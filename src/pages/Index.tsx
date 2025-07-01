@@ -2,21 +2,34 @@
 import React, { useState, useEffect } from 'react';
 import { NotesList } from '../components/NotesList';
 import { NoteEditor } from '../components/NoteEditor';
+import { ClassRecordings } from '../components/ClassRecordings';
+import { Schedule } from '../components/Schedule';
+import { AIChat } from '../components/AIChat';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { Note } from '../types/Note';
+import { ClassRecording, Quiz, ScheduleItem, Message } from '../types/Class';
 import { generateId } from '../utils/helpers';
+import { toast } from 'sonner';
 
 const Index = () => {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [recordings, setRecordings] = useState<ClassRecording[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat'>('notes');
+  const [isAILoading, setIsAILoading] = useState(false);
 
-  // Load notes from localStorage on mount
   useEffect(() => {
     const savedNotes = localStorage.getItem('notes');
+    const savedRecordings = localStorage.getItem('recordings');
+    const savedSchedule = localStorage.getItem('schedule');
+    const savedMessages = localStorage.getItem('chatMessages');
+
     if (savedNotes) {
       const parsedNotes = JSON.parse(savedNotes);
       setNotes(parsedNotes);
@@ -24,12 +37,46 @@ const Index = () => {
         setActiveNote(parsedNotes[0]);
       }
     }
+
+    if (savedRecordings) {
+      setRecordings(JSON.parse(savedRecordings));
+    }
+
+    if (savedSchedule) {
+      const parsed = JSON.parse(savedSchedule);
+      const withDates = parsed.map((item: any) => ({
+        ...item,
+        startTime: new Date(item.startTime),
+        endTime: new Date(item.endTime)
+      }));
+      setScheduleItems(withDates);
+    }
+
+    if (savedMessages) {
+      const parsed = JSON.parse(savedMessages);
+      const withDates = parsed.map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp)
+      }));
+      setChatMessages(withDates);
+    }
   }, []);
 
-  // Save notes to localStorage whenever notes change
   useEffect(() => {
     localStorage.setItem('notes', JSON.stringify(notes));
   }, [notes]);
+
+  useEffect(() => {
+    localStorage.setItem('recordings', JSON.stringify(recordings));
+  }, [recordings]);
+
+  useEffect(() => {
+    localStorage.setItem('schedule', JSON.stringify(scheduleItems));
+  }, [scheduleItems]);
+
+  useEffect(() => {
+    localStorage.setItem('chatMessages', JSON.stringify(chatMessages));
+  }, [chatMessages]);
 
   const createNewNote = () => {
     const newNote: Note = {
@@ -45,6 +92,7 @@ const Index = () => {
     
     setNotes(prev => [newNote, ...prev]);
     setActiveNote(newNote);
+    setActiveTab('notes');
   };
 
   const updateNote = (updatedNote: Note) => {
@@ -66,6 +114,66 @@ const Index = () => {
     }
   };
 
+  const addRecording = (recording: ClassRecording) => {
+    setRecordings(prev => [recording, ...prev]);
+  };
+
+  const generateQuiz = async (classId: string) => {
+    const recording = recordings.find(r => r.id === classId);
+    if (!recording) return;
+
+    try {
+      toast.success(`Generating quiz for "${recording.title}"...`);
+      // Mock quiz generation - in real app, send to AI service
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      toast.success('Quiz generated! Check your notes section.');
+    } catch (error) {
+      toast.error('Failed to generate quiz');
+    }
+  };
+
+  const addScheduleItem = (item: ScheduleItem) => {
+    setScheduleItems(prev => [...prev, item]);
+  };
+
+  const updateScheduleItem = (item: ScheduleItem) => {
+    setScheduleItems(prev => prev.map(i => i.id === item.id ? item : i));
+  };
+
+  const deleteScheduleItem = (id: string) => {
+    setScheduleItems(prev => prev.filter(i => i.id !== id));
+  };
+
+  const sendChatMessage = async (message: string) => {
+    const userMessage: Message = {
+      id: generateId(),
+      content: message,
+      role: 'user',
+      timestamp: new Date()
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    setIsAILoading(true);
+
+    try {
+      // Mock AI response - in real app, send to AI service
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const aiResponse: Message = {
+        id: generateId(),
+        content: `I understand you're asking about "${message}". Based on your notes and recordings, I can help you with study strategies, concept explanations, and academic guidance. What specific aspect would you like me to elaborate on?`,
+        role: 'assistant',
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, aiResponse]);
+    } catch (error) {
+      toast.error('Failed to get AI response');
+    } finally {
+      setIsAILoading(false);
+    }
+  };
+
   const filteredNotes = notes.filter(note => {
     const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          note.content.toLowerCase().includes(searchQuery.toLowerCase());
@@ -73,57 +181,100 @@ const Index = () => {
     return matchesSearch && matchesCategory;
   });
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'notes':
+        return (
+          <div className="flex flex-1 min-h-0">
+            <div className="w-80 bg-white border-r border-slate-200 flex flex-col">
+              <NotesList 
+                notes={filteredNotes}
+                activeNote={activeNote}
+                onNoteSelect={setActiveNote}
+                onNoteDelete={deleteNote}
+              />
+            </div>
+            <div className="flex-1 bg-white">
+              {activeNote ? (
+                <NoteEditor 
+                  note={activeNote}
+                  onNoteUpdate={updateNote}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400">
+                  <div className="text-center">
+                    <div className="text-6xl mb-4">📝</div>
+                    <h3 className="text-xl font-medium mb-2">No note selected</h3>
+                    <p>Select a note to start editing or create a new one</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'recordings':
+        return (
+          <div className="flex-1 p-6 overflow-y-auto">
+            <ClassRecordings 
+              recordings={recordings}
+              onAddRecording={addRecording}
+              onGenerateQuiz={generateQuiz}
+            />
+          </div>
+        );
+
+      case 'schedule':
+        return (
+          <div className="flex-1 p-6 overflow-y-auto">
+            <Schedule 
+              scheduleItems={scheduleItems}
+              onAddItem={addScheduleItem}
+              onUpdateItem={updateScheduleItem}
+              onDeleteItem={deleteScheduleItem}
+            />
+          </div>
+        );
+
+      case 'chat':
+        return (
+          <div className="flex-1">
+            <AIChat 
+              messages={chatMessages}
+              onSendMessage={sendChatMessage}
+              isLoading={isAILoading}
+            />
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="h-screen flex bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Sidebar */}
       <Sidebar 
         isOpen={isSidebarOpen}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
         noteCount={notes.length}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
         <Header 
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onNewNote={createNewNote}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          activeTab={activeTab}
         />
 
-        <div className="flex flex-1 min-h-0">
-          {/* Notes List */}
-          <div className="w-80 bg-white border-r border-slate-200 flex flex-col">
-            <NotesList 
-              notes={filteredNotes}
-              activeNote={activeNote}
-              onNoteSelect={setActiveNote}
-              onNoteDelete={deleteNote}
-            />
-          </div>
-
-          {/* Note Editor */}
-          <div className="flex-1 bg-white">
-            {activeNote ? (
-              <NoteEditor 
-                note={activeNote}
-                onNoteUpdate={updateNote}
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center text-slate-400">
-                <div className="text-center">
-                  <div className="text-6xl mb-4">📝</div>
-                  <h3 className="text-xl font-medium mb-2">No note selected</h3>
-                  <p>Select a note to start editing or create a new one</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        {renderTabContent()}
       </div>
     </div>
   );
