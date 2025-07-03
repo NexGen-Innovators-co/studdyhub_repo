@@ -47,8 +47,8 @@ export const TabContent: React.FC<TabContentProps> = ({
   switch (activeTab) {
     case 'notes':
       return (
-        <div className="flex flex-1 min-h-0">
-          <div className="w-80 bg-white border-r border-slate-200 flex flex-col">
+        <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
+          <div className="w-full lg:w-80 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col max-h-80 lg:max-h-none overflow-y-auto lg:overflow-visible">
             <NotesList 
               notes={filteredNotes}
               activeNote={activeNote}
@@ -56,18 +56,18 @@ export const TabContent: React.FC<TabContentProps> = ({
               onNoteDelete={onNoteDelete}
             />
           </div>
-          <div className="flex-1 bg-white">
+          <div className="flex-1 bg-white min-h-0">
             {activeNote ? (
               <NoteEditor 
                 note={activeNote}
                 onNoteUpdate={onNoteUpdate}
               />
             ) : (
-              <div className="h-full flex items-center justify-center text-slate-400">
+              <div className="h-full flex items-center justify-center text-slate-400 p-4">
                 <div className="text-center">
-                  <div className="text-6xl mb-4">📝</div>
-                  <h3 className="text-xl font-medium mb-2">No note selected</h3>
-                  <p>Select a note to start editing or create a new one</p>
+                  <div className="text-4xl sm:text-6xl mb-4">📝</div>
+                  <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
+                  <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
                 </div>
               </div>
             )}
@@ -77,7 +77,7 @@ export const TabContent: React.FC<TabContentProps> = ({
 
     case 'recordings':
       return (
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
           <ClassRecordings 
             recordings={recordings}
             onAddRecording={onAddRecording}
@@ -88,7 +88,7 @@ export const TabContent: React.FC<TabContentProps> = ({
 
     case 'schedule':
       return (
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
           <Schedule 
             scheduleItems={scheduleItems}
             onAddItem={onAddScheduleItem}

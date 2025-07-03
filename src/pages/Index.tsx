@@ -99,19 +99,35 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen flex bg-gradient-to-br from-slate-50 to-blue-50">
-      <Sidebar 
-        isOpen={isSidebarOpen}
-        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-        noteCount={notes.length}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
+    <div className="h-screen flex bg-gradient-to-br from-slate-50 to-blue-50 overflow-hidden">
+      {/* Mobile backdrop */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <div className={`
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
+        transition-transform duration-300 ease-in-out
+      `}>
+        <Sidebar 
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          noteCount={notes.length}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+      </div>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center justify-between p-4 bg-white border-b border-slate-200">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-0">
+        <div className="flex items-center justify-between p-3 sm:p-4 bg-white border-b border-slate-200">
           <Header 
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -120,8 +136,8 @@ const Index = () => {
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             activeTab={activeTab}
           />
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-600">Welcome, {user.email}</span>
+          <div className="hidden sm:flex items-center gap-3">
+            <span className="text-sm text-slate-600 hidden md:block">Welcome, {user.email}</span>
             <Button 
               variant="outline" 
               size="sm" 
@@ -129,9 +145,18 @@ const Index = () => {
               className="flex items-center gap-2"
             >
               <LogOut className="h-4 w-4" />
-              Sign Out
+              <span className="hidden sm:inline">Sign Out</span>
             </Button>
           </div>
+          {/* Mobile sign out */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleSignOut}
+            className="sm:hidden"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
         </div>
 
         <TabContent
