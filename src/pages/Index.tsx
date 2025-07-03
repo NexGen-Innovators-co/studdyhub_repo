@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { NotesList } from '../components/NotesList';
 import { NoteEditor } from '../components/NoteEditor';
 import { ClassRecordings } from '../components/ClassRecordings';
@@ -10,9 +11,14 @@ import { Header } from '../components/Header';
 import { Note } from '../types/Note';
 import { ClassRecording, Quiz, ScheduleItem, Message } from '../types/Class';
 import { generateId } from '../utils/helpers';
+import { useAuth } from '../hooks/useAuth';
+import { Button } from '../components/ui/button';
+import { LogOut, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
+  const { user, loading, signOut } = useAuth();
+  const navigate = useNavigate();
   const [notes, setNotes] = useState<Note[]>([]);
   const [recordings, setRecordings] = useState<ClassRecording[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -23,6 +29,13 @@ const Index = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
+
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
 
   useEffect(() => {
     const savedNotes = localStorage.getItem('notes');
@@ -181,6 +194,33 @@ const Index = () => {
     return matchesSearch && matchesCategory;
   });
 
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast.success('Signed out successfully');
+      navigate('/auth');
+    } catch (error) {
+      toast.error('Error signing out');
+    }
+  };
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="text-center">
+          <Sparkles className="h-12 w-12 text-blue-600 mx-auto mb-4 animate-spin" />
+          <p className="text-slate-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render main content if not authenticated
+  if (!user) {
+    return null;
+  }
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'notes':
@@ -265,14 +305,28 @@ const Index = () => {
       />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <Header 
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onNewNote={createNewNote}
-          isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          activeTab={activeTab}
-        />
+        <div className="flex items-center justify-between p-4 bg-white border-b border-slate-200">
+          <Header 
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onNewNote={createNewNote}
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            activeTab={activeTab}
+          />
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-slate-600">Welcome, {user.email}</span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleSignOut}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
+        </div>
 
         {renderTabContent()}
       </div>

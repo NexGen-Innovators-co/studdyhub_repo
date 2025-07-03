@@ -29,7 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab
 }) => {
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 gap-4">
+    <header className="flex items-center gap-4 flex-1">
       <Button
         variant="ghost"
         size="sm"
