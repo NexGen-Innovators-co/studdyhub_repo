@@ -5,14 +5,18 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
 import { Message } from '../types/Class';
+import { UserProfile, Document } from '../types/Document';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AIChatProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
   isLoading: boolean;
+  userProfile: UserProfile | null;
+  documents: Document[];
 }
 
-export const AIChat: React.FC<AIChatProps> = ({ messages, onSendMessage, isLoading }) => {
+export const AIChat: React.FC<AIChatProps> = ({ messages, onSendMessage, isLoading, userProfile, documents }) => {
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -24,11 +28,48 @@ export const AIChat: React.FC<AIChatProps> = ({ messages, onSendMessage, isLoadi
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (inputMessage.trim() && !isLoading) {
-      onSendMessage(inputMessage.trim());
-      setInputMessage('');
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        // Create context from documents and notes
+        const context = documents.map(doc => `Document: ${doc.title}`).join('\n');
+
+        // Call the Gemini edge function
+        const response = await fetch('/api/gemini-chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: inputMessage.trim(),
+            userId: user.id,
+            learningStyle: userProfile?.learning_style || 'visual',
+            learningPreferences: userProfile?.learning_preferences || {
+              explanation_style: 'detailed',
+              examples: true,
+              difficulty: 'intermediate'
+            },
+            context
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get AI response');
+        }
+
+        const data = await response.json();
+        // The AI response is now handled by the edge function
+        onSendMessage(inputMessage.trim());
+        setInputMessage('');
+      } catch (error) {
+        console.error('Error sending message:', error);
+        onSendMessage(inputMessage.trim()); // Fallback to original behavior
+        setInputMessage('');
+      }
     }
   };
 

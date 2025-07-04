@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Book, Calculator, FlaskConical, Clock, Globe, FileText, Hash, Mic, Calendar, MessageCircle } from 'lucide-react';
+import { Book, Calculator, FlaskConical, Clock, Globe, FileText, Hash, Mic, Calendar, MessageCircle, Upload, Settings } from 'lucide-react';
 import { Button } from './ui/button';
 import { NoteCategory } from '../types/Note';
 
@@ -10,8 +10,8 @@ interface SidebarProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   noteCount: number;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat';
-  onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat') => void;
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
+  onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
 }
 
 const categories = [
@@ -29,6 +29,8 @@ const tabs = [
   { id: 'recordings', name: 'Recordings', icon: Mic },
   { id: 'schedule', name: 'Schedule', icon: Calendar },
   { id: 'chat', name: 'AI Chat', icon: MessageCircle },
+  { id: 'documents', name: 'Documents', icon: Upload },
+  { id: 'settings', name: 'Settings', icon: Settings },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({

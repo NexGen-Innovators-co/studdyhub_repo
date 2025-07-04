@@ -10,14 +10,16 @@ interface HeaderProps {
   onNewNote: () => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat';
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
 }
 
 const tabNames = {
   notes: 'Notes',
   recordings: 'Class Recordings',
   schedule: 'Schedule & Timetable', 
-  chat: 'AI Study Assistant'
+  chat: 'AI Study Assistant',
+  documents: 'Document Upload',
+  settings: 'Learning Settings'
 };
 
 export const Header: React.FC<HeaderProps> = ({

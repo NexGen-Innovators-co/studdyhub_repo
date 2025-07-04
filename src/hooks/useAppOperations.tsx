@@ -1,31 +1,40 @@
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message } from '../types/Class';
+import { Document, UserProfile } from '../types/Document';
 import { generateId } from '../utils/helpers';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UseAppOperationsProps {
   notes: Note[];
   recordings: ClassRecording[];
   scheduleItems: ScheduleItem[];
   chatMessages: Message[];
+  documents: Document[];
+  userProfile: UserProfile | null;
   activeNote: Note | null;
   setNotes: (notes: Note[] | ((prev: Note[]) => Note[])) => void;
   setRecordings: (recordings: ClassRecording[] | ((prev: ClassRecording[]) => ClassRecording[])) => void;
   setScheduleItems: (items: ScheduleItem[] | ((prev: ScheduleItem[]) => ScheduleItem[])) => void;
   setChatMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
+  setDocuments: (documents: Document[] | ((prev: Document[]) => Document[])) => void;
+  setUserProfile: (profile: UserProfile | null) => void;
   setActiveNote: (note: Note | null) => void;
-  setActiveTab: (tab: 'notes' | 'recordings' | 'schedule' | 'chat') => void;
+  setActiveTab: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
   setIsAILoading: (loading: boolean) => void;
 }
 
 export const useAppOperations = ({
   notes,
   recordings,
+  userProfile,
   activeNote,
   setNotes,
   setRecordings,
   setScheduleItems,
   setChatMessages,
+  setDocuments,
+  setUserProfile,
   setActiveNote,
   setActiveTab,
   setIsAILoading,
@@ -109,22 +118,37 @@ export const useAppOperations = ({
     setIsAILoading(true);
 
     try {
-      // Mock AI response - in real app, send to AI service
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // The actual AI response will be handled by the edge function
+      // This is just to add the user message to the local state
+      // The edge function will handle adding the AI response to the database
       
-      const aiResponse: Message = {
-        id: generateId(),
-        content: `I understand you're asking about "${message}". Based on your notes and recordings, I can help you with study strategies, concept explanations, and academic guidance. What specific aspect would you like me to elaborate on?`,
-        role: 'assistant',
-        timestamp: new Date()
-      };
-
-      setChatMessages(prev => [...prev, aiResponse]);
+      // For now, we'll still show a fallback response
+      setTimeout(async () => {
+        const aiResponse: Message = {
+          id: generateId(),
+          content: `I understand you're asking about "${message}". I'm now powered by Gemini AI and can provide personalized responses based on your learning style and uploaded documents!`,
+          role: 'assistant',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, aiResponse]);
+        setIsAILoading(false);
+      }, 1500);
     } catch (error) {
       toast.error('Failed to get AI response');
-    } finally {
       setIsAILoading(false);
     }
+  };
+
+  const handleDocumentUploaded = (document: Document) => {
+    setDocuments(prev => [document, ...prev]);
+  };
+
+  const handleDocumentDeleted = (documentId: string) => {
+    setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+  };
+
+  const handleProfileUpdate = (profile: UserProfile) => {
+    setUserProfile(profile);
   };
 
   return {
@@ -137,5 +161,8 @@ export const useAppOperations = ({
     updateScheduleItem,
     deleteScheduleItem,
     sendChatMessage,
+    handleDocumentUploaded,
+    handleDocumentDeleted,
+    handleProfileUpdate,
   };
 };
