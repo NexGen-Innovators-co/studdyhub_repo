@@ -4,16 +4,21 @@ import { NoteEditor } from './NoteEditor';
 import { ClassRecordings } from './ClassRecordings';
 import { Schedule } from './Schedule';
 import { AIChat } from './AIChat';
+import { DocumentUpload } from './DocumentUpload';
+import { LearningStyleSettings } from './LearningStyleSettings';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message } from '../types/Class';
+import { Document, UserProfile } from '../types/Document';
 
 interface TabContentProps {
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat';
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
   filteredNotes: Note[];
   activeNote: Note | null;
   recordings: ClassRecording[];
   scheduleItems: ScheduleItem[];
   chatMessages: Message[];
+  documents: Document[];
+  userProfile: UserProfile | null;
   isAILoading: boolean;
   onNoteSelect: (note: Note) => void;
   onNoteUpdate: (note: Note) => void;
@@ -24,6 +29,9 @@ interface TabContentProps {
   onUpdateScheduleItem: (item: ScheduleItem) => void;
   onDeleteScheduleItem: (id: string) => void;
   onSendMessage: (message: string) => Promise<void>;
+  onDocumentUploaded: (document: Document) => void;
+  onDocumentDeleted: (documentId: string) => void;
+  onProfileUpdate: (profile: UserProfile) => void;
 }
 
 export const TabContent: React.FC<TabContentProps> = ({
@@ -33,6 +41,8 @@ export const TabContent: React.FC<TabContentProps> = ({
   recordings,
   scheduleItems,
   chatMessages,
+  documents,
+  userProfile,
   isAILoading,
   onNoteSelect,
   onNoteUpdate,
@@ -43,6 +53,9 @@ export const TabContent: React.FC<TabContentProps> = ({
   onUpdateScheduleItem,
   onDeleteScheduleItem,
   onSendMessage,
+  onDocumentUploaded,
+  onDocumentDeleted,
+  onProfileUpdate,
 }) => {
   switch (activeTab) {
     case 'notes':
@@ -105,6 +118,29 @@ export const TabContent: React.FC<TabContentProps> = ({
             messages={chatMessages}
             onSendMessage={onSendMessage}
             isLoading={isAILoading}
+            userProfile={userProfile}
+            documents={documents}
+          />
+        </div>
+      );
+
+    case 'documents':
+      return (
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
+          <DocumentUpload 
+            documents={documents}
+            onDocumentUploaded={onDocumentUploaded}
+            onDocumentDeleted={onDocumentDeleted}
+          />
+        </div>
+      );
+
+    case 'settings':
+      return (
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
+          <LearningStyleSettings 
+            profile={userProfile}
+            onProfileUpdate={onProfileUpdate}
           />
         </div>
       );

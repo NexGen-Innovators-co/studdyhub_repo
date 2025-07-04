@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message } from '../types/Class';
+import { Document, UserProfile } from '../types/Document';
 
 export const useAppData = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [recordings, setRecordings] = useState<ClassRecording[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
 
   // Load data from localStorage on mount
@@ -84,6 +87,8 @@ export const useAppData = () => {
     recordings,
     scheduleItems,
     chatMessages,
+    documents,
+    userProfile,
     activeNote,
     searchQuery,
     selectedCategory,
@@ -97,6 +102,8 @@ export const useAppData = () => {
     setRecordings,
     setScheduleItems,
     setChatMessages,
+    setDocuments,
+    setUserProfile,
     setActiveNote,
     setSearchQuery,
     setSelectedCategory,

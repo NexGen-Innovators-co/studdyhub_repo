@@ -20,6 +20,8 @@ const Index = () => {
     recordings,
     scheduleItems,
     chatMessages,
+    documents,
+    userProfile,
     activeNote,
     searchQuery,
     selectedCategory,
@@ -31,6 +33,8 @@ const Index = () => {
     setRecordings,
     setScheduleItems,
     setChatMessages,
+    setDocuments,
+    setUserProfile,
     setActiveNote,
     setSearchQuery,
     setSelectedCategory,
@@ -49,16 +53,23 @@ const Index = () => {
     updateScheduleItem,
     deleteScheduleItem,
     sendChatMessage,
+    handleDocumentUploaded,
+    handleDocumentDeleted,
+    handleProfileUpdate,
   } = useAppOperations({
     notes,
     recordings,
     scheduleItems,
     chatMessages,
+    documents,
+    userProfile,
     activeNote,
     setNotes,
     setRecordings,
     setScheduleItems,
     setChatMessages,
+    setDocuments,
+    setUserProfile,
     setActiveNote,
     setActiveTab,
     setIsAILoading,
@@ -166,6 +177,8 @@ const Index = () => {
           recordings={recordings}
           scheduleItems={scheduleItems}
           chatMessages={chatMessages}
+          documents={documents}
+          userProfile={userProfile}
           isAILoading={isAILoading}
           onNoteSelect={setActiveNote}
           onNoteUpdate={updateNote}
@@ -176,6 +189,9 @@ const Index = () => {
           onUpdateScheduleItem={updateScheduleItem}
           onDeleteScheduleItem={deleteScheduleItem}
           onSendMessage={sendChatMessage}
+          onDocumentUploaded={handleDocumentUploaded}
+          onDocumentDeleted={handleDocumentDeleted}
+          onProfileUpdate={handleProfileUpdate}
         />
       </div>
     </div>
