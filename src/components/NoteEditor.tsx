@@ -7,6 +7,7 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Note, NoteCategory } from '../types/Note';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NoteEditorProps {
   note: Note;
@@ -49,24 +50,37 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate }) =>
 
     setIsGeneratingAI(true);
     
-    // Simulate AI summary generation
-    setTimeout(() => {
-      const mockSummary = `This note covers key concepts about ${title.toLowerCase()}. The content includes important details that could be useful for studying and review.`;
-      
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-summary', {
+        body: {
+          content,
+          title,
+          category
+        }
+      });
+
+      if (error) {
+        throw new Error('Failed to generate summary');
+      }
+
       const updatedNote: Note = {
         ...note,
         title,
         content,
         category,
         tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
-        aiSummary: mockSummary,
+        aiSummary: data.summary,
         updatedAt: new Date()
       };
       
       onNoteUpdate(updatedNote);
-      setIsGeneratingAI(false);
       toast.success('AI summary generated!');
-    }, 2000);
+    } catch (error) {
+      toast.error('Failed to generate AI summary');
+      console.error('Error generating summary:', error);
+    } finally {
+      setIsGeneratingAI(false);
+    }
   };
 
   return (

@@ -8,6 +8,7 @@ import { ClassRecording, Quiz } from '../types/Class';
 import { VoiceRecorder } from './VoiceRecorder';
 import { formatDate } from '../utils/helpers';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ClassRecordingsProps {
   recordings: ClassRecording[];
@@ -27,17 +28,32 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     setIsProcessing(true);
     
     try {
-      // Mock AI processing - in real app, you'd send to Supabase Edge Function
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
+      // Process with real AI - upload audio and get transcript/summary
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Upload audio file to storage
+      const fileName = `${user.id}/${Date.now()}-${title}.webm`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, audioBlob);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(fileName);
+
+      // For now, create recording with placeholder content
+      // In a full implementation, you'd call an AI service for transcription
       const newRecording: ClassRecording = {
         id: `rec_${Date.now()}`,
         title,
         subject,
-        audioUrl: URL.createObjectURL(audioBlob),
-        transcript: `This is a mock transcript of the ${subject} class about ${title}. The lecture covered key concepts including theoretical foundations, practical applications, and real-world examples. Students should review the main points discussed and prepare for upcoming assessments.`,
-        summary: `Summary: This ${subject} class focused on ${title}. Key topics included fundamental principles, methodology, and practical implementations. Important takeaways for students to remember for exams.`,
-        duration: 45 * 60, // 45 minutes
+        audioUrl: publicUrl,
+        transcript: `Transcript processing for ${subject} class about ${title}. Real transcription would be processed by AI service.`,
+        summary: `AI-generated summary for ${subject} class on ${title}. This would contain key points from the actual lecture.`,
+        duration: Math.floor(audioBlob.size / 1000), // Approximate duration
         date: new Date(),
         createdAt: new Date()
       };
