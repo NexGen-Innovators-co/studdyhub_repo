@@ -86,11 +86,24 @@ export const useAppOperations = ({
 
     try {
       toast.success(`Generating quiz for "${recording.title}"...`);
-      // Mock quiz generation - in real app, send to AI service
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const { data, error } = await supabase.functions.invoke('generate-quiz', {
+        body: {
+          title: recording.title,
+          subject: recording.subject,
+          transcript: recording.transcript,
+          summary: recording.summary
+        }
+      });
+
+      if (error) {
+        throw new Error('Failed to generate quiz');
+      }
+
       toast.success('Quiz generated! Check your notes section.');
     } catch (error) {
       toast.error('Failed to generate quiz');
+      console.error('Error generating quiz:', error);
     }
   };
 
@@ -118,23 +131,32 @@ export const useAppOperations = ({
     setIsAILoading(true);
 
     try {
-      // The actual AI response will be handled by the edge function
-      // This is just to add the user message to the local state
-      // The edge function will handle adding the AI response to the database
-      
-      // For now, we'll still show a fallback response
-      setTimeout(async () => {
-        const aiResponse: Message = {
-          id: generateId(),
-          content: `I understand you're asking about "${message}". I'm now powered by Gemini AI and can provide personalized responses based on your learning style and uploaded documents!`,
-          role: 'assistant',
-          timestamp: new Date()
-        };
-        setChatMessages(prev => [...prev, aiResponse]);
-        setIsAILoading(false);
-      }, 1500);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Fetch latest chat messages to get AI response
+      const { data: chatData, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('timestamp', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      // Convert to local format and update state
+      const messages: Message[] = chatData.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        role: msg.role as 'user' | 'assistant',
+        timestamp: new Date(msg.timestamp || Date.now())
+      })).reverse();
+
+      setChatMessages(messages);
     } catch (error) {
       toast.error('Failed to get AI response');
+      console.error('Error in sendChatMessage:', error);
+    } finally {
       setIsAILoading(false);
     }
   };

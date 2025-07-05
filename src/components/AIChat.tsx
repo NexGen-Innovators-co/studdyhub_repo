@@ -39,12 +39,8 @@ export const AIChat: React.FC<AIChatProps> = ({ messages, onSendMessage, isLoadi
         const context = documents.map(doc => `Document: ${doc.title}`).join('\n');
 
         // Call the Gemini edge function
-        const response = await fetch('/api/gemini-chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+        const { data, error } = await supabase.functions.invoke('gemini-chat', {
+          body: {
             message: inputMessage.trim(),
             userId: user.id,
             learningStyle: userProfile?.learning_style || 'visual',
@@ -54,14 +50,13 @@ export const AIChat: React.FC<AIChatProps> = ({ messages, onSendMessage, isLoadi
               difficulty: 'intermediate'
             },
             context
-          }),
+          }
         });
 
-        if (!response.ok) {
+        if (error) {
           throw new Error('Failed to get AI response');
         }
 
-        const data = await response.json();
         // The AI response is now handled by the edge function
         onSendMessage(inputMessage.trim());
         setInputMessage('');
