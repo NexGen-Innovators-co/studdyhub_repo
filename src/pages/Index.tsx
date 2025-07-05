@@ -29,6 +29,7 @@ const Index = () => {
     activeTab,
     isAILoading,
     filteredNotes,
+    loading: dataLoading,
     setNotes,
     setRecordings,
     setScheduleItems,
@@ -41,6 +42,7 @@ const Index = () => {
     setIsSidebarOpen,
     setActiveTab,
     setIsAILoading,
+    loadUserData,
   } = useAppData();
 
   const {
@@ -92,13 +94,13 @@ const Index = () => {
     }
   };
 
-  // Show loading while checking auth
-  if (loading) {
+  // Show loading while checking auth or loading data
+  if (loading || dataLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="text-center">
           <Sparkles className="h-12 w-12 text-blue-600 mx-auto mb-4 animate-spin" />
-          <p className="text-slate-600">Loading...</p>
+          <p className="text-slate-600">Loading your data...</p>
         </div>
       </div>
     );

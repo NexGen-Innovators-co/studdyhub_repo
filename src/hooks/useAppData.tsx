@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export const useAppData = () => {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -16,62 +18,160 @@ export const useAppData = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Load data from localStorage on mount
+  // Load data from Supabase on mount
   useEffect(() => {
-    const savedNotes = localStorage.getItem('notes');
-    const savedRecordings = localStorage.getItem('recordings');
-    const savedSchedule = localStorage.getItem('schedule');
-    const savedMessages = localStorage.getItem('chatMessages');
-
-    if (savedNotes) {
-      const parsedNotes = JSON.parse(savedNotes);
-      setNotes(parsedNotes);
-      if (parsedNotes.length > 0) {
-        setActiveNote(parsedNotes[0]);
-      }
-    }
-
-    if (savedRecordings) {
-      setRecordings(JSON.parse(savedRecordings));
-    }
-
-    if (savedSchedule) {
-      const parsed = JSON.parse(savedSchedule);
-      const withDates = parsed.map((item: any) => ({
-        ...item,
-        startTime: new Date(item.startTime),
-        endTime: new Date(item.endTime)
-      }));
-      setScheduleItems(withDates);
-    }
-
-    if (savedMessages) {
-      const parsed = JSON.parse(savedMessages);
-      const withDates = parsed.map((msg: any) => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp)
-      }));
-      setChatMessages(withDates);
-    }
+    loadUserData();
   }, []);
 
-  // Save data to localStorage when state changes
-  useEffect(() => {
-    localStorage.setItem('notes', JSON.stringify(notes));
-  }, [notes]);
+  const loadUserData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-  useEffect(() => {
-    localStorage.setItem('recordings', JSON.stringify(recordings));
-  }, [recordings]);
+      // Load user profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-  useEffect(() => {
-    localStorage.setItem('schedule', JSON.stringify(scheduleItems));
-  }, [scheduleItems]);
+      if (profileData) {
+        setUserProfile({
+          id: profileData.id,
+          email: profileData.email || user.email || '',
+          full_name: profileData.full_name || '',
+          avatar_url: profileData.avatar_url || '',
+          learning_style: (profileData.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
+          learning_preferences: (profileData.learning_preferences as any) || {
+            explanation_style: 'detailed',
+            examples: true,
+            difficulty: 'intermediate'
+          },
+          created_at: new Date(profileData.created_at || Date.now()),
+          updated_at: new Date(profileData.updated_at || Date.now())
+        });
+      }
 
-  useEffect(() => {
-    localStorage.setItem('chatMessages', JSON.stringify(chatMessages));
-  }, [chatMessages]);
+      // Load notes
+      const { data: notesData } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false });
+
+      if (notesData) {
+        const formattedNotes = notesData.map(note => ({
+          id: note.id,
+          title: note.title,
+          content: note.content || '',
+          category: note.category || 'general',
+          tags: note.tags || [],
+          createdAt: new Date(note.created_at || Date.now()),
+          updatedAt: new Date(note.updated_at || Date.now()),
+          aiSummary: note.ai_summary || ''
+        }));
+        setNotes(formattedNotes);
+        if (formattedNotes.length > 0) {
+          setActiveNote(formattedNotes[0]);
+        }
+      }
+
+      // Load recordings
+      const { data: recordingsData } = await supabase
+        .from('class_recordings')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (recordingsData) {
+        const formattedRecordings = recordingsData.map(recording => ({
+          id: recording.id,
+          title: recording.title,
+          subject: recording.subject,
+          date: new Date(recording.date || Date.now()),
+          duration: recording.duration || 0,
+          audioUrl: recording.audio_url || '',
+          transcript: recording.transcript || '',
+          summary: recording.summary || '',
+          createdAt: new Date(recording.created_at || Date.now())
+        }));
+        setRecordings(formattedRecordings);
+      }
+
+      // Load schedule items
+      const { data: scheduleData } = await supabase
+        .from('schedule_items')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('start_time', { ascending: true });
+
+      if (scheduleData) {
+        const formattedSchedule = scheduleData.map(item => ({
+          id: item.id,
+          title: item.title,
+          subject: item.subject,
+          startTime: new Date(item.start_time),
+          endTime: new Date(item.end_time),
+          type: item.type as 'class' | 'study' | 'assignment' | 'exam' | 'other',
+          description: item.description || '',
+          location: item.location || '',
+          color: item.color || '#3B82F6'
+        }));
+        setScheduleItems(formattedSchedule);
+      }
+
+      // Load chat messages
+      const { data: chatData } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('timestamp', { ascending: true });
+
+      if (chatData) {
+        const formattedMessages = chatData.map(msg => ({
+          id: msg.id,
+          content: msg.content,
+          role: msg.role as 'user' | 'assistant',
+          timestamp: new Date(msg.timestamp || Date.now())
+        }));
+        setChatMessages(formattedMessages);
+      }
+
+      // Load documents
+      const { data: documentsData } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (documentsData) {
+        const formattedDocuments = documentsData.map(doc => ({
+          id: doc.id,
+          title: doc.title,
+          user_id: doc.user_id,
+          file_name: doc.file_name,
+          file_type: doc.file_type,
+          file_size: doc.file_size || 0,
+          file_url: doc.file_url,
+          content_extracted: doc.content_extracted || '',
+          created_at: new Date(doc.created_at),
+          updated_at: new Date(doc.updated_at)
+        }));
+        setDocuments(formattedDocuments);
+      }
+
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      toast.error('Failed to load user data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter notes based on search and category
   const filteredNotes = notes.filter(note => {
@@ -96,6 +196,7 @@ export const useAppData = () => {
     activeTab,
     isAILoading,
     filteredNotes,
+    loading,
     
     // Setters
     setNotes,
@@ -110,5 +211,8 @@ export const useAppData = () => {
     setIsSidebarOpen,
     setActiveTab,
     setIsAILoading,
+    
+    // Functions
+    loadUserData,
   };
 };

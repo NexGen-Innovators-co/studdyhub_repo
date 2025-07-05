@@ -40,44 +40,134 @@ export const useAppOperations = ({
   setIsAILoading,
 }: UseAppOperationsProps) => {
 
-  const createNewNote = () => {
-    const newNote: Note = {
-      id: generateId(),
-      title: 'Untitled Note',
-      content: '',
-      category: 'general',
-      tags: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      aiSummary: ''
-    };
-    
-    setNotes(prev => [newNote, ...prev]);
-    setActiveNote(newNote);
-    setActiveTab('notes');
-  };
+  const createNewNote = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
 
-  const updateNote = (updatedNote: Note) => {
-    setNotes(prev => 
-      prev.map(note => 
-        note.id === updatedNote.id 
-          ? { ...updatedNote, updatedAt: new Date() }
-          : note
-      )
-    );
-    setActiveNote(updatedNote);
-  };
+      const newNote = {
+        title: 'Untitled Note',
+        content: '',
+        category: 'general' as const,
+        tags: [],
+        user_id: user.id,
+        ai_summary: ''
+      };
 
-  const deleteNote = (noteId: string) => {
-    setNotes(prev => prev.filter(note => note.id !== noteId));
-    if (activeNote?.id === noteId) {
-      const remainingNotes = notes.filter(note => note.id !== noteId);
-      setActiveNote(remainingNotes.length > 0 ? remainingNotes[0] : null);
+      const { data, error } = await supabase
+        .from('notes')
+        .insert(newNote)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const formattedNote: Note = {
+        id: data.id,
+        title: data.title,
+        content: data.content || '',
+        category: data.category || 'general',
+        tags: data.tags || [],
+        createdAt: new Date(data.created_at || Date.now()),
+        updatedAt: new Date(data.updated_at || Date.now()),
+        aiSummary: data.ai_summary || ''
+      };
+      
+      setNotes(prev => [formattedNote, ...prev]);
+      setActiveNote(formattedNote);
+      setActiveTab('notes');
+    } catch (error) {
+      console.error('Error creating note:', error);
+      toast.error('Failed to create note');
     }
   };
 
-  const addRecording = (recording: ClassRecording) => {
-    setRecordings(prev => [recording, ...prev]);
+  const updateNote = async (updatedNote: Note) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('notes')
+        .update({
+          title: updatedNote.title,
+          content: updatedNote.content,
+          category: updatedNote.category,
+          tags: updatedNote.tags,
+          ai_summary: updatedNote.aiSummary,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', updatedNote.id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      const noteWithUpdatedTime = {
+        ...updatedNote,
+        updatedAt: new Date()
+      };
+
+      setNotes(prev => 
+        prev.map(note => 
+          note.id === updatedNote.id ? noteWithUpdatedTime : note
+        )
+      );
+      setActiveNote(noteWithUpdatedTime);
+    } catch (error) {
+      console.error('Error updating note:', error);
+      toast.error('Failed to update note');
+    }
+  };
+
+  const deleteNote = async (noteId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('notes')
+        .delete()
+        .eq('id', noteId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setNotes(prev => prev.filter(note => note.id !== noteId));
+      if (activeNote?.id === noteId) {
+        const remainingNotes = notes.filter(note => note.id !== noteId);
+        setActiveNote(remainingNotes.length > 0 ? remainingNotes[0] : null);
+      }
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      toast.error('Failed to delete note');
+    }
+  };
+
+  const addRecording = async (recording: ClassRecording) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('class_recordings')
+        .insert({
+          title: recording.title,
+          subject: recording.subject,
+          date: recording.date.toISOString(),
+          duration: recording.duration,
+          audio_url: recording.audioUrl,
+          transcript: recording.transcript,
+          summary: recording.summary,
+          user_id: user.id
+        });
+
+      if (error) throw error;
+
+      setRecordings(prev => [recording, ...prev]);
+    } catch (error) {
+      console.error('Error adding recording:', error);
+      toast.error('Failed to save recording');
+    }
   };
 
   const generateQuiz = async (classId: string) => {
@@ -107,16 +197,81 @@ export const useAppOperations = ({
     }
   };
 
-  const addScheduleItem = (item: ScheduleItem) => {
-    setScheduleItems(prev => [...prev, item]);
+  const addScheduleItem = async (item: ScheduleItem) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('schedule_items')
+        .insert({
+          title: item.title,
+          subject: item.subject,
+          start_time: item.startTime.toISOString(),
+          end_time: item.endTime.toISOString(),
+          type: item.type,
+          description: item.description,
+          location: item.location,
+          color: item.color,
+          user_id: user.id
+        });
+
+      if (error) throw error;
+
+      setScheduleItems(prev => [...prev, item]);
+    } catch (error) {
+      console.error('Error adding schedule item:', error);
+      toast.error('Failed to add schedule item');
+    }
   };
 
-  const updateScheduleItem = (item: ScheduleItem) => {
-    setScheduleItems(prev => prev.map(i => i.id === item.id ? item : i));
+  const updateScheduleItem = async (item: ScheduleItem) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('schedule_items')
+        .update({
+          title: item.title,
+          subject: item.subject,
+          start_time: item.startTime.toISOString(),
+          end_time: item.endTime.toISOString(),
+          type: item.type,
+          description: item.description,
+          location: item.location,
+          color: item.color
+        })
+        .eq('id', item.id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setScheduleItems(prev => prev.map(i => i.id === item.id ? item : i));
+    } catch (error) {
+      console.error('Error updating schedule item:', error);
+      toast.error('Failed to update schedule item');
+    }
   };
 
-  const deleteScheduleItem = (id: string) => {
-    setScheduleItems(prev => prev.filter(i => i.id !== id));
+  const deleteScheduleItem = async (id: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('schedule_items')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setScheduleItems(prev => prev.filter(i => i.id !== id));
+    } catch (error) {
+      console.error('Error deleting schedule item:', error);
+      toast.error('Failed to delete schedule item');
+    }
   };
 
   const sendChatMessage = async (message: string) => {
@@ -165,16 +320,79 @@ export const useAppOperations = ({
     }
   };
 
-  const handleDocumentUploaded = (document: Document) => {
-    setDocuments(prev => [document, ...prev]);
+  const handleDocumentUploaded = async (document: Document) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('documents')
+        .insert({
+          title: document.title,
+          file_name: document.file_name,
+          file_type: document.file_type,
+          file_size: document.file_size,
+          file_url: document.file_url,
+          content_extracted: document.content_extracted,
+          user_id: user.id
+        });
+
+      if (error) throw error;
+
+      setDocuments(prev => [document, ...prev]);
+      toast.success('Document uploaded successfully');
+    } catch (error) {
+      console.error('Error saving document:', error);
+      toast.error('Failed to save document');
+    }
   };
 
-  const handleDocumentDeleted = (documentId: string) => {
-    setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+  const handleDocumentDeleted = async (documentId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', documentId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+      toast.success('Document deleted successfully');
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast.error('Failed to delete document');
+    }
   };
 
-  const handleProfileUpdate = (profile: UserProfile) => {
-    setUserProfile(profile);
+  const handleProfileUpdate = async (profile: UserProfile) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: profile.email,
+          full_name: profile.full_name,
+          avatar_url: profile.avatar_url,
+          learning_style: profile.learning_style,
+          learning_preferences: profile.learning_preferences,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      setUserProfile({ ...profile, updated_at: new Date() });
+      toast.success('Profile updated successfully');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
+    }
   };
 
   return {
