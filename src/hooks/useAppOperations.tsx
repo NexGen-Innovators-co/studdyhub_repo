@@ -134,6 +134,9 @@ export const useAppOperations = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      // Wait a moment for the edge function to process and save messages
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       // Fetch latest chat messages to get AI response
       const { data: chatData, error } = await supabase
         .from('chat_messages')
@@ -154,6 +157,7 @@ export const useAppOperations = ({
 
       setChatMessages(messages);
     } catch (error) {
+      // Keep the user message in local state even if sync fails
       toast.error('Failed to get AI response');
       console.error('Error in sendChatMessage:', error);
     } finally {
