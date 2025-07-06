@@ -13,7 +13,7 @@ serve(async (req) => {
 
   try {
     const { content, title, category } = await req.json();
-    
+
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) {
       throw new Error('GEMINI_API_KEY not configured');
@@ -26,7 +26,7 @@ Category: ${category}
 Content: ${content}
 
 Please provide a summary that highlights the most important information and learning points.`;
-    
+
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
       headers: {
