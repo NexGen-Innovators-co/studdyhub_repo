@@ -33,47 +33,57 @@ interface TabContentProps {
   onDocumentDeleted: (documentId: string) => void;
   onProfileUpdate: (profile: UserProfile) => void;
 }
+ 
+export const TabContent: React.FC<TabContentProps> = (props) => {
+  const { activeTab, userProfile, isAILoading } = props;
 
-export const TabContent: React.FC<TabContentProps> = ({
-  activeTab,
-  filteredNotes,
-  activeNote,
-  recordings,
-  scheduleItems,
-  chatMessages,
-  documents,
-  userProfile,
-  isAILoading,
-  onNoteSelect,
-  onNoteUpdate,
-  onNoteDelete,
-  onAddRecording,
-  onGenerateQuiz,
-  onAddScheduleItem,
-  onUpdateScheduleItem,
-  onDeleteScheduleItem,
-  onSendMessage,
-  onDocumentUploaded,
-  onDocumentDeleted,
-  onProfileUpdate,
-}) => {
+  // Group props for child components to improve readability
+  const notesProps = {
+    notes: props.filteredNotes,
+    activeNote: props.activeNote,
+    onNoteSelect: props.onNoteSelect,
+    onNoteDelete: props.onNoteDelete,
+    onNoteUpdate: props.onNoteUpdate,
+  };
+
+  const recordingsProps = {
+    recordings: props.recordings,
+    onAddRecording: props.onAddRecording,
+    onGenerateQuiz: props.onGenerateQuiz,
+  };
+
+  const scheduleProps = {
+    scheduleItems: props.scheduleItems,
+    onAddItem: props.onAddScheduleItem,
+    onUpdateItem: props.onUpdateScheduleItem,
+    onDeleteItem: props.onDeleteScheduleItem,
+  };
+
+  const chatProps = {
+    messages: props.chatMessages,
+    documents: props.documents,
+    onSendMessage: props.onSendMessage,
+  };
+
+  const documentsProps = {
+    documents: props.documents,
+    onDocumentUploaded: props.onDocumentUploaded,
+    onDocumentDeleted: props.onDocumentDeleted,
+  };
+
   switch (activeTab) {
     case 'notes':
       return (
         <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
           <div className="w-full lg:w-80 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col max-h-80 lg:max-h-none overflow-y-auto lg:overflow-visible">
-            <NotesList 
-              notes={filteredNotes}
-              activeNote={activeNote}
-              onNoteSelect={onNoteSelect}
-              onNoteDelete={onNoteDelete}
-            />
+            <NotesList {...notesProps} />
           </div>
           <div className="flex-1 bg-white min-h-0">
-            {activeNote ? (
+            {notesProps.activeNote ? (
               <NoteEditor 
-                note={activeNote}
-                onNoteUpdate={onNoteUpdate}
+                note={notesProps.activeNote}
+                onNoteUpdate={notesProps.onNoteUpdate}
+                userProfile={userProfile}
               />
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400 p-4">
@@ -91,35 +101,24 @@ export const TabContent: React.FC<TabContentProps> = ({
     case 'recordings':
       return (
         <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
-          <ClassRecordings 
-            recordings={recordings}
-            onAddRecording={onAddRecording}
-            onGenerateQuiz={onGenerateQuiz}
-          />
+          <ClassRecordings {...recordingsProps} />
         </div>
       );
 
     case 'schedule':
       return (
         <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
-          <Schedule 
-            scheduleItems={scheduleItems}
-            onAddItem={onAddScheduleItem}
-            onUpdateItem={onUpdateScheduleItem}
-            onDeleteItem={onDeleteScheduleItem}
-          />
+          <Schedule {...scheduleProps} />
         </div>
       );
 
     case 'chat':
       return (
         <div className="flex-1">
-          <AIChat 
-            messages={chatMessages}
-            onSendMessage={onSendMessage}
+          <AIChat
+            {...chatProps}
             isLoading={isAILoading}
             userProfile={userProfile}
-            documents={documents}
           />
         </div>
       );
@@ -127,11 +126,7 @@ export const TabContent: React.FC<TabContentProps> = ({
     case 'documents':
       return (
         <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
-          <DocumentUpload 
-            documents={documents}
-            onDocumentUploaded={onDocumentUploaded}
-            onDocumentDeleted={onDocumentDeleted}
-          />
+          <DocumentUpload {...documentsProps} />
         </div>
       );
 
@@ -139,8 +134,8 @@ export const TabContent: React.FC<TabContentProps> = ({
       return (
         <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
           <LearningStyleSettings 
-            profile={userProfile}
-            onProfileUpdate={onProfileUpdate}
+            profile={props.userProfile}
+            onProfileUpdate={props.onProfileUpdate}
           />
         </div>
       );

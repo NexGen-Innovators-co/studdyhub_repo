@@ -69,6 +69,8 @@ export const useAppData = () => {
           id: note.id,
           title: note.title,
           content: note.content || '',
+          document_id: (note as any).document_id || null,
+          userId: note.user_id || user.id,
           category: note.category || 'general',
           tags: note.tags || [],
           createdAt: new Date(note.created_at || Date.now()),
