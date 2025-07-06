@@ -70,7 +70,8 @@ export const useAppOperations = ({
         tags: data.tags || [],
         createdAt: new Date(data.created_at || Date.now()),
         updatedAt: new Date(data.updated_at || Date.now()),
-        aiSummary: data.ai_summary || ''
+        aiSummary: data.ai_summary || '',
+        document_id: ''
       };
       
       setNotes(prev => [formattedNote, ...prev]);

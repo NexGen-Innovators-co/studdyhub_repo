@@ -26,9 +26,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     const file = files[0];
     
     // Validate file type
-    const allowedTypes = ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowedTypes = ['application/pdf', 'text/plain'];
     if (!allowedTypes.includes(file.type)) {
-      toast.error('Please upload PDF, DOC, DOCX, or TXT files only');
+      toast.error('Unsupported file type. Please upload PDF or TXT files.');
       return;
     }
 
@@ -154,13 +154,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           Drag and drop files here, or click to browse
         </p>
         <p className="text-sm text-gray-400 mb-4">
-          Supports PDF, DOC, DOCX, TXT files up to 10MB
+          Supports PDF and TXT files up to 10MB
         </p>
         <input
           type="file"
           id="file-upload"
           className="hidden"
-          accept=".pdf,.doc,.docx,.txt"
+          accept=".pdf,.txt"
           onChange={(e) => handleFileUpload(e.target.files)}
           disabled={isUploading}
         />
