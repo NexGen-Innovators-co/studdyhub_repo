@@ -1,5 +1,6 @@
-
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle } from 'lucide-react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Button } from './ui/button';
@@ -9,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Note, NoteCategory, UserProfile } from '../types'; // Assuming central index.ts
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import Mermaid from './Mermaid'; // Import the Mermaid component
+import { SectionSelectionDialog } from './SectionSelectionDialog'; // Import the new dialog
 
 interface NoteEditorProps {
   note: Note;
   onNoteUpdate: (note: Note) => void;
-  // The user profile is needed for the new AI function
   userProfile: UserProfile | null;
 }
 
@@ -27,6 +29,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isEditing, setIsEditing] = useState(true);
+  const [documentSections, setDocumentSections] = useState<string[]>([]);
+  const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [extractedContent, setExtractedContent] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -35,19 +42,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
     setCategory(note.category);
     setTags(note.tags.join(', '));
 
-    // When note changes, stop any active speech from the previous note.
     if ('speechSynthesis' in window && speechSynthesis.speaking) {
       speechSynthesis.cancel();
     }
     setIsSpeaking(false);
 
-    // Cleanup function for when the component unmounts
     return () => {
       if ('speechSynthesis' in window) speechSynthesis.cancel();
     };
   }, [note]);
 
-  // Load available text-to-speech voices from the browser
   useEffect(() => {
     const populateVoiceList = () => {
       if (typeof speechSynthesis === 'undefined') {
@@ -56,7 +60,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
       const availableVoices = speechSynthesis.getVoices();
       if (availableVoices.length > 0) {
         setVoices(availableVoices);
-        // Set a default voice only if one isn't already selected.
         if (!selectedVoiceURI) {
           const defaultVoice = availableVoices.find(voice => voice.name === 'Google US English') || availableVoices[0];
           if (defaultVoice) setSelectedVoiceURI(defaultVoice.voiceURI);
@@ -68,7 +71,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
     if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = populateVoiceList;
     }
-  }, []); // Run only once on mount
+  }, []);
 
   const handleSave = () => {
     const updatedNote: Note = {
@@ -77,10 +80,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
       content,
       category,
       tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
-      // Align with database schema (snake_case and string format)
       updatedAt: new Date()
     };
-    
+
     onNoteUpdate(updatedNote);
     toast.success('Note saved successfully!');
   };
@@ -110,8 +112,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
         throw new Error(error.message || 'An unknown error occurred');
       }
 
-      // The parent component will receive the completely new note object
-      // and should handle swapping it in the UI.
       onNoteUpdate(newNote);
       toast.success('Note regenerated successfully!', { id: toastId });
     } catch (error) {
@@ -134,38 +134,34 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
       return;
     }
 
-    // Validate file type before proceeding
-    const allowedTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/msword'];
+    const allowedTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
     if (!allowedTypes.includes(file.type)) {
-      toast.error('Unsupported file type. Please upload a PDF ,TXT file or a Word document.');
-      if (event.target) event.target.value = ''; // Reset file input to allow re-selection
+      toast.error('Unsupported file type. Please upload a PDF, TXT file or a Word document.');
+      if (event.target) event.target.value = '';
       return;
     }
 
     setIsUploading(true);
+    setSelectedFile(file); // Store the file for later use
     const toastId = toast.loading('Uploading document...');
 
     try {
-      // Step 1: Upload file to Supabase Storage
       const filePath = `${userProfile.id}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage
-        .from('documents') // Assumes a bucket named 'documents'
+        .from('documents')
         .upload(filePath, file);
       if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-      
+
       toast.loading('Extracting text from document...', { id: toastId });
 
-      // Step 2: Get the public URL for the uploaded file to pass to our function.
       const { data: urlData } = supabase.storage
         .from('documents')
         .getPublicUrl(filePath);
 
       if (!urlData?.publicUrl) {
-        console.error('Failed to get public URL for uploaded file:', urlData);
         throw new Error("Could not get public URL for the uploaded file.");
       }
 
-      // Step 3: Call your 'gemini-document-extractor' Edge Function to get the content.
       const { data: extractionData, error: extractionError } = await supabase.functions.invoke('gemini-document-extractor', {
         body: {
           file_url: urlData.publicUrl,
@@ -175,35 +171,24 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
 
       if (extractionError) throw extractionError;
       const extractedContent = extractionData.content_extracted;
+      setExtractedContent(extractedContent); // Store extracted content
 
-      // Step 4: Create a document record in the database with the extracted content.
-      const { data: newDocument, error: docError } = await supabase
-        .from('documents')
-        .insert({
-          user_id: userProfile.id,
-          title: file.name,
-          file_name: file.name,
-          file_url: urlData.publicUrl,
-          file_type: file.type,
-          content_extracted: extractedContent, // Storing the content from our function
-        })
-        .select('id')
-        .single();
- 
-      if (docError || !newDocument) throw new Error(docError?.message || 'Failed to create document record.');
- 
-      toast.loading('Generating AI note...', { id: toastId });
-
-      // Step 5: Call the function to generate the note from the new document
-      const { data: newNote, error: generationError } = await supabase.functions.invoke('generate-note-from-document', {
-        body: { documentId: newDocument.id, userProfile },
+      // Analyze document structure
+      toast.loading('Analyzing document structure...', { id: toastId });
+      const { data: structureData, error: structureError } = await supabase.functions.invoke('analyze-document-structure', {
+        body: { documentContent: extractedContent }
       });
- 
-      if (generationError) throw new Error(generationError.message || 'Failed to generate note.');
 
-      // Step 6: Update the parent component with the new note
-      onNoteUpdate(newNote);
-      toast.success('New note generated from document!', { id: toastId });
+      if (structureError) throw structureError;
+
+      if (structureData && structureData.sections && structureData.sections.length > 0) {
+        setDocumentSections(structureData.sections);
+        setIsSectionDialogOpen(true); // Open dialog for section selection
+        toast.dismiss(toastId); // Dismiss loading toast
+      } else {
+        // No sections found, proceed with full document note generation
+        await generateNoteFromExtractedContent(extractedContent, file.name, urlData.publicUrl, file.type, toastId.toString());
+      }
 
     } catch (error) {
       let errorMessage = 'An unknown error occurred.';
@@ -218,8 +203,75 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
       console.error('Error during upload and generate process:', error);
     } finally {
       setIsUploading(false);
-      if (event.target) event.target.value = ''; // Allow re-uploading the same file
+      if (event.target) event.target.value = '';
     }
+  };
+
+  const generateNoteFromExtractedContent = async (contentToUse: string, fileName: string, fileUrl: string, fileType: string, toastId: string, selectedSection: string | null = null) => {
+    if (!userProfile || !selectedFile) {
+      toast.error("User profile or selected file is missing.");
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    toast.loading('Generating AI note...', { id: toastId });
+
+    try {
+      const { data: newDocument, error: docError } = await supabase
+        .from('documents')
+        .insert({
+          user_id: userProfile.id,
+          title: fileName,
+          file_name: fileName,
+          file_url: fileUrl,
+          file_type: fileType,
+          content_extracted: contentToUse,
+        })
+        .select('id')
+        .single();
+
+      if (docError || !newDocument) throw new Error(docError?.message || 'Failed to create document record.');
+
+      const { data: newNote, error: generationError } = await supabase.functions.invoke('generate-note-from-document', {
+        body: {
+          documentId: newDocument.id,
+          userProfile,
+          selectedSection, // Pass the selected section to the AI function
+        },
+      });
+
+      if (generationError) throw new Error(generationError.message || 'Failed to generate note.');
+
+      onNoteUpdate(newNote);
+      toast.success('New note generated from document!', { id: toastId });
+
+    } catch (error) {
+      let errorMessage = 'An unknown error occurred.';
+      if (error instanceof FunctionsHttpError) {
+        errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
+        console.error('Function HTTP Error Details:', error.context);
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      toast.error(errorMessage, { id: toastId });
+      console.error('Error during note generation:', error);
+    } finally {
+      setIsGeneratingAI(false);
+      setIsSectionDialogOpen(false); // Close dialog
+      setDocumentSections([]); // Clear sections
+      setSelectedFile(null); // Clear selected file
+      setExtractedContent(null); // Clear extracted content
+    }
+  };
+
+  const handleSectionSelect = async (section: string | null) => {
+    if (!selectedFile || !extractedContent || !userProfile) {
+      toast.error("Missing file or extracted content to generate note.");
+      return; // Early exit if prerequisites are not met
+    }
+
+    const toastId = toast.loading(`Generating note from ${section ? `section: ${section}` : 'full document'}...`);
+    await generateNoteFromExtractedContent(extractedContent, selectedFile.name, supabase.storage.from('documents').getPublicUrl(`${userProfile.id}/${Date.now()}_${selectedFile.name}`).data.publicUrl, selectedFile.type, toastId as string, section);
   };
 
   const handleTextToSpeech = () => {
@@ -239,22 +291,21 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
       return;
     }
 
-    // Simple markdown cleanup for better reading flow
     const textToRead = content
-      .replace(/#+\s/g, '') // Remove markdown headers
-      .replace(/(\*|_|`|~|>)/g, '') // Remove other markdown characters
-      .replace(/(\r\n|\n|\r)/gm, " "); // Replace newlines with spaces
+      .replace(/```mermaid[\s\S]*?```/g, '(A diagram is present here.)') // Replace mermaid blocks
+      .replace(/###\s?.*?\s/g, '') // Remove headings like ### 1. Summary
+      .replace(/\*\*|\*|_|`|~/g, '') // Remove bold, italic, code, strikethrough markers
+      .replace(/(\r\n|\n|\r)/gm, " "); // Normalize line breaks
 
     const utterance = new SpeechSynthesisUtterance(textToRead);
-    
-    // Find and set the selected voice
+
     if (selectedVoiceURI) {
       const selectedVoice = voices.find(v => v.voiceURI === selectedVoiceURI);
       if (selectedVoice) {
         utterance.voice = selectedVoice;
       }
     }
-    
+
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = (e) => {
@@ -264,6 +315,34 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
     };
 
     speechSynthesis.speak(utterance);
+  };
+
+  // Custom renderer for code blocks to handle Mermaid diagrams
+  const CodeRenderer = ({ node, inline, className, children, ...props }: any) => {
+    const match = /language-(\w+)/.exec(className || '');
+    const lang = match && match[1];
+
+    if (lang === 'mermaid' && !inline) {
+      const chart = String(children).replace(/\n$/, '');
+      return <Mermaid chart={chart} />;
+    }
+
+    // Handle other languages or inline code
+    if (!inline) {
+      return (
+        <pre className="bg-slate-100 p-3 rounded-md my-2 overflow-x-auto">
+          <code className={className} {...props}>
+            {children}
+          </code>
+        </pre>
+      );
+    }
+
+    return (
+      <code className="bg-slate-100 text-purple-600 px-1 py-0.5 rounded" {...props}>
+        {children}
+      </code>
+    );
   };
 
   return (
@@ -278,7 +357,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
             className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent"
           />
           <div className="flex items-center gap-2">
-            <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt" />
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
             <Button
               variant="outline"
               size="sm"
@@ -286,9 +365,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
               disabled={isUploading || isGeneratingAI || !userProfile}
             >
               {isUploading ? (
-                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
+                <Brain className="h-4 w-4 mr-2 animate-pulse" />
               ) : (
-                 <UploadCloud className="h-4 w-4 mr-2" />
+                <UploadCloud className="h-4 w-4 mr-2" />
               )}
               {isUploading ? 'Processing...' : 'Upload & Generate'}
             </Button>
@@ -323,6 +402,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
               <Save className="h-4 w-4 mr-2" />
               Save
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(!isEditing)}
+            >
+              {isEditing ? 'Preview' : 'Edit'}
+            </Button>
           </div>
         </div>
 
@@ -350,8 +436,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
               <SelectValue placeholder="Select a voice" />
             </SelectTrigger>
             <SelectContent>
-              {voices.map((voice) => (
-                <SelectItem key={voice.voiceURI} value={voice.voiceURI}>
+              {voices.map((voice, index) => (
+                <SelectItem key={`${voice.voiceURI}-${index.toString()}`} value={voice.voiceURI}>
                   {`${voice.name} (${voice.lang})`}
                 </SelectItem>
               ))}
@@ -371,13 +457,26 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 p-6">
-        <Textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Start writing your note here..."
-          className="h-full resize-none border-none shadow-none focus-visible:ring-0 text-base leading-relaxed bg-transparent"
-        />
+      <div className="flex-1 p-6 flex flex-col overflow-y-auto">
+        {isEditing ? (
+          <Textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Start writing your note here..."
+            className="flex-1 resize-none border-none shadow-none focus-visible:ring-0 text-base leading-relaxed bg-transparent min-h-0"
+          />
+        ) : (
+          <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed flex-1 overflow-y-auto min-h-0">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code: CodeRenderer,
+              }}
+            >
+              {content}
+            </ReactMarkdown>
+          </div>
+        )}
       </div>
 
       {/* AI Summary Section */}
@@ -387,9 +486,30 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
             <Sparkles className="h-4 w-4 text-purple-600" />
             <h4 className="font-medium text-purple-800">AI Summary</h4>
           </div>
-          <p className="text-sm text-purple-700 leading-relaxed">{note.aiSummary}</p>
+          <div className="prose prose-sm max-w-none text-purple-700 leading-relaxed">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code: CodeRenderer,
+              }}
+            >
+              {note.aiSummary}
+            </ReactMarkdown>
+          </div>
         </div>
       )}
+
+      <SectionSelectionDialog
+        isOpen={isSectionDialogOpen}
+        sections={documentSections}
+        onSectionSelect={handleSectionSelect}
+        onCancel={() => {
+          setIsSectionDialogOpen(false);
+          setIsUploading(false); // Allow re-upload if cancelled
+          setSelectedFile(null);
+          setExtractedContent(null);
+        }}
+      />
     </div>
   );
 };

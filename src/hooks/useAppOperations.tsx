@@ -73,7 +73,7 @@ export const useAppOperations = ({
         aiSummary: data.ai_summary || '',
         document_id: ''
       };
-      
+
       setNotes(prev => [formattedNote, ...prev]);
       setActiveNote(formattedNote);
       setActiveTab('notes');
@@ -108,8 +108,8 @@ export const useAppOperations = ({
         updatedAt: new Date()
       };
 
-      setNotes(prev => 
-        prev.map(note => 
+      setNotes(prev =>
+        prev.map(note =>
           note.id === updatedNote.id ? noteWithUpdatedTime : note
         )
       );
@@ -177,7 +177,7 @@ export const useAppOperations = ({
 
     try {
       toast.success(`Generating quiz for "${recording.title}"...`);
-      
+
       const { data, error } = await supabase.functions.invoke('generate-quiz', {
         body: {
           title: recording.title,

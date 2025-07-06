@@ -14,7 +14,7 @@ serve(async (req) => {
 
   try {
     const { message, userId, learningStyle, learningPreferences, context } = await req.json();
-    
+
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) {
       throw new Error('GEMINI_API_KEY not configured');
@@ -22,7 +22,7 @@ serve(async (req) => {
 
     // Create system prompt based on learning style and preferences
     const systemPrompt = createSystemPrompt(learningStyle, learningPreferences);
-    
+
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
       headers: {
@@ -87,7 +87,7 @@ serve(async (req) => {
 
 function createSystemPrompt(learningStyle: string, preferences: any): string {
   const basePrompt = "You are an AI study assistant that helps students understand their notes and materials better.";
-  
+
   let stylePrompt = "";
   switch (learningStyle) {
     case 'visual':
@@ -122,6 +122,6 @@ function createSystemPrompt(learningStyle: string, preferences: any): string {
   }
 
   const examplePrompt = preferences?.examples ? "Always include relevant examples and practical applications." : "Focus on direct explanations without extensive examples.";
-  
+
   return `${basePrompt} ${stylePrompt} ${difficultyPrompt} ${examplePrompt}`;
 }
