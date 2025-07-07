@@ -1,41 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { 
-  Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle, 
-  ChevronDown, ChevronUp, Menu, X, ChevronLeft 
-} from 'lucide-react';
+import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle } from 'lucide-react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Note, NoteCategory, UserProfile } from '../types';
+import { Note, NoteCategory, UserProfile } from '../types'; // Assuming central index.ts
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import Mermaid from './Mermaid';
-import { SectionSelectionDialog } from './SectionSelectionDialog';
+import Mermaid from './Mermaid'; // Import the Mermaid component
+import { SectionSelectionDialog } from './SectionSelectionDialog'; // Import the new dialog
 
 interface NoteEditorProps {
   note: Note;
   onNoteUpdate: (note: Note) => void;
   userProfile: UserProfile | null;
-  // New props for mobile responsiveness
-  isMobile?: boolean;
-  onShowSidebar?: () => void;
-  showBackButton?: boolean;
-  onBack?: () => void;
 }
 
-export const NoteEditor: React.FC<NoteEditorProps> = ({ 
-  note, 
-  onNoteUpdate, 
-  userProfile,
-  isMobile = false,
-  onShowSidebar,
-  showBackButton = false,
-  onBack
-}) => {
+export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, userProfile }) => {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [category, setCategory] = useState<NoteCategory>(note.category);
@@ -50,8 +34,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [extractedContent, setExtractedContent] = useState<string | null>(null);
-  const [isVisible, setIsVisible] = useState(true);
-  const [showMobileControls, setShowMobileControls] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -90,10 +72,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       speechSynthesis.onvoiceschanged = populateVoiceList;
     }
   }, []);
-
-  const toggleVisibility = () => {
-    setIsVisible(!isVisible);
-  };
 
   const handleSave = () => {
     const updatedNote: Note = {
@@ -164,7 +142,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
 
     setIsUploading(true);
-    setSelectedFile(file);
+    setSelectedFile(file); // Store the file for later use
     const toastId = toast.loading('Uploading document...');
 
     try {
@@ -193,8 +171,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       if (extractionError) throw extractionError;
       const extractedContent = extractionData.content_extracted;
-      setExtractedContent(extractedContent);
+      setExtractedContent(extractedContent); // Store extracted content
 
+      // Analyze document structure
       toast.loading('Analyzing document structure...', { id: toastId });
       const { data: structureData, error: structureError } = await supabase.functions.invoke('analyze-document-structure', {
         body: { documentContent: extractedContent }
@@ -204,9 +183,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       if (structureData && structureData.sections && structureData.sections.length > 0) {
         setDocumentSections(structureData.sections);
-        setIsSectionDialogOpen(true);
-        toast.dismiss(toastId);
+        setIsSectionDialogOpen(true); // Open dialog for section selection
+        toast.dismiss(toastId); // Dismiss loading toast
       } else {
+        // No sections found, proceed with full document note generation
         await generateNoteFromExtractedContent(extractedContent, file.name, urlData.publicUrl, file.type, toastId.toString());
       }
 
@@ -256,7 +236,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         body: {
           documentId: newDocument.id,
           userProfile,
-          selectedSection,
+          selectedSection, // Pass the selected section to the AI function
         },
       });
 
@@ -277,17 +257,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       console.error('Error during note generation:', error);
     } finally {
       setIsGeneratingAI(false);
-      setIsSectionDialogOpen(false);
-      setDocumentSections([]);
-      setSelectedFile(null);
-      setExtractedContent(null);
+      setIsSectionDialogOpen(false); // Close dialog
+      setDocumentSections([]); // Clear sections
+      setSelectedFile(null); // Clear selected file
+      setExtractedContent(null); // Clear extracted content
     }
   };
 
   const handleSectionSelect = async (section: string | null) => {
     if (!selectedFile || !extractedContent || !userProfile) {
       toast.error("Missing file or extracted content to generate note.");
-      return;
+      return; // Early exit if prerequisites are not met
     }
 
     const toastId = toast.loading(`Generating note from ${section ? `section: ${section}` : 'full document'}...`);
@@ -312,10 +292,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
 
     const textToRead = content
-      .replace(/```mermaid[\s\S]*?```/g, '(A diagram is present here.)')
-      .replace(/###\s?.*?\s/g, '')
-      .replace(/\*\*|\*|_|`|~/g, '')
-      .replace(/(\r\n|\n|\r)/gm, " ");
+      .replace(/```mermaid[\s\S]*?```/g, '(A diagram is present here.)') // Replace mermaid blocks
+      .replace(/###\s?.*?\s/g, '') // Remove headings like ### 1. Summary
+      .replace(/\*\*|\*|_|`|~/g, '') // Remove bold, italic, code, strikethrough markers
+      .replace(/(\r\n|\n|\r)/gm, " "); // Normalize line breaks
 
     const utterance = new SpeechSynthesisUtterance(textToRead);
 
@@ -337,6 +317,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     speechSynthesis.speak(utterance);
   };
 
+  // Custom renderer for code blocks to handle Mermaid diagrams
   const CodeRenderer = ({ node, inline, className, children, ...props }: any) => {
     const match = /language-(\w+)/.exec(className || '');
     const lang = match && match[1];
@@ -346,9 +327,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       return <Mermaid chart={chart} />;
     }
 
+    // Handle other languages or inline code
     if (!inline) {
       return (
-        <pre className="bg-slate-100 p-2 sm:p-3 rounded-md my-2 overflow-x-auto text-xs sm:text-sm">
+        <pre className="bg-slate-100 p-3 rounded-md my-2 overflow-x-auto">
           <code className={className} {...props}>
             {children}
           </code>
@@ -357,224 +339,82 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
 
     return (
-      <code className="bg-slate-100 text-purple-600 px-1 py-0.5 rounded text-xs sm:text-sm" {...props}>
+      <code className="bg-slate-100 text-purple-600 px-1 py-0.5 rounded" {...props}>
         {children}
       </code>
     );
   };
 
-  const PreRenderer = ({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) => {
-    return (
-      <pre {...props}>{children}</pre>
-    );
-  };
-
   return (
     <div className="h-full flex flex-col">
-      {/* Mobile Header with Back Button and Menu Toggle */}
-      <div className="md:hidden flex items-center justify-between p-3 border-b border-slate-200 bg-white">
-        <div className="flex items-center gap-2">
-          {showBackButton && onBack && (
-            <Button variant="ghost" size="sm" onClick={onBack}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          )}
-          {onShowSidebar && (
-            <Button variant="ghost" size="sm" onClick={onShowSidebar}>
-              <Menu className="h-4 w-4" />
-            </Button>
-          )}
-          <h1 className="text-lg font-semibold truncate">{title || 'Untitled Note'}</h1>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowMobileControls(!showMobileControls)}
-        >
-          {showMobileControls ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-        </Button>
-      </div>
-
-      {/* Mobile Controls Panel */}
-      {showMobileControls && (
-        <div className="md:hidden p-3 border-b border-slate-200 bg-slate-50 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={triggerFileUpload}
-              disabled={isUploading || isGeneratingAI || !userProfile}
-              className="text-xs"
-            >
-              {isUploading ? (
-                <Brain className="h-3 w-3 mr-1 animate-pulse" />
-              ) : (
-                <UploadCloud className="h-3 w-3 mr-1" />
-              )}
-              {isUploading ? 'Processing...' : 'Upload'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={regenerateNoteFromDocument}
-              disabled={isUploading || isGeneratingAI || !note.document_id}
-              className="text-purple-600 border-purple-200 hover:bg-purple-50 text-xs"
-            >
-              {isGeneratingAI ? (
-                <Brain className="h-3 w-3 mr-1 animate-pulse" />
-              ) : (
-                <RefreshCw className="h-3 w-3 mr-1" />
-              )}
-              Regen
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTextToSpeech}
-              disabled={isUploading || isGeneratingAI}
-              className="text-xs"
-            >
-              {isSpeaking ? (
-                <StopCircle className="h-3 w-3 mr-1 animate-pulse text-red-500" />
-              ) : (
-                <Volume2 className="h-3 w-3 mr-1" />
-              )}
-              {isSpeaking ? 'Stop' : 'Read'}
-            </Button>
-            <Button onClick={handleSave} size="sm" className="text-xs">
-              <Save className="h-3 w-3 mr-1" />
-              Save
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsEditing(!isEditing)}
-              className="text-xs"
-            >
-              {isEditing ? 'Preview' : 'Edit'}
-            </Button>
-          </div>
-          
-          <div className="space-y-2">
-            <Select value={category} onValueChange={(value: NoteCategory) => setCategory(value)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="general">General</SelectItem>
-                <SelectItem value="math">Mathematics</SelectItem>
-                <SelectItem value="science">Science</SelectItem>
-                <SelectItem value="history">History</SelectItem>
-                <SelectItem value="language">Languages</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={selectedVoiceURI || ''}
-              onValueChange={(value) => setSelectedVoiceURI(value)}
-              disabled={isSpeaking || voices.length === 0}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a voice" />
-              </SelectTrigger>
-              <SelectContent>
-                {voices.map((voice, index) => (
-                  <SelectItem key={`${voice.voiceURI}-${index.toString()}`} value={voice.voiceURI}>
-                    {`${voice.name} (${voice.lang})`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="flex items-center gap-2">
-              <Hash className="h-4 w-4 text-slate-400" />
-              <Input
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="Add tags (comma separated)..."
-                className="flex-1"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Desktop Header */}
-      <div className="hidden md:block p-3 sm:p-4 lg:p-6 border-b border-slate-200 bg-white">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+      {/* Editor Header */}
+      <div className="p-6 border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between mb-4">
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Note title..."
-            className="text-lg sm:text-xl lg:text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent"
+            className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent"
           />
-          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
             <Button
               variant="outline"
               size="sm"
               onClick={triggerFileUpload}
               disabled={isUploading || isGeneratingAI || !userProfile}
-              className="text-xs sm:text-sm"
             >
               {isUploading ? (
-                <Brain className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-pulse" />
+                <Brain className="h-4 w-4 mr-2 animate-pulse" />
               ) : (
-                <UploadCloud className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <UploadCloud className="h-4 w-4 mr-2" />
               )}
-              <span className="hidden sm:inline">{isUploading ? 'Processing...' : 'Upload & Generate'}</span>
-              <span className="sm:hidden">Upload</span>
+              {isUploading ? 'Processing...' : 'Upload & Generate'}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={regenerateNoteFromDocument}
               disabled={isUploading || isGeneratingAI || !note.document_id}
-              className="text-purple-600 border-purple-200 hover:bg-purple-50 text-xs sm:text-sm"
+              className="text-purple-600 border-purple-200 hover:bg-purple-50"
             >
               {isGeneratingAI ? (
-                <Brain className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-pulse" />
+                <Brain className="h-4 w-4 mr-2 animate-pulse" />
               ) : (
-                <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              <span className="hidden sm:inline">{isGeneratingAI ? 'Generating...' : 'Regenerate Note'}</span>
-              <span className="sm:hidden">Regen</span>
+              {isGeneratingAI ? 'Generating...' : 'Regenerate Note'}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleTextToSpeech}
               disabled={isUploading || isGeneratingAI}
-              className="text-xs sm:text-sm"
             >
               {isSpeaking ? (
-                <StopCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-pulse text-red-500" />
+                <StopCircle className="h-4 w-4 mr-2 animate-pulse text-red-500" />
               ) : (
-                <Volume2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <Volume2 className="h-4 w-4 mr-2" />
               )}
-              <span className="hidden sm:inline">{isSpeaking ? 'Stop' : 'Read Aloud'}</span>
-              <span className="sm:hidden">{isSpeaking ? 'Stop' : 'Read'}</span>
+              {isSpeaking ? 'Stop' : 'Read Aloud'}
             </Button>
-            <Button onClick={handleSave} size="sm" className="text-xs sm:text-sm">
-              <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <Button onClick={handleSave} size="sm">
+              <Save className="h-4 w-4 mr-2" />
               Save
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsEditing(!isEditing)}
-              className="text-xs sm:text-sm"
             >
               {isEditing ? 'Preview' : 'Edit'}
             </Button>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-4">
           <Select value={category} onValueChange={(value: NoteCategory) => setCategory(value)}>
-            <SelectTrigger className="w-full sm:w-40">
+            <SelectTrigger className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -592,7 +432,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             onValueChange={(value) => setSelectedVoiceURI(value)}
             disabled={isSpeaking || voices.length === 0}
           >
-            <SelectTrigger className="w-full sm:w-[240px]">
+            <SelectTrigger className="w-[240px]">
               <SelectValue placeholder="Select a voice" />
             </SelectTrigger>
             <SelectContent>
@@ -617,21 +457,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 p-3 sm:p-4 lg:p-6 flex flex-col overflow-y-auto">
+      <div className="flex-1 p-6 flex flex-col overflow-y-auto">
         {isEditing ? (
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Start writing your note here..."
-            className="flex-1 resize-none border-none shadow-none focus-visible:ring-0 text-sm sm:text-base leading-relaxed bg-transparent min-h-0"
+            className="flex-1 resize-none border-none shadow-none focus-visible:ring-0 text-base leading-relaxed bg-transparent min-h-0"
           />
         ) : (
-          <div className="prose prose-sm sm:prose-base max-w-none text-slate-700 leading-relaxed flex-1 overflow-y-auto min-h-0">
+          <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed flex-1 overflow-y-auto min-h-0">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
                 code: CodeRenderer,
-                pre: PreRenderer,
               }}
             >
               {content}
@@ -642,42 +481,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       {/* AI Summary Section */}
       {note.aiSummary && (
-        <div className="border-t border-slate-200 bg-gradient-to-r from-purple-50 to-blue-50">
-          <div className="p-3 sm:p-4 lg:p-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-purple-600" />
-                <h4 className="font-medium text-purple-800 text-sm sm:text-base">AI Summary</h4>
-              </div>
-              <button
-                onClick={toggleVisibility}
-                className="flex items-center gap-1 px-2 py-1 text-purple-600 hover:text-purple-800 hover:bg-purple-100 rounded-md transition-colors"
-                aria-label={isVisible ? "Hide AI Summary" : "Show AI Summary"}
-              >
-                {isVisible ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-                <span className="text-xs font-medium">
-                  {isVisible ? 'Hide' : 'Show'}
-                </span>
-              </button>
-            </div>
-
-            {isVisible && (
-              <div className="prose prose-sm sm:prose-base max-w-none text-purple-700 leading-relaxed">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    code: CodeRenderer,
-                    pre: PreRenderer,
-                  }}
-                >
-                  {note.aiSummary}
-                </ReactMarkdown>
-              </div>
-            )}
+        <div className="p-6 border-t border-slate-200 bg-gradient-to-r from-purple-50 to-blue-50">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-4 w-4 text-purple-600" />
+            <h4 className="font-medium text-purple-800">AI Summary</h4>
+          </div>
+          <div className="prose prose-sm max-w-none text-purple-700 leading-relaxed">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code: CodeRenderer,
+              }}
+            >
+              {note.aiSummary}
+            </ReactMarkdown>
           </div>
         </div>
       )}
@@ -688,7 +505,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         onSectionSelect={handleSectionSelect}
         onCancel={() => {
           setIsSectionDialogOpen(false);
-          setIsUploading(false);
+          setIsUploading(false); // Allow re-upload if cancelled
           setSelectedFile(null);
           setExtractedContent(null);
         }}
