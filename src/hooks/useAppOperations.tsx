@@ -71,8 +71,7 @@ export const useAppOperations = ({
         createdAt: new Date(data.created_at || Date.now()),
         updatedAt: new Date(data.updated_at || Date.now()),
         aiSummary: data.ai_summary || '',
-        document_id: data.document_id || null,
-        user_id: data.user_id
+        document_id: ''
       };
 
       setNotes(prev => [formattedNote, ...prev]);
