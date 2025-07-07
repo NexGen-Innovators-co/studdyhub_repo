@@ -119,6 +119,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             {...chatProps}
             isLoading={isAILoading}
             userProfile={userProfile}
+            notes={notes}
           />
         </div>
       );
