@@ -348,15 +348,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
   return (
     <div className="h-full flex flex-col">
       {/* Editor Header */}
-      <div className="p-6 border-b border-slate-200 bg-white">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2"> {/* Added flex-wrap and gap-2 */}
+      <div className="p-4 sm:p-6 border-b border-slate-200 bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Note title..."
-            className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0" 
+            className="text-xl sm:text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0" 
           />
-          <div className="flex items-center gap-2 flex-wrap justify-end"> {/* Added flex-wrap and justify-end */}
+          <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-start sm:justify-end">
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
             <Button
               variant="outline"
@@ -412,9 +412,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
           </div>
         </div>
 
-        <div className="flex items-center gap-4 flex-wrap"> {/* Added flex-wrap */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
           <Select value={category} onValueChange={(value: NoteCategory) => setCategory(value)}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -444,20 +444,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-2 flex-1 min-w-0"> {/* Added flex-1 min-w-0 */}
-            <Hash className="h-4 w-4 text-slate-400" />
+          <div className="flex items-center gap-2 flex-1 min-w-0 w-full sm:w-auto">
+            <Hash className="h-4 w-4 text-slate-400 flex-shrink-0" />
             <Input
               value={tags}
               onChange={(e) => setTags(e.target.value)}
-              placeholder="Add tags (comma separated)..."
-              className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1" 
+              placeholder="Add tags..."
+              className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0" 
             />
           </div>
         </div>
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 p-6 flex flex-col overflow-y-auto">
+      <div className="flex-1 p-4 sm:p-6 flex flex-col overflow-y-auto">
         {isEditing ? (
           <Textarea
             value={content}
