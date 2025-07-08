@@ -349,14 +349,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
     <div className="h-full flex flex-col">
       {/* Editor Header */}
       <div className="p-6 border-b border-slate-200 bg-white">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2"> {/* Added flex-wrap and gap-2 */}
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Note title..."
-            className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent"
+            className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0" 
           />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end"> {/* Added flex-wrap and justify-end */}
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
             <Button
               variant="outline"
@@ -412,7 +412,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap"> {/* Added flex-wrap */}
           <Select value={category} onValueChange={(value: NoteCategory) => setCategory(value)}>
             <SelectTrigger className="w-40">
               <SelectValue />
@@ -432,7 +432,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
             onValueChange={(value) => setSelectedVoiceURI(value)}
             disabled={isSpeaking || voices.length === 0}
           >
-            <SelectTrigger className="w-[240px]">
+            <SelectTrigger className="w-full sm:w-[240px]"> {/* Adjusted width for responsiveness */}
               <SelectValue placeholder="Select a voice" />
             </SelectTrigger>
             <SelectContent>
@@ -444,13 +444,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-2 flex-1">
+          <div className="flex items-center gap-2 flex-1 min-w-0"> {/* Added flex-1 min-w-0 */}
             <Hash className="h-4 w-4 text-slate-400" />
             <Input
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="Add tags (comma separated)..."
-              className="border-none shadow-none focus-visible:ring-0 bg-transparent"
+              className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1" 
             />
           </div>
         </div>

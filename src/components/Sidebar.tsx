@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Book, Calculator, FlaskConical, Clock, Globe, FileText, Hash, Mic, Calendar, MessageCircle, Upload, Settings } from 'lucide-react';
 import { Button } from './ui/button';
@@ -45,7 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div className={`bg-white border-r border-slate-200 transition-all duration-300 ${
       isOpen ? 'w-64' : 'w-0 lg:w-16'
-    } overflow-hidden`}>
+    } overflow-hidden h-full flex flex-col shadow-lg lg:shadow-none relative`}>
       <div className="p-4">
         {/* Main Navigation */}
         <div className="mb-6">
