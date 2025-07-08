@@ -30,26 +30,26 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab
 }) => {
   return (
-    <header className="flex items-center gap-2 sm:gap-4 flex-1">
+    <header className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
       <Button
         variant="ghost"
         size="sm"
         onClick={onToggleSidebar}
-        className="lg:hidden p-2"
+        className="lg:hidden p-1.5 sm:p-2 flex-shrink-0"
       >
         <Menu className="h-4 w-4" />
       </Button>
 
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink">
         <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-bold text-slate-800 truncate">NoteMind</h1>
+        <div className="min-w-0 flex-shrink">
+          <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-800 truncate">NoteMind</h1>
           <p className="text-xs text-slate-500 hidden sm:block truncate">{tabNames[activeTab]}</p>
         </div>
       </div>
 
       {activeTab === 'notes' && (
-        <div className="flex-1 max-w-sm sm:max-w-md mx-2 sm:mx-4 hidden md:block">
+        <div className="flex-1 max-w-xs sm:max-w-sm md:max-w-md mx-1 sm:mx-2 md:mx-4 hidden md:block">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
         <Button 
           onClick={onNewNote}
           size="sm"
-          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md"
+          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md flex-shrink-0"
         >
           <Plus className="h-4 w-4 sm:mr-2" />
           <span className="hidden sm:inline">New Note</span>

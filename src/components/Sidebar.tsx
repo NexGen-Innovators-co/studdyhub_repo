@@ -45,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className={`bg-white border-r border-slate-200 transition-all duration-300 ${
       isOpen ? 'w-64' : 'w-0 lg:w-16'
     } overflow-hidden h-full flex flex-col shadow-lg lg:shadow-none relative`}>
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         {/* Main Navigation */}
         <div className="mb-6">
           {isOpen && (

@@ -33,13 +33,14 @@ export const useAppData = () => {
         return;
       }
 
-      // Load user profile
+      // Load user profile - use maybeSingle to avoid errors if no profile exists
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
+      // Create user profile if it doesn't exist or use existing one
       if (profileData) {
         setUserProfile({
           id: profileData.id,
@@ -55,6 +56,41 @@ export const useAppData = () => {
           created_at: new Date(profileData.created_at || Date.now()),
           updated_at: new Date(profileData.updated_at || Date.now())
         });
+      } else {
+        // Create default profile if none exists
+        const defaultProfile = {
+          id: user.id,
+          email: user.email || '',
+          full_name: '',
+          avatar_url: '',
+          learning_style: 'visual' as const,
+          learning_preferences: {
+            explanation_style: 'detailed' as const,
+            examples: true,
+            difficulty: 'intermediate' as const
+          }
+        };
+
+        try {
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert(defaultProfile);
+
+          if (!insertError) {
+            setUserProfile({
+              ...defaultProfile,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+        } catch (error) {
+          // Profile creation failed, but continue with default
+          setUserProfile({
+            ...defaultProfile,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+        }
       }
 
       // Load notes

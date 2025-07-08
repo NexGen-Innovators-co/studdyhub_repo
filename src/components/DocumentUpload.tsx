@@ -133,10 +133,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+        className={`border-2 border-dashed rounded-lg p-4 sm:p-6 md:p-8 text-center transition-colors ${
           dragActive
             ? 'border-blue-500 bg-blue-50'
             : 'border-gray-300 hover:border-gray-400'
@@ -146,14 +146,14 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         onDragOver={handleDrag}
         onDrop={handleDrop}
       >
-        <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
+        <Upload className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 mx-auto text-gray-400 mb-3 sm:mb-4" />
+        <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
           Upload Study Documents
         </h3>
-        <p className="text-gray-500 mb-4">
+        <p className="text-sm sm:text-base text-gray-500 mb-3 sm:mb-4">
           Drag and drop files here, or click to browse
         </p>
-        <p className="text-sm text-gray-400 mb-4">
+        <p className="text-xs sm:text-sm text-gray-400 mb-3 sm:mb-4">
           Supports PDF and TXT files up to 10MB
         </p>
         <input
