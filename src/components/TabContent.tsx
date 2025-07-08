@@ -9,6 +9,17 @@ import { LearningStyleSettings } from './LearningStyleSettings';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
+import { ChatHistory } from './ChatHistory'; 
+
+interface ChatSession {
+  id: string;
+  title: string;
+  created_at: Date;
+  updated_at: Date;
+  last_message_at: Date;
+  document_ids: string[];
+  message_count?: number;
+}
 
 interface TabContentProps {
   activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
@@ -20,6 +31,7 @@ interface TabContentProps {
   documents: Document[];
   userProfile: UserProfile | null;
   isAILoading: boolean;
+  setIsAILoading: (isLoading: boolean) => void;
   onNoteSelect: (note: Note) => void;
   onNoteUpdate: (note: Note) => void;
   onNoteDelete: (noteId: string) => void;
@@ -32,12 +44,25 @@ interface TabContentProps {
   onDocumentUploaded: (document: Document) => void;
   onDocumentDeleted: (documentId: string) => void;
   onProfileUpdate: (profile: UserProfile) => void;
+  // New props for ChatHistory management
+  chatSessions: ChatSession[];
+  activeChatSessionId: string | null;
+  onChatSessionSelect: (sessionId: string) => void;
+  onNewChatSession: () => Promise<string | null>;
+  onDeleteChatSession: (sessionId: string) => Promise<void>;
+  onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
+  onSelectedDocumentIdsChange: (ids: string[]) => void;
+  selectedDocumentIds: string[];
+  // New props for responsive chat history
+  isChatHistoryOpen: boolean;
+  onToggleChatHistory: () => void;
+  onNewMessage: (message: Message) => void;
 }
  
 export const TabContent: React.FC<TabContentProps> = (props) => {
-  const { activeTab, userProfile, isAILoading } = props;
+  const { activeTab, userProfile, isAILoading, isChatHistoryOpen, onToggleChatHistory } = props;
 
-  // Group props for child components to improve readability
+  // Group props for child components
   const notesProps = {
     notes: props.filteredNotes,
     activeNote: props.activeNote,
@@ -59,16 +84,43 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onDeleteItem: props.onDeleteScheduleItem,
   };
 
+  // Updated chatProps with new props
   const chatProps = {
     messages: props.chatMessages,
     documents: props.documents,
     onSendMessage: props.onSendMessage,
+    notes: props.filteredNotes,
+    selectedDocumentIds: props.selectedDocumentIds,
+    onSelectionChange: props.onSelectedDocumentIdsChange,
+    activeChatSessionId: props.activeChatSessionId,
+    onNewChatSession: props.onNewChatSession,
+    onDeleteChatSession: props.onDeleteChatSession,
+    onRenameChatSession: props.onRenameChatSession,
+    onChatSessionSelect: props.onChatSessionSelect,
+    chatSessions: props.chatSessions,
+    onToggleChatHistory: onToggleChatHistory,
+    isLoading: isAILoading,
+    setIsLoading: props.setIsAILoading,
+    onNewMessage: props.onNewMessage,
+    userProfile: userProfile,
   };
 
   const documentsProps = {
     documents: props.documents,
     onDocumentUploaded: props.onDocumentUploaded,
     onDocumentDeleted: props.onDocumentDeleted,
+  };
+
+  // Props for ChatHistory component
+  const chatHistoryProps = {
+    sessions: props.chatSessions,
+    activeSessionId: props.activeChatSessionId,
+    onSessionSelect: props.onChatSessionSelect,
+    onNewSession: props.onNewChatSession,
+    onDeleteSession: props.onDeleteChatSession, // This is already a Promise<void> in Index.tsx
+    onRenameSession: props.onRenameChatSession,
+    isOpen: isChatHistoryOpen,
+    onClose: onToggleChatHistory,
   };
 
   switch (activeTab) {
@@ -114,13 +166,28 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'chat':
       return (
-        <div className="flex-1">
-          <AIChat
-            {...chatProps}
-            isLoading={isAILoading}
-            userProfile={userProfile}
-            notes={props.filteredNotes}
-          />
+        <div className="flex flex-1 min-h-0 relative">
+          {/* Mobile backdrop for chat history */}
+          {isChatHistoryOpen && (
+            <div 
+              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+              onClick={onToggleChatHistory}
+            />
+          )}
+
+          {/* Chat History as a responsive sidebar/drawer */}
+          <div className={`${isChatHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
+            fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
+            w-80 bg-white border-r border-slate-200 shadow-lg lg:shadow-none
+            flex flex-col transition-transform duration-300 ease-in-out
+            lg:translate-x-0 lg:w-80`}>
+            <ChatHistory {...chatHistoryProps} />
+          </div>
+
+          {/* AI Chat content fills remaining space */}
+          <div className="flex-1 bg-white min-h-0">
+            <AIChat {...chatProps} />
+          </div>
         </div>
       );
 
