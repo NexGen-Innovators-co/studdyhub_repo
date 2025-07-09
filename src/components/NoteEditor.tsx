@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw'; // Needed for rendering raw HTML, especially for Mermaid SVG
 import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle } from 'lucide-react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Note, NoteCategory, UserProfile } from '../types'; // Assuming central index.ts
+import { Note, NoteCategory, UserProfile } from '../types';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import Mermaid from './Mermaid'; // Import the Mermaid component
-import { SectionSelectionDialog } from './SectionSelectionDialog'; // Import the new dialog
+import { SectionSelectionDialog } from './SectionSelectionDialog';
 
 interface NoteEditorProps {
   note: Note;
@@ -194,7 +195,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
       let errorMessage = 'An unknown error occurred.';
       if (error instanceof FunctionsHttpError) {
         errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
-        console.error('Function HTTP Error Details:', error.context);
       } else if (error instanceof Error) {
         errorMessage = error.message;
       }
@@ -224,8 +224,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
           title: fileName,
           file_name: fileName,
           file_url: fileUrl,
-          file_type: fileType,
           content_extracted: contentToUse,
+          file_type: fileType,
         })
         .select('id')
         .single();
@@ -249,7 +249,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
       let errorMessage = 'An unknown error occurred.';
       if (error instanceof FunctionsHttpError) {
         errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
-        console.error('Function HTTP Error Details:', error.context);
       } else if (error instanceof Error) {
         errorMessage = error.message;
       }
@@ -317,30 +316,33 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
     speechSynthesis.speak(utterance);
   };
 
-  // Custom renderer for code blocks to handle Mermaid diagrams
-  const CodeRenderer = ({ node, inline, className, children, ...props }: any) => {
+  // Custom renderer for code blocks to handle Mermaid diagrams and apply styling
+  const CodeRenderer = ({ inline, className, children, ...props }: any) => {
+    const codeContent = String(children).trim();
     const match = /language-(\w+)/.exec(className || '');
     const lang = match && match[1];
 
-    if (lang === 'mermaid' && !inline) {
-      const chart = String(children).replace(/\n$/, '');
-      return <Mermaid chart={chart} />;
+    if (!inline && lang === 'mermaid') {
+      return <Mermaid chart={codeContent} />;
     }
 
-    // Handle other languages or inline code
-    if (!inline) {
-      return (
-        <pre className="bg-slate-100 p-3 rounded-md my-2 overflow-x-auto">
-          <code className={className} {...props}>
-            {children}
+    // For other code blocks, apply dark theme and syntax highlighting (handled by 'prose' and 'prismjs' if configured)
+    // Adding a language label for clarity
+    return !inline && lang ? (
+      <div className="relative my-4 rounded-md overflow-hidden">
+        <div className="absolute top-0 right-0 bg-slate-700 text-white text-xs px-2 py-1 rounded-bl-md">
+          {lang.toUpperCase()}
+        </div>
+        <pre className="p-4 bg-slate-800 text-white overflow-x-auto">
+          <code className={`language-${lang}`} {...props}>
+            {codeContent}
           </code>
         </pre>
-      );
-    }
-
-    return (
+      </div>
+    ) : (
+      // Inline code
       <code className="bg-slate-100 text-purple-600 px-1 py-0.5 rounded" {...props}>
-        {children}
+        {codeContent}
       </code>
     );
   };
@@ -348,15 +350,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
   return (
     <div className="h-full flex flex-col">
       {/* Editor Header */}
-      <div className="p-4 sm:p-6 border-b border-slate-200 bg-white">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+      <div className="p-6 border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Note title..."
-            className="text-xl sm:text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0" 
+            className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0"
           />
-          <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-start sm:justify-end">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
             <Button
               variant="outline"
@@ -412,9 +414,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <Select value={category} onValueChange={(value: NoteCategory) => setCategory(value)}>
-            <SelectTrigger className="w-full sm:w-40">
+            <SelectTrigger className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -432,7 +434,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
             onValueChange={(value) => setSelectedVoiceURI(value)}
             disabled={isSpeaking || voices.length === 0}
           >
-            <SelectTrigger className="w-full sm:w-[240px]"> {/* Adjusted width for responsiveness */}
+            <SelectTrigger className="w-full sm:w-[240px]">
               <SelectValue placeholder="Select a voice" />
             </SelectTrigger>
             <SelectContent>
@@ -444,20 +446,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-2 flex-1 min-w-0 w-full sm:w-auto">
-            <Hash className="h-4 w-4 text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Hash className="h-4 w-4 text-slate-400" />
             <Input
               value={tags}
               onChange={(e) => setTags(e.target.value)}
-              placeholder="Add tags..."
-              className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0" 
+              placeholder="Add tags (comma separated)..."
+              className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1"
             />
           </div>
         </div>
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 p-4 sm:p-6 flex flex-col overflow-y-auto">
+      <div className="flex-1 p-6 flex flex-col overflow-y-auto">
         {isEditing ? (
           <Textarea
             value={content}
@@ -469,8 +471,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
           <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed flex-1 overflow-y-auto min-h-0">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]} 
               components={{
                 code: CodeRenderer,
+                // Custom components for enhanced table rendering
+                table: ({node, ...props}) => (
+                  <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200"> {/* Added responsive overflow, shadow, border */}
+                    <table className="w-full border-collapse" {...props} />
+                  </div>
+                ),
+                thead: ({node, ...props}) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100" {...props} />, 
+                th: ({node, ...props}) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800" {...props} />, 
+                td: ({node, ...props}) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors" {...props} />,
+                // Custom components for colorful headings and typography (optional, prose handles defaults)
+                h1: ({node, ...props}) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3" {...props} />,
+                h2: ({node, ...props}) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2" {...props} />,
+                h3: ({node, ...props}) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2" {...props} />,
+                h4: ({node, ...props}) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1" {...props} />,
+                ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-1 text-slate-700" {...props} />,
+                ol: ({node, ...props}) => <ol className="list-decimal list-inside space-y-1 text-slate-700" {...props} />,
+                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4" {...props} />,
+                p: ({node, ...props}) => <p className="mb-3 text-slate-700 leading-relaxed" {...props} />,
+                a: ({node, ...props}) => <a className="text-blue-600 hover:underline" {...props} />,
               }}
             >
               {content}
@@ -489,8 +511,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onNoteUpdate, user
           <div className="prose prose-sm max-w-none text-purple-700 leading-relaxed">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]} 
               components={{
                 code: CodeRenderer,
+                // Apply similar table styling for AI summary section
+                table: ({node, ...props}) => (
+                  <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200">
+                    <table className="w-full border-collapse" {...props} />
+                  </div>
+                ),
+                thead: ({node, ...props}) => <thead className="bg-gradient-to-r from-purple-100 to-blue-100" {...props} />, 
+                th: ({node, ...props}) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-purple-800" {...props} />,
+                td: ({node, ...props}) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-purple-50 hover:bg-blue-50 transition-colors" {...props} />,
+                // Custom components for colorful headings and typography in summary
+                h1: ({node, ...props}) => <h1 className="text-3xl font-extrabold text-purple-700 mt-6 mb-3" {...props} />,
+                h2: ({node, ...props}) => <h2 className="text-2xl font-bold text-blue-700 mt-5 mb-2" {...props} />,
+                h3: ({node, ...props}) => <h3 className="text-xl font-semibold text-teal-700 mt-4 mb-2" {...props} />,
+                h4: ({node, ...props}) => <h4 className="text-lg font-semibold text-pink-700 mt-3 mb-1" {...props} />,
+                ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-1 text-purple-700" {...props} />,
+                ol: ({node, ...props}) => <ol className="list-decimal list-inside space-y-1 text-purple-700" {...props} />,
+                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-purple-400 pl-4 py-2 italic text-purple-600 bg-purple-50 rounded-r-md my-4" {...props} />,
+                p: ({node, ...props}) => <p className="mb-3 text-purple-700 leading-relaxed" {...props} />,
+                a: ({node, ...props}) => <a className="text-purple-600 hover:underline" {...props} />,
               }}
             >
               {note.aiSummary}
