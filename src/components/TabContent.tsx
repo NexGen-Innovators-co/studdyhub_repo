@@ -65,7 +65,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   // Group props for child components
   const notesProps = {
     notes: props.filteredNotes,
-    activeNote: props.activeNote,
+    activeNote: props.activeNote ,
     onNoteSelect: props.onNoteSelect,
     onNoteDelete: props.onNoteDelete,
     onNoteUpdate: props.onNoteUpdate,
@@ -133,9 +133,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
           <div className="flex-1 bg-white min-h-0">
             {notesProps.activeNote ? (
               <NoteEditor 
-                note={notesProps.activeNote}
-                onNoteUpdate={notesProps.onNoteUpdate}
-                userProfile={userProfile}
+                note={notesProps.activeNote} // Pass the active note
+                onNoteUpdate={notesProps.onNoteUpdate} // Correct prop name
+                userProfile={userProfile} // Pass userProfile 
               />
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400 p-4">

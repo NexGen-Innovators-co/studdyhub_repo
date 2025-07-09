@@ -27,7 +27,7 @@ interface ChatSession {
 const Index = () => {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
-  
+
   const {
     notes,
     recordings,
@@ -59,6 +59,7 @@ const Index = () => {
   } = useAppData();
 
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  // Initialize activeChatSessionId as null to show empty chat initially
   const [activeChatSessionId, setActiveChatSessionId] = useState<string | null>(null);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [isChatHistoryOpen, setIsChatHistoryOpen] = useState(false);
@@ -70,12 +71,14 @@ const Index = () => {
   }, [user]);
 
   useEffect(() => {
+    // Only load messages if an active session is explicitly selected
     if (activeChatSessionId) {
       loadSessionMessages(activeChatSessionId);
     } else {
+      // Clear messages if no session is active (e.g., initial load or after deleting last session)
       setChatMessages([]);
     }
-  }, [activeChatSessionId]);
+  }, [activeChatSessionId, user]); // Added user to dependency array
 
   useEffect(() => {
     if (activeChatSessionId && chatSessions.length > 0) {
@@ -110,10 +113,7 @@ const Index = () => {
       }));
 
       setChatSessions(formattedSessions);
-
-      if (formattedSessions.length > 0 && !activeChatSessionId) {
-        setActiveChatSessionId(formattedSessions[0].id);
-      }
+      // Do NOT set activeChatSessionId here. It will be set explicitly by user selection or new chat creation.
     } catch (error) {
       console.error('Error loading chat sessions:', error);
       toast.error('Failed to load chat sessions.');
@@ -140,8 +140,8 @@ const Index = () => {
       setChatMessages(formattedMessages);
     } catch (error) {
       console.error('Error loading session messages:', error);
-      setChatMessages([]);
-      toast.error('Failed to load chat messages.');
+      setChatMessages([]); // Clear messages on error
+      toast.error('Failed to load chat messages for this session.');
     }
   };
 
@@ -174,10 +174,11 @@ const Index = () => {
       };
 
       setChatSessions(prev => [newSession, ...prev]);
-      setActiveChatSessionId(newSession.id);
+      setActiveChatSessionId(newSession.id); // Set the new session as active
+      setChatMessages([]); // Clear messages for the new session
       toast.success('New chat session created!');
-      setIsChatHistoryOpen(false);
-      
+      setIsChatHistoryOpen(false); // Close history sidebar on mobile
+
       return newSession.id;
     } catch (error) {
       console.error('Error creating new session:', error);
@@ -186,37 +187,36 @@ const Index = () => {
     }
   };
 
-  // In Index.tsx
-const deleteChatSession = async (sessionId: string) => {
-  try {
-    if (!user) return;
+  const deleteChatSession = async (sessionId: string) => {
+    try {
+      if (!user) return;
 
-    // Delete from database
-    const { error } = await supabase
-      .from('chat_sessions')
-      .delete()
-      .eq('id', sessionId)
-      .eq('user_id', user.id);
+      // Delete from database
+      const { error } = await supabase
+        .from('chat_sessions')
+        .delete()
+        .eq('id', sessionId)
+        .eq('user_id', user.id);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    // Update state
-    setChatSessions(prev => prev.filter(s => s.id !== sessionId));
-    
-    if (activeChatSessionId === sessionId) {
-      const remainingSessions = chatSessions.filter(s => s.id !== sessionId);
-      if (remainingSessions.length > 0) {
-        setActiveChatSessionId(remainingSessions[0].id);
-      } else {
-        setActiveChatSessionId(null);
+      // Update state
+      setChatSessions(prev => prev.filter(s => s.id !== sessionId));
+
+      if (activeChatSessionId === sessionId) {
+        const remainingSessions = chatSessions.filter(s => s.id !== sessionId);
+        if (remainingSessions.length > 0) {
+          setActiveChatSessionId(remainingSessions[0].id); // Set active to the first remaining session
+        } else {
+          setActiveChatSessionId(null); // No sessions left, set to null
+        }
       }
+      toast.success('Chat session deleted.');
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      toast.error('Failed to delete chat session');
     }
-    toast.success('Chat session deleted.');
-  } catch (error) {
-    console.error('Error deleting session:', error);
-    toast.error('Failed to delete chat session');
-  }
-};
+  };
 
   const renameChatSession = async (sessionId: string, newTitle: string) => {
     try {
@@ -230,7 +230,7 @@ const deleteChatSession = async (sessionId: string) => {
 
       if (error) throw error;
 
-      setChatSessions(prev => prev.map(s => 
+      setChatSessions(prev => prev.map(s =>
         s.id === sessionId ? { ...s, title: newTitle } : s
       ));
       toast.success('Chat session renamed.');
@@ -310,7 +310,7 @@ const deleteChatSession = async (sessionId: string) => {
       // Update session last_message_at and document_ids in DB
       const { error: updateError } = await supabase
         .from('chat_sessions')
-        .update({ 
+        .update({
           last_message_at: new Date().toISOString(),
           document_ids: selectedDocumentIds
         })
@@ -323,8 +323,8 @@ const deleteChatSession = async (sessionId: string) => {
 
       // Directly update the specific session in state and re-sort
       setChatSessions(prevSessions => {
-        const updatedSessions = prevSessions.map(session => 
-          session.id === activeChatSessionId 
+        const updatedSessions = prevSessions.map(session =>
+          session.id === activeChatSessionId
             ? { ...session, last_message_at: new Date(), document_ids: selectedDocumentIds }
             : session
         );
@@ -353,7 +353,7 @@ const deleteChatSession = async (sessionId: string) => {
         context += `Title: ${doc.title}\n`;
         context += `File: ${doc.file_name}\n`;
         if (doc.content_extracted) {
-          const content = doc.content_extracted.length > 2000 
+          const content = doc.content_extracted.length > 2000
             ? doc.content_extracted.substring(0, 2000) + '...'
             : doc.content_extracted;
           context += `Content: ${content}\n`;
@@ -368,7 +368,7 @@ const deleteChatSession = async (sessionId: string) => {
         context += `Title: ${note.title}\n`;
         context += `Category: ${note.category}\n`;
         if (note.content) {
-          const content = note.content.length > 1500 
+          const content = note.content.length > 1500
             ? note.content.substring(0, 1500) + '...'
             : note.content;
           context += `Content: ${content}\n`;
@@ -456,17 +456,17 @@ const deleteChatSession = async (sessionId: string) => {
     <div className="h-screen flex bg-gradient-to-br from-slate-50 to-blue-50 overflow-hidden">
       {/* Mobile backdrop for main sidebar */}
       {isSidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
-      
+
       {/* Sidebar */}
       <div className={`${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
         transition-transform duration-300 ease-in-out`}>
-        <Sidebar 
+        <Sidebar
           isOpen={isSidebarOpen}
           onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
           selectedCategory={selectedCategory}
@@ -480,7 +480,7 @@ const deleteChatSession = async (sessionId: string) => {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0">
         <div className="flex items-center justify-between p-3 sm:p-4 bg-white border-b border-slate-200">
-          <Header 
+          <Header
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onNewNote={createNewNote}
@@ -490,9 +490,9 @@ const deleteChatSession = async (sessionId: string) => {
           />
           <div className="hidden sm:flex items-center gap-3">
             <span className="text-sm text-slate-600 hidden md:block">Welcome, {user.email}</span>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleSignOut}
               className="flex items-center gap-2"
             >
@@ -500,9 +500,9 @@ const deleteChatSession = async (sessionId: string) => {
               <span className="hidden sm:inline">Sign Out</span>
             </Button>
           </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleSignOut}
             className="sm:hidden"
           >

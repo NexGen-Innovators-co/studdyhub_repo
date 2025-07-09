@@ -21,8 +21,8 @@ interface ChatHistoryProps {
   activeSessionId: string | null;
   onSessionSelect: (sessionId: string) => void;
   onNewSession: () => void;
-  onDeleteSession: (sessionId: string) => Promise<void>; // Changed to async
-  onRenameSession: (sessionId: string, newTitle: string) => Promise<void>; // Changed to async
+  onDeleteSession: (sessionId: string) => Promise<void>;
+  onRenameSession: (sessionId: string, newTitle: string) => Promise<void>;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -39,7 +39,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null); // Track deleting state
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const startEditing = (session: ChatSession) => {
     setEditingId(session.id);
@@ -67,7 +67,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({
     }
   };
 
-  // Handle delete with async operation
   const handleDelete = async (sessionId: string) => {
     setDeletingId(sessionId);
     try {
@@ -109,11 +108,12 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({
             {(sessions ?? []).map((session) => (
               <Card
                 key={session.id}
-                className={`cursor-pointer transition-colors rounded-lg shadow-sm ${
-                  activeSessionId === session.id
-                    ? 'bg-blue-50 border-l-4 border-l-blue-500'
+                // Enhanced active session styling with gradient and thicker border
+                className={`cursor-pointer transition-colors rounded-lg shadow-sm 
+                  ${activeSessionId === session.id
+                    ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-l-blue-500 shadow-md'
                     : 'hover:bg-slate-50 border border-slate-100'
-                }`}
+                  }`}
                 onClick={() => onSessionSelect(session.id)}
               >
                 <CardContent className="p-3">
@@ -146,7 +146,8 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({
 
                       {(session.document_ids ?? []).length > 0 && ( 
                         <div className="mt-2">
-                          <Badge variant="outline" className="text-xs bg-slate-100 text-slate-600 border-slate-200">
+                          {/* Colorful badge for document count */}
+                          <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-200">
                             {(session.document_ids ?? []).length} document{session.document_ids?.length !== 1 ? 's' : ''}
                           </Badge>
                         </div>
