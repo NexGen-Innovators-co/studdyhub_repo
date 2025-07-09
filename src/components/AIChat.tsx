@@ -16,7 +16,6 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import 'highlight.js/styles/github-dark.css';
 import Mermaid from './Mermaid';
-import { createLowlight } from 'lowlight';
 import { Element } from 'hast';
 
 // Import languages for syntax highlighting
@@ -29,8 +28,15 @@ import xml from 'highlight.js/lib/languages/xml';
 import bash from 'highlight.js/lib/languages/bash';
 
 // Create lowlight instance and register languages
-const lowlight = createLowlight();
-lowlight.register({ javascript, python, java, cpp, sql, xml, bash });
+import { lowlight } from 'lowlight';
+import { LanguageFn } from 'highlight.js';
+lowlight.registerLanguage('javascript', javascript as LanguageFn);
+lowlight.registerLanguage('python', python as LanguageFn);
+lowlight.registerLanguage('java', java as LanguageFn);
+lowlight.registerLanguage('cpp', cpp as LanguageFn);
+lowlight.registerLanguage('sql', sql as LanguageFn);
+lowlight.registerLanguage('xml', xml as LanguageFn);
+lowlight.registerLanguage('bash', bash as LanguageFn);
 
 // Helper function to convert highlight.js output to React elements
 const renderHighlightedCode = (result: any) => {
