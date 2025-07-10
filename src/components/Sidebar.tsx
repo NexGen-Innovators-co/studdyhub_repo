@@ -42,14 +42,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTabChange
 }) => {
   return (
-    <div className={`bg-white border-r border-slate-200 transition-all duration-300 ${
-      isOpen ? 'w-64' : 'w-0 lg:w-16'
-    } overflow-hidden h-full flex flex-col shadow-lg lg:shadow-none relative`}>
-      <div className="p-3 sm:p-4">
-        {/* Main Navigation */}
-        <div className="mb-6">
-          {isOpen && (
-            <h2 className="font-semibold text-slate-800 mb-3">Navigation</h2>
+    // The main container for the sidebar.
+    // On mobile, it slides in/out based on 'isOpen'.
+    // On desktop (lg breakpoint), it's narrow by default (w-16) and expands on hover (group-hover:w-64).
+    // 'group' class is essential for group-hover to work on child elements.
+    <div className={`bg-white border-r h-full border-slate-200 transition-all duration-300 ease-in-out ${
+      isOpen ? 'translate-x-0' : '-translate-x-full'
+    } fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg lg:shadow-none
+    lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden`}>
+      
+      {/* Content area, takes up remaining vertical space and allows scrolling */}
+      <div className="p-2 sm:p-3 flex-1 overflow-hidden"> 
+        {/* Main Navigation Section */}
+        <div className="mb-2">
+          {/* "Navigation" heading: visible when 'isOpen' (mobile) or on desktop hover */}
+          {(isOpen || window.innerWidth >= 1024) && ( // Check for isOpen or desktop view
+            <h2 className="font-semibold text-slate-800 mb-2 
+              lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+              Navigation
+            </h2>
           )}
           <nav className="space-y-1">
             {tabs.map((tab) => {
@@ -67,19 +78,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   } ${!isOpen && 'px-2'}`}
                   onClick={() => onTabChange(tab.id as any)}
                 >
-                  <Icon className={`h-4 w-4 ${isOpen ? 'mr-3' : ''}`} />
-                  {isOpen && <span className="truncate">{tab.name}</span>}
+                  {/* Icon: has margin when 'isOpen' (mobile) or on desktop hover */}
+                  <Icon className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'}`} />
+                  {/* Text label: visible when 'isOpen' (mobile) or on desktop hover */}
+                  <span className={`truncate ${
+                    isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-10 lg:w-full lg:pl-1 lg:pointer-events-none'
+                  }`}>
+                    {tab.name}
+                  </span>
                 </Button>
               );
             })}
           </nav>
         </div>
 
-        {/* Categories (only shown when Notes tab is active) */}
+        {/* Categories Section (only shown when Notes tab is active) */}
         {activeTab === 'notes' && (
           <div>
-            {isOpen && (
-              <div className="mb-3">
+            {/* "Categories" heading: visible when 'isOpen' (mobile) or on desktop hover */}
+            {(isOpen || window.innerWidth >= 1024) && ( // Check for isOpen or desktop view
+              <div className="mb-2 
+                lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
                 <h2 className="font-semibold text-slate-800">Categories</h2>
                 <p className="text-sm text-slate-500">{noteCount} notes</p>
               </div>
@@ -101,8 +120,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     } ${!isOpen && 'px-2'}`}
                     onClick={() => onCategoryChange(category.id)}
                   >
-                    <Icon className={`h-3 w-3 ${isOpen ? 'mr-2' : ''}`} />
-                    {isOpen && <span className="truncate">{category.name}</span>}
+                    {/* Icon: has margin when 'isOpen' (mobile) or on desktop hover */}
+                    <Icon className={`h-3 w-3 ${isOpen ? 'mr-2' : 'lg:group-hover:mr-2 lg:transition-all lg:duration-300'}`} />
+                    {/* Text label: visible when 'isOpen' (mobile) or on desktop hover */}
+                    <span className={`truncate ${
+                      isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-9 lg:w-full lg:pl-1 lg:pointer-events-none'
+                    }`}>
+                      {category.name}
+                    </span>
                   </Button>
                 );
               })}

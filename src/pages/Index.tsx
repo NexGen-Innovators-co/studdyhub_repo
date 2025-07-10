@@ -246,8 +246,6 @@ const Index = () => {
       return;
     }
 
-    setIsAILoading(true);
-
     // 1. Immediately add user message to local state
     const newUserMessage: Message = {
       id: crypto.randomUUID(),
@@ -256,16 +254,15 @@ const Index = () => {
       timestamp: new Date(),
     };
     setChatMessages(prevMessages => [...(prevMessages || []), newUserMessage]);
-
+    setIsAILoading(true);
     // 2. Add a temporary AI loading message
-    const aiLoadingMessage: Message = {
-      id: 'loading-ai-response',
-      content: 'AI is thinking...',
-      role: 'assistant',
-      timestamp: new Date(),
-    };
-    setChatMessages(prevMessages => [...(prevMessages || []), aiLoadingMessage]);
-
+    // const aiLoadingMessage: Message = {
+    //   id: 'loading-ai-response',
+    //   content: 'AI is thinking...',
+    //   role: 'assistant',
+    //   timestamp: new Date(),
+    // };
+    // setChatMessages(prevMessages => [...(prevMessages || [])]);
     try {
       const context = buildRichContext(selectedDocumentIds, documents, notes);
 
@@ -279,9 +276,9 @@ const Index = () => {
           sessionId: activeChatSessionId,
           learningStyle: userProfile?.learning_style || 'visual',
           learningPreferences: userProfile?.learning_preferences || {
-            explanation_style: 'simple',
-            examples: true,
-            difficulty: 'intermediate'
+            explanation_style: userProfile?.learning_preferences?.explanation_style || 'detailed',
+            examples: userProfile?.learning_preferences?.examples || 'yes',
+            difficulty: userProfile?.learning_preferences?.difficulty || 'medium',
           },
           context,
           chatHistory: historyToSend
@@ -546,6 +543,8 @@ const Index = () => {
           isChatHistoryOpen={isChatHistoryOpen}
           onToggleChatHistory={() => setIsChatHistoryOpen(!isChatHistoryOpen)}
           onNewMessage={handleNewMessage}
+          isNotesHistoryOpen={isChatHistoryOpen} // New prop
+          onToggleNotesHistory={() => setIsChatHistoryOpen(!isChatHistoryOpen)}
         />
       </div>
     </div>

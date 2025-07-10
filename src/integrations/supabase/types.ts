@@ -344,6 +344,67 @@ export type Database = {
           },
         ]
       }
+      // New table for audio processing results
+      audio_processing_results: {
+        Row: {
+          id: string;
+          file_url: string;
+          transcript: string | null;
+          summary: string | null;
+          translated_content: string | null;
+          status: string; // e.g., 'processing', 'completed', 'error'
+          error_message: string | null;
+          target_language: string;
+          created_at: string;
+          updated_at: string;
+          user_id: string; // Added user_id for RLS
+          document_id: string | null; // Added document_id to link to the documents table
+        };
+        Insert: {
+          id?: string;
+          file_url: string;
+          transcript?: string | null;
+          summary?: string | null;
+          translated_content?: string | null;
+          status: string;
+          error_message?: string | null;
+          target_language?: string;
+          created_at?: string;
+          updated_at?: string;
+          user_id: string;
+          document_id?: string | null; // Added document_id for inserts
+        };
+        Update: {
+          id?: string;
+          file_url?: string;
+          transcript?: string | null;
+          summary?: string | null;
+          translated_content?: string | null;
+          status?: string;
+          error_message?: string | null;
+          target_language?: string;
+          created_at?: string;
+          updated_at?: string;
+          user_id?: string;
+          document_id?: string | null; // Added document_id for updates
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audio_processing_results_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audio_processing_results_document_id_fkey" // New foreign key
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ];
+      };
     }
     Views: {
       [_ in never]: never
@@ -500,4 +561,4 @@ export const Constants = {
       schedule_item_type: ["class", "study", "assignment", "exam", "other"],
     },
   },
-} as const
+} as const;

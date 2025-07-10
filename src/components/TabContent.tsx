@@ -57,10 +57,13 @@ interface TabContentProps {
   isChatHistoryOpen: boolean;
   onToggleChatHistory: () => void;
   onNewMessage: (message: Message) => void;
+  // New props for responsive notes history
+  isNotesHistoryOpen: boolean;
+  onToggleNotesHistory: () => void;
 }
  
 export const TabContent: React.FC<TabContentProps> = (props) => {
-  const { activeTab, userProfile, isAILoading, isChatHistoryOpen, onToggleChatHistory } = props;
+  const { activeTab, userProfile, isAILoading, isChatHistoryOpen, onToggleChatHistory, isNotesHistoryOpen, onToggleNotesHistory } = props;
 
   // Group props for child components
   const notesProps = {
@@ -123,19 +126,50 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onClose: onToggleChatHistory,
   };
 
+  // Props for NotesHistory component (similar to ChatHistory)
+  const notesHistoryProps = {
+    notes: props.filteredNotes,
+    activeNote: props.activeNote,
+    onNoteSelect: props.onNoteSelect,
+    onNoteDelete: props.onNoteDelete,
+    isOpen: isNotesHistoryOpen,
+    onClose: onToggleNotesHistory,
+  };
+
   switch (activeTab) {
     case 'notes':
       return (
-        <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
-          <div className="w-full lg:w-80 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col max-h-80 lg:max-h-none overflow-y-auto lg:overflow-visible">
-            <NotesList {...notesProps} />
+        <div className="flex flex-1 min-h-0 relative">
+          {/* Mobile backdrop for notes history */}
+          {isNotesHistoryOpen && (
+            <div 
+              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+              onClick={onToggleNotesHistory}
+            />
+          )}
+
+          {/* Notes History as a responsive sidebar/drawer */}
+          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
+            fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
+            w-80 bg-white border-r border-slate-200 shadow-lg lg:shadow-none
+            flex flex-col transition-transform duration-300 ease-in-out
+            lg:translate-x-0 lg:w-80`}>
+            <NotesList 
+              {...notesProps} 
+              isOpen={isNotesHistoryOpen}
+              onClose={onToggleNotesHistory}
+            />
           </div>
+
+          {/* Note Editor content fills remaining space */}
           <div className="flex-1 bg-white min-h-0">
             {notesProps.activeNote ? (
               <NoteEditor 
-                note={notesProps.activeNote} // Pass the active note
-                onNoteUpdate={notesProps.onNoteUpdate} // Correct prop name
-                userProfile={userProfile} // Pass userProfile 
+                note={notesProps.activeNote}
+                onNoteUpdate={notesProps.onNoteUpdate}
+                userProfile={userProfile}
+                onToggleNotesHistory={onToggleNotesHistory}
+                isNotesHistoryOpen={isNotesHistoryOpen}
               />
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400 p-4">
