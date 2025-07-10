@@ -44,4 +44,6 @@ export interface Message {
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
+  isError?: boolean; // Add this line
+  originalUserMessageContent?: string
 }

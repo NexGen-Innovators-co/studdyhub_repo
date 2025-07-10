@@ -145,13 +145,13 @@ const Index = () => {
     }
   };
 
-  const createNewChatSession = async () => {
+  const createNewChatSession = async (): Promise<string | null> => {
     try {
       if (!user) {
         toast.error('Please sign in to create a new chat session.');
         return null;
       }
-
+  
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({
@@ -161,9 +161,16 @@ const Index = () => {
         })
         .select()
         .single();
-
-      if (error) throw error;
-
+  
+      if (error) {
+        console.error('Database error creating session:', error);
+        throw error;
+      }
+  
+      if (!data) {
+        throw new Error('No data returned from session creation');
+      }
+  
       const newSession: ChatSession = {
         id: data.id,
         title: data.title,
@@ -172,49 +179,58 @@ const Index = () => {
         last_message_at: new Date(data.last_message_at),
         document_ids: data.document_ids || []
       };
-
+  
+      // Update state atomically
       setChatSessions(prev => [newSession, ...prev]);
-      setActiveChatSessionId(newSession.id); // Set the new session as active
-      setChatMessages([]); // Clear messages for the new session
+      setActiveChatSessionId(newSession.id);
+      setChatMessages([]); // Clear messages for new session
+      
       toast.success('New chat session created!');
-      setIsChatHistoryOpen(false); // Close history sidebar on mobile
-
+      setIsChatHistoryOpen(false);
+  
       return newSession.id;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating new session:', error);
-      toast.error('Failed to create new chat session');
+      toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
       return null;
     }
   };
+  
 
   const deleteChatSession = async (sessionId: string) => {
     try {
       if (!user) return;
-
-      // Delete from database
+  
       const { error } = await supabase
         .from('chat_sessions')
         .delete()
         .eq('id', sessionId)
         .eq('user_id', user.id);
-
+  
       if (error) throw error;
-
+  
       // Update state
-      setChatSessions(prev => prev.filter(s => s.id !== sessionId));
-
+      const remainingSessions = chatSessions.filter(s => s.id !== sessionId);
+      setChatSessions(remainingSessions);
+  
       if (activeChatSessionId === sessionId) {
-        const remainingSessions = chatSessions.filter(s => s.id !== sessionId);
         if (remainingSessions.length > 0) {
-          setActiveChatSessionId(remainingSessions[0].id); // Set active to the first remaining session
+          // Set the most recent session as active
+          const mostRecent = remainingSessions.sort((a, b) => 
+            b.last_message_at.getTime() - a.last_message_at.getTime()
+          )[0];
+          setActiveChatSessionId(mostRecent.id);
         } else {
-          setActiveChatSessionId(null); // No sessions left, set to null
+          // No sessions left
+          setActiveChatSessionId(null);
+          setChatMessages([]);
         }
       }
+  
       toast.success('Chat session deleted.');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting session:', error);
-      toast.error('Failed to delete chat session');
+      toast.error(`Failed to delete chat session: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -240,102 +256,295 @@ const Index = () => {
     }
   };
 
-  const handleSendMessage = async (messageContent: string) => {
+  // New internal function to get AI response
+  
+// 3. Enhanced _getAIResponse with better error states
+const _getAIResponse = async (userMessageContent: string, aiMessageIdToUpdate: string | null = null) => {
+  if (!user || !activeChatSessionId) {
+    toast.error("Authentication required or no active chat session.");
+    return;
+  }
+
+  setIsAILoading(true);
+  let userMessageSaved = false;
+
+  try {
+    // First, save the user message to database if this is a new message
+    if (!aiMessageIdToUpdate) {
+      const { data: userMessageData, error: userMessageError } = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: activeChatSessionId,
+          user_id: user.id,
+          content: userMessageContent,
+          role: 'user',
+          timestamp: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (userMessageError) {
+        console.error('Error saving user message:', userMessageError);
+        throw new Error('Failed to save your message');
+      }
+
+      userMessageSaved = true;
+      
+      // Update the temporary user message with the real ID
+      if (userMessageData) {
+        setChatMessages(prev => 
+          prev.map(msg => 
+            msg.content === userMessageContent && msg.role === 'user' && !msg.id.includes('-')
+              ? { ...msg, id: userMessageData.id, timestamp: new Date(userMessageData.timestamp) }
+              : msg
+          )
+        );
+      }
+    }
+
+    // Build context and get AI response
+    const context = buildRichContext(selectedDocumentIds, documents, notes);
+    const historyToSend = (chatMessages || []).filter(msg => {
+      if (aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate) {
+        return false;
+      }
+      return true;
+    });
+
+    const { data, error } = await supabase.functions.invoke('gemini-chat', {
+      body: {
+        message: userMessageContent,
+        userId: user.id,
+        sessionId: activeChatSessionId,
+        learningStyle: userProfile?.learning_style || 'visual',
+        learningPreferences: userProfile?.learning_preferences || {
+          explanation_style: userProfile?.learning_preferences?.explanation_style || 'detailed',
+          examples: userProfile?.learning_preferences?.examples || 'yes',
+          difficulty: userProfile?.learning_preferences?.difficulty || 'medium',
+        },
+        context,
+        chatHistory: historyToSend
+      }
+    });
+
+    if (error) {
+      throw new Error(`AI service error: ${error.message}`);
+    }
+
+    const aiResponseContent = data.response;
+    if (!aiResponseContent) {
+      throw new Error('Empty response from AI service');
+    }
+
+    // Save or update AI response
+    if (aiMessageIdToUpdate) {
+      const { error: updateDbError } = await supabase
+        .from('chat_messages')
+        .update({ 
+          content: aiResponseContent, 
+          timestamp: new Date().toISOString(), 
+          is_error: false 
+        })
+        .eq('id', aiMessageIdToUpdate)
+        .eq('session_id', activeChatSessionId);
+
+      if (updateDbError) {
+        console.error('Error updating AI message:', updateDbError);
+        throw new Error('Failed to save AI response');
+      }
+
+      setChatMessages(prev =>
+        prev.map(msg =>
+          msg.id === aiMessageIdToUpdate
+            ? { ...msg, content: aiResponseContent, timestamp: new Date(), isError: false }
+            : msg
+        )
+      );
+    } else {
+      const { data: newAiMessageData, error: insertDbError } = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: activeChatSessionId,
+          user_id: user.id,
+          content: aiResponseContent,
+          role: 'assistant',
+          timestamp: new Date().toISOString(),
+          is_error: false,
+        })
+        .select()
+        .single();
+
+      if (insertDbError) {
+        console.error('Error inserting AI message:', insertDbError);
+        throw new Error('Failed to save AI response');
+      }
+
+      const newAiMessage: Message = {
+        id: newAiMessageData?.id || crypto.randomUUID(),
+        content: aiResponseContent,
+        role: 'assistant',
+        timestamp: new Date(newAiMessageData?.timestamp || Date.now()),
+        isError: false,
+      };
+      setChatMessages(prev => [...(prev || []), newAiMessage]);
+    }
+
+    // Update session metadata
+    const { error: updateSessionError } = await supabase
+      .from('chat_sessions')
+      .update({
+        last_message_at: new Date().toISOString(),
+        document_ids: selectedDocumentIds
+      })
+      .eq('id', activeChatSessionId);
+
+    if (updateSessionError) {
+      console.error('Error updating session:', updateSessionError);
+      // Don't throw here as the message was saved successfully
+    }
+
+    // Update local session state
+    setChatSessions(prev => {
+      const updated = prev.map(session =>
+        session.id === activeChatSessionId
+          ? { ...session, last_message_at: new Date(), document_ids: selectedDocumentIds }
+          : session
+      );
+      return updated.sort((a, b) => b.last_message_at.getTime() - a.last_message_at.getTime());
+    });
+
+  } catch (error: any) {
+    console.error('Error in _getAIResponse:', error);
+    toast.error(`Failed to get AI response: ${error.message || 'Unknown error'}`);
+
+    // Handle different error scenarios
+    if (aiMessageIdToUpdate) {
+      // Update existing message to error state
+      setChatMessages(prev =>
+        prev.map(msg =>
+          msg.id === aiMessageIdToUpdate
+            ? { 
+                ...msg, 
+                content: `Failed to regenerate response: ${error.message || 'Unknown error'}. Please try again.`, 
+                isError: true, 
+                timestamp: new Date() 
+              }
+            : msg
+        )
+      );
+    } else {
+      // Add error message for new response
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `I'm sorry, I couldn't generate a response: ${error.message || 'Unknown error'}. Please try again.`,
+        timestamp: new Date(),
+        isError: true,
+        originalUserMessageContent: userMessageContent,
+      };
+      setChatMessages(prev => [...(prev || []), errorMessage]);
+    }
+  } finally {
+    setIsAILoading(false);
+  }
+};
+const validateActiveSession = async (): Promise<boolean> => {
+  if (!activeChatSessionId) return false;
+  
+  try {
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('id', activeChatSessionId)
+      .eq('user_id', user?.id)
+      .single();
+    
+    if (error || !data) {
+      console.log('Active session no longer exists');
+      setActiveChatSessionId(null);
+      setChatMessages([]);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error validating session:', error);
+    return false;
+  }
+};
+
+
+
+// 1. Enhanced handleSubmit with better error recovery
+const handleSubmit = async (messageContent: string) => {
+  if (!messageContent.trim() || isAILoading) return;
+
+  const trimmedMessage = messageContent.trim();
+  
+  try {
+    setIsAILoading(true);
+
+    // Check authentication first
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      toast.error("User not authenticated.");
+      toast.error("You must be logged in to chat.");
       return;
     }
 
-    // 1. Immediately add user message to local state
-    const newUserMessage: Message = {
+    let currentSessionId = activeChatSessionId;
+
+    // Auto-create session if none exists
+    if (!currentSessionId) {
+      console.log("No active session, creating new one...");
+      currentSessionId = await createNewChatSession();
+      if (!currentSessionId) {
+        toast.error("Failed to create chat session. Please try again.");
+        return;
+      }
+      toast.info("New chat session created.");
+    }
+
+    // Verify session still exists (in case it was deleted externally)
+    const sessionExists = chatSessions.some(s => s.id === currentSessionId);
+    if (!sessionExists && currentSessionId !== activeChatSessionId) {
+      console.log("Session doesn't exist in state, refreshing...");
+      await loadChatSessions();
+      // After refresh, check again
+      const refreshedSessionExists = chatSessions.some(s => s.id === currentSessionId);
+      if (!refreshedSessionExists) {
+        toast.error("Session no longer exists. Creating a new one...");
+        currentSessionId = await createNewChatSession();
+        if (!currentSessionId) {
+          toast.error("Failed to create new session.");
+          return;
+        }
+      }
+    }
+
+    // Add user message to UI immediately for better UX
+    const tempUserMessage: Message = {
       id: crypto.randomUUID(),
-      content: messageContent,
+      content: trimmedMessage,
       role: 'user',
       timestamp: new Date(),
     };
-    setChatMessages(prevMessages => [...(prevMessages || []), newUserMessage]);
-    setIsAILoading(true);
-    // 2. Add a temporary AI loading message
-    // const aiLoadingMessage: Message = {
-    //   id: 'loading-ai-response',
-    //   content: 'AI is thinking...',
-    //   role: 'assistant',
-    //   timestamp: new Date(),
-    // };
-    // setChatMessages(prevMessages => [...(prevMessages || [])]);
-    try {
-      const context = buildRichContext(selectedDocumentIds, documents, notes);
+    setChatMessages(prev => [...(prev || []), tempUserMessage]);
 
-      // Prepare chat history to send to the Edge Function
-      const historyToSend = (chatMessages || []).filter(msg => msg.id !== 'loading-ai-response');
+    // Get AI response
+    await _getAIResponse(trimmedMessage);
 
-      const { data, error } = await supabase.functions.invoke('gemini-chat', {
-        body: {
-          message: messageContent,
-          userId: user.id,
-          sessionId: activeChatSessionId,
-          learningStyle: userProfile?.learning_style || 'visual',
-          learningPreferences: userProfile?.learning_preferences || {
-            explanation_style: userProfile?.learning_preferences?.explanation_style || 'detailed',
-            examples: userProfile?.learning_preferences?.examples || 'yes',
-            difficulty: userProfile?.learning_preferences?.difficulty || 'medium',
-          },
-          context,
-          chatHistory: historyToSend
-        }
-      });
-
-      if (error) {
-        throw new Error('Failed to get AI response: ' + error.message);
-      }
-
-      const aiResponseContent = data.response;
-
-      // 3. Replace loading message with actual AI response
-      setChatMessages(prevMessages => {
-        const currentMessages = prevMessages || [];
-        const updatedMessages = currentMessages.filter(msg => msg.id !== 'loading-ai-response');
-        const newAiMessage: Message = {
-          id: crypto.randomUUID(),
-          content: aiResponseContent,
-          role: 'assistant',
-          timestamp: new Date(),
-        };
-        return [...updatedMessages, newAiMessage];
-      });
-
-      // Update session last_message_at and document_ids in DB
-      const { error: updateError } = await supabase
-        .from('chat_sessions')
-        .update({
-          last_message_at: new Date().toISOString(),
-          document_ids: selectedDocumentIds
-        })
-        .eq('id', activeChatSessionId);
-
-      if (updateError) {
-        console.error('Error updating chat session:', updateError);
-        toast.error('Failed to update chat session details.');
-      }
-
-      // Directly update the specific session in state and re-sort
-      setChatSessions(prevSessions => {
-        const updatedSessions = prevSessions.map(session =>
-          session.id === activeChatSessionId
-            ? { ...session, last_message_at: new Date(), document_ids: selectedDocumentIds }
-            : session
-        );
-        return updatedSessions.sort((a, b) => b.last_message_at.getTime() - a.last_message_at.getTime());
-      });
-
-    } catch (error: any) {
-      console.error('Error sending message:', error);
-      toast.error('Failed to send message: ' + error.message);
-      setChatMessages(prevMessages => (prevMessages || []).filter(msg => msg.id !== 'loading-ai-response'));
-    } finally {
-      setIsAILoading(false);
-    }
-  };
+  } catch (error: any) {
+    console.error('Error in handleSubmit:', error);
+    toast.error(`Failed to send message: ${error.message || 'Unknown error'}`);
+    
+    // Remove the optimistically added user message on error
+    setChatMessages(prev => 
+      prev.filter(msg => !(msg.content === trimmedMessage && msg.role === 'user'))
+    );
+  } finally {
+    // Note: setIsAILoading(false) is handled in _getAIResponse
+  }
+};
 
   // Helper function to build rich context
   const buildRichContext = (selectedIds: string[], allDocuments: AppDocument[], allNotes: Note[]) => {
@@ -386,6 +595,93 @@ const Index = () => {
   const handleNewMessage = (message: Message) => {
     setChatMessages(prev => [...(prev || []), message]);
   };
+
+  // New function to handle message deletion
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      if (!user || !activeChatSessionId) {
+        toast.error("Authentication required or no active chat session.");
+        return;
+      }
+
+      // Optimistically update UI
+      setChatMessages(prevMessages => (prevMessages || []).filter(msg => msg.id !== messageId));
+      toast.info("Deleting message...");
+
+      // Delete from database
+      const { error } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('id', messageId)
+        .eq('session_id', activeChatSessionId)
+        .eq('user_id', user.id); // Ensure only the user can delete their own messages
+
+      if (error) {
+        // If deletion fails, revert UI (optional, but good for robustness)
+        console.error('Error deleting message from DB:', error);
+        toast.error('Failed to delete message from database.');
+        // Re-fetch messages to ensure UI is in sync with DB
+        loadSessionMessages(activeChatSessionId);
+      } else {
+        toast.success('Message deleted successfully.');
+      }
+    } catch (error: any) {
+      console.error('Error in handleDeleteMessage:', error);
+      toast.error(`Error deleting message: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  // Modified handleRegenerateResponse function
+  const handleRegenerateResponse = async (lastUserMessageContent: string) => {
+    if (!user || !activeChatSessionId) {
+      toast.error("Authentication required or no active chat session.");
+      return;
+    }
+
+    const lastAssistantMessage = chatMessages.slice().reverse().find(msg => msg.role === 'assistant');
+
+    if (!lastAssistantMessage) {
+      toast.info("No previous AI message to regenerate.");
+      return;
+    }
+
+    // Optimistically update the last assistant message to a "thinking" state
+    setChatMessages(prevMessages =>
+      (prevMessages || []).map(msg =>
+        msg.id === lastAssistantMessage.id
+          ? { ...msg, content: 'AI is thinking...', timestamp: new Date(), isError: false } // Clear error state on retry
+          : msg
+      )
+    );
+
+    toast.info("Regenerating response...");
+
+    // Call the internal function to get AI response, indicating update
+    await _getAIResponse(lastUserMessageContent, lastAssistantMessage.id);
+  };
+
+  // New function to handle retrying a failed AI message
+  const handleRetryFailedMessage = async (originalUserMessageContent: string, failedAiMessageId: string) => {
+    if (!user || !activeChatSessionId) {
+      toast.error("Authentication required or no active chat session.");
+      return;
+    }
+
+    // Optimistically update the failed AI message to a "thinking" state
+    setChatMessages(prevMessages =>
+      (prevMessages || []).map(msg =>
+        msg.id === failedAiMessageId
+          ? { ...msg, content: 'AI is thinking...', timestamp: new Date(), isError: false } // Clear error state
+          : msg
+      )
+    );
+
+    toast.info("Retrying message...");
+
+    // Call the internal function to get AI response, indicating update
+    await _getAIResponse(originalUserMessageContent, failedAiMessageId);
+  };
+
 
   const {
     createNewNote,
@@ -526,7 +822,7 @@ const Index = () => {
           onAddScheduleItem={addScheduleItem}
           onUpdateScheduleItem={updateScheduleItem}
           onDeleteScheduleItem={deleteScheduleItem}
-          onSendMessage={handleSendMessage}
+          onSendMessage={handleSubmit} // Pass handleSubmit as onSendMessage
           onDocumentUploaded={handleDocumentUploaded}
           onDocumentDeleted={handleDocumentDeleted}
           onProfileUpdate={handleProfileUpdate}
@@ -545,6 +841,9 @@ const Index = () => {
           onNewMessage={handleNewMessage}
           isNotesHistoryOpen={isChatHistoryOpen} // New prop
           onToggleNotesHistory={() => setIsChatHistoryOpen(!isChatHistoryOpen)}
+          onDeleteMessage={handleDeleteMessage}
+          onRegenerateResponse={handleRegenerateResponse} // Pass the new regenerate handler
+          onRetryFailedMessage={handleRetryFailedMessage} // Pass the new retry handler
         />
       </div>
     </div>

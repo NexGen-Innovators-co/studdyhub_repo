@@ -59,7 +59,10 @@ interface TabContentProps {
   onNewMessage: (message: Message) => void;
   // New props for responsive notes history
   isNotesHistoryOpen: boolean;
+  onRegenerateResponse: (lastUserMessageContent: string) => Promise<void>;
+  onDeleteMessage: (messageId: string) => void;
   onToggleNotesHistory: () => void;
+  onRetryFailedMessage: (originalUserMessageContent: string, failedAiMessageId: string) => Promise<void>; // Add this prop
 }
  
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -88,26 +91,31 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   };
 
   // Updated chatProps with new props
-  const chatProps = {
-    messages: props.chatMessages,
-    documents: props.documents,
-    onSendMessage: props.onSendMessage,
-    notes: props.filteredNotes,
-    selectedDocumentIds: props.selectedDocumentIds,
-    onSelectionChange: props.onSelectedDocumentIdsChange,
-    activeChatSessionId: props.activeChatSessionId,
-    onNewChatSession: props.onNewChatSession,
-    onDeleteChatSession: props.onDeleteChatSession,
-    onRenameChatSession: props.onRenameChatSession,
-    onChatSessionSelect: props.onChatSessionSelect,
-    chatSessions: props.chatSessions,
-    onToggleChatHistory: onToggleChatHistory,
-    isLoading: isAILoading,
-    setIsLoading: props.setIsAILoading,
-    onNewMessage: props.onNewMessage,
-    userProfile: userProfile,
-  };
+  // In TabContent.tsx, update the chatProps to only show messages when a session is selected:
 
+const chatProps = {
+  // Only show messages if there's an active chat session
+  messages: props.activeChatSessionId ? props.chatMessages : [],
+  documents: props.documents,
+  onSendMessage: props.onSendMessage,
+  notes: props.filteredNotes,
+  selectedDocumentIds: props.selectedDocumentIds,
+  onSelectionChange: props.onSelectedDocumentIdsChange,
+  activeChatSessionId: props.activeChatSessionId,
+  onNewChatSession: props.onNewChatSession,
+  onDeleteChatSession: props.onDeleteChatSession,
+  onRenameChatSession: props.onRenameChatSession,
+  onChatSessionSelect: props.onChatSessionSelect,
+  chatSessions: props.chatSessions,
+  onToggleChatHistory: onToggleChatHistory,
+  isLoading: isAILoading,
+  setIsLoading: props.setIsAILoading,
+  onNewMessage: props.onNewMessage,
+  onDeleteMessage: props.onDeleteMessage,
+  onRegenerateResponse: props.onRegenerateResponse,
+  onRetryFailedMessage: props.onRetryFailedMessage,
+  userProfile: userProfile,
+};
   const documentsProps = {
     documents: props.documents,
     onDocumentUploaded: props.onDocumentUploaded,
