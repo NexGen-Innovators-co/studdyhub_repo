@@ -802,7 +802,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       document.execCommand('copy');
       toast.success('Audio URL copied to clipboard!');
     } catch (err) {
-      console.error('Failed to copy audio URL: ', err);
+      console.error('Failed to copy text: ', err);
       toast.error('Failed to copy audio URL.');
     } finally {
       document.body.removeChild(textarea);
@@ -838,24 +838,24 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     return !inline && lang ? (
       <div className="relative my-4 rounded-md overflow-hidden">
-        <div className="absolute top-0 right-0 bg-slate-700 text-white text-xs px-2 py-1 rounded-bl-md">
+        <div className="absolute top-0 right-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs px-2 py-1 rounded-bl-md">
           {lang.toUpperCase()}
         </div>
-        <pre className="p-4 bg-slate-800 text-white overflow-x-auto">
+        <pre className="p-4 bg-[#0d1117] text-white overflow-x-auto text-sm">
           <code className={`language-${lang}`} {...props}>
             {codeContent}
           </code>
         </pre>
       </div>
     ) : (
-      <code className="bg-slate-100 text-purple-600 px-1 py-0.5 rounded" {...props}>
+      <code className="bg-slate-100 text-purple-600 px-1 py-0.5 rounded font-mono text-sm" {...props}>
         {codeContent}
       </code>
     );
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-slate-50 border border-slate-200 rounded-lg shadow-md overflow-hidden">
       {/* Editor Header */}
       <div className="p-3 sm:p-4 border-b border-slate-200 bg-white">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -865,7 +865,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               variant="ghost"
               size="sm"
               onClick={onToggleNotesHistory}
-              className="lg:hidden h-8 w-8 p-0 mr-2"
+              className="lg:hidden h-8 w-8 p-0 mr-2 text-slate-600 hover:bg-slate-50"
             >
               {isNotesHistoryOpen ? <FileText className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
@@ -874,16 +874,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Note title..."
-            className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0"
+            className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0 text-slate-800"
           />
           {/* Desktop buttons */}
           <div className="hidden lg:flex items-center gap-2 flex-wrap justify-end">
-            <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
             <Button
               variant="outline"
               size="sm"
               onClick={triggerFileUpload}
               disabled={isUploading || isGeneratingAI || isProcessingAudio || !userProfile}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               {isUploading ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -892,12 +892,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               )}
               {isUploading ? 'Processing...' : 'Upload Doc & Generate'}
             </Button>
-            <input type="file" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ display: 'none' }} accept="audio/*" />
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
+
             <Button
               variant="outline"
               size="sm"
               onClick={triggerAudioUpload}
               disabled={isProcessingAudio || isUploading || isGeneratingAI || !userProfile}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               {isProcessingAudio ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -906,12 +908,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               )}
               {isProcessingAudio ? 'Uploading Audio...' : 'Upload Audio'}
             </Button>
+            <input type="file" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ display: 'none' }} accept="audio/*" />
+
             <Button
               variant="outline"
               size="sm"
               onClick={regenerateNoteFromDocument}
               disabled={isUploading || isGeneratingAI || isProcessingAudio || !note.document_id}
-              className="text-purple-600 border-purple-200 hover:bg-purple-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               {isGeneratingAI ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -920,12 +924,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               )}
               {isGeneratingAI ? 'Generating...' : 'Regenerate Note'}
             </Button>
-            {/* New "View Original Document" button for desktop */}
+
             <Button
               variant="outline"
               size="sm"
               onClick={handleViewOriginalDocument}
               disabled={!note.document_id || isLoadingDocument || isProcessingAudio}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               {isLoadingDocument ? (
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -934,41 +939,46 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               )}
               View Original Document
             </Button>
-            {/* New "Download Note" button for desktop */}
+
             <Button
               variant="outline"
               size="sm"
               onClick={handleDownloadNote}
               disabled={!content.trim()}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               <Download className="h-4 w-4 mr-2" />
               Download Markdown
             </Button>
-            {/* New "Download PDF" button for desktop */}
+
             <Button
               variant="outline"
               size="sm"
               onClick={handleDownloadPdf}
               disabled={!content.trim()}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               <FileDown className="h-4 w-4 mr-2" />
               Download PDF
             </Button>
-            {/* New "Copy Note Content" button for desktop */}
+
             <Button
               variant="outline"
               size="sm"
               onClick={handleCopyNoteContent}
               disabled={!content.trim()}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               <Copy className="h-4 w-4 mr-2" />
               Copy Content
             </Button>
+
             <Button
               variant="outline"
               size="sm"
               onClick={handleTextToSpeech}
               disabled={isUploading || isGeneratingAI || isProcessingAudio}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               {isSpeaking ? (
                 <StopCircle className="h-4 w-4 mr-2 animate-pulse text-red-500" />
@@ -977,7 +987,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               )}
               {isSpeaking ? 'Stop' : 'Read Aloud'}
             </Button>
-            <Button onClick={handleSave} size="sm">
+            <Button onClick={handleSave} size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700">
               <Save className="h-4 w-4 mr-2" />
               Save
             </Button>
@@ -985,6 +995,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               variant="outline"
               size="sm"
               onClick={() => setIsEditing(!isEditing)}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               {isEditing ? 'Full Preview' : 'Edit with Live Preview'}
             </Button>
@@ -996,6 +1007,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               variant="outline"
               size="sm"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               <Menu className="h-4 w-4" />
               <span className="ml-2">More</span>
@@ -1006,7 +1018,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
                   onClick={() => { triggerFileUpload(); setIsMobileMenuOpen(false); }}
                   disabled={isUploading || isGeneratingAI || isProcessingAudio || !userProfile}
                 >
@@ -1020,7 +1032,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <input type="file" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ display: 'none' }} accept="audio/*" />
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
                   onClick={() => { triggerAudioUpload(); setIsMobileMenuOpen(false); }}
                   disabled={isProcessingAudio || isUploading || isGeneratingAI || !userProfile}
                 >
@@ -1033,7 +1045,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
                   onClick={() => { regenerateNoteFromDocument(); setIsMobileMenuOpen(false); }}
                   disabled={isUploading || isGeneratingAI || isProcessingAudio || !note.document_id}
                 >
@@ -1047,7 +1059,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 {/* New "View Original Document" button for mobile */}
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
                   onClick={() => { handleViewOriginalDocument(); setIsMobileMenuOpen(false); }}
                   disabled={!note.document_id || isLoadingDocument || isProcessingAudio}
                 >
@@ -1061,7 +1073,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 {/* New "Download Note" button for mobile */}
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
                   onClick={() => { handleDownloadNote(); setIsMobileMenuOpen(false); }}
                   disabled={!content.trim()}
                 >
@@ -1071,7 +1083,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 {/* New "Download PDF" button for mobile */}
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
                   onClick={() => { handleDownloadPdf(); setIsMobileMenuOpen(false); }}
                   disabled={!content.trim()}
                 >
@@ -1081,7 +1093,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 {/* New "Copy Note Content" button for mobile */}
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
                   onClick={() => { handleCopyNoteContent(); setIsMobileMenuOpen(false); }}
                   disabled={!content.trim()}
                 >
@@ -1090,7 +1102,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
                   onClick={() => { handleTextToSpeech(); setIsMobileMenuOpen(false); }}
                   disabled={isUploading || isGeneratingAI || isProcessingAudio}
                 >
@@ -1103,7 +1115,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700"
                   onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}
                 >
                   <Save className="h-4 w-4 mr-2" />
@@ -1111,7 +1123,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
                   onClick={() => { setIsEditing(!isEditing); setIsMobileMenuOpen(false); }}
                 >
                   {isEditing ? <FileText className="h-4 w-4 mr-2" /> : <Menu className="h-4 w-4 mr-2" />}
@@ -1166,7 +1178,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     value={tags}
                     onChange={(e) => setTags(e.target.value)}
                     placeholder="Add tags (comma separated)..."
-                    className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1"
+                    className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1 text-slate-700"
                   />
                 </div>
               </div>
@@ -1213,7 +1225,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="Add tags (comma separated)..."
-              className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1"
+              className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1 text-slate-700"
             />
           </div>
         </div>
@@ -1221,8 +1233,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       {/* Audio Options Panel */}
       {uploadedAudioDetails && isAudioOptionsVisible && (
-        <div className="p-3 sm:p-4 border-b border-slate-200 bg-blue-50 flex flex-col gap-3">
-          <h3 className="text-lg font-semibold text-blue-800">Audio Options: {uploadedAudioDetails.name}</h3>
+        <div className="p-3 sm:p-4 border-b border-slate-200 bg-slate-50 flex flex-col gap-3">
+          <h3 className="text-lg font-semibold text-slate-800">Audio Options: {uploadedAudioDetails.name}</h3>
           <audio ref={audioPlayerRef} src={uploadedAudioDetails.url} onEnded={handleAudioEnded} className="w-full hidden" />
           <div className="flex items-center gap-2 flex-wrap">
             <Button
@@ -1230,6 +1242,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handlePlayAudio}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               {isPlayingAudio ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
               {isPlayingAudio ? 'Pause Audio' : 'Play Audio'}
@@ -1239,6 +1252,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleDownloadAudio}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               <Download className="h-4 w-4 mr-2" />
               Download Audio
@@ -1248,6 +1262,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleCopyAudioUrl}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               <Copy className="h-4 w-4 mr-2" />
               Copy Audio URL
@@ -1257,6 +1272,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleClearAudioProcessing}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio}
+              className="text-slate-600 hover:bg-slate-50"
             >
               <XCircle className="h-4 w-4 mr-2" />
               Clear Audio
@@ -1267,6 +1283,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleGenerateNoteFromAudio}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio || !userProfile}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700"
             >
               {isGeneratingAudioNote ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1280,6 +1297,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleGenerateSummaryFromAudio}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio || !userProfile}
+              className="bg-slate-100 text-slate-600 hover:bg-slate-200"
             >
               {isGeneratingAudioSummary ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1307,6 +1325,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleTranslateAudio}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio || targetLanguage === 'en' || !userProfile}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50"
             >
               {isTranslatingAudio ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1330,9 +1349,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Start writing your note here..."
-              className="flex-1 resize-none border shadow-sm focus-visible:ring-0 text-base leading-relaxed bg-transparent min-h-[50vh] lg:min-h-0"
+              className="flex-1 resize-none border shadow-sm focus-visible:ring-0 text-base leading-relaxed bg-white min-h-[50vh] lg:min-h-0 border-slate-200"
             />
-            <div className="flex-1 prose prose-sm max-w-none text-slate-700 leading-relaxed overflow-y-auto min-h-[50vh] lg:min-h-0 border rounded-md p-4 shadow-sm bg-white" id="note-preview-content">
+            <div className="flex-1 prose prose-sm max-w-none text-slate-700 leading-relaxed overflow-y-auto min-h-[50vh] lg:min-h-0 border rounded-md p-4 shadow-sm bg-white border-slate-200" id="note-preview-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
@@ -1408,7 +1427,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <div
               className={`
                 lg:w-1/3 lg:max-w-sm lg:flex-shrink-0 lg:border-l lg:border-slate-200 lg:relative lg:h-auto lg:transform-none lg:rounded-none
-                fixed bottom-0 left-0 right-0 h-1/2 bg-gradient-to-r from-purple-50 to-blue-50 z-50
+                fixed bottom-0 left-0 right-0 h-1/2 bg-gradient-to-r from-blue-50 to-purple-50 z-50
                 transition-transform duration-300 ease-in-out transform
                 ${isSummaryVisible ? 'translate-y-0' : 'translate-y-full'}
                 flex flex-col
@@ -1418,13 +1437,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               <div className="flex items-center justify-between gap-2 mb-3 cursor-pointer" onClick={() => setIsSummaryVisible(!isSummaryVisible)}>
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-purple-600" />
-                  <h4 className="font-medium text-purple-800">AI Summary</h4>
+                  <h4 className="font-medium text-slate-800">AI Summary</h4>
                 </div>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-600 hover:bg-slate-50">
                   {isSummaryVisible ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                 </Button>
               </div>
-              <div className="prose prose-sm max-w-none text-purple-700 leading-relaxed overflow-y-auto flex-1">
+              <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed overflow-y-auto flex-1">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}
@@ -1435,18 +1454,18 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                         <table className="w-full border-collapse" {...props} />
                       </div>
                     ),
-                    thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-purple-100 to-blue-100" {...props} />,
-                    th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-purple-800" {...props} />,
-                    td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-purple-50 hover:bg-blue-50 transition-colors" {...props} />,
-                    h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-purple-700 mt-6 mb-3" {...props} />,
-                    h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-blue-700 mt-5 mb-2" {...props} />,
-                    h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-teal-700 mt-4 mb-2" {...props} />,
-                    h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-pink-700 mt-3 mb-1" {...props} />,
-                    ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-purple-700" {...props} />,
-                    ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-purple-700" {...props} />,
-                    blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-purple-400 pl-4 py-2 italic text-purple-600 bg-purple-50 rounded-r-md my-4" {...props} />,
-                    p: ({ node, ...props }) => <p className="mb-3 text-purple-700 leading-relaxed" {...props} />,
-                    a: ({ node, ...props }) => <a className="text-purple-600 hover:underline" {...props} />,
+                    thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100" {...props} />,
+                    th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800" {...props} />,
+                    td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors" {...props} />,
+                    h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3" {...props} />,
+                    h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2" {...props} />,
+                    h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2" {...props} />,
+                    h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1" {...props} />,
+                    ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700" {...props} />,
+                    ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700" {...props} />,
+                    blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4" {...props} />,
+                    p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed" {...props} />,
+                    a: ({ node, ...props }) => <a className="text-blue-600 hover:underline" {...props} />,
                   }}
                 >
                   {note.aiSummary}
@@ -1458,17 +1477,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
         {/* Translated Content Section - Still at the bottom, but within the main content area */}
         {translatedContent && (
-          <div className="p-3 sm:p-6 border-t border-slate-200 bg-gradient-to-r from-green-50 to-teal-50">
+          <div className="p-3 sm:p-6 border-t border-slate-200 bg-slate-50">
             <div className="flex items-center justify-between gap-2 mb-3 cursor-pointer" onClick={() => setTranslatedContent(null)}>
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-green-600" />
-                <h4 className="font-medium text-green-800">Translated Content ({targetLanguage.toUpperCase()})</h4>
+                <FileText className="h-4 w-4 text-slate-600" />
+                <h4 className="font-medium text-slate-800">Translated Content ({targetLanguage.toUpperCase()})</h4>
               </div>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-600 hover:bg-slate-50">
                 <ChevronUp className="h-4 w-4" />
               </Button>
             </div>
-            <div className="prose prose-sm max-w-none text-green-700 leading-relaxed">
+            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
@@ -1479,18 +1498,18 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                       <table className="w-full border-collapse" {...props} />
                     </div>
                   ),
-                  thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-green-100 to-teal-100" {...props} />,
-                  th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-green-800" {...props} />,
-                  td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-green-50 hover:bg-teal-50 transition-colors" {...props} />,
-                  h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-green-700 mt-6 mb-3" {...props} />,
-                  h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-teal-700 mt-5 mb-2" {...props} />,
-                  h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-blue-700 mt-4 mb-2" {...props} />,
+                  thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100" {...props} />,
+                  th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800" {...props} />,
+                  td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors" {...props} />,
+                  h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3" {...props} />,
+                  h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2" {...props} />,
+                  h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2" {...props} />,
                   h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1" {...props} />,
-                  ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-green-700" {...props} />,
-                  ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-green-700" {...props} />,
-                  blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-green-400 pl-4 py-2 italic text-green-600 bg-green-50 rounded-r-md my-4" {...props} />,
-                  p: ({ node, ...props }) => <p className="mb-3 text-green-700 leading-relaxed" {...props} />,
-                  a: ({ node, ...props }) => <a className="text-green-600 hover:underline" {...props} />,
+                  ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700" {...props} />,
+                  ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700" {...props} />,
+                  blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4" {...props} />,
+                  p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed" {...props} />,
+                  a: ({ node, ...props }) => <a className="text-blue-600 hover:underline" {...props} />,
                 }}
               >
                 {translatedContent}

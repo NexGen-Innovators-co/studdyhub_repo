@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden`}>
       
       {/* Content area, takes up remaining vertical space and allows scrolling */}
-      <div className="p-2 sm:p-3 flex-1 overflow-hidden"> 
+      <div className="p-6 sm:p-4 flex-1 overflow-hidden"> 
         {/* Main Navigation Section */}
         <div className="mb-2">
           {/* "Navigation" heading: visible when 'isOpen' (mobile) or on desktop hover */}

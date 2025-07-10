@@ -15,7 +15,7 @@ interface HeaderProps {
 const tabNames = {
   notes: 'Notes',
   recordings: 'Class Recordings',
-  schedule: 'Schedule & Timetable', 
+  schedule: 'Schedule & Timetable',
   chat: 'AI Study Assistant',
   documents: 'Document Upload',
   settings: 'Learning Settings'
@@ -44,31 +44,34 @@ export const Header: React.FC<HeaderProps> = ({
         <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
         <div className="min-w-0 flex-shrink">
           <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-800 truncate">NoteMind</h1>
+          {/* Display tab name on small screens and up */}
           <p className="text-xs text-slate-500 hidden sm:block truncate">{tabNames[activeTab]}</p>
         </div>
       </div>
 
       {activeTab === 'notes' && (
-        <div className="flex-1 max-w-xs sm:max-w-sm md:max-w-md mx-1 sm:mx-2 md:mx-4 hidden md:block">
+        // Search bar: visible on small screens and up, adjusted width
+        <div className="flex-1 max-w-xs sm:max-w-sm md:max-w-md mx-1 sm:mx-2 md:mx-4 hidden sm:block">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Search notes..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors text-sm"
+              className="pl-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors text-sm w-full"
             />
           </div>
         </div>
       )}
 
       {activeTab === 'notes' && (
-        <Button 
+        <Button
           onClick={onNewNote}
           size="sm"
           className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md flex-shrink-0"
         >
           <Plus className="h-4 w-4 sm:mr-2" />
+          {/* Hide "New Note" text on extra small screens for better fit */}
           <span className="hidden sm:inline">New Note</span>
         </Button>
       )}
