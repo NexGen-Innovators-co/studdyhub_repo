@@ -181,7 +181,9 @@ export const useAppData = () => {
           type: item.type as 'class' | 'study' | 'assignment' | 'exam' | 'other',
           description: item.description || '',
           location: item.location || '',
-          color: item.color || '#3B82F6'
+          color: item.color || '#3B82F6',
+          userId: item.user_id,
+          createdAt: item.created_at || new Date().toISOString()
         }));
         setScheduleItems(formattedSchedule);
       }

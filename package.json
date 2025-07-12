@@ -65,6 +65,7 @@
     "@tiptap/extension-table-row": "^2.25.0",
     "@tiptap/react": "^2.25.0",
     "@tiptap/starter-kit": "^2.25.0",
+    "@types/uuid": "^10.0.0",
     "caniuse-lite": "^1.0.30001726",
     "chart.js": "^4.5.0",
     "class-variance-authority": "^0.7.1",
@@ -93,6 +94,7 @@
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "turndown": "^7.2.0",
+    "uuid": "^10.0.0",
     "vaul": "^0.9.3",
     "zod": "^3.23.8"
   },
