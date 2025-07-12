@@ -80,11 +80,13 @@ export const Schedule: React.FC<ScheduleProps> = ({
       title: formData.title,
       subject: formData.subject,
       type: formData.type,
-      startTime: startDateTime,
-      endTime: endDateTime,
+      startTime: startDateTime.toISOString(),
+      endTime: endDateTime.toISOString(),
       location: formData.location,
       description: formData.description,
-      color: getColorForType(formData.type)
+      color: getColorForType(formData.type),
+      userId: editingItem?.userId || '',
+      createdAt: editingItem?.createdAt || new Date().toISOString()
     };
 
     if (editingItem) {
@@ -99,9 +101,9 @@ export const Schedule: React.FC<ScheduleProps> = ({
   };
 
   const handleEdit = (item: ScheduleItem) => {
-    const date = item.startTime.toISOString().split('T')[0];
-    const startTime = item.startTime.toTimeString().slice(0, 5);
-    const endTime = item.endTime.toTimeString().slice(0, 5);
+    const date = new Date(item.startTime).toISOString().split('T')[0];
+    const startTime = new Date(item.startTime).toTimeString().slice(0, 5);
+    const endTime = new Date(item.endTime).toTimeString().slice(0, 5);
 
     setFormData({
       title: item.title,
@@ -138,8 +140,8 @@ export const Schedule: React.FC<ScheduleProps> = ({
 
   const today = new Date();
   const upcomingItems = scheduleItems
-    .filter(item => item.startTime >= today)
-    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    .filter(item => new Date(item.startTime) >= today)
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
   return (
     <div className="space-y-6">
@@ -255,12 +257,12 @@ export const Schedule: React.FC<ScheduleProps> = ({
                     
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      <span>{item.startTime.toLocaleDateString()}</span>
+                      <span>{new Date(item.startTime).toLocaleDateString()}</span>
                     </div>
                     
                     <div className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      <span>{formatTime(item.startTime)} - {formatTime(item.endTime)}</span>
+                      <span>{formatTime(new Date(item.startTime))} - {formatTime(new Date(item.endTime))}</span>
                     </div>
                     
                     {item.location && (

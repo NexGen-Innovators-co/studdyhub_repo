@@ -8,7 +8,7 @@ import { VoiceRecorder } from './VoiceRecorder';
 import { formatDate } from '../utils/helpers';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
+import { generateId } from '../utils/helpers';
 
 interface ClassRecordingsProps {
   recordings?: ClassRecording[]; // Make optional with default
@@ -47,7 +47,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const fileName = `${user.id}/${uuidv4()}-${title}.webm`;
+      const fileName = `${user.id}/${generateId()}-${title}.webm`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('documents')
         .upload(fileName, audioBlob);
@@ -69,7 +69,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       URL.revokeObjectURL(audioUrl);
 
       const newRecording: ClassRecording = {
-        id: uuidv4(),
+        id: generateId(),
         title,
         subject,
         audioUrl: publicUrl,
@@ -141,7 +141,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
     try {
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const filePath = `${user.id}/audio/${uuidv4()}_${safeFileName}`;
+      const filePath = `${user.id}/audio/${generateId()}_${safeFileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('documents')
@@ -173,7 +173,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       if (docError || !newDocument) throw new Error(docError?.message || 'Failed to create document record for audio.');
 
       const newRecording: ClassRecording = {
-        id: uuidv4(),
+        id: generateId(),
         title: `Audio Recording: ${file.name}`,
         subject: 'Uploaded Audio',
         audioUrl: urlData.publicUrl,
@@ -268,7 +268,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         documentId = existingDocument.id;
       }
 
-      const { data, error } = await supabase.functions.invoke('process-audio', {
+      const { data, error } = await supabase.functions.invoke('gemini-audio-processor', {
         body: {
           file_url: audioDetails.url,
           target_language: targetLanguage,
@@ -323,7 +323,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
           if (data.status === 'completed') {
             toast.success('Audio processing completed!');
             const newRecording: ClassRecording = {
-              id: uuidv4(),
+              id: generateId(),
               title: `Audio Note: ${uploadedAudioDetails?.name || 'Untitled'}`,
               subject: 'Uploaded Audio',
               audioUrl: uploadedAudioDetails?.url || null,
@@ -491,13 +491,14 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         return;
       }
 
-      const quiz: Quiz = {
-        id: uuidv4(),
-        classId: recording.id,
-        title: data.title || recording.title,
-        questions: data.questions,
-        createdAt: new Date().toISOString()
-      };
+        const quiz: Quiz = {
+          id: generateId(),
+          classId: recording.id,
+          title: data.title || recording.title,
+          questions: data.questions,
+          userId: user.id,
+          createdAt: new Date().toISOString()
+        };
 
       const { error: insertError } = await supabase
         .from('quizzes')

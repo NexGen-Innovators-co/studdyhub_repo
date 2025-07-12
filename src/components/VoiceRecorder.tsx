@@ -140,7 +140,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
             {!isRecording ? (
               <Button 
                 onClick={startRecording}
-                className="bg-red-500 hover:bg-red-600 text-white"
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               >
                 <Mic className="h-4 w-4 mr-2" />
                 Start Recording
