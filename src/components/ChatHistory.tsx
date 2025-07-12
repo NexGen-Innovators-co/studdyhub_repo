@@ -9,9 +9,9 @@ import { formatDate } from '../utils/helpers';
 interface ChatSession {
   id: string;
   title: string;
-  created_at: Date;
-  updated_at: Date;
-  last_message_at: Date;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string;
   document_ids: string[];
   message_count?: number;
 }
@@ -108,7 +108,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({
             {(sessions ?? []).map((session) => (
               <Card
                 key={session.id}
-                // Enhanced active session styling with gradient and thicker border
                 className={`cursor-pointer transition-colors rounded-lg shadow-sm 
                   ${activeSessionId === session.id
                     ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-l-blue-500 shadow-md'
@@ -133,27 +132,23 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({
                       ) : (
                         <h3 className="font-medium truncate text-slate-800">{session.title}</h3>
                       )}
-                      
                       <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
                         <Calendar className="h-3 w-3 text-slate-400" />
-                        <span>{formatDate(session.last_message_at)}</span>
+                        <span>{formatDate(new Date(session.last_message_at))}</span>
                         {session.message_count && (
                           <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-600">
                             {session.message_count} messages
                           </Badge>
                         )}
                       </div>
-
                       {(session.document_ids ?? []).length > 0 && ( 
                         <div className="mt-2">
-                          {/* Colorful badge for document count */}
                           <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-200">
                             {(session.document_ids ?? []).length} document{session.document_ids?.length !== 1 ? 's' : ''}
                           </Badge>
                         </div>
                       )}
                     </div>
-
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
