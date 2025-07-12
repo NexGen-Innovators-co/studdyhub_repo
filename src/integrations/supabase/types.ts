@@ -14,10 +14,64 @@ export type Database = {
   }
   public: {
     Tables: {
+      audio_processing_results: {
+        Row: {
+          created_at: string | null
+          document_id: string | null
+          error_message: string | null
+          file_url: string
+          id: string
+          status: string
+          summary: string | null
+          target_language: string | null
+          transcript: string | null
+          translated_content: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          document_id?: string | null
+          error_message?: string | null
+          file_url: string
+          id?: string
+          status: string
+          summary?: string | null
+          target_language?: string | null
+          transcript?: string | null
+          translated_content?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Update: {
+          created_at?: string | null
+          document_id?: string | null
+          error_message?: string | null
+          file_url?: string
+          id?: string
+          status?: string
+          summary?: string | null
+          target_language?: string | null
+          transcript?: string | null
+          translated_content?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audio_processing_results_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_messages: {
         Row: {
           content: string
           id: string
+          is_error: boolean | null
           role: Database["public"]["Enums"]["message_role"]
           session_id: string | null
           timestamp: string | null
@@ -26,6 +80,7 @@ export type Database = {
         Insert: {
           content: string
           id?: string
+          is_error?: boolean | null
           role: Database["public"]["Enums"]["message_role"]
           session_id?: string | null
           timestamp?: string | null
@@ -34,6 +89,7 @@ export type Database = {
         Update: {
           content?: string
           id?: string
+          is_error?: boolean | null
           role?: Database["public"]["Enums"]["message_role"]
           session_id?: string | null
           timestamp?: string | null
@@ -84,6 +140,7 @@ export type Database = {
           audio_url: string | null
           created_at: string | null
           date: string | null
+          document_id: string | null
           duration: number | null
           id: string
           subject: string
@@ -91,12 +148,12 @@ export type Database = {
           title: string
           transcript: string | null
           user_id: string
-          document_id: string | null // Added document_id for RLS
         }
         Insert: {
           audio_url?: string | null
           created_at?: string | null
           date?: string | null
+          document_id?: string | null
           duration?: number | null
           id?: string
           subject: string
@@ -104,12 +161,12 @@ export type Database = {
           title: string
           transcript?: string | null
           user_id: string
-          document_id?: string | null // Added document_id for inserts
         }
         Update: {
           audio_url?: string | null
           created_at?: string | null
           date?: string | null
+          document_id?: string | null
           duration?: number | null
           id?: string
           subject?: string
@@ -117,21 +174,20 @@ export type Database = {
           title?: string
           transcript?: string | null
           user_id?: string
-          document_id?: string | null // Added document_id for updates
         }
         Relationships: [
+          {
+            foreignKeyName: "class_recordings_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "class_recordings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "class_recordings_document_id_fkey" // New foreign key
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
             referencedColumns: ["id"]
           },
         ]
@@ -354,67 +410,6 @@ export type Database = {
           },
         ]
       }
-      // New table for audio processing results
-      audio_processing_results: {
-        Row: {
-          id: string;
-          file_url: string;
-          transcript: string | null;
-          summary: string | null;
-          translated_content: string | null;
-          status: string; // e.g., 'processing', 'completed', 'error'
-          error_message: string | null;
-          target_language: string;
-          created_at: string;
-          updated_at: string;
-          user_id: string; // Added user_id for RLS
-          document_id: string | null; // Added document_id to link to the documents table
-        };
-        Insert: {
-          id?: string;
-          file_url: string;
-          transcript?: string | null;
-          summary?: string | null;
-          translated_content?: string | null;
-          status: string;
-          error_message?: string | null;
-          target_language?: string;
-          created_at?: string;
-          updated_at?: string;
-          user_id: string;
-          document_id?: string | null; // Added document_id for inserts
-        };
-        Update: {
-          id?: string;
-          file_url?: string;
-          transcript?: string | null;
-          summary?: string | null;
-          translated_content?: string | null;
-          status?: string;
-          error_message?: string | null;
-          target_language?: string;
-          created_at?: string;
-          updated_at?: string;
-          user_id?: string;
-          document_id?: string | null; // Added document_id for updates
-        };
-        Relationships: [
-          {
-            foreignKeyName: "audio_processing_results_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "audio_processing_results_document_id_fkey" // New foreign key
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-        ];
-      };
     }
     Views: {
       [_ in never]: never
@@ -571,4 +566,4 @@ export const Constants = {
       schedule_item_type: ["class", "study", "assignment", "exam", "other"],
     },
   },
-} as const;
+} as const
