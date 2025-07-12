@@ -515,7 +515,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
       onGenerateQuiz(recording, quiz);
       setQuizMode({ recording, quiz });
-      setUserAnswers(new Array(quiz.questions.length).fill(null));
+      setUserAnswers(new Array(quiz.questions?.length || 0).fill(null));
       setCurrentQuestionIndex(0);
       toast.success('Quiz generated and saved successfully!', { id: toastId });
     } catch (error) {
@@ -541,8 +541,9 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   };
 
   const handleNextQuestion = () => {
-    if (quizMode && currentQuestionIndex < quizMode.quiz.questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    const totalQuestions = quizMode?.quiz?.questions?.length || 0;
+    if (currentQuestionIndex < totalQuestions - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
     } else {
       setShowResults(true);
     }
@@ -561,15 +562,15 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     setShowResults(false);
   };
 
-  const calculateScore = () => {
-    if (!quizMode || !quizMode.quiz.questions.length) return 0;
-    let correct = 0;
-    quizMode.quiz.questions.forEach((question, index) => {
-      if (userAnswers[index] === question.correctAnswer) {
-        correct++;
-      }
-    });
-    return Math.round((correct / quizMode.quiz.questions.length) * 100);
+  const calculateScore = (): number => {
+    if (!quizMode?.quiz?.questions?.length) return 0;
+    
+    const totalQuestions = quizMode.quiz.questions.length;
+    const correctAnswers = quizMode.quiz.questions.reduce((score, question, index) => {
+      return userAnswers[index] === question.correctAnswer ? score + 1 : score;
+    }, 0);
+    
+    return Math.round((correctAnswers / totalQuestions) * 100);
   };
 
   const formatDuration = (seconds: number | null) => {
@@ -835,10 +836,10 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
                     <div>
                       <h3 className="text-lg font-semibold text-slate-800 mb-4">
-                        {quizMode.quiz.questions[currentQuestionIndex].question}
+                        {quizMode.quiz.questions?.[currentQuestionIndex]?.question || 'Question not available'}
                       </h3>
                       <div className="space-y-3">
-                        {quizMode.quiz.questions[currentQuestionIndex].options.map((option, index) => (
+                        {(quizMode.quiz.questions?.[currentQuestionIndex]?.options || []).map((option, index) => (
                           <Button
                             key={index}
                             variant={userAnswers[currentQuestionIndex] === index ? "default" : "outline"}
@@ -869,7 +870,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                         disabled={userAnswers[currentQuestionIndex] === null}
                         className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
                       >
-                        {currentQuestionIndex < quizMode.quiz.questions.length - 1 ? 'Next' : 'Finish'}
+                        {currentQuestionIndex < (quizMode.quiz.questions?.length || 0) - 1 ? 'Next' : 'Finish'}
                       </Button>
                     </div>
                   </div>
@@ -896,7 +897,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                   </div>
 
                   <div className="space-y-4">
-                    {quizMode.quiz.questions && quizMode.quiz.questions.length > 0 ? (
+                    {quizMode.quiz.questions && Array.isArray(quizMode.quiz.questions) && quizMode.quiz.questions.length > 0 ? (
                       quizMode.quiz.questions.map((question, index) => (
                         <div key={question.id || index} className="border border-slate-200 rounded-lg p-4">
                           <div className="flex items-center gap-2 mb-2">
