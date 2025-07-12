@@ -29,18 +29,24 @@ export const useAppData = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        console.log('No user authenticated');
         setLoading(false);
+        setRecordings([]); // Ensure recordings is empty if no user
         return;
       }
 
-      // Load user profile - use maybeSingle to avoid errors if no profile exists
-      const { data: profileData } = await supabase
+      // Load user profile
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
 
-      // Create user profile if it doesn't exist or use existing one
+      if (profileError) {
+        console.error('Error loading user profile:', profileError);
+        toast.error('Failed to load user profile');
+      }
+
       if (profileData) {
         setUserProfile({
           id: profileData.id,
@@ -57,7 +63,6 @@ export const useAppData = () => {
           updated_at: new Date(profileData.updated_at || Date.now())
         });
       } else {
-        // Create default profile if none exists
         const defaultProfile = {
           id: user.id,
           email: user.email || '',
@@ -70,12 +75,10 @@ export const useAppData = () => {
             difficulty: 'intermediate' as const
           }
         };
-
         try {
           const { error: insertError } = await supabase
             .from('profiles')
             .insert(defaultProfile);
-
           if (!insertError) {
             setUserProfile({
               ...defaultProfile,
@@ -84,7 +87,7 @@ export const useAppData = () => {
             });
           }
         } catch (error) {
-          // Profile creation failed, but continue with default
+          console.error('Error creating default profile:', error);
           setUserProfile({
             ...defaultProfile,
             created_at: new Date(),
@@ -93,14 +96,53 @@ export const useAppData = () => {
         }
       }
 
+      // Load recordings
+      console.log('Fetching recordings for user:', user.id); // Debug log
+      const { data: recordingsData, error: recordingsError } = await supabase
+        .from('class_recordings')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (recordingsError) {
+        console.error('Error fetching recordings:', recordingsError);
+        toast.error('Failed to load recordings');
+        setRecordings([]);
+      } else {
+        console.log('Raw recordings data from Supabase:', recordingsData); // Debug log
+        if (recordingsData) {
+          const formattedRecordings = recordingsData.map(recording => ({
+            id: recording.id,
+            title: recording.title,
+            subject: recording.subject,
+            date: recording.date || new Date().toISOString(),
+            duration: recording.duration || 0,
+            audioUrl: recording.audio_url || '',
+            transcript: recording.transcript || '',
+            summary: recording.summary || '',
+            createdAt: recording.created_at || new Date().toISOString(),
+            userId: recording.user_id, // Add userId
+            document_id: recording.document_id // Add document_id
+          }));
+          console.log('Formatted recordings:', formattedRecordings); // Debug log
+          setRecordings(formattedRecordings);
+        } else {
+          console.log('No recordings data received, setting empty array'); // Debug log
+          setRecordings([]);
+        }
+      }
+
       // Load notes
-      const { data: notesData } = await supabase
+      const { data: notesData, error: notesError } = await supabase
         .from('notes')
         .select('*')
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
 
-      if (notesData) {
+      if (notesError) {
+        console.error('Error fetching notes:', notesError);
+        toast.error('Failed to load notes');
+      } else if (notesData) {
         const formattedNotes = notesData.map(note => ({
           id: note.id,
           title: note.title,
@@ -119,42 +161,23 @@ export const useAppData = () => {
         }
       }
 
-      // Load recordings
-      const { data: recordingsData } = await supabase
-        .from('class_recordings')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (recordingsData) {
-        const formattedRecordings = recordingsData.map(recording => ({
-          id: recording.id,
-          title: recording.title,
-          subject: recording.subject,
-          date: new Date(recording.date || Date.now()),
-          duration: recording.duration || 0,
-          audioUrl: recording.audio_url || '',
-          transcript: recording.transcript || '',
-          summary: recording.summary || '',
-          createdAt: new Date(recording.created_at || Date.now())
-        }));
-        setRecordings(formattedRecordings);
-      }
-
       // Load schedule items
-      const { data: scheduleData } = await supabase
+      const { data: scheduleData, error: scheduleError } = await supabase
         .from('schedule_items')
         .select('*')
         .eq('user_id', user.id)
         .order('start_time', { ascending: true });
 
-      if (scheduleData) {
+      if (scheduleError) {
+        console.error('Error fetching schedule items:', scheduleError);
+        toast.error('Failed to load schedule items');
+      } else if (scheduleData) {
         const formattedSchedule = scheduleData.map(item => ({
           id: item.id,
           title: item.title,
           subject: item.subject,
-          startTime: new Date(item.start_time),
-          endTime: new Date(item.end_time),
+          startTime: item.start_time,
+          endTime: item.end_time,
           type: item.type as 'class' | 'study' | 'assignment' | 'exam' | 'other',
           description: item.description || '',
           location: item.location || '',
@@ -164,30 +187,36 @@ export const useAppData = () => {
       }
 
       // Load chat messages
-      const { data: chatData } = await supabase
+      const { data: chatData, error: chatError } = await supabase
         .from('chat_messages')
         .select('*')
         .eq('user_id', user.id)
         .order('timestamp', { ascending: true });
 
-      if (chatData) {
+      if (chatError) {
+        console.error('Error fetching chat messages:', chatError);
+        toast.error('Failed to load chat messages');
+      } else if (chatData) {
         const formattedMessages = chatData.map(msg => ({
           id: msg.id,
           content: msg.content,
-          role: msg.role as 'user' | 'assistant',
-          timestamp: new Date(msg.timestamp || Date.now())
+          role: msg.role as 'user' | 'assistant', // Ensure role is correctly typed
+          timestamp: new Date(msg.timestamp || Date.now()).toISOString() // Convert Date to ISO string
         }));
         setChatMessages(formattedMessages);
       }
 
       // Load documents
-      const { data: documentsData } = await supabase
+      const { data: documentsData, error: documentsError } = await supabase
         .from('documents')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (documentsData) {
+      if (documentsError) {
+        console.error('Error fetching documents:', documentsError);
+        toast.error('Failed to load documents');
+      } else if (documentsData) {
         const formattedDocuments = documentsData.map(doc => ({
           id: doc.id,
           title: doc.title,
@@ -204,10 +233,12 @@ export const useAppData = () => {
       }
 
     } catch (error) {
-      console.error('Error loading user data:', error);
-      toast.error('Failed to load user data');
+      console.error('Unexpected error loading user data:', error);
+      toast.error('An unexpected error occurred while loading data');
+      setRecordings([]); // Fallback to empty array on any error
     } finally {
       setLoading(false);
+      console.log('Final recordings state:', recordings); // Debug log
     }
   };
 

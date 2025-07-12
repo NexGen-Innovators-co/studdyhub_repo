@@ -146,28 +146,11 @@ export const useAppOperations = ({
 
   const addRecording = async (recording: ClassRecording) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
-        .from('class_recordings')
-        .insert({
-          title: recording.title,
-          subject: recording.subject,
-          date: recording.date.toISOString(),
-          duration: recording.duration,
-          audio_url: recording.audioUrl,
-          transcript: recording.transcript,
-          summary: recording.summary,
-          user_id: user.id
-        });
-
-      if (error) throw error;
-
+      // Recording is already inserted by ClassRecordings.tsx; only update local state
       setRecordings(prev => [recording, ...prev]);
     } catch (error) {
-      console.error('Error adding recording:', error);
-      toast.error('Failed to save recording');
+      console.error('Error adding recording to state:', error);
+      toast.error('Failed to update recordings state');
     }
   };
 
@@ -208,8 +191,8 @@ export const useAppOperations = ({
         .insert({
           title: item.title,
           subject: item.subject,
-          start_time: item.startTime.toISOString(),
-          end_time: item.endTime.toISOString(),
+          start_time: typeof item.startTime === 'string' ? item.startTime : item.startTime,
+          end_time: typeof item.endTime === 'string' ? item.endTime : item.endTime,
           type: item.type,
           description: item.description,
           location: item.location,
@@ -236,8 +219,8 @@ export const useAppOperations = ({
         .update({
           title: item.title,
           subject: item.subject,
-          start_time: item.startTime.toISOString(),
-          end_time: item.endTime.toISOString(),
+          start_time: typeof item.startTime === 'string' ? item.startTime : item.startTime,
+          end_time: typeof item.endTime === 'string' ? item.endTime : item.endTime,
           type: item.type,
           description: item.description,
           location: item.location,
@@ -280,7 +263,7 @@ export const useAppOperations = ({
       id: generateId(),
       content: message,
       role: 'user',
-      timestamp: new Date()
+      timestamp: new Date().toISOString()
     };
 
     setChatMessages(prev => [...prev, userMessage]);
@@ -308,7 +291,7 @@ export const useAppOperations = ({
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
-        timestamp: new Date(msg.timestamp || Date.now())
+        timestamp: msg.timestamp || new Date().toISOString()
       })).reverse();
 
       setChatMessages(messages);

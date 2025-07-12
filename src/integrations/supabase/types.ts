@@ -91,6 +91,7 @@ export type Database = {
           title: string
           transcript: string | null
           user_id: string
+          document_id: string | null // Added document_id for RLS
         }
         Insert: {
           audio_url?: string | null
@@ -103,6 +104,7 @@ export type Database = {
           title: string
           transcript?: string | null
           user_id: string
+          document_id?: string | null // Added document_id for inserts
         }
         Update: {
           audio_url?: string | null
@@ -115,6 +117,7 @@ export type Database = {
           title?: string
           transcript?: string | null
           user_id?: string
+          document_id?: string | null // Added document_id for updates
         }
         Relationships: [
           {
@@ -122,6 +125,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_recordings_document_id_fkey" // New foreign key
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
             referencedColumns: ["id"]
           },
         ]

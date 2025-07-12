@@ -438,13 +438,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
         // Specific check for Gemini model overloaded error
         if (error.message.includes("The model is overloaded")) {
-            errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
         }
       } else if (error instanceof Error) {
         errorMessage = error.message;
         // Specific check for Gemini model overloaded error
         if (error.message.includes("The model is overloaded")) {
-            errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
         }
       }
 
@@ -703,7 +703,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const toastId = toast.loading('Uploading audio file...');
 
     try {
-      const filePath = `${userProfile.id}/audio/${Date.now()}_${file.name}`;
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = `${userProfile.id}/audio/${Date.now()}_${safeFileName}`;
+
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(filePath, file);
@@ -973,11 +975,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const match = /language-(\w+)/.exec(className || '');
     const lang = match && match[1];
     const codeContent = String(children).trim();
-  
+
     // Handle Mermaid diagrams
     if (!inline && lang === 'mermaid') {
       return (
-        <CodeBlockErrorBoundary 
+        <CodeBlockErrorBoundary
           fallback={
             <div className="my-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex items-center gap-2 text-yellow-700">
@@ -993,11 +995,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             </div>
           }
         >
-          <Mermaid chart={codeContent} />
+          <Mermaid chart={codeContent} onMermaidError={() => { }} />
         </CodeBlockErrorBoundary>
       );
     }
-  
+
     // Handle DOT diagrams
     if (!inline && lang === 'dot') {
       return (
@@ -1021,7 +1023,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         </div>
       );
     }
-  
+
     // Handle code blocks with syntax highlighting
     if (!inline && lang) {
       return (
@@ -1047,11 +1049,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               </Button>
             </div>
           </div>
-          
+
           {/* Code content with enhanced syntax highlighting */}
           <div className="p-4 bg-white overflow-x-auto">
             <pre className="font-mono text-sm leading-relaxed">
-              <code 
+              <code
                 className="text-gray-800"
                 dangerouslySetInnerHTML={{
                   __html: highlightCode(codeContent, lang)
@@ -1062,7 +1064,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         </div>
       );
     }
-  
+
     // Inline code
     return (
       <code className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md font-mono text-sm border border-purple-200" {...props}>
@@ -1070,7 +1072,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       </code>
     );
   };
-  
+
   // Enhanced syntax highlighting function
   const highlightCode = (code: string, language: string) => {
     try {
@@ -1081,7 +1083,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       return escapeHtml(code);
     }
   };
-  
+
   // Helper function to escape HTML
   const escapeHtml = (text: string) => {
     const map: { [key: string]: string } = {
@@ -1093,7 +1095,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     };
     return text.replace(/[&<>"']/g, (m) => map[m]);
   };
-  
+
   // Helper function to convert lowlight result to HTML with inline styles
   const toHtml = (result: any) => {
     const nodeToHtml = (node: any): string => {
@@ -1103,7 +1105,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (node.type === 'element') {
         const { tagName, properties, children } = node;
         const classNames = (properties?.className || []).join(' ');
-        
+
         // Map highlight.js classes to inline styles for guaranteed rendering
         const styleMap: { [key: string]: string } = {
           'hljs-comment': 'color: #6b7280; font-style: italic;',
@@ -1142,20 +1144,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           'hljs-section': 'color: #059669;',
           'hljs-boolean': 'color: #ea580c;',
         };
-        
+
         let style = '';
         classNames.split(' ').forEach(cls => {
           if (styleMap[cls]) {
             style += styleMap[cls] + ' ';
           }
         });
-        
+
         const childrenHtml = children?.map(nodeToHtml).join('') || '';
         return `<${tagName}${style ? ` style="${style.trim()}"` : ''}>${childrenHtml}</${tagName}>`;
       }
       return '';
     };
-    
+
     return result.children.map(nodeToHtml).join('');
   };
 

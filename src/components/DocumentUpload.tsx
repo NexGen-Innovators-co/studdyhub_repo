@@ -4,13 +4,27 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Document } from '../types/Document';
+import { Document } from '../types/Document'; // Ensure this points to your Document.ts file
+import { User } from '@supabase/supabase-js'; // Import User type
 
 interface DocumentUploadProps {
   documents: Document[];
   onDocumentUploaded: (document: Document) => void;
   onDocumentDeleted: (documentId: string) => void;
 }
+
+// Helper function to extract storage path from public URL
+// This assumes your public URL structure is consistent:
+// .../storage/v1/object/public/{bucketName}/{filePath}
+const getStoragePathFromFileUrl = (fileUrl: string, bucketName: string): string => {
+  const parts = fileUrl.split(`/storage/v1/object/public/${bucketName}/`);
+  if (parts.length > 1) {
+    return parts[1];
+  }
+  // Fallback for unexpected URL formats or if bucketName isn't found
+  console.warn(`Could not extract storage path from URL: ${fileUrl} with bucket: ${bucketName}`);
+  return '';
+};
 
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   documents,
@@ -24,7 +38,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     if (!files || files.length === 0) return;
 
     const file = files[0];
-    
+
     // Validate file type
     const allowedTypes = ['application/pdf', 'text/plain'];
     if (!allowedTypes.includes(file.type)) {
@@ -34,88 +48,143 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      toast.error('File size must be less than 10MB');
+      toast.error('File size exceeds 10MB limit.');
       return;
     }
 
     setIsUploading(true);
+    let uploadedDocumentForCallback: Document | null = null; // This will hold the Document object in the correct type
+    let uploadedFilePathForCleanup: string | null = null; // This holds the storage path for potential cleanup
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        throw new Error('User not authenticated. Please log in.');
+      }
+      const currentUser: User = userData.user;
 
-      // Upload file to storage
-      const fileName = `${user.id}/${Date.now()}-${file.name}`;
+      // 1. Upload file to Supabase Storage
+      const filePath = `${currentUser.id}/${Date.now()}-${file.name}`; // Ensure unique path per user
+      uploadedFilePathForCleanup = filePath; // Store for potential cleanup if DB insert fails
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('documents')
-        .upload(fileName, file);
+        .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
 
-      // Get file URL
-      const { data: { publicUrl } } = supabase.storage
+      // Get public URL of the uploaded file
+      const { data: publicUrlData } = supabase.storage
         .from('documents')
-        .getPublicUrl(uploadData.path);
+        .getPublicUrl(filePath);
 
-      // Save document metadata to database
-      const { data: documentData, error: dbError } = await supabase
+      const fileUrl = publicUrlData.publicUrl;
+
+      // 2. Invoke Supabase Edge Function to extract text
+      // The function name 'gemini-document-extractor' should match your deployed Deno function name
+      const { data: extractionData, error: extractionError } = await supabase.functions.invoke(
+        'gemini-document-extractor',
+        {
+          body: { file_url: fileUrl, file_type: file.type },
+        }
+      );
+
+      if (extractionError) {
+        throw new Error(`Text extraction failed: ${extractionError.message}`);
+      }
+
+      const extractedText = extractionData?.content_extracted || "";
+
+      // 3. Save document metadata and extracted text to Supabase database
+      const { data, error: dbError } = await supabase
         .from('documents')
-        .insert({
-          user_id: user.id,
-          title: file.name.split('.')[0],
-          file_name: file.name,
-          file_url: publicUrl,
-          file_type: file.type,
-          file_size: file.size,
-        })
-        .select()
+        .insert([
+          {
+            user_id: currentUser.id, // Required by your schema
+            title: file.name.split('.')[0],
+            file_name: file.name,
+            file_size: file.size,
+            file_type: file.type,
+            file_url: fileUrl,
+            content_extracted: extractedText, // Corrected column name based on your schema
+          },
+        ])
+        .select('*')
         .single();
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        throw new Error(`Database insertion failed: ${dbError.message}`);
+      }
 
-      const newDocument: Document = {
-        ...documentData,
-        created_at: new Date(documentData.created_at),
-        updated_at: new Date(documentData.updated_at),
+      // Transform the Supabase response data to match the 'Document' interface
+      // converting string dates to Date objects.
+      uploadedDocumentForCallback = {
+        id: data.id,
+        user_id: data.user_id,
+        title: data.title,
+        file_name: data.file_name,
+        file_url: data.file_url,
+        file_type: data.file_type,
+        file_size: data.file_size ?? undefined, // Handle null from DB to undefined for optional interface property
+        content_extracted: data.content_extracted ?? undefined, // Handle null from DB to undefined
+        created_at: new Date(data.created_at), // Convert string to Date
+        updated_at: new Date(data.updated_at), // Convert string to Date
       };
 
-      onDocumentUploaded(newDocument);
-      toast.success('Document uploaded successfully!');
-    } catch (error) {
-      console.error('Error uploading document:', error);
-      toast.error('Failed to upload document');
+      toast.success('Document uploaded and processed successfully!');
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast.error(error.message);
+      // If upload to storage succeeded but extraction/db failed, delete the uploaded file
+      if (uploadedFilePathForCleanup) {
+        await supabase.storage.from('documents').remove([uploadedFilePathForCleanup]);
+      }
     } finally {
       setIsUploading(false);
+      if (uploadedDocumentForCallback) {
+        onDocumentUploaded(uploadedDocumentForCallback);
+      }
     }
   };
 
   const handleDeleteDocument = async (document: Document) => {
     try {
+      // Extract the storage path from the file_url for deletion
+      const storagePath = getStoragePathFromFileUrl(document.file_url, 'documents');
+      if (!storagePath) {
+        throw new Error('Could not determine storage path from file URL for deletion.');
+      }
+
       // Delete from storage
-      const pathParts = document.file_url.split('/');
-      const filePath = `${pathParts[pathParts.length - 2]}/${pathParts[pathParts.length - 1]}`;
-      
-      await supabase.storage
+      const { error: storageError } = await supabase.storage
         .from('documents')
-        .remove([filePath]);
+        .remove([storagePath]);
+
+      if (storageError) {
+        throw new Error(`Failed to delete file from storage: ${storageError.message}`);
+      }
 
       // Delete from database
-      const { error } = await supabase
+      const { error: dbError } = await supabase
         .from('documents')
         .delete()
         .eq('id', document.id);
 
-      if (error) throw error;
+      if (dbError) {
+        throw new Error(`Failed to delete document from database: ${dbError.message}`);
+      }
 
-      onDocumentDeleted(document.id);
       toast.success('Document deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting document:', error);
-      toast.error('Failed to delete document');
+      onDocumentDeleted(document.id);
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      toast.error(error.message);
     }
   };
 
-  const handleDrag = (e: React.DragEvent) => {
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -125,54 +194,46 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    handleFileUpload(e.dataTransfer.files);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileUpload(e.dataTransfer.files);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileUpload(e.target.files);
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Upload Area */}
-      <div
-        className={`border-2 border-dashed rounded-lg p-4 sm:p-6 md:p-8 text-center transition-colors ${
-          dragActive
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-      >
-        <Upload className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 mx-auto text-gray-400 mb-3 sm:mb-4" />
-        <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
-          Upload Study Documents
-        </h3>
-        <p className="text-sm sm:text-base text-gray-500 mb-3 sm:mb-4">
-          Drag and drop files here, or click to browse
-        </p>
-        <p className="text-xs sm:text-sm text-gray-400 mb-3 sm:mb-4">
-          Supports PDF and TXT files up to 10MB
-        </p>
-        <input
-          type="file"
-          id="file-upload"
-          className="hidden"
-          accept=".pdf,.txt"
-          onChange={(e) => handleFileUpload(e.target.files)}
-          disabled={isUploading}
-        />
+    <div
+      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+        dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50'
+      }`}
+      onDragEnter={handleDrag}
+      onDragLeave={handleDrag}
+      onDragOver={handleDrag}
+      onDrop={handleDrop}
+    >
+      <input
+        type="file"
+        id="file-upload"
+        className="hidden"
+        onChange={handleFileChange}
+        accept=".pdf,.txt"
+        disabled={isUploading}
+      />
+      <div className="flex flex-col items-center justify-center space-y-3">
+        <p className="text-gray-600">Drag and drop files here, or</p>
         <Button
           onClick={() => document.getElementById('file-upload')?.click()}
           disabled={isUploading}
-          className="bg-blue-600 hover:bg-blue-700"
         >
           {isUploading ? (
             <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Uploading...
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading...
             </>
           ) : (
             <>
@@ -185,7 +246,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
       {/* Documents List */}
       {documents.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-3 mt-6">
           <h4 className="font-medium text-gray-900">Uploaded Documents</h4>
           {documents.map((document) => (
             <Card key={document.id}>
