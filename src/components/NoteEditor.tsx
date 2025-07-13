@@ -13,9 +13,9 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import Mermaid from './Mermaid';
 import { SectionSelectionDialog } from './SectionSelectionDialog';
-import { CodeBlockErrorBoundary, useCopyToClipboard } from './AIChat'; // Import from AIChat
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { DocumentViewerDialog } from './DocumentViewerDialog';
-
+import { CodeBlockErrorBoundary } from './AIChat';
 // Import Supabase generated types
 import { Database } from '../integrations/supabase/types'; // Adjust path if your supabase.ts is elsewhere
 
@@ -372,19 +372,29 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    toast.info("File selected, starting upload..."); // Added for debugging
     const file = event.target.files?.[0];
     if (!file || !userProfile) {
       if (!userProfile) toast.error("Cannot upload: User profile is missing.");
       return;
     }
 
-    const allowedTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error('Unsupported file type. Please upload a PDF, TXT file or a Word document.');
+    const allowedDocumentTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
+    const allowedAudioTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm'];
+
+    if (allowedAudioTypes.includes(file.type)) {
+      // If it's an audio file, route it to the audio handler
+      handleAudioFileSelect(event); // Pass the event to reuse its logic
+      return;
+    }
+
+    if (!allowedDocumentTypes.includes(file.type)) {
+      toast.error('Unsupported file type. Please upload a PDF, TXT, Word document, or an audio file.');
       if (event.target) event.target.value = '';
       return;
     }
 
+    // Proceed with document upload logic
     setIsUploading(true);
     setSelectedFile(file);
     const toastId = toast.loading('Uploading document...');
@@ -429,6 +439,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         setIsSectionDialogOpen(true);
         toast.dismiss(toastId);
       } else {
+        // If no sections, generate note from full content
         await generateNoteFromExtractedContent(extractedContent, file.name, urlData.publicUrl, file.type, toastId.toString());
       }
 
@@ -466,6 +477,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     toast.loading('Generating AI note...', { id: toastId });
 
     try {
+      // Create a new document entry for the file first
       const { data: newDocument, error: docError } = await supabase
         .from('documents')
         .insert({
@@ -473,7 +485,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           title: fileName,
           file_name: fileName,
           file_url: fileUrl,
-          content_extracted: 'Processing audio for content...', // Placeholder
+          content_extracted: contentToUse, // Store the extracted content
           file_type: fileType,
         })
         .select('id')
@@ -525,7 +537,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
 
     const toastId = toast.loading(`Generating note from ${section ? `section: ${section}` : 'full document'}...`);
-    await generateNoteFromExtractedContent(extractedContent, selectedFile.name, supabase.storage.from('documents').getPublicUrl(`${userProfile.id}/${Date.now()}_${selectedFile.name}`).data.publicUrl, selectedFile.type, toastId as string, section);
+    // Ensure the public URL is correctly retrieved for the selectedFile
+    const { data: urlData } = supabase.storage.from('documents').getPublicUrl(`${userProfile.id}/${Date.now()}_${selectedFile.name}`);
+    
+    await generateNoteFromExtractedContent(extractedContent, selectedFile.name, urlData.publicUrl, selectedFile.type, toastId as string, section);
   };
 
   const handleTextToSpeech = () => {
@@ -686,6 +701,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleAudioFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    toast.info("Audio file selected, starting upload..."); // Added for debugging
     const file = event.target.files?.[0];
     if (!file || !userProfile) {
       if (!userProfile) toast.error("Cannot upload: User profile is missing.");
@@ -976,6 +992,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const lang = match && match[1];
     const codeContent = String(children).trim();
 
+    // Create a ref for the Mermaid component
+    const mermaidDiagramRef = useRef<HTMLDivElement>(null);
+
     // Handle Mermaid diagrams
     if (!inline && lang === 'mermaid') {
       return (
@@ -995,7 +1014,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             </div>
           }
         >
-          <Mermaid chart={codeContent} onMermaidError={() => { }} />
+          {/* Pass the mermaidDiagramRef to the Mermaid component */}
+          <Mermaid
+            chart={codeContent}
+            onMermaidError={() => { }} // Provide an empty function or a proper handler
+            diagramRef={mermaidDiagramRef}
+          // onSuggestAiCorrection is optional, so no need to pass if not needed here
+          />
         </CodeBlockErrorBoundary>
       );
     }
@@ -1043,7 +1068,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => copy(codeContent)}
-                className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                className="h-6 w-6 p-0"
               >
                 {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
               </Button>
@@ -1199,7 +1224,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               )}
               {isUploading ? 'Processing...' : 'Upload Doc & Generate'}
             </Button>
-            <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept=".pdf,.txt,.doc,.docx,audio/*" /> {/* Updated style and accept attribute */}
 
             <Button
               variant="outline"
@@ -1215,7 +1240,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               )}
               {isProcessingAudio ? 'Uploading Audio...' : 'Upload Audio'}
             </Button>
-            <input type="file" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ display: 'none' }} accept="audio/*" />
+            <input type="file" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept="audio/*" /> {/* Updated style */}
 
             <Button
               variant="outline"
@@ -1322,7 +1347,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {isMobileMenuOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-10 flex flex-col py-2">
                 {/* Action Buttons */}
-                <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} accept=".pdf,.txt,.doc,.docx" />
+                <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept=".pdf,.txt,.doc,.docx,audio/*" /> {/* Updated style and accept attribute */}
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
@@ -1336,7 +1361,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                   )}
                   {isUploading ? 'Processing...' : 'Upload Doc & Generate'}
                 </Button>
-                <input type="file" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ display: 'none' }} accept="audio/*" />
+                <input type="file" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept="audio/*" /> {/* Updated style */}
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"

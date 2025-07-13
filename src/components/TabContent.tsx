@@ -171,7 +171,7 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, onClo
 
   const renderContent = () => {
     if (language === 'mermaid') {
-      return <Mermaid chart={code} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} />;
+      return <Mermaid chart={code} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} diagramRef={null} />;
     } else if (language === 'chartjs') {
       try {
         const chartConfig = JSON.parse(code);
