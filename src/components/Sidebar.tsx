@@ -184,7 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Icon className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'}`} />
                   {/* Text label: visible when 'isOpen' (mobile) or on desktop hover */}
                   <span className={`truncate ${
-                    isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-10 lg:w-full lg:pl-1 lg:pointer-events-none'
+                    isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300  lg:pointer-events-none'
                   }`}>
                     {tab.name}
                   </span>
@@ -231,7 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               lg:max-h-0 lg:overflow-hidden // Default for desktop when not hovered
             `}>
               {chatSessions.length === 0 && (isOpen || window.innerWidth >= 1024) ? (
-                <p className="text-sm text-slate-500 py-2 px-3 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+                <p className="text-sm text-slate-500 py-2  lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
                   No chat sessions yet.
                 </p>
               ) : (
@@ -257,7 +257,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       >
                         <MessageCircle className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'}`} />
                         <span className={`truncate ${
-                          isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-10 lg:w-full lg:pl-1 lg:pointer-events-none'
+                          isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300  lg:pointer-events-none'
                         }`}>
                           {session.title}
                         </span>
@@ -334,7 +334,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <Icon className={`h-3 w-3 ${isOpen ? 'mr-2' : 'lg:group-hover:mr-2 lg:transition-all lg:duration-300'}`} />
                     {/* Text label: visible when 'isOpen' (mobile) or on desktop hover */}
                     <span className={`truncate ${
-                      isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-9 lg:w-full lg:pl-1 lg:pointer-events-none'
+                      isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300  lg:pointer-events-none'
                     }`}>
                       {category.name}
                     </span>

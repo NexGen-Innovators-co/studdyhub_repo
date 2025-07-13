@@ -928,7 +928,7 @@ const Index = () => {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0">
-        <div className="flex items-center justify-between p-3 sm:p-4 bg-white border-b border-slate-200">
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b-0 shadow-2xl bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
           <Header {...headerProps} />
           <div className="hidden sm:flex items-center gap-3">
             <span className="text-sm text-slate-600 hidden md:block">Welcome, {user.email}</span>
