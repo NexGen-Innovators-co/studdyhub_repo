@@ -1,16 +1,17 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { AlertTriangle, Copy, Check, Loader2, Wrench, Play, Code, Download, Eye, EyeOff } from 'lucide-react'; 
+import { AlertTriangle, Copy, Check, Loader2, Wrench, Play, Code, Download, Eye, EyeOff, Info, ChevronDown, ChevronUp } from 'lucide-react'; 
 import { Button } from './ui/button'; 
 
 interface MermaidProps {
   chart: string;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void; 
+  onSuggestAiCorrection?: (prompt: string) => void; // New prop for AI correction
 }
 
 // Function to aggressively clean the Mermaid string
 const cleanMermaidString = (input: string): string => {
   let cleaned = input.replace(/[\u00A0\u202F\u200B]/g, ' ');
-  cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\u000E-\u001F\u007F]/g, ''); // Fixed unicode range for control characters
   cleaned = cleaned.split('\n').map(line => line.replace(/\s+/g, ' ').trim()).join('\n');
   return cleaned.trim();
 };
@@ -27,51 +28,68 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
     let line = lines[i];
     const originalLine = line;
     
-    if (i === 0 || line.trim() === '') {
+    // Skip empty lines or initial directive lines
+    if (i === 0 && (line.startsWith('graph') || line.startsWith('sequenceDiagram') || line.startsWith('flowchart') || line.startsWith('gantt') || line.startsWith('classDiagram') || line.startsWith('stateDiagram') || line.startsWith('pie') || line.startsWith('erDiagram') || line.startsWith('journey') || line.startsWith('gitGraph') || line.startsWith('quadrantChart') || line.startsWith('requirementDiagram') || line.startsWith('mindmap') || line.startsWith('timeline') || line.startsWith('C4Context') || line.startsWith('C4Container') || line.startsWith('C4Component') || line.startsWith('C4Dynamic') || line.startsWith('C4Deployment'))) {
+      fixedLines.push(line);
+      continue;
+    }
+    if (line.trim() === '') {
       fixedLines.push(line);
       continue;
     }
     
-    if (line.includes('[') || line.includes('{')) {
-      const nodeMatches = line.match(/([A-Z]\[.*?\])|([A-Z]\{.*?\})/g);
-      
-      if (nodeMatches) {
-        for (const match of nodeMatches) {
-          const nodeId = match.charAt(0);
-          const nodeType = match.charAt(1);
-          const endChar = nodeType === '[' ? ']' : '}';
-          const content = match.slice(2, -1);
-          const hasSpecialChars = /[()\/=\[\]∂∫+\-\^]/.test(content);
+    // Handle special characters within node definitions (e.g., A[Content with (special) chars])
+    // Also capture (.*?) for round nodes and other shapes
+    const nodeDefinitionRegex = /([A-Z0-9_]+\s*(?:\[.*?\]|\{.*?\}|\(.*?\)|<.*?>|\|.*?\|))/g; // Added <...> for hexagons, |...| for cylinders
+    line = line.replace(nodeDefinitionRegex, (match) => {
+      const contentMatch = match.match(/\[(.*?)\]|\{(.*?)\}|\((.*?)\}|<(.*?)>|\|(.*?)\|/);
+      if (contentMatch) {
+        const content = contentMatch[1] || contentMatch[2] || contentMatch[3] || contentMatch[4] || contentMatch[5];
+        const nodeTypeChar = match.includes('[') ? '[' : (match.includes('{') ? '{' : (match.includes('(') ? '(' : (match.includes('<') ? '<' : '|')));
+        const endChar = nodeTypeChar === '[' ? ']' : (nodeTypeChar === '{' ? '}' : (nodeTypeChar === '(' ? ')' : (nodeTypeChar === '<' ? '>' : '|')));
+        
+        const hasSpecialChars = /[()\/=\[\]∂∫+\-\^]/.test(content);
+        
+        if (hasSpecialChars) {
+          const isAlreadyFormatted = content.startsWith('`') && content.endsWith('`');
           
-          if (hasSpecialChars) {
-            const isAlreadyFormatted = content.startsWith('`') && content.endsWith('`');
+          if (!isAlreadyFormatted) {
+            let fixedContent = content
+              .replace(/\(/g, '&lpar;')
+              .replace(/\)/g, '&rpar;')
+              .replace(/\//g, '&sol;')
+              .replace(/=/g, '&equals;')
+              .replace(/\[/g, '&lbrack;')
+              .replace(/\]/g, '&rbrack;')
+              .replace(/∂/g, '&part;')
+              .replace(/∫/g, '&int;')
+              .replace(/\+/g, '&plus;')
+              .replace(/\^/g, '&Hat;')
+              .replace(/(?<!-)(--)(?!>)/g, '&minus;&minus;') 
+              .replace(/(?<!-)(-{1})(?![->])/g, '&minus;'); 
             
-            if (!isAlreadyFormatted) {
-              let fixedContent = content
-                .replace(/\(/g, '&lpar;')
-                .replace(/\)/g, '&rpar;')
-                .replace(/\//g, '&sol;')
-                .replace(/=/g, '&equals;')
-                .replace(/\[/g, '&lbrack;')
-                .replace(/\]/g, '&rbrack;')
-                .replace(/∂/g, '&part;')
-                .replace(/∫/g, '&int;')
-                .replace(/\+/g, '&plus;')
-                .replace(/\^/g, '&Hat;')
-                .replace(/(?<!-)(--)(?!>)/g, '&minus;&minus;')
-                .replace(/(?<!-)(-{1})(?![->])/g, '&minus;');
-              
-              fixedContent = `\`${fixedContent}\``;
-              const fixedMatch = `${nodeId}${nodeType}${fixedContent}${endChar}`;
-              line = line.replace(match, fixedMatch);
-              wasFixed = true;
-            }
+            fixedContent = `\`${fixedContent}\``;
+            const nodeId = match.split(nodeTypeChar)[0].trim();
+            wasFixed = true;
+            return `${nodeId}${nodeTypeChar}${fixedContent}${endChar}`;
           }
         }
       }
-    }
+      return match; 
+    });
     
-    line = line.replace(/\s*(-->|--)\s*/g, ' $1 ');
+    // Handle unquoted labels in edges (e.g., A -- This is a label --> B)
+    const edgeLabelRegex = /(\s(?:-+|==|~~)(?:>)?\s)([^\s"'][\w\s]*?[^\s"'])\s((?:-+|==|~~)(?:>)?\s)/g;
+    line = line.replace(edgeLabelRegex, (match, p1, p2, p3) => {
+      if (p2.includes(' ') && !p2.startsWith('"') && !p2.endsWith('"') && !p2.startsWith('`') && !p2.endsWith('`')) {
+        wasFixed = true;
+        return `${p1}"${p2}"${p3}`;
+      }
+      return match; 
+    });
+
+    // Trim spaces around arrows and operators
+    line = line.replace(/\s*(-->|--|---|-+>|==>|==|=+>|~~>|~~)\s*/g, ' $1 '); 
     line = line.replace(/\s+/g, ' ').trim();
     
     if (line !== originalLine) {
@@ -185,7 +203,7 @@ const downloadSvg = (svgString: string, filename: string = 'mermaid-diagram') =>
   URL.revokeObjectURL(url);
 };
 
-const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError }) => {
+const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCorrection }) => {
   const mermaidDivRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -219,13 +237,21 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError }) => {
     }
   };
 
+  const handleAiFixClick = useCallback((code: string, errorType: 'syntax' | 'rendering') => {
+    const prompt = `I encountered a ${errorType} error with the following Mermaid diagram code. Please correct the syntax and provide the corrected Mermaid code. Ensure there are no trailing spaces on any line within the code block.
+\`\`\`mermaid
+${code}
+\`\`\`
+`;
+    if (onSuggestAiCorrection) {
+      onSuggestAiCorrection(prompt);
+    }
+  }, [onSuggestAiCorrection]);
+
+
   const triggerRender = () => {
-    console.log("Trigger render called, chart length:", chart.trim().length);
     if (chart.trim()) {
-      console.log("Setting shouldRender to true");
       setShouldRender(true);
-    } else {
-      console.log("Chart is empty, not rendering");
     }
   };
 
@@ -247,7 +273,6 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError }) => {
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.1.1/dist/mermaid.min.js';
       script.onload = () => {
-        console.log("Mermaid script loaded successfully.");
         setIsMermaidLoaded(true);
       };
       script.onerror = () => {
@@ -264,22 +289,8 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError }) => {
   useEffect(() => {
     const renderDiagram = async () => {
       if (!isMermaidLoaded || !mermaidDivRef.current || !(window as any).mermaid || !shouldRender) {
-        if (!isMermaidLoaded) {
-          console.log("Mermaid not loaded yet");
-        }
-        if (!mermaidDivRef.current) {
-          console.log("Mermaid div ref not available");
-        }
-        if (!(window as any).mermaid) {
-          console.log("Mermaid not available on window");
-        }
-        if (!shouldRender) {
-          console.log("Should render is false");
-        }
         return;
       }
-
-      console.log("Starting render process...");
 
       // Clean up any previous render attempts
       cleanupRender();
@@ -292,9 +303,6 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError }) => {
       const mermaidInstance = (window as any).mermaid;
 
       try {
-        console.log("Mermaid object accessed from window:", mermaidInstance);
-        console.log("Mermaid initialized. Version:", mermaidInstance.version); 
-
         // Enhanced theme configuration with better colors
         mermaidInstance.initialize({ 
           startOnLoad: false, 
@@ -398,14 +406,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError }) => {
         const { fixed: fixedChart, wasFixed } = autoFixMermaidSyntax(cleanedChart);
         setWasAutoFixed(wasFixed);
         
-        if (wasFixed) {
-          console.log("Auto-fixed Mermaid syntax errors");
-          console.log("Original:", cleanedChart);
-          console.log("Fixed:", fixedChart);
-        }
-        
         const finalChart = fixedChart;
-        console.log("Attempting to render Mermaid chart:", finalChart);
 
         const renderPromise = new Promise<any>((resolve, reject) => {
           renderTimeoutRef.current = setTimeout(() => {
@@ -442,6 +443,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError }) => {
         console.error("Rendering error (mermaid):", e);
         setError(e.message || "An unknown error occurred during rendering.");
         if (onMermaidError) {
+          // Only inform AIChat about the error, don't trigger input fill here
           onMermaidError(chart, 'rendering');
         }
       } finally {
@@ -450,7 +452,6 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError }) => {
     };
 
     if (isMermaidLoaded && shouldRender) {
-      console.log("Calling renderDiagram...");
       renderDiagram();
     }
 
@@ -478,48 +479,48 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError }) => {
     );
   }
 
+  // New compact error display
   if (error) {
     return (
-      <div className="my-4 p-4 bg-gradient-to-br from-red-50 to-pink-50 border border-red-200 rounded-lg">
-        <div className="flex items-center gap-2 text-red-700">
-          <AlertTriangle className="h-4 w-4" />
-          <span className="text-sm font-medium">Diagram Rendering Error</span>
+      <div className="my-4 p-3 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-lg">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-orange-700">
+            <Info className="h-4 w-4" />
+            <span className="text-sm font-medium">Diagram Issue Detected</span>
+          </div>
+          <div className="flex gap-2">
+            {onSuggestAiCorrection && ( // Only show button if prop is provided
+              <Button
+                size="sm"
+                onClick={() => handleAiFixClick(chart, 'rendering')} // Call new handler
+                className="bg-blue-600 text-white shadow-md hover:bg-blue-700 h-7 px-3 text-xs" 
+              >
+                <Wrench className="h-3 w-3 mr-1" />
+                AI Fix
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={triggerRender}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 h-7 px-3 text-xs" 
+            >
+              <Play className="h-3 w-3 mr-1" />
+              Try Again
+            </Button>
+          </div>
         </div>
-        <p className="text-sm text-red-600 mt-1">
-          Could not render Mermaid diagram (Mermaid v{(window as any).mermaid?.version || 'unknown'}): {error} 
-        </p>
-        <pre className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded overflow-x-auto">
-          {chart}
-        </pre>
-        <div className="flex flex-col sm:flex-row gap-2 mt-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={copyCode}
-            className="text-slate-600 border-slate-200 hover:bg-slate-50 flex-1 sm:flex-none"
-          >
-            {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
-            Copy Code
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onMermaidError && onMermaidError(chart, 'rendering')}
-            className="bg-blue-500 text-white hover:bg-blue-600 flex-1 sm:flex-none"
-          >
-            <span className="hidden sm:inline">Suggest AI Correction</span>
-            <span className="sm:hidden">AI Fix</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={triggerRender}
-            className="bg-green-500 text-white hover:bg-green-600 flex-1 sm:flex-none"
-          >
-            <Play className="h-3 w-3 mr-1" />
-            Try Again
-          </Button>
-        </div>
+        <details className="text-sm text-orange-600 cursor-pointer">
+          <summary className="flex items-center gap-2 py-1">
+            <ChevronDown className="h-4 w-4" />
+            <span>Show Details</span>
+          </summary>
+          <div className="mt-2 p-2 bg-gray-50 rounded overflow-x-auto text-gray-600">
+            <p className="mb-1">Error: {error}</p>
+            <p className="font-semibold mb-1">Diagram Code:</p>
+            <pre className="text-sm whitespace-pre-wrap">{chart}</pre>
+          </div>
+        </details>
       </div>
     );
   }

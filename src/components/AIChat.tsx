@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, memo } from 'react';
-import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check } from 'lucide-react';
+import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
+import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2 } from 'lucide-react'; // Added Trash2 for delete icon
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
@@ -142,7 +142,7 @@ export const useCopyToClipboard = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast.success('Code copied to clipboard!');
-    } catch (error) {
+    } catch (err) {
       toast.error('Failed to copy code');
     }
   };
@@ -181,26 +181,6 @@ const renderHighlightedCode = (result: any) => {
   return result.children.map((node: any, index: number) => renderNode(node, index));
 };
 
-const isValidMermaidSyntax = (code: string): boolean => {
-  const trimmedCode = code.trim();
-  return (
-    trimmedCode.startsWith('graph') ||
-    trimmedCode.startsWith('sequenceDiagram') ||
-    trimmedCode.startsWith('flowchart') ||
-    trimmedCode.startsWith('gantt') ||
-    trimmedCode.startsWith('classDiagram') ||
-    trimmedCode.startsWith('stateDiagram') ||
-    trimmedCode.startsWith('pie') ||
-    trimmedCode.startsWith('erDiagram') ||
-    trimmedCode.startsWith('journey') ||
-    trimmedCode.startsWith('gitGraph') ||
-    trimmedCode.startsWith('quadrantChart') ||
-    trimmedCode.startsWith('requirementDiagram') ||
-    trimmedCode.startsWith('mindmap') ||
-    trimmedCode.startsWith('timeline')
-  );
-};
-
 interface ChartRendererProps {
   chartConfig: any;
 }
@@ -210,7 +190,6 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig }) => {
   const chartInstance = useRef<any>(null);
 
   useEffect(() => {
-    console.log("ChartRenderer: Received chartConfig:", chartConfig);
     if (canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d');
       if (ctx) {
@@ -236,7 +215,104 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig }) => {
   );
 };
 
-const CodeBlock = memo(({ node, inline, className, children, onMermaidError, ...props }: any) => {
+// New DiagramPanel component
+interface DiagramPanelProps {
+  diagramContent: string;
+  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'unknown'; // Added diagramType
+  onClose: () => void;
+  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
+  onSuggestAiCorrection: (prompt: string) => void;
+  isOpen: boolean; // Added isOpen prop for controlled visibility
+}
+
+const DiagramPanel: React.FC<DiagramPanelProps> = ({ diagramContent, diagramType, onClose, onMermaidError, onSuggestAiCorrection, isOpen }) => {
+  let panelContent;
+  let panelTitle = 'Diagram View';
+
+  if (diagramType === 'mermaid') {
+    panelContent = (
+      <Mermaid chart={diagramContent} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} />
+    );
+    panelTitle = 'Mermaid Diagram View';
+  } else if (diagramType === 'dot') {
+    // Placeholder for DOT graph rendering. You would integrate a library like Viz.js here.
+    // For now, it shows the raw code and a suggestion button.
+    panelContent = (
+      <div className="flex flex-col items-center justify-center h-full p-4">
+        <p className="text-slate-600 mb-2">DOT Graph Rendering Coming Soon!</p>
+        <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full">
+          {diagramContent}
+        </pre>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onSuggestAiCorrection(`Can you fix or generate a DOT graph for me? Here's the code: ${diagramContent}`)}
+          className="mt-4 bg-blue-500 text-white hover:bg-blue-600"
+        >
+          Suggest AI Correction
+        </Button>
+      </div>
+    );
+    panelTitle = 'DOT Graph View';
+  } else if (diagramType === 'chartjs') {
+     try {
+      const chartConfig = JSON.parse(diagramContent);
+      panelContent = <ChartRenderer chartConfig={chartConfig} />;
+      panelTitle = 'Chart.js Graph View';
+    } catch (e) {
+      panelContent = (
+        <div className="text-red-700 p-4">
+          <p>Invalid Chart.js configuration.</p>
+          <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full">
+            {diagramContent}
+          </pre>
+           <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onSuggestAiCorrection(`Can you fix this Chart.js configuration? Here's the code: ${diagramContent}`)}
+            className="mt-4 bg-blue-500 text-white hover:bg-blue-600"
+          >
+            Suggest AI Correction
+          </Button>
+        </div>
+      );
+      panelTitle = 'Chart.js Error';
+    }
+  }
+   else {
+    panelContent = (
+      <div className="flex flex-col items-center justify-center h-full text-slate-500">
+        <AlertTriangle className="h-8 w-8 mb-2" />
+        <p>Unsupported Diagram Type</p>
+        <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full mt-2">
+          {diagramContent}
+        </pre>
+      </div>
+    );
+    panelTitle = 'Unsupported Diagram';
+  }
+
+  return (
+    <div className={`
+      absolute inset-y-0 right-0 w-full bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40 transition-transform duration-300 ease-in-out
+      ${isOpen ? 'translate-x-0' : 'translate-x-full'}
+      md:relative md:translate-x-0 md:w-1/2 lg:w-2/5 md:border-t md:rounded-lg md:shadow-md
+    `}>
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
+        <h3 className="text-lg font-semibold text-slate-800">{panelTitle}</h3>
+        <Button variant="ghost" size="icon" onClick={onClose} title="Close Diagram">
+          <X className="h-5 w-5 text-slate-500 hover:text-slate-700" />
+        </Button>
+      </div>
+      <div className="flex-1 overflow-auto p-4 sm:p-6">
+        {panelContent}
+      </div>
+    </div>
+  );
+};
+
+
+const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, ...props }: any) => {
   const { copied, copy } = useCopyToClipboard();
   const match = /language-(\w+)/.exec(className || '');
   const lang = match && match[1];
@@ -270,51 +346,23 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, ...
   }
 
   if (!inline && lang === 'mermaid') {
-    if (!isValidMermaidSyntax(codeContent)) {
-      return (
-        <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center gap-2 text-red-700">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm font-medium">Mermaid Syntax Error</span>
-          </div>
-          <p className="text-sm text-red-600 mt-1">
-            Invalid Mermaid syntax detected. Please check your diagram code.
-          </p>
-          <pre className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded overflow-x-auto">
-            {codeContent}
-          </pre>
-          <div className="flex gap-2 mt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => copy(codeContent)}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
-            >
-              {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
-              Copy Code
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onMermaidError && onMermaidError(codeContent, 'syntax')}
-              className="bg-blue-500 text-white hover:bg-blue-600"
-            >
-              Suggest AI Correction
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRawCode(true)}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
-            >
-              Show Raw Code
-            </Button>
-          </div>
-        </div>
-      );
-    }
+    // Render a button to view the diagram in the side panel
     return (
-      <Mermaid chart={codeContent} onMermaidError={onMermaidError} />
+      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between">
+        <div className="flex items-center gap-2 text-slate-700">
+          <FileText className="h-4 w-4" />
+          <span className="text-sm font-medium">Mermaid Diagram</span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onViewDiagram && onViewDiagram(codeContent, 'mermaid')}
+          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm"
+        >
+          <Maximize2 className="h-4 w-4 mr-2" />
+          View Diagram
+        </Button>
+      </div>
     );
   }
 
@@ -337,6 +385,17 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, ...
             </Button>
           </div>
           <ChartRenderer chartConfig={chartConfig} />
+          <div className="flex gap-2 mt-3 justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewDiagram && onViewDiagram(codeContent, 'chartjs')}
+              className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm"
+            >
+              <Maximize2 className="h-4 w-4 mr-2" />
+              View Full Chart
+            </Button>
+          </div>
         </div>
       );
     } catch (e) {
@@ -366,7 +425,7 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, ...
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onMermaidError && onMermaidError(codeContent, 'syntax')}
+              onClick={() => onSuggestAiCorrection && onSuggestAiCorrection(`Can you fix this Chart.js configuration? Here's the code: ${codeContent}`)}
               className="bg-blue-500 text-white hover:bg-blue-600"
             >
               Suggest AI Correction
@@ -386,24 +445,22 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, ...
   }
 
   if (!inline && lang === 'dot') {
+    // Render a button to view the diagram in the side panel for DOT graphs
     return (
-      <div className="my-4 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-            DOT Graph
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => copy(codeContent)}
-            className="h-6 w-6 p-0"
-          >
-            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          </Button>
+      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between">
+        <div className="flex items-center gap-2 text-slate-700">
+          <FileText className="h-4 w-4" />
+          <span className="text-sm font-medium">DOT Graph</span>
         </div>
-        <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto">
-          {codeContent}
-        </pre>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onViewDiagram && onViewDiagram(codeContent, 'dot')}
+          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm"
+        >
+          <Maximize2 className="h-4 w-4 mr-2" />
+          View Diagram
+        </Button>
       </div>
     );
   }
@@ -433,7 +490,7 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, ...
         </div>
         <div className="p-4 bg-white overflow-x-auto">
           <pre className="font-mono text-sm leading-relaxed">
-            <code 
+            <code
               className="text-gray-800"
               dangerouslySetInnerHTML={{
                 __html: highlightCode(codeContent, lang)
@@ -487,7 +544,7 @@ const toHtml = (result: any) => {
         'hljs-string': 'color: #059669;',
         'hljs-number': 'color: #ea580c;',
         'hljs-built_in': 'color: #2563eb; font-weight: 500;',
-        'hljs-function': 'color: #1d4ed8; font-weight: 500;',
+        'hljs-function': 'color: #1d4ed8;',
         'hljs-variable': 'color: #1e40af;',
         'hljs-type': 'color: #0d9488;',
         'hljs-class': 'color: #d97706;',
@@ -518,24 +575,24 @@ const toHtml = (result: any) => {
         'hljs-section': 'color: #059669;',
         'hljs-boolean': 'color: #ea580c;',
       };
-      
+
       let style = '';
       classNames.split(' ').forEach(cls => {
         if (styleMap[cls]) {
           style += styleMap[cls] + ' ';
         }
       });
-      
+
       const childrenHtml = children?.map(nodeToHtml).join('') || '';
       return `<${tagName}${style ? ` style="${style.trim()}"` : ''}>${childrenHtml}</${tagName}>`;
     }
     return '';
   };
-  
+
   return result.children.map(nodeToHtml).join('');
 };
 
-const MarkdownRenderer: React.FC<{ content: string; isUserMessage?: boolean; onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void; }> = ({ content, isUserMessage, onMermaidError }) => {
+const MarkdownRenderer: React.FC<{ content: string; isUserMessage?: boolean; onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void; onSuggestAiCorrection: (prompt: string) => void; onViewDiagram: (code: string, type: 'mermaid' | 'dot' | 'chartjs' | 'unknown') => void; }> = ({ content, isUserMessage, onMermaidError, onSuggestAiCorrection, onViewDiagram }) => {
   const textColorClass = isUserMessage ? 'text-white' : 'text-slate-700';
   const linkColorClass = isUserMessage ? 'text-blue-200 hover:underline' : 'text-blue-600 hover:underline';
   const listTextColorClass = isUserMessage ? 'text-white' : 'text-slate-700';
@@ -548,17 +605,17 @@ const MarkdownRenderer: React.FC<{ content: string; isUserMessage?: boolean; onM
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw]}
         components={{
-          code: (props) => <CodeBlock {...props} onMermaidError={onMermaidError} />,
-          h1: ({node, ...props}) => <h1 className={`text-2xl font-extrabold ${isUserMessage ? 'text-white' : 'text-blue-700'} mt-4 mb-2`} {...props} />,
-          h2: ({node, ...props}) => <h2 className={`text-xl font-bold ${isUserMessage ? 'text-white' : 'text-purple-700'} mt-3 mb-2`} {...props} />,
-          h3: ({node, ...props}) => <h3 className={`text-lg font-semibold ${isUserMessage ? 'text-white' : 'text-green-700'} mt-2 mb-1`} {...props} />,
-          h4: ({node, ...props}) => <h4 className={`text-base font-semibold ${isUserMessage ? 'text-white' : 'text-orange-700'} mt-1 mb-1`} {...props} />,
-          p: ({node, ...props}) => <p className={`mb-2 ${textColorClass} leading-relaxed`} {...props} />,
-          a: ({node, ...props}) => <a className={`${linkColorClass} font-medium`} {...props} />,
-          ul: ({node, ...props}) => <ul className={`list-disc list-inside space-y-1 ${listTextColorClass} mb-2`} {...props} />,
-          ol: ({node, ...props}) => <ol className={`list-decimal list-inside space-y-1 ${listTextColorClass} mb-2`} {...props} />,
-          li: ({node, ...props}) => <li className="mb-1" {...props} />,
-          blockquote: ({node, ...props}) => <blockquote className={`border-l-4 ${blockquoteBgClass} pl-4 py-2 italic ${blockquoteTextColorClass} rounded-r-md my-3`} {...props} />,
+          code: (props) => <CodeBlock {...props} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} onViewDiagram={onViewDiagram} />,
+          h1: ({ node, ...props }) => <h1 className={`text-2xl font-extrabold ${isUserMessage ? 'text-white' : 'text-blue-700'} mt-4 mb-2`} {...props} />,
+          h2: ({ node, ...props }) => <h2 className={`text-xl font-bold ${isUserMessage ? 'text-white' : 'text-purple-700'} mt-3 mb-2`} {...props} />,
+          h3: ({ node, ...props }) => <h3 className={`text-lg font-semibold ${isUserMessage ? 'text-white' : 'text-green-700'} mt-2 mb-1`} {...props} />,
+          h4: ({ node, ...props }) => <h4 className={`text-base font-semibold ${isUserMessage ? 'text-white' : 'text-orange-700'} mt-1 mb-1`} {...props} />,
+          p: ({ node, ...props }) => <p className={`mb-2 ${textColorClass} leading-relaxed`} {...props} />,
+          a: ({ node, ...props }) => <a className={`${linkColorClass} font-medium`} {...props} />,
+          ul: ({ node, ...props }) => <ul className={`list-disc list-inside space-y-1 ${listTextColorClass} mb-2`} {...props} />,
+          ol: ({ node, ...props }) => <ol className={`list-decimal list-inside space-y-1 ${listTextColorClass} mb-2`} {...props} />,
+          li: ({ node, ...props }) => <li className="mb-1" {...props} />,
+          blockquote: ({ node, ...props }) => <blockquote className={`border-l-4 ${blockquoteBgClass} pl-4 py-2 italic ${blockquoteTextColorClass} rounded-r-md my-3`} {...props} />,
           table: ({ node, ...props }) => (
             <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200">
               <table className="w-full border-collapse" {...props} />
@@ -637,11 +694,13 @@ interface AIChatProps {
   onChatSessionSelect: (sessionId: string) => void;
   chatSessions: ChatSession[];
   onNewMessage: (message: Message) => void;
-  onToggleChatHistory: () => void;
   onDeleteMessage: (messageId: string) => void;
   onRegenerateResponse: (lastUserMessageContent: string) => Promise<void>;
   onRetryFailedMessage: (originalUserMessageContent: string, failedAiMessageId: string) => Promise<void>;
   isSubmittingUserMessage: boolean;
+  // New props for message pagination
+  hasMoreMessages: boolean;
+  onLoadOlderMessages: () => Promise<void>;
 }
 
 const AIChatComponent: React.FC<AIChatProps> = ({
@@ -657,11 +716,12 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   activeChatSessionId,
   onNewChatSession,
   onNewMessage,
-  onToggleChatHistory,
   onDeleteMessage,
   onRegenerateResponse,
   onRetryFailedMessage,
   isSubmittingUserMessage,
+  hasMoreMessages, // Destructure new prop
+  onLoadOlderMessages, // Destructure new prop
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -669,33 +729,44 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(messages.length);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // State for the side-out diagram panel
+  const [activeDiagram, setActiveDiagram] = useState<{ content: string; type: 'mermaid' | 'dot' | 'chartjs' | 'unknown' } | null>(null);
+  const isDiagramPanelOpen = !!activeDiagram; // Derived state
 
   const scrollToBottom = () => {
-    console.log('AIChat: scrollToBottom called.');
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    if (messages.length > prevMessagesLengthRef.current) {
-      console.log('AIChat: New message detected, calling scrollToBottom.');
+    // Only scroll to bottom if new messages are added, not when older messages are prepended
+    if (messages.length > prevMessagesLengthRef.current && messages[messages.length - 1]?.role !== 'user') { // Check if last message is not user's (i.e., AI response or new chat)
+      scrollToBottom();
+    } else if (messages.length > prevMessagesLengthRef.current && messages[messages.length - 1]?.role === 'user' && prevMessagesLengthRef.current === 0) {
+      // Scroll to bottom on first user message in a new chat
       scrollToBottom();
     }
     prevMessagesLengthRef.current = messages.length;
   }, [messages]);
 
   useEffect(() => {
-    console.log('AIChat: activeChatSessionId changed to', activeChatSessionId);
     setInputMessage('');
   }, [activeChatSessionId]);
 
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [inputMessage]);
+
   const handleDeleteClick = (messageId: string) => {
-    console.log('AIChat: handleDeleteClick for message ID:', messageId);
     setMessageToDelete(messageId);
     setShowDeleteConfirm(true);
   };
 
   const handleConfirmDelete = () => {
-    console.log('AIChat: handleConfirmDelete for message ID:', messageToDelete);
     if (messageToDelete) {
       onDeleteMessage(messageToDelete);
       setMessageToDelete(null);
@@ -703,266 +774,285 @@ const AIChatComponent: React.FC<AIChatProps> = ({
     }
   };
 
-  const handleRegenerateClick = () => {
-    console.log('AIChat: handleRegenerateClick initiated.');
-    const lastUserMessage = messages.slice().reverse().find(msg => msg.role === 'user');
-    if (lastUserMessage) {
-      console.log('AIChat: Calling onRegenerateResponse with content:', lastUserMessage.content);
-      onRegenerateResponse(lastUserMessage.content);
-    } else {
-      toast.info("No previous user message to regenerate from.");
-      console.log('AIChat: No previous user message found for regeneration.');
-    }
+  const handleRegenerateClick = (lastUserMessageContent: string) => {
+    onRegenerateResponse(lastUserMessageContent);
   };
 
   const handleRetryClick = (originalUserMessageContent: string, failedAiMessageId: string) => {
-    console.log('AIChat: handleRetryClick initiated for failed AI message ID:', failedAiMessageId);
     onRetryFailedMessage(originalUserMessageContent, failedAiMessageId);
   };
 
   const handleMermaidError = (code: string, errorType: 'syntax' | 'rendering') => {
-    console.log(`AIChat: Mermaid error detected (${errorType}). Code:`, code);
-    const prompt = `I encountered a ${errorType} error with the following Mermaid diagram code. Please correct the syntax and provide the corrected Mermaid code. Ensure there are no trailing spaces on any line within the code block.
-    
-\`\`\`mermaid
-${code}
-\`\`\`
-`;
-    setInputMessage(prompt);
-    toast.info("Mermaid correction prompt loaded. Click send to get AI's help!");
+    toast.info(`Mermaid diagram encountered a ${errorType} error. Click 'AI Fix' to get help.`);
   };
+
+  const handleSuggestMermaidAiCorrection = useCallback((prompt: string) => {
+    setInputMessage(prompt);
+    textareaRef.current?.focus();
+  }, []);
+
+  // New callback to handle viewing a diagram in the side panel
+  const handleViewDiagram = useCallback((code: string, type: 'mermaid' | 'dot' | 'chartjs' | 'unknown' = 'unknown') => {
+    setActiveDiagram({ content: code, type: type });
+  }, []);
+
+  const handleCloseDiagramPanel = useCallback(() => {
+    setActiveDiagram(null);
+  }, []);
 
   const displayMessages = messages;
   const lastMessageIsAssistant = displayMessages.length > 0 && displayMessages[displayMessages.length - 1].role === 'assistant';
 
   return (
     <CodeBlockErrorBoundary>
-      <div className="flex flex-col h-full mx-auto sm:max-w-5xl bg-white rounded-lg shadow-md overflow-hidden border border-slate-200">
-        <div className="p-4 sm:p-6 border-b border-slate-200 bg-white">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
-                <Bot className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-slate-800 text-lg">AI Study Assistant</h2>
-                <p className="text-sm text-slate-500">
-                  {(selectedDocumentIds ?? []).length > 0
-                    ? `Using ${(selectedDocumentIds ?? []).length} document${(selectedDocumentIds ?? []).length !== 1 ? 's' : ''} as context`
-                    : 'Ask questions about your notes, recordings, or study topics'
-                  }
+      <div className="flex flex-col h-full relative bg-slate-50 overflow-hidden md:flex-row">
+        {/* Main Chat Area */}
+        <div className={`
+          flex-1 flex flex-col h-full bg-white rounded-lg shadow-md border border-slate-200 transition-all duration-300 ease-in-out
+          ${isDiagramPanelOpen ? 'md:w-1/2 lg:w-3/5' : 'w-full'}
+          ${isDiagramPanelOpen ? 'md:mr-4' : ''}
+        `}>
+          {/* Removed the header section */}
+          {/* Adjusted padding: pb-[calc(4rem+2rem)] for mobile, md:pb-6 for desktop */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50 flex flex-col modern-scrollbar pb-[calc(4rem+2rem)] md:pb-6">
+            {(displayMessages ?? []).length === 0 && (activeChatSessionId === null) && (
+              <div className="text-center py-8 text-slate-400 flex-grow flex flex-col justify-center items-center">
+                <Bot className="h-12 w-12 mx-auto text-slate-300 mb-4" />
+                <h3 className="text-lg font-medium text-slate-700 mb-2">Welcome to your AI Study Assistant!</h3>
+                <p className="text-sm text-slate-500 max-w-md mx-auto">
+                  I can help you with questions about your notes, create study guides, explain concepts,
+                  and assist with your academic work. Select some documents and start chatting!
                 </p>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onToggleChatHistory}
-                className="lg:hidden text-slate-600 border-slate-200 hover:bg-slate-50"
-              >
-                <History className="h-4 w-4 mr-2" />
-                History
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  console.log('AIChat: Documents button clicked, showing DocumentSelector.');
-                  setShowDocumentSelector(true);
-                }}
-                className="text-slate-600 border-slate-200 hover:bg-slate-50"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Documents ({(selectedDocumentIds ?? []).length})
-              </Button>
-            </div>
+            )}
+            {activeChatSessionId !== null && messages.length === 0 && isLoading && (
+              <div className="flex gap-3 justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                <span className="text-slate-500">Loading messages...</span>
+              </div>
+            )}
+
+            {/* Load Older Messages Button */}
+            {hasMoreMessages && !isLoading && messages.length > 0 && (
+              <div className="flex justify-center py-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onLoadOlderMessages}
+                  className="text-slate-600 border-slate-200 hover:bg-slate-100"
+                >
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Load Older Messages
+                </Button>
+              </div>
+            )}
+
+            {(displayMessages ?? []).map((message, index) => {
+              let cardClasses = '';
+              let contentToRender;
+
+              if (message.role === 'user') {
+                cardClasses = 'bg-gradient-to-r from-blue-600 to-purple-600 text-white';
+                contentToRender = <p className="text-white leading-relaxed">{message.content}</p>;
+              } else { // message.role === 'assistant'
+                if (message.isError) {
+                  cardClasses = 'bg-red-50 border border-red-200 text-red-800';
+                } else {
+                  cardClasses = 'bg-white border border-slate-200';
+                }
+                contentToRender = <MarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewDiagram} />;
+              }
+
+              const isLastAIMessage = message.role === 'assistant' && index === displayMessages.length - 1;
+
+              return (
+                <div key={message.id} className="flex justify-center">
+                  <div className={`
+                    w-full max-w-4xl flex gap-3 group
+                    ${message.role === 'user' ? 'justify-end' : 'justify-start'}
+                  `}>
+                    {message.role === 'assistant' && (
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.isError ? 'bg-red-500' : 'bg-gradient-to-r from-blue-600 to-purple-600'
+                        }`}>
+                        {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
+                      </div>
+                    )}
+                    <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+                      <Card className={`max-w-xs sm:max-w-md md:max-w-lg p-1 overflow-hidden rounded-lg shadow-sm ${cardClasses}`}>
+                        <CardContent className="p-2 prose prose-sm max-w-none leading-relaxed">
+                          {contentToRender}
+                        </CardContent>
+                      </Card>
+                      <div className={`flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity`}>
+                        {message.role === 'assistant' && (
+                          <>
+                            {isLastAIMessage && !isLoading && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRegenerateClick(messages[index - 1]?.content || '')} // Pass previous user message content
+                                className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100"
+                                title="Regenerate response"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => useCopyToClipboard().copy(message.content)}
+                              className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100"
+                              title="Copy message"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteClick(message.id)}
+                              className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100"
+                              title="Delete message"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        {message.role === 'user' && ( // Keep delete for user messages
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteClick(message.id)}
+                            className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100"
+                            title="Delete message"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {message.role === 'assistant' && message.isError && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
+                              if (prevUserMessage) {
+                                handleRetryClick(prevUserMessage.content, message.id);
+                              }
+                            }}
+                            className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100"
+                            title="Retry failed message"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {message.role === 'user' && (
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-r from-green-500 to-blue-500 flex items-center justify-center flex-shrink-0">
+                        <User className="h-4 w-4 text-white" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {isLoading && (
+              <div className="flex justify-center">
+                <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
+                    <Bot className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="w-fit p-3 rounded-lg bg-white shadow-sm border border-slate-200">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-75"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-150"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
           </div>
-          {(selectedDocumentIds ?? []).length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(selectedDocumentIds ?? []).slice(0, 3).map(id => {
-                const doc = (documents ?? []).find(d => d.id === id);
-                const note = (notes ?? []).find(n => n.id === id);
-                const item = doc || note;
-                return item ? (
-                  <Badge key={id} variant="secondary" className="text-xs bg-slate-100 text-slate-600 max-w-[150px] truncate">
-                    {item.title}
-                  </Badge>
-                ) : null;
-              })}
-              {(selectedDocumentIds ?? []).length > 3 && (
-                <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-600">
-                  +{(selectedDocumentIds ?? []).length - 3} more
-                </Badge>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="flex-1 overflow-auto p-4 sm:p-6 space-y-4 bg-slate-50">
-          {(displayMessages ?? []).length === 0 && (activeChatSessionId === null) && (
-            <div className="text-center py-8 text-slate-400">
-              <Bot className="h-12 w-12 mx-auto text-slate-300 mb-4" />
-              <h3 className="text-lg font-medium text-slate-700 mb-2">Welcome to your AI Study Assistant!</h3>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">
-                I can help you with questions about your notes, create study guides, explain concepts,
-                and assist with your academic work. Select some documents and start chatting!
-              </p>
-            </div>
-          )}
-          {activeChatSessionId !== null && messages.length === 0 && isLoading && (
-            <div className="flex gap-3 justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-              <span className="text-slate-500">Loading messages...</span>
-            </div>
-          )}
-          {(displayMessages ?? []).map((message, index) => (
-            <div
-              key={message.id}
-              className={`flex gap-2 group ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              {message.role === 'assistant' && (
-                <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  message.isError ? 'bg-red-500' : 'bg-gradient-to-r from-blue-600 to-purple-600'
-                }`}>
-                  {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
-                </div>
-              )}
-              <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <Card className={`max-w-xs sm:max-w-2xl p-1 overflow-hidden rounded-lg shadow-sm ${
-                  message.role === 'user'
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                    : message.isError
-                      ? 'bg-red-50 border border-red-200 text-red-800'
-                      : 'bg-white border border-slate-200'
-                }`}>
-                  <CardContent className="p-2 prose prose-sm max-w-none leading-relaxed">
-                    <MarkdownRenderer content={message.content} isUserMessage={message.role === 'user'} onMermaidError={handleMermaidError} />
-                  </CardContent>
-                </Card>
-                <div className={`flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${
-                  message.role === 'user' ? 'self-end' : 'self-start'
-                }`}>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteClick(message.id)}
-                    className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100"
-                    title="Delete message"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                  {message.role === 'assistant' && message.isError && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
-                        if (prevUserMessage) {
-                          handleRetryClick(prevUserMessage.content, message.id);
-                        }
-                      }}
-                      className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100"
-                      title="Retry failed message"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
+          {/* Changed to fixed for mobile, static for md and up. Padding adjusted for desktop. */}
+          <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 z-10 md:static md:p-6 md:pb-6">
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (inputMessage.trim()) {
+                await onSendMessage(inputMessage);
+                setInputMessage('');
+              }
+            }} className="flex items-end gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-sm max-w-4xl mx-auto">
+              <textarea
+                ref={textareaRef}
+                value={inputMessage}
+                onChange={(e) => {
+                  setInputMessage(e.target.value);
+                }}
+                placeholder="Ask a question about your notes or study topics..."
+                className="flex-1 text-slate-700 focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-transparent px-2"
+                disabled={isLoading || isSubmittingUserMessage}
+                rows={1}
+              />
+              <div className="flex items-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowDocumentSelector(true)}
+                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                  title="Select Documents"
+                >
+                  <FileText className="h-5 w-5" />
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isLoading || isSubmittingUserMessage || !inputMessage.trim()}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                  title="Send Message"
+                >
+                  {isLoading || isSubmittingUserMessage ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
                   )}
-                </div>
+                </Button>
               </div>
-              {message.role === 'user' && (
-                <div className="h-8 w-8 rounded-full bg-gradient-to-r from-green-500 to-blue-500 flex items-center justify-center flex-shrink-0">
-                  <User className="h-4 w-4 text-white" />
-                </div>
-              )}
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex gap-3 items-center">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
-                <Bot className="h-4 w-4 text-white" />
-              </div>
-              <div className="w-fit p-3 rounded-lg bg-white shadow-sm border border-slate-200">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></div>
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-75"></div>
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-150"></div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-        <div className="p-4 sm:p-6 border-t border-slate-200 bg-white">
-          {lastMessageIsAssistant && !isLoading && (
-            <div className="mb-4 flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRegenerateClick}
-                className="text-slate-600 border-slate-200 hover:bg-slate-50"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Regenerate Response
-              </Button>
-            </div>
-          )}
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            console.log('AIChat: Form submitted. Input message:', inputMessage);
-            if (inputMessage.trim()) {
-              await onSendMessage(inputMessage);
-              setInputMessage('');
-              console.log('AIChat: Message sent and input cleared.');
-            } else {
-              console.log('AIChat: Input message is empty, not sending.');
-            }
-          }} className="flex gap-2">
-            <Input
-              value={inputMessage}
-              onChange={(e) => {
-                console.log('AIChat: Input changed to:', e.target.value);
-                setInputMessage(e.target.value);
+            </form>
+          </div>
+          {showDocumentSelector && (
+            <DocumentSelector
+              documents={documents}
+              notes={notes}
+              selectedDocumentIds={selectedDocumentIds}
+              onSelectionChange={onSelectionChange}
+              isOpen={showDocumentSelector}
+              onClose={() => {
+                setShowDocumentSelector(false);
               }}
-              placeholder="Ask a question about your notes or study topics..."
-              className="flex-1 text-slate-700 border-slate-200 focus:border-blue-500 focus:ring-blue-500"
-              disabled={isLoading || isSubmittingUserMessage}
             />
-            <Button
-              type="submit"
-              disabled={isLoading || isSubmittingUserMessage || !inputMessage.trim()}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700 disabled:opacity-50"
-            >
-              {isLoading || isSubmittingUserMessage ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </form>
-        </div>
-        {showDocumentSelector && (
-          <DocumentSelector
-            documents={documents}
-            notes={notes}
-            selectedDocumentIds={selectedDocumentIds}
-            onSelectionChange={onSelectionChange}
-            isOpen={showDocumentSelector}
+          )}
+          <ConfirmationModal
+            isOpen={showDeleteConfirm}
             onClose={() => {
-              console.log('AIChat: Closing DocumentSelector.');
-              setShowDocumentSelector(false);
+              setShowDeleteConfirm(false);
             }}
+            onConfirm={handleConfirmDelete}
+            title="Delete Message"
+            message="Are you sure you want to delete this message? This action cannot be undone."
+          />
+        </div>
+
+        {/* Diagram Panel - Conditionally rendered and responsive */}
+        {activeDiagram && (
+          <DiagramPanel
+            diagramContent={activeDiagram.content}
+            diagramType={activeDiagram.type} // Pass the type here
+            onClose={handleCloseDiagramPanel}
+            onMermaidError={handleMermaidError}
+            onSuggestAiCorrection={handleSuggestMermaidAiCorrection}
+            isOpen={isDiagramPanelOpen} // Pass isOpen state
           />
         )}
-        <ConfirmationModal
-          isOpen={showDeleteConfirm}
-          onClose={() => {
-            console.log('AIChat: Closing Delete Confirmation Modal.');
-            setShowDeleteConfirm(false);
-          }}
-          onConfirm={handleConfirmDelete}
-          title="Delete Message"
-          message="Are you sure you want to delete this message? This action cannot be undone."
-        />
       </div>
     </CodeBlockErrorBoundary>
   );

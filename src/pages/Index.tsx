@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'; // Import Routes, Route, useLocation
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { TabContent } from '../components/TabContent';
@@ -24,9 +24,14 @@ interface ChatSession {
   message_count?: number;
 }
 
+// Pagination constants
+const CHAT_SESSIONS_PER_PAGE = 10;
+const CHAT_MESSAGES_PER_PAGE = 20; // Load 20 messages at a time
+
 const Index = () => {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation(); // Get current location
 
   const {
     notes,
@@ -39,7 +44,6 @@ const Index = () => {
     searchQuery,
     selectedCategory,
     isSidebarOpen,
-    activeTab,
     isAILoading,
     filteredNotes,
     loading: dataLoading,
@@ -61,35 +65,35 @@ const Index = () => {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [activeChatSessionId, setActiveChatSessionId] = useState<string | null>(null);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
-  const [isChatHistoryOpen, setIsChatHistoryOpen] = useState(false);
+  const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
   const [isSubmittingUserMessage, setIsSubmittingUserMessage] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadChatSessions();
+  // Pagination states for chat sessions
+  const [chatSessionsLoadedCount, setChatSessionsLoadedCount] = useState(CHAT_SESSIONS_PER_PAGE);
+  const [hasMoreChatSessions, setHasMoreChatSessions] = useState(true);
+
+  // Pagination states for chat messages (per session)
+  const [hasMoreMessages, setHasMoreMessages] = useState(true); // Tracks if more messages can be loaded for the active session
+
+  // Derive activeTab from URL pathname
+  const currentActiveTab = useMemo(() => {
+    const path = location.pathname.split('/')[1];
+    switch (path) {
+      case 'notes': return 'notes';
+      case 'recordings': return 'recordings';
+      case 'schedule': return 'schedule';
+      case 'chat': return 'chat';
+      case 'documents': return 'documents';
+      case 'settings': return 'settings';
+      default: return 'notes';
     }
-  }, [user]);
+  }, [location.pathname]);
 
   useEffect(() => {
-    if (activeChatSessionId) {
-      loadSessionMessages(activeChatSessionId);
-    } else {
-      setChatMessages([]);
-    }
-  }, [activeChatSessionId, user]);
+    setActiveTab(currentActiveTab);
+  }, [currentActiveTab, setActiveTab]);
 
-  useEffect(() => {
-    if (activeChatSessionId && chatSessions.length > 0) {
-      const currentSession = chatSessions.find(s => s.id === activeChatSessionId);
-      if (currentSession) {
-        setSelectedDocumentIds(currentSession.document_ids || []);
-      }
-    } else if (!activeChatSessionId) {
-      setSelectedDocumentIds([]);
-    }
-  }, [activeChatSessionId, chatSessions]);
-
-  const loadChatSessions = async () => {
+  const loadChatSessions = useCallback(async () => {
     try {
       if (!user) return;
 
@@ -97,7 +101,8 @@ const Index = () => {
         .from('chat_sessions')
         .select('*')
         .eq('user_id', user.id)
-        .order('last_message_at', { ascending: false });
+        .order('last_message_at', { ascending: false })
+        .range(0, chatSessionsLoadedCount - 1); // Fetch up to chatSessionsLoadedCount
 
       if (error) throw error;
 
@@ -111,19 +116,28 @@ const Index = () => {
       }));
 
       setChatSessions(formattedSessions);
+      setHasMoreChatSessions(formattedSessions.length === chatSessionsLoadedCount); // Check if more sessions exist
     } catch (error) {
       console.error('Error loading chat sessions:', error);
       toast.error('Failed to load chat sessions.');
     }
-  };
+  }, [user, setChatSessions, chatSessionsLoadedCount]);
 
-  const loadSessionMessages = async (sessionId: string) => {
+  const handleLoadMoreChatSessions = useCallback(() => {
+    setChatSessionsLoadedCount(prevCount => prevCount + CHAT_SESSIONS_PER_PAGE);
+  }, []);
+
+  const loadSessionMessages = useCallback(async (sessionId: string) => {
     try {
+      if (!user) return;
+
+      // Fetch the latest N messages initially
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
         .eq('session_id', sessionId)
-        .order('timestamp', { ascending: true });
+        .order('timestamp', { ascending: false }) // Get most recent messages first
+        .limit(CHAT_MESSAGES_PER_PAGE);
 
       if (error) throw error;
 
@@ -132,17 +146,78 @@ const Index = () => {
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
         timestamp: msg.timestamp || new Date().toISOString(),
-      }));
+        isError: msg.is_error || false, // Ensure isError is populated
+      })).reverse(); // Reverse to display oldest first
 
       setChatMessages(formattedMessages);
+      setHasMoreMessages(data.length === CHAT_MESSAGES_PER_PAGE); // If we got exactly limit, there might be more
     } catch (error) {
       console.error('Error loading session messages:', error);
       setChatMessages([]);
       toast.error('Failed to load chat messages for this session.');
     }
-  };
+  }, [user, setChatMessages]);
 
-  const createNewChatSession = async (): Promise<string | null> => {
+  const handleLoadOlderChatMessages = useCallback(async () => {
+    if (!activeChatSessionId || !user || chatMessages.length === 0) return;
+
+    const oldestMessageTimestamp = chatMessages[0].timestamp;
+
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', activeChatSessionId)
+        .lt('timestamp', oldestMessageTimestamp) // Get messages older than the current oldest
+        .order('timestamp', { ascending: false }) // Still order desc to get latest of older batch
+        .limit(CHAT_MESSAGES_PER_PAGE);
+
+      if (error) throw error;
+
+      const olderMessages: Message[] = data.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        role: msg.role as 'user' | 'assistant',
+        timestamp: msg.timestamp || new Date().toISOString(),
+        isError: msg.is_error || false,
+      })).reverse(); // Reverse to display oldest first
+
+      setChatMessages(prevMessages => [...olderMessages, ...prevMessages]);
+      setHasMoreMessages(data.length === CHAT_MESSAGES_PER_PAGE); // If we got exactly limit, there might be more
+    } catch (error) {
+      console.error('Error loading older messages:', error);
+      toast.error('Failed to load older messages.');
+    }
+  }, [activeChatSessionId, user, chatMessages, setChatMessages]);
+
+
+  useEffect(() => {
+    if (user) {
+      loadChatSessions();
+    }
+  }, [user, loadChatSessions, chatSessionsLoadedCount]); // Dependency on chatSessionsLoadedCount
+
+  useEffect(() => {
+    if (activeChatSessionId) {
+      loadSessionMessages(activeChatSessionId);
+    } else {
+      setChatMessages([]);
+      setHasMoreMessages(false); // No active session, no more messages
+    }
+  }, [activeChatSessionId, user, loadSessionMessages]);
+
+  useEffect(() => {
+    if (activeChatSessionId && chatSessions.length > 0) {
+      const currentSession = chatSessions.find(s => s.id === activeChatSessionId);
+      if (currentSession) {
+        setSelectedDocumentIds(currentSession.document_ids || []);
+      }
+    } else if (!activeChatSessionId) {
+      setSelectedDocumentIds([]);
+    }
+  }, [activeChatSessionId, chatSessions]);
+
+  const createNewChatSession = useCallback(async (): Promise<string | null> => {
     try {
       if (!user) {
         toast.error('Please sign in to create a new chat session.');
@@ -177,12 +252,16 @@ const Index = () => {
         document_ids: data.document_ids || [],
       };
 
-      setChatSessions(prev => [newSession, ...prev]);
+      // Reset loaded count to ensure new session appears at top of list
+      setChatSessionsLoadedCount(CHAT_SESSIONS_PER_PAGE);
+      // Reload sessions to reflect the new session immediately
+      await loadChatSessions();
+
       setActiveChatSessionId(newSession.id);
       setChatMessages([]);
+      setHasMoreMessages(false); // New chat, no older messages yet
 
       toast.success('New chat session created!');
-      setIsChatHistoryOpen(false);
 
       return newSession.id;
     } catch (error: any) {
@@ -190,9 +269,9 @@ const Index = () => {
       toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
       return null;
     }
-  };
+  }, [user, selectedDocumentIds, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId, setChatMessages]);
 
-  const deleteChatSession = async (sessionId: string) => {
+  const deleteChatSession = useCallback(async (sessionId: string) => {
     try {
       if (!user) return;
 
@@ -204,18 +283,27 @@ const Index = () => {
 
       if (error) throw error;
 
-      const remainingSessions = chatSessions.filter(s => s.id !== sessionId);
-      setChatSessions(remainingSessions);
+      // After deleting, reset loaded count and reload to ensure correct pagination
+      setChatSessionsLoadedCount(CHAT_SESSIONS_PER_PAGE);
+      await loadChatSessions();
 
       if (activeChatSessionId === sessionId) {
-        if (remainingSessions.length > 0) {
-          const mostRecent = remainingSessions.sort((a, b) =>
-            new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-          )[0];
-          setActiveChatSessionId(mostRecent.id);
-        } else {
+        if (chatSessions.length > 1) { // If there are other sessions, pick the most recent one
+          const remainingSessions = chatSessions.filter(s => s.id !== sessionId);
+          if (remainingSessions.length > 0) {
+            const mostRecent = remainingSessions.sort((a, b) =>
+              new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+            )[0];
+            setActiveChatSessionId(mostRecent.id);
+          } else {
+            setActiveChatSessionId(null);
+            setChatMessages([]);
+            setHasMoreMessages(false);
+          }
+        } else { // If this was the last session
           setActiveChatSessionId(null);
           setChatMessages([]);
+          setHasMoreMessages(false);
         }
       }
 
@@ -224,9 +312,9 @@ const Index = () => {
       console.error('Error deleting session:', error);
       toast.error(`Failed to delete chat session: ${error.message || 'Unknown error'}`);
     }
-  };
+  }, [user, chatSessions, activeChatSessionId, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId, setChatMessages]);
 
-  const renameChatSession = async (sessionId: string, newTitle: string) => {
+  const renameChatSession = useCallback(async (sessionId: string, newTitle: string) => {
     try {
       if (!user) return;
 
@@ -246,9 +334,54 @@ const Index = () => {
       console.error('Error renaming session:', error);
       toast.error('Failed to rename chat session');
     }
-  };
+  }, [user, setChatSessions]);
 
-  const _getAIResponse = async (userMessageContent: string, aiMessageIdToUpdate: string | null = null) => {
+  const buildRichContext = useCallback((selectedIds: string[], allDocuments: AppDocument[], allNotes: Note[]) => {
+    const selectedDocs = (allDocuments ?? []).filter(doc => (selectedIds ?? []).includes(doc.id));
+    const selectedNotes = (allNotes ?? []).filter(note => (selectedIds ?? []).includes(note.id));
+
+    let context = '';
+
+    if (selectedDocs.length > 0) {
+      context += 'DOCUMENTS:\n';
+      selectedDocs.forEach(doc => {
+        context += `Title: ${doc.title}\n`;
+        context += `File: ${doc.file_name}\n`;
+        if (doc.content_extracted) {
+          const content = doc.content_extracted.length > 2000
+            ? doc.content_extracted.substring(0, 2000) + '...'
+            : doc.content_extracted;
+          context += `Content: ${content}\n`;
+        }
+        context += '\n';
+      });
+    }
+
+    if (selectedNotes.length > 0) {
+      context += 'NOTES:\n';
+      selectedNotes.forEach(note => {
+        context += `Title: ${note.title}\n`;
+        context += `Category: ${note.category}\n`;
+        if (note.content) {
+          const content = note.content.length > 1500
+            ? note.content.substring(0, 1500) + '...'
+            : note.content;
+          context += `Content: ${content}\n`;
+        }
+        if (note.aiSummary) {
+          context += `AI Summary: ${note.aiSummary}\n`;
+        }
+        if ((note.tags ?? []).length > 0) {
+          context += `Tags: ${(note.tags ?? []).join(', ')}\n`;
+        }
+        context += '\n';
+      });
+    }
+
+    return context;
+  }, []);
+
+  const _getAIResponse = useCallback(async (userMessageContent: string, aiMessageIdToUpdate: string | null = null) => {
     if (!user || !activeChatSessionId) {
       toast.error('Authentication required or no active chat session.');
       return;
@@ -393,9 +526,9 @@ const Index = () => {
     } finally {
       setIsAILoading(false);
     }
-  };
+  }, [user, activeChatSessionId, setIsAILoading, buildRichContext, selectedDocumentIds, documents, notes, chatMessages, userProfile, setChatMessages, setChatSessions]);
 
-  const validateActiveSession = async (): Promise<boolean> => {
+  const validateActiveSession = useCallback(async (): Promise<boolean> => {
     if (!activeChatSessionId) return false;
 
     try {
@@ -410,6 +543,7 @@ const Index = () => {
         console.log('Active session no longer exists');
         setActiveChatSessionId(null);
         setChatMessages([]);
+        setHasMoreMessages(false); // No active session, no more messages
         return false;
       }
 
@@ -418,9 +552,9 @@ const Index = () => {
       console.error('Error validating session:', error);
       return false;
     }
-  };
+  }, [activeChatSessionId, user, setActiveChatSessionId, setChatMessages]);
 
-  const handleSubmit = async (messageContent: string) => {
+  const handleSubmit = useCallback(async (messageContent: string) => {
     if (!messageContent.trim() || isAILoading) return;
 
     const trimmedMessage = messageContent.trim();
@@ -445,10 +579,11 @@ const Index = () => {
         toast.info('New chat session created.');
       }
 
+      // Re-validate session existence in state after potential creation/load
       const sessionExists = chatSessions.some(s => s.id === currentSessionId);
-      if (!sessionExists && currentSessionId !== activeChatSessionId) {
+      if (!sessionExists) {
         console.log("Session doesn't exist in state, refreshing...");
-        await loadChatSessions();
+        await loadChatSessions(); // Reload sessions to ensure it's in state
         const refreshedSessionExists = chatSessions.some(s => s.id === currentSessionId);
         if (!refreshedSessionExists) {
           toast.error('Session no longer exists after refresh. Creating a new one...');
@@ -492,58 +627,13 @@ const Index = () => {
     } finally {
       setIsSubmittingUserMessage(false);
     }
-  };
+  }, [isAILoading, activeChatSessionId, createNewChatSession, chatSessions, loadChatSessions, setChatMessages, _getAIResponse, user]);
 
-  const buildRichContext = (selectedIds: string[], allDocuments: AppDocument[], allNotes: Note[]) => {
-    const selectedDocs = (allDocuments ?? []).filter(doc => (selectedIds ?? []).includes(doc.id));
-    const selectedNotes = (allNotes ?? []).filter(note => (selectedIds ?? []).includes(note.id));
-
-    let context = '';
-
-    if (selectedDocs.length > 0) {
-      context += 'DOCUMENTS:\n';
-      selectedDocs.forEach(doc => {
-        context += `Title: ${doc.title}\n`;
-        context += `File: ${doc.file_name}\n`;
-        if (doc.content_extracted) {
-          const content = doc.content_extracted.length > 2000
-            ? doc.content_extracted.substring(0, 2000) + '...'
-            : doc.content_extracted;
-          context += `Content: ${content}\n`;
-        }
-        context += '\n';
-      });
-    }
-
-    if (selectedNotes.length > 0) {
-      context += 'NOTES:\n';
-      selectedNotes.forEach(note => {
-        context += `Title: ${note.title}\n`;
-        context += `Category: ${note.category}\n`;
-        if (note.content) {
-          const content = note.content.length > 1500
-            ? note.content.substring(0, 1500) + '...'
-            : note.content;
-          context += `Content: ${content}\n`;
-        }
-        if (note.aiSummary) {
-          context += `AI Summary: ${note.aiSummary}\n`;
-        }
-        if ((note.tags ?? []).length > 0) {
-          context += `Tags: ${(note.tags ?? []).join(', ')}\n`;
-        }
-        context += '\n';
-      });
-    }
-
-    return context;
-  };
-
-  const handleNewMessage = (message: Message) => {
+  const handleNewMessage = useCallback((message: Message) => {
     setChatMessages(prev => [...(prev || []), message]);
-  };
+  }, [setChatMessages]);
 
-  const handleDeleteMessage = async (messageId: string) => {
+  const handleDeleteMessage = useCallback(async (messageId: string) => {
     try {
       if (!user || !activeChatSessionId) {
         toast.error('Authentication required or no active chat session.');
@@ -563,7 +653,6 @@ const Index = () => {
       if (error) {
         console.error('Error deleting message from DB:', error);
         toast.error('Failed to delete message from database.');
-        loadSessionMessages(activeChatSessionId);
       } else {
         toast.success('Message deleted successfully.');
       }
@@ -571,9 +660,9 @@ const Index = () => {
       console.error('Error in handleDeleteMessage:', error);
       toast.error(`Error deleting message: ${error.message || 'Unknown error'}`);
     }
-  };
+  }, [user, activeChatSessionId, setChatMessages]);
 
-  const handleRegenerateResponse = async (lastUserMessageContent: string) => {
+  const handleRegenerateResponse = useCallback(async (lastUserMessageContent: string) => {
     if (!user || !activeChatSessionId) {
       toast.error('Authentication required or no active chat session.');
       return;
@@ -597,9 +686,9 @@ const Index = () => {
     toast.info('Regenerating response...');
 
     await _getAIResponse(lastUserMessageContent, lastAssistantMessage.id);
-  };
+  }, [user, activeChatSessionId, chatMessages, setChatMessages, _getAIResponse]);
 
-  const handleRetryFailedMessage = async (originalUserMessageContent: string, failedAiMessageId: string) => {
+  const handleRetryFailedMessage = useCallback(async (originalUserMessageContent: string, failedAiMessageId: string) => {
     if (!user || !activeChatSessionId) {
       toast.error('Authentication required or no active chat session.');
       return;
@@ -616,7 +705,7 @@ const Index = () => {
     toast.info('Retrying message...');
 
     await _getAIResponse(originalUserMessageContent, failedAiMessageId);
-  };
+  }, [user, activeChatSessionId, setChatMessages, _getAIResponse]);
 
   const {
     createNewNote,
@@ -649,13 +738,152 @@ const Index = () => {
     setIsAILoading,
   });
 
+  // Memoize the onToggleSidebar and onCategoryChange functions
+  const memoizedOnToggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), [setIsSidebarOpen]);
+  const memoizedOnCategoryChange = useCallback((category: string) => setSelectedCategory(category), [setSelectedCategory]);
+
+  // Modified onTabChange to use navigate
+  const memoizedOnTabChange = useCallback((tab: string) => {
+    navigate(`/${tab}`); // Navigate to the new tab's URL
+    setIsSidebarOpen(false); // Close sidebar on tab change for mobile
+  }, [navigate, setIsSidebarOpen]);
+
+  // Memoize the header props
+  const headerProps = useMemo(() => ({
+    searchQuery,
+    onSearchChange: setSearchQuery,
+    onNewNote: createNewNote,
+    isSidebarOpen,
+    onToggleSidebar: memoizedOnToggleSidebar,
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings', // Explicitly cast
+  }), [searchQuery, setSearchQuery, createNewNote, isSidebarOpen, memoizedOnToggleSidebar, currentActiveTab]);
+
+  // Memoize the sidebar props
+  const sidebarProps = useMemo(() => ({
+    isOpen: isSidebarOpen,
+    onToggle: memoizedOnToggleSidebar,
+    selectedCategory: selectedCategory,
+    onCategoryChange: memoizedOnCategoryChange,
+    noteCount: notes.length,
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings', // Explicitly cast
+    onTabChange: memoizedOnTabChange,
+    // Pass chat session props to Sidebar
+    chatSessions: chatSessions,
+    activeChatSessionId: activeChatSessionId,
+    onChatSessionSelect: setActiveChatSessionId,
+    onNewChatSession: createNewChatSession,
+    onDeleteChatSession: deleteChatSession,
+    onRenameChatSession: renameChatSession,
+    hasMoreChatSessions: hasMoreChatSessions, // Pass pagination state
+    onLoadMoreChatSessions: handleLoadMoreChatSessions, // Pass load more function
+  }), [
+    isSidebarOpen,
+    memoizedOnToggleSidebar,
+    selectedCategory,
+    memoizedOnCategoryChange,
+    notes.length,
+    currentActiveTab,
+    memoizedOnTabChange,
+    chatSessions,
+    activeChatSessionId,
+    setActiveChatSessionId,
+    createNewChatSession,
+    deleteChatSession,
+    renameChatSession,
+    hasMoreChatSessions,
+    handleLoadMoreChatSessions,
+  ]);
+
+  // Memoize the TabContent props
+  const tabContentProps = useMemo(() => ({
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings', // Pass derived activeTab
+    filteredNotes,
+    activeNote,
+    recordings: recordings ?? [],
+    scheduleItems,
+    chatMessages,
+    documents,
+    userProfile,
+    isAILoading,
+    setIsAILoading,
+    onNoteSelect: setActiveNote,
+    onNoteUpdate: updateNote,
+    onNoteDelete: deleteNote,
+    onAddRecording: addRecording,
+    onGenerateQuiz: generateQuiz,
+    onAddScheduleItem: addScheduleItem,
+    onUpdateScheduleItem: updateScheduleItem,
+    onDeleteScheduleItem: deleteScheduleItem,
+    onSendMessage: handleSubmit,
+    onDocumentUploaded: handleDocumentUploaded,
+    onDocumentDeleted: handleDocumentDeleted,
+    onProfileUpdate: handleProfileUpdate,
+    chatSessions,
+    activeChatSessionId,
+    onChatSessionSelect: setActiveChatSessionId,
+    onNewChatSession: createNewChatSession,
+    onDeleteChatSession: deleteChatSession,
+    onRenameChatSession: renameChatSession,
+    onSelectedDocumentIdsChange: setSelectedDocumentIds,
+    selectedDocumentIds: selectedDocumentIds,
+    onNewMessage: handleNewMessage,
+    isNotesHistoryOpen: isNotesHistoryOpen,
+    onToggleNotesHistory: () => setIsNotesHistoryOpen(prev => !prev),
+    onDeleteMessage: handleDeleteMessage,
+    onRegenerateResponse: handleRegenerateResponse,
+    isSubmittingUserMessage: isSubmittingUserMessage,
+    onRetryFailedMessage: handleRetryFailedMessage,
+    hasMoreMessages: hasMoreMessages, // Pass pagination state for messages
+    onLoadOlderMessages: handleLoadOlderChatMessages, // Pass load older messages function
+  }), [
+    currentActiveTab,
+    filteredNotes,
+    activeNote,
+    recordings,
+    scheduleItems,
+    chatMessages,
+    documents,
+    userProfile,
+    isAILoading,
+    setIsAILoading,
+    setActiveNote,
+    updateNote,
+    deleteNote,
+    addRecording,
+    generateQuiz,
+    addScheduleItem,
+    updateScheduleItem,
+    deleteScheduleItem,
+    handleSubmit,
+    handleDocumentUploaded,
+    handleDocumentDeleted,
+    handleProfileUpdate,
+    chatSessions,
+    activeChatSessionId,
+    setActiveChatSessionId,
+    createNewChatSession,
+    deleteChatSession,
+    renameChatSession,
+    setSelectedDocumentIds,
+    selectedDocumentIds,
+    handleNewMessage,
+    isNotesHistoryOpen,
+    handleDeleteMessage,
+    handleRegenerateResponse,
+    isSubmittingUserMessage,
+    handleRetryFailedMessage,
+    hasMoreMessages,
+    handleLoadOlderChatMessages,
+  ]);
+
+
   useEffect(() => {
     if (!loading && !user) {
       navigate('/auth');
     }
   }, [user, loading, navigate]);
 
-  const handleSignOut = async () => {
+  const handleSignOut = useCallback(async () => {
     try {
       await signOut();
       toast.success('Signed out successfully');
@@ -663,7 +891,7 @@ const Index = () => {
     } catch (error) {
       toast.error('Error signing out');
     }
-  };
+  }, [signOut, navigate]);
 
   console.log('Index recordings state:', recordings); // Debug log
 
@@ -696,27 +924,12 @@ const Index = () => {
         fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
         transition-transform duration-300 ease-in-out`}
       >
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-          selectedCategory={selectedCategory}
-          onCategoryChange={setSelectedCategory}
-          noteCount={notes.length}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
+        <Sidebar {...sidebarProps} />
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0">
         <div className="flex items-center justify-between p-3 sm:p-4 bg-white border-b border-slate-200">
-          <Header
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            onNewNote={createNewNote}
-            isSidebarOpen={isSidebarOpen}
-            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-            activeTab={activeTab}
-          />
+          <Header {...headerProps} />
           <div className="hidden sm:flex items-center gap-3">
             <span className="text-sm text-slate-600 hidden md:block">Welcome, {user.email}</span>
             <Button
@@ -739,47 +952,18 @@ const Index = () => {
           </Button>
         </div>
 
-        <TabContent
-          activeTab={activeTab}
-          filteredNotes={filteredNotes}
-          activeNote={activeNote}
-          recordings={recordings ?? []} // Defensive check
-          scheduleItems={scheduleItems}
-          chatMessages={chatMessages}
-          documents={documents}
-          userProfile={userProfile}
-          isAILoading={isAILoading}
-          setIsAILoading={setIsAILoading}
-          onNoteSelect={setActiveNote}
-          onNoteUpdate={updateNote}
-          onNoteDelete={deleteNote}
-          onAddRecording={addRecording}
-          onGenerateQuiz={generateQuiz}
-          onAddScheduleItem={addScheduleItem}
-          onUpdateScheduleItem={updateScheduleItem}
-          onDeleteScheduleItem={deleteScheduleItem}
-          onSendMessage={handleSubmit}
-          onDocumentUploaded={handleDocumentUploaded}
-          onDocumentDeleted={handleDocumentDeleted}
-          onProfileUpdate={handleProfileUpdate}
-          chatSessions={chatSessions}
-          activeChatSessionId={activeChatSessionId}
-          onChatSessionSelect={setActiveChatSessionId}
-          onNewChatSession={createNewChatSession}
-          onDeleteChatSession={deleteChatSession}
-          onRenameChatSession={renameChatSession}
-          onSelectedDocumentIdsChange={setSelectedDocumentIds}
-          selectedDocumentIds={selectedDocumentIds}
-          isChatHistoryOpen={isChatHistoryOpen}
-          onToggleChatHistory={() => setIsChatHistoryOpen(!isChatHistoryOpen)}
-          onNewMessage={handleNewMessage}
-          isNotesHistoryOpen={isChatHistoryOpen}
-          onToggleNotesHistory={() => setIsChatHistoryOpen(!isChatHistoryOpen)}
-          onDeleteMessage={handleDeleteMessage}
-          onRegenerateResponse={handleRegenerateResponse}
-          isSubmittingUserMessage={isSubmittingUserMessage}
-          onRetryFailedMessage={handleRetryFailedMessage}
-        />
+        {/* Use React Router Routes to render TabContent based on URL */}
+        <Routes>
+          <Route path="/notes" element={<TabContent {...tabContentProps} activeTab="notes" />} />
+          <Route path="/recordings" element={<TabContent {...tabContentProps} activeTab="recordings" />} />
+          <Route path="/schedule" element={<TabContent {...tabContentProps} activeTab="schedule" />} />
+          <Route path="/chat" element={<TabContent {...tabContentProps} activeTab="chat" />} />
+          <Route path="/documents" element={<TabContent {...tabContentProps} activeTab="documents" />} />
+          <Route path="/settings" element={<TabContent {...tabContentProps} activeTab="settings" />} />
+          {/* Default route, redirects to /notes */}
+          <Route path="/" element={<TabContent {...tabContentProps} activeTab="notes" />} />
+          <Route path="*" element={<TabContent {...tabContentProps} activeTab="notes" />} /> {/* Fallback for unknown paths */}
+        </Routes>
       </div>
     </div>
   );
