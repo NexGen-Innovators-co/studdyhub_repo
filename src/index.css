@@ -5,10 +5,50 @@
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
 */
+.modern-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.modern-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+.modern-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+  border: 2px solid #f1f5f9;
+}
+.modern-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.modern-scrollbar::-webkit-scrollbar-thumb:active {
+  background: #767f8b;
+}
+/* Firefox */
+.modern-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+/* In your global CSS file (e.g., index.css or globals.css) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px; /* Width for vertical scrollbar */
+  height: 6px; /* Height for horizontal scrollbar */
+}
 
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1; /* Color of the track */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #888; /* Color of the scroll thumb */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #555; /* Color on hover */
+}
 @layer base {
   :root {
-    overflow: hidden;
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 

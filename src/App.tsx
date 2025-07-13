@@ -18,9 +18,10 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            {/* This is the key change: Index will now handle all paths starting with / */}
+            <Route path="/*" element={<Index />} />
+            {/* The catch-all for NotFound should come after all other specific routes */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
