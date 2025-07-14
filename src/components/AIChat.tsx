@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -30,12 +30,14 @@ import { lowlight } from 'lowlight';
 import { LanguageFn } from 'highlight.js';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard'; // Import the hook from its new location
 
+// Import Graphviz from @hpcc-js/wasm
+import { Graphviz } from '@hpcc-js/wasm';
+
 // Declare global types for libraries loaded via CDN
 declare global {
   interface Window {
     jspdf: any; // jsPDF library
     html2canvas: any; // html2canvas library
-    Viz: any; // Viz.js library
   }
 }
 
@@ -163,7 +165,42 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) 
         if (chartInstance.current) {
           chartInstance.current.destroy();
         }
-        chartInstance.current = new Chart(ctx, chartConfig);
+
+        // Deep clone the config to avoid modifying the original and causing re-renders
+        const configToUse = JSON.parse(JSON.stringify(chartConfig));
+
+        // --- START: Fix for Chart.js Tooltip Callbacks ---
+        // Chart.js expects functions for tooltip callbacks, but AI generates strings for JSON validity.
+        // We convert the string back to a function here.
+        if (configToUse.options?.plugins?.tooltip?.callbacks?.label && typeof configToUse.options.plugins.tooltip.callbacks.label === 'string') {
+          const labelString = configToUse.options.plugins.tooltip.callbacks.label;
+          configToUse.options.plugins.tooltip.callbacks.label = function(context: any) {
+            // Replace [value] with the actual data value
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            if (context.parsed.y !== undefined) {
+              label += context.parsed.y;
+            } else if (context.parsed.x !== undefined) {
+              label += context.parsed.x;
+            } else if (context.formattedValue !== undefined) { // For pie charts, formattedValue often has the percentage
+              label += context.formattedValue;
+            } else {
+              label += context.raw; // Fallback to raw value
+            }
+
+            // If the AI provided a specific string, try to use it as a template
+            // Example: "Value: [value]" -> "Value: 123"
+            if (labelString.includes('[value]')) {
+              return labelString.replace('[value]', label);
+            }
+            return label; // Return the default Chart.js label if no template
+          };
+        }
+        // --- END: Fix for Chart.js Tooltip Callbacks ---
+
+        chartInstance.current = new Chart(ctx, configToUse);
       }
     }
 
@@ -173,7 +210,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) 
         chartInstance.current = null;
       }
     };
-  }, [chartConfig, chartRef]);
+  }, [chartConfig, chartRef]); // Re-run effect if chartConfig or ref changes
 
   return (
     <div className="relative w-full h-80 bg-white p-4 rounded-lg shadow-inner">
@@ -188,7 +225,7 @@ interface DiagramPanelProps {
   diagramType: 'mermaid' | 'dot' | 'chartjs' | 'unknown';
   onClose: () => void;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
-  onSuggestAiCorrection: (prompt: string) => void;
+  onSuggestAiCorrection: (prompt: string) => void; // This is the prop passed down
   isOpen: boolean;
 }
 
@@ -220,7 +257,6 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
         downloadLink.href = svgUrl;
         downloadLink.download = `${fileName}.svg`;
         document.body.appendChild(downloadLink);
-        downloadLink.click();
         document.body.removeChild(downloadLink);
         URL.revokeObjectURL(svgUrl);
         toast.success('SVG diagram downloaded!');
@@ -234,7 +270,6 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
         downloadLink.href = dataURL;
         downloadLink.download = `${fileName}.png`;
         document.body.appendChild(downloadLink);
-        downloadLink.click();
         document.body.removeChild(downloadLink);
         toast.success('Chart downloaded as PNG!');
       } else {
@@ -293,32 +328,45 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
   } else if (diagramType === 'dot') {
     panelTitle = 'DOT Graph View';
     downloadSvgButtonText = 'Download Graph (SVG)';
-    // Render DOT graph using Viz.js
+    // Render DOT graph using @hpcc-js/wasm
     const [dotSvg, setDotSvg] = useState<string | null>(null);
     const [dotError, setDotError] = useState<string | null>(null);
+    const [isDotLoading, setIsDotLoading] = useState(false); // New loading state for DOT
 
     useEffect(() => {
       const renderDot = async () => {
         setDotSvg(null);
         setDotError(null);
-        if (!diagramContent || typeof window.Viz === 'undefined') { // Use window.Viz
-          setDotError('Viz.js not loaded or no content.');
-          return;
-        }
+        setIsDotLoading(true);
+
         try {
-          // Viz.js renders directly to SVG string
-          const svg = await window.Viz(diagramContent, { format: 'svg' }); // Use window.Viz
+          
+          // Instantiate Graphviz
+          const gv = await Graphviz.load();
+          const svg = await gv.layout(diagramContent, 'svg', 'dot');
           setDotSvg(svg);
         } catch (e: any) {
           console.error('DOT rendering error:', e);
           setDotError(`DOT rendering failed: ${e.message || 'Invalid DOT syntax'}`);
           onMermaidError(diagramContent, 'syntax'); // Use onMermaidError for general diagram errors
+        } finally {
+          setIsDotLoading(false);
         }
       };
-      renderDot();
-    }, [diagramContent, onMermaidError]);
 
-    panelContent = dotError ? (
+      if (diagramContent) {
+        renderDot();
+      } else {
+        setIsDotLoading(false); // No content to render
+      }
+    }, [diagramContent, onMermaidError]); // Dependencies for useEffect
+
+    panelContent = isDotLoading ? (
+      <div className="flex flex-col items-center justify-center h-full text-blue-600">
+        <Loader2 className="h-8 w-8 animate-spin mb-2" />
+        <p>Rendering DOT graph...</p>
+      </div>
+    ) : dotError ? (
       <div className="text-red-700 p-4">
         <p>Error rendering DOT graph:</p>
         <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full">
@@ -378,11 +426,10 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
   }
 
   return (
-    // Load jsPDF, html2canvas, and Viz.js from CDN
+    // Load jsPDF, html2canvas from CDN
     <>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/viz.js/2.1.2/viz.umd.min.js"></script>
 
       <div className={`
         absolute inset-y-0 right-0 w-full bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40 transition-transform duration-300 ease-in-out
@@ -657,13 +704,15 @@ const toHtml = (result: any) => {
     if (node.type === 'element') {
       const { tagName, properties, children } = node;
       const classNames = (properties?.className || []).join(' ');
+
+      // Map highlight.js classes to inline styles for guaranteed rendering
       const styleMap: { [key: string]: string } = {
         'hljs-comment': 'color: #6b7280; font-style: italic;',
         'hljs-keyword': 'color: #7c3aed; font-weight: 600;',
         'hljs-string': 'color: #059669;',
         'hljs-number': 'color: #ea580c;',
         'hljs-built_in': 'color: #2563eb; font-weight: 500;',
-        'hljs-function': 'color: #1d4ed8;',
+        'hljs-function': 'color: #1d4ed8; font-weight: 500;',
         'hljs-variable': 'color: #1e40af;',
         'hljs-type': 'color: #0d9488;',
         'hljs-class': 'color: #d97706;',
@@ -1427,11 +1476,12 @@ const AIChatComponent: React.FC<AIChatProps> = ({
         {/* Diagram Panel - Conditionally rendered and responsive */}
         {activeDiagram && (
           <DiagramPanel
+            key={`${activeDiagram.content}-${activeDiagram.type}`} // Add key to force remount
             diagramContent={activeDiagram.content}
             diagramType={activeDiagram.type}
             onClose={handleCloseDiagramPanel}
             onMermaidError={handleMermaidError}
-            onSuggestAiCorrection={handleSuggestMermaidAiCorrection}
+            onSuggestAiCorrection={handleSuggestMermaidAiCorrection} // Corrected prop name
             isOpen={isDiagramPanelOpen}
           />
         )}

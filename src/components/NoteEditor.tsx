@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle, Menu, FileText, ChevronDown, ChevronUp, Download, Copy, FileDown, Mic, Play, Pause, XCircle, Check, AlertTriangle } from 'lucide-react';
+import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle, Menu, FileText, ChevronDown, ChevronUp, Download, Copy, FileDown, Mic, Play, Pause, XCircle, Check, AlertTriangle, Loader2 } from 'lucide-react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -41,6 +41,9 @@ lowlight.registerLanguage('cpp', cpp as LanguageFn);
 lowlight.registerLanguage('sql', sql as LanguageFn);
 lowlight.registerLanguage('xml', xml as LanguageFn);
 lowlight.registerLanguage('bash', bash as LanguageFn);
+
+// Import graphviz for DOT rendering
+import { Graphviz } from '@hpcc-js/wasm';
 
 // Define a mapping of highlight.js classes to Tailwind CSS color classes
 const syntaxColorMap: { [key: string]: string } = {
@@ -367,11 +370,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   };
 
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
+  // Function to close mobile menu, but not trigger file input directly
+  const handleMobileMenuClose = () => {
+    setIsMobileMenuOpen(false);
   };
 
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("handleFileSelect triggered!"); // New debug log
     toast.info("File selected, starting upload..."); // Added for debugging
     const file = event.target.files?.[0];
     if (!file || !userProfile) {
@@ -539,7 +545,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const toastId = toast.loading(`Generating note from ${section ? `section: ${section}` : 'full document'}...`);
     // Ensure the public URL is correctly retrieved for the selectedFile
     const { data: urlData } = supabase.storage.from('documents').getPublicUrl(`${userProfile.id}/${Date.now()}_${selectedFile.name}`);
-    
+
     await generateNoteFromExtractedContent(extractedContent, selectedFile.name, urlData.publicUrl, selectedFile.type, toastId as string, section);
   };
 
@@ -696,11 +702,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   };
 
-  const triggerAudioUpload = () => {
-    audioInputRef.current?.click();
-  };
-
   const handleAudioFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("handleAudioFileSelect triggered!"); // New debug log
     toast.info("Audio file selected, starting upload..."); // Added for debugging
     const file = event.target.files?.[0];
     if (!file || !userProfile) {
@@ -992,6 +995,35 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const lang = match && match[1];
     const codeContent = String(children).trim();
 
+    // State for DOT graph rendering
+    const [svgContent, setSvgContent] = useState<string | null>(null);
+    const [dotError, setDotError] = useState<string | null>(null);
+    const [isDotLoading, setIsDotLoading] = useState(false);
+
+    useEffect(() => {
+      if (lang === 'dot' && codeContent) {
+        setIsDotLoading(true);
+        setDotError(null);
+        setSvgContent(null);
+
+        const renderDot = async () => {
+          try {
+            // Ensure graphviz is initialized (it's a promise)
+            const gv = await Graphviz.load();
+            const svg = gv.layout(codeContent, 'svg', 'dot');
+            setSvgContent(svg);
+          } catch (e: any) {
+            console.error("DOT rendering error:", e);
+            setDotError(`Failed to render DOT graph: ${e.message || 'Invalid DOT syntax.'}`);
+          } finally {
+            setIsDotLoading(false);
+          }
+        };
+        renderDot();
+      }
+    }, [codeContent, lang]);
+
+
     // Create a ref for the Mermaid component
     const mermaidDiagramRef = useRef<HTMLDivElement>(null);
 
@@ -1042,9 +1074,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
             </Button>
           </div>
-          <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto">
-            {codeContent}
-          </pre>
+          {isDotLoading && (
+            <div className="flex items-center justify-center py-4 text-blue-600">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              <span>Rendering DOT graph...</span>
+            </div>
+          )}
+          {dotError && (
+            <div className="my-2 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+              <AlertTriangle className="inline h-4 w-4 mr-2" />
+              {dotError}
+              <pre className="mt-2 text-xs text-red-600 overflow-x-auto">{codeContent}</pre>
+            </div>
+          )}
+          {svgContent && (
+            <div
+              className="dot-graph-container overflow-x-auto overflow-y-hidden p-2"
+              dangerouslySetInnerHTML={{ __html: svgContent }}
+            />
+          )}
+          {!isDotLoading && !dotError && !svgContent && (
+            <p className="text-sm text-gray-500 text-center py-4">No DOT graph content to display or invalid syntax.</p>
+          )}
         </div>
       );
     }
@@ -1210,12 +1261,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           />
           {/* Desktop buttons */}
           <div className="hidden lg:flex items-center gap-2 flex-wrap justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={triggerFileUpload}
-              disabled={isUploading || isGeneratingAI || isProcessingAudio || !userProfile}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+            {/* Document Upload Button (Desktop) */}
+            <label
+              htmlFor="document-upload-input"
+              className={`
+                inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-3
+                border border-input bg-background hover:bg-accent hover:text-accent-foreground
+                text-slate-600 border-slate-200 hover:bg-slate-50
+                ${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
             >
               {isUploading ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1223,15 +1277,18 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <UploadCloud className="h-4 w-4 mr-2" />
               )}
               {isUploading ? 'Processing...' : 'Upload Doc & Generate'}
-            </Button>
-            <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept=".pdf,.txt,.doc,.docx,audio/*" /> {/* Updated style and accept attribute */}
+            </label>
+            <input type="file" id="document-upload-input" ref={fileInputRef} onChange={handleFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept=".pdf,.txt,.doc,.docx,audio/*" />
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={triggerAudioUpload}
-              disabled={isProcessingAudio || isUploading || isGeneratingAI || !userProfile}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+            {/* Audio Upload Button (Desktop) */}
+            <label
+              htmlFor="audio-upload-input"
+              className={`
+                inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-3
+                border border-input bg-background hover:bg-accent hover:text-accent-foreground
+                text-slate-600 border-slate-200 hover:bg-slate-50
+                ${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
             >
               {isProcessingAudio ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1239,8 +1296,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <Mic className="h-4 w-4 mr-2" />
               )}
               {isProcessingAudio ? 'Uploading Audio...' : 'Upload Audio'}
-            </Button>
-            <input type="file" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept="audio/*" /> {/* Updated style */}
+            </label>
+            <input type="file" id="audio-upload-input" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept="audio/*" />
 
             <Button
               variant="outline"
@@ -1347,12 +1404,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {isMobileMenuOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-10 flex flex-col py-2">
                 {/* Action Buttons */}
-                <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept=".pdf,.txt,.doc,.docx,audio/*" /> {/* Updated style and accept attribute */}
-                <Button
-                  variant="ghost"
-                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
-                  onClick={() => { triggerFileUpload(); setIsMobileMenuOpen(false); }}
-                  disabled={isUploading || isGeneratingAI || isProcessingAudio || !userProfile}
+                <label
+                  htmlFor="document-upload-input-mobile"
+                  className={`
+                    inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2
+                    text-slate-600 hover:bg-slate-50
+                    ${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                  onClick={handleMobileMenuClose} // Close menu on click
                 >
                   {isUploading ? (
                     <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1360,13 +1419,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     <UploadCloud className="h-4 w-4 mr-2" />
                   )}
                   {isUploading ? 'Processing...' : 'Upload Doc & Generate'}
-                </Button>
-                <input type="file" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept="audio/*" /> {/* Updated style */}
-                <Button
-                  variant="ghost"
-                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
-                  onClick={() => { triggerAudioUpload(); setIsMobileMenuOpen(false); }}
-                  disabled={isProcessingAudio || isUploading || isGeneratingAI || !userProfile}
+                </label>
+                <input type="file" id="document-upload-input-mobile" ref={fileInputRef} onChange={handleFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept=".pdf,.txt,.doc,.docx,audio/*" />
+
+                <label
+                  htmlFor="audio-upload-input-mobile"
+                  className={`
+                    inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2
+                    text-slate-600 hover:bg-slate-50
+                    ${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                  onClick={handleMobileMenuClose} // Close menu on click
                 >
                   {isProcessingAudio ? (
                     <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1374,11 +1437,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     <Mic className="h-4 w-4 mr-2" />
                   )}
                   {isProcessingAudio ? 'Uploading Audio...' : 'Upload Audio'}
-                </Button>
+                </label>
+                <input type="file" id="audio-upload-input-mobile" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept="audio/*" />
+
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
-                  onClick={() => { regenerateNoteFromDocument(); setIsMobileMenuOpen(false); }}
+                  onClick={() => { regenerateNoteFromDocument(); handleMobileMenuClose(); }}
                   disabled={isUploading || isGeneratingAI || isProcessingAudio || !note.document_id}
                 >
                   {isGeneratingAI ? (
@@ -1392,7 +1457,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
-                  onClick={() => { handleViewOriginalDocument(); setIsMobileMenuOpen(false); }}
+                  onClick={() => { handleViewOriginalDocument(); handleMobileMenuClose(); }}
                   disabled={!note.document_id || isLoadingDocument || isProcessingAudio}
                 >
                   {isLoadingDocument ? (
@@ -1406,7 +1471,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
-                  onClick={() => { handleDownloadNote(); setIsMobileMenuOpen(false); }}
+                  onClick={() => { handleDownloadNote(); handleMobileMenuClose(); }}
                   disabled={!content.trim()}
                 >
                   <Download className="h-4 w-4 mr-2" />
@@ -1416,7 +1481,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
-                  onClick={() => { handleDownloadPdf(); setIsMobileMenuOpen(false); }}
+                  onClick={() => { handleDownloadPdf(); handleMobileMenuClose(); }}
                   disabled={!content.trim()}
                 >
                   <FileDown className="h-4 w-4 mr-2" />
@@ -1426,7 +1491,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
-                  onClick={() => { handleCopyNoteContent(); setIsMobileMenuOpen(false); }}
+                  onClick={() => { handleCopyNoteContent(); handleMobileMenuClose(); }}
                   disabled={!content.trim()}
                 >
                   <Copy className="h-4 w-4 mr-2" />
@@ -1435,7 +1500,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
-                  onClick={() => { handleTextToSpeech(); setIsMobileMenuOpen(false); }}
+                  onClick={() => { handleTextToSpeech(); handleMobileMenuClose(); }}
                   disabled={isUploading || isGeneratingAI || isProcessingAudio}
                 >
                   {isSpeaking ? (
@@ -1448,7 +1513,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700"
-                  onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}
+                  onClick={() => { handleSave(); handleMobileMenuClose(); }}
                 >
                   <Save className="h-4 w-4 mr-2" />
                   Save
@@ -1456,7 +1521,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <Button
                   variant="ghost"
                   className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
-                  onClick={() => { setIsEditing(!isEditing); setIsMobileMenuOpen(false); }}
+                  onClick={() => { setIsEditing(!isEditing); handleMobileMenuClose(); }}
                 >
                   {isEditing ? <FileText className="h-4 w-4 mr-2" /> : <Menu className="h-4 w-4 mr-2" />}
                   {isEditing ? 'Full Preview' : 'Edit with Live Preview'}
