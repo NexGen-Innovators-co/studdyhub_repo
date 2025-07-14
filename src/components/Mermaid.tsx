@@ -10,12 +10,33 @@ interface MermaidProps {
   diagramRef: React.RefObject<HTMLDivElement>; // <-- ADDED THIS PROP
 }
 
-// Function to aggressively clean the Mermaid string
+// Function to clean the Mermaid string (less aggressive)
 const cleanMermaidString = (input: string): string => {
-  let cleaned = input.replace(/[\u00A0\u202F\u200B]/g, ' ');
-  cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\u000E-\u001F\u007F]/g, ''); // Fixed unicode range for control characters
+  let cleaned = input;
+
+  // 1. Remove Byte Order Mark (BOM) if present
+  if (cleaned.charCodeAt(0) === 0xFEFF) {
+    cleaned = cleaned.slice(1);
+  }
+
+  // 2. Normalize all line endings to LF
+  cleaned = cleaned.replace(/\r\n|\r/g, '\n');
+
+  // 3. Replace common invisible/non-standard spaces with regular spaces
+  //    \u00A0: Non-breaking space
+  //    \u202F: Narrow No-Break Space
+  //    \u200B: Zero Width Space
+  //    \uFEFF: Zero Width No-Break Space (BOM handled above, but good to catch here too if somehow inside)
+  //    \u00AD: Soft Hyphen
+  cleaned = cleaned.replace(/[\u00A0\u202F\u200B\uFEFF\u00AD]/g, ' ');
+
+  // 4. Normalize multiple spaces to single spaces within each line, then trim each line
   cleaned = cleaned.split('\n').map(line => line.replace(/\s+/g, ' ').trim()).join('\n');
-  return cleaned.trim();
+
+  // 5. Trim leading/trailing whitespace for the entire cleaned string
+  cleaned = cleaned.trim();
+
+  return cleaned;
 };
 
 // Function to auto-fix common Mermaid syntax errors
@@ -39,6 +60,57 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
       fixedLines.push(line);
       continue;
     }
+
+    // --- Specific Mermaid Sequence Diagram Fixes ---
+    if (lines[0].trim().startsWith('sequenceDiagram')) {
+      // Regex to capture source, arrow, target, and message
+      // This is more robust for sequence diagrams as it re-formats the entire message line
+      const seqLineRegex = /^\s*([^->]+?)\s*(->>|-->|->|--|x-->>|x-->|--x|->>x|--x)\s*([^:]+?)(?::\s*(.*))?$/;
+      const match = line.match(seqLineRegex);
+
+      if (match) {
+        const source = match[1].trim();
+        const arrow = match[2].trim();
+        const target = match[3].trim();
+        let message = match[4] ? match[4].trim() : '';
+
+        // Fix common AI error: "-> >" to "->>" or "--> >" to "-->>" etc.
+        let correctedArrow = arrow;
+        if (arrow.includes(' ') && arrow.includes('>')) {
+          correctedArrow = arrow.replace(/\s+/g, ''); // Remove spaces within arrow
+          wasFixed = true;
+        }
+
+        // Ensure message is quoted if it contains spaces and is not already quoted
+        if (message.includes(' ') && !message.startsWith('"') && !message.endsWith('"') && !message.startsWith('`') && !message.endsWith('`')) {
+          message = `"${message}"`;
+          wasFixed = true;
+        }
+
+        // Reconstruct the line with clean parts and correct spacing
+        line = `${source}${correctedArrow}${target}${message ? `: ${message}` : ''}`;
+      } else {
+        // If it's a participant line, ensure it's clean
+        if (line.startsWith('participant')) {
+          const parts = line.split(':');
+          if (parts.length > 1) {
+            const participantName = parts[0].substring('participant'.length).trim();
+            const alias = parts.slice(1).join(':').trim();
+            if (alias) {
+              line = `participant ${participantName} as ${alias}`;
+            } else {
+              line = `participant ${participantName}`;
+            }
+            wasFixed = true;
+          } else {
+            line = `participant ${line.substring('participant'.length).trim()}`;
+            wasFixed = true;
+          }
+        }
+      }
+    }
+    // --- End Specific Mermaid Sequence Diagram Fixes ---
+
 
     // Handle special characters within node definitions (e.g., A[Content with (special) chars])
     // Also capture (.*?) for round nodes and other shapes
@@ -81,6 +153,7 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
     });
 
     // Handle unquoted labels in edges (e.g., A -- This is a label --> B)
+    // This is a more general rule, but the specific sequence diagram message quoting above takes precedence.
     const edgeLabelRegex = /(\s(?:-+|==|~~)(?:>)?\s)([^\s"'][\w\s]*?[^\s"'])\s((?:-+|==|~~)(?:>)?\s)/g;
     line = line.replace(edgeLabelRegex, (match, p1, p2, p3) => {
       if (p2.includes(' ') && !p2.startsWith('"') && !p2.endsWith('"') && !p2.startsWith('`') && !p2.endsWith('`')) {
@@ -90,9 +163,9 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
       return match;
     });
 
-    // Trim spaces around arrows and operators
-    line = line.replace(/\s*(-->|--|---|-+>|==>|==|=+>|~~>|~~)\s*/g, ' $1 ');
-    line = line.replace(/\s+/g, ' ').trim();
+    // Trim spaces around operators and ensure single spaces
+    line = line.replace(/\s*(-->|--|---|-+>|==>|==|=+>|~~>|~~)\s*/g, '$1'); // Remove spaces around arrows first
+    line = line.replace(/\s+/g, ' ').trim(); // Then normalize all spaces
 
     if (line !== originalLine) {
       wasFixed = true;
@@ -164,7 +237,6 @@ const downloadSvgAsPng = (svgString: string, filename: string = 'mermaid-diagram
             link.href = downloadUrl;
             link.download = `${filename}.png`;
             document.body.appendChild(link);
-            link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(downloadUrl);
           }
@@ -410,6 +482,12 @@ ${code}
 
         const finalChart = fixedChart;
 
+        // --- START DEBUG LOGGING ---
+        console.log("Mermaid input string (raw):", finalChart);
+        console.log("Mermaid input string (char codes):", finalChart.split('').map(c => c.charCodeAt(0)));
+        // --- END DEBUG LOGGING ---
+
+
         const renderPromise = new Promise<any>((resolve, reject) => {
           renderTimeoutRef.current = setTimeout(() => {
             reject(new Error("Mermaid rendering timed out after 7 seconds."));
@@ -549,7 +627,7 @@ ${code}
             onClick={copyCode}
             className="h-6 w-6 p-0 hover:bg-gray-100 self-end sm:self-auto"
           >
-            {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
           </Button>
         </div>
 
