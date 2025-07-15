@@ -28,8 +28,23 @@ lowlight.registerLanguage('sql', sql as LanguageFn);
 lowlight.registerLanguage('xml', xml as LanguageFn);
 lowlight.registerLanguage('bash', bash as LanguageFn);
 
-// Import graphviz for DOT rendering
+// Import graphviz for DOT rendering - Corrected import
 import { Graphviz } from '@hpcc-js/wasm';
+
+// Common interfaces for ReactMarkdown components
+interface MarkdownElementProps<T> extends React.HTMLProps<T> {
+  node: any; // ReactMarkdown adds a 'node' property
+}
+
+type TableProps = MarkdownElementProps<HTMLTableElement>;
+type TableSectionProps = MarkdownElementProps<HTMLTableSectionElement>;
+type TableCellProps = MarkdownElementProps<HTMLTableHeaderCellElement | HTMLTableDataCellElement>;
+type HeadingProps = MarkdownElementProps<HTMLHeadingElement>;
+type ListProps = MarkdownElementProps<HTMLUListElement | HTMLOListElement>;
+type BlockquoteProps = MarkdownElementProps<HTMLQuoteElement>;
+type ParagraphProps = MarkdownElementProps<HTMLParagraphElement>;
+type AnchorProps = MarkdownElementProps<HTMLAnchorElement>;
+
 
 // Define a mapping of highlight.js classes to Tailwind CSS color classes
 const syntaxColorMap: { [key: string]: string } = {
@@ -161,7 +176,28 @@ export const MarkdownCodeRenderer: React.FC<MarkdownCodeRendererProps> = ({ inli
   const [dotError, setDotError] = useState<string | null>(null);
   const [isDotLoading, setIsDotLoading] = useState(false);
 
-  
+  useEffect(() => {
+    if (lang === 'dot' && codeContent) {
+      setIsDotLoading(true);
+      setDotError(null);
+      setSvgContent(null);
+
+      const renderDot = async () => {
+        try {
+          // Use Graphviz directly as an object, not a constructor
+            const graphviz = await Graphviz.load(); // Corrected: Use .load()
+          const svg = graphviz.layout(codeContent, 'svg', 'dot'); // Corrected: Use .layout()
+          setSvgContent(svg);
+        } catch (e: any) {
+          console.error("DOT rendering error:", e);
+          setDotError(`Failed to render DOT graph: ${e.message || 'Invalid DOT syntax.'}`);
+        } finally {
+          setIsDotLoading(false);
+        }
+      };
+      renderDot();
+    }
+  }, [codeContent, lang]);
 
   // Create a ref for the Mermaid component
   const mermaidDiagramRef = useRef<HTMLDivElement>(null);

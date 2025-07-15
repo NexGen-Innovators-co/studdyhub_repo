@@ -1,3 +1,4 @@
+// AIChat.tsx
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from './ui/button';
@@ -28,10 +29,10 @@ import css from 'highlight.js/lib/languages/css';
 import typescript from 'highlight.js/lib/languages/typescript';
 import { lowlight } from 'lowlight';
 import { LanguageFn } from 'highlight.js';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard'; // Import the hook from its new location
 
 // Import Graphviz from @hpcc-js/wasm
 import { Graphviz } from '@hpcc-js/wasm';
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard'; // Import the hook from its new location
 
 // Declare global types for libraries loaded via CDN
 declare global {
@@ -72,44 +73,44 @@ registerLanguages();
 
 // Syntax highlighting color map (for rendering code blocks)
 const syntaxColorMap: { [key: string]: string } = {
-  'hljs-comment': 'text-gray-500 italic',
-  'hljs-quote': 'text-gray-500 italic',
-  'hljs-keyword': 'text-purple-600 font-semibold',
-  'hljs-selector-tag': 'text-purple-600',
-  'hljs-subst': 'text-purple-600',
-  'hljs-built_in': 'text-blue-600 font-medium',
-  'hljs-type': 'text-teal-600',
-  'hljs-class': 'text-amber-600',
-  'hljs-string': 'text-green-600',
-  'hljs-title': 'text-green-600',
-  'hljs-section': 'text-green-600',
-  'hljs-number': 'text-orange-600',
-  'hljs-literal': 'text-orange-600',
-  'hljs-boolean': 'text-orange-600',
-  'hljs-variable': 'text-blue-700',
-  'hljs-template-variable': 'text-blue-700',
-  'hljs-function': 'text-blue-700 font-medium',
-  'hljs-name': 'text-blue-700',
-  'hljs-params': 'text-amber-700',
-  'hljs-attr': 'text-amber-600',
-  'hljs-attribute': 'text-amber-600',
-  'hljs-tag': 'text-red-600',
-  'hljs-selector-id': 'text-red-600',
-  'hljs-selector-class': 'text-green-600',
-  'hljs-selector-attr': 'text-cyan-600',
-  'hljs-selector-pseudo': 'text-pink-600',
-  'hljs-operator': 'text-pink-600',
-  'hljs-symbol': 'text-red-600',
-  'hljs-bullet': 'text-pink-600',
-  'hljs-regexp': 'text-pink-700',
-  'hljs-meta': 'text-sky-600',
-  'hljs-meta-keyword': 'text-sky-600 font-semibold',
-  'hljs-meta-string': 'text-sky-700',
-  'hljs-addition': 'text-green-700 bg-green-100',
-  'hljs-deletion': 'text-red-700 bg-red-100',
-  'hljs-emphasis': 'italic',
-  'hljs-strong': 'font-bold',
-  'hljs-code-text': 'text-gray-800',
+  'hljs-comment': 'color: #6b7280; font-style: italic;',
+  'hljs-quote': 'color: #6b7280; font-style: italic;',
+  'hljs-keyword': 'color: #7c3aed; font-weight: 600;',
+  'hljs-selector-tag': 'color: #7c3aed;',
+  'hljs-subst': 'color: #7c3aed;',
+  'hljs-built_in': 'color: #2563eb; font-weight: 500;',
+  'hljs-type': 'color: #0d9488;',
+  'hljs-class': 'color: #d97706;',
+  'hljs-string': 'color: #059669;',
+  'hljs-title': 'color: #059669;',
+  'hljs-section': 'color: #059669;',
+  'hljs-number': 'color: #ea580c;',
+  'hljs-literal': 'color: #ea580c;',
+  'hljs-boolean': 'color: #ea580c;',
+  'hljs-variable': 'color: #1e40af;',
+  'hljs-template-variable': 'color: #1e40af;',
+  'hljs-function': 'color: #1d4ed8; font-weight: 500;',
+  'hljs-name': 'color: #1d4ed8;',
+  'hljs-params': 'color: #b45309;',
+  'hljs-attr': 'color: #d97706;',
+  'hljs-attribute': 'color: #d97706;',
+  'hljs-tag': 'color: #dc2626;',
+  'hljs-selector-id': 'color: #dc2626;',
+  'hljs-selector-class': 'color: #059669;',
+  'hljs-selector-attr': 'color: #0891b2;',
+  'hljs-selector-pseudo': 'color: #db2777;',
+  'hljs-operator': 'color: #db2777;',
+  'hljs-symbol': 'color: #dc2626;',
+  'hljs-bullet': 'color: #db2777;',
+  'hljs-regexp': 'color: #be185d;',
+  'hljs-meta': 'color: #0284c7;',
+  'hljs-meta-keyword': 'color: #0284c7; font-weight: 600;',
+  'hljs-meta-string': 'color: #0369a1;',
+  'hljs-addition': 'color: #166534; background-color: #f0fdf4;',
+  'hljs-deletion': 'color: #b91c1c; background-color: #fef2f2;',
+  'hljs-emphasis': 'italic;',
+  'hljs-strong': 'font-bold;',
+  'hljs-code-text': 'color: #gray-800;',
 };
 
 // Error Boundary for Code Blocks
@@ -157,6 +158,35 @@ interface ChartRendererProps {
 
 const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) => {
   const chartInstance = useRef<any>(null);
+  const [chartFontSize, setChartFontSize] = useState(12); // Default font size
+
+  // Function to calculate responsive font size
+  const calculateFontSize = useCallback(() => {
+    const width = window.innerWidth;
+    if (width < 640) { // Mobile
+      return 7; // Even smaller font size for mobile
+    } else if (width < 1024) { // Tablet
+      return 9; // Slightly smaller for tablet
+    } else { // Desktop
+      return 12;
+    }
+  }, []);
+
+  useEffect(() => {
+    // Set initial font size
+    setChartFontSize(calculateFontSize());
+
+    // Update font size on window resize
+    const handleResize = () => {
+      setChartFontSize(calculateFontSize());
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [calculateFontSize]);
+
 
   useEffect(() => {
     if (chartRef.current) {
@@ -168,6 +198,35 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) 
 
         // Deep clone the config to avoid modifying the original and causing re-renders
         const configToUse = JSON.parse(JSON.stringify(chartConfig));
+
+        // Apply responsive font sizes to chart options
+        if (configToUse.options) {
+          if (configToUse.options.plugins?.title) {
+            configToUse.options.plugins.title.font = {
+              size: chartFontSize * 1.2, // Slightly larger for title
+            };
+          }
+          if (configToUse.options.scales) {
+            Object.values(configToUse.options.scales).forEach((scale: any) => {
+              if (scale.ticks) {
+                scale.ticks.font = {
+                  size: chartFontSize,
+                };
+              }
+              if (scale.title) {
+                scale.title.font = {
+                  size: chartFontSize * 1.1, // Slightly larger for axis titles
+                };
+              }
+            });
+          }
+          // Also apply to legend if present
+          if (configToUse.options.plugins?.legend?.labels) {
+            configToUse.options.plugins.legend.labels.font = {
+              size: chartFontSize,
+            };
+          }
+        }
 
         // --- START: Fix for Chart.js Tooltip Callbacks ---
         // Chart.js expects functions for tooltip callbacks, but AI generates strings for JSON validity.
@@ -210,10 +269,11 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) 
         chartInstance.current = null;
       }
     };
-  }, [chartConfig, chartRef]); // Re-run effect if chartConfig or ref changes
+  }, [chartConfig, chartRef, chartFontSize]); // Re-run effect if chartConfig, ref, or font size changes
 
   return (
-    <div className="relative w-full h-80 bg-white p-4 rounded-lg shadow-inner">
+    // Removed fixed height (h-80) to allow for responsiveness
+    <div className="relative w-full bg-white p-4 rounded-lg shadow-inner">
       <canvas ref={chartRef}></canvas>
     </div>
   );
@@ -222,62 +282,154 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) 
 // DiagramPanel component
 interface DiagramPanelProps {
   diagramContent: string;
-  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'unknown';
+  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'unknown'; // Added 'code' type
   onClose: () => void;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
   onSuggestAiCorrection: (prompt: string) => void; // This is the prop passed down
   isOpen: boolean;
+  language?: string; // New prop for code language
 }
 
-const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagramType, onClose, onMermaidError, onSuggestAiCorrection, isOpen }) => {
+const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagramType, onClose, onMermaidError, onSuggestAiCorrection, isOpen, language }) => {
   const diagramContainerRef = useRef<HTMLDivElement>(null); // Ref for the container holding the diagram
   const chartCanvasRef = useRef<HTMLCanvasElement>(null); // Ref specifically for Chart.js canvas
   const mermaidDivRef = useRef<HTMLDivElement>(null); // Ref for Mermaid diagram container
 
+  // State for resizable panel
+  const diagramPanelRef = useRef<HTMLDivElement>(null); // Ref for the main DiagramPanel div
+  const [panelWidth, setPanelWidth] = useState<number | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const initialX = useRef(0);
+  const initialPanelWidth = useRef(0);
+
+  // Effect to set initial width based on responsive classes when panel opens
+  useEffect(() => {
+    if (isOpen && !panelWidth && diagramPanelRef.current) {
+      // Only set initial width if it's not already set (e.g., from a previous resize)
+      // and if we are on a desktop screen (width >= 768px for md breakpoint)
+      if (window.innerWidth >= 768) {
+        setPanelWidth(window.innerWidth * 0.7); // Set to 70% of viewport width initially
+      }
+    }
+  }, [isOpen, panelWidth]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (window.innerWidth < 768) return; // Only allow resizing on desktop
+
+    e.preventDefault();
+    setIsResizing(true);
+    initialX.current = e.clientX;
+    initialPanelWidth.current = diagramPanelRef.current?.offsetWidth || 0;
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+
+    const deltaX = initialX.current - e.clientX; // Dragging left increases width
+    let newWidth = initialPanelWidth.current + deltaX;
+
+    // Define min/max width for the panel
+    const minWidth = 300; // Minimum width in pixels
+    const maxWidth = window.innerWidth * 0.7; // Max 70% of viewport width
+
+    newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+    setPanelWidth(newWidth);
+  }, [isResizing]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    } else {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, handleMouseMove, handleMouseUp]);
+
+  // Apply dynamic width style
+  const dynamicWidthStyle = panelWidth !== null && window.innerWidth >= 768 ? { width: `${panelWidth}px` } : {};
+
+
   let panelContent;
   let panelTitle = 'Diagram View';
-  let downloadSvgButtonText = 'Download Diagram (SVG)';
+  let downloadButtonText = 'Download Diagram (SVG)'; // Renamed to be general
+  let downloadFileName = 'diagram';
 
   // Function to download diagram
-  const handleDownloadDiagram = () => {
+  const handleDownloadContent = () => {
     if (!diagramContainerRef.current) {
-      toast.error('Diagram not rendered for download.');
+      toast.error('Content not rendered for download.');
       return;
     }
 
-    let fileName = `diagram-${Date.now()}`;
+    let fileExtension = '';
+    let contentToDownload: string | Blob = '';
+    let mimeType = '';
 
     if (diagramType === 'mermaid' || diagramType === 'dot') {
       const svgElement = diagramContainerRef.current.querySelector('svg');
       if (svgElement) {
-        const svgData = new XMLSerializer().serializeToString(svgElement);
-        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-        const svgUrl = URL.createObjectURL(svgBlob);
-        const downloadLink = document.createElement('a');
-        downloadLink.href = svgUrl;
-        downloadLink.download = `${fileName}.svg`;
-        document.body.appendChild(downloadLink);
-        document.body.removeChild(downloadLink);
-        URL.revokeObjectURL(svgUrl);
-        toast.success('SVG diagram downloaded!');
+        contentToDownload = new XMLSerializer().serializeToString(svgElement);
+        fileExtension = 'svg';
+        mimeType = 'image/svg+xml;charset=utf-8';
       } else {
         toast.error('SVG element not found for download.');
+        return;
       }
     } else if (diagramType === 'chartjs') {
       if (chartCanvasRef.current) {
-        const dataURL = chartCanvasRef.current.toDataURL('image/png');
+        contentToDownload = chartCanvasRef.current.toDataURL('image/png');
+        fileExtension = 'png';
+        mimeType = 'image/png';
+        // For data URLs, create a link and click it
         const downloadLink = document.createElement('a');
-        downloadLink.href = dataURL;
-        downloadLink.download = `${fileName}.png`;
+        downloadLink.href = contentToDownload as string;
+        downloadLink.download = `${downloadFileName}.${fileExtension}`;
         document.body.appendChild(downloadLink);
+        downloadLink.click();
         document.body.removeChild(downloadLink);
-        toast.success('Chart downloaded as PNG!');
+        toast.success(`Chart downloaded as ${fileExtension.toUpperCase()}!`);
+        return; // Exit early for data URL handling
       } else {
-        toast.error('Chart canvas not found for download.');
+        toast.error('Chart canvas not found for chart.js download.');
+        return;
       }
+    } else if (diagramType === 'code') {
+      contentToDownload = diagramContent;
+      fileExtension = language || 'txt';
+      mimeType = `text/plain;charset=utf-8`; // Fallback to plain text
+      // More specific mime types for common languages
+      if (language === 'js' || language === 'javascript') mimeType = 'application/javascript';
+      if (language === 'py' || language === 'python') mimeType = 'text/x-python';
+      if (language === 'java') mimeType = 'text/x-java-source';
+      if (language === 'html') mimeType = 'text/html';
+      if (language === 'css') mimeType = 'text/css';
+      if (language === 'json') mimeType = 'application/json';
+      if (language === 'ts' || language === 'typescript') mimeType = 'application/typescript';
+
     } else {
-      toast.error('Unsupported diagram type for SVG/PNG download.');
+      toast.error('Unsupported content type for download.');
+      return;
     }
+
+    const blob = new Blob([contentToDownload], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = `${downloadFileName}.${fileExtension}`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(url);
+    toast.success(`${diagramType === 'code' ? 'Code' : 'Diagram'} downloaded as ${fileExtension.toUpperCase()}!`);
   };
 
   // Function to download as PDF
@@ -296,7 +448,7 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
     toast.info('Generating PDF...');
     try {
       const canvas = await window.html2canvas(diagramContainerRef.current, {
-        scale: 2, // Increase scale for better quality
+        scale: 3, // Increase scale for better quality
         useCORS: true, // If images are involved, might need this
         backgroundColor: '#f8fafc', // Match background of panel
       });
@@ -318,16 +470,19 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
     }
   };
 
+
   // Render logic based on diagramType
   if (diagramType === 'mermaid') {
     panelContent = (
       <Mermaid chart={diagramContent} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} diagramRef={mermaidDivRef} />
     );
     panelTitle = 'Mermaid Diagram View';
-    downloadSvgButtonText = 'Download Diagram (SVG)';
+    downloadButtonText = 'Download Diagram (SVG)';
+    downloadFileName = 'mermaid-diagram';
   } else if (diagramType === 'dot') {
     panelTitle = 'DOT Graph View';
-    downloadSvgButtonText = 'Download Graph (SVG)';
+    downloadButtonText = 'Download Graph (SVG)';
+    downloadFileName = 'dot-graph';
     // Render DOT graph using @hpcc-js/wasm
     const [dotSvg, setDotSvg] = useState<string | null>(null);
     const [dotError, setDotError] = useState<string | null>(null);
@@ -384,15 +539,17 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
         </Button>
       </div>
     ) : (
-      <div dangerouslySetInnerHTML={{ __html: dotSvg || '' }} className="w-full h-full flex items-center justify-center overflow-auto" />
+      <div dangerouslySetInnerHTML={{ __html: dotSvg || '' }} className="w-full h-full" /> // Removed items-center justify-center
     );
 
   } else if (diagramType === 'chartjs') {
     panelTitle = 'Chart.js Graph View';
-    downloadSvgButtonText = 'Download Chart (PNG)'; // Clarify PNG for Chart.js
+    downloadButtonText = 'Download Chart (PNG)'; // Clarify PNG for Chart.js
+    downloadFileName = 'chartjs-graph';
     try {
-      const chartConfig = JSON.parse(diagramContent);
-      panelContent = <ChartRenderer chartConfig={chartConfig} chartRef={chartCanvasRef} />;
+      // Remove comments from Chart.js JSON before parsing
+      const cleanedCodeContent = diagramContent.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
+      panelContent = <ChartRenderer chartConfig={JSON.parse(cleanedCodeContent)} chartRef={chartCanvasRef} />;
     } catch (e) {
       panelContent = (
         <div className="text-red-700 p-4">
@@ -410,9 +567,27 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
           </Button>
         </div>
       );
-      panelTitle = 'Chart.js Error';
     }
-  } else {
+  } else if (diagramType === 'code') {
+    panelTitle = language ? `Code View - ${language.toUpperCase()}` : 'Code View';
+    downloadButtonText = 'Download Code';
+    downloadFileName = `code.${language || 'txt'}`;
+    panelContent = (
+      <div className="relative rounded-lg overflow-hidden h-full">
+        <div className="p-4 bg-white overflow-x-auto h-full">
+          <pre className="font-mono text-sm leading-relaxed h-full">
+            <code
+              className="text-gray-800 h-full"
+              dangerouslySetInnerHTML={{
+                __html: highlightCode(diagramContent, language || 'plaintext')
+              }}
+            />
+          </pre>
+        </div>
+      </div>
+    );
+  }
+  else {
     panelContent = (
       <div className="flex flex-col items-center justify-center h-full text-slate-500">
         <AlertTriangle className="h-8 w-8 mb-2" />
@@ -423,6 +598,8 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
       </div>
     );
     panelTitle = 'Unsupported Diagram';
+    downloadButtonText = 'Download Content';
+    downloadFileName = 'content';
   }
 
   return (
@@ -431,44 +608,56 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-      <div className={`
-        absolute inset-y-0 right-0 w-full bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40 transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : 'translate-x-full'}
-        md:relative md:translate-x-0 md:w-1/2 lg:w-2/5 md:border-t md:rounded-lg md:shadow-md
-      `}>
+      <div
+        ref={diagramPanelRef} // Attach ref to the main panel div
+        className={`
+          absolute inset-y-0 right-0 w-full bg-white shadow-xl flex flex-col z-40 transition-transform duration-300 ease-in-out
+          ${isOpen ? 'translate-x-0' : 'translate-x-full'}
+          md:relative md:translate-x-0 md:flex-shrink-0 md:rounded-lg md:shadow-md md:mb-6 md:border md:border-slate-200
+        `}
+        style={dynamicWidthStyle} // Apply dynamic width here
+      >
+        {/* Resizer Handle - only visible on desktop */}
+        <div
+          className="hidden md:block absolute left-0 top-0 bottom-0 w-2 bg-transparent cursor-ew-resize z-50 hover:bg-gray-200 transition-colors duration-200"
+          onMouseDown={handleMouseDown}
+        />
+
         <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white">
           <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0">{panelTitle}</h3>
           <div className="flex flex-wrap items-center gap-2 justify-end"> {/* Added flex-wrap and justify-end */}
-            {/* Download SVG/PNG Button */}
+            {/* Download Button */}
             <Button
               variant="outline"
               size="sm"
-              onClick={handleDownloadDiagram}
+              onClick={handleDownloadContent} // Changed to general handler
               className="text-blue-600 hover:bg-blue-50"
-              title={downloadSvgButtonText}
+              title={downloadButtonText}
               disabled={!diagramContent || diagramType === 'unknown'}
             >
               <Download className="h-4 w-4 mr-0 sm:mr-2" /> {/* Removed mr-2 on small screens */}
-              <span className="hidden sm:inline">{downloadSvgButtonText}</span> {/* Hidden on small screens */}
+              <span className="hidden sm:inline">{downloadButtonText}</span> {/* Hidden on small screens */}
             </Button>
-            {/* Download PDF Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadPdf}
-              className="text-purple-600 hover:bg-purple-50"
-              title="Download Diagram (PDF)"
-              disabled={!diagramContent || diagramType === 'unknown'}
-            >
-              <Download className="h-4 w-4 mr-0 sm:mr-2" /> {/* Removed mr-2 on small screens */}
-              <span className="hidden sm:inline">Download PDF</span> {/* Hidden on small screens */}
-            </Button>
+            {/* Download PDF Button (only for diagrams, not code) */}
+            {(!['code', 'unknown'].includes(diagramType)) && ( // Corrected condition
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadPdf}
+                className="text-purple-600 hover:bg-purple-50"
+                title="Download Diagram (PDF)"
+                disabled={!diagramContent || diagramType === 'unknown'}
+              >
+                <Download className="h-4 w-4 mr-0 sm:mr-2" /> {/* Removed mr-2 on small screens */}
+                <span className="hidden sm:inline">Download PDF</span> {/* Hidden on small screens */}
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={onClose} title="Close Diagram" className="flex-shrink-0"> {/* Added flex-shrink-0 */}
               <X className="h-5 w-5 text-slate-500 hover:text-slate-700" />
             </Button>
           </div>
         </div>
-        <div ref={diagramContainerRef} className="flex-1 overflow-auto p-4 sm:p-6 flex items-center justify-center">
+        <div ref={diagramContainerRef} className="flex-1 overflow-auto p-4 sm:p-6 modern-scrollbar"> {/* Added modern-scrollbar */}
           {panelContent}
         </div>
       </div>
@@ -478,11 +667,35 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
 
 
 const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, ...props }: any) => {
-  const { copied, copy } = useCopyToClipboard(); // Use the imported hook
+  // The useCopyToClipboard hook is now called at the top level of AIChatComponent
+  // and 'copy' and 'copied' are passed down as props if needed, or accessed via context.
+  // For this CodeBlock, we will receive them as props.
+  const { copied, copy } = useCopyToClipboard(); 
   const match = /language-(\w+)/.exec(className || '');
   const lang = match && match[1];
   const codeContent = String(children).trim();
   const [showRawCode, setShowRawCode] = useState(false);
+
+  // If it's a raw code block (not mermaid, chartjs, or dot), show a "View Code" button
+  if (!inline && lang && !['mermaid', 'chartjs', 'dot'].includes(lang)) {
+    return (
+      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between">
+        <div className="flex items-center gap-2 text-slate-700">
+          <FileText className="h-4 w-4" />
+          <span className="text-sm font-medium">{lang.toUpperCase()} Code</span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onViewDiagram && onViewDiagram(codeContent, 'code', lang)} // Pass 'code' type and language
+          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm"
+        >
+          <Maximize2 className="h-4 w-4 mr-2" />
+          View Code
+        </Button>
+      </div>
+    );
+  }
 
   if (showRawCode) {
     return (
@@ -532,82 +745,24 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onS
   }
 
   if (!inline && lang === 'chartjs') {
-    try {
-      const chartConfig = JSON.parse(codeContent);
-      return (
-        <div className="my-4 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-              Chart.js Graph
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => copy(codeContent)}
-              className="h-6 w-6 p-0"
-            >
-              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            </Button>
-          </div>
-          {/* ChartRenderer in CodeBlock doesn't need chartRef as it's not for download */}
-          <ChartRenderer chartConfig={chartConfig} chartRef={useRef(null)} />
-          <div className="flex gap-2 mt-3 justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onViewDiagram && onViewDiagram(codeContent, 'chartjs')}
-              className="bg-blue-500 text-white hover:bg-blue-600"
-            >
-              <Maximize2 className="h-4 w-4 mr-2" />
-              View Full Chart
-            </Button>
-          </div>
+    // Modified to show a button instead of direct rendering
+    return (
+      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between">
+        <div className="flex items-center gap-2 text-slate-700">
+          <FileText className="h-4 w-4" />
+          <span className="text-sm font-medium">Chart.js Graph</span>
         </div>
-      );
-    } catch (e) {
-      console.error("Error parsing Chart.js config:", e);
-      return (
-        <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center gap-2 text-red-700">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm font-medium">Chart.js Error</span>
-          </div>
-          <p className="text-sm text-red-600 mt-1">
-            Invalid Chart.js JSON configuration. Please check the code.
-          </p>
-          <pre className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded overflow-x-auto">
-            {codeContent}
-          </pre>
-          <div className="flex gap-2 mt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => copy(codeContent)}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
-            >
-              {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
-              Copy Code
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onSuggestAiCorrection && onSuggestAiCorrection(`Can you fix this Chart.js configuration? Here's the code: ${codeContent}`)}
-              className="bg-blue-500 text-white hover:bg-blue-600"
-            >
-              Suggest AI Correction
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRawCode(true)}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
-            >
-              Show Raw Code
-            </Button>
-          </div>
-        </div>
-      );
-    }
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onViewDiagram && onViewDiagram(codeContent, 'chartjs')}
+          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm"
+        >
+          <Maximize2 className="h-4 w-4 mr-2" />
+          View Full Chart
+        </Button>
+      </div>
+    );
   }
 
   if (!inline && lang === 'dot') {
@@ -631,43 +786,7 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onS
     );
   }
 
-  if (!inline && lang) {
-    return (
-      <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-200">
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-400"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-            <div className="w-3 h-3 rounded-full bg-green-400"></div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
-              {lang}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => copy(codeContent)}
-              className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-            >
-              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            </Button>
-          </div>
-        </div>
-        <div className="p-4 bg-white overflow-x-auto">
-          <pre className="font-mono text-sm leading-relaxed">
-            <code
-              className="text-gray-800"
-              dangerouslySetInnerHTML={{
-                __html: highlightCode(codeContent, lang)
-              }}
-            />
-          </pre>
-        </div>
-      </div>
-    );
-  }
-
+  // Fallback for inline code or unhandled languages
   return (
     <code className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md font-mono text-sm border border-purple-200" {...props}>
       {children}
@@ -712,27 +831,26 @@ const toHtml = (result: any) => {
         'hljs-string': 'color: #059669;',
         'hljs-number': 'color: #ea580c;',
         'hljs-built_in': 'color: #2563eb; font-weight: 500;',
-        'hljs-function': 'color: #1d4ed8; font-weight: 500;',
-        'hljs-variable': 'color: #1e40af;',
         'hljs-type': 'color: #0d9488;',
         'hljs-class': 'color: #d97706;',
         'hljs-attr': 'color: #d97706;',
+        'hljs-attribute': 'color: #d97706;',
         'hljs-tag': 'color: #dc2626;',
+        'hljs-selector-id': 'color: #dc2626;',
+        'hljs-selector-class': 'color: #059669;',
+        'hljs-selector-attr': 'color: #0891b2;',
+        'hljs-selector-pseudo': 'color: #db2777;',
         'hljs-operator': 'color: #db2777;',
         'hljs-literal': 'color: #ea580c;',
         'hljs-meta': 'color: #0284c7;',
         'hljs-title': 'color: #059669;',
         'hljs-selector-tag': 'color: #7c3aed;',
-        'hljs-selector-class': 'color: #059669;',
-        'hljs-selector-id': 'color: #dc2626;',
         'hljs-regexp': 'color: #be185d;',
         'hljs-symbol': 'color: #dc2626;',
         'hljs-bullet': 'color: #db2777;',
         'hljs-params': 'color: #b45309;',
         'hljs-name': 'color: #1d4ed8;',
-        'hljs-attribute': 'color: #d97706;',
-        'hljs-selector-attr': 'color: #0891b2;',
-        'hljs-selector-pseudo': 'color: #db2777;',
+
         'hljs-template-variable': 'color: #1e40af;',
         'hljs-quote': 'color: #6b7280; font-style: italic;',
         'hljs-deletion': 'color: #b91c1c; background-color: #fef2f2;',
@@ -760,7 +878,8 @@ const toHtml = (result: any) => {
   return result.children.map(nodeToHtml).join('');
 };
 
-const MarkdownRenderer: React.FC<{ content: string; isUserMessage?: boolean; onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void; onSuggestAiCorrection: (prompt: string) => void; onViewDiagram: (code: string, type: 'mermaid' | 'dot' | 'chartjs' | 'unknown') => void; onToggleUserMessageExpansion: (messageId: string) => void; expandedMessages: Set<string>; }> = ({ content, isUserMessage, onMermaidError, onSuggestAiCorrection, onViewDiagram, onToggleUserMessageExpansion, expandedMessages }) => {
+// Memoize MarkdownRenderer to prevent unnecessary re-renders
+const MemoizedMarkdownRenderer: React.FC<{ content: string; isUserMessage?: boolean; onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void; onSuggestAiCorrection: (prompt: string) => void; onViewDiagram: (code: string, type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'unknown', language?: string) => void; onToggleUserMessageExpansion: (messageId: string) => void; expandedMessages: Set<string>; }> = memo(({ content, isUserMessage, onMermaidError, onSuggestAiCorrection, onViewDiagram, onToggleUserMessageExpansion, expandedMessages }) => {
   const textColorClass = isUserMessage ? 'text-white' : 'text-slate-700';
   const linkColorClass = isUserMessage ? 'text-blue-200 hover:underline' : 'text-blue-600 hover:underline';
   const listTextColorClass = isUserMessage ? 'text-white' : 'text-slate-700';
@@ -791,7 +910,8 @@ const MarkdownRenderer: React.FC<{ content: string; isUserMessage?: boolean; onM
           li: ({ node, ...props }) => <li className="mb-1" {...props} />,
           blockquote: ({ node, ...props }) => <blockquote className={`border-l-4 ${blockquoteBgClass} pl-4 py-2 italic ${blockquoteTextColorClass} rounded-r-md my-3`} {...props} />,
           table: ({ node, ...props }) => (
-            <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200">
+            // Ensure the table container takes full width and allows horizontal scrolling
+            <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200 w-full">
               <table className="w-full border-collapse" {...props} />
             </div>
           ),
@@ -826,7 +946,7 @@ const MarkdownRenderer: React.FC<{ content: string; isUserMessage?: boolean; onM
       )}
     </CodeBlockErrorBoundary>
   );
-};
+});
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -920,19 +1040,16 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null); // Ref for the scrollable chat container
-  const prevMessagesLengthRef = useRef(messages.length);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set()); // State to track expanded messages
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false); // State for scroll button visibility
 
-  // State for AI typing simulation
-  const [typingMessageContent, setTypingMessageContent] = useState('');
-  const typingMessageIdRef = useRef<string | null>(null); // Use ref for ID to avoid re-renders
-  const typingIntervalRef = useRef<number | null>(null);
-
   // State for the side-out diagram panel
-  const [activeDiagram, setActiveDiagram] = useState<{ content: string; type: 'mermaid' | 'dot' | 'chartjs' | 'unknown' } | null>(null);
+  const [activeDiagram, setActiveDiagram] = useState<{ content: string; type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'unknown'; language?: string } | null>(null); // Added language property
   const isDiagramPanelOpen = !!activeDiagram; // Derived state
+
+  // Initialize useCopyToClipboard hook once at the top level of the component
+  const { copied, copy } = useCopyToClipboard();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -964,110 +1081,10 @@ const AIChatComponent: React.FC<AIChatProps> = ({
     };
   }, [handleScroll]);
 
-  // Effect to manage AI typing simulation
+  // Scroll to bottom when new messages are added, or when isLoading changes (for new AI response)
   useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-
-    // Clear any existing interval when dependencies change or before starting a new one
-    if (typingIntervalRef.current) {
-      clearInterval(typingIntervalRef.current);
-      typingIntervalRef.current = null;
-    }
-
-    // Condition to start typing:
-    // 1. There is a last AI message.
-    // 2. It's not an error message.
-    // 3. The AI is currently loading/streaming a response (isLoading is true).
-    // 4. The message hasn't been fully typed yet OR it's a new message.
-    if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.isError && isLoading) {
-      // If it's a new message or we are resuming typing for the current message
-      if (lastMessage.id !== typingMessageIdRef.current || typingMessageContent.length < lastMessage.content.length) {
-        typingMessageIdRef.current = lastMessage.id;
-        // If it's a new message, start typing from scratch. Otherwise, resume.
-        if (typingMessageIdRef.current !== lastMessage.id) { // This condition was always true, causing reset
-          setTypingMessageContent('');
-        } else {
-          setTypingMessageContent(lastMessage.content.substring(0, typingMessageContent.length)); // Resume from current typed length
-        }
-
-
-        let i = typingMessageContent.length; // Start from where we left off or 0
-
-        typingIntervalRef.current = window.setInterval(() => {
-          setTypingMessageContent((prev) => {
-            // Check if the message being typed is still the last message
-            // and if we haven't typed the full content yet
-            if (typingMessageIdRef.current !== lastMessage.id || i >= lastMessage.content.length) {
-                // If the message is no longer the one we're typing or we've reached the end of its content
-                if (typingIntervalRef.current) {
-                    clearInterval(typingIntervalRef.current);
-                    typingIntervalRef.current = null;
-                }
-                typingMessageIdRef.current = null; // Mark as done typing
-                scrollToBottom(); // Ensure scroll to bottom after typing finishes
-                return lastMessage.content; // Ensure the full content is returned and persists
-            }
-
-            const nextChar = lastMessage.content.charAt(i);
-            i++;
-
-            // Scroll only if the user is near the bottom
-            if (chatContainerRef.current) {
-              const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-              const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50; // 50px threshold
-              if (isNearBottom) {
-                scrollToBottom();
-              }
-            }
-            return prev + nextChar;
-          });
-        }, 5); // Faster typing speed (e.g., 5ms per character)
-      }
-    } else {
-      // If AI is not loading, or message is an error, or no last message, or it's a user message
-      // Ensure typing state is cleared and interval is stopped
-      if (typingIntervalRef.current) {
-        clearInterval(typingIntervalRef.current);
-        typingIntervalRef.current = null;
-      }
-      // If there was a message being typed, ensure its full content is displayed
-      if (typingMessageIdRef.current !== null && lastMessage && lastMessage.id === typingMessageIdRef.current) {
-        setTypingMessageContent(lastMessage.content);
-      } else if (typingMessageIdRef.current === null && lastMessage && lastMessage.role === 'assistant' && !lastMessage.isError) {
-        // If no typing is active but the last message is an AI message, ensure it's fully displayed
-        setTypingMessageContent(lastMessage.content);
-      }
-      typingMessageIdRef.current = null;
-    }
-
-    // Scroll to bottom when new messages are added, or when the last message is being typed
-    if (messages.length > prevMessagesLengthRef.current || (lastMessage && typingMessageIdRef.current === lastMessage.id)) {
-      scrollToBottom();
-    }
-
-    prevMessagesLengthRef.current = messages.length;
-
-    // Cleanup function for the effect
-    return () => {
-      if (typingIntervalRef.current) {
-        clearInterval(typingIntervalRef.current);
-      }
-    };
-  }, [messages, isLoading, handleScroll]);
-
-
-  // Effect to reset typing state when active chat session changes
-  useEffect(() => {
-    // Clear any ongoing typing animation when the chat session changes
-    if (typingIntervalRef.current) {
-      clearInterval(typingIntervalRef.current);
-      typingIntervalRef.current = null;
-    }
-    setTypingMessageContent('');
-    typingMessageIdRef.current = null;
-    // Also scroll to bottom when a new session is loaded
     scrollToBottom();
-  }, [activeChatSessionId]);
+  }, [messages, isLoading]); // Trigger scroll on message change or loading state change
 
 
   useEffect(() => {
@@ -1107,11 +1124,11 @@ const AIChatComponent: React.FC<AIChatProps> = ({
     textareaRef.current?.focus();
   }, []);
 
-  // New callback to handle viewing a diagram in the side panel
-  const handleViewDiagram = useCallback((code: string, type: 'mermaid' | 'dot' | 'chartjs' | 'unknown' = 'unknown') => {
+  // New callback to handle viewing a diagram or code in the side panel
+  const handleViewDiagram = useCallback((code: string, type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'unknown' = 'unknown', language?: string) => {
     // Only update if the content or type has actually changed
-    if (!activeDiagram || activeDiagram.content !== code || activeDiagram.type !== type) {
-      setActiveDiagram({ content: code, type: type });
+    if (!activeDiagram || activeDiagram.content !== code || activeDiagram.type !== type || activeDiagram.language !== language) {
+      setActiveDiagram({ content: code, type: type, language: language });
     }
   }, [activeDiagram]); // Dependency on activeDiagram to compare
 
@@ -1164,22 +1181,21 @@ const AIChatComponent: React.FC<AIChatProps> = ({
 
   const displayMessages = messages;
 
-  const MAX_USER_MESSAGE_LENGTH = 200; // Define a threshold for collapsing
+  const MAX_USER_MESSAGE_LENGTH = 100; // Define a threshold for collapsing
 
   let lastDate = ''; // To keep track of the last message's date for grouping
 
   return (
     <CodeBlockErrorBoundary>
-      <div className="flex flex-col h-full border-t-0 relative bg-slate-50 overflow-hidden md:flex-row">
+      <div className="flex flex-col h-full border-none relative bg-transparent overflow-hidden md:flex-row md:p-6 md:gap-6"> {/* Added md:gap-6 here */}
         {/* Main Chat Area */}
         <div className={`
-          flex-1 flex flex-col h-full bg-white rounded-lg shadow-md border border-slate-200 transition-all duration-300 ease-in-out
-          ${isDiagramPanelOpen ? 'md:w-1/2 lg:w-3/5' : 'w-full'}
-          ${isDiagramPanelOpen ? 'md:mr-4' : ''}
-        `}>
+          flex-1 flex flex-col h-full bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out
+          ${isDiagramPanelOpen ? 'md:w-[30%]' : 'w-full'}
+        `}> {/* Removed border border-slate-200 */}
           {/* Removed the header section */}
           {/* Adjusted padding: pb-[calc(4rem+2rem)] for mobile, md:pb-6 for desktop */}
-          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50 flex flex-col modern-scrollbar pb-[calc(4rem+2rem)] md:pb-6">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col modern-scrollbar pb-32 md:pb-6">
             {(displayMessages ?? []).length === 0 && (activeChatSessionId === null) && (
               <div className="text-center py-8 text-slate-400 flex-grow flex flex-col justify-center items-center">
                 <Bot className="h-12 w-12 mx-auto text-slate-300 mb-4" />
@@ -1254,17 +1270,12 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                 );
               } else { // message.role === 'assistant'
                 if (message.isError) {
-                  cardClasses = 'bg-red-50 border border-red-200 text-red-800';
-                  contentToRender = <MarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewDiagram} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
+                  cardClasses = ' text-red-800';
+                  contentToRender = <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewDiagram} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
                 } else {
                   cardClasses = 'bg-white border border-slate-200';
-                  // If it's the last AI message and we are typing it
-                  if (isLastMessage && typingMessageIdRef.current === message.id) {
-                    contentToRender = <MarkdownRenderer content={typingMessageContent} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewDiagram} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
-                  } else {
-                    // For all other AI messages (older ones, or if typing finished)
-                    contentToRender = <MarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewDiagram} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
-                  }
+                  // Always render the message.content directly now
+                  contentToRender = <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewDiagram} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
                 }
               }
 
@@ -1285,13 +1296,13 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                       ${message.role === 'user' ? 'justify-end' : 'justify-start'}
                     `}>
                       {message.role === 'assistant' && (
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.isError ? 'bg-red-500' : 'bg-gradient-to-r from-blue-600 to-purple-600'} hidden sm:flex`}> {/* Added hidden sm:flex */}
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.isError ? 'bg-red-500' : 'bg-transparent'} hidden sm:flex`}> {/* Added hidden sm:flex */}
                           {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
                         </div>
                       )}
-                      <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
-                        <Card className={`max-w-xs sm:max-w-md md:max-w-lg p-1 overflow-hidden rounded-lg shadow-sm ${cardClasses}`}>
-                          <CardContent className="p-2 prose prose-base max-w-none leading-relaxed"> {/* Changed prose-sm to prose-base */}
+                      <div className={`flex flex-col ${message.role === 'user' ? 'items-end max-w-sm' : 'items-start'}`}>
+                        <Card className={`max-w-sm sm:max-w-4xl overflow-hidden rounded-lg ${message.role === 'assistant' ?'border-none shadow-none bg-transparent':''}' ${cardClasses}`}>
+                          <CardContent className={`p-2 prose border-none prose-base max-w-full leading-relaxed`}> {/* Changed prose-sm to prose-base */}
                             {contentToRender}
                           </CardContent>
                         </Card>
@@ -1316,7 +1327,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => useCopyToClipboard().copy(message.content)}
+                                  onClick={() => copy(message.content)}
                                   className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100"
                                   title="Copy message"
                                 >
@@ -1392,14 +1403,14 @@ const AIChatComponent: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
           {/* Input area - now with a wrapper div for the full-width background */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 z-10 md:static md:p-6 md:pb-6 rounded-t-lg md:rounded-lg">
+          <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 sm:bg-transparent md:bg-transparent md:shadow-none md:static md:rounded-lgz-10 md:static md:p-0 rounded-t-lg md:rounded-lg"> {/* Removed md:pb-6, set to md:p-0 */}
             <form onSubmit={async (e) => {
               e.preventDefault();
               if (inputMessage.trim()) {
                 await onSendMessage(inputMessage);
                 setInputMessage('');
               }
-            }} className="flex items-end gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] max-w-4xl mx-auto">
+            }} className="flex items-end gap-2 p-3 rounded-lg bg-white border border-slate-200 shadow-lg max-w-4xl mx-auto"> {/* Added shadow-lg */}
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
@@ -1466,7 +1477,8 @@ const AIChatComponent: React.FC<AIChatProps> = ({
             variant="outline"
             size="icon"
             onClick={scrollToBottom}
-            className="fixed bottom-[calc(4rem+1.5rem)] right-6 md:bottom-8 md:right-8 bg-white rounded-full shadow-lg p-2 z-20 transition-opacity duration-300 hover:scale-105"
+            // Adjusted bottom position for mobile (bottom-28 = 112px)
+            className="fixed bottom-28 right-6 md:bottom-8 md:right-8 bg-white rounded-full shadow-lg p-2 z-20 transition-opacity duration-300 hover:scale-105"
             title="Scroll to bottom"
           >
             <ChevronDown className="h-5 w-5 text-slate-600" />
@@ -1476,13 +1488,14 @@ const AIChatComponent: React.FC<AIChatProps> = ({
         {/* Diagram Panel - Conditionally rendered and responsive */}
         {activeDiagram && (
           <DiagramPanel
-            key={`${activeDiagram.content}-${activeDiagram.type}`} // Add key to force remount
+            key={`${activeDiagram.content}-${activeDiagram.type}-${activeDiagram.language}`} // Add language to key
             diagramContent={activeDiagram.content}
             diagramType={activeDiagram.type}
             onClose={handleCloseDiagramPanel}
             onMermaidError={handleMermaidError}
             onSuggestAiCorrection={handleSuggestMermaidAiCorrection} // Corrected prop name
             isOpen={isDiagramPanelOpen}
+            language={activeDiagram.language} // Pass language prop
           />
         )}
       </div>

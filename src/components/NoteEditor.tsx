@@ -1,8 +1,9 @@
+// NoteEditor.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle, Menu, FileText, ChevronDown, ChevronUp, Download, Copy, FileDown, Mic, Play, Pause, XCircle, Check, AlertTriangle, Loader2 } from 'lucide-react';
+import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle, Menu, FileText, ChevronDown, ChevronUp, Download, Copy, FileDown, Mic, Play, Pause, XCircle, Check, AlertTriangle, Loader2, TypeOutline } from 'lucide-react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -30,6 +31,7 @@ import cpp from 'highlight.js/lib/languages/cpp';
 import sql from 'highlight.js/lib/languages/sql';
 import xml from 'highlight.js/lib/languages/xml';
 import bash from 'highlight.js/lib/languages/bash';
+import json from 'highlight.js/lib/languages/typescript';
 
 // Create lowlight instance and register languages
 import { lowlight } from 'lowlight';
@@ -41,9 +43,13 @@ lowlight.registerLanguage('cpp', cpp as LanguageFn);
 lowlight.registerLanguage('sql', sql as LanguageFn);
 lowlight.registerLanguage('xml', xml as LanguageFn);
 lowlight.registerLanguage('bash', bash as LanguageFn);
-
-// Import graphviz for DOT rendering
+lowlight.registerLanguage('json', json as LanguageFn);
+// Direct import for Graphviz
 import { Graphviz } from '@hpcc-js/wasm';
+
+// Direct import for Chart.js
+import { Chart, registerables } from 'chart.js';
+Chart.register(...registerables); // Register Chart.js components globally
 
 // Define a mapping of highlight.js classes to Tailwind CSS color classes
 const syntaxColorMap: { [key: string]: string } = {
@@ -138,7 +144,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   isNotesHistoryOpen
 }) => {
   const [title, setTitle] = useState(note.title);
-  const [content, setContent] = useState(note.content);
+  const [content, setContent] = useState(note.content); // This is the debounced content
+  const [draftContent, setDraftContent] = useState(note.content); // This updates instantly from textarea
   const [category, setCategory] = useState<NoteCategory>(note.category);
   const [tags, setTags] = useState(note.tags.join(', '));
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
@@ -174,10 +181,26 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [isGeneratingAudioSummary, setIsGeneratingAudioSummary] = useState(false);
   const [isTranslatingAudio, setIsTranslatingAudio] = useState(false);
 
+  // State to hold the public URL of the uploaded document file
+  const [uploadedDocumentPublicUrl, setUploadedDocumentPublicUrl] = useState<string | null>(null);
+
+
+  // Debounce effect for content
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setContent(draftContent);
+    }, 500); // Debounce for 500ms
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [draftContent]);
+
 
   useEffect(() => {
     setTitle(note.title);
     setContent(note.content);
+    setDraftContent(note.content); // Reset draftContent when note changes
     setCategory(note.category);
     setTags(note.tags.join(', '));
 
@@ -250,6 +273,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             toast.success('Audio processing completed!');
             // Update the note content and link to the newly created document
             setContent(audioResult.transcript || 'No transcription available.');
+            setDraftContent(audioResult.transcript || 'No transcription available.'); // Also update draftContent
             onNoteUpdate({
               ...note,
               content: audioResult.transcript || '', // Ensure content is updated in the note object
@@ -306,14 +330,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (pollInterval) clearInterval(pollInterval);
       toast.dismiss('audio-job-status');
     };
-  }, [audioProcessingJobId, userProfile, note, onNoteUpdate]);
+  }, [audioProcessingJobId, userProfile, note, onNoteUpdate, setDraftContent]);
 
 
   const handleSave = () => {
     const updatedNote: Note = {
       ...note,
       title: title || 'Untitled Note',
-      content,
+      content, // Use the debounced content
       category,
       tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
       updatedAt: new Date()
@@ -349,6 +373,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       }
 
       onNoteUpdate(newNote);
+      setContent(newNote.content); // Update debounced content
+      setDraftContent(newNote.content); // Update draft content
       toast.success('Note regenerated successfully!', { id: toastId });
     } catch (error) {
       let errorMessage = 'Failed to regenerate note.';
@@ -358,7 +384,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
         }
       } else if (error instanceof Error) {
-        errorMessage = `Failed to regenerate note: ${error.message}`;
+        errorMessage = error.message;
         if (error.message.includes("The model is overloaded")) {
           errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
         }
@@ -403,10 +429,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     // Proceed with document upload logic
     setIsUploading(true);
     setSelectedFile(file);
+    setUploadedDocumentPublicUrl(null); // Reset URL state
     const toastId = toast.loading('Uploading document...');
 
     try {
       const filePath = `${userProfile.id}/${Date.now()}_${file.name}`;
+      console.log('Uploading file to path:', filePath); // LOG
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(filePath, file);
@@ -421,6 +449,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (!urlData?.publicUrl) {
         throw new Error("Could not get public URL for the uploaded file.");
       }
+      console.log('Public URL generated:', urlData.publicUrl); // LOG
+      setUploadedDocumentPublicUrl(urlData.publicUrl); // Store the public URL
 
       const { data: extractionData, error: extractionError } = await supabase.functions.invoke('gemini-document-extractor', {
         body: {
@@ -446,6 +476,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         toast.dismiss(toastId);
       } else {
         // If no sections, generate note from full content
+        // Pass the stored public URL here
         await generateNoteFromExtractedContent(extractedContent, file.name, urlData.publicUrl, file.type, toastId.toString());
       }
 
@@ -490,7 +521,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           user_id: userProfile.id,
           title: fileName,
           file_name: fileName,
-          file_url: fileUrl,
+          file_url: fileUrl, // Use the passed fileUrl (which is the public URL from upload)
           content_extracted: contentToUse, // Store the extracted content
           file_type: fileType,
         })
@@ -498,6 +529,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         .single();
 
       if (docError || !newDocument) throw new Error(docError?.message || 'Failed to create document record.');
+      console.log('Document record created with ID:', newDocument.id, 'and URL:', fileUrl); // LOG
 
       const { data: newNote, error: generationError } = await supabase.functions.invoke('generate-note-from-document', {
         body: {
@@ -510,6 +542,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (generationError) throw new Error(generationError.message || 'Failed to generate note.');
 
       onNoteUpdate(newNote);
+      setContent(newNote.content); // Update debounced content
+      setDraftContent(newNote.content); // Update draft content
       toast.success('New note generated from document!', { id: toastId });
 
     } catch (error) {
@@ -533,20 +567,19 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setDocumentSections([]);
       setSelectedFile(null);
       setExtractedContent(null);
+      setUploadedDocumentPublicUrl(null); // Clear the stored URL after use
     }
   };
 
   const handleSectionSelect = async (section: string | null) => {
-    if (!selectedFile || !extractedContent || !userProfile) {
-      toast.error("Missing file or extracted content to generate note.");
+    if (!selectedFile || !extractedContent || !userProfile || !uploadedDocumentPublicUrl) {
+      toast.error("Missing file, extracted content, user profile, or uploaded document URL to generate note.");
       return;
     }
 
     const toastId = toast.loading(`Generating note from ${section ? `section: ${section}` : 'full document'}...`);
-    // Ensure the public URL is correctly retrieved for the selectedFile
-    const { data: urlData } = supabase.storage.from('documents').getPublicUrl(`${userProfile.id}/${Date.now()}_${selectedFile.name}`);
-
-    await generateNoteFromExtractedContent(extractedContent, selectedFile.name, urlData.publicUrl, selectedFile.type, toastId as string, section);
+    // Pass the already stored public URL
+    await generateNoteFromExtractedContent(extractedContent, selectedFile.name, uploadedDocumentPublicUrl, selectedFile.type, toastId as string, section);
   };
 
   const handleTextToSpeech = () => {
@@ -566,11 +599,51 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       return;
     }
 
-    const textToRead = content
-      .replace(/```mermaid[\s\S]*?```/g, '(A diagram is present here.)')
-      .replace(/###\s?.*?\s/g, '')
-      .replace(/\*\*|\*|_|`|~/g, '')
-      .replace(/(\r\n|\n|\r)/gm, " ");
+    // Function to process markdown and replace code blocks with descriptions
+    const processMarkdownForSpeech = (markdownContent: string): string => {
+      let processedText = markdownContent;
+
+      // Regular expression to find code blocks with language specifiers
+      // This covers ```lang ... ``` and also ``` ... ``` without lang
+      const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+      processedText = processedText.replace(codeBlockRegex, (match, lang, code) => {
+        const lowerLang = lang.toLowerCase();
+        if (lowerLang === 'mermaid') {
+          return '(A Mermaid diagram is present here.)';
+        } else if (lowerLang === 'dot') {
+          return '(A DOT graph is present here.)';
+        } else if (lowerLang === 'chartjs') {
+          return '(A Chart.js graph is present here.)';
+        } else if (lang) {
+          // For other programming languages
+          return `(A ${lang} code block is present here.)`;
+        } else {
+          // For generic code blocks without a specified language
+          return '(A code block is present here.)';
+        }
+      });
+
+      // Remove other common markdown formatting
+      processedText = processedText
+        .replace(/#{1,6}\s/g, '') // Remove headers (e.g., # Heading)
+        .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, '$1$2') // Bold (**text**, __text__)
+        .replace(/\*([^*]+)\*|_([^_]+)_/g, '$1$2') // Italic (*text*, _text_)
+        .replace(/`([^`]+)`/g, '$1') // Inline code (`code`)
+        .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Links ([text](url)) - keep text
+        .replace(/!\[([^\]]+)\]\([^\)]+\)/g, '(Image: $1)') // Images (![alt](url)) - describe image
+        .replace(/^- /gm, '') // List items (dashes)
+        .replace(/^\d+\. /gm, '') // List items (numbers)
+        .replace(/>\s/g, '') // Blockquotes
+        .replace(/\|/g, ' ') // Table pipes
+        .replace(/---/g, ' ') // Horizontal rules
+        .replace(/(\r\n|\n|\r)/gm, " ") // Replace newlines with spaces
+        .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
+        .trim(); // Trim leading/trailing whitespace
+
+      return processedText;
+    };
+
+    const textToRead = processMarkdownForSpeech(content);
 
     const utterance = new SpeechSynthesisUtterance(textToRead);
 
@@ -602,6 +675,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const toastId = toast.loading('Loading original document...');
 
     try {
+      console.log('Attempting to fetch document with ID:', note.document_id); // LOG
       const { data, error } = await supabase
         .from('documents')
         .select('content_extracted, file_url, file_type')
@@ -611,6 +685,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (error) throw new Error(error.message);
       if (!data) throw new Error('Document not found.');
 
+      console.log('Fetched document URL:', data.file_url); // LOG
       setOriginalDocumentContent(data.content_extracted);
       setOriginalDocumentFileType(data.file_type);
       setOriginalDocumentFileUrl(data.file_url);
@@ -724,6 +799,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const filePath = `${userProfile.id}/audio/${Date.now()}_${safeFileName}`;
+      console.log('Uploading audio file to path:', filePath); // LOG
 
       const { error: uploadError } = await supabase.storage
         .from('documents')
@@ -738,6 +814,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (!urlData?.publicUrl) {
         throw new Error("Could not get public URL for the uploaded audio file.");
       }
+      console.log('Public audio URL generated:', urlData.publicUrl); // LOG
 
       setUploadedAudioDetails({ url: urlData.publicUrl, type: file.type, name: file.name });
       setIsAudioOptionsVisible(true);
@@ -789,6 +866,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         .single();
 
       if (docError || !newDocument) throw new Error(docError?.message || 'Failed to create document record for audio.');
+      console.log('Audio document record created with ID:', newDocument.id, 'and URL:', uploadedAudioDetails.url); // LOG
 
       // Call the new background processing Edge Function, passing the new document_id
       const { data, error } = await supabase.functions.invoke('process-audio', {
@@ -996,22 +1074,34 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const codeContent = String(children).trim();
 
     // State for DOT graph rendering
-    const [svgContent, setSvgContent] = useState<string | null>(null);
+    const [dotSvgContent, setDotSvgContent] = useState<string | null>(null);
     const [dotError, setDotError] = useState<string | null>(null);
     const [isDotLoading, setIsDotLoading] = useState(false);
+    const dotContainerRef = useRef<HTMLDivElement>(null); // Ref for DOT graph container
 
+    // State for Chart.js rendering
+    const chartCanvasRef = useRef<HTMLCanvasElement>(null);
+    const chartInstanceRef = useRef<Chart | null>(null);
+    const [chartJsError, setChartJsError] = useState<string | null>(null);
+    const [isChartJsLoading, setIsChartJsLoading] = useState(false);
+    const chartContainerRef = useRef<HTMLDivElement>(null); // Ref for Chart.js container div
+
+
+    // Effect for DOT graph rendering - now automatic on codeContent change
     useEffect(() => {
       if (lang === 'dot' && codeContent) {
         setIsDotLoading(true);
         setDotError(null);
-        setSvgContent(null);
+        setDotSvgContent(null);
 
         const renderDot = async () => {
           try {
-            // Ensure graphviz is initialized (it's a promise)
+            // Ensure Graphviz WASM is loaded if it's not already
+            // This is typically handled by @hpcc-js/wasm itself or a global setup
+            // For safety, we can ensure the instance is new each time.
             const gv = await Graphviz.load();
             const svg = gv.layout(codeContent, 'svg', 'dot');
-            setSvgContent(svg);
+            setDotSvgContent(svg);
           } catch (e: any) {
             console.error("DOT rendering error:", e);
             setDotError(`Failed to render DOT graph: ${e.message || 'Invalid DOT syntax.'}`);
@@ -1020,7 +1110,75 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           }
         };
         renderDot();
+      } else if (lang === 'dot' && !codeContent) { // Clear if code content is empty
+        setDotSvgContent(null);
+        setDotError(null);
+        setIsDotLoading(false);
       }
+    }, [codeContent, lang]);
+
+    // Effect for Chart.js rendering - now automatic on codeContent change
+    useEffect(() => {
+      if (lang === 'chartjs' && codeContent) {
+        setIsChartJsLoading(true);
+        setChartJsError(null);
+
+        // Destroy existing chart instance before creating a new one
+        if (chartInstanceRef.current) {
+          chartInstanceRef.current.destroy();
+          chartInstanceRef.current = null;
+        }
+
+        try {
+          // Remove comments from Chart.js JSON before parsing
+          const cleanedCodeContent = codeContent.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
+          const chartConfig = JSON.parse(cleanedCodeContent);
+          if (chartCanvasRef.current) {
+            const ctx = chartCanvasRef.current.getContext('2d');
+            if (ctx) {
+              chartInstanceRef.current = new Chart(ctx, chartConfig);
+
+              // Add ResizeObserver for responsiveness
+              if (chartContainerRef.current) {
+                const resizeObserver = new ResizeObserver(() => {
+                  if (chartInstanceRef.current) {
+                    chartInstanceRef.current.resize(); // Chart.js has a resize method
+                  }
+                });
+                resizeObserver.observe(chartContainerRef.current);
+
+                // Cleanup ResizeObserver
+                return () => {
+                  resizeObserver.disconnect();
+                  if (chartInstanceRef.current) {
+                    chartInstanceRef.current.destroy();
+                    chartInstanceRef.current = null;
+                  }
+                };
+              }
+            }
+          }
+        } catch (e: any) {
+          console.error("Chart.js rendering error:", e);
+          setChartJsError(`Failed to render Chart.js graph: ${e.message || 'Invalid JSON configuration.'}`);
+        } finally {
+          setIsChartJsLoading(false);
+        }
+      } else if (lang === 'chartjs' && !codeContent) { // Clear if code content is empty
+        if (chartInstanceRef.current) {
+          chartInstanceRef.current.destroy();
+          chartInstanceRef.current = null;
+        }
+        setChartJsError(null);
+        setIsChartJsLoading(false);
+      }
+      // Cleanup function for Chart.js effect
+      return () => {
+        if (chartInstanceRef.current) {
+          chartInstanceRef.current.destroy();
+          chartInstanceRef.current = null;
+        }
+      };
     }, [codeContent, lang]);
 
 
@@ -1060,26 +1218,27 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     // Handle DOT diagrams
     if (!inline && lang === 'dot') {
       return (
-        <div className="my-4 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-              DOT Graph
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => copy(codeContent)}
-              className="h-6 w-6 p-0"
-            >
-              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            </Button>
-          </div>
-          {isDotLoading && (
-            <div className="flex items-center justify-center py-4 text-blue-600">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              <span>Rendering DOT graph...</span>
+        <div className="my-4 p-3 sm:p-4 bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                DOT Graph
+              </span>
             </div>
-          )}
+            <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => copy(codeContent)}
+                className="h-7 px-2 text-xs hover:bg-gray-100 whitespace-nowrap"
+                title="Copy source code"
+              >
+                {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-500" /> : <Copy className="h-3 w-3 sm:mr-1" />}
+                <span className="hidden sm:inline">Copy</span>
+              </Button>
+            </div>
+          </div>
+
           {dotError && (
             <div className="my-2 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
               <AlertTriangle className="inline h-4 w-4 mr-2" />
@@ -1087,21 +1246,83 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               <pre className="mt-2 text-xs text-red-600 overflow-x-auto">{codeContent}</pre>
             </div>
           )}
-          {svgContent && (
-            <div
-              className="dot-graph-container overflow-x-auto overflow-y-hidden p-2"
-              dangerouslySetInnerHTML={{ __html: svgContent }}
-            />
-          )}
-          {!isDotLoading && !dotError && !svgContent && (
-            <p className="text-sm text-gray-500 text-center py-4">No DOT graph content to display or invalid syntax.</p>
-          )}
+
+          {/* Always render the container for the DOT graph */}
+          <div ref={dotContainerRef} className="relative w-full h-80 bg-white p-4 rounded-lg shadow-inner flex items-center justify-center">
+            {isDotLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>
+            )}
+            {dotSvgContent && (
+              <div
+                className="dot-graph-container overflow-x-auto overflow-y-hidden p-2 w-full h-full"
+                dangerouslySetInnerHTML={{ __html: dotSvgContent }}
+              />
+            )}
+            {!isDotLoading && !dotError && !dotSvgContent && (
+              <p className="text-sm text-gray-500">Enter DOT graph code to render.</p>
+            )}
+          </div>
         </div>
       );
     }
 
-    // Handle code blocks with syntax highlighting
+    // Handle Chart.js diagrams
+    if (!inline && lang === 'chartjs') {
+      return (
+        <div className="my-4 p-3 sm:p-4 bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Chart.js Graph
+              </span>
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => copy(codeContent)}
+                className="h-7 px-2 text-xs hover:bg-gray-100 whitespace-nowrap"
+                title="Copy source code"
+              >
+                {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-500" /> : <Copy className="h-3 w-3 sm:mr-1" />}
+                <span className="hidden sm:inline">Copy</span>
+              </Button>
+            </div>
+          </div>
+
+          {chartJsError && (
+            <div className="my-2 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+              <AlertTriangle className="inline h-4 w-4 mr-2" />
+              {chartJsError}
+              <pre className="mt-2 text-xs text-red-600 overflow-x-auto">{codeContent}</pre>
+            </div>
+          )}
+
+          {/* Always render the canvas for the Chart.js graph */}
+          <div ref={chartContainerRef} className="relative w-full h-80 bg-white p-4 rounded-lg shadow-inner flex items-center justify-center">
+            {isChartJsLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>
+            )}
+            {/* The canvas element is always present here */}
+            <canvas ref={chartCanvasRef}></canvas>
+            {!isChartJsLoading && !chartJsError && !codeContent && (
+              <p className="text-sm text-gray-500">Enter Chart.js configuration to render.</p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // Handle code blocks with syntax highlighting (including 'text' and 'plaintext')
     if (!inline && lang) {
+      // For 'text' or 'plaintext', we don't apply syntax highlighting, just preserve whitespace
+      const isPlainText = lang === 'text' || lang === 'plaintext';
+      const renderedCode = isPlainText ? escapeHtml(codeContent) : highlightCode(codeContent, lang); // Use highlightCode
+
       return (
         <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-200">
           {/* Header with language badge and copy button */}
@@ -1132,7 +1353,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               <code
                 className="text-gray-800"
                 dangerouslySetInnerHTML={{
-                  __html: highlightCode(codeContent, lang)
+                  __html: renderedCode
                 }}
               />
             </pre>
@@ -1411,7 +1632,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     text-slate-600 hover:bg-slate-50
                     ${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
-                  onClick={handleMobileMenuClose} // Close menu on click
+                  // Removed onClick={handleMobileMenuClose}
                 >
                   {isUploading ? (
                     <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1429,7 +1650,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     text-slate-600 hover:bg-slate-50
                     ${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
-                  onClick={handleMobileMenuClose} // Close menu on click
+                  // Removed onClick={handleMobileMenuClose}
                 >
                   {isProcessingAudio ? (
                     <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1741,14 +1962,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         {/* Editor/Preview Area */}
         {isEditing ? (
           // Split view: Textarea on left, ReactMarkdown preview on right
-          <div className="flex-1 p-3 sm:p-6 flex flex-col lg:flex-row gap-4 overflow-y-auto min-w-0">
+          <div className="flex-1 p-3 sm:p-6 flex flex-col lg:flex-row gap-4 modern-scrollbar overflow-y-auto min-w-0">
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Start writing your note here..."
               className="flex-1 resize-none border shadow-sm focus-visible:ring-0 text-base leading-relaxed bg-white min-h-[50vh] lg:min-h-0 border-slate-200"
             />
-            <div className="flex-1 prose prose-sm max-w-none text-slate-700 leading-relaxed overflow-y-auto min-h-[50vh] lg:min-h-0 border rounded-md p-4 shadow-sm bg-white border-slate-200" id="note-preview-content">
+            <div className="flex-1 prose prose-sm max-w-none text-slate-700 leading-relaxed modern-scrollbar overflow-y-auto min-h-[50vh] lg:min-h-0 border rounded-md p-4 shadow-sm bg-white border-slate-200" id="note-preview-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
@@ -1780,7 +2001,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         ) : (
           // Full preview mode
           <div className="flex-1 p-3 sm:p-6 flex flex-col overflow-y-auto min-w-0">
-            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed flex-1 overflow-y-auto min-h-0" id="note-preview-content">
+            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed flex-1 modern-scrollbar overflow-y-auto min-h-0" id="note-preview-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
@@ -1840,7 +2061,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                   {isSummaryVisible ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                 </Button>
               </div>
-              <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed overflow-y-auto flex-1">
+              <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed modern-scrollbar overflow-y-auto flex-1">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}

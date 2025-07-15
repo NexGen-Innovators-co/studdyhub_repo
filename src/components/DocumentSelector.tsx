@@ -1,3 +1,4 @@
+// DocumentSelector.tsx
 import React, { useState } from 'react';
 import { FileText, Check, X, Search } from 'lucide-react';
 import { Button } from './ui/button';
@@ -56,8 +57,8 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 sm:p-6"> {/* Responsive padding */}
-      <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-lg shadow-xl"> {/* Increased max-h, added rounded-lg, shadow-xl */}
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center overflow-y-auto justify-center p-4 sm:p-6" onClick={onClose}>
+      <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-lg shadow-xl" onClick={(e) => e.stopPropagation()}> {/* Added onClick to stop propagation */}
         <CardContent className="p-4 sm:p-6 flex flex-col h-full"> {/* Responsive padding */}
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-slate-800">Select Documents & Notes</h3>
@@ -88,7 +89,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
             </Badge>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-4 pr-2"> {/* Added pr-2 for scrollbar spacing */}
+          <div className="flex-1 max-h-[calc(90vh-200px)] overflow-y-scroll space-y-4 pr-2"> {/* Adjusted max-h for better fit */}
             {filteredDocuments.length > 0 && (
               <div>
                 <h4 className="font-medium text-sm text-slate-500 mb-2">Documents</h4> {/* Changed to text-slate-500 */}
@@ -170,14 +171,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
             )}
           </div>
 
-          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-200"> {/* Added border-slate-200 */}
-            <Button variant="outline" onClick={onClose} className="text-slate-600 border-slate-200 hover:bg-slate-50">
-              Cancel
-            </Button>
-            <Button onClick={onClose} className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700"> {/* Added gradient and shadow */}
-              Apply Selection
-            </Button>
-          </div>
+          
         </CardContent>
       </Card>
     </div>
