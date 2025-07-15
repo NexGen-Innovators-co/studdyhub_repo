@@ -5,9 +5,6 @@ import { Document, UserProfile } from '../types/Document';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// Define a union type for all possible application tabs
-type AppTab = 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'sitemap';
-
 export const useAppData = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [recordings, setRecordings] = useState<ClassRecording[]>([]);
@@ -19,8 +16,7 @@ export const useAppData = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  // Updated activeTab type to include 'sitemap'
-  const [activeTab, setActiveTab] = useState<AppTab>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -284,7 +280,7 @@ export const useAppData = () => {
     setSearchQuery,
     setSelectedCategory,
     setIsSidebarOpen,
-    setActiveTab, // Now correctly typed as Dispatch<SetStateAction<AppTab>>
+    setActiveTab,
     setIsAILoading,
     
     // Functions
