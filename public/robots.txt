@@ -1,4 +1,5 @@
 User-agent: Googlebot
+User-agent: Googlebot
 Allow: /
 
 User-agent: Bingbot
@@ -12,3 +13,5 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+Sitemap: https://www.google.com/url?sa=E&source=gmail&q=https://notemind.lovable.app/sitemap.xml
