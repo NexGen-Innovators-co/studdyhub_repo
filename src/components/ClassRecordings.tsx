@@ -9,6 +9,7 @@ import { formatDate } from '../utils/helpers';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { generateId } from '../utils/helpers';
+import { FunctionsHttpError } from '@supabase/supabase-js'; // Import FunctionsHttpError
 
 interface ClassRecordingsProps {
   recordings?: ClassRecording[]; // Make optional with default
@@ -26,7 +27,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   const [selectedRecording, setSelectedRecording] = useState<ClassRecording | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
-  const [uploadedAudioDetails, setUploadedAudioDetails] = useState<{ url: string; type: string; name: string; } | null>(null);
+  // Updated type for uploadedAudioDetails to always include document_id
+  const [uploadedAudioDetails, setUploadedAudioDetails] = useState<{ url: string; type: string; name: string; document_id: string; } | null>(null);
   const [isAudioOptionsVisible, setIsAudioOptionsVisible] = useState(false);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const audioPlayerRef = useRef<HTMLAudioElement>(null);
@@ -47,9 +49,9 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const fileName = `${user.id}/${generateId()}-${title}.webm`;
+      const fileName = `${user.id}/recordings/${generateId()}-${title}.webm`; // Changed path to recordings subfolder
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('documents')
+        .from('documents') // Assuming 'documents' bucket is used for all user files
         .upload(fileName, audioBlob);
 
       if (uploadError) throw uploadError;
@@ -68,18 +70,34 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       const duration = await durationPromise;
       URL.revokeObjectURL(audioUrl);
 
+      // Create a document record for the audio file
+      const { data: newDocument, error: docError } = await supabase
+        .from('documents')
+        .insert({
+          user_id: user.id,
+          title: `Class Recording: ${title}`,
+          file_name: `${title}.webm`,
+          file_url: publicUrl,
+          content_extracted: 'Processing audio for content...', // Placeholder
+          file_type: 'audio/webm',
+        })
+        .select('id')
+        .single();
+
+      if (docError || !newDocument) throw new Error(docError?.message || 'Failed to create document record for audio.');
+
       const newRecording: ClassRecording = {
         id: generateId(),
         title,
         subject,
         audioUrl: publicUrl,
-        transcript: '',
-        summary: '',
+        transcript: '', // Will be updated by polling
+        summary: '',     // Will be updated by polling
         duration: Math.floor(duration), // Correct duration in seconds
         date: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         userId: user.id,
-        document_id: null
+        document_id: newDocument.id // Link to the document
       };
 
       const { error: insertError } = await supabase
@@ -101,12 +119,18 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       if (insertError) throw new Error(`Failed to save recording to database: ${insertError.message}`);
 
       onAddRecording(newRecording);
-      toast.success('Recording saved, initiating processing...');
+      toast.success('Recording saved, initiating AI processing...');
 
-      // Automate note generation
-      await handleGenerateNoteFromAudio(newRecording);
+      // Trigger the AI processing for transcription and summary
+      await triggerAudioProcessing(publicUrl, newDocument.id, user.id);
+
     } catch (error) {
-      toast.error('Failed to process recording');
+      let errorMessage = 'Failed to process recording.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      toast.error(errorMessage);
+      console.error('Error in handleRecordingComplete:', error);
     } finally {
       setIsProcessing(false);
     }
@@ -114,6 +138,44 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
   const triggerAudioUpload = () => {
     audioInputRef.current?.click();
+  };
+
+  // Centralized function to trigger audio processing Edge Function
+  const triggerAudioProcessing = async (fileUrl: string, documentId: string, userId: string, targetLang: string = 'en') => {
+    setIsProcessingAudio(true);
+    const toastId = toast.loading('Sending audio for AI processing (transcription, summary)...');
+    try {
+      const { data, error } = await supabase.functions.invoke('gemini-audio-processor', {
+        body: {
+          file_url: fileUrl,
+          target_language: targetLang,
+          user_id: userId,
+          document_id: documentId,
+        },
+      });
+
+      if (error) throw error;
+      if (!data || !data.job_id) throw new Error('No job ID received from audio processor.');
+
+      setAudioProcessingJobId(data.job_id);
+      toast.success('Audio processing job started. You will be notified when it\'s complete.', { id: toastId });
+    } catch (error) {
+      let errorMessage = 'Failed to start audio processing.';
+      if (error instanceof FunctionsHttpError) {
+        errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
+        if (error.message.includes("The model is overloaded")) {
+          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+        if (error.message.includes("The model is overloaded")) {
+          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+        }
+      }
+      toast.error(errorMessage, { id: toastId });
+      console.error('Error initiating audio processing:', error);
+      setIsProcessingAudio(false); // Ensure loading state is reset on error
+    }
   };
 
   const handleAudioFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -141,7 +203,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
     try {
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const filePath = `${user.id}/audio/${generateId()}_${safeFileName}`;
+      const filePath = `${user.id}/recordings/${generateId()}_${safeFileName}`; // Consistent path
+      console.log('Uploading audio file to path:', filePath);
 
       const { error: uploadError } = await supabase.storage
         .from('documents')
@@ -156,37 +219,41 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       if (!urlData?.publicUrl) {
         throw new Error('Could not get public URL for the uploaded audio file.');
       }
+      console.log('Public audio URL generated:', urlData.publicUrl);
 
+      // Create a new document entry for the audio file first
       const { data: newDocument, error: docError } = await supabase
         .from('documents')
         .insert({
           user_id: user.id,
-          title: `Audio Recording: ${file.name}`,
+          title: `Uploaded Audio: ${file.name}`,
           file_name: file.name,
           file_url: urlData.publicUrl,
-          content_extracted: 'Processing audio for content...',
+          content_extracted: 'Processing audio for content...', // Placeholder
           file_type: file.type,
         })
         .select('id')
         .single();
 
       if (docError || !newDocument) throw new Error(docError?.message || 'Failed to create document record for audio.');
+      console.log('Audio document record created with ID:', newDocument.id);
 
+      // Create a new ClassRecording entry (initially with empty transcript/summary)
       const newRecording: ClassRecording = {
         id: generateId(),
-        title: `Audio Recording: ${file.name}`,
+        title: `Uploaded Audio: ${file.name}`,
         subject: 'Uploaded Audio',
         audioUrl: urlData.publicUrl,
-        transcript: '',
-        summary: '',
-        duration: 0,
+        transcript: '', // Will be filled by polling
+        summary: '',     // Will be filled by polling
+        duration: 0, // Will be updated if we can get it from metadata
         date: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         userId: user.id,
         document_id: newDocument.id
       };
 
-      const { error: insertError } = await supabase
+      const { error: insertRecordingError } = await supabase
         .from('class_recordings')
         .insert({
           id: newRecording.id,
@@ -202,13 +269,17 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
           document_id: newRecording.document_id
         });
 
-      if (insertError) throw new Error(`Failed to save recording to database: ${insertError.message}`);
+      if (insertRecordingError) throw new Error(`Failed to save recording to database: ${insertRecordingError.message}`);
 
-      setUploadedAudioDetails({ url: urlData.publicUrl, type: file.type, name: file.name });
+      // Set uploadedAudioDetails with the document_id
+      setUploadedAudioDetails({ url: urlData.publicUrl, type: file.type, name: file.name, document_id: newDocument.id });
       setIsAudioOptionsVisible(true);
-      toast.success('Audio file uploaded. Choose an action.', { id: toastId });
+      toast.success('Audio file uploaded. Initiating AI processing...', { id: toastId });
+      onAddRecording(newRecording); // Add the new recording to the state immediately
 
-      onAddRecording(newRecording);
+      // Now trigger the AI processing for this newly uploaded audio
+      await triggerAudioProcessing(urlData.publicUrl, newDocument.id, user.id);
+
     } catch (error) {
       let errorMessage = 'An unknown error occurred during audio upload.';
       if (error instanceof Error) {
@@ -217,17 +288,19 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       toast.error(errorMessage, { id: toastId });
       console.error('Error during audio upload:', error);
     } finally {
-      setIsProcessingAudio(false);
+      // setIsProcessingAudio(false); // Keep true until AI processing is done via polling
       if (event.target) event.target.value = '';
     }
   };
 
   const handleGenerateNoteFromAudio = async (recording?: ClassRecording) => {
+    // Ensure audioDetails always has document_id
     const audioDetails = recording 
-      ? { url: recording.audioUrl, type: 'audio/webm', name: recording.title } 
+      ? { url: recording.audioUrl, type: 'audio/webm', name: recording.title, document_id: recording.document_id || '' } 
       : uploadedAudioDetails;
-    if (!audioDetails) {
-      toast.error('No audio uploaded.');
+
+    if (!audioDetails || !audioDetails.document_id) { // Ensure document_id is present
+      toast.error('No audio uploaded or linked document ID missing.');
       return;
     }
 
@@ -238,56 +311,101 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     }
 
     setIsGeneratingNote(true);
-    const toastId = toast.loading('Initiating note generation from audio...');
+    const toastId = toast.loading('Initiating full note generation from audio...');
 
     try {
-      let documentId: string | undefined;
-      const { data: existingDocument } = await supabase
+      // Check if the document already has content_extracted. If so, we can use it directly.
+      const { data: documentData, error: docFetchError } = await supabase
         .from('documents')
-        .select('id')
-        .eq('file_url', audioDetails.url)
-        .eq('user_id', user.id)
+        .select('content_extracted')
+        .eq('id', audioDetails.document_id)
         .single();
 
-      if (!existingDocument) {
-        const { data: newDocument, error: docError } = await supabase
-          .from('documents')
-          .insert({
-            user_id: user.id,
-            title: `Audio Recording: ${audioDetails.name}`,
-            file_name: audioDetails.name,
-            file_url: audioDetails.url,
-            content_extracted: 'Processing audio for content...',
-            file_type: audioDetails.type,
-          })
-          .select('id')
-          .single();
-        if (docError || !newDocument) throw new Error(docError?.message || 'Failed to create document record for audio.');
-        documentId = newDocument.id;
-      } else {
-        documentId = existingDocument.id;
+      let contentToUse = documentData?.content_extracted || '';
+
+      // If content_extracted is empty or placeholder, trigger audio processing first
+      if (!contentToUse || contentToUse === 'Processing audio for content...') {
+        toast.loading('Audio content not yet extracted. Processing audio first...', { id: toastId });
+        // This will trigger the polling useEffect to update the document and recording
+        await triggerAudioProcessing(audioDetails.url, audioDetails.document_id, user.id, targetLanguage);
+        // We'll rely on the polling mechanism to update the note once audio processing is complete.
+        // The rest of this function will be handled by the polling success path.
+        return; 
       }
 
-      const { data, error } = await supabase.functions.invoke('gemini-audio-processor', {
+      // If content is already extracted, proceed with note generation directly
+      const { data: newNote, error: generationError } = await supabase.functions.invoke('generate-note-from-document', {
         body: {
-          file_url: audioDetails.url,
-          target_language: targetLanguage,
-          user_id: user.id,
-          document_id: documentId,
+          documentId: audioDetails.document_id,
+          userProfile: { // Placeholder user profile, ideally fetched from context/state
+            learning_style: 'visual',
+            learning_preferences: {
+              explanation_style: 'detailed and comprehensive',
+              examples: true,
+              difficulty: 'intermediate'
+            }
+          },
+          selectedSection: null, // For full audio, no specific section
         },
       });
 
-      if (error) throw error;
-      if (!data || !data.job_id) throw new Error('No job ID received from audio processor.');
+      if (generationError) throw new Error(generationError.message || 'Failed to generate note.');
 
-      setAudioProcessingJobId(data.job_id);
-      toast.success('Audio processing job started. You will be notified when it\'s complete.', { id: toastId });
-      setIsProcessingAudio(true);
+      // Update the existing recording with the generated note content
+      const { error: updateError } = await supabase
+        .from('class_recordings')
+        .update({
+          transcript: newNote.content, // Assuming the generated note content can serve as an updated transcript
+          summary: newNote.ai_summary,
+        })
+        .eq('document_id', audioDetails.document_id) // Use document_id for update
+        .eq('user_id', user.id);
+
+      if (updateError) {
+        console.error('Failed to update class recording with generated note:', updateError.message);
+        toast.error('Note generated, but failed to update recording details.', { id: toastId });
+      } else {
+        toast.success('Note generated and recording updated!', { id: toastId });
+        // Manually update the state of recordings to reflect the change
+        // Fetch the updated recording to ensure all fields are correct before passing to onAddRecording
+        const { data: fetchedRecording, error: fetchError } = await supabase
+          .from('class_recordings')
+          .select('*')
+          .eq('document_id', audioDetails.document_id)
+          .eq('user_id', user.id)
+          .single();
+
+        if (fetchedRecording && !fetchError) {
+            // Map snake_case to camelCase for ClassRecording type
+            const updatedRecording: ClassRecording = {
+                id: fetchedRecording.id,
+                title: fetchedRecording.title,
+                subject: fetchedRecording.subject,
+                audioUrl: fetchedRecording.audio_url,
+                transcript: fetchedRecording.transcript,
+                summary: fetchedRecording.summary,
+                duration: fetchedRecording.duration,
+                date: fetchedRecording.date,
+                createdAt: fetchedRecording.created_at, // Map here
+                userId: fetchedRecording.user_id, // Map here
+                document_id: fetchedRecording.document_id
+            };
+            onAddRecording(updatedRecording);
+        } else {
+            console.error('Failed to refetch updated recording:', fetchError?.message);
+        }
+      }
+
     } catch (error) {
       let errorMessage = 'Failed to start audio note generation.';
-      if (error instanceof Error) {
-        errorMessage = error.message;
+      if (error instanceof FunctionsHttpError) {
+        errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
         if (error.message.includes('The model is overloaded')) {
+          errorMessage = 'AI model is currently overloaded. Please try again in a few moments.';
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+        if (errorMessage.includes('The model is overloaded')) {
           errorMessage = 'AI model is currently overloaded. Please try again in a few moments.';
         }
       }
@@ -297,6 +415,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       setIsGeneratingNote(false);
     }
   };
+
 
   useEffect(() => {
     let pollInterval: NodeJS.Timeout | null = null;
@@ -322,39 +441,59 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         if (data) {
           if (data.status === 'completed') {
             toast.success('Audio processing completed!');
-            const newRecording: ClassRecording = {
-              id: generateId(),
-              title: `Audio Note: ${uploadedAudioDetails?.name || 'Untitled'}`,
-              subject: 'Uploaded Audio',
-              audioUrl: uploadedAudioDetails?.url || null,
-              transcript: data.transcript || '',
-              summary: data.summary || '',
-              duration: 0,
-              date: new Date().toISOString(),
-              createdAt: new Date().toISOString(),
-              userId: user.id,
-              document_id: data.document_id || null
-            };
-
-            const { error: insertError } = await supabase
+            // Update the corresponding ClassRecording and Document
+            const { error: updateRecordingError } = await supabase
               .from('class_recordings')
-              .insert({
-                id: newRecording.id,
-                user_id: newRecording.userId,
-                title: newRecording.title,
-                audio_url: newRecording.audioUrl,
-                transcript: newRecording.transcript,
-                summary: newRecording.summary,
-                duration: newRecording.duration,
-                subject: newRecording.subject,
-                date: newRecording.date,
-                created_at: newRecording.createdAt,
-                document_id: newRecording.document_id
-              });
+              .update({
+                transcript: data.transcript || '',
+                summary: data.summary || '',
+              })
+              .eq('document_id', data.document_id)
+              .eq('user_id', user.id);
 
-            if (insertError) throw new Error(`Failed to save recording to database: ${insertError.message}`);
+            if (updateRecordingError) {
+              console.error('Failed to update class recording after processing:', updateRecordingError.message);
+            }
 
-            onAddRecording(newRecording);
+            // Update the content_extracted in the documents table
+            const { error: updateDocumentError } = await supabase
+              .from('documents')
+              .update({
+                content_extracted: data.transcript || '', // Store transcript as extracted content
+              })
+              .eq('id', data.document_id)
+              .eq('user_id', user.id);
+
+            if (updateDocumentError) {
+              console.error('Failed to update document content_extracted after processing:', updateDocumentError.message);
+            }
+
+            // Find the updated recording and trigger onAddRecording to refresh UI
+            const { data: updatedRecording, error: fetchUpdatedRecordingError } = await supabase
+              .from('class_recordings')
+              .select('*')
+              .eq('document_id', data.document_id)
+              .eq('user_id', user.id)
+              .single();
+
+            if (updatedRecording && !fetchUpdatedRecordingError) {
+              // Map snake_case to camelCase for ClassRecording type
+              const mappedRecording: ClassRecording = {
+                  id: updatedRecording.id,
+                  title: updatedRecording.title,
+                  subject: updatedRecording.subject,
+                  audioUrl: updatedRecording.audio_url,
+                  transcript: updatedRecording.transcript,
+                  summary: updatedRecording.summary,
+                  duration: updatedRecording.duration,
+                  date: updatedRecording.date,
+                  createdAt: updatedRecording.created_at, // Map here
+                  userId: updatedRecording.user_id, // Map here
+                  document_id: updatedRecording.document_id
+              };
+              onAddRecording(mappedRecording); // This will re-add/update the recording in the parent state
+            }
+
             setTranslatedContent(data.translated_content || null);
             setAudioProcessingJobId(null);
             setIsProcessingAudio(false);
@@ -396,7 +535,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       if (pollInterval) clearInterval(pollInterval);
       toast.dismiss('audio-job-status');
     };
-  }, [audioProcessingJobId, onAddRecording, uploadedAudioDetails]);
+  }, [audioProcessingJobId, onAddRecording]); // Removed uploadedAudioDetails from dependencies as it's not directly used here
 
   const handlePlayAudio = () => {
     if (audioPlayerRef.current && uploadedAudioDetails) {

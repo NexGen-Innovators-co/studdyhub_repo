@@ -1,5 +1,6 @@
+// Index.tsx
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'; // Import Routes, Route, useLocation
+import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { TabContent } from '../components/TabContent';
@@ -13,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Message } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
+import { User } from '@supabase/supabase-js'; // Import User type
 
 interface ChatSession {
   id: string;
@@ -31,7 +33,7 @@ const CHAT_MESSAGES_PER_PAGE = 20; // Load 20 messages at a time
 const Index = () => {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation(); // Get current location
+  const location = useLocation();
 
   const {
     notes,
@@ -66,7 +68,7 @@ const Index = () => {
   const [activeChatSessionId, setActiveChatSessionId] = useState<string | null>(null);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
-  const [isSubmittingUserMessage, setIsSubmittingUserMessage] = useState(false);
+  const [isSubmittingUserMessage, setIsSubmittingUserMessage] = useState(false); // State to prevent double submission
 
   // Pagination states for chat sessions
   const [chatSessionsLoadedCount, setChatSessionsLoadedCount] = useState(CHAT_SESSIONS_PER_PAGE);
@@ -218,11 +220,14 @@ const Index = () => {
   }, [activeChatSessionId, chatSessions]);
 
   const createNewChatSession = useCallback(async (): Promise<string | null> => {
+    console.log('createNewChatSession: Attempting to create new session...');
     try {
       if (!user) {
+        console.log('createNewChatSession: User is null, cannot create session.');
         toast.error('Please sign in to create a new chat session.');
         return null;
       }
+      console.log('createNewChatSession: User ID for new session:', user.id);
 
       const { data, error } = await supabase
         .from('chat_sessions')
@@ -235,11 +240,12 @@ const Index = () => {
         .single();
 
       if (error) {
-        console.error('Database error creating session:', error);
+        console.error('createNewChatSession: Database error creating session:', error);
         throw error;
       }
 
       if (!data) {
+        console.error('createNewChatSession: No data returned from session creation');
         throw new Error('No data returned from session creation');
       }
 
@@ -252,20 +258,22 @@ const Index = () => {
         document_ids: data.document_ids || [],
       };
 
+      console.log('createNewChatSession: New session created with ID:', newSession.id);
+
       // Reset loaded count to ensure new session appears at top of list
       setChatSessionsLoadedCount(CHAT_SESSIONS_PER_PAGE);
       // Reload sessions to reflect the new session immediately
       await loadChatSessions();
+      console.log('createNewChatSession: Chat sessions reloaded.');
 
       setActiveChatSessionId(newSession.id);
       setChatMessages([]);
       setHasMoreMessages(false); // New chat, no older messages yet
-
-      toast.success('New chat session created!');
+      console.log('createNewChatSession: Active chat session ID set to:', newSession.id);
 
       return newSession.id;
     } catch (error: any) {
-      console.error('Error creating new session:', error);
+      console.error('createNewChatSession: Error creating new session:', error);
       toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
       return null;
     }
@@ -381,8 +389,11 @@ const Index = () => {
     return context;
   }, []);
 
-  const _getAIResponse = useCallback(async (userMessageContent: string, aiMessageIdToUpdate: string | null = null) => {
-    if (!user || !activeChatSessionId) {
+  // Modified _getAIResponse to accept sessionId as an argument
+  const _getAIResponse = useCallback(async (userMessageContent: string, currentUser: User, sessionId: string, aiMessageIdToUpdate: string | null = null) => {
+    console.log('_getAIResponse: Called with currentUser:', currentUser?.id, 'sessionId:', sessionId);
+    if (!currentUser || !sessionId) { // Use sessionId argument here
+      console.error('_getAIResponse: Authentication or active session missing. currentUser:', currentUser, 'sessionId:', sessionId);
       toast.error('Authentication required or no active chat session.');
       return;
     }
@@ -398,11 +409,12 @@ const Index = () => {
         return true;
       });
 
+      console.log('_getAIResponse: Invoking gemini-chat function...');
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
           message: userMessageContent,
-          userId: user.id,
-          sessionId: activeChatSessionId,
+          userId: currentUser.id, // Use currentUser.id
+          sessionId: sessionId, // Use sessionId argument here
           learningStyle: userProfile?.learning_style || 'visual',
           learningPreferences: userProfile?.learning_preferences || {
             explanation_style: userProfile?.learning_preferences?.explanation_style || 'detailed',
@@ -415,15 +427,20 @@ const Index = () => {
       });
 
       if (error) {
+        console.error('_getAIResponse: AI service error:', error);
         throw new Error(`AI service error: ${error.message}`);
       }
 
       const aiResponseContent = data.response;
       if (!aiResponseContent) {
+        console.error('_getAIResponse: Empty response from AI service');
         throw new Error('Empty response from AI service');
       }
 
+      console.log('_getAIResponse: AI response received. Content length:', aiResponseContent.length);
+
       if (aiMessageIdToUpdate) {
+        console.log('_getAIResponse: Updating existing AI message with ID:', aiMessageIdToUpdate);
         const { error: updateDbError } = await supabase
           .from('chat_messages')
           .update({
@@ -432,12 +449,13 @@ const Index = () => {
             is_error: false,
           })
           .eq('id', aiMessageIdToUpdate)
-          .eq('session_id', activeChatSessionId);
+          .eq('session_id', sessionId); // Use sessionId argument here
 
         if (updateDbError) {
-          console.error('Error updating AI message:', updateDbError);
+          console.error('_getAIResponse: Error updating AI message:', updateDbError);
           throw new Error('Failed to save AI response');
         }
+        console.log('_getAIResponse: AI message updated in DB.');
 
         setChatMessages(prev =>
           prev.map(msg =>
@@ -447,11 +465,12 @@ const Index = () => {
           )
         );
       } else {
+        console.log('_getAIResponse: Inserting new AI message...');
         const { data: newAiMessageData, error: insertDbError } = await supabase
           .from('chat_messages')
           .insert({
-            session_id: activeChatSessionId,
-            user_id: user.id,
+            session_id: sessionId, // Use sessionId argument here
+            user_id: currentUser.id, // Use currentUser.id
             content: aiResponseContent,
             role: 'assistant',
             timestamp: new Date().toISOString(),
@@ -461,9 +480,10 @@ const Index = () => {
           .single();
 
         if (insertDbError) {
-          console.error('Error inserting AI message:', insertDbError);
+          console.error('_getAIResponse: Error inserting AI message:', insertDbError);
           throw new Error('Failed to save AI response');
         }
+        console.log('_getAIResponse: New AI message inserted with ID:', newAiMessageData?.id);
 
         const newAiMessage: Message = {
           id: newAiMessageData?.id || crypto.randomUUID(),
@@ -475,28 +495,30 @@ const Index = () => {
         setChatMessages(prev => [...(prev || []), newAiMessage]);
       }
 
+      console.log('_getAIResponse: Updating chat session last_message_at...');
       const { error: updateSessionError } = await supabase
         .from('chat_sessions')
         .update({
           last_message_at: new Date().toISOString(),
           document_ids: selectedDocumentIds,
         })
-        .eq('id', activeChatSessionId);
+        .eq('id', sessionId); // Use sessionId argument here
 
       if (updateSessionError) {
-        console.error('Error updating session:', updateSessionError);
+        console.error('_getAIResponse: Error updating session:', updateSessionError);
       }
+      console.log('_getAIResponse: Chat session updated.');
 
       setChatSessions(prev => {
         const updated = prev.map(session =>
-          session.id === activeChatSessionId
+          session.id === sessionId // Use sessionId argument here
             ? { ...session, last_message_at: new Date().toISOString(), document_ids: selectedDocumentIds }
             : session
         );
         return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
       });
     } catch (error: any) {
-      console.error('Error in _getAIResponse:', error);
+      console.error('_getAIResponse: Caught error:', error);
       toast.error(`Failed to get AI response: ${error.message || 'Unknown error'}`);
 
       if (aiMessageIdToUpdate) {
@@ -525,13 +547,18 @@ const Index = () => {
       }
     } finally {
       setIsAILoading(false);
+      console.log('_getAIResponse: Finished, isAILoading set to false.');
     }
-  }, [user, activeChatSessionId, setIsAILoading, buildRichContext, selectedDocumentIds, documents, notes, chatMessages, userProfile, setChatMessages, setChatSessions]);
+  }, [setIsAILoading, buildRichContext, selectedDocumentIds, documents, notes, chatMessages, userProfile, setChatMessages, setChatSessions]); // Removed activeChatSessionId from dependencies
 
   const validateActiveSession = useCallback(async (): Promise<boolean> => {
-    if (!activeChatSessionId) return false;
+    if (!activeChatSessionId) {
+      console.log('validateActiveSession: No activeChatSessionId, returning false.');
+      return false;
+    }
 
     try {
+      console.log('validateActiveSession: Checking session ID:', activeChatSessionId, 'for user:', user?.id);
       const { data, error } = await supabase
         .from('chat_sessions')
         .select('id')
@@ -540,66 +567,71 @@ const Index = () => {
         .single();
 
       if (error || !data) {
-        console.log('Active session no longer exists');
+        console.log('validateActiveSession: Active session no longer exists or unauthorized. Error:', error);
         setActiveChatSessionId(null);
         setChatMessages([]);
         setHasMoreMessages(false); // No active session, no more messages
         return false;
       }
-
+      console.log('validateActiveSession: Session is valid.');
       return true;
     } catch (error) {
-      console.error('Error validating session:', error);
+      console.error('validateActiveSession: Error validating session:', error);
       return false;
     }
   }, [activeChatSessionId, user, setActiveChatSessionId, setChatMessages]);
 
   const handleSubmit = useCallback(async (messageContent: string) => {
-    if (!messageContent.trim() || isAILoading) return;
+    console.log('handleSubmit: Initiated with message:', messageContent);
+    console.log('handleSubmit: Current isAILoading:', isAILoading, 'isSubmittingUserMessage:', isSubmittingUserMessage);
+
+    // Prevent sending if AI is loading, or if already submitting a user message
+    if (!messageContent.trim() || isAILoading || isSubmittingUserMessage) {
+      console.log('handleSubmit: Aborting due to empty message, AI loading, or already submitting.');
+      return;
+    }
 
     const trimmedMessage = messageContent.trim();
-    setIsSubmittingUserMessage(true);
+    setIsSubmittingUserMessage(true); // Indicate that a user message submission is in progress
+    console.log('handleSubmit: setIsSubmittingUserMessage set to true.');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      console.log('handleSubmit: Getting current user from Supabase auth...');
+      const { data: { user: currentUser } } = await supabase.auth.getUser(); // Get user here
+      if (!currentUser) {
+        console.error('handleSubmit: No current user found after auth.getUser().');
         toast.error('You must be logged in to chat.');
-        return;
+        return; // Exit if no user
       }
+      console.log('handleSubmit: Current user found:', currentUser.id);
 
       let currentSessionId = activeChatSessionId;
+      console.log('handleSubmit: Initial activeChatSessionId:', activeChatSessionId);
 
+      // If no active session, create one. This logic should only run once.
       if (!currentSessionId) {
-        console.log('No active session, creating new one...');
-        currentSessionId = await createNewChatSession();
+        console.log('handleSubmit: No active session, creating new one...');
+        currentSessionId = await createNewChatSession(); // Await the session creation
         if (!currentSessionId) {
+          console.error('handleSubmit: Failed to create chat session.');
           toast.error('Failed to create chat session. Please try again.');
-          return;
+          return; // Exit if session creation failed
         }
         toast.info('New chat session created.');
+        console.log('handleSubmit: New session ID after creation:', currentSessionId);
+        // activeChatSessionId is already set by createNewChatSession, so no need to set it here again.
+        // loadChatSessions is also called within createNewChatSession.
       }
 
-      // Re-validate session existence in state after potential creation/load
-      const sessionExists = chatSessions.some(s => s.id === currentSessionId);
-      if (!sessionExists) {
-        console.log("Session doesn't exist in state, refreshing...");
-        await loadChatSessions(); // Reload sessions to ensure it's in state
-        const refreshedSessionExists = chatSessions.some(s => s.id === currentSessionId);
-        if (!refreshedSessionExists) {
-          toast.error('Session no longer exists after refresh. Creating a new one...');
-          currentSessionId = await createNewChatSession();
-          if (!currentSessionId) {
-            toast.error('Failed to create new session.');
-            return;
-          }
-        }
-      }
+      console.log('handleSubmit: Proceeding with session ID:', currentSessionId);
 
+      // Now that we are sure we have a currentSessionId, proceed to save the user message
+      console.log('handleSubmit: Saving user message to DB...');
       const { data: userMessageData, error: userMessageError } = await supabase
         .from('chat_messages')
         .insert({
-          session_id: currentSessionId,
-          user_id: user.id,
+          session_id: currentSessionId, // Use the confirmed session ID
+          user_id: currentUser.id, // Use currentUser.id
           content: trimmedMessage,
           role: 'user',
           timestamp: new Date().toISOString(),
@@ -608,9 +640,10 @@ const Index = () => {
         .single();
 
       if (userMessageError) {
-        console.error('Error saving user message:', userMessageError);
+        console.error('handleSubmit: Error saving user message:', userMessageError);
         throw new Error('Failed to save your message');
       }
+      console.log('handleSubmit: User message saved. Message ID:', userMessageData.id);
 
       const newUserMessage: Message = {
         id: userMessageData.id,
@@ -619,15 +652,21 @@ const Index = () => {
         timestamp: userMessageData.timestamp || new Date().toISOString(),
       };
       setChatMessages(prev => [...(prev || []), newUserMessage]);
+      console.log('handleSubmit: User message added to state.');
 
-      await _getAIResponse(trimmedMessage);
+      // Get AI response for the new user message, passing the validated currentUser and currentSessionId
+      console.log('handleSubmit: Calling _getAIResponse...');
+      await _getAIResponse(trimmedMessage, currentUser, currentSessionId); // Pass currentSessionId
+      console.log('handleSubmit: _getAIResponse call completed.');
+
     } catch (error: any) {
-      console.error('Error in handleSubmit:', error);
+      console.error('handleSubmit: Caught error:', error);
       toast.error(`Failed to send message: ${error.message || 'Unknown error'}`);
     } finally {
-      setIsSubmittingUserMessage(false);
+      setIsSubmittingUserMessage(false); // Always reset submission state
+      console.log('handleSubmit: setIsSubmittingUserMessage set to false.');
     }
-  }, [isAILoading, activeChatSessionId, createNewChatSession, chatSessions, loadChatSessions, setChatMessages, _getAIResponse, user]);
+  }, [isAILoading, activeChatSessionId, createNewChatSession, setChatMessages, _getAIResponse, isSubmittingUserMessage]); // Removed 'user' from dependency array as it's fetched internally
 
   const handleNewMessage = useCallback((message: Message) => {
     setChatMessages(prev => [...(prev || []), message]);
@@ -685,7 +724,8 @@ const Index = () => {
 
     toast.info('Regenerating response...');
 
-    await _getAIResponse(lastUserMessageContent, lastAssistantMessage.id);
+    // Pass the current user object and activeChatSessionId to _getAIResponse
+    await _getAIResponse(lastUserMessageContent, user, activeChatSessionId, lastAssistantMessage.id);
   }, [user, activeChatSessionId, chatMessages, setChatMessages, _getAIResponse]);
 
   const handleRetryFailedMessage = useCallback(async (originalUserMessageContent: string, failedAiMessageId: string) => {
@@ -704,7 +744,8 @@ const Index = () => {
 
     toast.info('Retrying message...');
 
-    await _getAIResponse(originalUserMessageContent, failedAiMessageId);
+    // Pass the current user object and activeChatSessionId to _getAIResponse
+    await _getAIResponse(originalUserMessageContent, user, activeChatSessionId, failedAiMessageId);
   }, [user, activeChatSessionId, setChatMessages, _getAIResponse]);
 
   const {
@@ -911,7 +952,7 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen flex bg-gradient-to-br from-slate-50 to-blue-50 overflow-hidden">
+    <div className="h-screen flex  overflow-hidden">
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -928,7 +969,7 @@ const Index = () => {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0">
-        <div className="flex items-center justify-between p-3 sm:p-4 border-b-0 shadow-2xl bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
           <Header {...headerProps} />
           <div className="hidden sm:flex items-center gap-3">
             <span className="text-sm text-slate-600 hidden md:block">Welcome, {user.email}</span>

@@ -512,7 +512,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
           <div className={`flex-1 flex min-h-0 transition-all duration-300 ease-in-out
             ${isSidePanelOpen ? 'lg:w-2/3' : 'lg:w-full'}`}> {/* Adjust width based on side panel */}
             
-            <div className={`flex-1 flex flex-col min-w-0 ${isSidePanelOpen ? 'lg:w-1/2' : 'w-full'}`}>
+            <div className={`flex-1 flex flex-col  min-w-0 ${isSidePanelOpen ? 'lg:w-1/2' : 'w-full'}`}>
               <AIChat {...chatProps} />
             </div>
 

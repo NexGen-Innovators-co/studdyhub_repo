@@ -1,12 +1,10 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.14.1';
-
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
-
 const createAnalysisPrompt = (textContent) => {
     return `
 Analyze the following document text to identify its structure. Your goal is to find chapters, sections, or a table of contents.
@@ -41,31 +39,37 @@ ${textContent}
 --- END OF TEXT ---
 `;
 };
-
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
+        return new Response('ok', {
+            headers: corsHeaders
+        });
     }
-
     try {
         const { documentContent } = await req.json();
         if (!documentContent) {
-            return new Response(JSON.stringify({ error: 'Missing documentContent' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify({
+                error: 'Missing documentContent'
+            }), {
+                status: 400,
+                headers: {
+                    ...corsHeaders,
+                    'Content-Type': 'application/json'
+                }
+            });
         }
-
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
         if (!geminiApiKey) {
             throw new Error("GEMINI_API_KEY is not set.");
         }
-
         const genAI = new GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-2.0-flash'
+        });
         const prompt = createAnalysisPrompt(documentContent);
         const result = await model.generateContent(prompt);
         const response = await result.response;
         let text = response.text().replace(/```json|```/g, '').trim();
-
         let structure;
         try {
             structure = JSON.parse(text);
@@ -78,29 +82,45 @@ serve(async (req) => {
                     structure = JSON.parse(jsonMatch[0]);
                 } catch (innerJsonError) {
                     console.error('Error parsing extracted JSON:', innerJsonError);
-                    return new Response(JSON.stringify({ error: 'AI response was not valid JSON and could not be parsed.' }), {
+                    return new Response(JSON.stringify({
+                        error: 'AI response was not valid JSON and could not be parsed.'
+                    }), {
                         status: 500,
-                        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                        headers: {
+                            ...corsHeaders,
+                            'Content-Type': 'application/json'
+                        }
                     });
                 }
             } else {
-                return new Response(JSON.stringify({ error: 'AI response was not valid JSON and no JSON object could be extracted.' }), {
+                return new Response(JSON.stringify({
+                    error: 'AI response was not valid JSON and no JSON object could be extracted.'
+                }), {
                     status: 500,
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json'
+                    }
                 });
             }
         }
-
         return new Response(JSON.stringify(structure), {
             status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json'
+            }
         });
-
     } catch (error) {
         console.error('Error analyzing document structure:', error.message);
-        return new Response(JSON.stringify({ error: error.message }), {
+        return new Response(JSON.stringify({
+            error: error.message
+        }), {
             status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json'
+            }
         });
     }
 });

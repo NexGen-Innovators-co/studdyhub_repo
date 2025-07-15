@@ -323,11 +323,11 @@ ${code}
   }, [onSuggestAiCorrection]);
 
 
-  const triggerRender = () => {
-    if (chart.trim()) {
+  const triggerRender = useCallback(() => {
+    if (chart.trim() && !isRendering) { // Only trigger if chart content exists and not already rendering
       setShouldRender(true);
     }
-  };
+  }, [chart, isRendering]);
 
   // Cleanup function for ongoing renders
   const cleanupRender = useCallback(() => {
@@ -538,6 +538,30 @@ ${code}
     return cleanupRender; // Cleanup on unmount
   }, [shouldRender, chart, isMermaidLoaded, onMermaidError, cleanupRender, diagramRef]); // Added diagramRef to dependencies
 
+  // Effect for ResizeObserver
+  useEffect(() => {
+    if (!diagramRef.current) return;
+
+    const resizeObserver = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        // Check if the content box size has changed
+        if (entry.contentBoxSize) {
+          // Trigger a re-render if the size changes, but only if not currently rendering
+          // and if there's actual chart content
+          if (!isRendering && chart.trim()) {
+            triggerRender();
+          }
+        }
+      }
+    });
+
+    resizeObserver.observe(diagramRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [diagramRef, chart, isRendering, triggerRender]); // Dependencies for ResizeObserver
+
   // Check if current chart is different from last rendered
   const hasChanges = chart !== lastRenderedChart;
 
@@ -654,7 +678,7 @@ ${code}
   }
 
   return (
-    <div className="my-4 p-3 sm:p-4 bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-sm border border-gray-200">
+    <div className="my-4 p-3 sm:p-4 bg-gradient-to-br h-auto w-auto sm:w-full from-white to-gray-50 rounded-lg shadow-sm border border-gray-200">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -712,7 +736,7 @@ ${code}
             variant="ghost"
             size="sm"
             onClick={triggerRender}
-            className="h-7 px-2 text-xs hover:bg-gray-100"
+            className="h-7 px-2 text-sm hover:bg-gray-100"
             title="Re-render diagram"
           >
             <Play className="h-3 w-3" />
@@ -744,7 +768,7 @@ ${code}
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-gray-100 p-2 overflow-x-auto">
+      <div className="bg-white rounded-lg  border border-gray-100 p-2 overflow-x-auto">
         <div
           ref={diagramRef} // Use the passed diagramRef here
           dangerouslySetInnerHTML={{ __html: svg || '' }}
