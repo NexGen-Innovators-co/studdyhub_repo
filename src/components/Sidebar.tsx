@@ -15,14 +15,19 @@ interface ChatSession {
   message_count?: number;
 }
 
+// Define a union type for all possible application tabs (matching AppTab from Index.tsx)
+type AppTab = 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'sitemap';
+
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   noteCount: number;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
-  onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
+  // Updated activeTab type
+  activeTab: AppTab;
+  // Updated onTabChange type to use AppTab
+  onTabChange: (tab: Exclude<AppTab, 'sitemap'>) => void; // Exclude 'sitemap' as it's not a clickable tab
   // New props for chat sessions
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
@@ -52,6 +57,7 @@ const tabs = [
   { id: 'chat', name: 'AI Chat', icon: MessageCircle },
   { id: 'documents', name: 'Documents', icon: Upload },
   { id: 'settings', name: 'Settings', icon: Settings },
+  // 'sitemap' is intentionally not added here as it's not a user-facing navigation tab
 ];
 
 // Re-usable ConfirmationModal component (can be moved to a shared UI file if needed elsewhere)
@@ -178,7 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md' 
                       : 'hover:bg-slate-100 text-slate-700'
                   } ${!isOpen && 'px-2'}`}
-                  onClick={() => onTabChange(tab.id as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings')} // Explicitly cast tab.id
+                  onClick={() => onTabChange(tab.id as Exclude<AppTab, 'sitemap'>)} // Explicitly cast tab.id, excluding 'sitemap'
                 >
                   {/* Icon: has margin when 'isOpen' (mobile) or on desktop hover */}
                   <Icon className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'}`} />

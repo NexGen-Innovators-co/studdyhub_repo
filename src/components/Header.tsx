@@ -3,22 +3,27 @@ import { Search, Plus, Menu, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 
+// Define a union type for all possible application tabs (matching AppTab from Index.tsx)
+type AppTab = 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'sitemap';
+
 interface HeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onNewNote: () => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
+  // Updated activeTab type
+  activeTab: AppTab;
 }
 
-const tabNames = {
+const tabNames: Record<AppTab, string> = {
   notes: 'Notes',
   recordings: 'Class Recordings',
   schedule: 'Schedule & Timetable',
   chat: 'AI Study Assistant',
   documents: 'Document Upload',
-  settings: 'Learning Settings'
+  settings: 'Learning Settings',
+  sitemap: 'Sitemap XML', // Added sitemap
 };
 
 export const Header: React.FC<HeaderProps> = ({
@@ -45,7 +50,10 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="min-w-0 flex-shrink">
           <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-800 truncate">NoteMind</h1>
           {/* Display tab name on small screens and up */}
-          <p className="text-xs text-slate-500 hidden sm:block truncate">{tabNames[activeTab]}</p>
+          {/* Conditionally render tab name, exclude sitemap from main display */}
+          {activeTab !== 'sitemap' && (
+            <p className="text-xs text-slate-500 hidden sm:block truncate">{tabNames[activeTab]}</p>
+          )}
         </div>
       </div>
 
