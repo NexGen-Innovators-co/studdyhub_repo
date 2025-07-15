@@ -15,7 +15,6 @@ import { Message } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { User } from '@supabase/supabase-js'; // Import User type
-import SitemapPage from './SitemapPage'; // Import the new SitemapPage component
 
 interface ChatSession {
   id: string;
@@ -26,9 +25,6 @@ interface ChatSession {
   document_ids: string[];
   message_count?: number;
 }
-
-// Define a union type for all possible application tabs
-type AppTab = 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'sitemap';
 
 // Pagination constants
 const CHAT_SESSIONS_PER_PAGE = 10;
@@ -63,7 +59,7 @@ const Index = () => {
     setSearchQuery,
     setSelectedCategory,
     setIsSidebarOpen,
-    setActiveTab, // This setActiveTab's type needs to be compatible with AppTab
+    setActiveTab,
     setIsAILoading,
     loadUserData,
   } = useAppData();
@@ -82,7 +78,7 @@ const Index = () => {
   const [hasMoreMessages, setHasMoreMessages] = useState(true); // Tracks if more messages can be loaded for the active session
 
   // Derive activeTab from URL pathname
-  const currentActiveTab: AppTab = useMemo(() => {
+  const currentActiveTab = useMemo(() => {
     const path = location.pathname.split('/')[1];
     switch (path) {
       case 'notes': return 'notes';
@@ -91,14 +87,12 @@ const Index = () => {
       case 'chat': return 'chat';
       case 'documents': return 'documents';
       case 'settings': return 'settings';
-      case 'sitemap.xml': return 'sitemap'; // Handle sitemap route
       default: return 'notes';
     }
   }, [location.pathname]);
 
   useEffect(() => {
-    // Cast here as setActiveTab's expected type might be narrower if not updated in useAppData
-    setActiveTab(currentActiveTab as any); 
+    setActiveTab(currentActiveTab);
   }, [currentActiveTab, setActiveTab]);
 
   const loadChatSessions = useCallback(async () => {
@@ -802,7 +796,7 @@ const Index = () => {
     onNewNote: createNewNote,
     isSidebarOpen,
     onToggleSidebar: memoizedOnToggleSidebar,
-    activeTab: currentActiveTab as AppTab, // Use AppTab
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings', // Explicitly cast
   }), [searchQuery, setSearchQuery, createNewNote, isSidebarOpen, memoizedOnToggleSidebar, currentActiveTab]);
 
   // Memoize the sidebar props
@@ -812,7 +806,7 @@ const Index = () => {
     selectedCategory: selectedCategory,
     onCategoryChange: memoizedOnCategoryChange,
     noteCount: notes.length,
-    activeTab: currentActiveTab as AppTab, // Use AppTab
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings', // Explicitly cast
     onTabChange: memoizedOnTabChange,
     // Pass chat session props to Sidebar
     chatSessions: chatSessions,
@@ -843,7 +837,7 @@ const Index = () => {
 
   // Memoize the TabContent props
   const tabContentProps = useMemo(() => ({
-    activeTab: currentActiveTab as Exclude<AppTab, 'sitemap'>, // Exclude 'sitemap' as TabContent doesn't render it
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings', // Pass derived activeTab
     filteredNotes,
     activeNote,
     recordings: recordings ?? [],
@@ -1001,8 +995,6 @@ const Index = () => {
 
         {/* Use React Router Routes to render TabContent based on URL */}
         <Routes>
-          {/* Add the sitemap route here */}
-          <Route path="/sitemap.xml" element={<SitemapPage />} />
           <Route path="/notes" element={<TabContent {...tabContentProps} activeTab="notes" />} />
           <Route path="/recordings" element={<TabContent {...tabContentProps} activeTab="recordings" />} />
           <Route path="/schedule" element={<TabContent {...tabContentProps} activeTab="schedule" />} />
