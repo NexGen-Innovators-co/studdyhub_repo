@@ -1,7 +1,15 @@
 {
     "rewrites": [
       {
-        "source": "/((?!sitemap\\.xml|robots\\.txt|favicon\\.ico|.*\\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico)).*)",
+        "source": "/sitemap.xml",
+        "destination": "/sitemap.xml"
+      },
+      {
+        "source": "/robots.txt",
+        "destination": "/robots.txt"
+      },
+      {
+        "source": "/(.*)",
         "destination": "/index.html"
       }
     ],
@@ -21,7 +29,6 @@
           {
             "key": "Content-Type", 
             "value": "text/plain"
-            
           }
         ]
       }
