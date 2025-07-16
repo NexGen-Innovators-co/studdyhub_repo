@@ -1,24 +1,22 @@
 {
-    "buildCommand": "npm run build",
-    "outputDirectory": "dist",
-    "headers": [
+    "routes": [
       {
-        "source": "/sitemap.xml",
-        "headers": [
-          {
-            "key": "Content-Type",
-            "value": "application/xml; charset=utf-8"
-          }
-        ]
+        "src": "/sitemap.xml",
+        "dest": "/sitemap.xml",
+        "headers": {
+          "Content-Type": "application/xml"
+        }
       },
       {
-        "source": "/robots.txt",
-        "headers": [
-          {
-            "key": "Content-Type",
-            "value": "text/plain; charset=utf-8"
-          }
-        ]
+        "src": "/robots.txt",
+        "dest": "/robots.txt",
+        "headers": {
+          "Content-Type": "text/plain"
+        }
+      },
+      {
+        "src": "/(.*)",
+        "dest": "/index.html"
       }
     ]
   }
