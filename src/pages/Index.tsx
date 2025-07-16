@@ -15,7 +15,7 @@ import { Message } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { User } from '@supabase/supabase-js'; // Import User type
-import { Analytics } from '@vercel/analytics/next';
+
 interface ChatSession {
   id: string;
   title: string;
@@ -1005,7 +1005,6 @@ const Index = () => {
           <Route path="/" element={<TabContent {...tabContentProps} activeTab="notes" />} />
           <Route path="*" element={<TabContent {...tabContentProps} activeTab="notes" />} /> {/* Fallback for unknown paths */}
         </Routes>
-        <Analytics />
       </div>
     </div>
   );
