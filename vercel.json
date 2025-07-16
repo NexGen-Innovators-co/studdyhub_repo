@@ -1,4 +1,5 @@
 {
+    "public": true,
     "headers": [
       {
         "source": "/sitemap.xml",
@@ -17,6 +18,22 @@
             "value": "text/plain; charset=utf-8"
           }
         ]
+      }
+    ],
+    "routes": [
+      {
+        "src": "/sitemap.xml",
+        "dest": "/sitemap.xml",
+        "headers": {
+          "Content-Type": "application/xml; charset=utf-8"
+        }
+      },
+      {
+        "src": "/robots.txt",
+        "dest": "/robots.txt", 
+        "headers": {
+          "Content-Type": "text/plain; charset=utf-8"
+        }
       }
     ]
   }
