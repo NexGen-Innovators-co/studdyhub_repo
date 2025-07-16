@@ -1,4 +1,4 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+const { VercelRequest, VercelResponse } = require('@vercel/node');
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
