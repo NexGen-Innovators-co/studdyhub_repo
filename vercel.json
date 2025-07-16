@@ -1,10 +1,5 @@
 {
-    "rewrites": [
-      {
-        "source": "/(.*)",
-        "destination": "/index.html"
-      }
-    ],
+    
     "headers": [
       {
         "source": "/robots.txt",
@@ -12,6 +7,33 @@
           {
             "key": "Content-Type", 
             "value": "text/plain"
+          }
+        ]
+      },
+      {
+        "source": "/favicon.ico",
+        "headers": [
+          {
+            "key": "Content-Type", 
+            "value": "image/x-icon"
+          }
+        ]
+      },
+      {
+        "source": "/sitemap.xml",
+        "headers": [
+          {
+            "key": "Content-Type", 
+            "value": "application/xml"
+          }
+        ]
+      },
+      {
+        "source": "/(.*)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, s-maxage=0, must-revalidate"
           }
         ]
       }
