@@ -35,9 +35,9 @@ export const NotesList: React.FC<NotesListProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full dark:bg-gray-900">
       {/* Mobile Header with Close Button */}
-      <div className="p-3 sm:p-4 border-b border-slate-200 bg-white lg:bg-transparent">
+      <div className="p-3 sm:p-4 border-b border-slate-200  ">
         <div className="flex items-center justify-between">
           <h3 className="font-medium text-slate-800 text-sm sm:text-base">
             {notes.length} {notes.length === 1 ? 'Note' : 'Notes'}
@@ -57,7 +57,7 @@ export const NotesList: React.FC<NotesListProps> = ({
       </div>
 
       {/* Notes List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto modern-scrollbar">
         <div className="divide-y divide-slate-100">
           {notes.length === 0 ? (
             <div className="p-6 sm:p-8 text-center text-slate-400">
@@ -69,7 +69,7 @@ export const NotesList: React.FC<NotesListProps> = ({
             notes.map((note) => (
               <div
                 key={note.id}
-                className={`p-3 sm:p-4 cursor-pointer hover:bg-slate-50 transition-colors border-l-4 group ${
+                className={`p-3 sm:p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors border-l-4 group ${
                   activeNote?.id === note.id 
                     ? 'bg-blue-50 border-l-blue-500' 
                     : 'border-l-transparent'

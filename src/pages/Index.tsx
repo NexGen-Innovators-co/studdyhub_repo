@@ -37,11 +37,11 @@ const Index = () => {
 
   // Theme state
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>(() => {
-    // Initialize theme from localStorage or default to 'light'
+    // Initialize theme from localStorage or default to 'dark'
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
+      return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
     }
-    return 'light';
+    return 'dark';
   });
 
   // Effect to apply theme class to HTML element
