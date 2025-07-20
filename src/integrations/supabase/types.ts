@@ -76,6 +76,10 @@ export type Database = {
           session_id: string | null
           timestamp: string | null
           user_id: string
+          imageUrl?: string;
+          imageMimeType?: string;
+          attachedDocumentIds?: string[] | null; // Array of document IDs attached to this message
+          attachedNoteIds?: string[] | null; // Array of note IDs attached to this message
         }
         Insert: {
           content: string
@@ -85,6 +89,10 @@ export type Database = {
           session_id?: string | null
           timestamp?: string | null
           user_id: string
+          imageUrl?: string;
+          imageMimeType?: string;
+          attachedDocumentIds?: string[] | null; // Array of document IDs attached to this message
+          attachedNoteIds?: string[] | null; // Array of note IDs attached to this message
         }
         Update: {
           content?: string
@@ -94,6 +102,10 @@ export type Database = {
           session_id?: string | null
           timestamp?: string | null
           user_id?: string
+          imageUrl?: string;
+          imageMimeType?: string;
+          attachedDocumentIds?: string[] | null; // Array of document IDs attached to this message
+          attachedNoteIds?: string[] | null; // Array of note IDs attached to this message
         }
         Relationships: [
           {
@@ -204,6 +216,10 @@ export type Database = {
           title: string
           updated_at: string
           user_id: string
+          type: "text" | "image" | "audio"
+          processing_error: String // This column needs to exist in your 'documents' table schema
+          processing_status: String
+
         }
         Insert: {
           content_extracted?: string | null
@@ -216,6 +232,9 @@ export type Database = {
           title: string
           updated_at?: string
           user_id: string
+          type: "text" | "image" | "audio"
+          processing_error?: string // This column needs to exist in your 'documents' table schema
+          processing_status: String
         }
         Update: {
           content_extracted?: string | null
@@ -228,6 +247,9 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string
+          type?: "text" | "image" | "audio"
+          processing_error?: string // This column needs to exist in your 'documents' table schema
+          processing_status: string
         }
         Relationships: []
       }

@@ -9,24 +9,24 @@ All colors MUST be HSL.
   width: 8px;
 }
 .modern-scrollbar::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f1f5f900;
   border-radius: 10px;
 }
 .modern-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #cbd5e100;
   border-radius: 10px;
-  border: 2px solid #f1f5f9;
+  border: 2px solid #f1f5f900;
 }
 .modern-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #94a3b800;
 }
 .modern-scrollbar::-webkit-scrollbar-thumb:active {
-  background: #767f8b;
+  background: #767f8b00;
 }
 /* Firefox */
 .modern-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f1f5f9;
+  scrollbar-color: #cbd5e100 #f1f5f900;
 }
 /* In your global CSS file (e.g., index.css or globals.css) */
 .custom-scrollbar::-webkit-scrollbar {

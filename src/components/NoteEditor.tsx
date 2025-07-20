@@ -523,7 +523,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           file_name: fileName,
           file_url: fileUrl, // Use the passed fileUrl (which is the public URL from upload)
           content_extracted: contentToUse, // Store the extracted content
-          file_type: fileType,
+          file_type: fileType, // Ensure file_type is passed
+          type: 'text', // Explicitly set the type to 'document'
+          processing_status: 'completed', // Mark as completed since content is extracted
+          processing_status_message: 'Content extracted successfully.',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          user_profile: userProfile, // Store the user profile for context
+          section: selectedSection || null, // Store the selected section if provided
+          file_size: selectedFile?.size || 0, // Store file size if available
+
+          
         })
         .select('id')
         .single();
@@ -860,6 +870,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           file_name: uploadedAudioDetails.name,
           file_url: uploadedAudioDetails.url,
           content_extracted: 'Processing audio for content...', // Placeholder
+          type: 'audio', // Explicitly set the type to 'audio'
+          processing_status: 'processing', // Mark as processing
           file_type: uploadedAudioDetails.type,
         })
         .select('id')
@@ -1459,9 +1471,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 border border-slate-200 rounded-lg shadow-md overflow-hidden">
+    <div className="h-full flex flex-col bg-slate-50 border border-slate-200 rounded-lg shadow-md dark:bg-slate-900 overflow-hidden">
       {/* Editor Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-200 bg-white">
+      <div className="p-3 sm:p-4 border-b border-slate-200 dark:bg-slate-900">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           {/* Mobile toggle for notes history */}
           {onToggleNotesHistory && (
@@ -1962,14 +1974,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         {/* Editor/Preview Area */}
         {isEditing ? (
           // Split view: Textarea on left, ReactMarkdown preview on right
-          <div className="flex-1 p-3 sm:p-6 flex flex-col lg:flex-row gap-4 modern-scrollbar overflow-y-auto min-w-0">
+          <div className="flex-1 p-3 sm:p-6 flex flex-col dark:bg-slate-800 lg:flex-row gap-4 modern-scrollbar overflow-y-auto min-w-0">
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Start writing your note here..."
-              className="flex-1 resize-none border shadow-sm focus-visible:ring-0 text-base leading-relaxed bg-white min-h-[50vh] lg:min-h-0 border-slate-200"
+              className="flex-1 resize-none border shadow-sm focus-visible:ring-0 text-base leading-relaxed dark:bg-slate-800  min-h-[50vh] lg:min-h-0 border-slate-200"
             />
-            <div className="flex-1 prose prose-sm max-w-none text-slate-700 leading-relaxed modern-scrollbar overflow-y-auto min-h-[50vh] lg:min-h-0 border rounded-md p-4 shadow-sm bg-white border-slate-200" id="note-preview-content">
+            <div className="flex-1 prose prose-sm max-w-none text-slate-700 leading-relaxed modern-scrollbar overflow-y-auto min-h-[50vh] lg:min-h-0 border rounded-md p-4 shadow-sm border-slate-200" id="note-preview-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}

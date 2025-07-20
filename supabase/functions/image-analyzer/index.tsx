@@ -1,288 +1,178 @@
+// supabase/functions/image-analyzer/index.ts
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.24.1"; // Ensure this is the latest version for multimodal support
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Use 0.224.0 if you updated it elsewhere
+import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.24.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
 // Define the types for Gemini API parts
 interface TextPart {
-  text: string;
+    text: string;
 }
 
 interface InlineData {
-  mimeType: string;
-  data: string; // Base64 encoded string
+    mimeType: string;
+    data: string; // Base64 encoded string
 }
 
 interface BlobPart {
-  inlineData: InlineData;
+    inlineData: InlineData;
 }
 
 type Part = TextPart | BlobPart;
 
 interface Content {
-  role: string;
-  parts: Part[];
+    role: string;
+    parts: Part[];
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: corsHeaders
-    });
-  }
-
-  try {
-    const { message, userId, sessionId, learningStyle, learningPreferences, context, chatHistory, imageDataBase64, imageMimeType } = await req.json();
-
-    if (!userId || !sessionId) { // Message can be empty if only image is sent
-      return new Response(JSON.stringify({
-        error: 'Missing required parameters: userId or sessionId'
-      }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+    if (req.method === 'OPTIONS') {
+        return new Response(null, {
+            headers: corsHeaders
+        });
     }
 
-    if (!message && !imageDataBase64) { // Ensure at least message or image is present
-      return new Response(JSON.stringify({
-        error: 'Missing required parameters: message or imageDataBase64'
-      }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json'
+    try {
+        const { documentId, imageDataBase64, imageMimeType, userId } = await req.json();
+
+        if (!documentId || !imageDataBase64 || !imageMimeType || !userId) {
+            return new Response(JSON.stringify({
+                error: 'Missing required parameters: documentId, imageDataBase64, imageMimeType, or userId'
+            }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
         }
-      });
-    }
 
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!geminiApiKey) {
-      throw new Error('GEMINI_API_KEY not configured');
-    }
-
-    const systemPrompt = createSystemPrompt(learningStyle, learningPreferences);
-
-    const geminiContents: Content[] = []; // Use the Content interface here
-
-    // Add system prompt and context as the first user turn
-    geminiContents.push({
-      role: 'user',
-      parts: [
-        {
-          text: `${systemPrompt}\n\nContext: ${context || 'No additional context provided'}`
+        const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+        if (!geminiApiKey) {
+            throw new Error('GEMINI_API_KEY not configured');
         }
-      ]
-    });
 
-    // Add previous chat history messages
-    if (chatHistory && Array.isArray(chatHistory)) {
-      chatHistory.forEach(async (msg: any) => { // Use 'any' for msg to handle imageUrl if present
-        if (msg.role === 'user') {
-          const userParts: Part[] = [];
-          if (msg.content) {
-            userParts.push({ text: msg.content });
-          }
-          // If the user's previous message had an image, include it in the history for AI context
-          if (msg.imageUrl && msg.imageMimeType) {
-            // Fetch the image from Supabase Storage and convert to Base64
-            // This is a crucial step for persisting image context across turns.
-            // NOTE: This will add latency. For production, consider caching or
-            // storing base64 directly in DB if image size is small and security allows.
-            // For now, we'll fetch from the URL.
-            // If the image data is already base64 in msg.imageUrl, use that directly.
-            let historicalImageData = msg.imageUrl;
-            if (historicalImageData.startsWith('http')) {
-              // If it's a URL, fetch it and convert to base64
-              // This is a simplification; in a real scenario, you'd want to store base64 or a smaller version
-              // or have the AI re-process the URL if it supports it.
-              // For now, we'll assume the client sends base64 for new images,
-              // and for historical, we'll just pass the URL if the AI can handle it,
-              // or you'd need a server-side fetch-and-encode.
-              // Given the current setup, if `msg.imageUrl` is a Supabase URL,
-              // the AI won't directly fetch it. We need the base64.
-              // For the purpose of this fix, let's assume `msg.imageUrl` in history
-              // is *already* base64 if it's meant for `inlineData`.
-              // If it's a URL, the AI won't see it via `inlineData`.
-              // For a robust solution, you'd convert the URL to base64 on the server side
-              // or store base64 in the DB for historical messages.
-              // For now, let's assume `msg.imageUrl` from DB is a public URL,
-              // and we'll only use `imageDataBase64` from the current request for inlineData.
-              // This part needs careful consideration for a production system.
-              // For this fix, we'll only pass `inlineData` if `msg.imageDataBase64` is available in history.
-              // This implies you might need to store `imageDataBase64` in the DB for history.
-              // Let's modify the frontend to save `imageDataBase64` as well.
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-              // TEMPORARY FIX: For historical images, we'll need to fetch and convert to base64
-              // or store base64 in the database. Since we're not doing that in the DB yet,
-              // we'll skip adding historical images to inlineData for now to avoid complexity.
-              // The prompt for the AI will mention "user provided an image".
-              // The *best* way is to store base64 in the DB for history or rely on AI's ability to fetch URLs.
-              // Given Gemini's inlineData requirement, we need base64.
-              // For now, the AI will only "see" the *current* image upload.
-              // To make historical images visible, you'd need to fetch them from `msg.imageUrl`
-              // and convert them to base64 here in the Edge Function, which adds latency.
-              // Let's assume `msg.imageUrl` in history is just for display, and `imageDataBase64` is for current turn.
-              // If you want historical images to be analyzed, you MUST store their base64 representation
-              // in the `chat_messages` table or fetch them here.
+        if (!supabaseUrl || !supabaseServiceRoleKey) {
+            throw new Error('Supabase URL or Service Role Key not configured');
+        }
 
-              // Re-evaluating: The prompt said "AI to analyze them". So, historical images *must* be sent.
-              // The easiest way is to store the base64 in the DB for user messages.
-              // Let's adjust the AIChat.tsx to save base64 to DB for user messages.
-              // If `msg.imageUrl` is actually the base64 string from the DB, then this is fine.
-              // If it's a public URL, then we need to fetch it.
-              // For now, let's assume `msg.imageUrl` in history is the public URL,
-              // and we'll fetch it here. This will add latency but ensures AI sees it.
+        // Create a Supabase client with the service role key for backend operations
+        const supabaseServiceRoleClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+            auth: { persistSession: false },
+        });
 
-              try {
-                const imageResponse = await fetch(msg.imageUrl);
-                const imageBlob = await imageResponse.blob();
-                const reader = new FileReader();
-                reader.readAsDataURL(imageBlob);
-                await new Promise(resolve => reader.onloadend = resolve);
-                const historicalBase64 = (reader.result as string).split(',')[1];
-                userParts.push({
-                  inlineData: {
-                    mimeType: imageBlob.type,
-                    data: historicalBase64
-                  }
-                });
-              } catch (imgFetchError) {
-                console.error("Failed to fetch historical image for AI:", imgFetchError);
-                // Optionally, add a text part indicating image was present but couldn't be processed
-                userParts.push({ text: `(User previously sent an image which could not be re-processed by AI)` });
-              }
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
+        // Use the gemini-pro-vision model for image analysis
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+        console.log(`Analyzing image for document ID: ${documentId}`);
+
+        const imagePart: BlobPart = {
+            inlineData: {
+                mimeType: imageMimeType,
+                data: imageDataBase64
             }
-          }
-          geminiContents.push({
-            role: 'user',
-            parts: userParts
-          });
-        } else if (msg.role === 'assistant') {
-          geminiContents.push({
-            role: 'model',
-            parts: [
-              {
-                text: msg.content
-              }
-            ]
-          });
+        };
+
+        const prompt = "Describe this image in detail, focusing on elements relevant for study notes, diagrams, text within the image, and overall context. Provide a comprehensive summary. If there's text in the image, transcribe it accurately. If it's a diagram, explain its components and purpose. Structure your response clearly with headings if appropriate.";
+
+        const result = await model.generateContent([
+            { text: prompt },
+            imagePart
+        ]);
+
+        const response = result.response;
+        let imageDescription = response.text();
+
+        console.log("Image description generated by AI.");
+
+        // --- START: Robust cleaning for generatedText from AI ---
+        imageDescription = imageDescription.split('\n')
+            .map((line) => {
+                let cleanedLine = line.replace(/[^\x20-\x7E\n\r]/g, ' ');
+                cleanedLine = cleanedLine.replace(/\s+/g, ' ').trim();
+                return cleanedLine;
+            }).filter((line) => line.length > 0 || line.trim().length === 0)
+            .join('\n');
+        // --- END: Robust cleaning for generatedText from AI ---
+
+
+        // Update the 'documents' table with the AI-generated description
+        const { data, error } = await supabaseServiceRoleClient
+            .from('documents')
+            .update({
+                content: imageDescription,
+                processing_status: 'completed',
+                processing_error: null,
+            })
+            .eq('id', documentId)
+            .eq('user_id', userId) // Ensure only the owner can update
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating document with image description:', error);
+            // Update status to failed if there's a DB error
+            await supabaseServiceRoleClient
+                .from('documents')
+                .update({ processing_status: 'failed', processing_error: error.message })
+                .eq('id', documentId);
+            throw new Error(`Failed to save image description: ${error.message}`);
         }
-      });
+
+        console.log(`Document ${documentId} updated with image description.`);
+
+        return new Response(JSON.stringify({
+            status: 'success',
+            document: data,
+            description: imageDescription
+        }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+
+    } catch (error: any) {
+        console.error('Error in image-analyzer function:', error);
+        return new Response(JSON.stringify({
+            error: error.message || 'Internal Server Error'
+        }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
     }
-
-    // Add the current user message (and image if present) as the last turn
-    const currentUserParts: Part[] = [];
-    if (message) {
-      currentUserParts.push({ text: message });
-    }
-    if (imageDataBase64 && imageMimeType) {
-      currentUserParts.push({
-        inlineData: {
-          mimeType: imageMimeType,
-          data: imageDataBase64
-        }
-      });
-    }
-    geminiContents.push({
-      role: 'user',
-      parts: currentUserParts
-    });
-
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: geminiContents,
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 3084
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`Gemini API error: ${response.status} - ${errorBody}`);
-    }
-
-    const data = await response.json();
-    let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
-
-    // --- START: Robust cleaning for generatedText from AI ---
-    generatedText = generatedText.split('\n') // Split into lines
-      .map((line) => {
-        // Replace any character that is NOT a printable ASCII character (0x20-0x7E),
-        // a newline (0x0A), or a carriage return (0x0D) with a standard space.
-        let cleanedLine = line.replace(/[^\x20-\x7E\n\r]/g, ' ');
-        // Normalize multiple spaces to single spaces and trim each line
-        cleanedLine = cleanedLine.replace(/\s+/g, ' ').trim();
-        return cleanedLine;
-      }).filter((line) => line.length > 0 || line.trim().length === 0) // Keep lines that were originally empty or just whitespace
-      .join('\n');
-    // --- END: Robust cleaning for generatedText from AI ---
-
-    return new Response(JSON.stringify({
-      response: generatedText,
-      userId: userId,
-      sessionId: sessionId,
-      timestamp: new Date().toISOString()
-    }), {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
-  } catch (error: any) {
-    console.error('Error in gemini-chat function:', error);
-    return new Response(JSON.stringify({
-      error: error.message || 'Internal Server Error'
-    }), {
-      status: 500,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
-  }
 });
 
+// System prompt function (can be shared or defined here for consistency)
 function createSystemPrompt(learningStyle: string, preferences: any) {
-  const basePrompt = `You are an advanced AI study assistant designed to help students master their materials through personalized, adaptive learning experiences. Your role is to:
-
+    // This function is included for completeness but not directly used by image-analyzer
+    // as it has a specific prompt for image description.
+    // However, it's good practice to keep it if you share prompt logic.
+    const basePrompt = `You are an advanced AI study assistant designed to help students master their materials through personalized, adaptive learning experiences. Your role is to:
 - Provide comprehensive explanations tailored to individual learning styles
 - Break down complex concepts into digestible components
 - Offer multiple perspectives and approaches to understanding
 - Encourage critical thinking and active learning
 - Adapt your communication style based on user preferences
 - Provide accurate, up-to-date information with proper context`;
-  let stylePrompt = "";
-  switch (learningStyle) {
-    case 'visual':
-      stylePrompt = `As a visual learner's assistant, you should:
-
+    let stylePrompt = "";
+    switch (learningStyle) {
+        case 'visual':
+            stylePrompt = `As a visual learner's assistant, you should:
 **Visual Communication:**
 - Use clear structure with headings, bullet points, and numbered lists
 - Provide step-by-step breakdowns with visual hierarchy
 - Use analogies and metaphors that create mental images
 - Describe concepts using spatial relationships and visual patterns
-
 **Diagram and Visualization Guidelines:**
 When creating diagrams and visualizations, you have multiple options:
-
 **Chart.js Visualizations:**
 For data visualization, statistical graphs, and charts, use Chart.js format.
 **IMPORTANT**: The content inside the \`\`\`chartjs\`\`\` block MUST be valid, pure JSON. Do NOT include any JavaScript comments, function calls, or invalid syntax. Ensure all keys and string values are enclosed in double quotes. For tooltips or labels that might typically use functions, provide static strings or reference data properties directly within the JSON. For example, instead of \`"label": function(context) { return 'Value: ' + context.parsed.y; }\`, use a static string like \`"label": "Data Point"\` or structure your data to include a string representation of the label.
-
 \`\`\`chartjs
 {
   "type": "line",
@@ -311,7 +201,6 @@ For data visualization, statistical graphs, and charts, use Chart.js format.
   }
 }
 \`\`\`
-
 **DOT Graph Visualizations:**
 For network diagrams, relationships, and graph structures, use DOT format:
 \`\`\`dot
@@ -328,7 +217,6 @@ digraph LearningPath {
     "Advanced Applications" [fillcolor=lightcoral];
 }
 \`\`\`
-
 **Mermaid Diagrams:**
 For flowcharts, process diagrams, and organizational charts, use Mermaid syntax.
 **CRITICAL**: The content inside the \`\`\`mermaid\`\`\` block MUST be perfectly valid Mermaid syntax.
@@ -339,7 +227,6 @@ For flowcharts, process diagrams, and organizational charts, use Mermaid syntax.
     - **Arrow Types:** Use standard Mermaid arrows like \`->>\`, \`-->\`, \`->\`, etc.
     - **Message Formats:** Messages should be concise. If they contain spaces, they should be quoted. E.g., \`User->>Client: "Login Request"\`.
     - **Alt/Loop Blocks:** Ensure \`alt\` and \`end\` keywords are correctly matched and indented.
-
 \`\`\`mermaid
 sequenceDiagram
     participant User
@@ -353,36 +240,31 @@ sequenceDiagram
         Server-->>Client: "Error Message"
     end
 \`\`\`
-
 **When to Use Each:**
 - **Chart.js**: Data trends, statistics, progress tracking, comparisons, quantitative analysis
 - **DOT graphs**: Relationships, dependencies, network structures, hierarchies, mind maps
 - **Mermaid**: Process flows, decision trees, timelines, organizational structures, sequence diagrams
 - **Tables/Text**: Simple comparisons, definitions, step-by-step instructions
 - **Image Analysis**: When a user provides an image, analyze its content and incorporate insights into the response. Do not describe the image unless specifically asked. Focus on extracting information relevant to the user's query from the image.
-
 **Alternative Visual Methods:**
 - ASCII art for simple diagrams
 - Structured text layouts
 - Tables for comparisons
 - Indented hierarchies for relationships
 - Descriptive "mental picture" explanations
-
 **Formatting:**
 - Use **bold** for key concepts
 - Use *italics* for emphasis
 - Use > blockquotes for important insights
 - Create clear section divisions`;
-      break;
-    case 'auditory':
-      stylePrompt = `As an auditory learner's assistant, you should:
-
+            break;
+        case 'auditory':
+            stylePrompt = `As an auditory learner's assistant, you should:
 **Conversational Approach:**
 - Use natural, spoken language patterns
 - Include verbal cues like "Let me explain this step by step"
 - Use repetition and reinforcement of key points
 - Employ rhythmic and memorable phrasing
-
 **Auditory Techniques:**
 - Start with verbal outlines: "We'll cover three main points..."
 - Use transitional phrases: "Now that we've covered X, let's move to Y"
@@ -392,22 +274,19 @@ sequenceDiagram
 - Create Chart.js visualizations to represent audio learning patterns and progress. Ensure Chart.js JSON is strictly valid and contains no JavaScript functions.
 - Use DOT graphs to show conversation flows and discussion structures. Ensure DOT syntax is correct.
 - **Image Analysis**: If an image is provided, describe its key elements verbally and explain how it relates to the topic.
-
 **Sound-Based Learning:**
 - Recommend creating mnemonics and acronyms
 - Suggest verbal practice and discussion
 - Include pronunciation guides for technical terms
 - Encourage explaining concepts out loud as a study method`;
-      break;
-    case 'kinesthetic':
-      stylePrompt = `As a kinesthetic learner's assistant, you should:
-
+            break;
+        case 'kinesthetic':
+            stylePrompt = `As a kinesthetic learner's assistant, you should:
 **Hands-On Approach:**
 - Provide practical, actionable steps
 - Include real-world applications and examples
 - Suggest physical activities and experiments
 - Break concepts into "doable" chunks
-
 **Interactive Learning:**
 - Recommend building models or demonstrations
 - Suggest role-playing scenarios
@@ -416,29 +295,25 @@ sequenceDiagram
 - Use DOT graphs to show relationship networks and concept connections. Ensure DOT syntax is correct.
 - Create Chart.js visualizations for tracking progress and performance. Ensure Chart.js JSON is strictly valid and contains no JavaScript functions.
 - **Image Analysis**: If an image is provided, suggest actions or experiments related to the image content.
-
 **Experiential Methods:**
 - Use analogies involving physical actions
 - Suggest trial-and-error learning approaches
 - Include hands-on projects and applications
 - Recommend learning through doing and practicing
 - Visualize learning paths and dependencies with interactive diagrams
-
 **Engagement Strategies:**
 - Vary activity types to maintain interest
 - Include short, frequent practice sessions
 - Suggest collaborative and group activities
 - Provide immediate application opportunities`;
-      break;
-    case 'reading':
-      stylePrompt = `As a reading/writing learner's assistant, you should:
-
+            break;
+        case 'reading':
+            stylePrompt = `As a reading/writing learner's assistant, you should:
 **Comprehensive Text:**
 - Provide detailed, thorough written explanations
 - Include extensive background information and context
 - Use precise vocabulary and technical terminology
 - Offer multiple written perspectives on topics
-
 **Written Learning Tools:**
 - Suggest note-taking strategies and templates
 - Recommend creating written summaries and outlines
@@ -447,31 +322,29 @@ sequenceDiagram
 - Use Chart.js for visualizing reading progress and comprehension metrics. Ensure Chart.js JSON is strictly valid and contains no JavaScript functions.
 - Create structured DOT graphs for organizing complex information hierarchies. Ensure DOT syntax is correct.
 - **Image Analysis**: If an image is provided, analyze its content and integrate findings into a detailed written explanation or summary.
-
 **Text-Based Organization:**
 - Use clear paragraph structure with topic sentences
 - Include comprehensive bullet points and lists
 - Provide detailed examples in written form
 - Create logical flow from basic to advanced concepts
-
 **Reading Strategies:**
 - Recommend additional reading materials
 - Suggest research and investigation techniques
 - Include citation practices and source evaluation
 - Provide writing prompts and reflection questions`;
-      break;
-    default:
-      stylePrompt = `Use a balanced, multi-modal approach:
+            break;
+        default:
+            stylePrompt = `Use a balanced, multi-modal approach:
 - Combine visual, auditory, and kinesthetic elements
 - Adapt explanations based on content complexity
 - Provide multiple learning pathways
 - Use varied presentation methods to maintain engagement
 - **Image Analysis**: If an image is provided, analyze its content and integrate findings into the response in a balanced way, suitable for various learning styles.`;
-  }
-  let difficultyPrompt = "";
-  switch (preferences?.difficulty) {
-    case 'beginner':
-      difficultyPrompt = `**Beginner Level Approach:**
+    }
+    let difficultyPrompt = "";
+    switch (preferences?.difficulty) {
+        case 'beginner':
+            difficultyPrompt = `**Beginner Level Approach:**
 - Start with fundamental concepts and build gradually
 - Avoid technical jargon; when necessary, provide clear definitions
 - Use simple analogies and everyday examples
@@ -479,9 +352,9 @@ sequenceDiagram
 - Provide encouragement and positive reinforcement
 - Break complex topics into very small, manageable pieces
 - Include basic prerequisite knowledge when needed`;
-      break;
-    case 'intermediate':
-      difficultyPrompt = `**Intermediate Level Approach:**
+            break;
+        case 'intermediate':
+            difficultyPrompt = `**Intermediate Level Approach:**
 - Assume basic foundational knowledge exists
 - Introduce technical terms with brief explanations
 - Connect new concepts to previously learned material
@@ -489,9 +362,9 @@ sequenceDiagram
 - Include some advanced context without overwhelming detail
 - Encourage independent thinking and problem-solving
 - Bridge gaps between basic and advanced understanding`;
-      break;
-    case 'advanced':
-      difficultyPrompt = `**Advanced Level Approach:**
+            break;
+        case 'advanced':
+            difficultyPrompt = `**Advanced Level Approach:**
 - Use sophisticated terminology and concepts
 - Provide in-depth technical explanations
 - Include current research and cutting-edge developments
@@ -500,15 +373,15 @@ sequenceDiagram
 - Challenge assumptions and encourage debate
 - Connect to broader academic and professional contexts
 - Assume strong foundational knowledge`;
-      break;
-    default:
-      difficultyPrompt = `**Adaptive Difficulty:**
+            break;
+        default:
+            difficultyPrompt = `**Adaptive Difficulty:**
 - Assess user's knowledge level through responses
 - Start at moderate level and adjust based on feedback
 - Provide scaffolding for complex concepts
 - Include both basic and advanced perspectives when relevant`;
-  }
-  const examplePrompt = preferences?.examples ? `**Example Integration:**
+    }
+    const examplePrompt = preferences?.examples ? `**Example Integration:**
 - Include relevant, practical examples for every major concept
 - Use real-world applications and case studies
 - Provide multiple examples to illustrate different aspects
@@ -519,19 +392,19 @@ sequenceDiagram
 - Focus on core concepts and principles
 - Use examples sparingly and only when essential for understanding
 - Prioritize clarity and brevity over illustration`;
-  const interactionPrompt = `**Interactive Guidelines:**
+    const interactionPrompt = `**Interactive Guidelines:**
 - Ask clarifying questions when requests are ambiguous
 - Encourage active participation and questioning
 - Provide feedback on student responses and understanding
 - Suggest follow-up questions and areas for exploration
 - Adapt explanations based on student's responses
 - Encourage self-assessment and reflection`;
-  const errorHandlingPrompt = `**Error Prevention:**
+    const errorHandlingPrompt = `**Error Prevention:**
 - Verify technical accuracy before providing information
 - Use fallback explanations when complex formatting might fail
 - Provide alternative explanation methods if primary approach isn't working
 - Acknowledge limitations and suggest additional resources when needed`;
-  return `${basePrompt}
+    return `${basePrompt}
 
 ${stylePrompt}
 

@@ -51,4 +51,8 @@ export interface Message {
   timestamp: string;
   isError?: boolean;
   originalUserMessageContent?: string;
+  imageUrl?: string;
+  imageMimeType?: string;
+  attachedDocumentIds?: string[]; // Array of document IDs attached to this message
+  attachedNoteIds?: string[];
 }

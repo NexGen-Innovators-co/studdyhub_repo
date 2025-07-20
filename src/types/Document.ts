@@ -1,14 +1,17 @@
 export interface Document {
-  id: string;
-  user_id: string;
-  title: string;
+  content_extracted: string | null;
+  created_at: string;
   file_name: string;
-  file_url: string;
+  file_size: number | null;
   file_type: string;
-  file_size?: number;
-  content_extracted?: string;
-  created_at: Date;
-  updated_at: Date;
+  file_url: string;
+  id: string;
+  title: string;
+  updated_at: string;
+  user_id: string;
+  type: "text" | "image" | "audio";
+  processing_error: string; // Changed from 'String' to 'string'
+  processing_status: string; // Changed from 'String' to 'string'
 }
 
 export interface UserProfile {

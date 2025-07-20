@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
@@ -10,14 +11,14 @@ interface UseAppOperationsProps {
   recordings: ClassRecording[];
   scheduleItems: ScheduleItem[];
   chatMessages: Message[];
-  documents: Document[];
+  documents: Document[]; // Ensure documents are passed
   userProfile: UserProfile | null;
   activeNote: Note | null;
   setNotes: (notes: Note[] | ((prev: Note[]) => Note[])) => void;
   setRecordings: (recordings: ClassRecording[] | ((prev: ClassRecording[]) => ClassRecording[])) => void;
   setScheduleItems: (items: ScheduleItem[] | ((prev: ScheduleItem[]) => ScheduleItem[])) => void;
   setChatMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
-  setDocuments: (documents: Document[] | ((prev: Document[]) => Document[])) => void;
+  setDocuments: (documents: Document[] | ((prev: Document[]) => Document[])) => void; // Ensure setDocuments is available
   setUserProfile: (profile: UserProfile | null) => void;
   setActiveNote: (note: Note | null) => void;
   setActiveTab: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
@@ -33,7 +34,7 @@ export const useAppOperations = ({
   setRecordings,
   setScheduleItems,
   setChatMessages,
-  setDocuments,
+  setDocuments, // Destructure setDocuments
   setUserProfile,
   setActiveNote,
   setActiveTab,
@@ -258,12 +259,19 @@ export const useAppOperations = ({
     }
   };
 
-  const sendChatMessage = async (message: string) => {
+  // Updated sendChatMessage to accept attached document and note IDs
+  const sendChatMessage = async (
+    messageContent: string,
+    attachedDocumentIds?: string[],
+    attachedNoteIds?: string[]
+  ) => {
     const userMessage: Message = {
       id: generateId(),
-      content: message,
+      content: messageContent,
       role: 'user',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      attachedDocumentIds: attachedDocumentIds || [], // Store attached document IDs
+      attachedNoteIds: attachedNoteIds || [],       // Store attached note IDs
     };
 
     setChatMessages(prev => [...prev, userMessage]);
@@ -273,32 +281,61 @@ export const useAppOperations = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Wait a moment for the edge function to process and save messages
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Insert the user message with attached IDs into the database
+      const { error: insertError } = await supabase
+        .from('chat_messages')
+        .insert({
+          id: userMessage.id,
+          content: userMessage.content,
+          role: userMessage.role,
+          timestamp: userMessage.timestamp,
+          user_id: user.id,
+          attached_document_ids: userMessage.attachedDocumentIds, // Save attached IDs
+          attached_note_ids: userMessage.attachedNoteIds,         // Save attached IDs
+        });
 
-      // Fetch latest chat messages to get AI response
-      const { data: chatData, error } = await supabase
+      if (insertError) throw insertError;
+
+      // The AI response generation is assumed to be handled by a backend function
+      // (e.g., a Supabase Edge Function triggered by the 'chat_messages' insert).
+      // This backend function will read the message, its attached IDs, fetch content,
+      // call the LLM, and then insert the AI's response into 'chat_messages'.
+
+      // For now, we'll simulate a delay and then fetch recent messages.
+      // In a real scenario, you'd listen for the AI's response being inserted.
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate backend processing time
+
+      // Fetch the latest chat messages (including the AI's response if it's already generated)
+      const { data: chatData, error: fetchError } = await supabase
         .from('chat_messages')
         .select('*')
         .eq('user_id', user.id)
-        .order('timestamp', { ascending: false })
-        .limit(20);
+        .order('timestamp', { ascending: true }) // Order ascending to get chronological order
+        .limit(50); // Fetch a reasonable number of recent messages
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
 
       // Convert to local format and update state
       const messages: Message[] = chatData.map(msg => ({
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
-        timestamp: msg.timestamp || new Date().toISOString()
-      })).reverse();
+        timestamp: msg.timestamp || new Date().toISOString(),
+        imageUrl: msg.imageUrl || undefined, // Assuming image_url might be stored for historical context
+        imageMimeType: msg.imageMimeType || undefined,
+        attachedDocumentIds: msg.attachedDocumentIds || [],
+        attachedNoteIds: msg.attachedNoteIds || [],
+      }));
 
       setChatMessages(messages);
+
     } catch (error) {
-      // Keep the user message in local state even if sync fails
-      toast.error('Failed to get AI response');
+      toast.error('Failed to send message or get AI response');
       console.error('Error in sendChatMessage:', error);
+      // Mark the user message as an error if the process fails
+      setChatMessages(prev => prev.map(msg =>
+        msg.id === userMessage.id ? { ...msg, isError: true } : msg
+      ));
     } finally {
       setIsAILoading(false);
     }
@@ -318,7 +355,10 @@ export const useAppOperations = ({
           file_size: document.file_size,
           file_url: document.file_url,
           content_extracted: document.content_extracted,
-          user_id: user.id
+          user_id: user.id,
+          type: document.type, // Ensure type is saved
+          processing_status: document.processing_status, // Ensure processing_status is saved
+          processing_error: document.processing_error, // Ensure processing_error is saved
         });
 
       if (error) throw error;
@@ -330,6 +370,13 @@ export const useAppOperations = ({
       toast.error('Failed to save document');
     }
   };
+
+  // NEW: Function to update a document in the local state
+  const updateDocument = useCallback((updatedDocument: Document) => {
+    setDocuments(prev =>
+      prev.map(doc => (doc.id === updatedDocument.id ? updatedDocument : doc))
+    );
+  }, [setDocuments]);
 
   const handleDocumentDeleted = async (documentId: string) => {
     try {
@@ -388,8 +435,9 @@ export const useAppOperations = ({
     addScheduleItem,
     updateScheduleItem,
     deleteScheduleItem,
-    sendChatMessage,
+    sendChatMessage, // Updated function
     handleDocumentUploaded,
+    updateDocument, // EXPOSE NEW FUNCTION
     handleDocumentDeleted,
     handleProfileUpdate,
   };
