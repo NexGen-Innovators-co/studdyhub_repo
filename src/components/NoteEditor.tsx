@@ -51,29 +51,29 @@ import { Graphviz } from '@hpcc-js/wasm';
 import { Chart, registerables } from 'chart.js';
 Chart.register(...registerables); // Register Chart.js components globally
 
-// Define a mapping of highlight.js classes to Tailwind CSS color classes
+// Define a mapping of highlight.js classes to Tailwind CSS color classes for dark theme
 const syntaxColorMap: { [key: string]: string } = {
-  'hljs-comment': 'text-slate-500', // Grey for comments
-  'hljs-keyword': 'text-purple-400', // Purple for keywords
-  'hljs-built_in': 'text-cyan-400', // Cyan for built-in functions/types
-  'hljs-string': 'text-green-400', // Green for strings
-  'hljs-variable': 'text-blue-300', // Blue for variables
-  'hljs-number': 'text-orange-300', // Orange for numbers
-  'hljs-literal': 'text-orange-300', // Orange for literals (true, false, null)
-  'hljs-function': 'text-blue-300', // Blue for function names
-  'hljs-params': 'text-yellow-300', // Yellow for function parameters
-  'hljs-tag': 'text-pink-400', // Pink for HTML/XML tags
-  'hljs-attr': 'text-cyan-400', // Cyan for HTML/XML attributes
-  'hljs-selector-tag': 'text-purple-400', // Purple for CSS selectors
-  'hljs-selector-id': 'text-orange-400', // Orange for CSS IDs
-  'hljs-selector-class': 'text-green-400', // Green for CSS classes
-  'hljs-regexp': 'text-pink-400', // Pink for regular expressions
-  'hljs-meta': 'text-sky-400', // Sky blue for meta information (e.g., #include)
-  'hljs-type': 'text-teal-400', // Teal for types
-  'hljs-symbol': 'text-red-400', // Red for symbols
-  'hljs-operator': 'text-pink-300', // Pink for operators
+  'hljs-comment': 'text-gray-400', // Lighter grey for comments in dark mode
+  'hljs-keyword': 'text-purple-300', // Lighter purple for keywords
+  'hljs-built_in': 'text-cyan-300', // Lighter cyan for built-in functions/types
+  'hljs-string': 'text-green-300', // Lighter green for strings
+  'hljs-variable': 'text-blue-200', // Lighter blue for variables
+  'hljs-number': 'text-orange-200', // Lighter orange for numbers
+  'hljs-literal': 'text-orange-200', // Lighter orange for literals (true, false, null)
+  'hljs-function': 'text-blue-200', // Lighter blue for function names
+  'hljs-params': 'text-yellow-200', // Lighter yellow for function parameters
+  'hljs-tag': 'text-pink-300', // Lighter pink for HTML/XML tags
+  'hljs-attr': 'text-cyan-300', // Lighter cyan for HTML/XML attributes
+  'hljs-selector-tag': 'text-purple-300', // Lighter purple for CSS selectors
+  'hljs-selector-id': 'text-orange-300', // Lighter orange for CSS IDs
+  'hljs-selector-class': 'text-green-300', // Lighter green for CSS classes
+  'hljs-regexp': 'text-pink-300', // Lighter pink for regular expressions
+  'hljs-meta': 'text-sky-300', // Lighter sky blue for meta information (e.g., #include)
+  'hljs-type': 'text-teal-300', // Lighter teal for types
+  'hljs-symbol': 'text-red-300', // Lighter red for symbols
+  'hljs-operator': 'text-pink-200', // Lighter pink for operators
   // Default text color for code content not specifically highlighted
-  'hljs-code-text': 'text-white',
+  'hljs-code-text': 'text-gray-100', // White-ish for general code text
 };
 
 // Helper function to convert highlight.js output to React elements with custom colors
@@ -1202,15 +1202,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       return (
         <CodeBlockErrorBoundary
           fallback={
-            <div className="my-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="flex items-center gap-2 text-yellow-700">
+            <div className="my-4 p-4 bg-yellow-900 border border-yellow-700 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-300">
                 <AlertTriangle className="h-4 w-4" />
                 <span className="text-sm font-medium">Mermaid Diagram Error</span>
               </div>
-              <p className="text-sm text-yellow-600 mt-1">
+              <p className="text-sm text-yellow-400 mt-1">
                 Failed to render Mermaid diagram. Raw content:
               </p>
-              <pre className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded overflow-x-auto">
+              <pre className="text-sm text-gray-300 mt-2 p-2 bg-gray-800 rounded overflow-x-auto">
                 {codeContent}
               </pre>
             </div>
@@ -1230,10 +1230,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     // Handle DOT diagrams
     if (!inline && lang === 'dot') {
       return (
-        <div className="my-4 p-3 sm:p-4 bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-sm border border-gray-200">
+        <div className="my-4 p-3 sm:p-4 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg shadow-sm border border-gray-700">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
                 DOT Graph
               </span>
             </div>
@@ -1242,28 +1242,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => copy(codeContent)}
-                className="h-7 px-2 text-xs hover:bg-gray-100 whitespace-nowrap"
+                className="h-7 px-2 text-xs hover:bg-gray-700 whitespace-nowrap text-gray-300"
                 title="Copy source code"
               >
-                {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-500" /> : <Copy className="h-3 w-3 sm:mr-1" />}
+                {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-500" /> : <Copy className="h-3 w-3 sm:mr-1 text-gray-300" />}
                 <span className="hidden sm:inline">Copy</span>
               </Button>
             </div>
           </div>
 
           {dotError && (
-            <div className="my-2 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+            <div className="my-2 p-3 bg-red-900 border border-red-700 rounded-md text-red-300 text-sm">
               <AlertTriangle className="inline h-4 w-4 mr-2" />
               {dotError}
-              <pre className="mt-2 text-xs text-red-600 overflow-x-auto">{codeContent}</pre>
+              <pre className="mt-2 text-xs text-red-400 overflow-x-auto">{codeContent}</pre>
             </div>
           )}
 
           {/* Always render the container for the DOT graph */}
-          <div ref={dotContainerRef} className="relative w-full h-80 bg-white p-4 rounded-lg shadow-inner flex items-center justify-center">
+          <div ref={dotContainerRef} className="relative w-full h-80 bg-gray-700 p-4 rounded-lg shadow-inner flex items-center justify-center">
             {isDotLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-700 bg-opacity-75 z-10">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
               </div>
             )}
             {dotSvgContent && (
@@ -1273,7 +1273,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               />
             )}
             {!isDotLoading && !dotError && !dotSvgContent && (
-              <p className="text-sm text-gray-500">Enter DOT graph code to render.</p>
+              <p className="text-sm text-gray-400">Enter DOT graph code to render.</p>
             )}
           </div>
         </div>
@@ -1283,10 +1283,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     // Handle Chart.js diagrams
     if (!inline && lang === 'chartjs') {
       return (
-        <div className="my-4 p-3 sm:p-4 bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-sm border border-gray-200">
+        <div className="my-4 p-3 sm:p-4 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg shadow-sm border border-gray-700">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
                 Chart.js Graph
               </span>
             </div>
@@ -1295,34 +1295,34 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => copy(codeContent)}
-                className="h-7 px-2 text-xs hover:bg-gray-100 whitespace-nowrap"
+                className="h-7 px-2 text-xs hover:bg-gray-700 whitespace-nowrap text-gray-300"
                 title="Copy source code"
               >
-                {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-500" /> : <Copy className="h-3 w-3 sm:mr-1" />}
+                {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-500" /> : <Copy className="h-3 w-3 sm:mr-1 text-gray-300" />}
                 <span className="hidden sm:inline">Copy</span>
               </Button>
             </div>
           </div>
 
           {chartJsError && (
-            <div className="my-2 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+            <div className="my-2 p-3 bg-red-900 border border-red-700 rounded-md text-red-300 text-sm">
               <AlertTriangle className="inline h-4 w-4 mr-2" />
               {chartJsError}
-              <pre className="mt-2 text-xs text-red-600 overflow-x-auto">{codeContent}</pre>
+              <pre className="mt-2 text-xs text-red-400 overflow-x-auto">{codeContent}</pre>
             </div>
           )}
 
           {/* Always render the canvas for the Chart.js graph */}
-          <div ref={chartContainerRef} className="relative w-full h-80 bg-white p-4 rounded-lg shadow-inner flex items-center justify-center">
+          <div ref={chartContainerRef} className="relative w-full h-80 bg-gray-700 p-4 rounded-lg shadow-inner flex items-center justify-center">
             {isChartJsLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-700 bg-opacity-75 z-10">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
               </div>
             )}
             {/* The canvas element is always present here */}
             <canvas ref={chartCanvasRef}></canvas>
             {!isChartJsLoading && !chartJsError && !codeContent && (
-              <p className="text-sm text-gray-500">Enter Chart.js configuration to render.</p>
+              <p className="text-sm text-gray-400">Enter Chart.js configuration to render.</p>
             )}
           </div>
         </div>
@@ -1336,23 +1336,23 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const renderedCode = isPlainText ? escapeHtml(codeContent) : highlightCode(codeContent, lang); // Use highlightCode
 
       return (
-        <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-200">
+        <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-700">
           {/* Header with language badge and copy button */}
-          <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-400"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-              <div className="w-3 h-3 rounded-full bg-green-400"></div>
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+              <span className="text-xs font-medium text-gray-300 uppercase tracking-wide">
                 {lang}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => copy(codeContent)}
-                className="h-6 w-6 p-0"
+                className="h-6 w-6 p-0 text-gray-400 hover:text-gray-100 hover:bg-gray-700"
               >
                 {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
               </Button>
@@ -1360,10 +1360,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </div>
 
           {/* Code content with enhanced syntax highlighting */}
-          <div className="p-4 bg-white overflow-x-auto">
+          <div className="p-4 bg-gray-900 overflow-x-auto">
             <pre className="font-mono text-sm leading-relaxed">
               <code
-                className="text-gray-800"
+                className="text-gray-100"
                 dangerouslySetInnerHTML={{
                   __html: renderedCode
                 }}
@@ -1376,7 +1376,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     // Inline code
     return (
-      <code className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md font-mono text-sm border border-purple-200" {...props}>
+      <code className="bg-purple-900 text-purple-300 px-2 py-1 rounded-md font-mono text-sm border border-purple-700" {...props}>
         {children}
       </code>
     );
@@ -1417,41 +1417,41 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
         // Map highlight.js classes to inline styles for guaranteed rendering
         const styleMap: { [key: string]: string } = {
-          'hljs-comment': 'color: #6b7280; font-style: italic;',
-          'hljs-keyword': 'color: #7c3aed; font-weight: 600;',
-          'hljs-string': 'color: #059669;',
-          'hljs-number': 'color: #ea580c;',
-          'hljs-built_in': 'color: #2563eb; font-weight: 500;',
-          'hljs-function': 'color: #1d4ed8; font-weight: 500;',
-          'hljs-variable': 'color: #1e40af;',
-          'hljs-type': 'color: #0d9488;',
-          'hljs-class': 'color: #d97706;',
-          'hljs-attr': 'color: #d97706;',
-          'hljs-tag': 'color: #dc2626;',
-          'hljs-operator': 'color: #db2777;',
-          'hljs-literal': 'color: #ea580c;',
-          'hljs-meta': 'color: #0284c7;',
-          'hljs-title': 'color: #059669;',
-          'hljs-selector-tag': 'color: #7c3aed;',
-          'hljs-selector-class': 'color: #059669;',
-          'hljs-selector-id': 'color: #dc2626;',
-          'hljs-regexp': 'color: #be185d;',
-          'hljs-symbol': 'color: #dc2626;',
-          'hljs-bullet': 'color: #db2777;',
-          'hljs-params': 'color: #b45309;',
-          'hljs-name': 'color: #1d4ed8;',
-          'hljs-attribute': 'color: #d97706;',
-          'hljs-selector-attr': 'color: #0891b2;',
-          'hljs-selector-pseudo': 'color: #db2777;',
-          'hljs-template-variable': 'color: #1e40af;',
-          'hljs-quote': 'color: #6b7280; font-style: italic;',
-          'hljs-deletion': 'color: #b91c1c; background-color: #fef2f2;',
-          'hljs-addition': 'color: #166534; background-color: #f0fdf4;',
-          'hljs-meta-keyword': 'color: #0284c7; font-weight: 600;',
-          'hljs-meta-string': 'color: #0369a1;',
-          'hljs-subst': 'color: #7c3aed;',
-          'hljs-section': 'color: #059669;',
-          'hljs-boolean': 'color: #ea580c;',
+          'hljs-comment': 'color: #9ca3af; font-style: italic;', // gray-400
+          'hljs-keyword': 'color: #c084fc; font-weight: 600;', // purple-300
+          'hljs-string': 'color: #86efac;', // green-300
+          'hljs-number': 'color: #fdba74;', // orange-200
+          'hljs-built_in': 'color: #93c5fd; font-weight: 500;', // blue-300
+          'hljs-function': 'color: #93c5fd; font-weight: 500;', // blue-300
+          'hljs-variable': 'color: #bfdbfe;', // blue-200
+          'hljs-type': 'color: #5eead4;', // teal-300
+          'hljs-class': 'color: #fcd34d;', // amber-300
+          'hljs-attr': 'color: #93c5fd;', // blue-300
+          'hljs-tag': 'color: #f472b6;', // pink-300
+          'hljs-operator': 'color: #fbcfe8;', // pink-200
+          'hljs-literal': 'color: #fdba74;', // orange-200
+          'hljs-meta': 'color: #7dd3fc;', // sky-300
+          'hljs-title': 'color: #86efac;', // green-300
+          'hljs-selector-tag': 'color: #c084fc;', // purple-300
+          'hljs-selector-class': 'color: #86efac;', // green-300
+          'hljs-selector-id': 'color: #fca5a5;', // red-300
+          'hljs-regexp': 'color: #f472b6;', // pink-300
+          'hljs-symbol': 'color: #fca5a5;', // red-300
+          'hljs-bullet': 'color: #fbcfe8;', // pink-200
+          'hljs-params': 'color: #fde68a;', // yellow-200
+          'hljs-name': 'color: #93c5fd;', // blue-300
+          'hljs-attribute': 'color: #fcd34d;', // amber-300
+          'hljs-selector-attr': 'color: #67e8f9;', // cyan-300
+          'hljs-selector-pseudo': 'color: #fbcfe8;', // pink-200
+          'hljs-template-variable': 'color: #bfdbfe;', // blue-200
+          'hljs-quote': 'color: #9ca3af; font-style: italic;', // gray-400
+          'hljs-deletion': 'color: #f87171; background-color: #450a0a;', // red-400, bg-red-950
+          'hljs-addition': 'color: #4ade80; background-color: #064e3b;', // green-400, bg-green-950
+          'hljs-meta-keyword': 'color: #7dd3fc; font-weight: 600;', // sky-300
+          'hljs-meta-string': 'color: #38bdf8;', // sky-400
+          'hljs-subst': 'color: #c084fc;', // purple-300
+          'hljs-section': 'color: #86efac;', // green-300
+          'hljs-boolean': 'color: #fdba74;', // orange-200
         };
 
         let style = '';
@@ -1471,9 +1471,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 border border-slate-200 rounded-lg shadow-md dark:bg-slate-900 overflow-hidden">
+    <div className="h-full flex flex-col bg-slate-50 border border-slate-200 rounded-lg shadow-md dark:bg-gray-900 dark:border-gray-800 overflow-hidden">
       {/* Editor Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-200 dark:bg-slate-900">
+      <div className="p-3 sm:p-4 border-b border-slate-200 dark:bg-gray-900 dark:border-gray-800">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           {/* Mobile toggle for notes history */}
           {onToggleNotesHistory && (
@@ -1481,7 +1481,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               variant="ghost"
               size="sm"
               onClick={onToggleNotesHistory}
-              className="lg:hidden h-8 w-8 p-0 mr-2 text-slate-600 hover:bg-slate-50"
+              className="lg:hidden h-8 w-8 p-0 mr-2 text-slate-600 hover:bg-slate-50 dark:text-gray-400 dark:hover:bg-gray-800"
             >
               {isNotesHistoryOpen ? <FileText className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
@@ -1490,7 +1490,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Note title..."
-            className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0 text-slate-800"
+            className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0 text-slate-800 dark:text-gray-100"
           />
           {/* Desktop buttons */}
           <div className="hidden lg:flex items-center gap-2 flex-wrap justify-end">
@@ -1501,6 +1501,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-3
                 border border-input bg-background hover:bg-accent hover:text-accent-foreground
                 text-slate-600 border-slate-200 hover:bg-slate-50
+                dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100
                 ${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
               `}
             >
@@ -1520,6 +1521,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-3
                 border border-input bg-background hover:bg-accent hover:text-accent-foreground
                 text-slate-600 border-slate-200 hover:bg-slate-50
+                dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100
                 ${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
               `}
             >
@@ -1537,7 +1539,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={regenerateNoteFromDocument}
               disabled={isUploading || isGeneratingAI || isProcessingAudio || !note.document_id}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               {isGeneratingAI ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1552,7 +1554,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleViewOriginalDocument}
               disabled={!note.document_id || isLoadingDocument || isProcessingAudio}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               {isLoadingDocument ? (
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -1567,7 +1569,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleDownloadNote}
               disabled={!content.trim()}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               <Download className="h-4 w-4 mr-2" />
               Download Markdown
@@ -1578,7 +1580,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleDownloadPdf}
               disabled={!content.trim()}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               <FileDown className="h-4 w-4 mr-2" />
               Download PDF
@@ -1589,7 +1591,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleCopyNoteContent}
               disabled={!content.trim()}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               <Copy className="h-4 w-4 mr-2" />
               Copy Content
@@ -1600,7 +1602,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleTextToSpeech}
               disabled={isUploading || isGeneratingAI || isProcessingAudio}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               {isSpeaking ? (
                 <StopCircle className="h-4 w-4 mr-2 animate-pulse text-red-500" />
@@ -1617,7 +1619,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               variant="outline"
               size="sm"
               onClick={() => setIsEditing(!isEditing)}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               {isEditing ? 'Full Preview' : 'Edit with Live Preview'}
             </Button>
@@ -1629,19 +1631,19 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               variant="outline"
               size="sm"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               <Menu className="h-4 w-4" />
               <span className="ml-2">More</span>
             </Button>
             {isMobileMenuOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-10 flex flex-col py-2">
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-10 flex flex-col py-2 dark:bg-gray-800 dark:border-gray-700">
                 {/* Action Buttons */}
                 <label
                   htmlFor="document-upload-input-mobile"
                   className={`
                     inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2
-                    text-slate-600 hover:bg-slate-50
+                    text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700
                     ${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                   // Removed onClick={handleMobileMenuClose}
@@ -1659,7 +1661,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                   htmlFor="audio-upload-input-mobile"
                   className={`
                     inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2
-                    text-slate-600 hover:bg-slate-50
+                    text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700
                     ${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                   // Removed onClick={handleMobileMenuClose}
@@ -1675,7 +1677,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                   onClick={() => { regenerateNoteFromDocument(); handleMobileMenuClose(); }}
                   disabled={isUploading || isGeneratingAI || isProcessingAudio || !note.document_id}
                 >
@@ -1689,7 +1691,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 {/* New "View Original Document" button for mobile */}
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                   onClick={() => { handleViewOriginalDocument(); handleMobileMenuClose(); }}
                   disabled={!note.document_id || isLoadingDocument || isProcessingAudio}
                 >
@@ -1703,7 +1705,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 {/* New "Download Note" button for mobile */}
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                   onClick={() => { handleDownloadNote(); handleMobileMenuClose(); }}
                   disabled={!content.trim()}
                 >
@@ -1713,7 +1715,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 {/* New "Download PDF" button for mobile */}
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                   onClick={() => { handleDownloadPdf(); handleMobileMenuClose(); }}
                   disabled={!content.trim()}
                 >
@@ -1723,7 +1725,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 {/* New "Copy Note Content" button for mobile */}
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                   onClick={() => { handleCopyNoteContent(); handleMobileMenuClose(); }}
                   disabled={!content.trim()}
                 >
@@ -1732,7 +1734,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                   onClick={() => { handleTextToSpeech(); handleMobileMenuClose(); }}
                   disabled={isUploading || isGeneratingAI || isProcessingAudio}
                 >
@@ -1753,7 +1755,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50"
+                  className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                   onClick={() => { setIsEditing(!isEditing); handleMobileMenuClose(); }}
                 >
                   {isEditing ? <FileText className="h-4 w-4 mr-2" /> : <Menu className="h-4 w-4 mr-2" />}
@@ -1761,22 +1763,22 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </Button>
 
                 {/* Separator */}
-                <div className="border-t border-slate-200 my-2 mx-4" />
-                <p className="text-sm font-semibold text-slate-600 px-4 mb-2">Note Settings</p>
+                <div className="border-t border-slate-200 my-2 mx-4 dark:border-gray-700" />
+                <p className="text-sm font-semibold text-slate-600 px-4 mb-2 dark:text-gray-300">Note Settings</p>
 
                 {/* Category Select */}
                 <div className="px-4 py-2">
                   <Select value={category} onValueChange={(value: NoteCategory) => setCategory(value)}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600">
                       <SelectValue placeholder="Select Category" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="general">General</SelectItem>
-                      <SelectItem value="math">Mathematics</SelectItem>
-                      <SelectItem value="science">Science</SelectItem>
-                      <SelectItem value="history">History</SelectItem>
-                      <SelectItem value="language">Languages</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                    <SelectContent className="dark:bg-gray-700 dark:border-gray-600">
+                      <SelectItem value="general" className="dark:text-gray-100 dark:hover:bg-gray-600">General</SelectItem>
+                      <SelectItem value="math" className="dark:text-gray-100 dark:hover:bg-gray-600">Mathematics</SelectItem>
+                      <SelectItem value="science" className="dark:text-gray-100 dark:hover:bg-gray-600">Science</SelectItem>
+                      <SelectItem value="history" className="dark:text-gray-100 dark:hover:bg-gray-600">History</SelectItem>
+                      <SelectItem value="language" className="dark:text-gray-100 dark:hover:bg-gray-600">Languages</SelectItem>
+                      <SelectItem value="other" className="dark:text-gray-100 dark:hover:bg-gray-600">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1788,12 +1790,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     onValueChange={(value) => setSelectedVoiceURI(value)}
                     disabled={isSpeaking || voices.length === 0}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600">
                       <SelectValue placeholder="Select a voice" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="dark:bg-gray-700 dark:border-gray-600">
                       {voices.map((voice, index) => (
-                        <SelectItem key={`${voice.voiceURI}-${index.toString()}`} value={voice.voiceURI}>
+                        <SelectItem key={`${voice.voiceURI}-${index.toString()}`} value={voice.voiceURI} className="dark:text-gray-100 dark:hover:bg-gray-600">
                           {`${voice.name} (${voice.lang})`}
                         </SelectItem>
                       ))}
@@ -1803,12 +1805,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
                 {/* Tags Input */}
                 <div className="flex items-center gap-2 px-4 py-2">
-                  <Hash className="h-4 w-4 text-slate-400" />
+                  <Hash className="h-4 w-4 text-slate-400 dark:text-gray-500" />
                   <Input
                     value={tags}
                     onChange={(e) => setTags(e.target.value)}
                     placeholder="Add tags (comma separated)..."
-                    className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1 text-slate-700"
+                    className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1 text-slate-700 dark:text-gray-200"
                   />
                 </div>
               </div>
@@ -1819,16 +1821,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         {/* This section is now hidden on mobile and moved into the toggler */}
         <div className="hidden lg:flex items-center gap-4 flex-wrap">
           <Select value={category} onValueChange={(value: NoteCategory) => setCategory(value)}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-40 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="general">General</SelectItem>
-              <SelectItem value="math">Mathematics</SelectItem>
-              <SelectItem value="science">Science</SelectItem>
-              <SelectItem value="history">History</SelectItem>
-              <SelectItem value="language">Languages</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+            <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+              <SelectItem value="general" className="dark:text-gray-100 dark:hover:bg-gray-700">General</SelectItem>
+              <SelectItem value="math" className="dark:text-gray-100 dark:hover:bg-gray-700">Mathematics</SelectItem>
+              <SelectItem value="science" className="dark:text-gray-100 dark:hover:bg-gray-700">Science</SelectItem>
+              <SelectItem value="history" className="dark:text-gray-100 dark:hover:bg-gray-700">History</SelectItem>
+              <SelectItem value="language" className="dark:text-gray-100 dark:hover:bg-gray-700">Languages</SelectItem>
+              <SelectItem value="other" className="dark:text-gray-100 dark:hover:bg-gray-700">Other</SelectItem>
             </SelectContent>
           </Select>
 
@@ -1837,12 +1839,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             onValueChange={(value) => setSelectedVoiceURI(value)}
             disabled={isSpeaking || voices.length === 0}
           >
-            <SelectTrigger className="w-full sm:w-[240px]">
+            <SelectTrigger className="w-full sm:w-[240px] dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700">
               <SelectValue placeholder="Select a voice" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
               {voices.map((voice, index) => (
-                <SelectItem key={`${voice.voiceURI}-${index.toString()}`} value={voice.voiceURI}>
+                <SelectItem key={`${voice.voiceURI}-${index.toString()}`} value={voice.voiceURI} className="dark:text-gray-100 dark:hover:bg-gray-700">
                   {`${voice.name} (${voice.lang})`}
                 </SelectItem>
               ))}
@@ -1850,12 +1852,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </Select>
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Hash className="h-4 w-4 text-slate-400" />
+            <Hash className="h-4 w-4 text-slate-400 dark:text-gray-500" />
             <Input
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="Add tags (comma separated)..."
-              className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1 text-slate-700"
+              className="border-none shadow-none focus-visible:ring-0 bg-transparent flex-1 text-slate-700 dark:text-gray-200"
             />
           </div>
         </div>
@@ -1863,8 +1865,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       {/* Audio Options Panel */}
       {uploadedAudioDetails && isAudioOptionsVisible && (
-        <div className="p-3 sm:p-4 border-b border-slate-200 bg-slate-50 flex flex-col gap-3">
-          <h3 className="text-lg font-semibold text-slate-800">Audio Options: {uploadedAudioDetails.name}</h3>
+        <div className="p-3 sm:p-4 border-b border-slate-200 bg-slate-50 dark:bg-gray-900 dark:border-gray-800 flex flex-col gap-3">
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100">Audio Options: {uploadedAudioDetails.name}</h3>
           <audio ref={audioPlayerRef} src={uploadedAudioDetails.url} onEnded={handleAudioEnded} className="w-full hidden" />
           <div className="flex items-center gap-2 flex-wrap">
             <Button
@@ -1872,7 +1874,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handlePlayAudio}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               {isPlayingAudio ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
               {isPlayingAudio ? 'Pause Audio' : 'Play Audio'}
@@ -1882,7 +1884,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleDownloadAudio}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               <Download className="h-4 w-4 mr-2" />
               Download Audio
@@ -1892,7 +1894,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleCopyAudioUrl}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               <Copy className="h-4 w-4 mr-2" />
               Copy Audio URL
@@ -1902,7 +1904,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleClearAudioProcessing}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio}
-              className="text-slate-600 hover:bg-slate-50"
+              className="text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               <XCircle className="h-4 w-4 mr-2" />
               Clear Audio
@@ -1927,7 +1929,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleGenerateSummaryFromAudio}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio || !userProfile}
-              className="bg-slate-100 text-slate-600 hover:bg-slate-200"
+              className="bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
             >
               {isGeneratingAudioSummary ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1937,17 +1939,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               {isGeneratingAudioSummary ? 'Generating Summary...' : 'Generate Only Summary'}
             </Button>
             <Select value={targetLanguage} onValueChange={setTargetLanguage} disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600">
                 <SelectValue placeholder="Translate to..." />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="en">English</SelectItem>
-                <SelectItem value="es">Spanish</SelectItem>
-                <SelectItem value="fr">French</SelectItem>
-                <SelectItem value="de">German</SelectItem>
-                <SelectItem value="zh">Chinese</SelectItem>
-                <SelectItem value="ja">Japanese</SelectItem>
-                <SelectItem value="ko">Korean</SelectItem>
+              <SelectContent className="dark:bg-gray-700 dark:border-gray-600">
+                <SelectItem value="en" className="dark:text-gray-100 dark:hover:bg-gray-600">English</SelectItem>
+                <SelectItem value="es" className="dark:text-gray-100 dark:hover:bg-gray-600">Spanish</SelectItem>
+                <SelectItem value="fr" className="dark:text-gray-100 dark:hover:bg-gray-600">French</SelectItem>
+                <SelectItem value="de" className="dark:text-gray-100 dark:hover:bg-gray-600">German</SelectItem>
+                <SelectItem value="zh" className="dark:text-gray-100 dark:hover:bg-gray-600">Chinese</SelectItem>
+                <SelectItem value="ja" className="dark:text-gray-100 dark:hover:bg-gray-600">Japanese</SelectItem>
+                <SelectItem value="ko" className="dark:text-gray-100 dark:hover:bg-gray-600">Korean</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -1955,7 +1957,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               size="sm"
               onClick={handleTranslateAudio}
               disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio || targetLanguage === 'en' || !userProfile}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             >
               {isTranslatingAudio ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1974,36 +1976,36 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         {/* Editor/Preview Area */}
         {isEditing ? (
           // Split view: Textarea on left, ReactMarkdown preview on right
-          <div className="flex-1 p-3 sm:p-6 flex flex-col dark:bg-slate-800 lg:flex-row gap-4 modern-scrollbar overflow-y-auto min-w-0">
+          <div className="flex-1 p-3 sm:p-6 flex flex-col dark:bg-gray-800 lg:flex-row gap-4 modern-scrollbar overflow-y-auto min-w-0">
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Start writing your note here..."
-              className="flex-1 resize-none border shadow-sm focus-visible:ring-0 text-base leading-relaxed dark:bg-slate-800  min-h-[50vh] lg:min-h-0 border-slate-200"
+              className="flex-1 resize-none border shadow-sm focus-visible:ring-0 text-base leading-relaxed dark:bg-gray-800 min-h-[50vh] lg:min-h-0 border-slate-200 dark:border-gray-700 dark:text-gray-100"
             />
-            <div className="flex-1 prose prose-sm max-w-none text-slate-700 leading-relaxed modern-scrollbar overflow-y-auto min-h-[50vh] lg:min-h-0 border rounded-md p-4 shadow-sm border-slate-200" id="note-preview-content">
+            <div className="flex-1 prose prose-sm max-w-none text-slate-700 leading-relaxed modern-scrollbar overflow-y-auto min-h-[50vh] lg:min-h-0 border rounded-md p-4 shadow-sm border-slate-200 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200" id="note-preview-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
                 components={{
                   code: CodeRenderer,
                   table: ({ node, ...props }) => (
-                    <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200">
+                    <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200 dark:border-gray-700">
                       <table className="w-full border-collapse" {...props} />
                     </div>
                   ),
-                  thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100" {...props} />,
-                  th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800" {...props} />,
-                  td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors" {...props} />,
-                  h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3" {...props} />,
-                  h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2" {...props} />,
-                  h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2" {...props} />,
-                  h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1" {...props} />,
-                  ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700" {...props} />,
-                  ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700" {...props} />,
-                  blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4" {...props} />,
-                  p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed" {...props} />,
-                  a: ({ node, ...props }) => <a className="text-blue-600 hover:underline" {...props} />,
+                  thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900" {...props} />,
+                  th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-600 dark:text-gray-100" {...props} />,
+                  td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors dark:border-gray-700 dark:even:bg-gray-800 dark:hover:bg-blue-900 dark:text-gray-200" {...props} />,
+                  h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3 dark:text-blue-400" {...props} />,
+                  h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2 dark:text-purple-400" {...props} />,
+                  h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2 dark:text-green-400" {...props} />,
+                  h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1 dark:text-orange-400" {...props} />,
+                  ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-gray-200" {...props} />,
+                  ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700 dark:text-gray-200" {...props} />,
+                  blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4 dark:border-blue-700 dark:text-gray-300 dark:bg-blue-950" {...props} />,
+                  p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed dark:text-gray-200" {...props} />,
+                  a: ({ node, ...props }) => <a className="text-blue-600 hover:underline dark:text-blue-400 dark:hover:underline" {...props} />,
                 }}
               >
                 {content}
@@ -2013,29 +2015,29 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         ) : (
           // Full preview mode
           <div className="flex-1 p-3 sm:p-6 flex flex-col overflow-y-auto min-w-0">
-            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed flex-1 modern-scrollbar overflow-y-auto min-h-0" id="note-preview-content">
+            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed flex-1 modern-scrollbar overflow-y-auto min-h-0 dark:text-gray-200" id="note-preview-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
                 components={{
                   code: CodeRenderer,
                   table: ({ node, ...props }) => (
-                    <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200">
+                    <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200 dark:border-gray-700">
                       <table className="w-full border-collapse" {...props} />
                     </div>
                   ),
-                  thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100" {...props} />,
-                  th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800" {...props} />,
-                  td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors" {...props} />,
-                  h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3" {...props} />,
-                  h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2" {...props} />,
-                  h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2" {...props} />,
-                  h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1" {...props} />,
-                  ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700" {...props} />,
-                  ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700" {...props} />,
-                  blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4" {...props} />,
-                  p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed" {...props} />,
-                  a: ({ node, ...props }) => <a className="text-blue-600 hover:underline" {...props} />,
+                  thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900" {...props} />,
+                  th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-600 dark:text-gray-100" {...props} />,
+                  td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors dark:border-gray-700 dark:even:bg-gray-800 dark:hover:bg-blue-900 dark:text-gray-200" {...props} />,
+                  h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3 dark:text-blue-400" {...props} />,
+                  h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2 dark:text-purple-400" {...props} />,
+                  h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2 dark:text-green-400" {...props} />,
+                  h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1 dark:text-orange-400" {...props} />,
+                  ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-gray-200" {...props} />,
+                  ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700 dark:text-gray-200" {...props} />,
+                  blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4 dark:border-blue-700 dark:text-gray-300 dark:bg-blue-950" {...props} />,
+                  p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed dark:text-gray-200" {...props} />,
+                  a: ({ node, ...props }) => <a className="text-blue-600 hover:underline dark:text-blue-400 dark:hover:underline" {...props} />,
                 }}
               >
                 {content}
@@ -2062,40 +2064,41 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 ${isSummaryVisible ? 'translate-y-0' : 'translate-y-full'}
                 flex flex-col
                 p-3 sm:p-6
+                dark:from-blue-950 dark:to-purple-950 dark:border-l-gray-800
               `}
             >
               <div className="flex items-center justify-between gap-2 mb-3 cursor-pointer" onClick={() => setIsSummaryVisible(!isSummaryVisible)}>
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-purple-600" />
-                  <h4 className="font-medium text-slate-800">AI Summary</h4>
+                  <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  <h4 className="font-medium text-slate-800 dark:text-gray-100">AI Summary</h4>
                 </div>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-600 hover:bg-slate-50">
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-600 hover:bg-slate-50 dark:text-gray-400 dark:hover:bg-gray-800">
                   {isSummaryVisible ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                 </Button>
               </div>
-              <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed modern-scrollbar overflow-y-auto flex-1">
+              <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed modern-scrollbar overflow-y-auto flex-1 dark:text-gray-200">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}
                   components={{
                     code: CodeRenderer,
                     table: ({ node, ...props }) => (
-                      <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200">
+                      <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200 dark:border-gray-700">
                         <table className="w-full border-collapse" {...props} />
                       </div>
                     ),
-                    thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100" {...props} />,
-                    th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800" {...props} />,
-                    td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors" {...props} />,
-                    h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3" {...props} />,
-                    h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2" {...props} />,
-                    h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2" {...props} />,
-                    h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1" {...props} />,
-                    ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700" {...props} />,
-                    ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700" {...props} />,
-                    blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4" {...props} />,
-                    p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed" {...props} />,
-                    a: ({ node, ...props }) => <a className="text-blue-600 hover:underline" {...props} />,
+                    thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900" {...props} />,
+                    th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-600 dark:text-gray-100" {...props} />,
+                    td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors dark:border-gray-700 dark:even:bg-gray-800 dark:hover:bg-blue-900 dark:text-gray-200" {...props} />,
+                    h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3 dark:text-blue-400" {...props} />,
+                    h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2 dark:text-purple-400" {...props} />,
+                    h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2 dark:text-green-400" {...props} />,
+                    h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1 dark:text-orange-400" {...props} />,
+                    ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-gray-200" {...props} />,
+                    ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700 dark:text-gray-200" {...props} />,
+                    blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4 dark:border-blue-700 dark:text-gray-300 dark:bg-blue-950" {...props} />,
+                    p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed dark:text-gray-200" {...props} />,
+                    a: ({ node, ...props }) => <a className="text-blue-600 hover:underline dark:text-blue-400 dark:hover:underline" {...props} />,
                   }}
                 >
                   {note.aiSummary}
@@ -2107,39 +2110,39 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
         {/* Translated Content Section - Still at the bottom, but within the main content area */}
         {translatedContent && (
-          <div className="p-3 sm:p-6 border-t border-slate-200 bg-slate-50">
+          <div className="p-3 sm:p-6 border-t border-slate-200 bg-slate-50 dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-center justify-between gap-2 mb-3 cursor-pointer" onClick={() => setTranslatedContent(null)}>
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-slate-600" />
-                <h4 className="font-medium text-slate-800">Translated Content ({targetLanguage.toUpperCase()})</h4>
+                <FileText className="h-4 w-4 text-slate-600 dark:text-gray-400" />
+                <h4 className="font-medium text-slate-800 dark:text-gray-100">Translated Content ({targetLanguage.toUpperCase()})</h4>
               </div>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-600 hover:bg-slate-50">
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-600 hover:bg-slate-50 dark:text-gray-400 dark:hover:bg-gray-800">
                 <ChevronUp className="h-4 w-4" />
               </Button>
             </div>
-            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed dark:text-gray-200">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
                 components={{
                   code: CodeRenderer,
                   table: ({ node, ...props }) => (
-                    <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200">
+                    <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200 dark:border-gray-700">
                       <table className="w-full border-collapse" {...props} />
                     </div>
                   ),
-                  thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100" {...props} />,
-                  th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800" {...props} />,
-                  td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors" {...props} />,
-                  h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3" {...props} />,
-                  h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2" {...props} />,
-                  h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2" {...props} />,
-                  h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1" {...props} />,
-                  ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700" {...props} />,
-                  ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700" {...props} />,
-                  blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4" {...props} />,
-                  p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed" {...props} />,
-                  a: ({ node, ...props }) => <a className="text-blue-600 hover:underline" {...props} />,
+                  thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900" {...props} />,
+                  th: ({ node, ...props }) => <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-600 dark:text-gray-100" {...props} />,
+                  td: ({ node, ...props }) => <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors dark:border-gray-700 dark:even:bg-gray-800 dark:hover:bg-blue-900 dark:text-gray-200" {...props} />,
+                  h1: ({ node, ...props }) => <h1 className="text-3xl font-extrabold text-blue-700 mt-6 mb-3 dark:text-blue-400" {...props} />,
+                  h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-purple-700 mt-5 mb-2 dark:text-purple-400" {...props} />,
+                  h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-green-700 mt-4 mb-2 dark:text-green-400" {...props} />,
+                  h4: ({ node, ...props }) => <h4 className="text-lg font-semibold text-orange-700 mt-3 mb-1 dark:text-orange-400" {...props} />,
+                  ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-gray-200" {...props} />,
+                  ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-1 text-slate-700 dark:text-gray-200" {...props} />,
+                  blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-400 pl-4 py-2 italic text-slate-600 bg-blue-50 rounded-r-md my-4 dark:border-blue-700 dark:text-gray-300 dark:bg-blue-950" {...props} />,
+                  p: ({ node, ...props }) => <p className="mb-3 text-slate-700 leading-relaxed dark:text-gray-200" {...props} />,
+                  a: ({ node, ...props }) => <a className="text-blue-600 hover:underline dark:text-blue-400 dark:hover:underline" {...props} />,
                 }}
               >
                 {translatedContent}

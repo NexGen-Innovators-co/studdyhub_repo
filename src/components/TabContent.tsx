@@ -70,39 +70,39 @@ const toHtml = (result: any) => {
       const { tagName, properties, children } = node;
       const classNames = (properties?.className || []).join(' ');
       const styleMap: { [key: string]: string } = {
-        'hljs-comment': 'color: #6b7280; font-style: italic;',
-        'hljs-keyword': 'color: #7c3aed; font-weight: 600;',
-        'hljs-string': 'color: #059669;',
-        'hljs-number': 'color: #ea580c;',
-        'hljs-built_in': 'color: #2563eb; font-weight: 500;',
-        'hljs-function': 'color: #1d4ed8;',
-        'hljs-variable': 'color: #1e40af;',
-        'hljs-type': 'color: #0d9488;',
-        'hljs-class': 'color: #d97706;',
-        'hljs-attr': 'color: #d97706;',
-        'hljs-tag': 'color: #dc2626;',
-        'hljs-operator': 'color: #db2777;',
-        'hljs-literal': 'color: #ea580c;',
-        'hljs-meta': 'color: #0284c7;',
-        'hljs-title': 'color: #059669;',
-        'hljs-selector-tag': 'color: #7c3aed;',
-        'hljs-regexp': 'color: #be185d;',
-        'hljs-symbol': 'color: #dc2626;',
-        'hljs-bullet': 'color: #db2777;',
-        'hljs-params': 'color: #b45309;',
-        'hljs-name': 'color: #1d4ed8;',
-        'hljs-attribute': 'color: #d97706;',
-        'hljs-selector-attr': 'color: #0891b2;',
-        'hljs-selector-pseudo': 'color: #db2777;',
-        'hljs-template-variable': 'color: #1e40af;',
-        'hljs-quote': 'color: #6b7280; font-style: italic;',
-        'hljs-deletion': 'color: #b91c1c; background-color: #fef2f2;',
-        'hljs-addition': 'color: #166534; background-color: #f0fdf4;',
-        'hljs-meta-keyword': 'color: #0284c7; font-weight: 600;',
-        'hljs-meta-string': 'color: #0369a1;',
-        'hljs-subst': 'color: #7c3aed;',
-        'hljs-section': 'color: #059669;',
-        'hljs-boolean': 'color: #ea580c;',
+        'hljs-comment': 'color: #9ca3af; font-style: italic;', // gray-400
+        'hljs-keyword': 'color: #c084fc; font-weight: 600;', // purple-300
+        'hljs-string': 'color: #86efac;', // green-300
+        'hljs-number': 'color: #fdba74;', // orange-200
+        'hljs-built_in': 'color: #93c5fd; font-weight: 500;', // blue-300
+        'hljs-function': 'color: #93c5fd; font-weight: 500;', // blue-300
+        'hljs-variable': 'color: #bfdbfe;', // blue-200
+        'hljs-type': 'color: #5eead4;', // teal-300
+        'hljs-class': 'color: #fcd34d;', // amber-300
+        'hljs-attr': 'color: #93c5fd;', // blue-300
+        'hljs-tag': 'color: #f472b6;', // pink-300
+        'hljs-operator': 'color: #fbcfe8;', // pink-200
+        'hljs-literal': 'color: #fdba74;', // orange-200
+        'hljs-meta': 'color: #7dd3fc;', // sky-300
+        'hljs-title': 'color: #86efac;', // green-300
+        'hljs-selector-tag': 'color: #c084fc;', // purple-300
+        'hljs-regexp': 'color: #f472b6;', // pink-300
+        'hljs-symbol': 'color: #fca5a5;', // red-300
+        'hljs-bullet': 'color: #fbcfe8;', // pink-200
+        'hljs-params': 'color: #fde68a;', // yellow-200
+        'hljs-name': 'color: #93c5fd;', // blue-300
+        'hljs-attribute': 'color: #fcd34d;', // amber-300
+        'hljs-selector-attr': 'color: #67e8f9;', // cyan-300
+        'hljs-selector-pseudo': 'color: #fbcfe8;', // pink-200
+        'hljs-template-variable': 'color: #bfdbfe;', // blue-200
+        'hljs-quote': 'color: #9ca3af; font-style: italic;', // gray-400
+        'hljs-deletion': 'color: #f87171; background-color: #450a0a;', // red-400, bg-red-950
+        'hljs-addition': 'color: #4ade80; background-color: #064e3b;', // green-400, bg-green-950
+        'hljs-meta-keyword': 'color: #7dd3fc; font-weight: 600;', // sky-300
+        'hljs-meta-string': 'color: #38bdf8;', // sky-400
+        'hljs-subst': 'color: #c084fc;', // purple-300
+        'hljs-section': 'color: #86efac;', // green-300
+        'hljs-boolean': 'color: #fdba74;', // orange-200
       };
       
       let style = '';
@@ -149,7 +149,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig }) => {
   }, [chartConfig]);
 
   return (
-    <div className="relative w-full h-80 bg-white p-4 rounded-lg shadow-inner">
+    <div className="relative w-full h-80 bg-gray-700 p-4 rounded-lg shadow-inner">
       <canvas ref={canvasRef}></canvas>
     </div>
   );
@@ -178,15 +178,15 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
         return <ChartRenderer chartConfig={chartConfig} />;
       } catch (e) {
         return (
-          <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center gap-2 text-red-700">
+          <div className="my-4 p-4 bg-red-900 border border-red-700 rounded-lg">
+            <div className="flex items-center gap-2 text-red-300">
               <AlertTriangle className="h-4 w-4" />
               <span className="text-sm font-medium">Chart.js Error</span>
             </div>
-            <p className="text-sm text-red-600 mt-1">
+            <p className="text-sm text-red-400 mt-1">
               Invalid Chart.js JSON configuration. Please check the code.
             </p>
-            <pre className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded overflow-x-auto">
+            <pre className="text-sm text-gray-300 mt-2 p-2 bg-gray-800 rounded overflow-x-auto">
               {code}
             </pre>
           </div>
@@ -197,15 +197,15 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
       // which is typically done in AIChat.tsx. For SidePanelViewer, we'll show raw code for now.
       return (
         <div className="flex flex-col items-center justify-center h-full p-4">
-          <p className="text-slate-600 mb-2">DOT Graph Rendering Not Available Here.</p>
-          <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full">
+          <p className="text-gray-300 mb-2">DOT Graph Rendering Not Available Here.</p>
+          <pre className="bg-gray-800 p-3 rounded-md text-sm overflow-x-auto max-w-full text-gray-200">
             {code}
           </pre>
           <Button
             variant="outline"
             size="sm"
             onClick={() => onSuggestAiCorrection(`Can you fix or generate a DOT graph for me? Here's the code: ${code}`)}
-            className="mt-4 bg-blue-500 text-white hover:bg-blue-600"
+            className="mt-4 bg-blue-700 text-white hover:bg-blue-800"
           >
             Suggest AI Correction
           </Button>
@@ -213,31 +213,31 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
       );
     } else if (type === 'code' && code && language) {
       return (
-        <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
+        <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-700">
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-400"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-              <div className="w-3 h-3 rounded-full bg-green-400"></div>
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+              <span className="text-xs font-medium text-gray-300 uppercase tracking-wide">
                 {language}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => copy(code)}
-                className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                className="h-6 w-6 p-0 text-gray-400 hover:text-gray-100 hover:bg-gray-700"
               >
                 {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
               </Button>
             </div>
           </div>
-          <div className="p-4 bg-white overflow-x-auto">
+          <div className="p-4 bg-gray-900 overflow-x-auto">
             <pre className="font-mono text-sm leading-relaxed">
               <code 
-                className="text-gray-800"
+                className="text-gray-100"
                 dangerouslySetInnerHTML={{
                   __html: highlightCode(code, language)
                 }}
@@ -248,7 +248,7 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
       );
     } else if (type === 'image' && imageUrl) {
         return (
-            <div className="flex items-center justify-center h-full w-full p-2">
+            <div className="flex items-center justify-center h-full w-full p-2 bg-gray-900">
                 <img 
                     src={imageUrl} 
                     alt="Full size image" 
@@ -263,10 +263,10 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
     }
     else {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-slate-500">
+        <div className="flex flex-col items-center justify-center h-full text-gray-400">
           <AlertTriangle className="h-8 w-8 mb-2" />
           <p>Unsupported Content Type</p>
-          <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full mt-2">
+          <pre className="bg-gray-800 p-3 rounded-md text-sm overflow-x-auto max-w-full mt-2 text-gray-300">
             {code || 'No content provided.'}
           </pre>
         </div>
@@ -275,11 +275,11 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
   };
 
   return (
-    <div className="flex flex-col bg-slate-50 border-l border-slate-200 shadow-xl"> {/* Removed fixed positioning */}
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
-        <h3 className="text-lg font-semibold text-slate-800">Content Viewer: {type === 'image' ? 'Image' : (language || type)}</h3>
-        <Button variant="ghost" size="icon" onClick={onClose} title="Close Panel">
-          <X className="h-5 w-5 text-slate-500 hover:text-slate-700" />
+    <div className="flex flex-col bg-slate-50 border-l border-slate-200 shadow-xl dark:bg-gray-900 dark:border-gray-800"> {/* Removed fixed positioning */}
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white dark:bg-gray-900 dark:border-gray-800">
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100">Content Viewer: {type === 'image' ? 'Image' : (language || type)}</h3>
+        <Button variant="ghost" size="icon" onClick={onClose} title="Close Panel" className="dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100">
+          <X className="h-5 w-5 text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-100" />
         </Button>
       </div>
       <div className="flex-1 overflow-auto p-4 sm:p-6">
@@ -378,7 +378,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     notes: props.filteredNotes,
     activeNote: props.activeNote,
     onNoteSelect: props.onNoteSelect,
-    onNoteDelete: props.onNoteDelete,
     onNoteUpdate: props.onNoteUpdate,
   }), [props.filteredNotes, props.activeNote, props.onNoteSelect, props.onNoteDelete, props.onNoteUpdate]);
 
@@ -487,15 +486,16 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
             w-80 bg-white border-r border-slate-200 shadow-lg lg:shadow-none
             flex flex-col transition-transform duration-300 ease-in-out
-            lg:translate-x-0 lg:w-80`}>
+            lg:translate-x-0 lg:w-80
+            dark:bg-gray-900 dark:border-gray-800 dark:shadow-none`}>
             <NotesList 
-              {...notesProps} 
+              {...notesHistoryProps} 
               isOpen={isNotesHistoryOpen}
               onClose={onToggleNotesHistory}
             />
           </div>
 
-          <div className="flex-1 bg-white min-h-0">
+          <div className="flex-1 bg-white min-h-0 dark:bg-gray-900">
             {notesProps.activeNote ? (
               <NoteEditor 
                 note={notesProps.activeNote}
@@ -505,7 +505,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                 isNotesHistoryOpen={isNotesHistoryOpen}
               />
             ) : (
-              <div className="h-full flex items-center justify-center text-slate-400 p-4">
+              <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
                 <div className="text-center">
                   <div className="text-4xl sm:text-6xl mb-4">📝</div>
                   <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
@@ -519,7 +519,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'recordings':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto dark:bg-gray-900">
           <ErrorBoundary>
             <ClassRecordings {...recordingsProps} />
           </ErrorBoundary>
@@ -528,7 +528,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'schedule':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto dark:bg-gray-900">
           <Schedule {...scheduleProps} />
         </div>
       );
@@ -541,7 +541,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
           <div className={`flex-1 flex min-h-0 transition-all duration-300 ease-in-out
             ${isSidePanelOpen ? 'lg:w-2/3' : 'lg:w-full'}`}> {/* Adjust width based on side panel */}
             
-            <div className={`flex-1 flex flex-col  min-w-0 ${isSidePanelOpen ? 'lg:w-1/2' : 'w-full'}`}>
+            <div className={`flex-1 flex flex-col  min-w-0 ${isSidePanelOpen ? 'lg:w-1/2' : 'w-full'} dark:bg-gray-900`}>
               <AIChat {...chatProps} />
             </div>
 
@@ -568,7 +568,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             )}
             {/* Mobile side panel (fixed position) */}
             {isSidePanelOpen && (
-              <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40 lg:hidden">
+              <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40 lg:hidden dark:bg-gray-900 dark:border-gray-800">
                 <SidePanelViewer
                   type={activeSidePanelContent!.type} // Pass type
                   code={activeSidePanelContent!.code}
@@ -586,14 +586,14 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'documents':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar ">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
           <DocumentUpload {...documentsProps} />
         </div>
       );
 
     case 'settings':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto dark:bg-gray-900">
           <LearningStyleSettings 
             profile={props.userProfile}
             onProfileUpdate={props.onProfileUpdate}
