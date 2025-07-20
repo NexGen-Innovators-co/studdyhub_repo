@@ -6,8 +6,8 @@ import { Button } from './ui/button';
 interface MermaidProps {
   chart: string;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
-  onSuggestAiCorrection?: (prompt: string) => void; // New prop for AI correction
-  diagramRef: React.RefObject<HTMLDivElement>; // <-- ADDED THIS PROP
+  onSuggestAiCorrection?: (prompt: string) => void;
+  diagramRef: React.RefObject<HTMLDivElement>;
 }
 
 // Function to clean the Mermaid string (less aggressive)
@@ -23,11 +23,6 @@ const cleanMermaidString = (input: string): string => {
   cleaned = cleaned.replace(/\r\n|\r/g, '\n');
 
   // 3. Replace common invisible/non-standard spaces with regular spaces
-  //    \u00A0: Non-breaking space
-  //    \u202F: Narrow No-Break Space
-  //    \u200B: Zero Width Space
-  //    \uFEFF: Zero Width No-Break Space (BOM handled above, but good to catch here too if somehow inside)
-  //    \u00AD: Soft Hyphen
   cleaned = cleaned.replace(/[\u00A0\u202F\u200B\uFEFF\u00AD]/g, ' ');
 
   // 4. Normalize multiple spaces to single spaces within each line, then trim each line
@@ -63,8 +58,6 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
 
     // --- Specific Mermaid Sequence Diagram Fixes ---
     if (lines[0].trim().startsWith('sequenceDiagram')) {
-      // Regex to capture source, arrow, target, and message
-      // This is more robust for sequence diagrams as it re-formats the entire message line
       const seqLineRegex = /^\s*([^->]+?)\s*(->>|-->|->|--|x-->>|x-->|--x|->>x|--x)\s*([^:]+?)(?::\s*(.*))?$/;
       const match = line.match(seqLineRegex);
 
@@ -74,23 +67,19 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
         const target = match[3].trim();
         let message = match[4] ? match[4].trim() : '';
 
-        // Fix common AI error: "-> >" to "->>" or "--> >" to "-->>" etc.
         let correctedArrow = arrow;
         if (arrow.includes(' ') && arrow.includes('>')) {
-          correctedArrow = arrow.replace(/\s+/g, ''); // Remove spaces within arrow
+          correctedArrow = arrow.replace(/\s+/g, '');
           wasFixed = true;
         }
 
-        // Ensure message is quoted if it contains spaces and is not already quoted
         if (message.includes(' ') && !message.startsWith('"') && !message.endsWith('"') && !message.startsWith('`') && !message.endsWith('`')) {
           message = `"${message}"`;
           wasFixed = true;
         }
 
-        // Reconstruct the line with clean parts and correct spacing
         line = `${source}${correctedArrow}${target}${message ? `: ${message}` : ''}`;
       } else {
-        // If it's a participant line, ensure it's clean
         if (line.startsWith('participant')) {
           const parts = line.split(':');
           if (parts.length > 1) {
@@ -111,10 +100,8 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
     }
     // --- End Specific Mermaid Sequence Diagram Fixes ---
 
-
-    // Handle special characters within node definitions (e.g., A[Content with (special) chars])
-    // Also capture (.*?) for round nodes and other shapes
-    const nodeDefinitionRegex = /([A-Z0-9_]+\s*(?:\[.*?\]|\{.*?\}|\(.*?\)|<.*?>|\|.*?\|))/g; // Added <...> for hexagons, |...| for cylinders
+    // Handle special characters within node definitions
+    const nodeDefinitionRegex = /([A-Z0-9_]+\s*(?:\[.*?\]|\{.*?\}|\(.*?\)|<.*?>|\|.*?\|))/g;
     line = line.replace(nodeDefinitionRegex, (match) => {
       const contentMatch = match.match(/\[(.*?)\]|\{(.*?)\}|\((.*?)\}|<(.*?)>|\|(.*?)\|/);
       if (contentMatch) {
@@ -129,18 +116,18 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
 
           if (!isAlreadyFormatted) {
             let fixedContent = content
-              .replace(/\(/g, '&lpar;')
-              .replace(/\)/g, '&rpar;')
-              .replace(/\//g, '&sol;')
-              .replace(/=/g, '&equals;')
-              .replace(/\[/g, '&lbrack;')
-              .replace(/\]/g, '&rbrack;')
-              .replace(/∂/g, '&part;')
-              .replace(/∫/g, '&int;')
-              .replace(/\+/g, '&plus;')
-              .replace(/\^/g, '&Hat;')
-              .replace(/(?<!-)(--)(?!>)/g, '&minus;&minus;')
-              .replace(/(?<!-)(-{1})(?![->])/g, '&minus;');
+              .replace(/\(/g, '(')
+              .replace(/\)/g, ')')
+              .replace(/\//g, '/')
+              .replace(/=/g, '=')
+              .replace(/\[/g, '[')
+              .replace(/\]/g, ']')
+              .replace(/∂/g, '∂')
+              .replace(/∫/g, '∫')
+              .replace(/\+/g, '+')
+              .replace(/\^/g, '^')
+              .replace(/(?<!-)(--)(?!>)/g, '−−')
+              .replace(/(?<!-)(-{1})(?![->])/g, '−');
 
             fixedContent = `\`${fixedContent}\``;
             const nodeId = match.split(nodeTypeChar)[0].trim();
@@ -152,8 +139,7 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
       return match;
     });
 
-    // Handle unquoted labels in edges (e.g., A -- This is a label --> B)
-    // This is a more general rule, but the specific sequence diagram message quoting above takes precedence.
+    // Handle unquoted labels in edges
     const edgeLabelRegex = /(\s(?:-+|==|~~)(?:>)?\s)([^\s"'][\w\s]*?[^\s"'])\s((?:-+|==|~~)(?:>)?\s)/g;
     line = line.replace(edgeLabelRegex, (match, p1, p2, p3) => {
       if (p2.includes(' ') && !p2.startsWith('"') && !p2.endsWith('"') && !p2.startsWith('`') && !p2.endsWith('`')) {
@@ -164,8 +150,8 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
     });
 
     // Trim spaces around operators and ensure single spaces
-    line = line.replace(/\s*(-->|--|---|-+>|==>|==|=+>|~~>|~~)\s*/g, '$1'); // Remove spaces around arrows first
-    line = line.replace(/\s+/g, ' ').trim(); // Then normalize all spaces
+    line = line.replace(/\s*(-->|--|---|-+>|==>|==|=+>|~~>|~~)\s*/g, '$1');
+    line = line.replace(/\s+/g, ' ').trim();
 
     if (line !== originalLine) {
       wasFixed = true;
@@ -180,56 +166,37 @@ const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean
   };
 };
 
-// Fixed function to download SVG as PNG without canvas taint issues
+// Function to download SVG as PNG without canvas taint issues
 const downloadSvgAsPng = (svgString: string, filename: string = 'mermaid-diagram') => {
   try {
-    // Create a new SVG element and set its content
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
     const svgElement = svgDoc.documentElement;
-
-    // Get SVG dimensions
     const svgSVGElement = svgElement as unknown as SVGSVGElement;
     const svgRect = svgSVGElement.getBoundingClientRect();
     const width = svgSVGElement.width?.baseVal?.value || svgRect.width || 800;
     const height = svgSVGElement.height?.baseVal?.value || svgRect.height || 600;
 
-    // Ensure SVG has proper dimensions and namespace
     svgSVGElement.setAttribute('width', width.toString());
     svgSVGElement.setAttribute('height', height.toString());
     svgSVGElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 
-    // Convert back to string
     const serializer = new XMLSerializer();
     const svgData = serializer.serializeToString(svgSVGElement);
-
-    // Create data URL directly from SVG string (no blob needed)
     const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
 
-    // Create canvas
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-
-    // Set canvas dimensions (2x for higher resolution)
     canvas.width = width * 2;
     canvas.height = height * 2;
-
-    // Scale context for high DPI
     ctx!.scale(2, 2);
-
-    // Fill with white background
-    ctx!.fillStyle = 'white';
+    ctx!.fillStyle = '#1f2937'; // Dark background
     ctx!.fillRect(0, 0, width, height);
 
-    // Create image and load SVG
     const img = new Image();
-
     img.onload = () => {
       try {
-        // Draw the SVG image to canvas
         ctx!.drawImage(img, 0, 0, width, height);
-
-        // Convert canvas to blob and download
         canvas.toBlob((blob) => {
           if (blob) {
             const downloadUrl = URL.createObjectURL(blob);
@@ -243,23 +210,18 @@ const downloadSvgAsPng = (svgString: string, filename: string = 'mermaid-diagram
         }, 'image/png');
       } catch (error) {
         console.error('Error converting canvas to PNG:', error);
-        // Fallback: offer SVG download instead
         downloadSvg(svgString, filename);
       }
     };
 
     img.onerror = () => {
       console.error('Error loading SVG image');
-      // Fallback: offer SVG download instead
       downloadSvg(svgString, filename);
     };
 
-    // Load the SVG data URL
     img.src = svgDataUrl;
-
   } catch (error) {
     console.error('Error processing SVG for PNG conversion:', error);
-    // Fallback: offer SVG download instead
     downloadSvg(svgString, filename);
   }
 };
@@ -277,7 +239,7 @@ const downloadSvg = (svgString: string, filename: string = 'mermaid-diagram') =>
   URL.revokeObjectURL(url);
 };
 
-const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCorrection, diagramRef }) => { // Destructure diagramRef
+const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCorrection, diagramRef }) => {
   const id = useRef(`mermaid-${Math.random().toString(36).substr(2, 9)}`);
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -322,14 +284,12 @@ ${code}
     }
   }, [onSuggestAiCorrection]);
 
-
   const triggerRender = useCallback(() => {
-    if (chart.trim() && !isRendering) { // Only trigger if chart content exists and not already rendering
+    if (chart.trim() && !isRendering) {
       setShouldRender(true);
     }
   }, [chart, isRendering]);
 
-  // Cleanup function for ongoing renders
   const cleanupRender = useCallback(() => {
     if (renderTimeoutRef.current) {
       clearTimeout(renderTimeoutRef.current);
@@ -362,78 +322,67 @@ ${code}
 
   useEffect(() => {
     const renderDiagram = async () => {
-      if (!isMermaidLoaded || !diagramRef.current || !(window as any).mermaid || !shouldRender) { // Use diagramRef.current
+      if (!isMermaidLoaded || !diagramRef.current || !(window as any).mermaid || !shouldRender) {
         return;
       }
 
-      // Clean up any previous render attempts
       cleanupRender();
 
       setIsRendering(true);
       setError(null);
       setSvg(null);
-      setShouldRender(false); // Reset trigger
+      setShouldRender(false);
 
       const mermaidInstance = (window as any).mermaid;
 
       try {
-        // Enhanced theme configuration with better colors
         mermaidInstance.initialize({
           startOnLoad: false,
-          theme: 'base',
+          theme: 'dark',
           themeVariables: {
             // Primary colors
             primaryColor: '#3b82f6',
-            primaryTextColor: '#ffffff',
+            primaryTextColor: '#e5e7eb',
             primaryBorderColor: '#2563eb',
-
             // Secondary colors
             secondaryColor: '#10b981',
             tertiaryColor: '#f59e0b',
-
             // Background colors
-            background: '#ffffff',
-            secondaryBackground: '#f8fafc',
-            tertiaryBackground: '#e2e8f0',
-
+            background: '#1f2937',
+            secondaryBackground: '#374151',
+            tertiaryBackground: '#4b5563',
             // Node colors
             mainBkg: '#3b82f6',
             secondBkg: '#10b981',
             tertiaryBkg: '#f59e0b',
-
             // Text colors
-            textColor: '#1f2937',
-            secondaryTextColor: '#6b7280',
-
+            textColor: '#e5e7eb',
+            secondaryTextColor: '#9ca3af',
             // Line colors
-            lineColor: '#6b7280',
-            arrowheadColor: '#374151',
-
+            lineColor: '#9ca3af',
+            arrowheadColor: '#e5e7eb',
             // Special colors
-            errorBkgColor: '#fee2e2',
-            errorTextColor: '#dc2626',
-
+            errorBkgColor: '#7f1d1d',
+            errorTextColor: '#f87171',
             // Flowchart specific
-            nodeBkg: '#ffffff',
+            nodeBkg: '#374151',
             nodeBorder: '#3b82f6',
-            clusterBkg: '#f8fafc',
-            clusterBorder: '#e2e8f0',
-
+            clusterBkg: '#1f2937',
+            clusterBorder: '#4b5563',
             // Sequence diagram
-            actorBkg: '#f8fafc',
+            actorBkg: '#374151',
             actorBorder: '#3b82f6',
-            actorTextColor: '#1f2937',
-            actorLineColor: '#6b7280',
-            signalColor: '#374151',
-            signalTextColor: '#1f2937',
-            labelBoxBkgColor: '#f8fafc',
-            labelBoxBorderColor: '#e2e8f0',
-            labelTextColor: '#1f2937',
-            loopTextColor: '#1f2937',
-            noteBorderColor: '#fbbf24',
-            noteBkgColor: '#fef3c7',
-            noteTextColor: '#92400e',
-
+            actorTextColor: '#e5e7eb',
+            actorLineColor: '#9ca3af',
+            signalColor: '#e5e7eb',
+            signalTextColor: '#e5e7eb',
+            labelBoxBkgColor: '#374151',
+            labelBoxBorderColor: '#4b5563',
+            labelTextColor: '#e5e7eb',
+            loopTextColor: '#e5e7eb',
+            noteBorderColor: '#d97706',
+            noteBkgColor: '#78350f',
+            noteTextColor: '#f59e0b',
             // Gantt chart
             cScale0: '#3b82f6',
             cScale1: '#10b981',
@@ -469,9 +418,8 @@ ${code}
           },
           xychart: {
             useMaxWidth: true,
-            defaultBackgroundColor: '#ffffff'
+            defaultBackgroundColor: '#1f2937'
           },
-          // Global responsive settings
           maxWidth: '100%',
           responsive: true
         });
@@ -482,11 +430,8 @@ ${code}
 
         const finalChart = fixedChart;
 
-        // --- START DEBUG LOGGING ---
         console.log("Mermaid input string (raw):", finalChart);
         console.log("Mermaid input string (char codes):", finalChart.split('').map(c => c.charCodeAt(0)));
-        // --- END DEBUG LOGGING ---
-
 
         const renderPromise = new Promise<any>((resolve, reject) => {
           renderTimeoutRef.current = setTimeout(() => {
@@ -516,14 +461,13 @@ ${code}
         setLastRenderedChart(chart);
 
         if (bindFunctions) {
-          bindFunctions(diagramRef.current); // Bind functions to the passed ref
+          bindFunctions(diagramRef.current);
         }
 
       } catch (e: any) {
         console.error("Rendering error (mermaid):", e);
         setError(e.message || "An unknown error occurred during rendering.");
         if (onMermaidError) {
-          // Only inform AIChat about the error, don't trigger input fill here
           onMermaidError(chart, 'rendering');
         }
       } finally {
@@ -535,22 +479,16 @@ ${code}
       renderDiagram();
     }
 
-    return cleanupRender; // Cleanup on unmount
-  }, [shouldRender, chart, isMermaidLoaded, onMermaidError, cleanupRender, diagramRef]); // Added diagramRef to dependencies
+    return cleanupRender;
+  }, [shouldRender, chart, isMermaidLoaded, onMermaidError, cleanupRender, diagramRef]);
 
-  // Effect for ResizeObserver
   useEffect(() => {
     if (!diagramRef.current) return;
 
     const resizeObserver = new ResizeObserver(entries => {
       for (let entry of entries) {
-        // Check if the content box size has changed
-        if (entry.contentBoxSize) {
-          // Trigger a re-render if the size changes, but only if not currently rendering
-          // and if there's actual chart content
-          if (!isRendering && chart.trim()) {
-            triggerRender();
-          }
+        if (entry.contentBoxSize && !isRendering && chart.trim()) {
+          triggerRender();
         }
       }
     });
@@ -560,44 +498,42 @@ ${code}
     return () => {
       resizeObserver.disconnect();
     };
-  }, [diagramRef, chart, isRendering, triggerRender]); // Dependencies for ResizeObserver
+  }, [diagramRef, chart, isRendering, triggerRender]);
 
-  // Check if current chart is different from last rendered
   const hasChanges = chart !== lastRenderedChart;
 
   if (!isMermaidLoaded) {
     return (
-      <div className="my-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg flex items-center justify-center h-40">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-500 mr-2" />
-        <span className="text-blue-700">Loading diagram library...</span>
+      <div className="my-4 p-4 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-center h-40">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-400 mr-2" />
+        <span className="text-gray-300">Loading diagram library...</span>
       </div>
     );
   }
 
   if (isRendering) {
     return (
-      <div className="my-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg flex items-center justify-center h-40">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-500 mr-2" />
-        <span className="text-blue-700">Rendering diagram...</span>
+      <div className="my-4 p-4 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-center h-40">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-400 mr-2" />
+        <span className="text-gray-300">Rendering diagram...</span>
       </div>
     );
   }
 
-  // New compact error display
   if (error) {
     return (
-      <div className="my-4 p-3 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-lg">
+      <div className="my-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-orange-700">
+          <div className="flex items-center gap-2 text-red-300">
             <Info className="h-4 w-4" />
             <span className="text-sm font-medium">Diagram Issue Detected</span>
           </div>
           <div className="flex gap-2">
-            {onSuggestAiCorrection && ( // Only show button if prop is provided
+            {onSuggestAiCorrection && (
               <Button
                 size="sm"
-                onClick={() => handleAiFixClick(chart, 'rendering')} // Call new handler
-                className="bg-blue-600 text-white shadow-md hover:bg-blue-700 h-7 px-3 text-xs"
+                onClick={() => handleAiFixClick(chart, 'rendering')}
+                className="bg-blue-600 text-white hover:bg-blue-500 h-7 px-3 text-xs"
               >
                 <Wrench className="h-3 w-3 mr-1" />
                 AI Fix
@@ -607,19 +543,19 @@ ${code}
               variant="outline"
               size="sm"
               onClick={triggerRender}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50 h-7 px-3 text-xs"
+              className="text-gray-300 border-gray-600 hover:bg-gray-700 h-7 px-3 text-xs"
             >
               <Play className="h-3 w-3 mr-1" />
               Try Again
             </Button>
           </div>
         </div>
-        <details className="text-sm text-orange-600 cursor-pointer">
+        <details className="text-sm text-red-300 cursor-pointer">
           <summary className="flex items-center gap-2 py-1">
             <ChevronDown className="h-4 w-4" />
             <span>Show Details</span>
           </summary>
-          <div className="mt-2 p-2 bg-gray-50 rounded overflow-x-auto text-gray-600">
+          <div className="mt-2 p-2 bg-gray-800 rounded overflow-x-auto text-gray-300">
             <p className="mb-1">Error: {error}</p>
             <p className="font-semibold mb-1">Diagram Code:</p>
             <pre className="text-sm whitespace-pre-wrap">{chart}</pre>
@@ -629,17 +565,16 @@ ${code}
     );
   }
 
-  // Show render button when no diagram is rendered yet or when there are changes
   if (!svg || hasChanges) {
     return (
-      <div className="my-4 p-3 sm:p-4 bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-lg">
+      <div className="my-4 p-3 sm:p-4 bg-gray-900 border border-gray-700 rounded-lg">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+            <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
               Mermaid Diagram
             </span>
             {hasChanges && svg && (
-              <div className="flex items-center gap-1 text-xs bg-gradient-to-r from-orange-100 to-amber-100 text-orange-700 px-2 py-1 rounded">
+              <div className="flex items-center gap-1 text-xs bg-red-900/50 text-red-300 px-2 py-1 rounded">
                 <AlertTriangle className="h-3 w-3" />
                 <span className="hidden sm:inline">Changes detected</span>
               </div>
@@ -649,43 +584,40 @@ ${code}
             variant="ghost"
             size="sm"
             onClick={copyCode}
-            className="h-6 w-6 p-0 hover:bg-gray-100 self-end sm:self-auto"
+            className="h-6 w-6 p-0 text-gray-300 hover:bg-gray-800"
           >
-            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
           </Button>
         </div>
-
-        <div className="flex items-center justify-center h-32 border-2 border-dashed border-gray-300 rounded-lg bg-white">
+        <div className="flex items-center justify-center h-32 border-2 border-dashed border-gray-600 rounded-lg bg-gray-800">
           <div className="text-center px-4">
-            <p className="text-sm text-gray-500 mb-3">
+            <p className="text-sm text-gray-400 mb-3">
               {!svg ? 'Click to render your Mermaid diagram' : 'Click to update diagram with changes'}
             </p>
             <Button
               onClick={triggerRender}
               disabled={!chart.trim()}
-              className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-lg"
+              className="bg-blue-600 hover:bg-blue-500 text-white"
             >
               <Play className="h-4 w-4 mr-2" />
               {!svg ? 'Render Diagram' : 'Update Diagram'}
             </Button>
           </div>
         </div>
-
-        {/* Hidden div for Mermaid rendering - always present */}
         <div ref={diagramRef} style={{ display: 'none' }} />
       </div>
     );
   }
 
   return (
-    <div className="my-4 p-3 sm:p-4 bg-gradient-to-br h-auto w-auto sm:w-full from-white to-gray-50 rounded-lg shadow-sm border border-gray-200">
+    <div className="my-4 p-3 sm:p-4 bg-gray-900 rounded-lg border border-gray-700">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
             Mermaid Diagram
           </span>
           {wasAutoFixed && (
-            <div className="flex items-center gap-1 text-xs bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 px-2 py-1 rounded">
+            <div className="flex items-center gap-1 text-xs bg-green-900/50 text-green-300 px-2 py-1 rounded">
               <Wrench className="h-3 w-3" />
               <span className="hidden sm:inline">Auto-fixed</span>
             </div>
@@ -696,7 +628,7 @@ ${code}
             variant="ghost"
             size="sm"
             onClick={() => setShowSourceCode(!showSourceCode)}
-            className="h-7 px-2 text-xs hover:bg-gray-100 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
             title="Toggle source code"
           >
             {showSourceCode ? <EyeOff className="h-3 w-3 sm:mr-1" /> : <Eye className="h-3 w-3 sm:mr-1" />}
@@ -706,17 +638,17 @@ ${code}
             variant="ghost"
             size="sm"
             onClick={copyCode}
-            className="h-7 px-2 text-xs hover:bg-gray-100 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
             title="Copy source code"
           >
-            {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-500" /> : <Copy className="h-3 w-3 sm:mr-1" />}
+            {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-400" /> : <Copy className="h-3 w-3 sm:mr-1" />}
             <span className="hidden sm:inline">Copy</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => svg && downloadSvg(svg)}
-            className="h-7 px-2 text-xs hover:bg-gray-100 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
             title="Download as SVG"
           >
             <Download className="h-3 w-3 sm:mr-1" />
@@ -726,7 +658,7 @@ ${code}
             variant="ghost"
             size="sm"
             onClick={() => svg && downloadSvgAsPng(svg)}
-            className="h-7 px-2 text-xs hover:bg-gray-100 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
             title="Download as PNG"
           >
             <Download className="h-3 w-3 sm:mr-1" />
@@ -736,7 +668,7 @@ ${code}
             variant="ghost"
             size="sm"
             onClick={triggerRender}
-            className="h-7 px-2 text-sm hover:bg-gray-100"
+            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800"
             title="Re-render diagram"
           >
             <Play className="h-3 w-3" />
@@ -745,7 +677,7 @@ ${code}
       </div>
 
       {showSourceCode && (
-        <div className="mb-4 p-3 bg-gray-900 rounded-lg border">
+        <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
             <div className="flex items-center gap-2">
               <Code className="h-4 w-4 text-gray-400" />
@@ -757,7 +689,7 @@ ${code}
               variant="ghost"
               size="sm"
               onClick={copySourceCode}
-              className="h-6 w-6 p-0 hover:bg-gray-800 self-end sm:self-auto"
+              className="h-6 w-6 p-0 text-gray-300 hover:bg-gray-700 self-end sm:self-auto"
             >
               {sourceCodeCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3 text-gray-400" />}
             </Button>
@@ -768,9 +700,9 @@ ${code}
         </div>
       )}
 
-      <div className="bg-white rounded-lg  border border-gray-100 p-2 overflow-x-auto">
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-2 overflow-x-auto">
         <div
-          ref={diagramRef} // Use the passed diagramRef here
+          ref={diagramRef}
           dangerouslySetInnerHTML={{ __html: svg || '' }}
           className="min-w-0 [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:w-full"
         />

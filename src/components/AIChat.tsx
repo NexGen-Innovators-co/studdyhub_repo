@@ -1,11 +1,10 @@
 // AIChat.tsx
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
-import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp, Image, Upload, XCircle, BookOpen, StickyNote, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
-import { Message } from '../types/Class';
 import { UserProfile, Document } from '../types/Document';
 import { Note } from '../types/Note';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +15,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import Mermaid from './Mermaid';
 import { Element } from 'hast';
-import { Chart, registerables } from 'chart.js';
+import { Chart, registerables }  from 'chart.js';
 import javascript from 'highlight.js/lib/languages/javascript';
 import python from 'highlight.js/lib/languages/python';
 import java from 'highlight.js/lib/languages/java';
@@ -32,7 +31,8 @@ import { LanguageFn } from 'highlight.js';
 
 // Import Graphviz from @hpcc-js/wasm
 import { Graphviz } from '@hpcc-js/wasm';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard'; // Import the hook from its new location
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+import { generateId } from '@/utils/helpers';
 
 // Declare global types for libraries loaded via CDN
 declare global {
@@ -134,12 +134,12 @@ export class CodeBlockErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return this.props.fallback || (
-        <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center gap-2 text-red-700">
+        <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950 dark:border-red-800">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
             <AlertTriangle className="h-4 w-4" />
             <span className="text-sm font-medium">Rendering Error</span>
           </div>
-          <p className="text-sm text-red-600 mt-1">
+          <p className="text-sm text-red-600 mt-1 dark:text-red-400">
             Failed to render this content. Please try refreshing or contact support if the issue persists.
           </p>
         </div>
@@ -184,7 +184,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) 
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
-    };
+    }
   }, [calculateFontSize]);
 
 
@@ -273,7 +273,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) 
 
   return (
     // Removed fixed height (h-80) to allow for responsiveness
-    <div className="relative w-full bg-white p-4 rounded-lg shadow-inner">
+    <div className="relative w-full bg-white p-4 rounded-lg shadow-inner dark:bg-gray-900">
       <canvas ref={chartRef}></canvas>
     </div>
   );
@@ -281,16 +281,17 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) 
 
 // DiagramPanel component
 interface DiagramPanelProps {
-  diagramContent: string;
-  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'unknown'; // Added 'code' type
+  diagramContent?: string; // Made optional for image view
+  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text'; // Added 'image' and 'document-text' type
   onClose: () => void;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
   onSuggestAiCorrection: (prompt: string) => void; // This is the prop passed down
   isOpen: boolean;
   language?: string; // New prop for code language
+  imageUrl?: string; // New prop for image URL
 }
 
-const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagramType, onClose, onMermaidError, onSuggestAiCorrection, isOpen, language }) => {
+const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagramType, onClose, onMermaidError, onSuggestAiCorrection, isOpen, language, imageUrl }) => {
   const diagramContainerRef = useRef<HTMLDivElement>(null); // Ref for the container holding the diagram
   const chartCanvasRef = useRef<HTMLCanvasElement>(null); // Ref specifically for Chart.js canvas
   const mermaidDivRef = useRef<HTMLDivElement>(null); // Ref for Mermaid diagram container
@@ -359,13 +360,24 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
 
 
   let panelContent;
-  let panelTitle = 'Diagram View';
-  let downloadButtonText = 'Download Diagram (SVG)'; // Renamed to be general
-  let downloadFileName = 'diagram';
+  let panelTitle = 'Viewer';
+  let downloadButtonText = 'Download Content';
+  let downloadFileName = 'content';
 
-  // Function to download diagram
+  // Function to download content
   const handleDownloadContent = () => {
-    if (!diagramContainerRef.current) {
+    if (diagramType === 'image' && imageUrl) {
+        const link = document.createElement('a');
+        link.href = imageUrl;
+        link.download = `image-${Date.now()}.png`; // Or derive from URL
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('Image downloaded!');
+        return;
+    }
+
+    if (!diagramContainerRef.current || !diagramContent) {
       toast.error('Content not rendered for download.');
       return;
     }
@@ -394,7 +406,6 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
         downloadLink.href = contentToDownload as string;
         downloadLink.download = `${downloadFileName}.${fileExtension}`;
         document.body.appendChild(downloadLink);
-        downloadLink.click();
         document.body.removeChild(downloadLink);
         toast.success(`Chart downloaded as ${fileExtension.toUpperCase()}!`);
         return; // Exit early for data URL handling
@@ -402,7 +413,7 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
         toast.error('Chart canvas not found for chart.js download.');
         return;
       }
-    } else if (diagramType === 'code') {
+    } else if (diagramType === 'code' || diagramType === 'document-text') { // Added document-text
       contentToDownload = diagramContent;
       fileExtension = language || 'txt';
       mimeType = `text/plain;charset=utf-8`; // Fallback to plain text
@@ -426,7 +437,6 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
     downloadLink.href = url;
     downloadLink.download = `${downloadFileName}.${fileExtension}`;
     document.body.appendChild(downloadLink);
-    downloadLink.click();
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(url);
     toast.success(`${diagramType === 'code' ? 'Code' : 'Diagram'} downloaded as ${fileExtension.toUpperCase()}!`);
@@ -435,7 +445,7 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
   // Function to download as PDF
   const handleDownloadPdf = async () => {
     if (!diagramContainerRef.current) {
-      toast.error('Diagram not rendered for PDF download.');
+      toast.error('Content not rendered for PDF download.');
       return;
     }
 
@@ -462,8 +472,8 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
       });
 
       pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save(`diagram-${Date.now()}.pdf`);
-      toast.success('Diagram downloaded as PDF!');
+      pdf.save(`content-${Date.now()}.pdf`);
+      toast.success('Content downloaded as PDF!');
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
@@ -474,7 +484,7 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
   // Render logic based on diagramType
   if (diagramType === 'mermaid') {
     panelContent = (
-      <Mermaid chart={diagramContent} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} diagramRef={mermaidDivRef} />
+      <Mermaid chart={diagramContent!} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} diagramRef={mermaidDivRef} />
     );
     panelTitle = 'Mermaid Diagram View';
     downloadButtonText = 'Download Diagram (SVG)';
@@ -498,12 +508,12 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
           
           // Instantiate Graphviz
           const gv = await Graphviz.load();
-          const svg = await gv.layout(diagramContent, 'svg', 'dot');
+          const svg = await gv.layout(diagramContent!, 'svg', 'dot');
           setDotSvg(svg);
         } catch (e: any) {
           console.error('DOT rendering error:', e);
           setDotError(`DOT rendering failed: ${e.message || 'Invalid DOT syntax'}`);
-          onMermaidError(diagramContent, 'syntax'); // Use onMermaidError for general diagram errors
+          onMermaidError(diagramContent!, 'syntax'); // Use onMermaidError for general diagram errors
         } finally {
           setIsDotLoading(false);
         }
@@ -517,14 +527,14 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
     }, [diagramContent, onMermaidError]); // Dependencies for useEffect
 
     panelContent = isDotLoading ? (
-      <div className="flex flex-col items-center justify-center h-full text-blue-600">
+      <div className="flex flex-col items-center justify-center h-full text-blue-600 dark:text-blue-400">
         <Loader2 className="h-8 w-8 animate-spin mb-2" />
         <p>Rendering DOT graph...</p>
       </div>
     ) : dotError ? (
-      <div className="text-red-700 p-4">
+      <div className="text-red-700 p-4 dark:text-red-300">
         <p>Error rendering DOT graph:</p>
-        <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full">
+        <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full dark:bg-gray-800 dark:text-red-400">
           {dotError}<br />
           Raw Code:<br />
           {diagramContent}
@@ -533,13 +543,13 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
           variant="outline"
           size="sm"
           onClick={() => onSuggestAiCorrection(`Can you fix this DOT graph? Here's the code: ${diagramContent}`)}
-          className="mt-4 bg-blue-500 text-white hover:bg-blue-600"
+          className="mt-4 bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-700 dark:hover:bg-blue-800"
         >
           Suggest AI Correction
         </Button>
       </div>
     ) : (
-      <div dangerouslySetInnerHTML={{ __html: dotSvg || '' }} className="w-full h-full" /> // Removed items-center justify-center
+      <div dangerouslySetInnerHTML={{ __html: dotSvg || '' }} className="w-full h-full dark:bg-gray-900" /> // Removed items-center justify-center
     );
 
   } else if (diagramType === 'chartjs') {
@@ -548,20 +558,20 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
     downloadFileName = 'chartjs-graph';
     try {
       // Remove comments from Chart.js JSON before parsing
-      const cleanedCodeContent = diagramContent.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
+      const cleanedCodeContent = diagramContent!.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
       panelContent = <ChartRenderer chartConfig={JSON.parse(cleanedCodeContent)} chartRef={chartCanvasRef} />;
     } catch (e) {
       panelContent = (
-        <div className="text-red-700 p-4">
+        <div className="text-red-700 p-4 dark:text-red-300">
           <p>Invalid Chart.js configuration.</p>
-          <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full">
+          <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full dark:bg-gray-800 dark:text-red-400">
             {diagramContent}
           </pre>
            <Button
             variant="outline"
             size="sm"
             onClick={() => onSuggestAiCorrection(`Can you fix this Chart.js configuration? Here's the code: ${diagramContent}`)}
-            className="mt-4 bg-blue-500 text-white hover:bg-blue-600"
+            className="mt-4 bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-700 dark:hover:bg-blue-800"
           >
             Suggest AI Correction
           </Button>
@@ -574,30 +584,65 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
     downloadFileName = `code.${language || 'txt'}`;
     panelContent = (
       <div className="relative rounded-lg overflow-hidden h-full">
-        <div className="p-4 bg-white overflow-x-auto h-full">
+        <div className="p-4 bg-white overflow-x-auto h-full dark:bg-gray-900">
           <pre className="font-mono text-sm leading-relaxed h-full">
             <code
-              className="text-gray-800 h-full"
+              className="text-gray-800 h-full dark:text-gray-200"
               dangerouslySetInnerHTML={{
-                __html: highlightCode(diagramContent, language || 'plaintext')
+                __html: highlightCode(diagramContent!, language || 'plaintext')
               }}
             />
           </pre>
         </div>
       </div>
     );
+  } else if (diagramType === 'document-text') { // New handler for plain text documents
+    panelTitle = language ? `Document View - ${language.toUpperCase()}` : 'Document View';
+    downloadButtonText = 'Download Document';
+    downloadFileName = `document.${language || 'txt'}`;
+    panelContent = (
+      <div className="relative rounded-lg overflow-hidden h-full">
+        <div className="p-4 bg-white overflow-x-auto h-full dark:bg-gray-900">
+          <pre className="font-mono text-sm leading-relaxed h-full whitespace-pre-wrap"> {/* Added whitespace-pre-wrap */}
+            <code
+              className="text-gray-800 h-full dark:text-gray-200"
+              dangerouslySetInnerHTML={{
+                __html: escapeHtml(diagramContent!) // Escape HTML for plain text
+              }}
+            />
+          </pre>
+        </div>
+      </div>
+    );
+  } else if (diagramType === 'image' && imageUrl) {
+    panelTitle = 'Image Viewer';
+    downloadButtonText = 'Download Image';
+    downloadFileName = `image-${Date.now()}`;
+    panelContent = (
+        <div className="flex items-center justify-center h-full w-full p-2 bg-gray-100 dark:bg-gray-950">
+            <img
+                src={imageUrl}
+                alt="Full size image"
+                className="max-w-full max-h-full object-contain rounded-lg shadow-md"
+                onError={(e) => {
+                    e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Load+Error';
+                    e.currentTarget.alt = 'Image failed to load';
+                }}
+            />
+        </div>
+    );
   }
   else {
     panelContent = (
-      <div className="flex flex-col items-center justify-center h-full text-slate-500">
+      <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-gray-400">
         <AlertTriangle className="h-8 w-8 mb-2" />
-        <p>Unsupported Diagram Type</p>
-        <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full mt-2">
-          {diagramContent}
+        <p>Unsupported Content Type</p>
+        <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full mt-2 dark:bg-gray-800 dark:text-gray-300">
+          {diagramContent || 'No content provided.'}
         </pre>
       </div>
     );
-    panelTitle = 'Unsupported Diagram';
+    panelTitle = 'Unsupported Content';
     downloadButtonText = 'Download Content';
     downloadFileName = 'content';
   }
@@ -614,50 +659,51 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
           absolute inset-y-0 right-0 w-full bg-white shadow-xl flex flex-col z-40 transition-transform duration-300 ease-in-out
           ${isOpen ? 'translate-x-0' : 'translate-x-full'}
           md:relative md:translate-x-0 md:flex-shrink-0 md:rounded-lg md:shadow-md md:mb-6 md:border md:border-slate-200
+          dark:bg-gray-900 dark:border-gray-700
         `}
         style={dynamicWidthStyle} // Apply dynamic width here
       >
         {/* Resizer Handle - only visible on desktop */}
         <div
-          className="hidden md:block absolute left-0 top-0 bottom-0 w-2 bg-transparent cursor-ew-resize z-50 hover:bg-gray-200 transition-colors duration-200"
+          className="hidden md:block absolute left-0 top-0 bottom-0 w-2 bg-transparent cursor-ew-resize z-50 hover:bg-gray-200 transition-colors duration-200 dark:hover:bg-gray-700"
           onMouseDown={handleMouseDown}
         />
 
-        <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white">
-          <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0">{panelTitle}</h3>
+        <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0 dark:text-gray-100">{panelTitle}</h3>
           <div className="flex flex-wrap items-center gap-2 justify-end"> {/* Added flex-wrap and justify-end */}
             {/* Download Button */}
             <Button
               variant="outline"
               size="sm"
               onClick={handleDownloadContent} // Changed to general handler
-              className="text-blue-600 hover:bg-blue-50"
+              className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 dark:border-blue-700"
               title={downloadButtonText}
-              disabled={!diagramContent || diagramType === 'unknown'}
+              disabled={!diagramContent && !imageUrl || diagramType === 'unknown'} // Disable if no content/image
             >
               <Download className="h-4 w-4 mr-0 sm:mr-2" /> {/* Removed mr-2 on small screens */}
               <span className="hidden sm:inline">{downloadButtonText}</span> {/* Hidden on small screens */}
             </Button>
-            {/* Download PDF Button (only for diagrams, not code) */}
-            {(!['code', 'unknown'].includes(diagramType)) && ( // Corrected condition
+            {/* Download PDF Button (only for diagrams, not code or images) */}
+            {(!['code', 'image', 'unknown', 'document-text'].includes(diagramType)) && ( // Corrected condition
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleDownloadPdf}
-                className="text-purple-600 hover:bg-purple-50"
-                title="Download Diagram (PDF)"
+                className="text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900 dark:border-purple-700"
+                title="Download Content (PDF)"
                 disabled={!diagramContent || diagramType === 'unknown'}
               >
                 <Download className="h-4 w-4 mr-0 sm:mr-2" /> {/* Removed mr-2 on small screens */}
                 <span className="hidden sm:inline">Download PDF</span> {/* Hidden on small screens */}
               </Button>
             )}
-            <Button variant="ghost" size="icon" onClick={onClose} title="Close Diagram" className="flex-shrink-0"> {/* Added flex-shrink-0 */}
-              <X className="h-5 w-5 text-slate-500 hover:text-slate-700" />
+            <Button variant="ghost" size="icon" onClick={onClose} title="Close Panel" className="flex-shrink-0 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"> {/* Added flex-shrink-0 */}
+              <X className="h-5 w-5 text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200" />
             </Button>
           </div>
         </div>
-        <div ref={diagramContainerRef} className="flex-1 overflow-auto p-4 sm:p-6 modern-scrollbar"> {/* Added modern-scrollbar */}
+        <div ref={diagramContainerRef} className="flex-1 overflow-auto p-4 sm:p-6 modern-scrollbar dark:bg-gray-900"> {/* Added modern-scrollbar */}
           {panelContent}
         </div>
       </div>
@@ -670,7 +716,7 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onS
   // The useCopyToClipboard hook is now called at the top level of AIChatComponent
   // and 'copy' and 'copied' are passed down as props if needed, or accessed via context.
   // For this CodeBlock, we will receive them as props.
-  const { copied, copy } = useCopyToClipboard(); 
+  const { copied, copy } = useCopyToClipboard();
   const match = /language-(\w+)/.exec(className || '');
   const lang = match && match[1];
   const codeContent = String(children).trim();
@@ -679,16 +725,16 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onS
   // If it's a raw code block (not mermaid, chartjs, or dot), show a "View Code" button
   if (!inline && lang && !['mermaid', 'chartjs', 'dot'].includes(lang)) {
     return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between">
-        <div className="flex items-center gap-2 text-slate-700">
+      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center gap-2 text-slate-700 dark:text-gray-200">
           <FileText className="h-4 w-4" />
           <span className="text-sm font-medium">{lang.toUpperCase()} Code</span>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onViewDiagram && onViewDiagram(codeContent, 'code', lang)} // Pass 'code' type and language
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm"
+          onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)} // Pass 'code' type and language
+          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
         >
           <Maximize2 className="h-4 w-4 mr-2" />
           View Code
@@ -699,24 +745,24 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onS
 
   if (showRawCode) {
     return (
-      <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-200">
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
-          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+      <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide dark:text-gray-300">
             Raw Code ({lang})
           </span>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowRawCode(false)}
-            className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
             title="Attempt rendering"
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
-        <div className="p-4 bg-white overflow-x-auto">
+        <div className="p-4 bg-white overflow-x-auto dark:bg-gray-900">
           <pre className="font-mono text-sm leading-relaxed">
-            <code className="text-gray-800">{codeContent}</code>
+            <code className="text-gray-800 dark:text-gray-200">{codeContent}</code>
           </pre>
         </div>
       </div>
@@ -726,16 +772,16 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onS
   if (!inline && lang === 'mermaid') {
     // Render a button to view the diagram in the side panel
     return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between">
-        <div className="flex items-center gap-2 text-slate-700">
+      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center gap-2 text-slate-700 dark:text-gray-200">
           <FileText className="h-4 w-4" />
           <span className="text-sm font-medium">Mermaid Diagram</span>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onViewDiagram && onViewDiagram(codeContent, 'mermaid')}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm"
+          onClick={() => onViewDiagram && onViewDiagram('mermaid', codeContent)}
+          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
         >
           <Maximize2 className="h-4 w-4 mr-2" />
           View Diagram
@@ -747,16 +793,16 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onS
   if (!inline && lang === 'chartjs') {
     // Modified to show a button instead of direct rendering
     return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between">
-        <div className="flex items-center gap-2 text-slate-700">
+      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center gap-2 text-slate-700 dark:text-gray-200">
           <FileText className="h-4 w-4" />
           <span className="text-sm font-medium">Chart.js Graph</span>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onViewDiagram && onViewDiagram(codeContent, 'chartjs')}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm"
+          onClick={() => onViewDiagram && onViewDiagram('chartjs', codeContent)}
+          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
         >
           <Maximize2 className="h-4 w-4 mr-2" />
           View Full Chart
@@ -768,16 +814,16 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onS
   if (!inline && lang === 'dot') {
     // Render a button to view the diagram in the side panel for DOT graphs
     return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between">
-        <div className="flex items-center gap-2 text-slate-700">
+      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center gap-2 text-slate-700 dark:text-gray-200">
           <FileText className="h-4 w-4" />
           <span className="text-sm font-medium">DOT Graph</span>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onViewDiagram && onViewDiagram(codeContent, 'dot')}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm"
+          onClick={() => onViewDiagram && onViewDiagram('dot', codeContent)}
+          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
         >
           <Maximize2 className="h-4 w-4 mr-2" />
           View Diagram
@@ -788,7 +834,7 @@ const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onS
 
   // Fallback for inline code or unhandled languages
   return (
-    <code className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md font-mono text-sm border border-purple-200" {...props}>
+    <code className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md font-mono text-sm border border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700" {...props}>
       {children}
     </code>
   );
@@ -827,12 +873,24 @@ const toHtml = (result: any) => {
       // Map highlight.js classes to inline styles for guaranteed rendering
       const styleMap: { [key: string]: string } = {
         'hljs-comment': 'color: #6b7280; font-style: italic;',
+        'hljs-quote': 'color: #6b7280; font-style: italic;',
         'hljs-keyword': 'color: #7c3aed; font-weight: 600;',
-        'hljs-string': 'color: #059669;',
-        'hljs-number': 'color: #ea580c;',
+        'hljs-selector-tag': 'color: #7c3aed;',
+        'hljs-subst': 'color: #7c3aed;',
         'hljs-built_in': 'color: #2563eb; font-weight: 500;',
         'hljs-type': 'color: #0d9488;',
         'hljs-class': 'color: #d97706;',
+        'hljs-string': 'color: #059669;',
+        'hljs-title': 'color: #059669;',
+        'hljs-section': 'color: #059669;',
+        'hljs-number': 'color: #ea580c;',
+        'hljs-literal': 'color: #ea580c;',
+        'hljs-boolean': 'color: #ea580c;',
+        'hljs-variable': 'color: #1e40af;',
+        'hljs-template-variable': 'color: #1e40af;',
+        'hljs-function': 'color: #1d4ed8; font-weight: 500;',
+        'hljs-name': 'color: #1d4ed8;',
+        'hljs-params': 'color: #b45309;',
         'hljs-attr': 'color: #d97706;',
         'hljs-attribute': 'color: #d97706;',
         'hljs-tag': 'color: #dc2626;',
@@ -841,53 +899,48 @@ const toHtml = (result: any) => {
         'hljs-selector-attr': 'color: #0891b2;',
         'hljs-selector-pseudo': 'color: #db2777;',
         'hljs-operator': 'color: #db2777;',
-        'hljs-literal': 'color: #ea580c;',
-        'hljs-meta': 'color: #0284c7;',
-        'hljs-title': 'color: #059669;',
-        'hljs-selector-tag': 'color: #7c3aed;',
-        'hljs-regexp': 'color: #be185d;',
         'hljs-symbol': 'color: #dc2626;',
         'hljs-bullet': 'color: #db2777;',
-        'hljs-params': 'color: #b45309;',
-        'hljs-name': 'color: #1d4ed8;',
-
-        'hljs-template-variable': 'color: #1e40af;',
-        'hljs-quote': 'color: #6b7280; font-style: italic;',
-        'hljs-deletion': 'color: #b91c1c; background-color: #fef2f2;',
-        'hljs-addition': 'color: #166534; background-color: #f0fdf4;',
+        'hljs-regexp': 'color: #be185d;',
+        'hljs-meta': 'color: #0284c7;',
         'hljs-meta-keyword': 'color: #0284c7; font-weight: 600;',
         'hljs-meta-string': 'color: #0369a1;',
-        'hljs-subst': 'color: #7c3aed;',
-        'hljs-section': 'color: #059669;',
-        'hljs-boolean': 'color: #ea580c;',
+        'hljs-addition': 'color: #166534; background-color: #f0fdf4;',
+        'hljs-deletion': 'color: #b91c1c; background-color: #fef2f2;',
+        'hljs-emphasis': 'italic;',
+        'hljs-strong': 'font-bold;',
+        'hljs-code-text': 'color: #gray-800;',
       };
-
       let style = '';
       classNames.split(' ').forEach(cls => {
         if (styleMap[cls]) {
           style += styleMap[cls] + ' ';
         }
       });
-
       const childrenHtml = children?.map(nodeToHtml).join('') || '';
       return `<${tagName}${style ? ` style="${style.trim()}"` : ''}>${childrenHtml}</${tagName}>`;
     }
     return '';
   };
-
   return result.children.map(nodeToHtml).join('');
 };
 
 // Memoize MarkdownRenderer to prevent unnecessary re-renders
-const MemoizedMarkdownRenderer: React.FC<{ content: string; isUserMessage?: boolean; onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void; onSuggestAiCorrection: (prompt: string) => void; onViewDiagram: (code: string, type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'unknown', language?: string) => void; onToggleUserMessageExpansion: (messageId: string) => void; expandedMessages: Set<string>; }> = memo(({ content, isUserMessage, onMermaidError, onSuggestAiCorrection, onViewDiagram, onToggleUserMessageExpansion, expandedMessages }) => {
-  const textColorClass = isUserMessage ? 'text-white' : 'text-slate-700';
-  const linkColorClass = isUserMessage ? 'text-blue-200 hover:underline' : 'text-blue-600 hover:underline';
-  const listTextColorClass = isUserMessage ? 'text-white' : 'text-slate-700';
-  const blockquoteTextColorClass = isUserMessage ? 'text-blue-100' : 'text-slate-600';
-  const blockquoteBgClass = isUserMessage ? 'bg-blue-700 border-blue-400' : 'bg-blue-50 border-blue-500';
-
+const MemoizedMarkdownRenderer: React.FC<{
+  content: string;
+  isUserMessage?: boolean;
+  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
+  onSuggestAiCorrection: (prompt: string) => void;
+  onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text', content?: string, language?: string, imageUrl?: string) => void; // Added 'document-text'
+  onToggleUserMessageExpansion: (messageId: string) => void;
+  expandedMessages: Set<string>;
+}> = memo(({ content, isUserMessage, onMermaidError, onSuggestAiCorrection, onViewDiagram, onToggleUserMessageExpansion, expandedMessages }) => {
+  const textColorClass = isUserMessage ? 'text-white' : 'text-slate-700 dark:text-gray-300';
+  const linkColorClass = isUserMessage ? 'text-blue-200 hover:underline' : 'text-blue-600 hover:underline dark:text-blue-400';
+  const listTextColorClass = isUserMessage ? 'text-white' : 'text-slate-700 dark:text-gray-300';
+  const blockquoteTextColorClass = isUserMessage ? 'text-blue-100' : 'text-slate-600 dark:text-gray-300';
+  const blockquoteBgClass = isUserMessage ? 'bg-blue-700 border-blue-400' : 'bg-blue-50 border-blue-500 dark:bg-blue-950 dark:border-blue-700';
   const MAX_USER_MESSAGE_LENGTH = 200; // Define a threshold for collapsing
-
   const isExpanded = expandedMessages.has(content); // Use content as key for now, ideally message.id
   const needsExpansion = isUserMessage && content.length > MAX_USER_MESSAGE_LENGTH;
   const displayedContent = needsExpansion && !isExpanded ? content.substring(0, MAX_USER_MESSAGE_LENGTH) + '...' : content;
@@ -899,10 +952,10 @@ const MemoizedMarkdownRenderer: React.FC<{ content: string; isUserMessage?: bool
         rehypePlugins={[rehypeRaw]}
         components={{
           code: (props) => <CodeBlock {...props} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} onViewDiagram={onViewDiagram} />,
-          h1: ({ node, ...props }) => <h1 className={`text-2xl font-extrabold ${isUserMessage ? 'text-white' : 'text-blue-700'} mt-4 mb-2`} {...props} />,
-          h2: ({ node, ...props }) => <h2 className={`text-xl font-bold ${isUserMessage ? 'text-white' : 'text-purple-700'} mt-3 mb-2`} {...props} />,
-          h3: ({ node, ...props }) => <h3 className ={`text-lg font-semibold ${isUserMessage ? 'text-white' : 'text-green-700'} mt-2 mb-1`} {...props} />,
-          h4: ({ node, ...props }) => <h4 className={`text-base font-semibold ${isUserMessage ? 'text-white' : 'text-orange-700'} mt-1 mb-1`} {...props} />,
+          h1: ({ node, ...props }) => <h1 className={`text-2xl font-extrabold ${isUserMessage ? 'text-white' : 'text-blue-700 dark:text-blue-400'} mt-4 mb-2`} {...props} />,
+          h2: ({ node, ...props }) => <h2 className={`text-xl font-bold ${isUserMessage ? 'text-white' : 'text-purple-700 dark:text-purple-400'} mt-3 mb-2`} {...props} />,
+          h3: ({ node, ...props }) => <h3 className ={`text-lg font-semibold ${isUserMessage ? 'text-white' : 'text-green-700 dark:text-green-400'} mt-2 mb-1`} {...props} />,
+          h4: ({ node, ...props }) => <h4 className={`text-base font-semibold ${isUserMessage ? 'text-white' : 'text-orange-700 dark:text-orange-400'} mt-1 mb-1`} {...props} />,
           p: ({ node, ...props }) => <p className={`mb-2 ${textColorClass} leading-relaxed`} {...props} />,
           a: ({ node, ...props }) => <a className={`${linkColorClass} font-medium`} {...props} />,
           ul: ({ node, ...props }) => <ul className={`list-disc list-inside space-y-1 ${listTextColorClass} mb-2`} {...props} />,
@@ -911,35 +964,34 @@ const MemoizedMarkdownRenderer: React.FC<{ content: string; isUserMessage?: bool
           blockquote: ({ node, ...props }) => <blockquote className={`border-l-4 ${blockquoteBgClass} pl-4 py-2 italic ${blockquoteTextColorClass} rounded-r-md my-3`} {...props} />,
           table: ({ node, ...props }) => (
             // Ensure the table container takes full width and allows horizontal scrolling
-            <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200 w-full">
+            <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200 w-full dark:border-gray-700">
               <table className="w-full border-collapse" {...props} />
             </div>
           ),
-          thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100" {...props} />,
+          thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900" {...props} />,
           th: ({ node, ...props }) => (
-            <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800" {...props} />
+            <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-600 dark:text-gray-200" {...props} />
           ),
           td: ({ node, ...props }) => (
-            <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors" {...props} />
+            <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors dark:border-gray-700 dark:even:bg-gray-800 dark:hover:bg-blue-950 dark:text-gray-300" {...props} />
           ),
         }}
       >
         {displayedContent}
       </ReactMarkdown>
       {needsExpansion && (
-        <Button
-          variant="link"
-          size="sm"
-          onClick={() => onToggleUserMessageExpansion(content)} // Pass content or message.id
+        <Button variant="link" size="sm" onClick={() => onToggleUserMessageExpansion(content)} // Pass content or message.id
           className="text-white text-xs p-0 h-auto mt-1 flex items-center justify-end"
         >
           {isExpanded ? (
             <>
-              Show Less <ChevronUp className="h-3 w-3 ml-1" />
+              Show Less
+              <ChevronUp className="h-3 w-3 ml-1" />
             </>
           ) : (
             <>
-              Show More <ChevronDown className="h-3 w-3 ml-1" />
+              Show More
+              <ChevronDown className="h-3 w-3 ml-1" />
             </>
           )}
         </Button>
@@ -958,15 +1010,14 @@ interface ConfirmationModalProps {
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message }) => {
   if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+      <Card className="bg-white rounded-lg shadow-xl max-w-sm w-full dark:bg-gray-800">
         <CardContent className="p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-3">{title}</h3>
-          <p className="text-slate-600 mb-6">{message}</p>
+          <h3 className="text-lg font-semibold text-slate-800 mb-3 dark:text-gray-100">{title}</h3>
+          <p className="text-slate-600 mb-6 dark:text-gray-300">{message}</p>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose} className="text-slate-600 border-slate-200 hover:bg-slate-50">
+            <Button variant="outline" onClick={onClose} className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700">
               Cancel
             </Button>
             <Button onClick={onConfirm} className="bg-red-600 text-white shadow-md hover:bg-red-700">
@@ -989,13 +1040,28 @@ interface ChatSession {
   message_count?: number;
 }
 
+// Updated Message interface to include image and context IDs and imageMimeType
+export interface Message {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp: string; // ISO string
+  isError?: boolean;
+  originalUserMessageContent?: string; // For retry functionality
+  imageUrl?: string; // URL of an uploaded image (e.g., from Supabase Storage)
+  imageMimeType?: string; // New: Mime type of the uploaded image (e.g., 'image/png')
+  attachedDocumentIds?: string[]; // New: IDs of documents attached to this message
+  attachedNoteIds?: string[]; // New: IDs of notes attached to this message
+}
+
 interface AIChatProps {
+  // Removed imageDataBase64 and imageMimeType from onSendMessage signature
+  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[]) => Promise<void>; 
   messages: Message[];
-  onSendMessage: (message: string) => Promise<void>;
   isLoading: boolean;
   setIsLoading: (isLoading: boolean) => void;
   userProfile: UserProfile | null;
-  documents: Document[];
+  documents: Document[]; // Ensure Document type is imported
   notes: Note[];
   selectedDocumentIds: string[];
   onSelectionChange: (ids: string[]) => void;
@@ -1012,6 +1078,7 @@ interface AIChatProps {
   isSubmittingUserMessage: boolean;
   hasMoreMessages: boolean;
   onLoadOlderMessages: () => Promise<void>;
+  onDocumentUpdated: (updatedDocument: Document) => void; // NEW PROP
 }
 
 const AIChatComponent: React.FC<AIChatProps> = ({
@@ -1020,7 +1087,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   isLoading,
   setIsLoading,
   userProfile,
-  documents,
+  documents, // Use documents prop
   notes,
   selectedDocumentIds,
   onSelectionChange,
@@ -1033,6 +1100,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   isSubmittingUserMessage,
   hasMoreMessages,
   onLoadOlderMessages,
+  onDocumentUpdated, // Destructure new prop
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -1044,9 +1112,20 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set()); // State to track expanded messages
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false); // State for scroll button visibility
 
-  // State for the side-out diagram panel
-  const [activeDiagram, setActiveDiagram] = useState<{ content: string; type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'unknown'; language?: string } | null>(null); // Added language property
+  // Image upload states (for UI preview only, not directly sent to AI anymore)
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // State for the side-out diagram/image panel
+  const [activeDiagram, setActiveDiagram] = useState<{ content?: string; type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text'; language?: string; imageUrl?: string } | null>(null); // Added imageUrl property
   const isDiagramPanelOpen = !!activeDiagram; // Derived state
+
+  // State for image generation
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [imagePrompt, setImagePrompt] = useState('');
+
 
   // Initialize useCopyToClipboard hook once at the top level of the component
   const { copied, copy } = useCopyToClipboard();
@@ -1092,7 +1171,8 @@ const AIChatComponent: React.FC<AIChatProps> = ({
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
     }
-  }, [inputMessage]);
+  }, [inputMessage, selectedImageFile]); // Re-evaluate height when image is added/removed
+
 
   const handleDeleteClick = (messageId: string) => {
     setMessageToDelete(messageId);
@@ -1124,13 +1204,10 @@ const AIChatComponent: React.FC<AIChatProps> = ({
     textareaRef.current?.focus();
   }, []);
 
-  // New callback to handle viewing a diagram or code in the side panel
-  const handleViewDiagram = useCallback((code: string, type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'unknown' = 'unknown', language?: string) => {
-    // Only update if the content or type has actually changed
-    if (!activeDiagram || activeDiagram.content !== code || activeDiagram.type !== type || activeDiagram.language !== language) {
-      setActiveDiagram({ content: code, type: type, language: language });
-    }
-  }, [activeDiagram]); // Dependency on activeDiagram to compare
+  // New callback to handle viewing a diagram, code, or image in the side panel
+  const handleViewContent = useCallback((type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text', content?: string, language?: string, imageUrl?: string) => {
+    setActiveDiagram({ content, type, language, imageUrl });
+  }, []);
 
   const handleCloseDiagramPanel = useCallback(() => {
     setActiveDiagram(null);
@@ -1185,22 +1262,324 @@ const AIChatComponent: React.FC<AIChatProps> = ({
 
   let lastDate = ''; // To keep track of the last message's date for grouping
 
+  // Image handling logic
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file.');
+        setSelectedImageFile(null);
+        setSelectedImagePreview(null);
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast.error('Image size exceeds 5MB limit.');
+        setSelectedImageFile(null);
+        setSelectedImagePreview(null);
+        return;
+      }
+      setSelectedImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedImageFile(null);
+      setSelectedImagePreview(null);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImageFile(null);
+    setSelectedImagePreview(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = ''; // Clear file input
+    }
+  };
+
+  const handleSendMessageWithImage = async () => {
+    if (!inputMessage.trim() && !selectedImageFile) return;
+
+    let attachedImageDocumentId: string | undefined = undefined;
+    let uploadedFilePath: string | undefined = undefined;
+
+    if (selectedImageFile) {
+        setIsLoading(true); // Show loading for image upload and analysis
+        toast.info('Uploading image for analysis...', { id: 'image-upload' });
+        try {
+          // Generate a unique file name
+          const fileExtension = selectedImageFile.name.split('.').pop();
+          const fileName = `${crypto.randomUUID()}.${fileExtension}`;
+          uploadedFilePath = `user_uploads/${userProfile?.id}/${fileName}`; 
+
+            // 1. Upload file to Supabase Storage
+            const { data: storageData, error: storageError } = await supabase.storage
+                .from('documents') // Your storage bucket for documents/images
+              .upload(uploadedFilePath, selectedImageFile, {
+                 cacheControl: '3600',
+                    upsert: false,
+                });
+
+            if (storageError) {
+                throw storageError;
+            }
+
+            const { data: publicUrlData } = supabase.storage
+                .from('documents')
+                .getPublicUrl(uploadedFilePath);
+
+            const fileUrl = publicUrlData.publicUrl;
+
+            // 2. Create a pending document entry for the image
+            const { data: docData, error: docError } = await supabase
+                .from('documents')
+                .insert({
+                    user_id: userProfile!.id, 
+                    title: selectedImageFile.name,
+                    file_name: selectedImageFile.name,
+                    file_type: selectedImageFile.type,
+                    file_size: selectedImageFile.size,
+                    processing_status: 'pending',
+                    type: 'image', // Mark as image document
+                    file_url: fileUrl, // Store the public URL
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  
+                })
+                .select()
+                .single();
+
+            if (docError) {
+                throw docError;
+            }
+            attachedImageDocumentId = docData.id;
+            toast.success('Image uploaded. Analyzing content...', { id: 'image-upload' }); // Update toast
+
+            // 3. Trigger image analysis via Edge Function
+            try {
+                const response = await fetch('https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/image-analyzer', { // Updated to absolute URL
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`
+                  },
+                  body: JSON.stringify({
+                    documentId: attachedImageDocumentId,
+                    fileUrl: fileUrl, // Send the public URL instead of base64
+                    userId: userProfile!.id,
+                  }),
+                });
+
+                let responseBody: string;
+                try {
+                    responseBody = await response.text(); // Read the body once as text
+                } catch (e) {
+                    throw new Error(`Failed to read image analysis response body: ${e}`);
+                }
+
+                // Check for non-OK responses first
+                if (!response.ok) {
+                    let errorBodyText = 'Unknown error';
+                    try {
+                        // Try to parse JSON error from the already read text
+                        const errorJson = JSON.parse(responseBody);
+                        errorBodyText = errorJson.error || JSON.stringify(errorJson);
+                    } catch (e) {
+                        errorBodyText = responseBody; // Use raw text if JSON parsing fails
+                    }
+                    throw new Error(`Image analysis failed: ${response.status} - ${errorBodyText}`);
+                }
+
+                // Attempt to parse JSON response from the already read text
+                let analysisResult;
+                try {
+                    analysisResult = JSON.parse(responseBody);
+                } catch (e) {
+                    throw new Error('Image analysis response was not valid JSON.');
+                }
+                
+                const imageDescription = analysisResult.description || 'No detailed description provided.';
+
+                // 4. Update document status with analysis result in DB
+                const { data: updatedDocData, error: updateDocError } = await supabase.from('documents')
+                    .update({
+                        content_extracted: imageDescription,
+                        processing_status: 'completed',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', attachedImageDocumentId!)
+                    .select() // Select the updated row to get the full object
+                    .single();
+
+                if (updateDocError) {
+                    throw updateDocError;
+                }
+
+                // NEW: Call the onDocumentUpdated prop to update the frontend state
+                if (updatedDocData) {
+                    onDocumentUpdated(updatedDocData as Document); // Cast to Document type
+                }
+
+                toast.success('Image analysis complete!', { id: 'image-analysis' });
+              } catch (analysisError: any) {
+                console.error('Error calling image-analyzer or updating document:', analysisError);
+                toast.error(`Image analysis failed: ${analysisError.message}`, { id: 'image-analysis' });
+                // Update document status to failed if analysis fails
+                await supabase.from('documents')
+                  .update({
+                    processing_error: analysisError.message,
+                    processing_status: 'failed',
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', attachedImageDocumentId!);
+              }
+
+        } catch (error: any) {
+            console.error('Image upload or registration error:', error);
+            toast.error(`Image upload failed: ${error.message}`);
+            // Clean up if initial upload or registration fails
+            if (attachedImageDocumentId) {
+              await supabase.from('documents').delete().eq('id', attachedImageDocumentId);
+            }
+            if (uploadedFilePath) {
+              await supabase.storage.from('documents').remove([uploadedFilePath]);
+            }
+        } finally {
+            setIsLoading(false); // Hide loading after all image processing steps
+        }
+    }
+
+    // Now, send the message and include the attached document IDs
+    // The AI will get the image's description by fetching the attached document content.
+    const finalAttachedDocumentIds = attachedImageDocumentId ? [...selectedDocumentIds, attachedImageDocumentId] : selectedDocumentIds;
+
+    // Filter notes to get only those whose IDs are in finalAttachedDocumentIds
+    const attachedNoteIds = notes
+      .filter(note => finalAttachedDocumentIds.includes(note.id))
+      .map(note => note.id);
+
+    await onSendMessage(
+      inputMessage.trim(),
+      finalAttachedDocumentIds, // Pass all selected document IDs (including the new image doc)
+      attachedNoteIds // Pass selected note IDs
+    );
+
+    setInputMessage('');
+    handleRemoveImage(); // Clear selected image preview
+    // REMOVED: onSelectionChange([]); // Do NOT clear selected documents/notes here
+  };
+
+  // Function to handle image generation
+  const handleGenerateImageFromText = async () => {
+    if (!imagePrompt.trim()) {
+      toast.error('Please enter a prompt for image generation.');
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    setGeneratedImageUrl(null);
+    toast.info('Generating image...', { id: 'image-gen' });
+
+    try {
+      const payload = { instances: { prompt: imagePrompt }, parameters: { "sampleCount": 1} };
+      const apiKey = "" // If you want to use models other than imagen-3.0-generate-002, provide an API key here. Otherwise, leave this as-is.
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+      
+      const response = await fetch(apiUrl, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify(payload)
+             });
+      const result = await response.json();
+
+      if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+        const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+        setGeneratedImageUrl(imageUrl);
+        toast.success('Image generated successfully!', { id: 'image-gen' });
+        // Optionally, add the generated image to the chat as an AI message
+        onNewMessage({
+          id: generateId(),
+          content: `Here is an image generated from your prompt: "${imagePrompt}"`,
+          role: 'assistant',
+          timestamp: new Date().toISOString(),
+          imageUrl: imageUrl,
+          imageMimeType: 'image/png',
+        });
+        setImagePrompt(''); // Clear prompt after generation
+      } else {
+        throw new Error('No image data received from API.');
+      }
+    } catch (error: any) {
+      console.error('Error generating image:', error);
+      toast.error(`Failed to generate image: ${error.message}`, { id: 'image-gen' });
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+
+  // Filter documents and notes that are currently selected to display their titles
+  const selectedDocumentTitles = documents
+    .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'text')
+    .map(doc => doc.title);
+
+  const selectedNoteTitles = notes
+    .filter(note => selectedDocumentIds.includes(note.id)) // Notes are also documents in a sense, but separate type
+    .map(note => note.title);
+
+  const selectedImageDocuments = documents
+    .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'image');
+
+
+  // NEW: Handle viewing attached files
+  const handleViewAttachedFile = useCallback((doc: Document) => {
+    const fileExtension = doc.file_name.split('.').pop()?.toLowerCase(); // Use file_name
+    const textMimeTypes = [
+        'text/plain',
+        'application/json',
+        'text/markdown',
+        'text/csv',
+        'application/xml',
+        // Add more text-based MIME types as needed
+    ];
+    const codeExtensions = [
+        'js', 'ts', 'py', 'java', 'c', 'cpp', 'html', 'css', 'json', 'xml', 'sql', 'sh', 'bash'
+    ];
+
+    // Check if it's an image
+    if (doc.file_type && doc.file_type.startsWith('image/')) { // Use file_type
+        handleViewContent('image', undefined, undefined, doc.file_url); // Use file_url
+    }
+    // Check if it's a text-based file that can be displayed as code/text
+    else if ((doc.file_type && textMimeTypes.includes(doc.file_type)) || (fileExtension && codeExtensions.includes(fileExtension))) { // Use file_type
+        handleViewContent('document-text', doc.content_extracted || `Cannot display content for ${doc.file_name} directly. Try downloading.`, fileExtension || 'txt'); // Use content_extracted and file_name
+    }
+    // For other file types, offer download or open in new tab
+    else if (doc.file_url) { // Use file_url
+        window.open(doc.file_url, '_blank'); // Open in new tab
+        toast.info(`Opening ${doc.file_name} in a new tab.`); // Use file_name
+    } else {
+        toast.error(`Cannot preview or open ${doc.file_name}. No URL available.`); // Use file_name
+    }
+  }, [handleViewContent]);
+
+
   return (
     <CodeBlockErrorBoundary>
-      <div className="flex flex-col h-full border-none relative bg-transparent overflow-hidden md:flex-row md:p-6 md:gap-6"> {/* Added md:gap-6 here */}
+      <div className="flex flex-col h-full border-none relative bg-transparent justify-center overflow-hidden md:flex-row md:p-6 md:gap-6"> {/* Added md:gap-6 here */}
         {/* Main Chat Area */}
         <div className={`
-          flex-1 flex flex-col h-full bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out
-          ${isDiagramPanelOpen ? 'md:w-[30%]' : 'w-full'}
-        `}> {/* Removed border border-slate-200 */}
-          {/* Removed the header section */}
-          {/* Adjusted padding: pb-[calc(4rem+2rem)] for mobile, md:pb-6 for desktop */}
+          flex-1 flex flex-col h-full bg-white rounded-lg  transition-all duration-300 ease-in-out
+          ${isDiagramPanelOpen ? 'md:w-[calc(100%-300px-1.5rem)]' : 'w-full'}
+          dark:bg-gray-900
+        `}>
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col modern-scrollbar pb-32 md:pb-6">
             {(displayMessages ?? []).length === 0 && (activeChatSessionId === null) && (
-              <div className="text-center py-8 text-slate-400 flex-grow flex flex-col justify-center items-center">
-                <Bot className="h-12 w-12 mx-auto text-slate-300 mb-4" />
-                <h3 className="text-lg font-medium text-slate-700 mb-2">Welcome to your AI Study Assistant!</h3>
-                <p className="text-sm text-slate-500 max-w-md mx-auto">
+              <div className="text-center py-8 text-slate-400 flex-grow flex flex-col justify-center items-center dark:text-gray-500">
+                <Bot className="h-12 w-12 mx-auto text-slate-300 mb-4 dark:text-gray-600" />
+                <h3 className="text-lg font-medium text-slate-700 mb-2 dark:text-gray-200">Welcome to your AI Study Assistant!</h3>
+                <p className="text-sm text-slate-500 max-w-md mx-auto dark:text-gray-400">
                   I can help you with questions about your notes, create study guides, explain concepts,
                   and assist with your academic work. Select some documents and start chatting!
                 </p>
@@ -1209,7 +1588,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
             {activeChatSessionId !== null && messages.length === 0 && isLoading && (
               <div className="flex gap-3 justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                <span className="text-slate-500">Loading messages...</span>
+                <span className="text-slate-500 dark:text-gray-400">Loading messages...</span>
               </div>
             )}
 
@@ -1220,7 +1599,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                   variant="outline"
                   size="sm"
                   onClick={onLoadOlderMessages}
-                  className="text-slate-600 border-slate-200 hover:bg-slate-100"
+                  className="text-slate-600 border-slate-200 hover:bg-slate-100 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-800"
                 >
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Load Older Messages
@@ -1245,6 +1624,21 @@ const AIChatComponent: React.FC<AIChatProps> = ({
 
                 contentToRender = (
                   <>
+                    {/* Display image if present in message history */}
+                    {message.imageUrl && (
+                      <div className="mb-3">
+                        <img
+                          src={message.imageUrl}
+                          alt="Uploaded by user"
+                          className="max-w-full h-auto rounded-lg shadow-md cursor-pointer"
+                          onClick={() => handleViewContent('image', undefined, undefined, message.imageUrl!)}
+                          onError={(e) => {
+                            e.currentTarget.src = 'https://placehold.co/150x100/e0e0e0/666666?text=Image+Error';
+                            e.currentTarget.alt = 'Image failed to load';
+                          }}
+                        />
+                      </div>
+                    )}
                     <p className="mb-2 text-white leading-relaxed whitespace-pre-wrap">
                       {displayedContent}
                     </p>
@@ -1266,16 +1660,54 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                         )}
                       </Button>
                     )}
+                    {/* Context Indicators for User Message */}
+                    {(message.attachedDocumentIds && message.attachedDocumentIds.length > 0 || message.attachedNoteIds && message.attachedNoteIds.length > 0 || message.imageUrl) && (
+                      <div className="flex flex-wrap gap-1 mt-2 justify-end">
+                        {/* Image indicator for historical images that were part of the message */}
+                        {message.imageUrl && (
+                          <Badge variant="secondary" className="bg-blue-500/20 text-white border-blue-400 flex items-center gap-1">
+                            <Image className="h-3 w-3" /> Image
+                          </Badge>
+                        )}
+                        {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
+                          <Badge variant="secondary" className="bg-purple-500/20 text-white border-purple-400">
+                            <BookOpen className="h-3 w-3 mr-1" /> {message.attachedDocumentIds.length} Docs
+                          </Badge>
+                        )}
+                        {message.attachedNoteIds && message.attachedNoteIds.length > 0 && (
+                          <Badge variant="secondary" className="bg-green-500/20 text-white border-green-400">
+                            <StickyNote className="h-3 w-3 mr-1" /> {message.attachedNoteIds.length} Notes
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </>
                 );
               } else { // message.role === 'assistant'
                 if (message.isError) {
-                  cardClasses = ' text-red-800';
-                  contentToRender = <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewDiagram} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
+                  cardClasses = ' text-red-800 dark:text-red-300';
+                  contentToRender = <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewContent} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
                 } else {
-                  cardClasses = 'bg-white border border-slate-200';
-                  // Always render the message.content directly now
-                  contentToRender = <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewDiagram} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
+                  cardClasses = 'bg-white border border-slate-200 dark:bg-gray-800 dark:border-gray-700';
+                  contentToRender = (
+                    <>
+                      {message.imageUrl && (
+                        <div className="mb-3">
+                          <img
+                            src={message.imageUrl}
+                            alt="Generated by AI"
+                            className="max-w-full h-auto rounded-lg shadow-md cursor-pointer"
+                            onClick={() => handleViewContent('image', undefined, undefined, message.imageUrl!)}
+                            onError={(e) => {
+                              e.currentTarget.src = 'https://placehold.co/150x100/e0e0e0/666666?text=Image+Error';
+                              e.currentTarget.alt = 'Image failed to load';
+                            }}
+                          />
+                        </div>
+                      )}
+                      <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewContent} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />
+                    </>
+                  );
                 }
               }
 
@@ -1285,7 +1717,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                 <React.Fragment key={message.id}>
                   {showDateHeader && (
                     <div className="flex justify-center my-4">
-                      <Badge variant="secondary" className="px-3 py-1 text-xs text-slate-500 bg-slate-100 rounded-full shadow-sm">
+                      <Badge variant="secondary" className="px-3 py-1 text-xs text-slate-500 bg-slate-100 rounded-full shadow-sm dark:bg-gray-700 dark:text-gray-300">
                         {messageDate}
                       </Badge>
                     </div>
@@ -1296,18 +1728,44 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                       ${message.role === 'user' ? 'justify-end' : 'justify-start'}
                     `}>
                       {message.role === 'assistant' && (
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.isError ? 'bg-red-500' : 'bg-transparent'} hidden sm:flex`}> {/* Added hidden sm:flex */}
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.isError ? 'bg-red-500' : 'bg-transparent'} hidden sm:flex dark:bg-gray-700`}> {/* Added hidden sm:flex */}
                           {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
                         </div>
                       )}
                       <div className={`flex flex-col ${message.role === 'user' ? 'items-end max-w-sm' : 'items-start'}`}>
-                        <Card className={`max-w-sm sm:max-w-4xl overflow-hidden rounded-lg ${message.role === 'assistant' ?'border-none shadow-none bg-transparent':''}' ${cardClasses}`}>
-                          <CardContent className={`p-2 prose border-none prose-base max-w-full leading-relaxed`}> {/* Changed prose-sm to prose-base */}
+                        <Card className={`max-w-sm sm:max-w-4xl overflow-hidden rounded-lg ${message.role === 'assistant' ?'border-none shadow-none bg-transparent dark:bg-transparent':'dark:bg-gray-800 dark:border-gray-700'}' ${cardClasses}`}>
+                          <CardContent className={`p-2 prose border-none prose-base max-w-full leading-relaxed dark:prose-invert`}> {/* Changed prose-sm to prose-base */}
                             {contentToRender}
+
+                            {/* Render attached files if attachedDocumentIds exist */}
+                            {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
+                              <div className={`mt-3 pt-3 ${message.role === 'user' ? 'border-blue-400' : 'border-slate-300 dark:border-gray-600'} border-t border-dashed`}>
+                                <p className={`text-sm font-semibold mb-2 ${message.role === 'user' ? 'text-blue-100' : 'text-slate-600 dark:text-gray-300'}`}>Attached Files:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {message.attachedDocumentIds.map(docId => {
+                                    const doc = documents.find(d => d.id === docId);
+                                    return doc ? (
+                                      <Badge
+                                        key={doc.id}
+                                        variant="secondary"
+                                        className={`cursor-pointer hover:opacity-80 transition-opacity ${message.role === 'user' ? 'bg-blue-500/30 text-white border-blue-400' : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600'}`}
+                                        onClick={() => handleViewAttachedFile(doc)}
+                                      >
+                                        <FileText className="h-3 w-3 mr-1" /> {doc.file_name} {/* Use file_name */}
+                                      </Badge>
+                                    ) : (
+                                      <Badge key={docId} variant="destructive" className="text-red-600 dark:text-red-400">
+                                        File Not Found: {docId}
+                                      </Badge>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                         <div className={`flex gap-1 mt-1 ${message.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
-                          <span className={`text-xs text-slate-500 ${message.role === 'user' ? 'text-white/80' : 'text-slate-500'}`}>
+                          <span className={`text-xs text-slate-500 ${message.role === 'user' ? 'text-white/80' : 'text-slate-500 dark:text-gray-400'}`}>
                             {formatTime(message.timestamp)} {/* Use message.timestamp */}
                           </span>
                           <div className={`flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity`}>
@@ -1318,7 +1776,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => handleRegenerateClick(messages[index - 1]?.content || '')} // Pass previous user message content
-                                    className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100"
+                                    className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
                                     title="Regenerate response"
                                   >
                                     <RefreshCw className="h-4 w-4" />
@@ -1328,7 +1786,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => copy(message.content)}
-                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100"
+                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
                                   title="Copy message"
                                 >
                                   <Copy className="h-4 w-4" />
@@ -1337,7 +1795,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleDeleteClick(message.id)}
-                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100"
+                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
                                   title="Delete message"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -1349,7 +1807,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDeleteClick(message.id)}
-                                className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100"
+                                className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
                                 title="Delete message"
                               >
                                 <X className="h-4 w-4" />
@@ -1365,7 +1823,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                                     handleRetryClick(prevUserMessage.content, message.id);
                                   }
                                 }}
-                                className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100"
+                                className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
                                 title="Retry failed message"
                               >
                                 <RefreshCw className="h-4 w-4" />
@@ -1390,11 +1848,26 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                   <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
                     <Bot className="h-4 w-4 text-white" />
                   </div>
-                  <div className="w-fit p-3 rounded-lg bg-white shadow-sm border border-slate-200">
+                  <div className="w-fit p-3 rounded-lg bg-white shadow-sm border border-slate-200 dark:bg-gray-800 dark:border-gray-700">
                     <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></div>
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-75"></div>
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-150"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse dark:bg-gray-500"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-75 dark:bg-gray-500"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-150 dark:bg-gray-500"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {isGeneratingImage && (
+              <div className="flex justify-center">
+                <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-pink-500 to-red-500 flex items-center justify-center">
+                    <Sparkles className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="w-fit p-3 rounded-lg bg-white shadow-sm border border-slate-200 dark:bg-gray-800 dark:border-gray-700">
+                    <div className="flex gap-1">
+                      <Loader2 className="h-4 w-4 animate-spin text-pink-500" />
+                      <span className="text-slate-500 dark:text-gray-400">Generating image...</span>
                     </div>
                   </div>
                 </div>
@@ -1403,14 +1876,44 @@ const AIChatComponent: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
           {/* Input area - now with a wrapper div for the full-width background */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 sm:bg-transparent md:bg-transparent md:shadow-none md:static md:rounded-lgz-10 md:static md:p-0 rounded-t-lg md:rounded-lg"> {/* Removed md:pb-6, set to md:p-0 */}
+          <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 sm:bg-transparent md:bg-transparent md:shadow-none md:static md:rounded-lgz-10 md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent">
+            {/* Display selected documents/notes/image */}
+            {(selectedDocumentIds.length > 0 || selectedImagePreview) && (
+              <div className="max-w-4xl mx-auto mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700">
+                <span className="text-sm font-medium text-slate-700 dark:text-gray-200">Context:</span>
+                {selectedImagePreview && (
+                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700">
+                    <Image className="h-3 w-3" /> Preview
+                    <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={handleRemoveImage} />
+                  </Badge>
+                )}
+                {selectedImageDocuments.length > 0 && (
+                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700">
+                    <Image className="h-3 w-3" /> {selectedImageDocuments.length} Image Doc{selectedImageDocuments.length > 1 ? 's' : ''}
+                    <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !selectedImageDocuments.map(imgDoc => imgDoc.id).includes(id)))} />
+                  </Badge>
+                )}
+                {selectedDocumentTitles.length > 0 && (
+                  <Badge variant="secondary" className="bg-purple-500/20 text-purple-800 border-purple-400 flex items-center gap-1 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700">
+                    <BookOpen className="h-3 w-3 mr-1" /> {selectedDocumentTitles.length} Text Doc{selectedDocumentTitles.length > 1 ? 's' : ''}
+                    <XCircle className="h-3 w-3 ml-1 cursor-pointer text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !documents.filter(doc => doc.type === 'text').map(d => d.id).includes(id)))} />
+                  </Badge>
+                )}
+                {selectedNoteTitles.length > 0 && (
+                  <Badge variant="secondary" className="bg-green-500/20 text-green-800 border-green-400 flex items-center gap-1 dark:bg-green-950 dark:text-green-300 dark:border-green-700">
+                    <StickyNote className="h-3 w-3 mr-1" /> {selectedNoteTitles.length} Note{selectedNoteTitles.length > 1 ? 's' : ''}
+                    <XCircle className="h-3 w-3 ml-1 cursor-pointer text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !notes.map(n => n.id).includes(id)))} />
+                  </Badge>
+                )}
+              </div>
+            )}
+
             <form onSubmit={async (e) => {
               e.preventDefault();
-              if (inputMessage.trim()) {
-                await onSendMessage(inputMessage);
-                setInputMessage('');
+              if (inputMessage.trim() || selectedImageFile) { // Allow sending with just an image
+                await handleSendMessageWithImage(); // Use new handler
               }
-            }} className="flex items-end gap-2 p-3 rounded-lg bg-white border border-slate-200 shadow-lg max-w-4xl mx-auto"> {/* Added shadow-lg */}
+            }} className="flex items-end gap-2 p-3 rounded-lg bg-white border border-slate-200 shadow-lg max-w-4xl mx-auto dark:bg-gray-800 dark:border-gray-700"> {/* Added shadow-lg */}
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
@@ -1418,24 +1921,58 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                   setInputMessage(e.target.value);
                 }}
                 placeholder="Ask a question about your notes or study topics..."
-                className="flex-1 text-slate-700 focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-transparent px-2"
-                disabled={isLoading || isSubmittingUserMessage}
+                className="flex-1 text-slate-700 focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-transparent px-2 dark:text-gray-200 dark:placeholder-gray-400"
+                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage}
                 rows={1}
               />
               <div className="flex items-end gap-2">
+                {/* Image Upload Button */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={imageInputRef}
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => imageInputRef.current?.click()}
+                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
+                  title="Upload Image"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage}
+                >
+                  <Upload className="h-5 w-5" />
+                </Button>
+
+                {/* Document/Note Selector Button */}
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   onClick={() => setShowDocumentSelector(true)}
-                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                  title="Select Documents"
+                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
+                  title="Select Documents/Notes for Context"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage}
                 >
                   <FileText className="h-5 w-5" />
                 </Button>
+                {/* Image Generation Button */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleGenerateImageFromText}
+                  className="text-pink-600 hover:bg-pink-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-pink-400 dark:hover:bg-pink-900"
+                  title="Generate Image from Text"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || !inputMessage.trim()}
+                >
+                  <Sparkles className="h-5 w-5" />
+                </Button>
                 <Button
                   type="submit"
-                  disabled={isLoading || isSubmittingUserMessage || !inputMessage.trim()}
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || (!inputMessage.trim() && !selectedImageFile)} // Disable if no text and no image
                   className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 h-10 w-10 flex-shrink-0 rounded-lg p-0"
                   title="Send Message"
                 >
@@ -1478,24 +2015,25 @@ const AIChatComponent: React.FC<AIChatProps> = ({
             size="icon"
             onClick={scrollToBottom}
             // Adjusted bottom position for mobile (bottom-28 = 112px)
-            className="fixed bottom-28 right-6 md:bottom-8 md:right-8 bg-white rounded-full shadow-lg p-2 z-20 transition-opacity duration-300 hover:scale-105"
+            className="fixed bottom-28 right-6 md:bottom-8 md:right-8 bg-white rounded-full shadow-lg p-2 z-20 transition-opacity duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
             title="Scroll to bottom"
           >
-            <ChevronDown className="h-5 w-5 text-slate-600" />
+            <ChevronDown className="h-5 w-5 text-slate-600 dark:text-gray-300" />
           </Button>
         )}
 
-        {/* Diagram Panel - Conditionally rendered and responsive */}
-        {activeDiagram && (
+        {/* Diagram/Image Panel - Conditionally rendered and responsive */}
+        {isDiagramPanelOpen && (
           <DiagramPanel
-            key={`${activeDiagram.content}-${activeDiagram.type}-${activeDiagram.language}`} // Add language to key
-            diagramContent={activeDiagram.content}
-            diagramType={activeDiagram.type}
+            key={`${activeDiagram?.content || ''}-${activeDiagram?.type || ''}-${activeDiagram?.language || ''}-${activeDiagram?.imageUrl || ''}`} // Add all relevant props to key
+            diagramContent={activeDiagram?.content}
+            diagramType={activeDiagram?.type || 'unknown'}
             onClose={handleCloseDiagramPanel}
             onMermaidError={handleMermaidError}
-            onSuggestAiCorrection={handleSuggestMermaidAiCorrection} // Corrected prop name
+            onSuggestAiCorrection={handleSuggestMermaidAiCorrection}
             isOpen={isDiagramPanelOpen}
-            language={activeDiagram.language} // Pass language prop
+            language={activeDiagram?.language}
+            imageUrl={activeDiagram?.imageUrl} // Pass imageUrl
           />
         )}
       </div>

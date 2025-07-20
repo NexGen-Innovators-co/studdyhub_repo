@@ -35,12 +35,38 @@ const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Theme state
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>(() => {
+    // Initialize theme from localStorage or default to 'light'
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
+    }
+    return 'light';
+  });
+
+  // Effect to apply theme class to HTML element
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const html = document.documentElement;
+      if (currentTheme === 'dark') {
+        html.classList.add('dark');
+      } else {
+        html.classList.remove('dark');
+      }
+      localStorage.setItem('theme', currentTheme); // Persist theme
+    }
+  }, [currentTheme]);
+
+  const handleThemeChange = useCallback((theme: 'light' | 'dark') => {
+    setCurrentTheme(theme);
+  }, []);
+
   const {
     notes,
     recordings,
     scheduleItems,
     chatMessages,
-    documents,
+    documents, // Get documents from useAppData
     userProfile,
     activeNote,
     searchQuery,
@@ -53,7 +79,7 @@ const Index = () => {
     setRecordings,
     setScheduleItems,
     setChatMessages,
-    setDocuments,
+    setDocuments, // Get setDocuments from useAppData
     setUserProfile,
     setActiveNote,
     setSearchQuery,
@@ -143,12 +169,17 @@ const Index = () => {
 
       if (error) throw error;
 
-      const formattedMessages: Message[] = data.map(msg => ({
+      const formattedMessages: Message[] = data.map((msg: any) => ({ // Cast msg to any for direct Supabase property access
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
         timestamp: msg.timestamp || new Date().toISOString(),
         isError: msg.is_error || false, // Ensure isError is populated
+        // Corrected property names from snake_case to camelCase for Message interface
+        attachedDocumentIds: msg.attached_document_ids || [],
+        attachedNoteIds: msg.attached_note_ids || [],
+        imageUrl: msg.image_url || undefined,
+        imageMimeType: msg.image_mime_type || undefined,
       })).reverse(); // Reverse to display oldest first
 
       setChatMessages(formattedMessages);
@@ -176,12 +207,17 @@ const Index = () => {
 
       if (error) throw error;
 
-      const olderMessages: Message[] = data.map(msg => ({
+      const olderMessages: Message[] = data.map((msg: any) => ({ // Cast msg to any
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
         timestamp: msg.timestamp || new Date().toISOString(),
         isError: msg.is_error || false,
+        // Corrected property names from snake_case to camelCase for Message interface
+        attachedDocumentIds: msg.attached_document_ids || [],
+        attachedNoteIds: msg.attached_note_ids || [],
+        imageUrl: msg.image_url || undefined,
+        imageMimeType: msg.image_mime_type || undefined,
       })).reverse(); // Reverse to display oldest first
 
       setChatMessages(prevMessages => [...olderMessages, ...prevMessages]);
@@ -344,9 +380,15 @@ const Index = () => {
     }
   }, [user, setChatSessions]);
 
-  const buildRichContext = useCallback((selectedIds: string[], allDocuments: AppDocument[], allNotes: Note[]) => {
-    const selectedDocs = (allDocuments ?? []).filter(doc => (selectedIds ?? []).includes(doc.id));
-    const selectedNotes = (allNotes ?? []).filter(note => (selectedIds ?? []).includes(note.id));
+  // Updated buildRichContext to accept specific document and note IDs
+  const buildRichContext = useCallback((
+    documentIdsToInclude: string[],
+    noteIdsToInclude: string[],
+    allDocuments: AppDocument[],
+    allNotes: Note[]
+  ) => {
+    const selectedDocs = (allDocuments ?? []).filter(doc => (documentIdsToInclude ?? []).includes(doc.id));
+    const selectedNotes = (allNotes ?? []).filter(note => (noteIdsToInclude ?? []).includes(note.id));
 
     let context = '';
 
@@ -355,11 +397,24 @@ const Index = () => {
       selectedDocs.forEach(doc => {
         context += `Title: ${doc.title}\n`;
         context += `File: ${doc.file_name}\n`;
+        if (doc.type === 'image') {
+            context += `Type: Image\n`;
+        } else if (doc.type === 'text') {
+            context += `Type: Text Document\n`;
+        }
         if (doc.content_extracted) {
           const content = doc.content_extracted.length > 2000
             ? doc.content_extracted.substring(0, 2000) + '...'
             : doc.content_extracted;
           context += `Content: ${content}\n`;
+        } else {
+            if (doc.type === 'image' && doc.processing_status !== 'completed') {
+                context += `Content: Image processing ${doc.processing_status || 'pending'}. No extracted text yet.\n`;
+            } else if (doc.type === 'image' && doc.processing_status === 'completed' && !doc.content_extracted) {
+                context += `Content: Image analysis completed, but no text or detailed description was extracted.\n`;
+            } else {
+                context += `Content: No content extracted or available.\n`;
+            }
         }
         context += '\n';
       });
@@ -385,14 +440,21 @@ const Index = () => {
         context += '\n';
       });
     }
-
+    console.log("Generated Context:", context);
     return context;
   }, []);
 
-  // Modified _getAIResponse to accept sessionId as an argument
-  const _getAIResponse = useCallback(async (userMessageContent: string, currentUser: User, sessionId: string, aiMessageIdToUpdate: string | null = null) => {
+  // Modified _getAIResponse to accept attached document and note IDs directly
+  const _getAIResponse = useCallback(async (
+    userMessageContent: string,
+    currentUser: User,
+    sessionId: string,
+    attachedDocumentIds: string[], // New parameter
+    attachedNoteIds: string[],     // New parameter
+    aiMessageIdToUpdate: string | null = null
+  ) => {
     console.log('_getAIResponse: Called with currentUser:', currentUser?.id, 'sessionId:', sessionId);
-    if (!currentUser || !sessionId) { // Use sessionId argument here
+    if (!currentUser || !sessionId) {
       console.error('_getAIResponse: Authentication or active session missing. currentUser:', currentUser, 'sessionId:', sessionId);
       toast.error('Authentication required or no active chat session.');
       return;
@@ -401,7 +463,10 @@ const Index = () => {
     setIsAILoading(true);
 
     try {
-      const context = buildRichContext(selectedDocumentIds, documents, notes);
+      // Pass the specific attached IDs to buildRichContext
+      const context = buildRichContext(attachedDocumentIds, attachedNoteIds, documents, notes);
+      console.log('_getAIResponse: Context sent to AI:', context);
+      
       const historyToSend = (chatMessages || []).filter(msg => {
         if (aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate) {
           return false;
@@ -413,8 +478,8 @@ const Index = () => {
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
           message: userMessageContent,
-          userId: currentUser.id, // Use currentUser.id
-          sessionId: sessionId, // Use sessionId argument here
+          userId: currentUser.id,
+          sessionId: sessionId,
           learningStyle: userProfile?.learning_style || 'visual',
           learningPreferences: userProfile?.learning_preferences || {
             explanation_style: userProfile?.learning_preferences?.explanation_style || 'detailed',
@@ -423,6 +488,8 @@ const Index = () => {
           },
           context,
           chatHistory: historyToSend,
+          attachedDocumentIds: attachedDocumentIds, // Pass to backend
+          attachedNoteIds: attachedNoteIds,         // Pass to backend
         },
       });
 
@@ -449,7 +516,7 @@ const Index = () => {
             is_error: false,
           })
           .eq('id', aiMessageIdToUpdate)
-          .eq('session_id', sessionId); // Use sessionId argument here
+          .eq('session_id', sessionId);
 
         if (updateDbError) {
           console.error('_getAIResponse: Error updating AI message:', updateDbError);
@@ -461,7 +528,7 @@ const Index = () => {
           prev.map(msg =>
             msg.id === aiMessageIdToUpdate
               ? { ...msg, content: aiResponseContent, timestamp: new Date().toISOString(), isError: false }
-              : msg
+              : msg // Corrected: Removed the duplicate ": msg"
           )
         );
       } else {
@@ -469,8 +536,8 @@ const Index = () => {
         const { data: newAiMessageData, error: insertDbError } = await supabase
           .from('chat_messages')
           .insert({
-            session_id: sessionId, // Use sessionId argument here
-            user_id: currentUser.id, // Use currentUser.id
+            session_id: sessionId,
+            user_id: currentUser.id,
             content: aiResponseContent,
             role: 'assistant',
             timestamp: new Date().toISOString(),
@@ -500,9 +567,9 @@ const Index = () => {
         .from('chat_sessions')
         .update({
           last_message_at: new Date().toISOString(),
-          document_ids: selectedDocumentIds,
+          document_ids: attachedDocumentIds, // Update session with the documents used for this message
         })
-        .eq('id', sessionId); // Use sessionId argument here
+        .eq('id', sessionId);
 
       if (updateSessionError) {
         console.error('_getAIResponse: Error updating session:', updateSessionError);
@@ -511,8 +578,8 @@ const Index = () => {
 
       setChatSessions(prev => {
         const updated = prev.map(session =>
-          session.id === sessionId // Use sessionId argument here
-            ? { ...session, last_message_at: new Date().toISOString(), document_ids: selectedDocumentIds }
+          session.id === sessionId
+            ? { ...session, last_message_at: new Date().toISOString(), document_ids: attachedDocumentIds }
             : session
         );
         return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
@@ -549,7 +616,7 @@ const Index = () => {
       setIsAILoading(false);
       console.log('_getAIResponse: Finished, isAILoading set to false.');
     }
-  }, [setIsAILoading, buildRichContext, selectedDocumentIds, documents, notes, chatMessages, userProfile, setChatMessages, setChatSessions]); // Removed activeChatSessionId from dependencies
+  }, [setIsAILoading, buildRichContext, documents, notes, chatMessages, userProfile, setChatMessages, setChatSessions]);
 
   const validateActiveSession = useCallback(async (): Promise<boolean> => {
     if (!activeChatSessionId) {
@@ -581,60 +648,65 @@ const Index = () => {
     }
   }, [activeChatSessionId, user, setActiveChatSessionId, setChatMessages]);
 
-  const handleSubmit = useCallback(async (messageContent: string) => {
-    console.log('handleSubmit: Initiated with message:', messageContent);
+  // Modified handleSubmit to accept attachedDocumentIds and attachedNoteIds
+  const handleSubmit = useCallback(async (messageContent: string, attachedDocumentIds?: string[], attachedNoteIds?: string[]) => {
+    console.log('handleSubmit: Initiated with message:', messageContent, 'attached docs:', attachedDocumentIds, 'attached notes:', attachedNoteIds);
     console.log('handleSubmit: Current isAILoading:', isAILoading, 'isSubmittingUserMessage:', isSubmittingUserMessage);
 
-    // Prevent sending if AI is loading, or if already submitting a user message
-    if (!messageContent.trim() || isAILoading || isSubmittingUserMessage) {
-      console.log('handleSubmit: Aborting due to empty message, AI loading, or already submitting.');
+    if (!messageContent.trim() && (!attachedDocumentIds || attachedDocumentIds.length === 0) && (!attachedNoteIds || attachedNoteIds.length === 0) || isAILoading || isSubmittingUserMessage) {
+      console.log('handleSubmit: Aborting due to empty message/no attachments, AI loading, or already submitting.');
       return;
     }
 
     const trimmedMessage = messageContent.trim();
-    setIsSubmittingUserMessage(true); // Indicate that a user message submission is in progress
+    setIsSubmittingUserMessage(true);
     console.log('handleSubmit: setIsSubmittingUserMessage set to true.');
 
     try {
       console.log('handleSubmit: Getting current user from Supabase auth...');
-      const { data: { user: currentUser } } = await supabase.auth.getUser(); // Get user here
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         console.error('handleSubmit: No current user found after auth.getUser().');
         toast.error('You must be logged in to chat.');
-        return; // Exit if no user
+        return;
       }
       console.log('handleSubmit: Current user found:', currentUser.id);
 
       let currentSessionId = activeChatSessionId;
       console.log('handleSubmit: Initial activeChatSessionId:', activeChatSessionId);
 
-      // If no active session, create one. This logic should only run once.
       if (!currentSessionId) {
         console.log('handleSubmit: No active session, creating new one...');
-        currentSessionId = await createNewChatSession(); // Await the session creation
+        currentSessionId = await createNewChatSession(); 
         if (!currentSessionId) {
           console.error('handleSubmit: Failed to create chat session.');
           toast.error('Failed to create chat session. Please try again.');
-          return; // Exit if session creation failed
+          return;
         }
         toast.info('New chat session created.');
         console.log('handleSubmit: New session ID after creation:', currentSessionId);
-        // activeChatSessionId is already set by createNewChatSession, so no need to set it here again.
-        // loadChatSessions is also called within createNewChatSession.
       }
+
+      // Ensure attachedDocumentIds and attachedNoteIds are arrays, even if empty
+      const finalAttachedDocumentIds = attachedDocumentIds || [];
+      const finalAttachedNoteIds = attachedNoteIds || [];
+
+      // Update selectedDocumentIds state with the new attachments for UI display
+      setSelectedDocumentIds(finalAttachedDocumentIds);
 
       console.log('handleSubmit: Proceeding with session ID:', currentSessionId);
 
-      // Now that we are sure we have a currentSessionId, proceed to save the user message
       console.log('handleSubmit: Saving user message to DB...');
       const { data: userMessageData, error: userMessageError } = await supabase
         .from('chat_messages')
         .insert({
-          session_id: currentSessionId, // Use the confirmed session ID
-          user_id: currentUser.id, // Use currentUser.id
+          session_id: currentSessionId,
+          user_id: currentUser.id,
           content: trimmedMessage,
           role: 'user',
           timestamp: new Date().toISOString(),
+          attached_document_ids: finalAttachedDocumentIds,
+          attached_note_ids: finalAttachedNoteIds,
         })
         .select()
         .single();
@@ -645,28 +717,51 @@ const Index = () => {
       }
       console.log('handleSubmit: User message saved. Message ID:', userMessageData.id);
 
+      let imageUrlForMessage: string | undefined;
+      let imageMimeTypeForMessage: string | undefined;
+      if (finalAttachedDocumentIds.length > 0) {
+        const imageDoc = documents.find(doc => finalAttachedDocumentIds.includes(doc.id) && doc.type === 'image');
+        if (imageDoc) {
+          imageUrlForMessage = imageDoc.file_url;
+          imageMimeTypeForMessage = imageDoc.file_type;
+        }
+      }
+
       const newUserMessage: Message = {
-        id: userMessageData.id,
-        content: userMessageData.content,
-        role: userMessageData.role as 'user',
-        timestamp: userMessageData.timestamp || new Date().toISOString(),
+        id: (userMessageData as any).id, // Cast to any for Supabase snake_case access
+        content: (userMessageData as any).content, // Cast to any
+        role: (userMessageData as any).role as 'user', // Cast to any
+        timestamp: (userMessageData as any).timestamp || new Date().toISOString(), // Cast to any
+        attachedDocumentIds: (userMessageData as any).attached_document_ids || [], // Cast to any
+        attachedNoteIds: (userMessageData as any).attached_note_ids || [], // Cast to any
+        imageUrl: imageUrlForMessage,
+        imageMimeType: imageMimeTypeForMessage,
       };
       setChatMessages(prev => [...(prev || []), newUserMessage]);
       console.log('handleSubmit: User message added to state.');
 
-      // Get AI response for the new user message, passing the validated currentUser and currentSessionId
       console.log('handleSubmit: Calling _getAIResponse...');
-      await _getAIResponse(trimmedMessage, currentUser, currentSessionId); // Pass currentSessionId
+      // Pass the specific attached IDs to _getAIResponse
+      await _getAIResponse(trimmedMessage, currentUser, currentSessionId, finalAttachedDocumentIds, finalAttachedNoteIds);
+
+      const { error: updateSessionDocsError } = await supabase
+        .from('chat_sessions')
+        .update({ document_ids: finalAttachedDocumentIds })
+        .eq('id', currentSessionId);
+
+      if (updateSessionDocsError) {
+        console.error('handleSubmit: Error updating session document_ids:', updateSessionDocsError);
+      }
       console.log('handleSubmit: _getAIResponse call completed.');
 
     } catch (error: any) {
       console.error('handleSubmit: Caught error:', error);
       toast.error(`Failed to send message: ${error.message || 'Unknown error'}`);
     } finally {
-      setIsSubmittingUserMessage(false); // Always reset submission state
+      setIsSubmittingUserMessage(false);
       console.log('handleSubmit: setIsSubmittingUserMessage set to false.');
     }
-  }, [isAILoading, activeChatSessionId, createNewChatSession, setChatMessages, _getAIResponse, isSubmittingUserMessage]); // Removed 'user' from dependency array as it's fetched internally
+  }, [isAILoading, activeChatSessionId, createNewChatSession, setChatMessages, _getAIResponse, isSubmittingUserMessage, documents, setSelectedDocumentIds, notes]);
 
   const handleNewMessage = useCallback((message: Message) => {
     setChatMessages(prev => [...(prev || []), message]);
@@ -708,6 +803,12 @@ const Index = () => {
     }
 
     const lastAssistantMessage = chatMessages.slice().reverse().find(msg => msg.role === 'assistant');
+    const lastUserMessage = chatMessages.slice().reverse().find(msg => msg.role === 'user');
+
+    if (!lastUserMessage) {
+      toast.info('No previous user message to regenerate from.');
+      return;
+    }
 
     if (!lastAssistantMessage) {
       toast.info('No previous AI message to regenerate.');
@@ -724,13 +825,26 @@ const Index = () => {
 
     toast.info('Regenerating response...');
 
-    // Pass the current user object and activeChatSessionId to _getAIResponse
-    await _getAIResponse(lastUserMessageContent, user, activeChatSessionId, lastAssistantMessage.id);
+    // Pass the specific attached IDs from the last user message to _getAIResponse
+    await _getAIResponse(
+      lastUserMessageContent,
+      user,
+      activeChatSessionId,
+      lastUserMessage.attachedDocumentIds || [],
+      lastUserMessage.attachedNoteIds || [],
+      lastAssistantMessage.id
+    );
   }, [user, activeChatSessionId, chatMessages, setChatMessages, _getAIResponse]);
 
   const handleRetryFailedMessage = useCallback(async (originalUserMessageContent: string, failedAiMessageId: string) => {
     if (!user || !activeChatSessionId) {
       toast.error('Authentication required or no active chat session.');
+      return;
+    }
+
+    const lastUserMessage = chatMessages.slice().reverse().find(msg => msg.role === 'user' && msg.content === originalUserMessageContent);
+    if (!lastUserMessage) {
+      toast.error('Could not find original user message to retry.');
       return;
     }
 
@@ -744,9 +858,16 @@ const Index = () => {
 
     toast.info('Retrying message...');
 
-    // Pass the current user object and activeChatSessionId to _getAIResponse
-    await _getAIResponse(originalUserMessageContent, user, activeChatSessionId, failedAiMessageId);
-  }, [user, activeChatSessionId, setChatMessages, _getAIResponse]);
+    // Pass the specific attached IDs from the original user message to _getAIResponse
+    await _getAIResponse(
+      originalUserMessageContent,
+      user,
+      activeChatSessionId,
+      lastUserMessage.attachedDocumentIds || [],
+      lastUserMessage.attachedNoteIds || [],
+      failedAiMessageId
+    );
+  }, [user, activeChatSessionId, chatMessages, setChatMessages, _getAIResponse]);
 
   const {
     createNewNote,
@@ -758,6 +879,7 @@ const Index = () => {
     updateScheduleItem,
     deleteScheduleItem,
     handleDocumentUploaded,
+    updateDocument, // Get the new updateDocument function
     handleDocumentDeleted,
     handleProfileUpdate,
   } = useAppOperations({
@@ -765,14 +887,14 @@ const Index = () => {
     recordings,
     scheduleItems,
     chatMessages,
-    documents,
+    documents, // Pass documents
     userProfile,
     activeNote,
     setNotes,
     setRecordings,
     setScheduleItems,
     setChatMessages,
-    setDocuments,
+    setDocuments, // Pass setDocuments
     setUserProfile,
     setActiveNote,
     setActiveTab,
@@ -817,6 +939,9 @@ const Index = () => {
     onRenameChatSession: renameChatSession,
     hasMoreChatSessions: hasMoreChatSessions, // Pass pagination state
     onLoadMoreChatSessions: handleLoadMoreChatSessions, // Pass load more function
+    // Pass theme props to Sidebar
+    currentTheme: currentTheme,
+    onThemeChange: handleThemeChange,
   }), [
     isSidebarOpen,
     memoizedOnToggleSidebar,
@@ -833,6 +958,8 @@ const Index = () => {
     renameChatSession,
     hasMoreChatSessions,
     handleLoadMoreChatSessions,
+    currentTheme, // Add currentTheme to dependencies
+    handleThemeChange, // Add handleThemeChange to dependencies
   ]);
 
   // Memoize the TabContent props
@@ -855,8 +982,9 @@ const Index = () => {
     onAddScheduleItem: addScheduleItem,
     onUpdateScheduleItem: updateScheduleItem,
     onDeleteScheduleItem: deleteScheduleItem,
-    onSendMessage: handleSubmit,
+    onSendMessage: handleSubmit, // This is where the updated handleSubmit is passed
     onDocumentUploaded: handleDocumentUploaded,
+    onDocumentUpdated: updateDocument, // Pass the new updateDocument function
     onDocumentDeleted: handleDocumentDeleted,
     onProfileUpdate: handleProfileUpdate,
     chatSessions,
@@ -895,8 +1023,9 @@ const Index = () => {
     addScheduleItem,
     updateScheduleItem,
     deleteScheduleItem,
-    handleSubmit,
+    handleSubmit, // Ensure this is the updated handleSubmit
     handleDocumentUploaded,
+    updateDocument, // Ensure updateDocument is in dependencies
     handleDocumentDeleted,
     handleProfileUpdate,
     chatSessions,
@@ -905,7 +1034,7 @@ const Index = () => {
     createNewChatSession,
     deleteChatSession,
     renameChatSession,
-    setSelectedDocumentIds,
+    setSelectedDocumentIds, // This is now correctly handled
     selectedDocumentIds,
     handleNewMessage,
     isNotesHistoryOpen,
@@ -938,10 +1067,10 @@ const Index = () => {
 
   if (loading || dataLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-800"> {/* Added dark mode */}
         <div className="text-center">
           <Sparkles className="h-12 w-12 text-blue-600 mx-auto mb-4 animate-spin" />
-          <p className="text-slate-600">Loading your data...</p>
+          <p className="text-slate-600 dark:text-gray-300">Loading your data...</p> {/* Added dark mode */}
         </div>
       </div>
     );
@@ -968,16 +1097,16 @@ const Index = () => {
         <Sidebar {...sidebarProps} />
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-0">
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-0 bg-slate-50 dark:bg-gray-900"> {/* Added dark mode background */}
         <div className="flex items-center justify-between p-3 sm:p-4 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
           <Header {...headerProps} />
           <div className="hidden sm:flex items-center gap-3">
-            <span className="text-sm text-slate-600 hidden md:block">Welcome, {user.email}</span>
+            <span className="text-sm text-slate-600 hidden md:block dark:text-gray-300">Welcome, {user.email}</span> {/* Added dark mode */}
             <Button
               variant="outline"
               size="sm"
               onClick={handleSignOut}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700" 
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sign Out</span>
@@ -987,7 +1116,7 @@ const Index = () => {
             variant="outline"
             size="sm"
             onClick={handleSignOut}
-            className="sm:hidden"
+            className="sm:hidden dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700" 
           >
             <LogOut className="h-4 w-4" />
           </Button>

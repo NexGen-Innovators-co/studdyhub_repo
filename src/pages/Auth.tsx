@@ -87,12 +87,12 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen flex dark:bg-gray-900 items-center justify-center p-4">
       <Card className="w-full max-w-md mx-auto">
         <CardHeader className="text-center space-y-4">
           <div className="flex items-center justify-center gap-2">
             <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">NoteMind</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">NoteMind</h1>
           </div>
           <div>
             <CardTitle className="text-lg sm:text-xl">Welcome</CardTitle>
@@ -110,7 +110,7 @@ const Auth = () => {
             
             <TabsContent value="signin" className="space-y-4">
               <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-2 ">
                   <Label htmlFor="signin-email" className="text-sm font-medium">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -120,7 +120,7 @@ const Auth = () => {
                       placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 h-10"
+                      className="pl-10 h-10 "
                       required
                     />
                   </div>

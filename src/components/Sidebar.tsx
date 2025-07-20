@@ -1,5 +1,5 @@
 import React from 'react';
-import { Book, Calculator, FlaskConical, Clock, Globe, FileText, Hash, Mic, Calendar, MessageCircle, Upload, Settings, Plus, Trash2, Edit, Loader2, X } from 'lucide-react'; // Added X icon for modal close
+import { Book, Calculator, FlaskConical, Clock, Globe, FileText, Hash, Mic, Calendar, MessageCircle, Upload, Settings, Plus, Trash2, Edit, Loader2, X, Sun, Moon } from 'lucide-react'; // Added Sun and Moon icons
 import { Button } from './ui/button';
 import { NoteCategory } from '../types/Note';
 import { Card, CardContent } from './ui/card'; // Import Card components for the modal
@@ -33,6 +33,9 @@ interface SidebarProps {
   // Pagination props for chat sessions
   hasMoreChatSessions: boolean;
   onLoadMoreChatSessions: () => void;
+  // Theme props
+  currentTheme: 'light' | 'dark';
+  onThemeChange: (theme: 'light' | 'dark') => void;
 }
 
 const categories = [
@@ -68,12 +71,12 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+      <Card className="bg-white rounded-lg shadow-xl max-w-sm w-full dark:bg-gray-800"> {/* Added dark mode */}
         <CardContent className="p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-3">{title}</h3>
-          <p className="text-slate-600 mb-6">{message}</p>
+          <h3 className="text-lg font-semibold text-slate-800 mb-3 dark:text-white">{title}</h3> {/* Added dark mode */}
+          <p className="text-slate-600 mb-6 dark:text-gray-300">{message}</p> {/* Added dark mode */}
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose} className="text-slate-600 border-slate-200 hover:bg-slate-50">
+            <Button variant="outline" onClick={onClose} className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"> {/* Added dark mode */}
               Cancel
             </Button>
             <Button onClick={onConfirm} className="bg-red-600 text-white shadow-md hover:bg-red-700">
@@ -105,6 +108,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Pagination props
   hasMoreChatSessions,
   onLoadMoreChatSessions,
+  // Theme props
+  currentTheme,
+  onThemeChange,
 }) => {
 
   const [isNewChatLoading, setIsNewChatLoading] = React.useState(false);
@@ -143,6 +149,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const handleThemeToggle = () => {
+    onThemeChange(currentTheme === 'light' ? 'dark' : 'light');
+  };
+
   return (
     // The main container for the sidebar.
     // On mobile, it slides in/out based on 'isOpen'.
@@ -151,16 +161,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className={`bg-white border-r h-full border-slate-200 transition-all duration-300 ease-in-out ${
       isOpen ? 'translate-x-0' : '-translate-x-full'
     } fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg lg:shadow-none
-    lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden`}>
+    lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden
+    dark:bg-gray-900 dark:border-gray-700`}> {/* Added dark mode classes */}
       
       {/* Content area, takes up remaining vertical space and allows scrolling */}
-      <div className="p-6 sm:p-4 flex-1 overflow-y-auto custom-scrollbar"> {/* Added overflow-y-auto and custom-scrollbar */}
+      <div className="p-6 sm:p-4 flex-1 overflow-y-auto modern-scrollbar"> {/* Added overflow-y-auto and custom-scrollbar */}
         {/* Main Navigation Section */}
         <div className="mb-2">
           {/* "Navigation" heading: visible when 'isOpen' (mobile) or on desktop hover */}
           {(isOpen || window.innerWidth >= 1024) && ( // Check for isOpen or desktop view
-            <h2 className="font-semibold text-slate-800 mb-2 
-              lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+            <h2 className="font-semibold text-slate-800
+              lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300
+              dark:text-gray-200"> {/* Added dark mode text */}
               Navigation
             </h2>
           )}
@@ -174,9 +186,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={tab.id}
                   variant={isActive ? "default" : "ghost"}
                   className={`w-full justify-start h-10 ${
-                    isActive 
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md' 
-                      : 'hover:bg-slate-100 text-slate-700'
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md'
+                      : 'hover:bg-slate-100 text-slate-700 dark:text-gray-300 dark:hover:bg-gray-800' // Added dark mode
                   } ${!isOpen && 'px-2'}`}
                   onClick={() => onTabChange(tab.id as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings')} // Explicitly cast tab.id
                 >
@@ -194,12 +206,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </nav>
         </div>
 
+        {/* Theme Toggle Button */}
+        <div className="mt-4 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700"> {/* Added dark mode border */}
+          <Button
+            variant="ghost"
+            className={`w-full justify-start h-10 text-slate-700 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'}`} 
+            onClick={handleThemeToggle}
+            title="Toggle Theme"
+          >
+            {currentTheme === 'light' ? (
+              <Moon className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'}`} />
+            ) : (
+              <Sun className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'}`} />
+            )}
+            <span className={`truncate ${
+              isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300  lg:pointer-events-none'
+            }`}>
+              {currentTheme === 'light' ? 'Dark Mode' : 'Light Mode'}
+            </span>
+          </Button>
+        </div>
+
         {/* Chat Sessions Section - Conditionally rendered based on activeTab */}
         {activeTab === 'chat' && (
-          <div className="mt-6 mb-2 border-t border-slate-200 pt-4">
+          <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700"> {/* Added dark mode border */}
             <div className="flex items-center justify-between mb-2">
               {(isOpen || window.innerWidth >= 1024) && (
-                <h2 className="font-semibold text-slate-800 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+                <h2 className="font-semibold text-slate-800 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-200"> {/* Added dark mode text */}
                   Chat Sessions
                 </h2>
               )}
@@ -207,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={handleNewChat}
-                className={`text-slate-600 hover:bg-slate-100 ${!isOpen && 'px-2'}`}
+                className={`text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'}`} 
                 title="New Chat"
                 disabled={isNewChatLoading}
               >
@@ -231,7 +264,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               lg:max-h-0 lg:overflow-hidden // Default for desktop when not hovered
             `}>
               {chatSessions.length === 0 && (isOpen || window.innerWidth >= 1024) ? (
-                <p className="text-sm text-slate-500 py-2  lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+                <p className="text-sm text-slate-500 py-2  lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-400"> {/* Added dark mode text */}
                   No chat sessions yet.
                 </p>
               ) : (
@@ -245,8 +278,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       key={session.id}
                       className={`flex items-center justify-between group cursor-pointer rounded-lg transition-colors duration-200 ${
                         isActive
-                          ? 'bg-slate-100 text-slate-800'
-                          : 'hover:bg-slate-50 text-slate-600'
+                          ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white' // Added dark mode
+                          : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300' // Added dark mode
                       }`}
                       onClick={() => { onChatSessionSelect(session.id); onTabChange('chat'); }} // Select and switch to chat tab
                     >
@@ -268,7 +301,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             variant="ghost"
                             size="sm"
                             onClick={(e) => handleRenameChat(session.id, session.title, e)}
-                            className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-slate-200"
+                            className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-slate-200 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700" // Added dark mode
                             title="Rename"
                           >
                             <Edit className="h-4 w-4" />
@@ -277,7 +310,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             variant="ghost"
                             size="sm"
                             onClick={(e) => handleDeleteChatClick(session.id, e)} // Changed to handleDeleteChatClick
-                            className="h-7 w-7 p-0 text-slate-500 hover:text-red-600 hover:bg-slate-200"
+                            className="h-7 w-7 p-0 text-slate-500 hover:text-red-600 hover:bg-slate-200 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700" // Added dark mode
                             title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -291,7 +324,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {hasMoreChatSessions && (isOpen || window.innerWidth >= 1024) && (
                 <Button
                   variant="ghost"
-                  className="w-full justify-center h-10 text-sm text-slate-600 hover:bg-slate-100"
+                  className="w-full justify-center h-10 text-sm text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800" // Added dark mode
                   onClick={onLoadMoreChatSessions}
                 >
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -304,13 +337,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Categories Section (only shown when Notes tab is active) */}
         {activeTab === 'notes' && (
-          <div className="mt-6 mb-2 border-t border-slate-200 pt-4">
+          <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700"> {/* Added dark mode border */}
             {/* "Categories" heading: visible when 'isOpen' (mobile) or on desktop hover */}
             {(isOpen || window.innerWidth >= 1024) && ( // Check for isOpen or desktop view
-              <div className="mb-2 
+              <div className="mb-2
                 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
-                <h2 className="font-semibold text-slate-800">Categories</h2>
-                <p className="text-sm text-slate-500">{noteCount} notes</p>
+                <h2 className="font-semibold text-slate-800 dark:text-gray-200">Categories</h2> {/* Added dark mode text */}
+                <p className="text-sm text-slate-500 dark:text-gray-400">{noteCount} notes</p> {/* Added dark mode text */}
               </div>
             )}
 
@@ -324,9 +357,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     key={category.id}
                     variant={isActive ? "secondary" : "ghost"}
                     className={`w-full justify-start h-9 text-sm ${
-                      isActive 
-                        ? 'bg-slate-100 text-slate-800' 
-                        : 'hover:bg-slate-50 text-slate-600'
+                      isActive
+                        ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white' // Added dark mode
+                        : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300' // Added dark mode
                     } ${!isOpen && 'px-2'}`}
                     onClick={() => onCategoryChange(category.id)}
                   >

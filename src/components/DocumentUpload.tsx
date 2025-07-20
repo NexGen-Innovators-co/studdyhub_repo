@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { Upload, File, X, Loader2 } from 'lucide-react';
+// src/components/DocumentUpload.tsx
+import React, { useState, useRef } from 'react';
+import { UploadCloud, FileText, Image, Loader2, Check, XCircle, AlertTriangle } from 'lucide-react';
 import { Button } from './ui/button';
-import { Card, CardContent } from './ui/card';
-import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Input } from './ui/input';
 import { toast } from 'sonner';
-import { Document } from '../types/Document'; // Ensure this points to your Document.ts file
-import { User } from '@supabase/supabase-js'; // Import User type
+import { supabase } from '@/integrations/supabase/client';
+import { Document } from '../types/Document'; // Assuming Document type is here
+import { useAuth } from '../hooks/useAuth'; // Import useAuth to get the user ID
 
 interface DocumentUploadProps {
   documents: Document[];
@@ -13,262 +15,313 @@ interface DocumentUploadProps {
   onDocumentDeleted: (documentId: string) => void;
 }
 
-// Helper function to extract storage path from public URL
-// This assumes your public URL structure is consistent:
-// .../storage/v1/object/public/{bucketName}/{filePath}
-const getStoragePathFromFileUrl = (fileUrl: string, bucketName: string): string => {
-  const parts = fileUrl.split(`/storage/v1/object/public/${bucketName}/`);
-  if (parts.length > 1) {
-    return parts[1];
-  }
-  // Fallback for unexpected URL formats or if bucketName isn't found
-  console.warn(`Could not extract storage path from URL: ${fileUrl} with bucket: ${bucketName}`);
-  return '';
-};
-
-export const DocumentUpload: React.FC<DocumentUploadProps> = ({
-  documents,
-  onDocumentUploaded,
-  onDocumentDeleted
-}) => {
+export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDocumentUploaded, onDocumentDeleted }) => {
+  const { user } = useAuth(); // Get the current authenticated user
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-
-    // Validate file type
-    const allowedTypes = ['application/pdf', 'text/plain'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error('Unsupported file type. Please upload PDF or TXT files.');
-      return;
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Basic file type check
+      if (!file.type.startsWith('text/') && file.type !== 'application/pdf' && !file.type.startsWith('image/')) {
+        toast.error('Unsupported file type. Please upload text, PDF, or image files.');
+        setSelectedFile(null);
+        return;
+      }
+      // Max file size 10MB for documents, 5MB for images (handled by backend for images)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File size exceeds 10MB limit.');
+        setSelectedFile(null);
+        return;
+      }
+      setSelectedFile(file);
+    } else {
+      setSelectedFile(null);
     }
+  };
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File size exceeds 10MB limit.');
+  const handleUpload = async () => {
+    if (!selectedFile || !user?.id) {
+      toast.error('Please select a file and ensure you are logged in.');
       return;
     }
 
     setIsUploading(true);
-    let uploadedDocumentForCallback: Document | null = null; // This will hold the Document object in the correct type
-    let uploadedFilePathForCleanup: string | null = null; // This holds the storage path for potential cleanup
+    setUploadProgress(0);
+
+    const isImage = selectedFile.type.startsWith('image/');
+    const fileExtension = selectedFile.name.split('.').pop();
+    const fileName = `${crypto.randomUUID()}.${fileExtension}`;
+    const filePath = `user_uploads/${user.id}/${fileName}`; // Store in user-specific folder
+
+    let newDocument: Document | null = null;
 
     try {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData?.user) {
-        throw new Error('User not authenticated. Please log in.');
-      }
-      const currentUser: User = userData.user;
-
       // 1. Upload file to Supabase Storage
-      const filePath = `${currentUser.id}/${Date.now()}-${file.name}`; // Ensure unique path per user
-      uploadedFilePathForCleanup = filePath; // Store for potential cleanup if DB insert fails
+      toast.info(`Uploading ${isImage ? 'image' : 'document'}...`);
+      const { data: storageData, error: storageError } = await supabase.storage
+        .from('documents') // Your storage bucket for documents/images
+        .upload(filePath, selectedFile, {
+          cacheControl: '3600',
+          upsert: false,
+          // You can add onUploadProgress if needed here, but it's not directly exposed by Supabase client for simple upload
+        });
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`);
+      if (storageError) {
+        throw storageError;
       }
 
-      // Get public URL of the uploaded file
       const { data: publicUrlData } = supabase.storage
         .from('documents')
         .getPublicUrl(filePath);
 
       const fileUrl = publicUrlData.publicUrl;
 
-      // 2. Invoke Supabase Edge Function to extract text
-      // The function name 'gemini-document-extractor' should match your deployed Deno function name
-      const { data: extractionData, error: extractionError } = await supabase.functions.invoke(
-        'gemini-document-extractor',
-        {
-          body: { file_url: fileUrl, file_type: file.type },
-        }
-      );
-
-      if (extractionError) {
-        throw new Error(`Text extraction failed: ${extractionError.message}`);
-      }
-
-      const extractedText = extractionData?.content_extracted || "";
-
-      // 3. Save document metadata and extracted text to Supabase database
-      const { data, error: dbError } = await supabase
+      // 2. Create a pending document entry in the 'documents' table
+      toast.info(`Registering ${isImage ? 'image' : 'document'}...`);
+      const { data: docData, error: docError } = await supabase
         .from('documents')
-        .insert([
-          {
-            user_id: currentUser.id, // Required by your schema
-            title: file.name.split('.')[0],
-            file_name: file.name,
-            file_size: file.size,
-            file_type: file.type,
-            file_url: fileUrl,
-            content_extracted: extractedText, // Corrected column name based on your schema
-          },
-        ])
-        .select('*')
+        .insert({
+          title: selectedFile.name,
+          file_url: fileUrl,
+          type: isImage ? 'image' : 'text', // Changed 'document' to 'text'
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          content_extracted: '', // Initially empty, will be filled after processing
+          processing_error: null, // Initially null, will be filled after processing
+          user_id: user.id,
+          file_name: selectedFile.name,
+          file_type: selectedFile.type,
+          file_size: selectedFile.size,
+          processing_status: 'pending', // Initial status
+          file_path: filePath, // Store the path for deletion later
+    
+        })
+        .select()
         .single();
 
-      if (dbError) {
-        throw new Error(`Database insertion failed: ${dbError.message}`);
+      if (docError) {
+        throw docError;
+      }
+      newDocument = {
+        ...docData,
+        processing_error: docData.processing_error as string,
+        processing_status: docData.processing_status as string,
+      };
+      onDocumentUploaded(newDocument); // Add to local state immediately with pending status
+      toast.success(`${isImage ? 'Image' : 'Document'} uploaded and registered! Processing content...`);
+
+      // 3. Trigger content analysis (Edge Function call)
+      if (isImage) {
+        // For images, call the new image-analyzer function
+        const reader = new FileReader();
+        reader.readAsDataURL(selectedFile);
+        reader.onloadend = async () => {
+          const imageDataBase64 = (reader.result as string).split(',')[1]; // Get base64 part
+          const imageMimeType = selectedFile.type;
+
+          try {
+            const response = await fetch('/functions/v1/image-analyzer', { // Path to your new Edge Function
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`
+              },
+              body: JSON.stringify({
+                documentId: newDocument!.id,
+                imageDataBase64: imageDataBase64,
+                imageMimeType: imageMimeType,
+                userId: user.id,
+              }),
+            });
+
+            if (!response.ok) {
+              const errorBody = await response.json();
+              throw new Error(`Image analysis failed: ${errorBody.error}`);
+            }
+
+            const result = await response.json();
+            toast.success('Image analyzed and description saved!');
+            // The document is updated by the Edge Function, so we might need to refetch or update state
+            // For simplicity, we'll just log success. The main app data loader should pick up the change.
+          } catch (analysisError: any) {
+            console.error('Error calling image-analyzer:', analysisError);
+            toast.error(`Image analysis failed: ${analysisError.message}`);
+            // Update document status to failed if analysis fails
+            await supabase.from('documents')
+              .update({ processing_status: 'failed', processing_error: analysisError.message })
+              .eq('id', newDocument!.id);
+          }
+        };
+      } else {
+        // For text documents (PDF, TXT), call the existing document-analyzer function
+        // (Assuming you have one or will create one)
+        // This part remains similar to how you'd handle text document processing.
+        // For now, we'll just mark it as completed if no specific text analysis is implemented yet.
+        // In a real app, you'd call another Edge Function here for text extraction/summarization.
+        await supabase.from('documents')
+            .update({ processing_status: 'completed' })
+            .eq('id', newDocument!.id);
+        toast.success('Document uploaded and ready!');
       }
 
-      // Transform the Supabase response data to match the 'Document' interface
-      // converting string dates to Date objects.
-      uploadedDocumentForCallback = {
-        id: data.id,
-        user_id: data.user_id,
-        title: data.title,
-        file_name: data.file_name,
-        file_url: data.file_url,
-        file_type: data.file_type,
-        file_size: data.file_size ?? undefined, // Handle null from DB to undefined for optional interface property
-        content_extracted: data.content_extracted ?? undefined, // Handle null from DB to undefined
-        created_at: new Date(data.created_at), // Convert string to Date
-        updated_at: new Date(data.updated_at), // Convert string to Date
-      };
-
-      toast.success('Document uploaded and processed successfully!');
     } catch (error: any) {
-      console.error('Upload error:', error);
-      toast.error(error.message);
-      // If upload to storage succeeded but extraction/db failed, delete the uploaded file
-      if (uploadedFilePathForCleanup) {
-        await supabase.storage.from('documents').remove([uploadedFilePathForCleanup]);
+      console.error('Upload or document registration error:', error);
+      toast.error(`Upload failed: ${error.message}`);
+      // Clean up if initial upload or registration fails
+      if (newDocument?.id) {
+        await supabase.from('documents').delete().eq('id', newDocument.id);
+      }
+      if (filePath) {
+        await supabase.storage.from('documents').remove([filePath]);
       }
     } finally {
       setIsUploading(false);
-      if (uploadedDocumentForCallback) {
-        onDocumentUploaded(uploadedDocumentForCallback);
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''; // Clear file input
       }
+      // You might want to trigger a refetch of documents in useAppData here
+      
+      // or ensure onDocumentUploaded pushes the final state.
     }
   };
 
-  const handleDeleteDocument = async (document: Document) => {
-    try {
-      // Extract the storage path from the file_url for deletion
-      const storagePath = getStoragePathFromFileUrl(document.file_url, 'documents');
-      if (!storagePath) {
-        throw new Error('Could not determine storage path from file URL for deletion.');
-      }
+  const handleDeleteDocument = async (documentId: string, filePath: string) => {
+    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+      return;
+    }
 
-      // Delete from storage
+    try {
+      // 1. Delete from Supabase Storage
       const { error: storageError } = await supabase.storage
         .from('documents')
-        .remove([storagePath]);
+        .remove([filePath]);
 
       if (storageError) {
-        throw new Error(`Failed to delete file from storage: ${storageError.message}`);
+        throw storageError;
       }
 
-      // Delete from database
+      // 2. Delete from 'documents' table
       const { error: dbError } = await supabase
         .from('documents')
         .delete()
-        .eq('id', document.id);
+        .eq('id', documentId);
 
       if (dbError) {
-        throw new Error(`Failed to delete document from database: ${dbError.message}`);
+        throw dbError;
       }
 
+      onDocumentDeleted(documentId);
       toast.success('Document deleted successfully!');
-      onDocumentDeleted(document.id);
     } catch (error: any) {
-      console.error('Delete error:', error);
-      toast.error(error.message);
+      console.error('Error deleting document:', error);
+      toast.error(`Failed to delete document: ${error.message}`);
     }
-  };
-
-  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileUpload(e.dataTransfer.files);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFileUpload(e.target.files);
   };
 
   return (
-    <div
-      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-        dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50'
-      }`}
-      onDragEnter={handleDrag}
-      onDragLeave={handleDrag}
-      onDragOver={handleDrag}
-      onDrop={handleDrop}
-    >
-      <input
-        type="file"
-        id="file-upload"
-        className="hidden"
-        onChange={handleFileChange}
-        accept=".pdf,.txt"
-        disabled={isUploading}
-      />
-      <div className="flex flex-col items-center justify-center space-y-3">
-        <p className="text-gray-600">Drag and drop files here, or</p>
-        <Button
-          onClick={() => document.getElementById('file-upload')?.click()}
-          disabled={isUploading}
-        >
-          {isUploading ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading...
-            </>
-          ) : (
-            <>
-              <Upload className="h-4 w-4 mr-2" />
-              Choose Files
-            </>
-          )}
-        </Button>
-      </div>
+    <div className="p-4 sm:p-6 bg-white rounded-lg shadow-md dark:bg-slate-900 ">
+      <h2 className="text-2xl font-bold text-slate-800 mb-6">Document & Image Upload</h2>
 
-      {/* Documents List */}
-      {documents.length > 0 && (
-        <div className="space-y-3 mt-6">
-          <h4 className="font-medium text-gray-900">Uploaded Documents</h4>
-          {documents.map((document) => (
-            <Card key={document.id}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <File className="h-8 w-8 text-blue-600" />
-                    <div>
-                      <h5 className="font-medium text-gray-900">{document.title}</h5>
-                      <p className="text-sm text-gray-500">
-                        {document.file_name} • {Math.round((document.file_size || 0) / 1024)}KB
-                      </p>
+      <Card className="mb-6 border-2 border-dashed border-blue-200 bg-blue-50 hover:border-blue-300 dark:bg-gray-800 dark:border-gray-700 transition-colors cursor-pointer">
+        <CardContent className="p-6 text-center" onClick={() => fileInputRef.current?.click()}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept=".txt,.pdf,image/*" // Accept text, pdf, and all image types
+          />
+          <UploadCloud className="h-10 w-10 text-blue-500 mx-auto mb-3" />
+          <p className="text-slate-700 font-medium">Drag & drop your file here, or click to browse</p>
+          <p className="text-sm text-slate-500 mt-1">Supports text, PDF, and image files (Max 10MB)</p>
+          {selectedFile && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-blue-600">
+              <FileText className="h-4 w-4" />
+              <span>{selectedFile.name}</span>
+              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="h-6 w-6 text-blue-500 hover:text-blue-700">
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Button
+        onClick={handleUpload}
+        disabled={!selectedFile || isUploading || !user?.id}
+        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 mb-8"
+      >
+        {isUploading ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Uploading & Analyzing...
+          </>
+        ) : (
+          <>
+            <UploadCloud className="h-4 w-4 mr-2" />
+            Upload & Analyze File
+          </>
+        )}
+      </Button>
+
+      <h3 className="text-xl font-semibold text-slate-800 mb-4">Your Uploaded Files</h3>
+      {documents.length === 0 ? (
+        <p className="text-slate-500 text-center py-8">No documents or images uploaded yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {documents.map((doc) => (
+            <Card key={doc.id} className="border border-slate-200 shadow-sm">
+              <CardContent className="p-4 flex flex-col h-full">
+                <div className="flex items-center gap-3 mb-3">
+                  {doc.type === 'image' ? (
+                    <Image className="h-6 w-6 text-purple-500 flex-shrink-0" />
+                  ) : (
+                    <FileText className="h-6 w-6 text-blue-500 flex-shrink-0" />
+                  )}
+                  <h4 className="font-semibold text-slate-800 text-lg flex-grow truncate">{doc.title}</h4>
+                  {doc.processing_status === 'pending' && (
+                    <Loader2 className="h-5 w-5 text-blue-500 animate-spin"  />
+                  )}
+                  {doc.processing_status === 'completed' && (
+                    <Check className="h-5 w-5 text-green-500" />
+                  )}
+                  {doc.processing_status === 'failed' && (
+                    <AlertTriangle className="h-5 w-5 text-red-500"  />
+                  )}
+                </div>
+                {doc.type === 'image' && doc.file_url && (
+                    <div className="mb-3">
+                        <img
+                            src={doc.file_url}
+                            alt={doc.title}
+                            className="max-w-full h-32 object-contain rounded-md mx-auto border border-slate-200"
+                            onError={(e) => {
+                                e.currentTarget.src = 'https://placehold.co/128x96/e0e0e0/666666?text=Image+Error';
+                                e.currentTarget.alt = 'Image failed to load';
+                            }}
+                        />
                     </div>
-                  </div>
+                )}
+                <p className="text-sm text-slate-600 mb-3 line-clamp-3">{doc.content_extracted || 'No content extracted yet.'}</p>
+                {doc.processing_status === 'failed' && doc.processing_error && (
+                  <p className="text-xs text-red-500 mt-1">Error: {doc.processing_error}</p>
+                )}
+                <div className="mt-auto flex justify-end gap-2">
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => handleDeleteDocument(document)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                    className="text-red-600 hover:bg-red-50"
+                    disabled={isUploading}
                   >
-                    <X className="h-4 w-4" />
+                    <XCircle className="h-4 w-4 mr-2" /> Delete
                   </Button>
+                  {/* Potentially add a "View" button here for image or full document */}
                 </div>
               </CardContent>
             </Card>
