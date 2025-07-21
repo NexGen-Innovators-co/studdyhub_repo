@@ -526,14 +526,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           file_type: fileType, // Ensure file_type is passed
           type: 'text', // Explicitly set the type to 'document'
           processing_status: 'completed', // Mark as completed since content is extracted
-          processing_status_message: 'Content extracted successfully.',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          user_profile: userProfile, // Store the user profile for context
-          section: selectedSection || null, // Store the selected section if provided
           file_size: selectedFile?.size || 0, // Store file size if available
 
-          
+
         })
         .select('id')
         .single();
@@ -1646,7 +1643,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700
                     ${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
-                  // Removed onClick={handleMobileMenuClose}
+                // Removed onClick={handleMobileMenuClose}
                 >
                   {isUploading ? (
                     <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -1664,7 +1661,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700
                     ${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
-                  // Removed onClick={handleMobileMenuClose}
+                // Removed onClick={handleMobileMenuClose}
                 >
                   {isProcessingAudio ? (
                     <Brain className="h-4 w-4 mr-2 animate-pulse" />

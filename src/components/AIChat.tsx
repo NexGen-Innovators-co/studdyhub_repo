@@ -1,6 +1,6 @@
 // AIChat.tsx
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
-import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp, Image, Upload, XCircle, BookOpen, StickyNote, Sparkles } from 'lucide-react';
+import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp, Image, Upload, XCircle, BookOpen, StickyNote, Sparkles, GripVertical } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
@@ -15,7 +15,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import Mermaid from './Mermaid';
 import { Element } from 'hast';
-import { Chart, registerables }  from 'chart.js';
+import { Chart, registerables } from 'chart.js';
 import javascript from 'highlight.js/lib/languages/javascript';
 import python from 'highlight.js/lib/languages/python';
 import java from 'highlight.js/lib/languages/java';
@@ -233,7 +233,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig, chartRef }) 
         // We convert the string back to a function here.
         if (configToUse.options?.plugins?.tooltip?.callbacks?.label && typeof configToUse.options.plugins.tooltip.callbacks.label === 'string') {
           const labelString = configToUse.options.plugins.tooltip.callbacks.label;
-          configToUse.options.plugins.tooltip.callbacks.label = function(context: any) {
+          configToUse.options.plugins.tooltip.callbacks.label = function (context: any) {
             // Replace [value] with the actual data value
             let label = context.dataset.label || '';
             if (label) {
@@ -296,68 +296,124 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
   const chartCanvasRef = useRef<HTMLCanvasElement>(null); // Ref specifically for Chart.js canvas
   const mermaidDivRef = useRef<HTMLDivElement>(null); // Ref for Mermaid diagram container
 
-  // State for resizable panel
+  // State for resizable panel width
   const diagramPanelRef = useRef<HTMLDivElement>(null); // Ref for the main DiagramPanel div
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
-  const [isResizing, setIsResizing] = useState(false);
+  const [isResizingWidth, setIsResizingWidth] = useState(false); // Renamed for clarity
   const initialX = useRef(0);
   const initialPanelWidth = useRef(0);
 
-  // Effect to set initial width based on responsive classes when panel opens
+  // State for resizable panel height
+  const [panelHeight, setPanelHeight] = useState<number | null>(null); // New state for height
+  const isResizingHeight = useRef(false); // New ref for height resizing
+  const initialY = useRef(0); // New ref for initial Y position for height resizing
+  const initialPanelHeight = useRef(0); // New ref for initial panel height
+
+  // Effect to set initial width/height based on responsive classes when panel opens
   useEffect(() => {
-    if (isOpen && !panelWidth && diagramPanelRef.current) {
-      // Only set initial width if it's not already set (e.g., from a previous resize)
-      // and if we are on a desktop screen (width >= 768px for md breakpoint)
-      if (window.innerWidth >= 768) {
-        setPanelWidth(window.innerWidth * 0.7); // Set to 70% of viewport width initially
+    if (isOpen && diagramPanelRef.current) {
+      if (window.innerWidth >= 768) { // Desktop
+        if (panelWidth === null) {
+          setPanelWidth(window.innerWidth * 0.7); // Set to 70% of viewport width initially
+        }
+        if (panelHeight === null) {
+          // Set initial height based on viewport height, e.g., 80% of viewport height
+          setPanelHeight(window.innerHeight * 0.8);
+        }
       }
     }
-  }, [isOpen, panelWidth]);
+  }, [isOpen, panelWidth, panelHeight]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  // --- Width Resize Handlers ---
+  const handleWidthResizeMouseDown = useCallback((e: React.MouseEvent) => {
     if (window.innerWidth < 768) return; // Only allow resizing on desktop
 
     e.preventDefault();
-    setIsResizing(true);
+    setIsResizingWidth(true);
     initialX.current = e.clientX;
     initialPanelWidth.current = diagramPanelRef.current?.offsetWidth || 0;
+    document.body.style.cursor = 'ew-resize'; // Change cursor globally
   }, []);
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isResizing) return;
+  const handleWidthResizeMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizingWidth) return;
 
     const deltaX = initialX.current - e.clientX; // Dragging left increases width
     let newWidth = initialPanelWidth.current + deltaX;
 
     // Define min/max width for the panel
     const minWidth = 300; // Minimum width in pixels
-    const maxWidth = window.innerWidth * 0.7; // Max 70% of viewport width
+    const maxWidth = window.innerWidth * 0.9; // Max 90% of viewport width to leave some space
 
     newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
     setPanelWidth(newWidth);
-  }, [isResizing]);
+  }, [isResizingWidth]);
 
-  const handleMouseUp = useCallback(() => {
-    setIsResizing(false);
+  const handleWidthResizeMouseUp = useCallback(() => {
+    setIsResizingWidth(false);
+    document.body.style.cursor = 'default';
   }, []);
 
+  // --- Height Resize Handlers ---
+  const handleHeightResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingHeight.current = true;
+    initialY.current = e.clientY;
+    initialPanelHeight.current = diagramPanelRef.current?.offsetHeight || 0;
+    document.body.style.cursor = 'ns-resize'; // Change cursor globally
+  }, []);
+
+  const handleHeightResizeMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizingHeight.current) return;
+
+    const deltaY = e.clientY - initialY.current; // Dragging down increases height
+    let newHeight = initialPanelHeight.current + deltaY;
+
+    // Define min/max height for the panel
+    const minHeight = 200; // Minimum height in pixels
+    const maxHeight = window.innerHeight * 0.9; // Max 90% of viewport height
+
+    newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+    setPanelHeight(newHeight);
+  }, []);
+
+  const handleHeightResizeMouseUp = useCallback(() => {
+    isResizingHeight.current = false;
+    document.body.style.cursor = 'default';
+  }, []);
+
+  // Global event listeners for resizing
   useEffect(() => {
-    if (isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+    if (isResizingWidth) {
+      window.addEventListener('mousemove', handleWidthResizeMouseMove);
+      window.addEventListener('mouseup', handleWidthResizeMouseUp);
     } else {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleWidthResizeMouseMove);
+      window.removeEventListener('mouseup', handleWidthResizeMouseUp);
     }
+
+    if (isResizingHeight.current) {
+      window.addEventListener('mousemove', handleHeightResizeMouseMove);
+      window.addEventListener('mouseup', handleHeightResizeMouseUp);
+    } else {
+      window.removeEventListener('mousemove', handleHeightResizeMouseMove);
+      window.removeEventListener('mouseup', handleHeightResizeMouseUp);
+    }
+
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleWidthResizeMouseMove);
+      window.removeEventListener('mouseup', handleWidthResizeMouseUp);
+      window.removeEventListener('mousemove', handleHeightResizeMouseMove);
+      window.removeEventListener('mouseup', handleHeightResizeMouseUp);
     };
-  }, [isResizing, handleMouseMove, handleMouseUp]);
+  }, [isResizingWidth, isResizingHeight, handleWidthResizeMouseMove, handleWidthResizeMouseUp, handleHeightResizeMouseMove, handleHeightResizeMouseUp]);
 
-  // Apply dynamic width style
-  const dynamicWidthStyle = panelWidth !== null && window.innerWidth >= 768 ? { width: `${panelWidth}px` } : {};
 
+  // Apply dynamic width and height styles
+  const dynamicPanelStyle: React.CSSProperties = {
+    ...(panelWidth !== null && window.innerWidth >= 768 ? { width: `${panelWidth}px` } : {}),
+    ...(panelHeight !== null ? { height: `${panelHeight}px` } : {}),
+  };
 
   let panelContent;
   let panelTitle = 'Viewer';
@@ -367,14 +423,14 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
   // Function to download content
   const handleDownloadContent = () => {
     if (diagramType === 'image' && imageUrl) {
-        const link = document.createElement('a');
-        link.href = imageUrl;
-        link.download = `image-${Date.now()}.png`; // Or derive from URL
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success('Image downloaded!');
-        return;
+      const link = document.createElement('a');
+      link.href = imageUrl;
+      link.download = `image-${Date.now()}.png`; // Or derive from URL
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Image downloaded!');
+      return;
     }
 
     if (!diagramContainerRef.current || !diagramContent) {
@@ -505,7 +561,7 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
         setIsDotLoading(true);
 
         try {
-          
+
           // Instantiate Graphviz
           const gv = await Graphviz.load();
           const svg = await gv.layout(diagramContent!, 'svg', 'dot');
@@ -549,7 +605,36 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
         </Button>
       </div>
     ) : (
-      <div dangerouslySetInnerHTML={{ __html: dotSvg || '' }} className="w-full h-full dark:bg-gray-900" /> // Removed items-center justify-center
+      // DOT graph content with custom zoom/pan (similar to Mermaid)
+      <div className="relative w-full h-full bg-gray-900 rounded-lg overflow-hidden">
+        <div
+          className="w-full h-full flex items-center justify-center relative"
+          style={{ cursor: isResizingHeight.current || isResizingWidth ? 'default' : 'grab' }} // Adjust cursor based on active resize
+          onWheel={(e) => {
+            // Implement zoom for DOT graph here if needed, similar to Mermaid
+            // For now, only pan will be active by default via CSS
+            e.preventDefault();
+          }}
+          onMouseDown={(e) => {
+            // Only pan if not resizing height or width
+            if (!isResizingHeight.current && !isResizingWidth) {
+              // Implement pan for DOT graph here if needed, similar to Mermaid
+            }
+          }}
+        >
+          <div
+            dangerouslySetInnerHTML={{ __html: dotSvg || '' }}
+            style={{
+              // Apply custom zoom/pan transforms if you implement them for DOT
+              // For now, let's just ensure it fits and is centered
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain', // Ensure SVG scales within its container
+            }}
+            className="min-w-0 [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:w-full"
+          />
+        </div>
+      </div>
     );
 
   } else if (diagramType === 'chartjs') {
@@ -567,7 +652,7 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
           <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto max-w-full dark:bg-gray-800 dark:text-red-400">
             {diagramContent}
           </pre>
-           <Button
+          <Button
             variant="outline"
             size="sm"
             onClick={() => onSuggestAiCorrection(`Can you fix this Chart.js configuration? Here's the code: ${diagramContent}`)}
@@ -619,17 +704,17 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
     downloadButtonText = 'Download Image';
     downloadFileName = `image-${Date.now()}`;
     panelContent = (
-        <div className="flex items-center justify-center h-full w-full p-2 bg-gray-100 dark:bg-gray-950">
-            <img
-                src={imageUrl}
-                alt="Full size image"
-                className="max-w-full max-h-full object-contain rounded-lg shadow-md"
-                onError={(e) => {
-                    e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Load+Error';
-                    e.currentTarget.alt = 'Image failed to load';
-                }}
-            />
-        </div>
+      <div className="flex items-center justify-center h-full w-full p-2 bg-gray-100 dark:bg-gray-950">
+        <img
+          src={imageUrl}
+          alt="Full size image"
+          className="max-w-full max-h-full object-contain rounded-lg shadow-md"
+          onError={(e) => {
+            e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Load+Error';
+            e.currentTarget.alt = 'Image failed to load';
+          }}
+        />
+      </div>
     );
   }
   else {
@@ -661,12 +746,12 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
           md:relative md:translate-x-0 md:flex-shrink-0 md:rounded-lg md:shadow-md md:mb-6 md:border md:border-slate-200
           dark:bg-gray-900 dark:border-gray-700
         `}
-        style={dynamicWidthStyle} // Apply dynamic width here
+        style={dynamicPanelStyle} // Apply dynamic width and height here
       >
-        {/* Resizer Handle - only visible on desktop */}
+        {/* Resizer Handle for Width - only visible on desktop */}
         <div
           className="hidden md:block absolute left-0 top-0 bottom-0 w-2 bg-transparent cursor-ew-resize z-50 hover:bg-gray-200 transition-colors duration-200 dark:hover:bg-gray-700"
-          onMouseDown={handleMouseDown}
+          onMouseDown={handleWidthResizeMouseDown}
         />
 
         <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700">
@@ -705,6 +790,13 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
         </div>
         <div ref={diagramContainerRef} className="flex-1 overflow-auto p-4 sm:p-6 modern-scrollbar dark:bg-gray-900"> {/* Added modern-scrollbar */}
           {panelContent}
+        </div>
+        {/* Resize Handle for Height */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-3 flex items-center justify-center cursor-ns-resize text-gray-500 hover:text-gray-300 z-50"
+          onMouseDown={handleHeightResizeMouseDown}
+        >
+          <GripVertical className="h-4 w-4" />
         </div>
       </div>
     </>
@@ -954,7 +1046,7 @@ const MemoizedMarkdownRenderer: React.FC<{
           code: (props) => <CodeBlock {...props} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} onViewDiagram={onViewDiagram} />,
           h1: ({ node, ...props }) => <h1 className={`text-2xl font-extrabold ${isUserMessage ? 'text-white' : 'text-blue-700 dark:text-blue-400'} mt-4 mb-2`} {...props} />,
           h2: ({ node, ...props }) => <h2 className={`text-xl font-bold ${isUserMessage ? 'text-white' : 'text-purple-700 dark:text-purple-400'} mt-3 mb-2`} {...props} />,
-          h3: ({ node, ...props }) => <h3 className ={`text-lg font-semibold ${isUserMessage ? 'text-white' : 'text-green-700 dark:text-green-400'} mt-2 mb-1`} {...props} />,
+          h3: ({ node, ...props }) => <h3 className={`text-lg font-semibold ${isUserMessage ? 'text-white' : 'text-green-700 dark:text-green-400'} mt-2 mb-1`} {...props} />,
           h4: ({ node, ...props }) => <h4 className={`text-base font-semibold ${isUserMessage ? 'text-white' : 'text-orange-700 dark:text-orange-400'} mt-1 mb-1`} {...props} />,
           p: ({ node, ...props }) => <p className={`mb-2 ${textColorClass} leading-relaxed`} {...props} />,
           a: ({ node, ...props }) => <a className={`${linkColorClass} font-medium`} {...props} />,
@@ -970,7 +1062,7 @@ const MemoizedMarkdownRenderer: React.FC<{
           ),
           thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900" {...props} />,
           th: ({ node, ...props }) => (
-            <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-600 dark:text-gray-200" {...props} />
+            <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-200" {...props} />
           ),
           td: ({ node, ...props }) => (
             <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors dark:border-gray-700 dark:even:bg-gray-800 dark:hover:bg-blue-950 dark:text-gray-300" {...props} />
@@ -1056,7 +1148,7 @@ export interface Message {
 
 interface AIChatProps {
   // Removed imageDataBase64 and imageMimeType from onSendMessage signature
-  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[]) => Promise<void>; 
+  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[]) => Promise<void>;
   messages: Message[];
   isLoading: boolean;
   setIsLoading: (isLoading: boolean) => void;
@@ -1111,6 +1203,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set()); // State to track expanded messages
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false); // State for scroll button visibility
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false); // New state for older message loading
 
   // Image upload states (for UI preview only, not directly sent to AI anymore)
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -1126,6 +1219,30 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState('');
 
+  // Local state to merge documents from prop and newly uploaded/updated documents
+  const [mergedDocuments, setMergedDocuments] = useState<Document[]>(documents);
+
+  // Sync mergedDocuments with the prop whenever the prop changes (e.g., parent fetches new data)
+  useEffect(() => {
+    setMergedDocuments(documents);
+  }, [documents]);
+
+  // Local handler to update mergedDocuments when an image is processed
+  const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
+    setMergedDocuments(prevDocs => {
+      const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
+      if (existingIndex > -1) {
+        // Update existing document
+        const newDocs = [...prevDocs];
+        newDocs[existingIndex] = updatedDoc;
+        return newDocs;
+      } else {
+        // Add new document (for newly created image documents)
+        return [...prevDocs, updatedDoc];
+      }
+    });
+  }, []);
+
 
   // Initialize useCopyToClipboard hook once at the top level of the component
   const { copied, copy } = useCopyToClipboard();
@@ -1134,16 +1251,39 @@ const AIChatComponent: React.FC<AIChatProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Handle scroll event to show/hide scroll to bottom button
-  const handleScroll = useCallback(() => {
-    if (chatContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+  // Handle scroll event for infinite loading and scroll to bottom button
+  const handleScroll = useCallback(async () => {
+    const chatContainer = chatContainerRef.current;
+    if (chatContainer) {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+
+      // Logic for "Scroll to Bottom" button visibility
       // Show button if not at the very bottom (with a 100px threshold)
       // Also ensure scrollHeight is greater than clientHeight (i.e., there's actually something to scroll)
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 100;
       setShowScrollToBottomButton(!isAtBottom && scrollHeight > clientHeight);
+
+      // Logic for loading older messages (infinite scroll)
+      const scrollThreshold = 100; // Load when within 100px of the top
+      if (scrollTop < scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading) {
+        setIsLoadingOlderMessages(true);
+        const oldScrollHeight = scrollHeight; // Capture current scrollHeight before loading more
+
+        await onLoadOlderMessages();
+
+        // After messages load, adjust scroll position to maintain user's view
+        // Use a timeout to ensure new messages have rendered and updated scrollHeight
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            const newScrollHeight = chatContainerRef.current.scrollHeight;
+            chatContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
+          }
+        }, 0); // Small timeout to allow DOM to update
+
+        setIsLoadingOlderMessages(false);
+      }
     }
-  }, []);
+  }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages]);
 
   // Attach and detach scroll listener
   useEffect(() => {
@@ -1162,7 +1302,15 @@ const AIChatComponent: React.FC<AIChatProps> = ({
 
   // Scroll to bottom when new messages are added, or when isLoading changes (for new AI response)
   useEffect(() => {
-    scrollToBottom();
+    // Only scroll to bottom if the user is already near the bottom
+    const chatContainer = chatContainerRef.current;
+    if (chatContainer) {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200; // 200px threshold
+      if (isNearBottom) {
+        scrollToBottom();
+      }
+    }
   }, [messages, isLoading]); // Trigger scroll on message change or loading state change
 
 
@@ -1301,173 +1449,184 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   const handleSendMessageWithImage = async () => {
     if (!inputMessage.trim() && !selectedImageFile) return;
 
+    setIsLoading(true); // Start loading immediately for any message send operation
     let attachedImageDocumentId: string | undefined = undefined;
     let uploadedFilePath: string | undefined = undefined;
+    let finalAttachedDocumentIds = [...selectedDocumentIds]; // Start with existing selected docs
 
-    if (selectedImageFile) {
-        setIsLoading(true); // Show loading for image upload and analysis
+    try {
+      if (selectedImageFile) {
         toast.info('Uploading image for analysis...', { id: 'image-upload' });
-        try {
-          // Generate a unique file name
-          const fileExtension = selectedImageFile.name.split('.').pop();
-          const fileName = `${crypto.randomUUID()}.${fileExtension}`;
-          uploadedFilePath = `user_uploads/${userProfile?.id}/${fileName}`; 
+        // Generate a unique file name
+        const fileExtension = selectedImageFile.name.split('.').pop();
+        const fileName = `${crypto.randomUUID()}.${fileExtension}`;
+        uploadedFilePath = `user_uploads/${userProfile?.id}/${fileName}`;
 
-            // 1. Upload file to Supabase Storage
-            const { data: storageData, error: storageError } = await supabase.storage
-                .from('documents') // Your storage bucket for documents/images
-              .upload(uploadedFilePath, selectedImageFile, {
-                 cacheControl: '3600',
-                    upsert: false,
-                });
+        // 1. Upload file to Supabase Storage
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from('documents') // Your storage bucket for documents/images
+          .upload(uploadedFilePath, selectedImageFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
 
-            if (storageError) {
-                throw storageError;
-            }
-
-            const { data: publicUrlData } = supabase.storage
-                .from('documents')
-                .getPublicUrl(uploadedFilePath);
-
-            const fileUrl = publicUrlData.publicUrl;
-
-            // 2. Create a pending document entry for the image
-            const { data: docData, error: docError } = await supabase
-                .from('documents')
-                .insert({
-                    user_id: userProfile!.id, 
-                    title: selectedImageFile.name,
-                    file_name: selectedImageFile.name,
-                    file_type: selectedImageFile.type,
-                    file_size: selectedImageFile.size,
-                    processing_status: 'pending',
-                    type: 'image', // Mark as image document
-                    file_url: fileUrl, // Store the public URL
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                  
-                })
-                .select()
-                .single();
-
-            if (docError) {
-                throw docError;
-            }
-            attachedImageDocumentId = docData.id;
-            toast.success('Image uploaded. Analyzing content...', { id: 'image-upload' }); // Update toast
-
-            // 3. Trigger image analysis via Edge Function
-            try {
-                const response = await fetch('https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/image-analyzer', { // Updated to absolute URL
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`
-                  },
-                  body: JSON.stringify({
-                    documentId: attachedImageDocumentId,
-                    fileUrl: fileUrl, // Send the public URL instead of base64
-                    userId: userProfile!.id,
-                  }),
-                });
-
-                let responseBody: string;
-                try {
-                    responseBody = await response.text(); // Read the body once as text
-                } catch (e) {
-                    throw new Error(`Failed to read image analysis response body: ${e}`);
-                }
-
-                // Check for non-OK responses first
-                if (!response.ok) {
-                    let errorBodyText = 'Unknown error';
-                    try {
-                        // Try to parse JSON error from the already read text
-                        const errorJson = JSON.parse(responseBody);
-                        errorBodyText = errorJson.error || JSON.stringify(errorJson);
-                    } catch (e) {
-                        errorBodyText = responseBody; // Use raw text if JSON parsing fails
-                    }
-                    throw new Error(`Image analysis failed: ${response.status} - ${errorBodyText}`);
-                }
-
-                // Attempt to parse JSON response from the already read text
-                let analysisResult;
-                try {
-                    analysisResult = JSON.parse(responseBody);
-                } catch (e) {
-                    throw new Error('Image analysis response was not valid JSON.');
-                }
-                
-                const imageDescription = analysisResult.description || 'No detailed description provided.';
-
-                // 4. Update document status with analysis result in DB
-                const { data: updatedDocData, error: updateDocError } = await supabase.from('documents')
-                    .update({
-                        content_extracted: imageDescription,
-                        processing_status: 'completed',
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', attachedImageDocumentId!)
-                    .select() // Select the updated row to get the full object
-                    .single();
-
-                if (updateDocError) {
-                    throw updateDocError;
-                }
-
-                // NEW: Call the onDocumentUpdated prop to update the frontend state
-                if (updatedDocData) {
-                    onDocumentUpdated(updatedDocData as Document); // Cast to Document type
-                }
-
-                toast.success('Image analysis complete!', { id: 'image-analysis' });
-              } catch (analysisError: any) {
-                console.error('Error calling image-analyzer or updating document:', analysisError);
-                toast.error(`Image analysis failed: ${analysisError.message}`, { id: 'image-analysis' });
-                // Update document status to failed if analysis fails
-                await supabase.from('documents')
-                  .update({
-                    processing_error: analysisError.message,
-                    processing_status: 'failed',
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('id', attachedImageDocumentId!);
-              }
-
-        } catch (error: any) {
-            console.error('Image upload or registration error:', error);
-            toast.error(`Image upload failed: ${error.message}`);
-            // Clean up if initial upload or registration fails
-            if (attachedImageDocumentId) {
-              await supabase.from('documents').delete().eq('id', attachedImageDocumentId);
-            }
-            if (uploadedFilePath) {
-              await supabase.storage.from('documents').remove([uploadedFilePath]);
-            }
-        } finally {
-            setIsLoading(false); // Hide loading after all image processing steps
+        if (storageError) {
+          throw storageError;
         }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(uploadedFilePath);
+
+        const fileUrl = publicUrlData.publicUrl;
+
+        // 2. Create a pending document entry for the image
+        const { data: docData, error: docError } = await supabase
+          .from('documents')
+          .insert({
+            user_id: userProfile!.id,
+            title: selectedImageFile.name,
+            file_name: selectedImageFile.name,
+            file_type: selectedImageFile.type,
+            file_size: selectedImageFile.size,
+            processing_status: 'pending',
+            type: 'image', // Mark as image document
+            file_url: fileUrl, // Store the public URL
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (docError) {
+          throw docError;
+        }
+        attachedImageDocumentId = docData.id;
+        finalAttachedDocumentIds.push(attachedImageDocumentId); // Add new image doc ID to final list
+
+        // Immediately add the pending document to local state for display
+        handleDocumentUpdatedLocally(docData as Document);
+        toast.success('Image uploaded. Analyzing content...', { id: 'image-upload' }); // Update toast
+
+        // 3. Trigger image analysis via Edge Function and WAIT for it
+        try {
+          const response = await fetch('https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/image-analyzer', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`
+            },
+            body: JSON.stringify({
+              documentId: attachedImageDocumentId,
+              fileUrl: fileUrl,
+              userId: userProfile!.id,
+            }),
+          });
+
+          let responseBody: string;
+          try {
+            responseBody = await response.text();
+          } catch (e) {
+            throw new Error(`Failed to read image analysis response body: ${e}`);
+          }
+
+          if (!response.ok) {
+            let errorBodyText = 'Unknown error';
+            try {
+              const errorJson = JSON.parse(responseBody);
+              errorBodyText = errorJson.error || JSON.stringify(errorJson);
+            } catch (e) {
+              errorBodyText = responseBody;
+            }
+            throw new Error(`Image analysis failed: ${response.status} - ${errorBodyText}`);
+          }
+
+          let analysisResult;
+          try {
+            analysisResult = JSON.parse(responseBody);
+          } catch (e) {
+            throw new Error('Image analysis response was not valid JSON.');
+          }
+
+          const imageDescription = analysisResult.description || 'No detailed description provided.';
+
+          // 4. Update document status with analysis result in DB
+          const { data: updatedDocData, error: updateDocError } = await supabase.from('documents')
+            .update({
+              content_extracted: imageDescription,
+              processing_status: 'completed',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', attachedImageDocumentId!)
+            .select()
+            .single();
+
+          if (updateDocError) {
+            throw updateDocError;
+          }
+
+          // Update local state with the completed document
+          if (updatedDocData) {
+            handleDocumentUpdatedLocally(updatedDocData as Document);
+            onDocumentUpdated(updatedDocData as Document); // Also call the parent prop
+          }
+          toast.success('Image analysis complete!', { id: 'image-analysis' });
+
+        } catch (analysisError: any) {
+          console.error('Error calling image-analyzer or updating document:', analysisError);
+          toast.error(`Image analysis failed: ${analysisError.message}`, { id: 'image-analysis' });
+          // Update document status to failed if analysis fails
+          await supabase.from('documents')
+            .update({
+              processing_error: analysisError.message,
+              processing_status: 'failed',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', attachedImageDocumentId!);
+          // Update local state to reflect the failed status
+          if (attachedImageDocumentId) {
+            handleDocumentUpdatedLocally({
+              ...mergedDocuments.find(d => d.id === attachedImageDocumentId)!,
+              processing_status: 'failed',
+              processing_error: analysisError.message,
+              updated_at: new Date().toISOString()
+            });
+          }
+          // Re-throw to be caught by the outer try-catch for overall message sending failure
+          throw analysisError;
+        }
+      }
+
+      // Filter notes to get only those whose IDs are in finalAttachedDocumentIds
+      const attachedNoteIds = notes
+        .filter(note => finalAttachedDocumentIds.includes(note.id))
+        .map(note => note.id);
+
+      // Send the message AFTER image processing (if any) is complete
+      await onSendMessage(
+        inputMessage.trim(),
+        finalAttachedDocumentIds,
+        attachedNoteIds
+      );
+
+      setInputMessage('');
+      handleRemoveImage(); // Clear selected image preview
+
+    } catch (error: any) {
+      console.error('Overall message sending error (including image processing):', error);
+      // If an error occurred during image upload/analysis, ensure loading is stopped
+      toast.error(`Failed to send message: ${error.message}`);
+      // Clean up if initial upload or registration fails
+      if (attachedImageDocumentId) {
+        await supabase.from('documents').delete().eq('id', attachedImageDocumentId);
+        setMergedDocuments(prevDocs => prevDocs.filter(doc => doc.id !== attachedImageDocumentId)); // Remove from local state
+      }
+      if (uploadedFilePath) {
+        await supabase.storage.from('documents').remove([uploadedFilePath]);
+      }
+    } finally {
+      setIsLoading(false); // Ensure loading stops in all cases
     }
-
-    // Now, send the message and include the attached document IDs
-    // The AI will get the image's description by fetching the attached document content.
-    const finalAttachedDocumentIds = attachedImageDocumentId ? [...selectedDocumentIds, attachedImageDocumentId] : selectedDocumentIds;
-
-    // Filter notes to get only those whose IDs are in finalAttachedDocumentIds
-    const attachedNoteIds = notes
-      .filter(note => finalAttachedDocumentIds.includes(note.id))
-      .map(note => note.id);
-
-    await onSendMessage(
-      inputMessage.trim(),
-      finalAttachedDocumentIds, // Pass all selected document IDs (including the new image doc)
-      attachedNoteIds // Pass selected note IDs
-    );
-
-    setInputMessage('');
-    handleRemoveImage(); // Clear selected image preview
-    // REMOVED: onSelectionChange([]); // Do NOT clear selected documents/notes here
   };
 
   // Function to handle image generation
@@ -1482,15 +1641,15 @@ const AIChatComponent: React.FC<AIChatProps> = ({
     toast.info('Generating image...', { id: 'image-gen' });
 
     try {
-      const payload = { instances: { prompt: imagePrompt }, parameters: { "sampleCount": 1} };
+      const payload = { instances: { prompt: imagePrompt }, parameters: { "sampleCount": 1 } };
       const apiKey = "" // If you want to use models other than imagen-3.0-generate-002, provide an API key here. Otherwise, leave this as-is.
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
-      
+
       const response = await fetch(apiUrl, {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify(payload)
-             });
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
       const result = await response.json();
 
       if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
@@ -1520,7 +1679,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
 
 
   // Filter documents and notes that are currently selected to display their titles
-  const selectedDocumentTitles = documents
+  const selectedDocumentTitles = mergedDocuments // Use mergedDocuments
     .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'text')
     .map(doc => doc.title);
 
@@ -1528,7 +1687,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
     .filter(note => selectedDocumentIds.includes(note.id)) // Notes are also documents in a sense, but separate type
     .map(note => note.title);
 
-  const selectedImageDocuments = documents
+  const selectedImageDocuments = mergedDocuments // Use mergedDocuments
     .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'image');
 
 
@@ -1536,33 +1695,46 @@ const AIChatComponent: React.FC<AIChatProps> = ({
   const handleViewAttachedFile = useCallback((doc: Document) => {
     const fileExtension = doc.file_name.split('.').pop()?.toLowerCase(); // Use file_name
     const textMimeTypes = [
-        'text/plain',
-        'application/json',
-        'text/markdown',
-        'text/csv',
-        'application/xml',
-        // Add more text-based MIME types as needed
+      'text/plain',
+      'application/json',
+      'text/markdown',
+      'text/csv',
+      'application/xml',
+      // Add more text-based MIME types as needed
     ];
     const codeExtensions = [
-        'js', 'ts', 'py', 'java', 'c', 'cpp', 'html', 'css', 'json', 'xml', 'sql', 'sh', 'bash'
+      'js', 'ts', 'py', 'java', 'c', 'cpp', 'html', 'css', 'json', 'xml', 'sql', 'sh', 'bash'
     ];
 
     // Check if it's an image
     if (doc.file_type && doc.file_type.startsWith('image/')) { // Use file_type
-        handleViewContent('image', undefined, undefined, doc.file_url); // Use file_url
+      handleViewContent('image', undefined, undefined, doc.file_url); // Use file_url
     }
     // Check if it's a text-based file that can be displayed as code/text
     else if ((doc.file_type && textMimeTypes.includes(doc.file_type)) || (fileExtension && codeExtensions.includes(fileExtension))) { // Use file_type
-        handleViewContent('document-text', doc.content_extracted || `Cannot display content for ${doc.file_name} directly. Try downloading.`, fileExtension || 'txt'); // Use content_extracted and file_name
+      handleViewContent('document-text', doc.content_extracted || `Cannot display content for ${doc.file_name} directly. Try downloading.`, fileExtension || 'txt'); // Use content_extracted and file_name
     }
     // For other file types, offer download or open in new tab
     else if (doc.file_url) { // Use file_url
-        window.open(doc.file_url, '_blank'); // Open in new tab
-        toast.info(`Opening ${doc.file_name} in a new tab.`); // Use file_name
+      window.open(doc.file_url, '_blank'); // Open in new tab
+      toast.info(`Opening ${doc.file_name} in a new tab.`); // Use file_name
     } else {
-        toast.error(`Cannot preview or open ${doc.file_name}. No URL available.`); // Use file_name
+      toast.error(`Cannot preview or open ${doc.file_name}. No URL available.`); // Use file_name
     }
   }, [handleViewContent]);
+
+  // Effect to clear context when activeChatSessionId changes
+  useEffect(() => {
+    // Only clear if activeChatSessionId is not null (i.e., a session is active or newly created)
+    // And if selectedDocumentIds is not already empty (to avoid unnecessary re-renders)
+    if (activeChatSessionId !== null) {
+      if (selectedDocumentIds.length > 0) {
+        onSelectionChange([]); // Clear selected documents
+      }
+      handleRemoveImage(); // Clear selected image and its preview
+      setInputMessage(''); // Clear input message
+    }
+  }, [activeChatSessionId, onSelectionChange]); // Depend on activeChatSessionId and onSelectionChange
 
 
   return (
@@ -1592,18 +1764,11 @@ const AIChatComponent: React.FC<AIChatProps> = ({
               </div>
             )}
 
-            {/* Load Older Messages Button */}
-            {hasMoreMessages && !isLoading && messages.length > 0 && (
+            {/* Loading Indicator for Older Messages */}
+            {isLoadingOlderMessages && (
               <div className="flex justify-center py-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onLoadOlderMessages}
-                  className="text-slate-600 border-slate-200 hover:bg-slate-100 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-800"
-                >
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Load Older Messages
-                </Button>
+                <Loader2 className="h-5 w-5 animate-spin text-blue-500 mr-2" />
+                <span className="text-slate-500 dark:text-gray-400">Loading older messages...</span>
               </div>
             )}
 
@@ -1733,7 +1898,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                         </div>
                       )}
                       <div className={`flex flex-col ${message.role === 'user' ? 'items-end max-w-sm' : 'items-start'}`}>
-                        <Card className={`max-w-sm sm:max-w-4xl overflow-hidden rounded-lg ${message.role === 'assistant' ?'border-none shadow-none bg-transparent dark:bg-transparent':'dark:bg-gray-800 dark:border-gray-700'}' ${cardClasses}`}>
+                        <Card className={`max-w-sm sm:max-w-4xl overflow-hidden rounded-lg ${message.role === 'assistant' ? 'border-none shadow-none bg-transparent dark:bg-transparent' : 'dark:bg-gray-800 dark:border-gray-700'}' ${cardClasses}`}>
                           <CardContent className={`p-2 prose border-none prose-base max-w-full leading-relaxed dark:prose-invert`}> {/* Changed prose-sm to prose-base */}
                             {contentToRender}
 
@@ -1743,15 +1908,17 @@ const AIChatComponent: React.FC<AIChatProps> = ({
                                 <p className={`text-sm font-semibold mb-2 ${message.role === 'user' ? 'text-blue-100' : 'text-slate-600 dark:text-gray-300'}`}>Attached Files:</p>
                                 <div className="flex flex-wrap gap-2">
                                   {message.attachedDocumentIds.map(docId => {
-                                    const doc = documents.find(d => d.id === docId);
+                                    // Use mergedDocuments for finding the document
+                                    const doc = mergedDocuments.find(d => d.id === docId);
                                     return doc ? (
                                       <Badge
                                         key={doc.id}
                                         variant="secondary"
-                                        className={`cursor-pointer hover:opacity-80 transition-opacity ${message.role === 'user' ? 'bg-blue-500/30 text-white border-blue-400' : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600'}`}
+                                        className={`cursor-pointer hover:opacity-80 transition-opacity ${doc.processing_status === 'pending' ? 'bg-yellow-500/30 text-yellow-800 border-yellow-400 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-700' : doc.processing_status === 'failed' ? 'bg-red-500/30 text-red-800 border-red-400 dark:bg-red-950 dark:text-red-300 dark:border-red-700' : (message.role === 'user' ? 'bg-blue-500/30 text-white border-blue-400' : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600')}`}
                                         onClick={() => handleViewAttachedFile(doc)}
                                       >
-                                        <FileText className="h-3 w-3 mr-1" /> {doc.file_name} {/* Use file_name */}
+                                        {doc.processing_status === 'pending' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : doc.processing_status === 'failed' ? <AlertTriangle className="h-3 w-3 mr-1" /> : <FileText className="h-3 w-3 mr-1" />}
+                                        {doc.file_name}
                                       </Badge>
                                     ) : (
                                       <Badge key={docId} variant="destructive" className="text-red-600 dark:text-red-400">
@@ -1987,7 +2154,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
           </div>
           {showDocumentSelector && (
             <DocumentSelector
-              documents={documents}
+              documents={mergedDocuments} // Pass mergedDocuments to DocumentSelector
               notes={notes}
               selectedDocumentIds={selectedDocumentIds}
               onSelectionChange={onSelectionChange}

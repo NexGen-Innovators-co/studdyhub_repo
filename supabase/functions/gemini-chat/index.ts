@@ -1,35 +1,15 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.24.1"; // Ensure this is the latest version for multimodal support
 
+// Define CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
-// Define the types for Gemini API parts
-interface TextPart {
-  text: string;
-}
-
-interface InlineData {
-  mimeType: string;
-  data: string; // Base64 encoded string
-}
-
-interface BlobPart {
-  inlineData: InlineData;
-}
-
-type Part = TextPart | BlobPart;
-
-interface Content {
-  role: string;
-  parts: Part[];
-}
-
+// Main server handler for incoming requests
 serve(async (req) => {
+  // Handle OPTIONS requests (pre-flight CORS checks)
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: corsHeaders
@@ -37,40 +17,59 @@ serve(async (req) => {
   }
 
   try {
-    const { message, userId, sessionId, learningStyle, learningPreferences, context, chatHistory, imageDataBase64, imageMimeType } = await req.json();
+    // Parse the request body as JSON
+    const {
+      message,
+      userId,
+      sessionId,
+      learningStyle,
+      learningPreferences,
+      context,
+      chatHistory,
+      imageDataBase64,
+      imageMimeType
+    } = await req.json();
 
-    if (!userId || !sessionId) { // Message can be empty if only image is sent
+    // Validate required parameters
+    if (!userId || !sessionId) {
       return new Response(JSON.stringify({
         error: 'Missing required parameters: userId or sessionId'
       }), {
         status: 400,
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...corsHeaders
         }
       });
     }
 
-    if (!message && !imageDataBase64) { // Ensure at least message or image is present
+    // Ensure either a message or image data is provided for the current turn
+    if (!message && !imageDataBase64) {
       return new Response(JSON.stringify({
-        error: 'Missing required parameters: message or imageDataBase64'
+        error: 'Missing required parameters: message or imageDataBase64 for the current turn'
       }), {
         status: 400,
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...corsHeaders
         }
       });
     }
 
+    // Retrieve Gemini API key from environment variables
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) {
-      throw new Error('GEMINI_API_KEY not configured');
+      throw new Error('GEMINI_API_KEY environment variable not configured.');
     }
 
+    // Generate the system prompt based on learning style and preferences
     const systemPrompt = createSystemPrompt(learningStyle, learningPreferences);
 
-    const geminiContents: Content[] = []; // Use the Content interface here
+    // Initialize the array to hold Gemini API content (chat history + current message)
+    const geminiContents: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }> = [];
 
-    // Add system prompt and context as the first user turn
+    // Add system prompt and context as the first user turn.
+    // This sets the initial persona and context for the AI.
     geminiContents.push({
       role: 'user',
       parts: [
@@ -80,84 +79,27 @@ serve(async (req) => {
       ]
     });
 
-    // Add previous chat history messages
+    // Add previous chat history messages to `geminiContents`.
+    // It's crucial that historical images are already in Base64 format in `chatHistory`
+    // for efficient processing, avoiding re-fetching.
     if (chatHistory && Array.isArray(chatHistory)) {
-      chatHistory.forEach(async (msg: any) => { // Use 'any' for msg to handle imageUrl if present
+      for (const msg of chatHistory) { // Use for...of for proper async iteration
         if (msg.role === 'user') {
-          const userParts: Part[] = [];
+          const userParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
           if (msg.content) {
-            userParts.push({ text: msg.content });
+            userParts.push({
+              text: msg.content
+            });
           }
-          // If the user's previous message had an image, include it in the history for AI context
-          if (msg.imageUrl && msg.imageMimeType) {
-            // Fetch the image from Supabase Storage and convert to Base64
-            // This is a crucial step for persisting image context across turns.
-            // NOTE: This will add latency. For production, consider caching or
-            // storing base64 directly in DB if image size is small and security allows.
-            // For now, we'll fetch from the URL.
-            // If the image data is already base64 in msg.imageUrl, use that directly.
-            let historicalImageData = msg.imageUrl;
-            if (historicalImageData.startsWith('http')) {
-              // If it's a URL, fetch it and convert to base64
-              // This is a simplification; in a real scenario, you'd want to store base64 or a smaller version
-              // or have the AI re-process the URL if it supports it.
-              // For now, we'll assume the client sends base64 for new images,
-              // and for historical, we'll just pass the URL if the AI can handle it,
-              // or you'd need a server-side fetch-and-encode.
-              // Given the current setup, if `msg.imageUrl` is a Supabase URL,
-              // the AI won't directly fetch it. We need the base64.
-              // For the purpose of this fix, let's assume `msg.imageUrl` in history
-              // is *already* base64 if it's meant for `inlineData`.
-              // If it's a URL, the AI won't see it via `inlineData`.
-              // For a robust solution, you'd convert the URL to base64 on the server side
-              // or store base64 in the DB for historical messages.
-              // For now, let's assume `msg.imageUrl` from DB is a public URL,
-              // and we'll only use `imageDataBase64` from the current request for inlineData.
-              // This part needs careful consideration for a production system.
-              // For this fix, we'll only pass `inlineData` if `msg.imageDataBase64` is available in history.
-              // This implies you might need to store `imageDataBase64` in the DB for history.
-              // Let's modify the frontend to save `imageDataBase64` as well.
-
-              // TEMPORARY FIX: For historical images, we'll need to fetch and convert to base64
-              // or store base64 in the database. Since we're not doing that in the DB yet,
-              // we'll skip adding historical images to inlineData for now to avoid complexity.
-              // The prompt for the AI will mention "user provided an image".
-              // The *best* way is to store base64 in the DB for history or rely on AI's ability to fetch URLs.
-              // Given Gemini's inlineData requirement, we need base64.
-              // For now, the AI will only "see" the *current* image upload.
-              // To make historical images visible, you'd need to fetch them from `msg.imageUrl`
-              // and convert them to base64 here in the Edge Function, which adds latency.
-              // Let's assume `msg.imageUrl` in history is just for display, and `imageDataBase64` is for current turn.
-              // If you want historical images to be analyzed, you MUST store their base64 representation
-              // in the `chat_messages` table or fetch them here.
-
-              // Re-evaluating: The prompt said "AI to analyze them". So, historical images *must* be sent.
-              // The easiest way is to store the base64 in the DB for user messages.
-              // Let's adjust the AIChat.tsx to save base64 to DB for user messages.
-              // If `msg.imageUrl` is actually the base64 string from the DB, then this is fine.
-              // If it's a public URL, then we need to fetch it.
-              // For now, let's assume `msg.imageUrl` in history is the public URL,
-              // and we'll fetch it here. This will add latency but ensures AI sees it.
-
-              try {
-                const imageResponse = await fetch(msg.imageUrl);
-                const imageBlob = await imageResponse.blob();
-                const reader = new FileReader();
-                reader.readAsDataURL(imageBlob);
-                await new Promise(resolve => reader.onloadend = resolve);
-                const historicalBase64 = (reader.result as string).split(',')[1];
-                userParts.push({
-                  inlineData: {
-                    mimeType: imageBlob.type,
-                    data: historicalBase64
-                  }
-                });
-              } catch (imgFetchError) {
-                console.error("Failed to fetch historical image for AI:", imgFetchError);
-                // Optionally, add a text part indicating image was present but couldn't be processed
-                userParts.push({ text: `(User previously sent an image which could not be re-processed by AI)` });
+          // If the user's previous message had image data (Base64), include it.
+          // This assumes `imageDataBase64` is stored in your database for historical messages.
+          if (msg.imageDataBase64 && msg.imageMimeType) {
+            userParts.push({
+              inlineData: {
+                mimeType: msg.imageMimeType,
+                data: msg.imageDataBase64
               }
-            }
+            });
           }
           geminiContents.push({
             role: 'user',
@@ -173,13 +115,15 @@ serve(async (req) => {
             ]
           });
         }
-      });
+      }
     }
 
-    // Add the current user message (and image if present) as the last turn
-    const currentUserParts: Part[] = [];
+    // Add the current user message (and image if present) as the last turn.
+    const currentUserParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
     if (message) {
-      currentUserParts.push({ text: message });
+      currentUserParts.push({
+        text: message
+      });
     }
     if (imageDataBase64 && imageMimeType) {
       currentUserParts.push({
@@ -194,7 +138,12 @@ serve(async (req) => {
       parts: currentUserParts
     });
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
+    // Construct the Gemini API request URL
+    const geminiApiUrl = new URL(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`);
+    geminiApiUrl.searchParams.append('key', geminiApiKey);
+
+    // Make the request to the Gemini API
+    const response = await fetch(geminiApiUrl.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -210,27 +159,27 @@ serve(async (req) => {
       })
     });
 
+    // Handle non-OK responses from the Gemini API
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new Error(`Gemini API error: ${response.status} - ${errorBody}`);
+      console.error(`Gemini API error: ${response.status} - ${errorBody}`);
+      throw new Error(`Failed to get response from Gemini API: ${response.statusText}`);
     }
 
+    // Parse the Gemini API response
     const data = await response.json();
     let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
 
-    // --- START: Robust cleaning for generatedText from AI ---
-    generatedText = generatedText.split('\n') // Split into lines
+    // Robust cleaning for generatedText from AI to remove non-printable characters
+    generatedText = generatedText.split('\n')
       .map((line) => {
-        // Replace any character that is NOT a printable ASCII character (0x20-0x7E),
-        // a newline (0x0A), or a carriage return (0x0D) with a standard space.
-        let cleanedLine = line.replace(/[^\x20-\x7E\n\r]/g, ' ');
-        // Normalize multiple spaces to single spaces and trim each line
-        cleanedLine = cleanedLine.replace(/\s+/g, ' ').trim();
+        let cleanedLine = line.replace(/[^\x20-\x7E\n\r]/g, ' '); // Replace non-printable ASCII with space
+        cleanedLine = cleanedLine.replace(/\s+/g, ' ').trim(); // Normalize spaces and trim
         return cleanedLine;
-      }).filter((line) => line.length > 0 || line.trim().length === 0) // Keep lines that were originally empty or just whitespace
+      }).filter((line) => line.length > 0 || line.trim().length === 0) // Keep original empty/whitespace lines
       .join('\n');
-    // --- END: Robust cleaning for generatedText from AI ---
 
+    // Return the AI's response
     return new Response(JSON.stringify({
       response: generatedText,
       userId: userId,
@@ -242,8 +191,10 @@ serve(async (req) => {
         'Content-Type': 'application/json'
       }
     });
-  } catch (error: any) {
+
+  } catch (error) {
     console.error('Error in gemini-chat function:', error);
+    // Return a generic error response for unhandled exceptions
     return new Response(JSON.stringify({
       error: error.message || 'Internal Server Error'
     }), {
@@ -256,7 +207,14 @@ serve(async (req) => {
   }
 });
 
-function createSystemPrompt(learningStyle: string, preferences: any) {
+/**
+ * Creates a dynamic system prompt for the AI based on user's learning style and preferences.
+ * This prompt guides the AI's behavior and response generation.
+ * @param learningStyle - The user's preferred learning style (e.g., 'visual', 'auditory').
+ * @param preferences - Additional learning preferences (e.g., difficulty, examples).
+ * @returns A string containing the comprehensive system prompt.
+ */
+function createSystemPrompt(learningStyle: string, preferences: { difficulty?: string; examples?: boolean }) {
   const basePrompt = `You are an advanced AI study assistant designed to help students master their materials through personalized, adaptive learning experiences. Your role is to:
 
 - Provide comprehensive explanations tailored to individual learning styles
@@ -265,6 +223,7 @@ function createSystemPrompt(learningStyle: string, preferences: any) {
 - Encourage critical thinking and active learning
 - Adapt your communication style based on user preferences
 - Provide accurate, up-to-date information with proper context`;
+
   let stylePrompt = "";
   switch (learningStyle) {
     case 'visual':
@@ -468,6 +427,7 @@ sequenceDiagram
 - Use varied presentation methods to maintain engagement
 - **Image Analysis**: If an image is provided, analyze its content and integrate findings into the response in a balanced way, suitable for various learning styles.`;
   }
+
   let difficultyPrompt = "";
   switch (preferences?.difficulty) {
     case 'beginner':
@@ -508,6 +468,7 @@ sequenceDiagram
 - Provide scaffolding for complex concepts
 - Include both basic and advanced perspectives when relevant`;
   }
+
   const examplePrompt = preferences?.examples ? `**Example Integration:**
 - Include relevant, practical examples for every major concept
 - Use real-world applications and case studies
@@ -519,6 +480,7 @@ sequenceDiagram
 - Focus on core concepts and principles
 - Use examples sparingly and only when essential for understanding
 - Prioritize clarity and brevity over illustration`;
+
   const interactionPrompt = `**Interactive Guidelines:**
 - Ask clarifying questions when requests are ambiguous
 - Encourage active participation and questioning
@@ -526,11 +488,13 @@ sequenceDiagram
 - Suggest follow-up questions and areas for exploration
 - Adapt explanations based on student's responses
 - Encourage self-assessment and reflection`;
+
   const errorHandlingPrompt = `**Error Prevention:**
 - Verify technical accuracy before providing information
 - Use fallback explanations when complex formatting might fail
 - Provide alternative explanation methods if primary approach isn't working
 - Acknowledge limitations and suggest additional resources when needed`;
+
   return `${basePrompt}
 
 ${stylePrompt}
