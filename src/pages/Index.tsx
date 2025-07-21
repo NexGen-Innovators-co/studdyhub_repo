@@ -443,6 +443,8 @@ const Index = () => {
     console.log("Generated Context:", context);
     return context;
   }, []);
+  // Refresh a single document and update state
+
 
   // Modified _getAIResponse to accept attached document and note IDs directly
   const _getAIResponse = useCallback(async (
@@ -647,7 +649,26 @@ const Index = () => {
       return false;
     }
   }, [activeChatSessionId, user, setActiveChatSessionId, setChatMessages]);
-
+  const refreshUploadedDocument = async (docId: string) => {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('id', docId)
+      .single();
+  
+    if (error) {
+      console.error('Failed to refresh uploaded document:', error.message);
+      return null;
+    }
+  
+    setDocuments((prev) =>
+      prev.map((doc) => (doc.id === docId ? (data as AppDocument) : doc))
+    );
+  
+    return data;
+  };
+  
+  
   // Modified handleSubmit to accept attachedDocumentIds and attachedNoteIds
   const handleSubmit = useCallback(async (messageContent: string, attachedDocumentIds?: string[], attachedNoteIds?: string[]) => {
     console.log('handleSubmit: Initiated with message:', messageContent, 'attached docs:', attachedDocumentIds, 'attached notes:', attachedNoteIds);

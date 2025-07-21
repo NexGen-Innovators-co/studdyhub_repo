@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { AlertTriangle, Copy, Check, Loader2, Wrench, Play, Code, Download, Eye, EyeOff, Info, ChevronDown, ChevronUp } from 'lucide-react';
-import { Button } from './ui/button';
+import { AlertTriangle, Copy, Check, Loader2, Wrench, Play, Code, Download, Eye, EyeOff, Info, ChevronDown, ChevronUp, ZoomIn, ZoomOut, Maximize, GripVertical } from 'lucide-react';
+import { Button } from './ui/button'; // Assuming this path is correct for your Button component
 
 // Define the MermaidProps interface
 interface MermaidProps {
@@ -204,25 +204,26 @@ const downloadSvgAsPng = (svgString: string, filename: string = 'mermaid-diagram
             link.href = downloadUrl;
             link.download = `${filename}.png`;
             document.body.appendChild(link);
+            link.click(); // Programmatically click the link
             document.body.removeChild(link);
             URL.revokeObjectURL(downloadUrl);
           }
         }, 'image/png');
       } catch (error) {
         console.error('Error converting canvas to PNG:', error);
-        downloadSvg(svgString, filename);
+        downloadSvg(svgString, filename); // Fallback to SVG download
       }
     };
 
     img.onerror = () => {
-      console.error('Error loading SVG image');
-      downloadSvg(svgString, filename);
+      console.error('Error loading SVG image for PNG conversion.');
+      downloadSvg(svgString, filename); // Fallback to SVG download
     };
 
     img.src = svgDataUrl;
   } catch (error) {
     console.error('Error processing SVG for PNG conversion:', error);
-    downloadSvg(svgString, filename);
+    downloadSvg(svgString, filename); // Fallback to SVG download
   }
 };
 
@@ -234,7 +235,7 @@ const downloadSvg = (svgString: string, filename: string = 'mermaid-diagram') =>
   link.href = url;
   link.download = `${filename}.svg`;
   document.body.appendChild(link);
-  link.click();
+  link.click(); // Programmatically click the link
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };
@@ -252,6 +253,23 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
   const [showSourceCode, setShowSourceCode] = useState(false);
   const [sourceCodeCopied, setSourceCodeCopied] = useState(false);
   const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // State for custom zoom and pan
+  const [scale, setScale] = useState(1);
+  const [translateX, setTranslateX] = useState(0);
+  const [translateY, setTranslateY] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
+  const lastPanPosition = useRef({ x: 0, y: 0 });
+  const svgContentRef = useRef<HTMLDivElement>(null); // Ref for the div containing the SVG
+
+  // State for expand/collapse functionality
+  const [isDiagramExpanded, setIsDiagramExpanded] = useState(true); // Default to expanded
+
+  // State for resizable height
+  const [componentHeight, setComponentHeight] = useState(300); // Initial height
+  const isResizing = useRef(false);
+  const initialResizeY = useRef(0);
+  const initialComponentHeight = useRef(0);
 
   const copyCode = async () => {
     try {
@@ -297,6 +315,7 @@ ${code}
     }
   }, []);
 
+  // Load Mermaid script
   useEffect(() => {
     const loadMermaidScript = () => {
       if (isMermaidLoaded || (window as any).mermaid) {
@@ -320,6 +339,7 @@ ${code}
     loadMermaidScript();
   }, [isMermaidLoaded]);
 
+  // Render diagram
   useEffect(() => {
     const renderDiagram = async () => {
       if (!isMermaidLoaded || !diagramRef.current || !(window as any).mermaid || !shouldRender) {
@@ -439,7 +459,7 @@ ${code}
           }, 7000);
 
           mermaidInstance.render(
-            'mermaid-chart-' + Date.now(),
+            'mermaid-chart-' + Date.now(), // Unique ID for each render
             finalChart
           ).then(result => {
             if (renderTimeoutRef.current) {
@@ -464,6 +484,11 @@ ${code}
           bindFunctions(diagramRef.current);
         }
 
+        // Reset zoom and pan when a new diagram is successfully rendered
+        setScale(1);
+        setTranslateX(0);
+        setTranslateY(0);
+
       } catch (e: any) {
         console.error("Rendering error (mermaid):", e);
         setError(e.message || "An unknown error occurred during rendering.");
@@ -482,11 +507,15 @@ ${code}
     return cleanupRender;
   }, [shouldRender, chart, isMermaidLoaded, onMermaidError, cleanupRender, diagramRef]);
 
+  // Trigger render on initial mount and when diagramRef changes
   useEffect(() => {
     if (!diagramRef.current) return;
+    triggerRender(); // Initial render
 
     const resizeObserver = new ResizeObserver(entries => {
       for (let entry of entries) {
+        // Only re-render if the content box size changes and not currently rendering
+        // This helps with responsiveness while avoiding infinite loops
         if (entry.contentBoxSize && !isRendering && chart.trim()) {
           triggerRender();
         }
@@ -501,6 +530,108 @@ ${code}
   }, [diagramRef, chart, isRendering, triggerRender]);
 
   const hasChanges = chart !== lastRenderedChart;
+
+  // Custom Zoom and Pan Handlers
+  const handleZoom = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault(); // Prevent page scrolling
+    const svgElement = svgContentRef.current?.querySelector('svg');
+    if (!svgElement) return;
+
+    const scaleAmount = 0.1;
+    const newScale = event.deltaY < 0 ? scale * (1 + scaleAmount) : scale * (1 - scaleAmount);
+
+    // Clamp scale to reasonable min/max values
+    const clampedScale = Math.max(0.1, Math.min(10, newScale));
+
+    // Calculate mouse position relative to SVG content area
+    const rect = svgContentRef.current!.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // Adjust translation to zoom towards the mouse pointer
+    const oldTranslateX = translateX;
+    const oldTranslateY = translateY;
+
+    const newTranslateX = mouseX - ((mouseX - oldTranslateX) * (clampedScale / scale));
+    const newTranslateY = mouseY - ((mouseY - oldTranslateY) * (clampedScale / scale));
+
+    setScale(clampedScale);
+    setTranslateX(newTranslateX);
+    setTranslateY(newTranslateY);
+  }, [scale, translateX, translateY]);
+
+  const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button === 0) { // Left mouse button
+      setIsPanning(true);
+      lastPanPosition.current = { x: event.clientX, y: event.clientY };
+      event.currentTarget.style.cursor = 'grabbing';
+    }
+  }, []);
+
+  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (isPanning) {
+      const deltaX = event.clientX - lastPanPosition.current.x;
+      const deltaY = event.clientY - lastPanPosition.current.y;
+      setTranslateX(prev => prev + deltaX);
+      setTranslateY(prev => prev + deltaY);
+      lastPanPosition.current = { x: event.clientX, y: event.clientY };
+    }
+  }, [isPanning]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+    if (svgContentRef.current) {
+      svgContentRef.current.style.cursor = 'grab';
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsPanning(false);
+    if (svgContentRef.current) {
+      svgContentRef.current.style.cursor = 'grab';
+    }
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    setScale(prev => Math.min(10, prev * 1.2)); // Zoom in by 20%
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setScale(prev => Math.max(0.1, prev * 0.8)); // Zoom out by 20%
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setScale(1);
+    setTranslateX(0);
+    setTranslateY(0);
+  }, []);
+
+  // Resize Handlers
+  const handleResizeMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    isResizing.current = true;
+    initialResizeY.current = event.clientY;
+    initialComponentHeight.current = componentHeight;
+    document.body.style.cursor = 'ns-resize'; // Change cursor globally
+    // Add global event listeners to handle mouseup outside the component
+    document.addEventListener('mousemove', handleResizeMouseMove);
+    document.addEventListener('mouseup', handleResizeMouseUp);
+  }, [componentHeight]);
+
+  const handleResizeMouseMove = useCallback((event: MouseEvent) => {
+    if (isResizing.current) {
+      const deltaY = event.clientY - initialResizeY.current;
+      const newHeight = Math.max(200, initialComponentHeight.current + deltaY); // Min height 200px
+      setComponentHeight(newHeight);
+    }
+  }, []);
+
+  const handleResizeMouseUp = useCallback(() => {
+    isResizing.current = false;
+    document.body.style.cursor = 'default'; // Reset cursor globally
+    document.removeEventListener('mousemove', handleResizeMouseMove);
+    document.removeEventListener('mouseup', handleResizeMouseUp);
+  }, [handleResizeMouseMove]);
+
 
   if (!isMermaidLoaded) {
     return (
@@ -624,6 +755,35 @@ ${code}
           )}
         </div>
         <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
+          {/* Custom Zoom Controls */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleZoomIn}
+            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            title="Zoom In"
+          >
+            <ZoomIn className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleZoomOut}
+            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            title="Zoom Out"
+          >
+            <ZoomOut className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleResetZoom}
+            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            title="Reset Zoom"
+          >
+            <Maximize className="h-3 w-3" />
+          </Button>
+
           <Button
             variant="ghost"
             size="sm"
@@ -673,6 +833,17 @@ ${code}
           >
             <Play className="h-3 w-3" />
           </Button>
+          {/* Expand/Collapse Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsDiagramExpanded(prev => !prev)}
+            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            title={isDiagramExpanded ? 'Collapse Diagram' : 'Expand Diagram'}
+          >
+            {isDiagramExpanded ? <ChevronUp className="h-3 w-3 sm:mr-1" /> : <ChevronDown className="h-3 w-3 sm:mr-1" />}
+            <span className="hidden sm:inline">{isDiagramExpanded ? 'Collapse' : 'Expand'}</span>
+          </Button>
         </div>
       </div>
 
@@ -700,13 +871,40 @@ ${code}
         </div>
       )}
 
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-2 overflow-x-auto">
+      {isDiagramExpanded && (
         <div
-          ref={diagramRef}
-          dangerouslySetInnerHTML={{ __html: svg || '' }}
-          className="min-w-0 [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:w-full"
-        />
-      </div>
+          className="bg-gray-800 rounded-lg border border-gray-700 p-2 overflow-hidden relative" // Added relative for resize handle positioning
+          style={{ height: `${componentHeight}px` }} // Apply dynamic height
+        >
+          <div
+            ref={svgContentRef} // Assign ref here for mouse events
+            className="w-full h-full flex items-center justify-center" // Removed min-h, using parent height
+            style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+            onWheel={handleZoom}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+          >
+            <div
+              dangerouslySetInnerHTML={{ __html: svg || '' }}
+              style={{
+                transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+                transformOrigin: '0 0', // Set transform origin to top-left for consistent translation
+                transition: isPanning ? 'none' : 'transform 0.1s ease-out', // Smooth transition for zoom, instant for pan
+              }}
+              className="min-w-0 [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:w-full"
+            />
+          </div>
+          {/* Resize Handle */}
+          <div
+            className="absolute bottom-0 left-0 right-0 h-3 flex items-center justify-center cursor-ns-resize text-gray-500 hover:text-gray-300"
+            onMouseDown={handleResizeMouseDown}
+          >
+            <GripVertical className="h-4 w-4" />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
