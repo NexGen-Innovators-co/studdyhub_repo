@@ -225,11 +225,15 @@ export const useAppData = () => {
           user_id: doc.user_id,
           file_name: doc.file_name,
           file_type: doc.file_type,
-          file_size: doc.file_size || 0,
           file_url: doc.file_url,
-          content_extracted: doc.content_extracted || '',
-          created_at: new Date(doc.created_at),
-          updated_at: new Date(doc.updated_at)
+          file_size: doc.file_size || 0,
+          content_extracted: doc.content_extracted || null,
+          // FIX: Ensure 'type', 'processing_status', 'processing_error' are correctly cast
+          type: doc.type as Document['type'], // Cast directly to the union type
+          processing_status: String(doc.processing_status) || null, // Cast to string | null
+          processing_error: String(doc.processing_error) || null, // Cast to string | null
+          created_at: new Date(doc.created_at).toISOString(), // Convert Date to ISO string
+          updated_at: new Date(doc.updated_at).toISOString()  // Convert Date to ISO string
         }));
         setDocuments(formattedDocuments);
       }

@@ -18,17 +18,8 @@ serve(async (req) => {
 
   try {
     // Parse the request body as JSON
-    const {
-      message,
-      userId,
-      sessionId,
-      learningStyle,
-      learningPreferences,
-      context,
-      chatHistory,
-      imageDataBase64,
-      imageMimeType
-    } = await req.json();
+    // Note: imageDataBase64 and imageMimeType are for the *current* message being sent
+    const { message, userId, sessionId, learningStyle, learningPreferences, context, chatHistory, imageDataBase64, imageMimeType } = await req.json();
 
     // Validate required parameters
     if (!userId || !sessionId) {
@@ -44,7 +35,7 @@ serve(async (req) => {
     }
 
     // Ensure either a message or image data is provided for the current turn
-    if (!message && !imageDataBase64) {
+    if (!message && !imageDataBase664) {
       return new Response(JSON.stringify({
         error: 'Missing required parameters: message or imageDataBase64 for the current turn'
       }), {
@@ -66,7 +57,7 @@ serve(async (req) => {
     const systemPrompt = createSystemPrompt(learningStyle, learningPreferences);
 
     // Initialize the array to hold Gemini API content (chat history + current message)
-    const geminiContents: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }> = [];
+    const geminiContents: Array<any> = [];
 
     // Add system prompt and context as the first user turn.
     // This sets the initial persona and context for the AI.
@@ -80,37 +71,27 @@ serve(async (req) => {
     });
 
     // Add previous chat history messages to `geminiContents`.
-    // It's crucial that historical images are already in Base64 format in `chatHistory`
-    // for efficient processing, avoiding re-fetching.
+    // IMPORTANT: For historical messages, we only include text content.
+    // The `imageDataBase64` is not persisted in the `chat_messages` table for historical turns.
     if (chatHistory && Array.isArray(chatHistory)) {
-      for (const msg of chatHistory) { // Use for...of for proper async iteration
+      for (const msg of chatHistory) {
         if (msg.role === 'user') {
-          const userParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
-          if (msg.content) {
-            userParts.push({
-              text: msg.content
-            });
-          }
-          // If the user's previous message had image data (Base64), include it.
-          // This assumes `imageDataBase64` is stored in your database for historical messages.
-          if (msg.imageDataBase64 && msg.imageMimeType) {
-            userParts.push({
-              inlineData: {
-                mimeType: msg.imageMimeType,
-                data: msg.imageDataBase64
-              }
-            });
-          }
+          // For historical user messages, only include the text content.
+          // The AI relies on the 'context' parameter for information about attached documents/images.
           geminiContents.push({
             role: 'user',
-            parts: userParts
+            parts: [
+              {
+                text: msg.content || '' // Ensure content is a string
+              }
+            ]
           });
         } else if (msg.role === 'assistant') {
           geminiContents.push({
             role: 'model',
             parts: [
               {
-                text: msg.content
+                text: msg.content || '' // Ensure content is a string
               }
             ]
           });
@@ -125,14 +106,23 @@ serve(async (req) => {
         text: message
       });
     }
+
+    // Only include inlineData if imageDataBase64 is provided for the *current* turn
     if (imageDataBase64 && imageMimeType) {
+      // CRITICAL FIX: Strip the "data:image/<mime-type>;base64," prefix from the base64 string
+      const base64DataOnly = imageDataBase64.split(',')[1];
+      if (!base64DataOnly) {
+        throw new Error('Invalid imageDataBase64 format: Missing base64 data after comma.');
+      }
+
       currentUserParts.push({
         inlineData: {
           mimeType: imageMimeType,
-          data: imageDataBase64
+          data: base64DataOnly // Use the stripped base64 data
         }
       });
     }
+
     geminiContents.push({
       role: 'user',
       parts: currentUserParts
@@ -163,7 +153,7 @@ serve(async (req) => {
     if (!response.ok) {
       const errorBody = await response.text();
       console.error(`Gemini API error: ${response.status} - ${errorBody}`);
-      throw new Error(`Failed to get response from Gemini API: ${response.statusText}`);
+      throw new Error(`Failed to get response from Gemini API: ${response.statusText}. Details: ${errorBody}`);
     }
 
     // Parse the Gemini API response
@@ -171,12 +161,11 @@ serve(async (req) => {
     let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
 
     // Robust cleaning for generatedText from AI to remove non-printable characters
-    generatedText = generatedText.split('\n')
-      .map((line) => {
-        let cleanedLine = line.replace(/[^\x20-\x7E\n\r]/g, ' '); // Replace non-printable ASCII with space
-        cleanedLine = cleanedLine.replace(/\s+/g, ' ').trim(); // Normalize spaces and trim
-        return cleanedLine;
-      }).filter((line) => line.length > 0 || line.trim().length === 0) // Keep original empty/whitespace lines
+    generatedText = generatedText.split('\n').map((line) => {
+      let cleanedLine = line.replace(/[^\x20-\x7E\n\r]/g, ' '); // Replace non-printable ASCII with space
+      cleanedLine = cleanedLine.replace(/\s+/g, ' ').trim(); // Normalize spaces and trim
+      return cleanedLine;
+    }).filter((line) => line.length > 0 || line.trim().length === 0) // Keep original empty/whitespace lines
       .join('\n');
 
     // Return the AI's response
@@ -214,7 +203,7 @@ serve(async (req) => {
  * @param preferences - Additional learning preferences (e.g., difficulty, examples).
  * @returns A string containing the comprehensive system prompt.
  */
-function createSystemPrompt(learningStyle: string, preferences: { difficulty?: string; examples?: boolean }) {
+function createSystemPrompt(learningStyle: string, preferences: any) {
   const basePrompt = `You are an advanced AI study assistant designed to help students master their materials through personalized, adaptive learning experiences. Your role is to:
 
 - Provide comprehensive explanations tailored to individual learning styles
@@ -458,7 +447,6 @@ sequenceDiagram
 - Encourage critical analysis and evaluation
 - Present multiple theoretical frameworks
 - Challenge assumptions and encourage debate
-- Connect to broader academic and professional contexts
 - Assume strong foundational knowledge`;
       break;
     default:
