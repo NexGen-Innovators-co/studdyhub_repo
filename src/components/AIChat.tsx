@@ -1147,8 +1147,8 @@ export interface Message {
 }
 
 interface AIChatProps {
-  // Removed imageDataBase64 and imageMimeType from onSendMessage signature
-  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[]) => Promise<void>;
+  // MODIFIED: Added imageDataBase64 to onSendMessage signature
+  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[], imageUrl?: string, imageMimeType?: string, imageDataBase64?: string) => Promise<void>;
   messages: Message[];
   isLoading: boolean;
   setIsLoading: (isLoading: boolean) => void;
@@ -1452,6 +1452,7 @@ const AIChatComponent: React.FC<AIChatProps> = ({
     setIsLoading(true); // Start loading immediately for any message send operation
     let attachedImageDocumentId: string | undefined = undefined;
     let uploadedFilePath: string | undefined = undefined;
+    let fileUrl: string | undefined = undefined; // Declare fileUrl here
     let finalAttachedDocumentIds = [...selectedDocumentIds]; // Start with existing selected docs
 
     try {
@@ -1474,11 +1475,11 @@ const AIChatComponent: React.FC<AIChatProps> = ({
           throw storageError;
         }
 
-        const { data: publicUrlData } = supabase.storage
+        const { data: publicUrlData } = await supabase.storage
           .from('documents')
           .getPublicUrl(uploadedFilePath);
 
-        const fileUrl = publicUrlData.publicUrl;
+        fileUrl = publicUrlData.publicUrl; // Assign to declared fileUrl
 
         // 2. Create a pending document entry for the image
         const { data: docData, error: docError } = await supabase
@@ -1561,6 +1562,8 @@ const AIChatComponent: React.FC<AIChatProps> = ({
             .select()
             .single();
 
+          console.log( 'updatedDocData: ', updatedDocData)
+
           if (updateDocError) {
             throw updateDocError;
           }
@@ -1569,9 +1572,13 @@ const AIChatComponent: React.FC<AIChatProps> = ({
           if (updatedDocData) {
             handleDocumentUpdatedLocally(updatedDocData as Document);
             onDocumentUpdated(updatedDocData as Document); // Also call the parent prop
-          }
+          
           toast.success('Image analysis complete!', { id: 'image-analysis' });
-
+          } else {
+            console.error('Failed to update document status:', updateDocError);
+            toast.error('Failed to update document status.', { id: 'image-analysis' });
+          }
+        
         } catch (analysisError: any) {
           console.error('Error calling image-analyzer or updating document:', analysisError);
           toast.error(`Image analysis failed: ${analysisError.message}`, { id: 'image-analysis' });
@@ -1602,11 +1609,14 @@ const AIChatComponent: React.FC<AIChatProps> = ({
         .filter(note => finalAttachedDocumentIds.includes(note.id))
         .map(note => note.id);
 
-      // Send the message AFTER image processing (if any) is complete
+      // MODIFIED: Pass imageUrl, imageMimeType, and imageDataBase64 to onSendMessage
       await onSendMessage(
         inputMessage.trim(),
         finalAttachedDocumentIds,
-        attachedNoteIds
+        attachedNoteIds,
+        fileUrl, // Pass the image URL (public URL for display)
+        selectedImageFile?.type, // Pass the image MIME type
+        selectedImagePreview // Pass the base64 data URL for AI consumption
       );
 
       setInputMessage('');

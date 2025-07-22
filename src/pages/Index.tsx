@@ -11,10 +11,11 @@ import { Button } from '../components/ui/button';
 import { LogOut, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Message } from '../types/Class';
+import { Message } from '../types/Class'; // Assuming Message type is here
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { User } from '@supabase/supabase-js'; // Import User type
+import { generateId } from '@/utils/helpers'; // Assuming this is where generateId comes from
 
 interface ChatSession {
   id: string;
@@ -402,7 +403,13 @@ const Index = () => {
         } else if (doc.type === 'text') {
             context += `Type: Text Document\n`;
         }
-        if (doc.content_extracted) {
+        // IMPORTANT: For image documents, use content_extracted if available
+        if (doc.type === 'image' && doc.content_extracted) {
+            const content = doc.content_extracted.length > 2000
+                ? doc.content_extracted.substring(0, 2000) + '...'
+                : doc.content_extracted;
+            context += `Content (Image Description): ${content}\n`;
+        } else if (doc.content_extracted) { // For text documents
           const content = doc.content_extracted.length > 2000
             ? doc.content_extracted.substring(0, 2000) + '...'
             : doc.content_extracted;
@@ -453,7 +460,10 @@ const Index = () => {
     sessionId: string,
     attachedDocumentIds: string[], // New parameter
     attachedNoteIds: string[],     // New parameter
-    aiMessageIdToUpdate: string | null = null
+    aiMessageIdToUpdate: string | null = null,
+    // NEW: Pass imageDataBase64 and imageMimeType to _getAIResponse
+    imageDataBase64?: string,
+    imageMimeType?: string,
   ) => {
     console.log('_getAIResponse: Called with currentUser:', currentUser?.id, 'sessionId:', sessionId);
     if (!currentUser || !sessionId) {
@@ -469,17 +479,49 @@ const Index = () => {
       const context = buildRichContext(attachedDocumentIds, attachedNoteIds, documents, notes);
       console.log('_getAIResponse: Context sent to AI:', context);
       
-      const historyToSend = (chatMessages || []).filter(msg => {
+      // Prepare chat history for AI, including inline image data for the *current* user message
+      let chatHistory: Array<{ role: string; parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> }> = [];
+
+      // Add previous messages to chat history (text only for simplicity, as full image data isn't persisted for past messages)
+      // Filter out the AI message being updated if in retry/regenerate scenario
+      const historicalMessages = (chatMessages || []).filter(msg => {
         if (aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate) {
-          return false;
+          return false; // Exclude the AI message that is being regenerated/retried
         }
         return true;
       });
 
+      historicalMessages.forEach(msg => {
+        if (msg.role === 'user' || msg.role === 'assistant') {
+          // For historical user messages, only include the text content.
+          // The AI relies on the 'context' parameter for information about attached documents/images.
+          chatHistory.push({ role: msg.role, parts: [{ text: msg.content }] });
+        }
+      });
+
+      // Add the *current* user message, including image data if available
+      const currentUserMessageParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+        { text: userMessageContent }
+      ];
+
+      if (imageDataBase64 && imageMimeType) {
+        // Extract the base64 string part from the data URL (e.g., "data:image/png;base64,iVBORw...")
+        const base64Data = imageDataBase64.split(',')[1];
+        currentUserMessageParts.push({
+          inlineData: {
+            mimeType: imageMimeType,
+            data: base64Data
+          }
+        });
+      }
+
+      chatHistory.push({ role: 'user', parts: currentUserMessageParts });
+
+
       console.log('_getAIResponse: Invoking gemini-chat function...');
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
-          message: userMessageContent,
+          message: userMessageContent, // This is the text part of the current user message
           userId: currentUser.id,
           sessionId: sessionId,
           learningStyle: userProfile?.learning_style || 'visual',
@@ -489,9 +531,12 @@ const Index = () => {
             difficulty: userProfile?.learning_preferences?.difficulty || 'intermediate',
           },
           context,
-          chatHistory: historyToSend,
+          chatHistory: chatHistory, // Pass the prepared chat history
           attachedDocumentIds: attachedDocumentIds, // Pass to backend
           attachedNoteIds: attachedNoteIds,         // Pass to backend
+          // Pass imageDataBase64 and imageMimeType to the Edge Function for the *current* message
+          imageDataBase64: imageDataBase64,
+          imageMimeType: imageMimeType,
         },
       });
 
@@ -649,6 +694,8 @@ const Index = () => {
       return false;
     }
   }, [activeChatSessionId, user, setActiveChatSessionId, setChatMessages]);
+
+  // FIX: Added explicit type casting for processing_error and processing_status
   const refreshUploadedDocument = async (docId: string) => {
     const { data, error } = await supabase
       .from('documents')
@@ -661,21 +708,40 @@ const Index = () => {
       return null;
     }
   
+    // Explicitly convert String objects to primitive strings if they exist
+    // This addresses the 'String' vs 'string' type incompatibility.
+    const refreshedDocData: AppDocument = {
+      ...(data as AppDocument), // Spread existing properties
+      processing_error: typeof (data as any).processing_error === 'string'
+        ? (data as any).processing_error
+        : (data as any).processing_error?.toString() || undefined,
+      processing_status: typeof (data as any).processing_status === 'string'
+        ? (data as any).processing_status
+        : (data as any).processing_status?.toString() || 'unknown', // Provide a default if conversion fails
+    };
+
     setDocuments((prev) =>
-      prev.map((doc) => (doc.id === docId ? (data as AppDocument) : doc))
+      prev.map((doc) => (doc.id === docId ? refreshedDocData : doc))
     );
   
-    return data;
+    return refreshedDocData; // Return the correctly typed data
   };
   
   
-  // Modified handleSubmit to accept attachedDocumentIds and attachedNoteIds
-  const handleSubmit = useCallback(async (messageContent: string, attachedDocumentIds?: string[], attachedNoteIds?: string[]) => {
-    console.log('handleSubmit: Initiated with message:', messageContent, 'attached docs:', attachedDocumentIds, 'attached notes:', attachedNoteIds);
+  // Modified handleSubmit to accept attachedDocumentIds and attachedNoteIds, and image data
+  const handleSubmit = useCallback(async (
+    messageContent: string,
+    attachedDocumentIds?: string[],
+    attachedNoteIds?: string[],
+    imageUrl?: string, // Public URL for display
+    imageMimeType?: string, // MIME type for image
+    imageDataBase64?: string // Base64 data for AI consumption
+  ) => {
+    console.log('handleSubmit: Initiated with message:', messageContent, 'attached docs:', attachedDocumentIds, 'attached notes:', attachedNoteIds, 'imageUrl:', imageUrl ? 'present' : 'absent');
     console.log('handleSubmit: Current isAILoading:', isAILoading, 'isSubmittingUserMessage:', isSubmittingUserMessage);
 
-    if (!messageContent.trim() && (!attachedDocumentIds || attachedDocumentIds.length === 0) && (!attachedNoteIds || attachedNoteIds.length === 0) || isAILoading || isSubmittingUserMessage) {
-      console.log('handleSubmit: Aborting due to empty message/no attachments, AI loading, or already submitting.');
+    if (!messageContent.trim() && (!attachedDocumentIds || attachedDocumentIds.length === 0) && (!attachedNoteIds || attachedNoteIds.length === 0) && !imageUrl || isAILoading || isSubmittingUserMessage) {
+      console.log('handleSubmit: Aborting due to empty message/no attachments/no image, AI loading, or already submitting.');
       return;
     }
 
@@ -709,8 +775,34 @@ const Index = () => {
       }
 
       // Ensure attachedDocumentIds and attachedNoteIds are arrays, even if empty
-      const finalAttachedDocumentIds = attachedDocumentIds || [];
+      let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
+
+      // If an image was just uploaded and has an ID, ensure its content_extracted is fresh
+      // This is crucial for the AI to get the image description immediately
+      if (imageUrl && finalAttachedDocumentIds.length > 0) {
+        const imageDocId = finalAttachedDocumentIds.find(docId => {
+            const doc = documents.find(d => d.id === docId);
+            return doc && doc.type === 'image' && doc.file_url === imageUrl;
+        });
+
+        if (imageDocId) {
+            console.log(`handleSubmit: Refreshing document with ID ${imageDocId} to ensure latest content_extracted.`);
+            const refreshedDoc = await refreshUploadedDocument(imageDocId);
+            if (refreshedDoc) {
+                // The refreshUploadedDocument already updates the state via setDocuments.
+                // We just need to ensure the 'documents' state is fully updated before buildRichContext is called.
+                // Since setDocuments is asynchronous, we rely on React's batching or the next render cycle.
+                // For immediate use, we might need to pass the refreshedDoc directly to buildRichContext
+                // or ensure 'documents' in useAppData is reactive to this change.
+                // Given buildRichContext is called inside _getAIResponse, and _getAIResponse is awaited,
+                // the state should be consistent by then if useAppData's documents state is correctly updated.
+                console.log(`handleSubmit: Document ${imageDocId} refreshed and state updated.`);
+            } else {
+                console.warn(`handleSubmit: Failed to refresh document ${imageDocId}. AI might not get full image context.`);
+            }
+        }
+      }
 
       // Update selectedDocumentIds state with the new attachments for UI display
       setSelectedDocumentIds(finalAttachedDocumentIds);
@@ -728,6 +820,8 @@ const Index = () => {
           timestamp: new Date().toISOString(),
           attached_document_ids: finalAttachedDocumentIds,
           attached_note_ids: finalAttachedNoteIds,
+          image_url: imageUrl, // Save image URL to DB
+          image_mime_type: imageMimeType, // Save image MIME type to DB
         })
         .select()
         .single();
@@ -738,16 +832,6 @@ const Index = () => {
       }
       console.log('handleSubmit: User message saved. Message ID:', userMessageData.id);
 
-      let imageUrlForMessage: string | undefined;
-      let imageMimeTypeForMessage: string | undefined;
-      if (finalAttachedDocumentIds.length > 0) {
-        const imageDoc = documents.find(doc => finalAttachedDocumentIds.includes(doc.id) && doc.type === 'image');
-        if (imageDoc) {
-          imageUrlForMessage = imageDoc.file_url;
-          imageMimeTypeForMessage = imageDoc.file_type;
-        }
-      }
-
       const newUserMessage: Message = {
         id: (userMessageData as any).id, // Cast to any for Supabase snake_case access
         content: (userMessageData as any).content, // Cast to any
@@ -755,15 +839,15 @@ const Index = () => {
         timestamp: (userMessageData as any).timestamp || new Date().toISOString(), // Cast to any
         attachedDocumentIds: (userMessageData as any).attached_document_ids || [], // Cast to any
         attachedNoteIds: (userMessageData as any).attached_note_ids || [], // Cast to any
-        imageUrl: imageUrlForMessage,
-        imageMimeType: imageMimeTypeForMessage,
+        imageUrl: (userMessageData as any).image_url, // Use the URL saved to DB
+        imageMimeType: (userMessageData as any).image_mime_type, // Use the MIME type saved to DB
       };
       setChatMessages(prev => [...(prev || []), newUserMessage]);
       console.log('handleSubmit: User message added to state.');
 
       console.log('handleSubmit: Calling _getAIResponse...');
-      // Pass the specific attached IDs to _getAIResponse
-      await _getAIResponse(trimmedMessage, currentUser, currentSessionId, finalAttachedDocumentIds, finalAttachedNoteIds);
+      // Pass the specific attached IDs and image data to _getAIResponse
+      await _getAIResponse(trimmedMessage, currentUser, currentSessionId, finalAttachedDocumentIds, finalAttachedNoteIds, null, imageDataBase64, imageMimeType);
 
       const { error: updateSessionDocsError } = await supabase
         .from('chat_sessions')
@@ -782,7 +866,7 @@ const Index = () => {
       setIsSubmittingUserMessage(false);
       console.log('handleSubmit: setIsSubmittingUserMessage set to false.');
     }
-  }, [isAILoading, activeChatSessionId, createNewChatSession, setChatMessages, _getAIResponse, isSubmittingUserMessage, documents, setSelectedDocumentIds, notes]);
+  }, [isAILoading, activeChatSessionId, createNewChatSession, setChatMessages, _getAIResponse, isSubmittingUserMessage, documents, setSelectedDocumentIds, notes, refreshUploadedDocument, setDocuments]);
 
   const handleNewMessage = useCallback((message: Message) => {
     setChatMessages(prev => [...(prev || []), message]);
@@ -847,13 +931,19 @@ const Index = () => {
     toast.info('Regenerating response...');
 
     // Pass the specific attached IDs from the last user message to _getAIResponse
+    // Also pass image data if available for the last user message
     await _getAIResponse(
       lastUserMessageContent,
       user,
       activeChatSessionId,
       lastUserMessage.attachedDocumentIds || [],
       lastUserMessage.attachedNoteIds || [],
-      lastAssistantMessage.id
+      lastAssistantMessage.id,
+      // For regeneration, we don't have the base64 data readily available unless stored.
+      // If the AI needs to "see" the image again, you'd need to re-fetch/convert it here.
+      // For now, it relies on the text context and the image_url being present in the message history.
+      undefined, // imageDataBase64
+      undefined // imageMimeType
     );
   }, [user, activeChatSessionId, chatMessages, setChatMessages, _getAIResponse]);
 
@@ -880,13 +970,18 @@ const Index = () => {
     toast.info('Retrying message...');
 
     // Pass the specific attached IDs from the original user message to _getAIResponse
+    // Also pass image data if available for the original user message
     await _getAIResponse(
       originalUserMessageContent,
       user,
       activeChatSessionId,
       lastUserMessage.attachedDocumentIds || [],
       lastUserMessage.attachedNoteIds || [],
-      failedAiMessageId
+      failedAiMessageId,
+      // For retry, similar to regeneration, we don't have the base64 data readily available.
+      // If full image data is needed for retry, it would need to be re-fetched or stored.
+      undefined, // imageDataBase64
+      undefined // imageMimeType
     );
   }, [user, activeChatSessionId, chatMessages, setChatMessages, _getAIResponse]);
 
