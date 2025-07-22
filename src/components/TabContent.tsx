@@ -319,7 +319,7 @@ interface TabContentProps {
   onAddScheduleItem: (item: ScheduleItem) => void;
   onUpdateScheduleItem: (item: ScheduleItem) => void;
   onDeleteScheduleItem: (id: string) => void;
-  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[]) => Promise<void>; // Updated signature
+  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[], imageUrl?: string, imageMimeType?: string, imageDataBase64?: string) => Promise<void>; // Updated signature
   onDocumentUploaded: (document: Document) => void;
   onDocumentDeleted: (documentId: string) => void;
   onProfileUpdate: (profile: UserProfile) => void;
