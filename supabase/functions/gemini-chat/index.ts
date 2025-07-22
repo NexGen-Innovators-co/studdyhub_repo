@@ -19,25 +19,12 @@ serve(async (req) => {
   try {
     // Parse the request body as JSON
     // Note: imageDataBase64 and imageMimeType are for the *current* message being sent
-    const { message, userId, sessionId, learningStyle, learningPreferences, context, chatHistory, imageDataBase64, imageMimeType } = await req.json();
+    const { userId, sessionId, learningStyle, learningPreferences, chatHistory } = await req.json();
 
     // Validate required parameters
     if (!userId || !sessionId) {
       return new Response(JSON.stringify({
         error: 'Missing required parameters: userId or sessionId'
-      }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
-      });
-    }
-
-    // Ensure either a message or image data is provided for the current turn
-    if (!message && !imageDataBase664) {
-      return new Response(JSON.stringify({
-        error: 'Missing required parameters: message or imageDataBase64 for the current turn'
       }), {
         status: 400,
         headers: {
@@ -59,74 +46,51 @@ serve(async (req) => {
     // Initialize the array to hold Gemini API content (chat history + current message)
     const geminiContents: Array<any> = [];
 
-    // Add system prompt and context as the first user turn.
-    // This sets the initial persona and context for the AI.
+    // Add system prompt as the very first instruction.
     geminiContents.push({
       role: 'user',
-      parts: [
-        {
-          text: `${systemPrompt}\n\nContext: ${context || 'No additional context provided'}`
-        }
-      ]
+      parts: [{ text: systemPrompt }]
+    });
+    // The AI's initial response to the system prompt can be an empty model turn
+    geminiContents.push({
+      role: 'model',
+      parts: [{ text: "Okay, I understand. I'm ready to assist you." }]
     });
 
     // Add previous chat history messages to `geminiContents`.
-    // IMPORTANT: For historical messages, we only include text content.
-    // The `imageDataBase64` is not persisted in the `chat_messages` table for historical turns.
+    // This loop now handles the structure passed from the frontend,
+    // where user messages might have multiple parts (text + context from attachments/images).
     if (chatHistory && Array.isArray(chatHistory)) {
       for (const msg of chatHistory) {
         if (msg.role === 'user') {
-          // For historical user messages, only include the text content.
-          // The AI relies on the 'context' parameter for information about attached documents/images.
+          // User messages can have multiple parts (text, inlineData, and context from attachments)
+          const userParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+
+          // Ensure msg.parts is an array and iterate over it
+          if (msg.parts && Array.isArray(msg.parts)) {
+            for (const part of msg.parts) {
+              if (part.text) {
+                userParts.push({ text: part.text });
+              }
+              // Only include inlineData if it's explicitly provided in the part
+              if (part.inlineData && part.inlineData.mimeType && part.inlineData.data) {
+                userParts.push({ inlineData: { mimeType: part.inlineData.mimeType, data: part.inlineData.data } });
+              }
+            }
+          }
           geminiContents.push({
             role: 'user',
-            parts: [
-              {
-                text: msg.content || '' // Ensure content is a string
-              }
-            ]
+            parts: userParts
           });
-        } else if (msg.role === 'assistant') {
+        } else if (msg.role === 'assistant' || msg.role === 'model') {
+          // Model messages should only have text parts
           geminiContents.push({
             role: 'model',
-            parts: [
-              {
-                text: msg.content || '' // Ensure content is a string
-              }
-            ]
+            parts: [{ text: msg.content || msg.parts?.[0]?.text || '' }] // Handle both content and parts structure
           });
         }
       }
     }
-
-    // Add the current user message (and image if present) as the last turn.
-    const currentUserParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
-    if (message) {
-      currentUserParts.push({
-        text: message
-      });
-    }
-
-    // Only include inlineData if imageDataBase64 is provided for the *current* turn
-    if (imageDataBase64 && imageMimeType) {
-      // CRITICAL FIX: Strip the "data:image/<mime-type>;base64," prefix from the base64 string
-      const base64DataOnly = imageDataBase64.split(',')[1];
-      if (!base64DataOnly) {
-        throw new Error('Invalid imageDataBase64 format: Missing base64 data after comma.');
-      }
-
-      currentUserParts.push({
-        inlineData: {
-          mimeType: imageMimeType,
-          data: base64DataOnly // Use the stripped base64 data
-        }
-      });
-    }
-
-    geminiContents.push({
-      role: 'user',
-      parts: currentUserParts
-    });
 
     // Construct the Gemini API request URL
     const geminiApiUrl = new URL(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`);
@@ -363,7 +327,7 @@ sequenceDiagram
 - Provide step-by-step practical exercises
 - Use DOT graphs to show relationship networks and concept connections. Ensure DOT syntax is correct.
 - Create Chart.js visualizations for tracking progress and performance. Ensure Chart.js JSON is strictly valid and contains no JavaScript functions.
-- **Image Analysis**: If an image is provided, suggest actions or experiments related to the image content.
+- **Image Analysis**: If an data is provided, suggest actions or experiments related to the data content.
 
 **Experiential Methods:**
 - Use analogies involving physical actions
@@ -394,7 +358,7 @@ sequenceDiagram
 - Provide written exercises and practice problems
 - Use Chart.js for visualizing reading progress and comprehension metrics. Ensure Chart.js JSON is strictly valid and contains no JavaScript functions.
 - Create structured DOT graphs for organizing complex information hierarchies. Ensure DOT syntax is correct.
-- **Image Analysis**: If an image is provided, analyze its content and integrate findings into a detailed written explanation or summary.
+- **Image Analysis**: If an data is provided, analyze its content and integrate findings into a detailed written explanation or summary.
 
 **Text-Based Organization:**
 - Use clear paragraph structure with topic sentences
@@ -414,7 +378,7 @@ sequenceDiagram
 - Adapt explanations based on content complexity
 - Provide multiple learning pathways
 - Use varied presentation methods to maintain engagement
-- **Image Analysis**: If an image is provided, analyze its content and integrate findings into the response in a balanced way, suitable for various learning styles.`;
+- **Image Analysis**: If an data is provided, analyze its content and integrate findings into the response in a balanced way, suitable for various learning styles.`;
   }
 
   let difficultyPrompt = "";

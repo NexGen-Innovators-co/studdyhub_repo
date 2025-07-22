@@ -203,7 +203,11 @@ export const useAppData = () => {
           id: msg.id,
           content: msg.content,
           role: msg.role as 'user' | 'assistant', // Ensure role is correctly typed
-          timestamp: new Date(msg.timestamp || Date.now()).toISOString() // Convert Date to ISO string
+          timestamp: new Date(msg.timestamp || Date.now()).toISOString(), // Convert Date to ISO string
+          attachedDocumentIds: msg.attachedDocumentIds || [], // Include attached document IDs
+          attachedNoteIds: msg.attachedNoteIds || [],         // Include attached note IDs
+          imageUrl: msg.imageUrl || undefined,
+          imageMimeType: msg.imageMimeType || undefined,
         }));
         setChatMessages(formattedMessages);
       }

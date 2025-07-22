@@ -656,7 +656,7 @@ const DiagramPanel: React.FC<DiagramPanelProps> = memo(({ diagramContent, diagra
             variant="outline"
             size="sm"
             onClick={() => onSuggestAiCorrection(`Can you fix this Chart.js configuration? Here's the code: ${diagramContent}`)}
-            className="mt-4 bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-700 dark:hover:bg-blue-800"
+            className="mt-4 bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
           >
             Suggest AI Correction
           </Button>
