@@ -3,7 +3,7 @@ import { NotesList } from './NotesList';
 import { NoteEditor } from './NoteEditor';
 import { ClassRecordings } from './ClassRecordings';
 import { Schedule } from './Schedule';
-import { AIChat } from './AIChat'; // Import AIChat
+import  AIChat  from './AIChat'; // Import AIChat
 import { DocumentUpload } from './DocumentUpload';
 import { LearningStyleSettings } from './LearningStyleSettings';
 import { Note } from '../types/Note';
@@ -343,6 +343,7 @@ interface TabContentProps {
   hasMoreMessages: boolean;
   onLoadOlderMessages: () => Promise<void>;
   onDocumentUpdated: (updatedDocument: Document) => void; // NEW PROP
+  isLoadingSessionMessages: boolean; // NEW PROP
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -424,6 +425,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     hasMoreMessages: props.hasMoreMessages, // Pass new prop
     onLoadOlderMessages: props.onLoadOlderMessages, // Pass new prop
  onDocumentUpdated: props.onDocumentUpdated, // Pass the new prop
+    isLoadingSessionMessages: props.isLoadingSessionMessages, // NEW: Pass new prop
+    learningStyle: userProfile?.learning_style || 'visual',
+    learningPreferences: userProfile?.learning_preferences || {},
   }), [
     props.activeChatSessionId,
     props.chatMessages,
@@ -451,13 +455,17 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.hasMoreMessages, // Dependency
     props.onLoadOlderMessages, // Dependency
  props.onDocumentUpdated, // Dependency
+    props.isLoadingSessionMessages, // NEW: Dependency
+    userProfile?.learning_style,
+    userProfile?.learning_preferences,
   ]);
 
   const documentsProps = useMemo(() => ({
     documents: props.documents,
     onDocumentUploaded: props.onDocumentUploaded,
     onDocumentDeleted: props.onDocumentDeleted,
-  }), [props.documents, props.onDocumentUploaded, props.onDocumentDeleted]);
+    onDocumentUpdated: props.onDocumentUpdated, // ADD THIS LINE
+  }), [props.documents, props.onDocumentUploaded, props.onDocumentDeleted, props.onDocumentUpdated]);
 
   // Removed chatHistoryProps as ChatHistory component is removed
 

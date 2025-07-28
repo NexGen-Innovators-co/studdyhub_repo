@@ -11,14 +11,14 @@ interface UseAppOperationsProps {
   recordings: ClassRecording[];
   scheduleItems: ScheduleItem[];
   chatMessages: Message[];
-  documents: Document[]; // Ensure documents are passed
+  documents: Document[];
   userProfile: UserProfile | null;
   activeNote: Note | null;
   setNotes: (notes: Note[] | ((prev: Note[]) => Note[])) => void;
   setRecordings: (recordings: ClassRecording[] | ((prev: ClassRecording[]) => ClassRecording[])) => void;
   setScheduleItems: (items: ScheduleItem[] | ((prev: ScheduleItem[]) => ScheduleItem[])) => void;
   setChatMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
-  setDocuments: (documents: Document[] | ((prev: Document[]) => Document[])) => void; // Ensure setDocuments is available
+  setDocuments: (documents: Document[] | ((prev: Document[]) => Document[])) => void;
   setUserProfile: (profile: UserProfile | null) => void;
   setActiveNote: (note: Note | null) => void;
   setActiveTab: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
@@ -356,9 +356,12 @@ export const useAppOperations = ({
           file_url: document.file_url,
           content_extracted: document.content_extracted,
           user_id: user.id,
-          type: document.type, // Ensure type is saved
-          processing_status: document.processing_status, // Ensure processing_status is saved
-          processing_error: document.processing_error, // Ensure processing_error is saved
+          type: document.type,
+          processing_status: document.processing_status as string,
+          processing_error: document.processing_error as string,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          id: document.id || generateId() // Ensure ID is set
         });
 
       if (error) throw error;

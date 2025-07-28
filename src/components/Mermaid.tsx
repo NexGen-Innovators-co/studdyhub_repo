@@ -291,16 +291,20 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
     }
   };
 
-  const handleAiFixClick = useCallback((code: string, errorType: 'syntax' | 'rendering') => {
-    const prompt = `I encountered a ${errorType} error with the following Mermaid diagram code. Please correct the syntax and provide the corrected Mermaid code. Ensure there are no trailing spaces on any line within the code block.
+  const handleAiFixClick = useCallback(() => {
+    // Generate a more specific prompt for AI based on the error
+    const prompt = `The following Mermaid diagram code caused a rendering error. Please correct the syntax for a Mermaid diagram (it could be a sequence, flowchart, ER, or usecase diagram). Ensure there are no trailing spaces on any line, and that the code adheres strictly to Mermaid's syntax for a single diagram type.
+
 \`\`\`mermaid
-${code}
+${chart}
 \`\`\`
-`;
+
+Here's the error message received: "${error}". Please provide only the corrected Mermaid code within a \`\`\`mermaid\`\`\` block.`;
+
     if (onSuggestAiCorrection) {
       onSuggestAiCorrection(prompt);
     }
-  }, [onSuggestAiCorrection]);
+  }, [chart, error, onSuggestAiCorrection]);
 
   const triggerRender = useCallback(() => {
     if (chart.trim() && !isRendering) {
@@ -478,7 +482,7 @@ ${code}
 
         const { svg: generatedSvg, bindFunctions } = await renderPromise;
         setSvg(generatedSvg);
-        setLastRenderedChart(chart);
+        setLastRenderedChart(chart); // Update last rendered chart on success
 
         if (bindFunctions) {
           bindFunctions(diagramRef.current);
@@ -491,6 +495,7 @@ ${code}
 
       } catch (e: any) {
         console.error("Rendering error (mermaid):", e);
+        // Pass the error message to onMermaidError for potential AI correction
         setError(e.message || "An unknown error occurred during rendering.");
         if (onMermaidError) {
           onMermaidError(chart, 'rendering');
@@ -510,7 +515,10 @@ ${code}
   // Trigger render on initial mount and when diagramRef changes
   useEffect(() => {
     if (!diagramRef.current) return;
-    triggerRender(); // Initial render
+    // Only trigger initial render if there's chart data and no error
+    if (chart.trim() && !error) {
+      triggerRender();
+    }
 
     const resizeObserver = new ResizeObserver(entries => {
       for (let entry of entries) {
@@ -527,7 +535,10 @@ ${code}
     return () => {
       resizeObserver.disconnect();
     };
-  }, [diagramRef, chart, isRendering, triggerRender]);
+  }, [diagramRef, chart, isRendering, triggerRender, error]); // Added error to dependencies
+
+  // Determine if the "Try Again" button should be disabled
+  const disableTryAgain = !!error && chart === lastRenderedChart;
 
   const hasChanges = chart !== lastRenderedChart;
 
@@ -663,7 +674,7 @@ ${code}
             {onSuggestAiCorrection && (
               <Button
                 size="sm"
-                onClick={() => handleAiFixClick(chart, 'rendering')}
+                onClick={handleAiFixClick} // Call the local handler
                 className="bg-blue-600 text-white hover:bg-blue-500 h-7 px-3 text-xs"
               >
                 <Wrench className="h-3 w-3 mr-1" />
@@ -674,24 +685,14 @@ ${code}
               variant="outline"
               size="sm"
               onClick={triggerRender}
-              className="text-gray-300 border-gray-600 hover:bg-gray-700 h-7 px-3 text-xs"
+              disabled={disableTryAgain} // Disable if no changes and still error
+              className="text-gray-300 border-gray-600 hover:bg-gray-700 h-7 px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="h-3 w-3 mr-1" />
               Try Again
             </Button>
           </div>
         </div>
-        <details className="text-sm text-red-300 cursor-pointer">
-          <summary className="flex items-center gap-2 py-1">
-            <ChevronDown className="h-4 w-4" />
-            <span>Show Details</span>
-          </summary>
-          <div className="mt-2 p-2 bg-gray-800 rounded overflow-x-auto text-gray-300">
-            <p className="mb-1">Error: {error}</p>
-            <p className="font-semibold mb-1">Diagram Code:</p>
-            <pre className="text-sm whitespace-pre-wrap">{chart}</pre>
-          </div>
-        </details>
       </div>
     );
   }
@@ -728,7 +729,7 @@ ${code}
             <Button
               onClick={triggerRender}
               disabled={!chart.trim()}
-              className="bg-blue-600 hover:bg-blue-500 text-white"
+              className="bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="h-4 w-4 mr-2" />
               {!svg ? 'Render Diagram' : 'Update Diagram'}
