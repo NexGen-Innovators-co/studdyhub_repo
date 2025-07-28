@@ -78,7 +78,7 @@ const Auth = () => {
         }
       } else {
         toast.success('Welcome back!');
-        navigate('/chat', { replace: true }); // CHANGE THIS LINE
+        navigate('/note', { replace: true }); // CHANGE THIS LINE
       }
     } catch (error) {
       toast.error('An unexpected error occurred');
@@ -108,7 +108,7 @@ const Auth = () => {
               <TabsTrigger value="signin" className="text-sm">Sign In</TabsTrigger>
               <TabsTrigger value="signup" className="text-sm">Sign Up</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="signin" className="space-y-4">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2 ">
@@ -141,8 +141,8 @@ const Auth = () => {
                     />
                   </div>
                 </div>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 h-10"
                   disabled={isLoading}
                 >
@@ -150,7 +150,7 @@ const Auth = () => {
                 </Button>
               </form>
             </TabsContent>
-            
+
             <TabsContent value="signup" className="space-y-4">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
@@ -199,8 +199,8 @@ const Auth = () => {
                     />
                   </div>
                 </div>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 h-10"
                   disabled={isLoading}
                 >
