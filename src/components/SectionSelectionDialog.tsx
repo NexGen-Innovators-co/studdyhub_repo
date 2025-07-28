@@ -7,6 +7,7 @@ interface SectionSelectionDialogProps {
   sections: string[];
   onSectionSelect: (section: string | null) => void; // null for all content
   onCancel: () => void;
+  documentId?: string; // Optional document ID for tracking
 }
 
 export const SectionSelectionDialog: React.FC<SectionSelectionDialogProps> = ({ isOpen, sections, onSectionSelect, onCancel }) => {

@@ -217,8 +217,8 @@ export type Database = {
           updated_at: string
           user_id: string
           type: "text" | "image" | "audio"
-          processing_error: String // This column needs to exist in your 'documents' table schema
-          processing_status: String
+          processing_error: string // This column needs to exist in your 'documents' table schema
+          processing_status: string
 
         }
         Insert: {

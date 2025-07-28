@@ -1,3 +1,4 @@
+// useAppData.tsx
 import { useState, useEffect } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message } from '../types/Class';
@@ -24,6 +25,81 @@ export const useAppData = () => {
   useEffect(() => {
     loadUserData();
   }, []);
+
+  // Real-time listener for documents
+  useEffect(() => {
+    const setupDocumentListener = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('No user authenticated, skipping document listener setup.');
+        return;
+      }
+
+      console.log('Setting up real-time listener for documents...');
+      const channel = supabase
+        .channel('public:documents') // Channel name, can be anything unique
+        .on(
+          'postgres_changes', // Listen for changes in PostgreSQL
+          { event: '*', schema: 'public', table: 'documents', filter: `user_id=eq.${user.id}` }, // Filter by user_id
+          (payload) => {
+            console.log('Real-time change received for documents:', payload);
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newDoc = payload.new as any; // Cast to any for flexible property access
+              const formattedDoc: Document = {
+                id: newDoc.id,
+                title: newDoc.title,
+                user_id: newDoc.user_id,
+                file_name: newDoc.file_name,
+                file_type: newDoc.file_type,
+                file_url: newDoc.file_url,
+                file_size: newDoc.file_size || 0,
+                content_extracted: newDoc.content_extracted || null,
+                type: newDoc.type as Document['type'], // Explicitly cast to the union type
+                processing_status: String(newDoc.processing_status) || null, // Convert to string and handle null
+                processing_error: String(newDoc.processing_error) || null, // Convert to string and handle null
+                created_at: new Date(newDoc.created_at).toISOString(),
+                updated_at: new Date(newDoc.updated_at).toISOString(),
+              };
+
+              setDocuments(prevDocs => {
+                const existingIndex = prevDocs.findIndex(doc => doc.id === formattedDoc.id);
+                if (existingIndex > -1) {
+                  // If document already exists in state, update it
+                  const updatedDocs = [...prevDocs];
+                  updatedDocs[existingIndex] = formattedDoc;
+                  return updatedDocs;
+                } else {
+                  // If it's a new document (e.g., initial insert), add it to the beginning
+                  return [formattedDoc, ...prevDocs];
+                }
+              });
+
+              // Show toasts for status changes
+              if (formattedDoc.processing_status === 'completed') {
+                toast.success(`Document "${formattedDoc.title}" processed successfully!`);
+              } else if (formattedDoc.processing_status === 'failed') {
+                toast.error(`Document "${formattedDoc.title}" processing failed: ${formattedDoc.processing_error}`);
+              }
+            } else if (payload.eventType === 'DELETE') {
+              // If a document is deleted, remove it from state
+              const deletedId = payload.old.id;
+              setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== deletedId));
+              toast.info('Document deleted from list.');
+            }
+          }
+        )
+        .subscribe(); // Start listening
+
+      // Cleanup function: unsubscribe when component unmounts or user changes
+      return () => {
+        console.log('Unsubscribing from document listener.');
+        supabase.removeChannel(channel);
+      };
+    };
+
+    // Call the setup function when the component mounts or user changes
+    setupDocumentListener();
+  }, [setDocuments]); // Dependency array: re-run effect if setDocuments changes (unlikely)
 
   const loadUserData = async () => {
     try {
@@ -63,6 +139,7 @@ export const useAppData = () => {
           updated_at: new Date(profileData.updated_at || Date.now())
         });
       } else {
+        // Create a default profile if one doesn't exist
         const defaultProfile = {
           id: user.id,
           email: user.email || '',
@@ -212,7 +289,7 @@ export const useAppData = () => {
         setChatMessages(formattedMessages);
       }
 
-      // Load documents
+      // Load documents (initial load, real-time listener handles subsequent changes)
       const { data: documentsData, error: documentsError } = await supabase
         .from('documents')
         .select('*')
@@ -232,12 +309,11 @@ export const useAppData = () => {
           file_url: doc.file_url,
           file_size: doc.file_size || 0,
           content_extracted: doc.content_extracted || null,
-          // FIX: Ensure 'type', 'processing_status', 'processing_error' are correctly cast
-          type: doc.type as Document['type'], // Cast directly to the union type
-          processing_status: String(doc.processing_status) || null, // Cast to string | null
-          processing_error: String(doc.processing_error) || null, // Cast to string | null
-          created_at: new Date(doc.created_at).toISOString(), // Convert Date to ISO string
-          updated_at: new Date(doc.updated_at).toISOString()  // Convert Date to ISO string
+          type: doc.type as Document['type'],
+          processing_status: String(doc.processing_status) || null,
+          processing_error: String(doc.processing_error) || null,
+          created_at: new Date(doc.created_at).toISOString(),
+          updated_at: new Date(doc.updated_at).toISOString()
         }));
         setDocuments(formattedDocuments);
       }

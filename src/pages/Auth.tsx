@@ -21,7 +21,8 @@ const Auth = () => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        navigate('/');
+        // Redirect to the main app dashboard if already authenticated
+        navigate('/note', { replace: true }); // CHANGE THIS LINE
       }
     };
     checkAuth();
@@ -77,7 +78,7 @@ const Auth = () => {
         }
       } else {
         toast.success('Welcome back!');
-        navigate('/');
+        navigate('/chat', { replace: true }); // CHANGE THIS LINE
       }
     } catch (error) {
       toast.error('An unexpected error occurred');
