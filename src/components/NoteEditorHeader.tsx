@@ -212,7 +212,7 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
             )}
             {isSpeaking ? 'Stop' : 'Read Aloud'}
           </Button>
-          <Button onClick={handleSave} size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700">
+          <Button onClick={handleSave} size="sm" className="bg-blue-500   text-white shadow-md hover:from-blue-700 hover:to-purple-700">
             <Save className="h-4 w-4 mr-2" />
             Save
           </Button>
