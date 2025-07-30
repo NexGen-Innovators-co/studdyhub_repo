@@ -124,7 +124,9 @@ const TermsOfService: React.FC = () => {
                     <p>
                         If you have any questions about these Terms, please contact us:
                         <br />
-                        By email: support@notemindai.com
+                        By email: twenethomas36@gmail.com
+                        <br />
+                        
                     </p>
                 </div>
             </main>
