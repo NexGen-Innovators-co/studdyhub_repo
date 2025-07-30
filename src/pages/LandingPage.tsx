@@ -143,28 +143,31 @@ const LandingPage: React.FC = () => {
   // Testimonial carousel navigation
   const testimonials = [
     {
-      name: "Sarah Johnson",
-      role: "Medical Student",
-      avatar: "SJ",
+      name: "Doris",
+      role: "SHS student",
+      avatar: "D",
       content: "NoteMind AI has completely revolutionized how I study. The AI chat is incredibly helpful, and the document analysis saves me so much time!",
       rating: 5,
-      verified: true
+      verified: true,
+      imageUrl: "/testimonial1.jpg" // Added for the first testimonial
     },
     {
-      name: "Michael Chen",
-      role: "PhD Researcher",
-      avatar: "MC",
+      name: "Isabel",
+      role: "A computer science student at UMaT",
+      avatar: "I",
       content: "The voice recording feature with AI transcription is a game-changer for my research interviews. Absolutely incredible!",
       rating: 5,
-      verified: true
+      verified: true,
+      imageUrl: "/testimonial3.jpg" // Added for the second testimonial
     },
     {
-      name: "Emma Davis",
-      role: "Business Student",
-      avatar: "ED",
+      name: "Dr. Effah Emmanuel",
+      role: "A computer science lecturer at UMaT",
+      avatar: "DE",
       content: "Finally, an AI tool that actually understands my learning style. My productivity has increased by 300%!",
       rating: 5,
-      verified: true
+      verified: true,
+      imageUrl: "/testimonial2.jpg" // Updated for the third testimonial
     }
   ];
 
@@ -269,7 +272,7 @@ const LandingPage: React.FC = () => {
           <img
             src="/siteimage.png"
             alt="NoteMind AI Logo"
-            className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
+            className="h-14 w-14 object-contain group-hover:scale-110 transition-transform"
           />
           <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">NoteMind AI</span>
         </Link>
@@ -522,8 +525,14 @@ const LandingPage: React.FC = () => {
                   className="w-full flex-shrink-0 p-8 bg-gray-50 dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700"
                 >
                   <div className="flex items-center mb-6">
-                    <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg mr-4">
-                      {testimonial.avatar}
+                    <div className="flex items-center justify-center w-14 h-14 rounded-full overflow-hidden mr-4">
+                      {testimonial.imageUrl ? (
+                        <img src={testimonial.imageUrl} alt={`${testimonial.name}'s avatar`} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+                          {testimonial.avatar}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -609,7 +618,11 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="md:col-span-2">
             <div className="flex items-center gap-3 mb-6">
-              <Sparkles className="h-8 w-8 text-blue-400" />
+            <img
+            src="/siteimage.png"
+            alt="NoteMind AI Logo"
+            className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
+          />
               <span className="text-2xl font-extrabold text-white">NoteMind AI</span>
             </div>
             <p className="text-gray-400 leading-relaxed mb-6">
@@ -620,7 +633,11 @@ const LandingPage: React.FC = () => {
                 <Globe className="h-5 w-5" />
               </a>
               <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
-                <Sparkles className="h-5 w-5" />
+              <img
+            src="/siteimage.png"
+            alt="NoteMind AI Logo"
+            className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
+          />
               </a>
             </div>
           </div>
@@ -630,18 +647,18 @@ const LandingPage: React.FC = () => {
             <ul className="space-y-3 text-gray-400">
               <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
               <li><a href="#cta" className="hover:text-white transition-colors">Pricing</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">API</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Integrations</a></li>
+              <li><a href="api" className="hover:text-white transition-colors">API</a></li>
+              <li><a href="integrations" className="hover:text-white transition-colors">Integrations</a></li>
             </ul>
           </div>
 
           <div>
             <h3 className="text-white font-semibold mb-4">Company</h3>
             <ul className="space-y-3 text-gray-400">
-              <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
+              <li><a href="/about-us" className="hover:text-white transition-colors">About Us</a></li>
+              <li><a href="/blogs" className="hover:text-white transition-colors">Blog</a></li>
+              <li><a href="careers" className="hover:text-white transition-colors">Careers</a></li>
+              <li><a href="/contact" className="hover:text-white transition-colors">Contact</a></li>
             </ul>
           </div>
         </div>
@@ -649,8 +666,8 @@ const LandingPage: React.FC = () => {
         <div className="border-t border-gray-700 pt-8 mt-12 text-center text-gray-500 text-sm">
           <p>&copy; {new Date().getFullYear()} NoteMind AI. All rights reserved.</p>
           <div className="flex justify-center gap-4 mt-2">
-            <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+            <a href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</a>
+            <a href="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</a>
           </div>
         </div>
       </footer>

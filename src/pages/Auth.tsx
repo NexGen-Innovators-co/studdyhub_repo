@@ -21,7 +21,7 @@ const Auth = () => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        navigate('/chat', { replace: true });
+        navigate('/note', { replace: true });
       }
     };
     checkAuth();
@@ -77,7 +77,7 @@ const Auth = () => {
         }
       } else {
         toast.success('Welcome back!');
-        navigate('/chat', { replace: true });
+        navigate('/note', { replace: true });
       }
     } catch (error) {
       toast.error('An unexpected error occurred');
@@ -88,29 +88,30 @@ const Auth = () => {
 
   // Handle Google Sign-in
   const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/chat`, // Redirect to chat after successful sign-in
-        },
-      });
+    // setIsLoading(true);
+    // try {
+    //   const { error } = await supabase.auth.signInWithOAuth({
+    //     provider: 'google',
+    //     options: {
+    //       redirectTo: `${window.location.origin}/note`, // Redirect to chat after successful sign-in
+    //     },
+    //   });
 
-      if (error) {
-        toast.error(`Google sign-in failed: ${error.message}`);
-      }
-      // Supabase handles the redirect, so no further action needed here on success
-    } catch (error) {
-      toast.error('An unexpected error occurred during Google sign-in');
-    } finally {
-      setIsLoading(false);
-    }
+    //   if (error) {
+    //     toast.error(`Google sign-in failed: ${error.message}`);
+    //   }
+    //   // Supabase handles the redirect, so no further action needed here on success
+    // } catch (error) {
+    //   toast.error('An unexpected error occurred during Google sign-in');
+    // } finally {
+    //   setIsLoading(false);
+    // }
+    toast.info("coming soon..")
   };
 
   return (
     <div className="min-h-screen flex flex-col font-inter relative overflow-hidden
-      bg-gray-950 bg-[url('/public/herobackgroundimg.png')] bg-cover bg-center
+      bg-gray-950 bg-[url('/herobackgroundimg.png')] bg-cover bg-center
       before:content-[''] before:absolute before:inset-0 before:bg-gradient-to-br before:from-transparent before:via-gray-950/70 before:to-gray-950/90 before:z-0 text-white">
       {/* Main Content Area - Two Columns */}
       <div className="flex flex-grow flex-col lg:flex-row items-center justify-center p-4 sm:p-6 lg:p-8 relative z-10">
@@ -147,10 +148,10 @@ const Auth = () => {
                     >
                       {/* Google Icon SVG */}
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12.0003 4.40002C13.6003 4.40002 14.9603 4.96002 16.0003 5.92002L19.0403 2.96002C17.2003 1.28002 14.8003 0.400024 12.0003 0.400024C7.28033 0.400024 3.20033 3.04002 1.28033 7.04002L5.28033 10.0001C6.24033 7.52002 8.96033 5.92002 12.0003 5.92002V4.40002Z" fill="#EA4335"/>
-                        <path d="M23.6003 12.0001C23.6003 11.2001 23.5203 10.4001 23.3603 9.60009H12.0003V14.4001H18.8003C18.4803 16.0001 17.6003 17.2001 16.4003 18.0001V21.4401H20.8003C23.2003 19.2001 23.6003 15.8401 23.6003 12.0001Z" fill="#4285F4"/>
-                        <path d="M12.0003 23.6001C14.8003 23.6001 17.2003 22.7201 19.0403 21.4401L16.0003 18.0001C14.9603 18.7201 13.6003 19.2001 12.0003 19.2001C8.96033 19.2001 6.24033 17.6001 5.28033 15.1201L1.28033 18.0801C3.20033 22.0801 7.28033 24.7201 12.0003 24.7201V23.6001Z" fill="#34A853"/>
-                        <path d="M0.400326 12.0001C0.400326 11.2001 0.480326 10.4001 0.640326 9.60009L4.64033 6.64009C4.32033 7.28009 4.08033 7.92009 3.92033 8.64009H0.400326V12.0001Z" fill="#FBBC04"/>
+                        <path d="M12.0003 4.40002C13.6003 4.40002 14.9603 4.96002 16.0003 5.92002L19.0403 2.96002C17.2003 1.28002 14.8003 0.400024 12.0003 0.400024C7.28033 0.400024 3.20033 3.04002 1.28033 7.04002L5.28033 10.0001C6.24033 7.52002 8.96033 5.92002 12.0003 5.92002V4.40002Z" fill="#EA4335" />
+                        <path d="M23.6003 12.0001C23.6003 11.2001 23.5203 10.4001 23.3603 9.60009H12.0003V14.4001H18.8003C18.4803 16.0001 17.6003 17.2001 16.4003 18.0001V21.4401H20.8003C23.2003 19.2001 23.6003 15.8401 23.6003 12.0001Z" fill="#4285F4" />
+                        <path d="M12.0003 23.6001C14.8003 23.6001 17.2003 22.7201 19.0403 21.4401L16.0003 18.0001C14.9603 18.7201 13.6003 19.2001 12.0003 19.2001C8.96033 19.2001 6.24033 17.6001 5.28033 15.1201L1.28033 18.0801C3.20033 22.0801 7.28033 24.7201 12.0003 24.7201V23.6001Z" fill="#34A853" />
+                        <path d="M0.400326 12.0001C0.400326 11.2001 0.480326 10.4001 0.640326 9.60009L4.64033 6.64009C4.32033 7.28009 4.08033 7.92009 3.92033 8.64009H0.400326V12.0001Z" fill="#FBBC04" />
                       </svg>
                       Continue with Google
                     </Button>
@@ -288,7 +289,7 @@ const Auth = () => {
                 </TabsContent>
               </Tabs>
               <div className="text-xs text-gray-500 text-center mt-6 space-y-2">
-                <p>By continuing, you agree to Supabase's <a href="#" className="text-blue-400 hover:underline">Terms of Service</a> and <a href="#" className="text-blue-400 hover:underline">Privacy Policy</a>.</p>
+                <p>By continuing, you agree to Supabase's <a href="/terms-of-service" className="text-blue-400 hover:underline">Terms of Service</a> and <a href="/privacy-policy" className="text-blue-400 hover:underline">Privacy Policy</a>.</p>
                 <p>and to receive periodic emails with updates.</p>
               </div>
             </CardContent>
@@ -303,7 +304,7 @@ const Auth = () => {
             </blockquote>
             <div className="flex items-center justify-center lg:justify-start gap-3 mt-6">
               <img
-                src="/founder.jpg" 
+                src="/founder.jpg"
                 alt="Founder of NoteMind AI"
                 className="h-20 w-20 rounded-full object-cover border-2 border-gray-600"
               />
