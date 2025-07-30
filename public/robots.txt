@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://www.google.com/url?sa=E&source=gmail&q=https://studdyhub.vercel.app/sitemap.xml
+Sitemap: https://studdyhub.vercel.app/sitemap.xml
