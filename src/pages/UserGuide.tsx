@@ -52,10 +52,10 @@ const UserGuidePage: React.FC = () => {
                 <Link to="/" className="flex items-center gap-3 group">
                     <img
                         src="/siteimage.png"
-                        alt="NoteMind AI Logo"
+                        alt="studdyhub AI Logo"
                         className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
                     />
-                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">NoteMind AI</span>
+                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
                 </Link>
                 <div className="flex items-center gap-4">
                     <Link to="/auth">
@@ -127,14 +127,14 @@ const UserGuidePage: React.FC = () => {
 
                 {/* Content Area */}
                 <div className="lg:w-3/4 bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 prose dark:prose-invert max-w-none">
-                    <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">NoteMind AI: The Full User Guide</h1>
-                    <p className="lead text-lg text-gray-700 dark:text-gray-300 mb-10">Welcome to NoteMind AI, your intelligent companion designed to transform your academic and professional learning journey. This comprehensive guide will walk you through every feature, helping you maximize your productivity and achieve deeper understanding.</p>
+                    <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">studdyhub AI: The Full User Guide</h1>
+                    <p className="lead text-lg text-gray-700 dark:text-gray-300 mb-10">Welcome to studdyhub AI, your intelligent companion designed to transform your academic and professional learning journey. This comprehensive guide will walk you through every feature, helping you maximize your productivity and achieve deeper understanding.</p>
 
                     <section ref={sectionRefs.introduction} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
                         <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
-                            <Sparkles className="h-8 w-8 text-blue-600 dark:text-blue-400" /> 1. Introduction to NoteMind AI
+                            <Sparkles className="h-8 w-8 text-blue-600 dark:text-blue-400" /> 1. Introduction to studdyhub AI
                         </h2>
-                        <p>NoteMind AI is an advanced learning and note-taking platform powered by artificial intelligence. It's built to simplify complex information, organize your thoughts, and provide personalized assistance tailored to your unique learning style. Whether you're a student, researcher, or professional, NoteMind AI helps you learn smarter, not harder.</p>
+                        <p>studdyhub AI is an advanced learning and note-taking platform powered by artificial intelligence. It's built to simplify complex information, organize your thoughts, and provide personalized assistance tailored to your unique learning style. Whether you're a student, researcher, or professional, studdyhub AI helps you learn smarter, not harder.</p>
 
                         <h3 className="text-2xl font-semibold mt-6 mb-3 text-gray-800 dark:text-gray-200 flex items-center gap-2">
                             <Lightbulb className="h-6 w-6 text-yellow-600 dark:text-yellow-400" /> Key Benefits:
@@ -155,14 +155,14 @@ const UserGuidePage: React.FC = () => {
                             <ChevronRight className="h-5 w-5" /> 2.1 Account Creation & Login
                         </h3>
                         <ol className="list-decimal list-inside space-y-2">
-                            <li><strong>Sign Up:</strong> Visit <a href="https://notemind.lovable.app/auth" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">https://notemind.lovable.app/auth</a> and follow the prompts to create your account. You'll typically need to provide your name, email, and set a password.</li>
+                            <li><strong>Sign Up:</strong> Visit <a href="https://studdyhub.lovable.app/auth" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">https://studdyhub.lovable.app/auth</a> and follow the prompts to create your account. You'll typically need to provide your name, email, and set a password.</li>
                             <li><strong>Login:</strong> Once registered, use your credentials to log in.</li>
                         </ol>
 
                         <h3 className="text-2xl font-semibold mt-6 mb-3 text-gray-800 dark:text-gray-200 flex items-center gap-2">
                             <LayoutDashboard className="h-5 w-5" /> 2.2 Navigating the Interface
                         </h3>
-                        <p>The NoteMind AI interface is designed to be intuitive. Key areas usually include:</p>
+                        <p>The studdyhub AI interface is designed to be intuitive. Key areas usually include:</p>
                         <ul className="list-disc list-inside space-y-2">
                             <li><strong>Chat Interface:</strong> Your primary interaction point with the AI assistant.</li>
                             <li><strong>Document/Note Library:</strong> Where your uploaded files and created notes are stored.</li>
@@ -183,7 +183,7 @@ const UserGuidePage: React.FC = () => {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
-                                    <p>NoteMind AI goes beyond traditional note-taking by leveraging AI to enhance your notes.</p>
+                                    <p>studdyhub AI goes beyond traditional note-taking by leveraging AI to enhance your notes.</p>
                                     <ul className="list-disc list-inside ml-4 space-y-1">
                                         <li><strong>Creating Notes:</strong> Manually type notes or upload existing text documents (<code>.txt</code>, <code>.md</code>, <code>.docx</code>).</li>
                                         <li><strong>Organization:</strong> AI can categorize and tag your notes for easy retrieval.</li>
@@ -241,7 +241,7 @@ const UserGuidePage: React.FC = () => {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
-                                    <p>Upload various document types and let NoteMind AI unlock their full potential.</p>
+                                    <p>Upload various document types and let studdyhub AI unlock their full potential.</p>
                                     <ul className="list-disc list-inside ml-4 space-y-1">
                                         <li><strong>Supported Formats:</strong> Images (<code>.jpeg</code>, <code>.png</code>, etc.), PDFs, and text-based documents.</li>
                                         <li><strong>Content Extraction:</strong> AI extracts readable text from PDFs and images.</li>
@@ -259,7 +259,7 @@ const UserGuidePage: React.FC = () => {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
-                                    <p>NoteMind AI adapts to how you learn best. Set your preferred learning style in your profile or explicitly ask the AI to adjust.</p>
+                                    <p>studdyhub AI adapts to how you learn best. Set your preferred learning style in your profile or explicitly ask the AI to adjust.</p>
                                     <ul className="list-disc list-inside ml-4 space-y-1">
                                         <li><strong>Visual Learner:</strong> Expect more diagrams, charts, and visual descriptions.</li>
                                         <li><strong>Auditory Learner:</strong> Responses are conversational, with verbal cues.</li>
@@ -275,7 +275,7 @@ const UserGuidePage: React.FC = () => {
                         <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
                             <Code className="h-8 w-8 text-indigo-600 dark:text-indigo-400" /> 4. Interactive Visualizations
                         </h2>
-                        <p>One of NoteMind AI's most powerful features is its ability to generate interactive diagrams and 3D scenes directly in the chat.</p>
+                        <p>One of studdyhub AI's most powerful features is its ability to generate interactive diagrams and 3D scenes directly in the chat.</p>
 
                         <h3 className="text-2xl font-semibold mt-6 mb-3 text-gray-800 dark:text-gray-200 flex items-center gap-2">
                             <ChevronRight className="h-5 w-5" /> How to Request:
@@ -320,7 +320,7 @@ const UserGuidePage: React.FC = () => {
                         <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
                             <Plug className="h-8 w-8 text-teal-600 dark:text-teal-400" /> 5. Integrations
                         </h2>
-                        <p>NoteMind AI is designed to work seamlessly with your existing tools. Check the "Integrations" page on the website for a list of supported services. Common integrations may include:</p>
+                        <p>studdyhub AI is designed to work seamlessly with your existing tools. Check the "Integrations" page on the website for a list of supported services. Common integrations may include:</p>
                         <ul className="list-disc list-inside space-y-2">
                             <li><strong>Cloud Storage:</strong> Google Drive, Dropbox for document syncing.</li>
                             <li><strong>Communication Platforms:</strong> Slack, Microsoft Teams for meeting summaries.</li>
@@ -337,7 +337,7 @@ const UserGuidePage: React.FC = () => {
                         <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
                             <Settings className="h-8 w-8 text-gray-600 dark:text-gray-400" /> 6. Account Management
                         </h2>
-                        <p>Access your profile and settings to customize your NoteMind AI experience.</p>
+                        <p>Access your profile and settings to customize your studdyhub AI experience.</p>
                         <ul className="list-disc list-inside space-y-2">
                             <li><strong>Profile Settings:</strong> Update your name, email, and password.</li>
                             <li><strong>Learning Preferences:</strong> Adjust your preferred learning style and content difficulty.</li>
@@ -364,7 +364,7 @@ const UserGuidePage: React.FC = () => {
 
                     <section ref={sectionRefs.tips} className="mb-10">
                         <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
-                            <TrendingUp className="h-8 w-8 text-pink-600 dark:text-pink-400" /> 8. Tips for Maximizing Your Learning with NoteMind AI
+                            <TrendingUp className="h-8 w-8 text-pink-600 dark:text-pink-400" /> 8. Tips for Maximizing Your Learning with studdyhub AI
                         </h2>
                         <ul className="list-disc list-inside space-y-2">
                             <li><strong>Be Specific with Prompts:</strong> The more detailed your questions, the better the AI can understand and respond.</li>
@@ -374,7 +374,7 @@ const UserGuidePage: React.FC = () => {
                             <li><strong>Review AI Responses Critically:</strong> While powerful, AI is a tool. Always cross-reference information and think critically about the responses.</li>
                             <li><strong>Provide Feedback:</strong> Your feedback helps us improve! If something isn't working or could be better, let us know.</li>
                         </ul>
-                        <p className="mt-8 text-lg text-gray-700 dark:text-gray-300">Thank you for choosing NoteMind AI. We're excited to be a part of your learning journey!</p>
+                        <p className="mt-8 text-lg text-gray-700 dark:text-gray-300">Thank you for choosing studdyhub AI. We're excited to be a part of your learning journey!</p>
                     </section>
                 </div>
             </main>
@@ -382,7 +382,7 @@ const UserGuidePage: React.FC = () => {
             {/* Footer */}
             <footer className="py-10 px-6 bg-gray-800 dark:bg-black text-gray-300 text-center">
                 <div className="max-w-6xl mx-auto">
-                    <p>&copy; {new Date().getFullYear()} NoteMind AI. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
                     <div className="flex justify-center gap-4 mt-2">
                         <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
                         <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</Link>

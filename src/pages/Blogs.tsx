@@ -34,14 +34,14 @@ const Blog: React.FC = () => {
             id: 1,
             title: "The Future of Learning: How AI is Transforming Education",
             summary: "Explore how artificial intelligence is set to revolutionize educational methodologies, making learning more personalized and efficient.",
-            author: "NoteMind AI Team",
+            author: "studdyhub AI Team",
             date: "July 25, 2025",
             imageUrl: "https://placehold.co/600x400/A78BFA/FFFFFF?text=AI+Learning"
         },
         {
             id: 2,
             title: "Mastering Your Notes with Intelligent Summarization",
-            summary: "Discover techniques and features within NoteMind AI that help you condense vast amounts of information into digestible summaries.",
+            summary: "Discover techniques and features within studdyhub AI that help you condense vast amounts of information into digestible summaries.",
             author: "Dr. Anya Sharma",
             date: "July 18, 2025",
             imageUrl: "https://placehold.co/600x400/60A5FA/FFFFFF?text=Note+Taking"
@@ -49,7 +49,7 @@ const Blog: React.FC = () => {
         {
             id: 3,
             title: "Voice to Text: Unlocking Insights from Your Lectures",
-            summary: "Learn how NoteMind AI's advanced transcription and analysis features can turn your spoken words into actionable insights.",
+            summary: "Learn how studdyhub AI's advanced transcription and analysis features can turn your spoken words into actionable insights.",
             author: "Michael Lee",
             date: "July 10, 2025",
             imageUrl: "https://placehold.co/600x400/34D399/FFFFFF?text=Voice+AI"
@@ -57,7 +57,7 @@ const Blog: React.FC = () => {
         {
             id: 4,
             title: "Personalized Learning Paths: Tailoring AI to Your Style",
-            summary: "Understand how NoteMind AI adapts to visual, auditory, kinesthetic, and reading/writing learning styles for a truly unique experience.",
+            summary: "Understand how studdyhub AI adapts to visual, auditory, kinesthetic, and reading/writing learning styles for a truly unique experience.",
             author: "Sarah Chen",
             date: "July 01, 2025",
             imageUrl: "https://placehold.co/600x400/FBBF24/FFFFFF?text=Personalized+Learning"
@@ -71,10 +71,10 @@ const Blog: React.FC = () => {
                 <Link to="/" className="flex items-center gap-3 group">
                     <img
                         src="/siteimage.png"
-                        alt="NoteMind AI Logo"
+                        alt="studdyhub AI Logo"
                         className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
                     />
-                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">NoteMind AI</span>
+                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
                 </Link>
                 <div className="flex items-center gap-4">
                     <Link to="/auth">
@@ -95,7 +95,7 @@ const Blog: React.FC = () => {
             <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
                 <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">Our Blog</h1>
                 <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto text-center mb-12">
-                    Stay updated with the latest insights, tips, and news from NoteMind AI.
+                    Stay updated with the latest insights, tips, and news from studdyhub AI.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -130,10 +130,10 @@ const Blog: React.FC = () => {
                         <div className="flex items-center gap-3 mb-6">
                             <img
                                 src="/siteimage.png"
-                                alt="NoteMind AI Logo"
+                                alt="studdyhub AI Logo"
                                 className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
                             />
-                            <span className="text-2xl font-extrabold text-white">NoteMind AI</span>
+                            <span className="text-2xl font-extrabold text-white">studdyhub AI</span>
                         </div>
                         <p className="text-gray-400 leading-relaxed mb-6">
                             Empowering students and professionals to achieve more with intelligent tools for notes, recordings, and schedules.
@@ -145,7 +145,7 @@ const Blog: React.FC = () => {
                             <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
                                 <img
                                     src="/siteimage.png"
-                                    alt="NoteMind AI Logo"
+                                    alt="studdyhub AI Logo"
                                     className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
                                 />
                             </a>
@@ -174,7 +174,7 @@ const Blog: React.FC = () => {
                 </div>
 
                 <div className="border-t border-gray-700 pt-8 mt-12 text-center text-gray-500 text-sm">
-                    <p>&copy; {new Date().getFullYear()} NoteMind AI. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
                     <div className="flex justify-center gap-4 mt-2">
                         <a href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</a>
                         <a href="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</a>

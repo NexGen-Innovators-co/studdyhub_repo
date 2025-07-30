@@ -4,7 +4,7 @@
 // It generates a dynamic sitemap.xml.
 
 export default async function handler(req, res) {
-  // Define your static routes for NoteMind AI
+  // Define your static routes for studdyhub AI
   const staticRoutes = [
     '/',
     '/auth',

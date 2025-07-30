@@ -41,9 +41,9 @@ export const Header: React.FC<HeaderProps> = ({
       </Button>
 
       <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink">
-      <img src="/siteimage.png" alt="Loading..." className="w-16 h-16 " />
+        <img src="/siteimage.png" alt="Loading..." className="w-16 h-16 " />
         <div className="min-w-0 flex-shrink">
-          <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-800 dark:text-white truncate">NoteMind</h1>
+          <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-800 dark:text-white truncate">studdyhub</h1>
           {/* Display tab name on small screens and up */}
           <p className="text-xs text-slate-500 hidden sm:block truncate">{tabNames[activeTab]}</p>
         </div>

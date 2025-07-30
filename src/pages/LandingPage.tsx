@@ -75,7 +75,7 @@ const LandingPage: React.FC = () => {
           const { error: insertError } = await supabase
             .from('app_stats')
             .insert([defaultStats])
-            
+
 
           if (insertError) {
             console.error("Error inserting default app stats:", insertError);
@@ -146,7 +146,7 @@ const LandingPage: React.FC = () => {
       name: "Doris",
       role: "SHS student",
       avatar: "D",
-      content: "NoteMind AI has completely revolutionized how I study. The AI chat is incredibly helpful, and the document analysis saves me so much time!",
+      content: "studdyhub AI has completely revolutionized how I study. The AI chat is incredibly helpful, and the document analysis saves me so much time!",
       rating: 5,
       verified: true,
       imageUrl: "/testimonial1.jpg" // Added for the first testimonial
@@ -262,19 +262,18 @@ const LandingPage: React.FC = () => {
     <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased overflow-x-hidden">
 
       {/* Header */}
-      <header className={`fixed w-full px-6 py-4 flex justify-between items-center z-50 transition-all duration-300 ${
-        scrollY > 50
+      <header className={`fixed w-full px-6 py-4 flex justify-between items-center z-50 transition-all duration-300 ${scrollY > 50
           ? 'bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md'
           : 'bg-transparent'
-      }`}>
+        }`}>
         {/* Site Icon and Name - Linked to home */}
         <Link to="/" className="flex items-center gap-3 group">
           <img
             src="/siteimage.png"
-            alt="NoteMind AI Logo"
+            alt="studdyhub AI Logo"
             className="h-14 w-14 object-contain group-hover:scale-110 transition-transform"
           />
-          <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">NoteMind AI</span>
+          <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
         </Link>
 
         {/* Desktop Navigation */}
@@ -370,7 +369,7 @@ const LandingPage: React.FC = () => {
           {/* Site Image in Hero Section */}
           <img
             src="/siteimage.png"
-            alt="NoteMind AI logo or main illustration"
+            alt="studdyhub AI logo or main illustration"
             className="w-48 h-48 sm:w-64 sm:h-64 mx-auto mb-6 object-contain rounded-full shadow-lg"
           />
 
@@ -483,9 +482,8 @@ const LandingPage: React.FC = () => {
             {features.map((feature, index) => (
               <div
                 key={index}
-                className={`p-8 rounded-xl shadow-md border border-gray-200 dark:border-gray-800 ${feature.bgColor} ${feature.darkBgColor} hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 transform hover:-translate-y-1 ${
-                  activeFeature === index ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
-                }`}
+                className={`p-8 rounded-xl shadow-md border border-gray-200 dark:border-gray-800 ${feature.bgColor} ${feature.darkBgColor} hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 transform hover:-translate-y-1 ${activeFeature === index ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+                  }`}
                 onMouseEnter={() => setActiveFeature(index)}
               >
                 <div className={`inline-flex items-center justify-center w-16 h-16 ${feature.color} text-white rounded-full mb-6 shadow-md`}>
@@ -510,7 +508,7 @@ const LandingPage: React.FC = () => {
             What Our <span className="text-blue-600 dark:text-blue-400">Users Say</span>
           </h2>
           <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto mb-12">
-            Hear directly from students and professionals who are transforming their productivity with NoteMind AI.
+            Hear directly from students and professionals who are transforming their productivity with studdyhub AI.
           </p>
 
           {/* Carousel Container */}
@@ -585,9 +583,8 @@ const LandingPage: React.FC = () => {
                 <button
                   key={index}
                   onClick={() => setCurrentTestimonialIndex(index)}
-                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                    index === currentTestimonialIndex ? 'bg-blue-600 dark:bg-blue-400' : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
-                  }`}
+                  className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentTestimonialIndex ? 'bg-blue-600 dark:bg-blue-400' : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
+                    }`}
                   aria-label={`Go to testimonial ${index + 1}`}
                 ></button>
               ))}
@@ -603,7 +600,7 @@ const LandingPage: React.FC = () => {
             Ready to <span className="text-yellow-300">Elevate</span> Your Learning?
           </h2>
           <p className="text-lg md:text-xl opacity-90 mb-10">
-            Join thousands of students and professionals who've revolutionized their productivity with NoteMind AI.
+            Join thousands of students and professionals who've revolutionized their productivity with studdyhub AI.
           </p>
           <Link to="/auth">
             <Button type="button" className="px-10 py-4 bg-white text-blue-600 font-bold text-xl rounded-lg shadow-xl hover:bg-gray-100 transition-colors transform hover:scale-105">
@@ -618,12 +615,12 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="md:col-span-2">
             <div className="flex items-center gap-3 mb-6">
-            <img
-            src="/siteimage.png"
-            alt="NoteMind AI Logo"
-            className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
-          />
-              <span className="text-2xl font-extrabold text-white">NoteMind AI</span>
+              <img
+                src="/siteimage.png"
+                alt="studdyhub AI Logo"
+                className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
+              />
+              <span className="text-2xl font-extrabold text-white">studdyhub AI</span>
             </div>
             <p className="text-gray-400 leading-relaxed mb-6">
               Empowering students and professionals to achieve more with intelligent tools for notes, recordings, and schedules.
@@ -633,11 +630,11 @@ const LandingPage: React.FC = () => {
                 <Globe className="h-5 w-5" />
               </a>
               <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
-              <img
-            src="/siteimage.png"
-            alt="NoteMind AI Logo"
-            className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
-          />
+                <img
+                  src="/siteimage.png"
+                  alt="studdyhub AI Logo"
+                  className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
+                />
               </a>
             </div>
           </div>
@@ -664,7 +661,7 @@ const LandingPage: React.FC = () => {
         </div>
 
         <div className="border-t border-gray-700 pt-8 mt-12 text-center text-gray-500 text-sm">
-          <p>&copy; {new Date().getFullYear()} NoteMind AI. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
           <div className="flex justify-center gap-4 mt-2">
             <a href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</a>
             <a href="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</a>

@@ -36,10 +36,10 @@ const AboutUs: React.FC = () => {
                 <Link to="/" className="flex items-center gap-3 group">
                     <img
                         src="/siteimage.png"
-                        alt="NoteMind AI Logo"
+                        alt="studdyhub AI Logo"
                         className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
                     />
-                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">NoteMind AI</span>
+                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
                 </Link>
                 <div className="flex items-center gap-4">
                     <Link to="/auth">
@@ -61,7 +61,7 @@ const AboutUs: React.FC = () => {
                 <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">About Us</h1>
                 <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 prose dark:prose-invert max-w-3xl mx-auto">
                     <p>
-                        NoteMind AI was founded with a singular vision: to revolutionize the way students and professionals learn, organize, and thrive in their academic and professional lives. We believe that learning should be intuitive, personalized, and efficient.
+                        studdyhub AI was founded with a singular vision: to revolutionize the way students and professionals learn, organize, and thrive in their academic and professional lives. We believe that learning should be intuitive, personalized, and efficient.
                     </p>
 
                     <h2>Our Mission</h2>
@@ -70,7 +70,7 @@ const AboutUs: React.FC = () => {
                     </p>
 
                     <h2>What We Offer</h2>
-                    <p>NoteMind AI provides a suite of features designed to support your journey:</p>
+                    <p>studdyhub AI provides a suite of features designed to support your journey:</p>
                     <ul>
                         <li><strong>Intelligent Note-Taking:</strong> Summarize, organize, and extract insights from your notes automatically.</li>
                         <li><strong>Effortless Recording Analysis:</strong> Transcribe lectures and meetings, identifying key topics and speakers.</li>
@@ -109,7 +109,7 @@ const AboutUs: React.FC = () => {
                         We are a passionate team of educators, AI researchers, and software engineers dedicated to creating impactful learning technologies. We believe in the power of AI to transform education and are excited to build the future of personalized learning.
                     </p>
 
-                    <p>Thank you for being a part of the NoteMind AI community!</p>
+                    <p>Thank you for being a part of the studdyhub AI community!</p>
                 </div>
             </main>
 
@@ -119,10 +119,10 @@ const AboutUs: React.FC = () => {
                         <div className="flex items-center gap-3 mb-6">
                             <img
                                 src="/siteimage.png"
-                                alt="NoteMind AI Logo"
+                                alt="studdyhub AI Logo"
                                 className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
                             />
-                            <span className="text-2xl font-extrabold text-white">NoteMind AI</span>
+                            <span className="text-2xl font-extrabold text-white">studdyhub AI</span>
                         </div>
                         <p className="text-gray-400 leading-relaxed mb-6">
                             Empowering students and professionals to achieve more with intelligent tools for notes, recordings, and schedules.
@@ -134,7 +134,7 @@ const AboutUs: React.FC = () => {
                             <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
                                 <img
                                     src="/siteimage.png"
-                                    alt="NoteMind AI Logo"
+                                    alt="studdyhub AI Logo"
                                     className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
                                 />
                             </a>
@@ -163,7 +163,7 @@ const AboutUs: React.FC = () => {
                 </div>
 
                 <div className="border-t border-gray-700 pt-8 mt-12 text-center text-gray-500 text-sm">
-                    <p>&copy; {new Date().getFullYear()} NoteMind AI. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
                     <div className="flex justify-center gap-4 mt-2">
                         <a href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</a>
                         <a href="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</a>
