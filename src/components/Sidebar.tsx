@@ -256,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={tab.id}
                   variant={isActive ? "default" : "ghost"}
                   className={`w-full justify-start h-10 ${isActive
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md'
+                      ? '"w-full bg-blue-600 text-white font-bold text-lg py-3 rounded-lg shadow-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-[1.005] disabled:opacity-50 disabled:cursor-not-allowed h-12"d'
                       : 'hover:bg-slate-100 text-slate-700 dark:text-gray-300 dark:hover:bg-gray-800' // Added dark mode
                     } ${!isOpen && 'px-2'}`}
                   onClick={() => onTabChange(tab.id as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings')} // Explicitly cast tab.id

@@ -67,6 +67,33 @@ export type Database = {
           },
         ]
       }
+      app_stats: { // Added app_stats table definition
+        Row: {
+          id: string
+          active_users: string
+          notes_processed: string
+          uptime: string
+          user_rating: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          active_users?: string
+          notes_processed?: string
+          uptime?: string
+          user_rating?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          active_users?: string
+          notes_processed?: string
+          uptime?: string
+          user_rating?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string

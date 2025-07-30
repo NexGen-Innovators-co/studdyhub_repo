@@ -55,4 +55,5 @@ export interface Message {
   imageMimeType?: string;
   attachedDocumentIds?: string[]; // Array of document IDs attached to this message
   attachedNoteIds?: string[];
+  session_id?: string; // ID of the session this message belongs to
 }

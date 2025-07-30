@@ -86,7 +86,7 @@ export const useAppOperations = ({
 
   const updateNote = async (updatedNote: Note) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase
@@ -123,7 +123,7 @@ export const useAppOperations = ({
 
   const deleteNote = async (noteId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase
@@ -184,7 +184,7 @@ export const useAppOperations = ({
 
   const addScheduleItem = async (item: ScheduleItem) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase
@@ -212,7 +212,7 @@ export const useAppOperations = ({
 
   const updateScheduleItem = async (item: ScheduleItem) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase
@@ -241,7 +241,7 @@ export const useAppOperations = ({
 
   const deleteScheduleItem = async (id: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase
@@ -259,91 +259,65 @@ export const useAppOperations = ({
     }
   };
 
-  // Updated sendChatMessage to accept attached document and note IDs
+  // Updated sendChatMessage to only insert into DB, relying on real-time listener for state update
   const sendChatMessage = async (
     messageContent: string,
     attachedDocumentIds?: string[],
-    attachedNoteIds?: string[]
+    attachedNoteIds?: string[],
+    imageUrl?: string, // New: imageUrl for storage
+    imageMimeType?: string, // New: imageMimeType for storage
   ) => {
-    const userMessage: Message = {
-      id: generateId(),
-      content: messageContent,
-      role: 'user',
-      timestamp: new Date().toISOString(),
-      attachedDocumentIds: attachedDocumentIds || [], // Store attached document IDs
-      attachedNoteIds: attachedNoteIds || [],       // Store attached note IDs
-    };
-
-    setChatMessages(prev => [...prev, userMessage]);
-    setIsAILoading(true);
-
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
+
+      const userMessageId = generateId(); // Generate ID for the user message
 
       // Insert the user message with attached IDs into the database
       const { error: insertError } = await supabase
         .from('chat_messages')
         .insert({
-          id: userMessage.id,
-          content: userMessage.content,
-          role: userMessage.role,
-          timestamp: userMessage.timestamp,
+          id: userMessageId, // Use the generated ID
+          content: messageContent,
+          role: 'user',
+          timestamp: new Date().toISOString(),
           user_id: user.id,
-          attached_document_ids: userMessage.attachedDocumentIds, // Save attached IDs
-          attached_note_ids: userMessage.attachedNoteIds,         // Save attached IDs
+          attached_document_ids: attachedDocumentIds || [],
+          attached_note_ids: attachedNoteIds || [],
+          image_url: imageUrl || null, // Store image URL
+          image_mime_type: imageMimeType || null, // Store image MIME type
         });
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Error inserting user message into DB:', insertError);
+        throw insertError;
+      }
+      toast.success('Message sent!');
+
+      // NO LONGER SETTING LOCAL STATE HERE.
+      // The real-time listener in useAppData will pick up this insert and update the state.
 
       // The AI response generation is assumed to be handled by a backend function
       // (e.g., a Supabase Edge Function triggered by the 'chat_messages' insert).
       // This backend function will read the message, its attached IDs, fetch content,
       // call the LLM, and then insert the AI's response into 'chat_messages'.
-
-      // For now, we'll simulate a delay and then fetch recent messages.
-      // In a real scenario, you'd listen for the AI's response being inserted.
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate backend processing time
-
-      // Fetch the latest chat messages (including the AI's response if it's already generated)
-      const { data: chatData, error: fetchError } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: true }) // Order ascending to get chronological order
-        .limit(50); // Fetch a reasonable number of recent messages
-
-      if (fetchError) throw fetchError;
-
-      // Convert to local format and update state
-      const messages: Message[] = chatData.map(msg => ({
-        id: msg.id,
-        content: msg.content,
-        role: msg.role as 'user' | 'assistant',
-        timestamp: msg.timestamp || new Date().toISOString(),
-        imageUrl: msg.imageUrl || undefined, // Assuming image_url might be stored for historical context
-        imageMimeType: msg.imageMimeType || undefined,
-        attachedDocumentIds: msg.attachedDocumentIds || [],
-        attachedNoteIds: msg.attachedNoteIds || [],
-      }));
-
-      setChatMessages(messages);
+      // The real-time listener in useAppData will then pick up the AI's response.
 
     } catch (error) {
-      toast.error('Failed to send message or get AI response');
+      toast.error('Failed to send message.');
       console.error('Error in sendChatMessage:', error);
-      // Mark the user message as an error if the process fails
-      setChatMessages(prev => prev.map(msg =>
-        msg.id === userMessage.id ? { ...msg, isError: true } : msg
-      ));
+      // If the initial insert of the user message fails, we need to handle it.
+      // The UI will not show the user message if it's not inserted into DB and picked up by listener.
+      // For now, rely on the toast for feedback.
     } finally {
-      setIsAILoading(false);
+      // setIsAILoading(false); // This should be managed by Index.tsx based on AI response status
     }
   };
 
+
   const handleDocumentUploaded = async (document: Document) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase
@@ -383,7 +357,7 @@ export const useAppOperations = ({
 
   const handleDocumentDeleted = async (documentId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase
@@ -404,7 +378,7 @@ export const useAppOperations = ({
 
   const handleProfileUpdate = async (profile: UserProfile) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase

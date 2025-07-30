@@ -1,5 +1,5 @@
 // useAppData.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
@@ -10,7 +10,7 @@ export const useAppData = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [recordings, setRecordings] = useState<ClassRecording[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
-  const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  const [chatMessages, setChatMessages] = useState<Message[]>([]); // This will hold ALL messages for the user
   const [documents, setDocuments] = useState<Document[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
@@ -19,98 +19,62 @@ export const useAppData = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Initial loading state for all app data
 
-  // Load data from Supabase on mount
+  // State to hold the current user, derived from auth listener
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Refs to store channel instances for proper cleanup
+  const documentChannelRef = useRef<any>(null);
+  const chatMessageChannelRef = useRef<any>(null);
+  const notesChannelRef = useRef<any>(null); // New ref for notes channel
+  const recordingsChannelRef = useRef<any>(null); // New ref for recordings channel
+  const scheduleChannelRef = useRef<any>(null); // New ref for schedule items channel
+  const profileChannelRef = useRef<any>(null); // New ref for profile channel
+
+
+  // Auth listener to set currentUser
   useEffect(() => {
-    loadUserData();
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user || null);
+    });
+
+    // Initial check
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setCurrentUser(user || null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
-  // Real-time listener for documents
+  // Load data from Supabase when currentUser changes
+  // This useEffect ensures data is loaded only once per user session
   useEffect(() => {
-    const setupDocumentListener = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.log('No user authenticated, skipping document listener setup.');
-        return;
-      }
+    if (currentUser) {
+      loadUserData(currentUser);
+    } else {
+      // Clear data if no user is logged in
+      setNotes([]);
+      setRecordings([]);
+      setScheduleItems([]);
+      setChatMessages([]); // Ensure chat messages are cleared
+      setDocuments([]);
+      setUserProfile(null);
+      setLoading(false); // Set loading to false when data is cleared
+    }
+  }, [currentUser]); // Depend on currentUser
 
-      console.log('Setting up real-time listener for documents...');
-      const channel = supabase
-        .channel('public:documents') // Channel name, can be anything unique
-        .on(
-          'postgres_changes', // Listen for changes in PostgreSQL
-          { event: '*', schema: 'public', table: 'documents', filter: `user_id=eq.${user.id}` }, // Filter by user_id
-          (payload) => {
-            console.log('Real-time change received for documents:', payload);
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const newDoc = payload.new as any; // Cast to any for flexible property access
-              const formattedDoc: Document = {
-                id: newDoc.id,
-                title: newDoc.title,
-                user_id: newDoc.user_id,
-                file_name: newDoc.file_name,
-                file_type: newDoc.file_type,
-                file_url: newDoc.file_url,
-                file_size: newDoc.file_size || 0,
-                content_extracted: newDoc.content_extracted || null,
-                type: newDoc.type as Document['type'], // Explicitly cast to the union type
-                processing_status: String(newDoc.processing_status) || null, // Convert to string and handle null
-                processing_error: String(newDoc.processing_error) || null, // Convert to string and handle null
-                created_at: new Date(newDoc.created_at).toISOString(),
-                updated_at: new Date(newDoc.updated_at).toISOString(),
-              };
+  // Centralized function to load all user data
+  const loadUserData = useCallback(async (user: any) => {
+    // Only set loading to true if we are actually fetching data
+    // This prevents a flicker if data is already loaded and user hasn't changed
+    if (!loading && (notes.length === 0 && recordings.length === 0 && scheduleItems.length === 0 && chatMessages.length === 0 && documents.length === 0 && !userProfile)) {
+        setLoading(true);
+    }
 
-              setDocuments(prevDocs => {
-                const existingIndex = prevDocs.findIndex(doc => doc.id === formattedDoc.id);
-                if (existingIndex > -1) {
-                  // If document already exists in state, update it
-                  const updatedDocs = [...prevDocs];
-                  updatedDocs[existingIndex] = formattedDoc;
-                  return updatedDocs;
-                } else {
-                  // If it's a new document (e.g., initial insert), add it to the beginning
-                  return [formattedDoc, ...prevDocs];
-                }
-              });
-
-              // Show toasts for status changes
-              if (formattedDoc.processing_status === 'completed') {
-                toast.success(`Document "${formattedDoc.title}" processed successfully!`);
-              } else if (formattedDoc.processing_status === 'failed') {
-                toast.error(`Document "${formattedDoc.title}" processing failed: ${formattedDoc.processing_error}`);
-              }
-            } else if (payload.eventType === 'DELETE') {
-              // If a document is deleted, remove it from state
-              const deletedId = payload.old.id;
-              setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== deletedId));
-              toast.info('Document deleted from list.');
-            }
-          }
-        )
-        .subscribe(); // Start listening
-
-      // Cleanup function: unsubscribe when component unmounts or user changes
-      return () => {
-        console.log('Unsubscribing from document listener.');
-        supabase.removeChannel(channel);
-      };
-    };
-
-    // Call the setup function when the component mounts or user changes
-    setupDocumentListener();
-  }, [setDocuments]); // Dependency array: re-run effect if setDocuments changes (unlikely)
-
-  const loadUserData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.log('No user authenticated');
-        setLoading(false);
-        setRecordings([]); // Ensure recordings is empty if no user
-        return;
-      }
-
       // Load user profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -174,7 +138,6 @@ export const useAppData = () => {
       }
 
       // Load recordings
-      console.log('Fetching recordings for user:', user.id); // Debug log
       const { data: recordingsData, error: recordingsError } = await supabase
         .from('class_recordings')
         .select('*')
@@ -186,7 +149,6 @@ export const useAppData = () => {
         toast.error('Failed to load recordings');
         setRecordings([]);
       } else {
-        console.log('Raw recordings data from Supabase:', recordingsData); // Debug log
         if (recordingsData) {
           const formattedRecordings = recordingsData.map(recording => ({
             id: recording.id,
@@ -198,13 +160,11 @@ export const useAppData = () => {
             transcript: recording.transcript || '',
             summary: recording.summary || '',
             createdAt: recording.created_at || new Date().toISOString(),
-            userId: recording.user_id, // Add userId
-            document_id: recording.document_id // Add document_id
+            userId: recording.user_id,
+            document_id: recording.document_id
           }));
-          console.log('Formatted recordings:', formattedRecordings); // Debug log
           setRecordings(formattedRecordings);
         } else {
-          console.log('No recordings data received, setting empty array'); // Debug log
           setRecordings([]);
         }
       }
@@ -224,8 +184,8 @@ export const useAppData = () => {
           id: note.id,
           title: note.title,
           content: note.content || '',
-          document_id: (note as any).document_id || null,
-          userId: note.user_id || user.id,
+          document_id: note.document_id || null,
+          user_id: note.user_id || user.id,
           category: note.category || 'general',
           tags: note.tags || [],
           createdAt: new Date(note.created_at || Date.now()),
@@ -233,7 +193,7 @@ export const useAppData = () => {
           aiSummary: note.ai_summary || ''
         }));
         setNotes(formattedNotes);
-        if (formattedNotes.length > 0) {
+        if (formattedNotes.length > 0 && !activeNote) { // Only set active note if none is active
           setActiveNote(formattedNotes[0]);
         }
       }
@@ -263,30 +223,6 @@ export const useAppData = () => {
           createdAt: item.created_at || new Date().toISOString()
         }));
         setScheduleItems(formattedSchedule);
-      }
-
-      // Load chat messages
-      const { data: chatData, error: chatError } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: true });
-
-      if (chatError) {
-        console.error('Error fetching chat messages:', chatError);
-        toast.error('Failed to load chat messages');
-      } else if (chatData) {
-        const formattedMessages = chatData.map(msg => ({
-          id: msg.id,
-          content: msg.content,
-          role: msg.role as 'user' | 'assistant', // Ensure role is correctly typed
-          timestamp: new Date(msg.timestamp || Date.now()).toISOString(), // Convert Date to ISO string
-          attachedDocumentIds: msg.attachedDocumentIds || [], // Include attached document IDs
-          attachedNoteIds: msg.attachedNoteIds || [],         // Include attached note IDs
-          imageUrl: msg.imageUrl || undefined,
-          imageMimeType: msg.imageMimeType || undefined,
-        }));
-        setChatMessages(formattedMessages);
       }
 
       // Load documents (initial load, real-time listener handles subsequent changes)
@@ -323,10 +259,408 @@ export const useAppData = () => {
       toast.error('An unexpected error occurred while loading data');
       setRecordings([]); // Fallback to empty array on any error
     } finally {
-      setLoading(false);
-      console.log('Final recordings state:', recordings); // Debug log
+      setLoading(false); // Always set loading to false in finally block
     }
-  };
+  }, [loading, notes.length, recordings.length, scheduleItems.length, chatMessages.length, documents.length, userProfile, setNotes, setRecordings, setScheduleItems, setChatMessages, setDocuments, setUserProfile, setActiveNote]); // Added all state setters to dependencies
+
+  // Real-time listener for documents
+  useEffect(() => {
+    const setupDocumentListener = () => {
+      if (documentChannelRef.current) {
+        supabase.removeChannel(documentChannelRef.current);
+        documentChannelRef.current = null;
+      }
+
+      if (!currentUser) {
+        return;
+      }
+
+      const channel = supabase
+        .channel('public:documents')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'documents', filter: `user_id=eq.${currentUser.id}` },
+          (payload) => {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newDoc = payload.new as any;
+              const formattedDoc: Document = {
+                id: newDoc.id,
+                title: newDoc.title,
+                user_id: newDoc.user_id,
+                file_name: newDoc.file_name,
+                file_type: newDoc.file_type,
+                file_url: newDoc.file_url,
+                file_size: newDoc.file_size || 0,
+                content_extracted: newDoc.content_extracted || null,
+                type: newDoc.type as Document['type'],
+                processing_status: String(newDoc.processing_status) || null,
+                processing_error: String(newDoc.processing_error) || null,
+                created_at: new Date(newDoc.created_at).toISOString(),
+                updated_at: new Date(newDoc.updated_at).toISOString(),
+              };
+
+              setDocuments(prevDocs => {
+                const existingIndex = prevDocs.findIndex(doc => doc.id === formattedDoc.id);
+                if (existingIndex > -1) {
+                  const updatedDocs = [...prevDocs];
+                  updatedDocs[existingIndex] = formattedDoc;
+                  return updatedDocs;
+                } else {
+                  return [formattedDoc, ...prevDocs];
+                }
+              });
+
+              if (formattedDoc.processing_status === 'completed') {
+                toast.success(`Document "${formattedDoc.title}" processed successfully!`);
+              } else if (formattedDoc.processing_status === 'failed') {
+                toast.error(`Document "${formattedDoc.title}" processing failed: ${formattedDoc.processing_error}`);
+              }
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== deletedId));
+              toast.info('Document deleted from list.');
+            }
+          }
+        )
+        .subscribe();
+
+      documentChannelRef.current = channel;
+
+      return () => {
+        if (documentChannelRef.current) {
+          supabase.removeChannel(documentChannelRef.current);
+          documentChannelRef.current = null;
+        }
+      };
+    };
+
+    setupDocumentListener();
+  }, [currentUser, setDocuments]);
+
+  // Real-time listener for ALL chat messages for the current user
+  useEffect(() => {
+    const setupChatMessageListener = () => {
+      if (chatMessageChannelRef.current) {
+        supabase.removeChannel(chatMessageChannelRef.current);
+        chatMessageChannelRef.current = null;
+      }
+
+      if (!currentUser) {
+        setChatMessages([]);
+        return;
+      }
+
+      const channel = supabase
+        .channel(`public:chat_messages:user_${currentUser.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${currentUser.id}` },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const newMessage: Message = {
+                id: payload.new.id,
+                content: payload.new.content,
+                role: payload.new.role,
+                timestamp: payload.new.timestamp,
+                isError: payload.new.is_error || false,
+                attachedDocumentIds: payload.new.attached_document_ids || [],
+                attachedNoteIds: payload.new.attached_note_ids || [],
+                imageUrl: payload.new.image_url || undefined,
+                imageMimeType: payload.new.image_mime_type || undefined,
+                session_id: payload.new.session_id,
+              };
+              setChatMessages(prevMessages => {
+                if (!prevMessages.some(msg => msg.id === newMessage.id)) {
+                  const updatedMessages = [...prevMessages, newMessage].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                  return updatedMessages;
+                }
+                return prevMessages;
+              });
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedMessage: Message = {
+                id: payload.new.id,
+                content: payload.new.content,
+                role: payload.new.role,
+                timestamp: payload.new.timestamp,
+                isError: payload.new.is_error || false,
+                attachedDocumentIds: payload.new.attached_document_ids || [],
+                attachedNoteIds: payload.new.attached_note_ids || [],
+                imageUrl: payload.new.image_url || undefined,
+                imageMimeType: payload.new.image_mime_type || undefined,
+                session_id: payload.new.session_id,
+              };
+              setChatMessages(prevMessages =>
+                prevMessages.map(msg => (msg.id === updatedMessage.id ? updatedMessage : msg))
+              );
+            } else if (payload.eventType === 'DELETE') {
+              setChatMessages(prevMessages =>
+                prevMessages.filter(msg => msg.id !== payload.old.id)
+              );
+            }
+          }
+        )
+        .subscribe();
+
+      chatMessageChannelRef.current = channel;
+
+      return () => {
+        if (chatMessageChannelRef.current) {
+          supabase.removeChannel(chatMessageChannelRef.current);
+          chatMessageChannelRef.current = null;
+        }
+      };
+    };
+
+    setupChatMessageListener();
+  }, [currentUser, setChatMessages]);
+
+  // NEW: Real-time listener for Notes
+  useEffect(() => {
+    const setupNotesListener = () => {
+      if (notesChannelRef.current) {
+        supabase.removeChannel(notesChannelRef.current);
+        notesChannelRef.current = null;
+      }
+
+      if (!currentUser) {
+        return;
+      }
+
+      const channel = supabase
+        .channel('public:notes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'notes', filter: `user_id=eq.${currentUser.id}` },
+          (payload) => {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newNote = payload.new as any;
+              const formattedNote: Note = {
+                id: newNote.id,
+                title: newNote.title,
+                content: newNote.content || '',
+                document_id: newNote.document_id || null,
+                user_id: newNote.user_id,
+                category: newNote.category || 'general',
+                tags: newNote.tags || [],
+                createdAt: new Date(newNote.created_at || Date.now()),
+                updatedAt: new Date(newNote.updated_at || Date.now()),
+                aiSummary: newNote.ai_summary || ''
+              };
+
+              setNotes(prevNotes => {
+                const existingIndex = prevNotes.findIndex(note => note.id === formattedNote.id);
+                if (existingIndex > -1) {
+                  const updatedNotes = [...prevNotes];
+                  updatedNotes[existingIndex] = formattedNote;
+                  return updatedNotes;
+                } else {
+                  return [formattedNote, ...prevNotes];
+                }
+              });
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setNotes(prevNotes => prevNotes.filter(note => note.id !== deletedId));
+            }
+          }
+        )
+        .subscribe();
+
+      notesChannelRef.current = channel;
+
+      return () => {
+        if (notesChannelRef.current) {
+          supabase.removeChannel(notesChannelRef.current);
+          notesChannelRef.current = null;
+        }
+      };
+    };
+
+    setupNotesListener();
+  }, [currentUser, setNotes]);
+
+  // NEW: Real-time listener for Recordings
+  useEffect(() => {
+    const setupRecordingsListener = () => {
+      if (recordingsChannelRef.current) {
+        supabase.removeChannel(recordingsChannelRef.current);
+        recordingsChannelRef.current = null;
+      }
+
+      if (!currentUser) {
+        return;
+      }
+
+      const channel = supabase
+        .channel('public:class_recordings')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'class_recordings', filter: `user_id=eq.${currentUser.id}` },
+          (payload) => {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newRecording = payload.new as any;
+              const formattedRecording: ClassRecording = {
+                id: newRecording.id,
+                title: newRecording.title,
+                subject: newRecording.subject,
+                date: newRecording.date || new Date().toISOString(),
+                duration: newRecording.duration || 0,
+                audioUrl: newRecording.audio_url || '',
+                transcript: newRecording.transcript || '',
+                summary: newRecording.summary || '',
+                createdAt: newRecording.created_at || new Date().toISOString(),
+                userId: newRecording.user_id,
+                document_id: newRecording.document_id
+              };
+
+              setRecordings(prevRecordings => {
+                const existingIndex = prevRecordings.findIndex(rec => rec.id === formattedRecording.id);
+                if (existingIndex > -1) {
+                  const updatedRecordings = [...prevRecordings];
+                  updatedRecordings[existingIndex] = formattedRecording;
+                  return updatedRecordings;
+                } else {
+                  return [formattedRecording, ...prevRecordings];
+                }
+              });
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setRecordings(prevRecordings => prevRecordings.filter(rec => rec.id !== deletedId));
+            }
+          }
+        )
+        .subscribe();
+
+      recordingsChannelRef.current = channel;
+
+      return () => {
+        if (recordingsChannelRef.current) {
+          supabase.removeChannel(recordingsChannelRef.current);
+          recordingsChannelRef.current = null;
+        }
+      };
+    };
+
+    setupRecordingsListener();
+  }, [currentUser, setRecordings]);
+
+  // NEW: Real-time listener for Schedule Items
+  useEffect(() => {
+    const setupScheduleListener = () => {
+      if (scheduleChannelRef.current) {
+        supabase.removeChannel(scheduleChannelRef.current);
+        scheduleChannelRef.current = null;
+      }
+
+      if (!currentUser) {
+        return;
+      }
+
+      const channel = supabase
+        .channel('public:schedule_items')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'schedule_items', filter: `user_id=eq.${currentUser.id}` },
+          (payload) => {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newItem = payload.new as any;
+              const formattedItem: ScheduleItem = {
+                id: newItem.id,
+                title: newItem.title,
+                subject: newItem.subject,
+                startTime: newItem.start_time,
+                endTime: newItem.end_time,
+                type: newItem.type as 'class' | 'study' | 'assignment' | 'exam' | 'other',
+                description: newItem.description || '',
+                location: newItem.location || '',
+                color: newItem.color || '#3B82F6',
+                userId: newItem.user_id,
+                createdAt: newItem.created_at || new Date().toISOString()
+              };
+
+              setScheduleItems(prevItems => {
+                const existingIndex = prevItems.findIndex(item => item.id === formattedItem.id);
+                if (existingIndex > -1) {
+                  const updatedItems = [...prevItems];
+                  updatedItems[existingIndex] = formattedItem;
+                  return updatedItems;
+                } else {
+                  return [formattedItem, ...prevItems];
+                }
+              });
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setScheduleItems(prevItems => prevItems.filter(item => item.id !== deletedId));
+            }
+          }
+        )
+        .subscribe();
+
+      scheduleChannelRef.current = channel;
+
+      return () => {
+        if (scheduleChannelRef.current) {
+          supabase.removeChannel(scheduleChannelRef.current);
+          scheduleChannelRef.current = null;
+        }
+      };
+    };
+
+    setupScheduleListener();
+  }, [currentUser, setScheduleItems]);
+
+  // NEW: Real-time listener for User Profile
+  useEffect(() => {
+    const setupProfileListener = () => {
+      if (profileChannelRef.current) {
+        supabase.removeChannel(profileChannelRef.current);
+        profileChannelRef.current = null;
+      }
+
+      if (!currentUser) {
+        return;
+      }
+
+      const channel = supabase
+        .channel('public:profiles')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${currentUser.id}` },
+          (payload) => {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newProfile = payload.new as any;
+              setUserProfile({
+                id: newProfile.id,
+                email: newProfile.email || currentUser.email || '',
+                full_name: newProfile.full_name || '',
+                avatar_url: newProfile.avatar_url || '',
+                learning_style: (newProfile.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
+                learning_preferences: (newProfile.learning_preferences as any) || {
+                  explanation_style: 'detailed',
+                  examples: true,
+                  difficulty: 'intermediate'
+                },
+                created_at: new Date(newProfile.created_at || Date.now()),
+                updated_at: new Date(newProfile.updated_at || Date.now())
+              });
+            }
+            // No DELETE event expected for profile, as profile is always there for a user
+          }
+        )
+        .subscribe();
+
+      profileChannelRef.current = channel;
+
+      return () => {
+        if (profileChannelRef.current) {
+          supabase.removeChannel(profileChannelRef.current);
+          profileChannelRef.current = null;
+        }
+      };
+    };
+
+    setupProfileListener();
+  }, [currentUser, setUserProfile]);
+
 
   // Filter notes based on search and category
   const filteredNotes = notes.filter(note => {
@@ -341,7 +675,7 @@ export const useAppData = () => {
     notes,
     recordings,
     scheduleItems,
-    chatMessages,
+    chatMessages, // This is the global, unfiltered list
     documents,
     userProfile,
     activeNote,
@@ -351,13 +685,13 @@ export const useAppData = () => {
     activeTab,
     isAILoading,
     filteredNotes,
-    loading,
+    loading, // Expose loading state
     
     // Setters
     setNotes,
     setRecordings,
     setScheduleItems,
-    setChatMessages,
+    setChatMessages, // Still exposed for consistency, but less direct use now
     setDocuments,
     setUserProfile,
     setActiveNote,
@@ -367,7 +701,6 @@ export const useAppData = () => {
     setActiveTab,
     setIsAILoading,
     
-    // Functions
-    loadUserData,
+    // Functions (none exposed directly from here, as data loading is internal)
   };
 };

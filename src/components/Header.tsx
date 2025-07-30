@@ -41,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
       </Button>
 
       <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink">
-        <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
+      <img src="/public/siteimage.png" alt="Loading..." className="w-16 h-16 " />
         <div className="min-w-0 flex-shrink">
           <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-800 dark:text-white truncate">NoteMind</h1>
           {/* Display tab name on small screens and up */}
