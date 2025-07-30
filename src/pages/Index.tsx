@@ -163,7 +163,7 @@ const Index = () => {
       return [];
     }
     return allChatMessages.filter(msg => msg.session_id === activeChatSessionId)
-                          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [allChatMessages, activeChatSessionId]);
 
 
@@ -295,14 +295,14 @@ const Index = () => {
   }, [activeChatSessionId, chatSessions]);
 
   const createNewChatSession = useCallback(async (): Promise<string | null> => {
-    console.log('createNewChatSession: Attempting to create new session...');
+    ('createNewChatSession: Attempting to create new session...');
     try {
       if (!user) {
-        console.log('createNewChatSession: User is null, cannot create session.');
+        ('createNewChatSession: User is null, cannot create session.');
         toast.error('Please sign in to create a new chat session.');
         return null;
       }
-      console.log('createNewChatSession: User ID for new session:', user.id);
+
 
       const { data, error } = await supabase
         .from('chat_sessions')
@@ -333,17 +333,17 @@ const Index = () => {
         document_ids: data.document_ids || [],
       };
 
-      console.log('createNewChatSession: New session created with ID:', newSession.id);
+     
 
       // Reset loaded count to ensure new session appears at top of list
       setChatSessionsLoadedCount(CHAT_SESSIONS_PER_PAGE);
       // Reload sessions to reflect the new session immediately
       await loadChatSessions();
-      console.log('createNewChatSession: Chat sessions reloaded.');
+     
 
       setActiveChatSessionId(newSession.id);
       setHasMoreMessages(false); // New chat, no older messages yet
-      console.log('createNewChatSession: Active chat session ID set to:', newSession.id);
+
 
       return newSession.id;
     } catch (error: any) {
@@ -434,29 +434,29 @@ const Index = () => {
         context += `Title: ${doc.title}\n`;
         context += `File: ${doc.file_name}\n`;
         if (doc.type === 'image') {
-            context += `Type: Image\n`;
+          context += `Type: Image\n`;
         } else if (doc.type === 'text') {
-            context += `Type: Text Document\n`;
+          context += `Type: Text Document\n`;
         }
         // IMPORTANT: For image documents, use content_extracted if available
         if (doc.type === 'image' && doc.content_extracted) {
-            const content = doc.content_extracted.length > 2000
-                ? doc.content_extracted.substring(0, 2000) + '...'
-                : doc.content_extracted;
-            context += `Content (Image Description): ${content}\n`;
+          const content = doc.content_extracted.length > 2000
+            ? doc.content_extracted.substring(0, 2000) + '...'
+            : doc.content_extracted;
+          context += `Content (Image Description): ${content}\n`;
         } else if (doc.content_extracted) { // For text documents
           const content = doc.content_extracted.length > 2000
             ? doc.content_extracted.substring(0, 2000) + '...'
             : doc.content_extracted;
           context += `Content: ${content}\n`;
         } else {
-            if (doc.type === 'image' && doc.processing_status !== 'completed') {
-                context += `Content: Image processing ${doc.processing_status || 'pending'}. No extracted text yet.\n`;
-            } else if (doc.type === 'image' && doc.processing_status === 'completed' && !doc.content_extracted) {
-                context += `Content: Image analysis completed, but no text or detailed description was extracted.\n`;
-            } else {
-                context += `Content: No content extracted or available.\n`;
-            }
+          if (doc.type === 'image' && doc.processing_status !== 'completed') {
+            context += `Content: Image processing ${doc.processing_status || 'pending'}. No extracted text yet.\n`;
+          } else if (doc.type === 'image' && doc.processing_status === 'completed' && !doc.content_extracted) {
+            context += `Content: Image analysis completed, but no text or detailed description was extracted.\n`;
+          } else {
+            context += `Content: No content extracted or available.\n`;
+          }
         }
         context += '\n';
       });
@@ -482,7 +482,7 @@ const Index = () => {
         context += '\n';
       });
     }
-    console.log("Generated Context:", context);
+
     return context;
   }, []);
   // Refresh a single document and update state
@@ -531,38 +531,37 @@ const Index = () => {
     imageDataBase64?: string, // Base64 data for AI consumption
     aiMessageIdToUpdate: string | null = null, // For retry/regenerate
   ) => {
-    console.log('handleSubmit: Initiated with message:', messageContent, 'attached docs:', attachedDocumentIds, 'attached notes:', attachedNoteIds, 'imageUrl:', imageUrl ? 'present' : 'absent');
-    console.log('handleSubmit: Current isAILoading:', isAILoading, 'isSubmittingUserMessage:', isSubmittingUserMessage);
+
 
     if (!messageContent.trim() && (!attachedDocumentIds || attachedDocumentIds.length === 0) && (!attachedNoteIds || attachedNoteIds.length === 0) && !imageUrl || isAILoading || isSubmittingUserMessage) {
-      console.log('handleSubmit: Aborting due to empty message/no attachments/no image, AI loading, or already submitting.');
+      ('handleSubmit: Aborting due to empty message/no attachments/no image, AI loading, or already submitting.');
       return;
     }
 
     const trimmedMessage = messageContent.trim();
     setIsSubmittingUserMessage(true);
     setIsAILoading(true); // Start AI loading immediately
-    console.log('handleSubmit: setIsSubmittingUserMessage set to true, setIsAILoading set to true.');
+    ('handleSubmit: setIsSubmittingUserMessage set to true, setIsAILoading set to true.');
 
     let attachedImageDocumentId: string | undefined = undefined;
     let uploadedFilePath: string | undefined = undefined;
     let imageDescriptionForAI: string | undefined;
 
     try {
-      console.log('handleSubmit: Getting current user from Supabase auth...');
+      ('handleSubmit: Getting current user from Supabase auth...');
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         console.error('handleSubmit: No current user found after auth.getUser().');
         toast.error('You must be logged in to chat.');
         return;
       }
-      console.log('handleSubmit: Current user found:', currentUser.id);
+
 
       let currentSessionId = activeChatSessionId;
-      console.log('handleSubmit: Initial activeChatSessionId:', activeChatSessionId);
+
 
       if (!currentSessionId) {
-        console.log('handleSubmit: No active session, creating new one...');
+        ('handleSubmit: No active session, creating new one...');
         currentSessionId = await createNewChatSession();
         if (!currentSessionId) {
           console.error('handleSubmit: Failed to create chat session.');
@@ -570,7 +569,7 @@ const Index = () => {
           return;
         }
         toast.info('New chat session created.');
-        console.log('handleSubmit: New session ID after creation:', currentSessionId);
+
       }
 
       let finalAttachedDocumentIds = attachedDocumentIds || [];
@@ -580,25 +579,25 @@ const Index = () => {
       if (imageUrl && finalAttachedDocumentIds.length > 0) {
         const imageDoc = documents.find(d => d.type === 'image' && d.file_url === imageUrl);
         if (imageDoc) {
-            attachedImageDocumentId = imageDoc.id;
-            uploadedFilePath = imageDoc.file_url;
+          attachedImageDocumentId = imageDoc.id;
+          uploadedFilePath = imageDoc.file_url;
         }
 
         if (attachedImageDocumentId) {
-            console.log(`handleSubmit: Refreshing document with ID ${attachedImageDocumentId} to ensure latest content_extracted.`);
-            const refreshedDoc = await refreshUploadedDocument(attachedImageDocumentId);
-            if (refreshedDoc) {
-                imageDescriptionForAI = refreshedDoc.content_extracted;
-                console.log(`handleSubmit: Document ${attachedImageDocumentId} refreshed and state updated. Extracted content length: ${imageDescriptionForAI?.length || 0}`);
-            } else {
-                console.warn(`handleSubmit: Failed to refresh document ${attachedImageDocumentId}. AI might not get full image context.`);
-            }
+          (`handleSubmit: Refreshing document with ID ${attachedImageDocumentId} to ensure latest content_extracted.`);
+          const refreshedDoc = await refreshUploadedDocument(attachedImageDocumentId);
+          if (refreshedDoc) {
+            imageDescriptionForAI = refreshedDoc.content_extracted;
+            (`handleSubmit: Document ${attachedImageDocumentId} refreshed and state updated. Extracted content length: ${imageDescriptionForAI?.length || 0}`);
+          } else {
+            console.warn(`handleSubmit: Failed to refresh document ${attachedImageDocumentId}. AI might not get full image context.`);
+          }
         }
       }
 
       setSelectedDocumentIds(finalAttachedDocumentIds);
 
-      console.log('handleSubmit: Proceeding with session ID:', currentSessionId);
+
 
       // Prepare chat history for AI (only historical messages)
       // If aiMessageIdToUpdate is present, it means we are regenerating/retrying,
@@ -653,7 +652,7 @@ const Index = () => {
       }
 
 
-      console.log('handleSubmit: Invoking gemini-chat function...');
+      ('handleSubmit: Invoking gemini-chat function...');
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
           userId: currentUser.id,
@@ -687,7 +686,7 @@ const Index = () => {
         throw new Error('Empty response from AI service');
       }
 
-      console.log('handleSubmit: AI response received. Content length:', aiResponseContent.length);
+
 
       // The Edge Function has already saved both the user and assistant messages.
       // The real-time listener in useAppData will pick them up and update the state.
@@ -717,7 +716,7 @@ const Index = () => {
     } finally {
       setIsSubmittingUserMessage(false);
       setIsAILoading(false); // Ensure AI loading is stopped
-      console.log('handleSubmit: setIsSubmittingUserMessage set to false, setIsAILoading set to false.');
+      ('handleSubmit: setIsSubmittingUserMessage set to false, setIsAILoading set to false.');
     }
   }, [isAILoading, activeChatSessionId, createNewChatSession, isSubmittingUserMessage, documents, setSelectedDocumentIds, notes, refreshUploadedDocument, setDocuments, allChatMessages, userProfile, setChatSessions, setIsAILoading]);
 
@@ -1033,7 +1032,6 @@ const Index = () => {
     }
   }, [signOut, navigate]);
 
-  console.log('Index recordings state:', recordings); // Debug log
 
   if (loading || dataLoading) {
     return (

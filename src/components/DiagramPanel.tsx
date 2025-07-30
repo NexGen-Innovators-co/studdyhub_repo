@@ -113,11 +113,11 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
 
   useEffect(() => {
     if (canvasRef.current && codeContent) {
-      console.log("[Three.js Renderer] Attempting to render Three.js scene.");
+      ("[Three.js Renderer] Attempting to render Three.js scene.");
       if (threeJsCleanupRef.current) {
         threeJsCleanupRef.current();
         threeJsCleanupRef.current = null;
-        console.log("[Three.js Renderer] Cleaned up previous scene.");
+        ("[Three.js Renderer] Cleaned up previous scene.");
       }
 
       try {
@@ -136,11 +136,11 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
 
         // Finally, call the user's 'createThreeJSScene' function, passing all its expected arguments.
         const { scene, renderer, cleanup } = createScene(canvasRef.current, THREE, OrbitControls, GLTFLoader);
-        
+
         threeJsCleanupRef.current = cleanup;
         onInvalidCode(null); // Clear any previous error
         onSceneReady(scene, renderer, cleanup); // Pass scene, renderer, and cleanup to parent
-        console.log("[Three.js Renderer] Three.js scene rendered successfully.");
+        ("[Three.js Renderer] Three.js scene rendered successfully.");
       } catch (error: any) {
         console.error("Error rendering Three.js scene:", error);
         onInvalidCode(`Error rendering 3D scene: ${error.message}`);
@@ -162,7 +162,7 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
       if (threeJsCleanupRef.current) {
         threeJsCleanupRef.current();
         threeJsCleanupRef.current = null;
-        console.log("[Three.js Renderer] Cleanup: Three.js scene unmounted.");
+        ("[Three.js Renderer] Cleanup: Three.js scene unmounted.");
       }
     };
   }, [codeContent, canvasRef, onInvalidCode, onSceneReady]);
@@ -191,7 +191,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   const chartRef = useRef<HTMLCanvasElement>(null);
   // chartInstance is now managed within ChartRenderer
   const diagramContainerRef = useRef<HTMLDivElement>(null); // Ref for the main content area for PDF export
-  
+
   // Theme state
   const [currentTheme, setCurrentTheme] = useState<ThemeName>('github-light');
   const [showThemeSelector, setShowThemeSelector] = useState(false);
@@ -221,7 +221,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   const [dotSvg, setDotSvg] = useState<string | null>(null);
   const [dotError, setDotError] = useState<string | null>(null);
   const [isDotLoading, setIsDotLoading] = useState(false);
-  
+
   // Auto-detect system theme preference
   useEffect(() => {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -428,8 +428,8 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     }
     else if (diagramType === 'code' || diagramType === 'document-text') {
       if (!diagramContent) {
-          toast.error('No content available for code/document download.');
-          return;
+        toast.error('No content available for code/document download.');
+        return;
       }
       contentToDownload = diagramContent;
       fileExtension = language || 'txt';
@@ -585,16 +585,15 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             {Object.keys(themes).map((themeName) => (
               <button
                 key={themeName}
-                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                  currentTheme === themeName ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''
-                }`}
+                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${currentTheme === themeName ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''
+                  }`}
                 onClick={() => {
                   setCurrentTheme(themeName as ThemeName);
                   setShowThemeSelector(false);
                 }}
               >
                 <div className="flex items-center space-x-2">
-                  <div 
+                  <div
                     className="w-4 h-4 rounded border"
                     style={{ backgroundColor: themes[themeName as ThemeName].background }}
                   />
@@ -620,12 +619,12 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
     if (showRawCode) {
       return (
-        <div 
+        <div
           className="relative rounded-lg overflow-hidden h-full"
           style={{ backgroundColor: theme.background }}
         >
           <div className="p-4 overflow-x-auto h-full">
-            <pre 
+            <pre
               className="font-mono text-sm leading-relaxed h-full whitespace-pre-wrap"
               style={{ color: theme.foreground }}
             >
@@ -751,17 +750,17 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       downloadButtonText = 'Download Code';
       downloadFileName = `code.${language || 'txt'}`;
       return (
-        <div 
+        <div
           className="relative rounded-lg overflow-hidden h-full shadow-lg"
-          style={{ 
+          style={{
             backgroundColor: theme.background,
             border: `1px solid ${theme.border}`
           }}
         >
           {/* Header with language indicator and line numbers toggle */}
-          <div 
+          <div
             className="px-4 py-2 border-b text-sm font-medium flex items-center justify-between"
-            style={{ 
+            style={{
               backgroundColor: theme.background,
               borderColor: theme.border,
               color: theme.foreground
@@ -771,18 +770,18 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               <Code className="h-4 w-4" />
               <span>{language?.toUpperCase() || 'PLAINTEXT'}</span>
             </span>
-            <span 
+            <span
               className="text-xs opacity-75"
               style={{ color: theme.lineNumbers }}
             >
               {diagramContent?.split('\n').length || 0} lines
             </span>
           </div>
-          
+
           <div className="p-4 overflow-auto h-full">
             <div className="flex">
               {/* Line numbers */}
-              <div 
+              <div
                 className="select-none pr-4 text-right font-mono text-sm leading-relaxed"
                 style={{ color: theme.lineNumbers }}
               >
@@ -792,7 +791,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                   </div>
                 ))}
               </div>
-              
+
               {/* Code content */}
               <div className="flex-1 overflow-x-auto">
                 <pre className="font-mono text-sm leading-relaxed">
@@ -813,15 +812,15 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       downloadButtonText = 'Download Document';
       downloadFileName = `document.${language || 'txt'}`;
       return (
-        <div 
+        <div
           className="relative rounded-lg overflow-hidden h-full shadow-lg"
-          style={{ 
+          style={{
             backgroundColor: theme.background,
             border: `1px solid ${theme.border}`
           }}
         >
           <div className="p-6 overflow-auto h-full">
-            <pre 
+            <pre
               className="font-mono text-sm leading-relaxed h-full whitespace-pre-wrap"
               style={{ color: theme.foreground }}
             >
@@ -922,7 +921,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                 <Code className="h-4 w-4 mr-2" /> {showRawCode ? 'Hide Raw Code' : 'View Raw Code'}
               </Button>
             )}
-            
+
             <Button
               variant="outline"
               size="sm"
@@ -949,7 +948,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                 <span className="hidden sm:inline">Download GLTF</span>
               </Button>
             )}
-            
+
             {(!['code', 'image', 'unknown', 'document-text'].includes(diagramType)) && (
               <Button
                 variant="outline"
@@ -963,17 +962,17 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                 <span className="hidden sm:inline">Download PDF</span>
               </Button>
             )}
-            
+
             <Button variant="ghost" size="icon" onClick={onClose} title="Close Panel" className="flex-shrink-0 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200">
               <X className="h-5 w-5 text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200" />
             </Button>
           </div>
         </div>
-        
+
         <div ref={diagramContainerRef} className="flex-1 overflow-auto modern-scrollbar dark:bg-gray-900">
           {renderContent}
         </div>
-        
+
         <div
           className="absolute bottom-0 left-0 right-0 h-3 flex items-center justify-center cursor-ns-resize text-gray-500 hover:text-gray-300 z-50"
           onMouseDown={handleHeightResizeMouseDown}

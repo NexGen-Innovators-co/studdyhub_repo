@@ -25,7 +25,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
   const [dragActive, setDragActive] = useState(false);
   // processingDocuments now explicitly tracks documents for which analysis has been *triggered*
   // and we are awaiting a DB update (either initial trigger or retry).
-  const [processingDocuments, setProcessingDocuments] = useState<Set<string>>(new Set()); 
+  const [processingDocuments, setProcessingDocuments] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const formatFileSize = (bytes: number) => {
@@ -112,10 +112,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
 
     // Add document to the set of actively processing documents
     setProcessingDocuments(prev => new Set(prev).add(doc.id));
-    
+
     try {
       toast.info(`${doc.processing_status === 'failed' ? 'Retrying' : 'Starting'} analysis for "${doc.title}"...`);
-      
+
       // Optimistically update document status to pending locally if it's a retry from a 'failed' state.
       // For initial upload, the document is already inserted as 'pending' by handleUpload.
       if (doc.processing_status === 'failed') {
@@ -124,10 +124,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
 
       const isImage = doc.type === 'image';
       // Determine the correct Edge Function URL based on document type
-      const functionUrl = isImage 
-        ? 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/image-analyzer' 
+      const functionUrl = isImage
+        ? 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/image-analyzer'
         : 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/gemini-document-extractor';
-      
+
       // Construct the payload for the Edge Function
       const bodyPayload = isImage ? {
         documentId: doc.id,
@@ -157,53 +157,52 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
         },
         body: JSON.stringify(bodyPayload),
       })
-      .then(async response => {
-        // Handle response from the Edge Function call itself (not the processing result)
-        if (!response.ok) {
-          const errorBody = await response.json();
-          const errorMessage = `Analysis trigger failed: ${errorBody.error || 'Unknown server error'}`;
-          console.error('Edge function trigger response error:', errorMessage);
-          toast.error(errorMessage);
-          // Optimistically update local state to failed, this will be overwritten by DB if Edge Function also updates DB
-          onDocumentUpdated({ 
-            ...doc, 
-            processing_status: 'failed', 
-            processing_error: errorMessage 
+        .then(async response => {
+          // Handle response from the Edge Function call itself (not the processing result)
+          if (!response.ok) {
+            const errorBody = await response.json();
+            const errorMessage = `Analysis trigger failed: ${errorBody.error || 'Unknown server error'}`;
+            console.error('Edge function trigger response error:', errorMessage);
+            toast.error(errorMessage);
+            // Optimistically update local state to failed, this will be overwritten by DB if Edge Function also updates DB
+            onDocumentUpdated({
+              ...doc,
+              processing_status: 'failed',
+              processing_error: errorMessage
+            });
+          } else {
+
+          }
+        })
+        .catch(analysisError => {
+          // Handle network errors or unexpected errors during the fetch call
+          console.error('Network or unexpected error triggering analysis:', analysisError);
+          toast.error(`Failed to trigger analysis: ${analysisError.message}`);
+          onDocumentUpdated({
+            ...doc,
+            processing_status: 'failed',
+            processing_error: analysisError.message
           });
-        } else {
-          // Response indicates function was successfully called, not necessarily that processing completed
-          console.log('Edge function triggered successfully for document:', doc.id);
-        }
-      })
-      .catch(analysisError => {
-        // Handle network errors or unexpected errors during the fetch call
-        console.error('Network or unexpected error triggering analysis:', analysisError);
-        toast.error(`Failed to trigger analysis: ${analysisError.message}`);
-        onDocumentUpdated({ 
-          ...doc, 
-          processing_status: 'failed', 
-          processing_error: analysisError.message 
+        })
+        .finally(() => {
+          // Remove document from the set of actively processing documents once the trigger call finishes
+          setProcessingDocuments(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(doc.id);
+            return newSet;
+          });
         });
-      })
-      .finally(() => {
-        // Remove document from the set of actively processing documents once the trigger call finishes
-        setProcessingDocuments(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(doc.id);
-          return newSet;
-        });
-      });
-      
+
     } catch (analysisError: any) {
       // Catch errors that occur before the fetch call is even made (e.g., no user, no token)
       console.error('Error setting up analysis request:', analysisError);
       toast.error(`Failed to initiate analysis: ${analysisError.message}`);
-      
+
       // Update local state with error
-      onDocumentUpdated({ 
-        ...doc, 
-        processing_status: 'failed', 
-        processing_error: analysisError.message 
+      onDocumentUpdated({
+        ...doc,
+        processing_status: 'failed',
+        processing_error: analysisError.message
       });
       // Remove from processing set
       setProcessingDocuments(prev => {
@@ -287,7 +286,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       }
 
       newDocumentId = docData.id; // Store the actual ID from DB (should match tempDocId)
-      
+
       // *** IMPORTANT CHANGE: Removed direct call to onDocumentUploaded here. ***
       // The useAppData real-time listener will now handle adding this document to the state
       // once it's inserted into the database. This prevents UI duplicates.
@@ -315,7 +314,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     } catch (error: any) {
       console.error('Upload or document registration error:', error);
       toast.error(`Upload failed: ${error.message}`);
-      
+
       // Clean up on failure: if the initial document insert succeeded but something else failed,
       // attempt to remove the document from the database and local state.
       if (newDocumentId) {
@@ -326,7 +325,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
           console.error('Failed to clean up document from database:', cleanupError);
         }
       }
-      
+
       // Clean up storage file if it was uploaded
       if (uploadedFilePath) {
         try {

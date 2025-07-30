@@ -124,7 +124,7 @@ serve(async (req) => {
     // Process files with Gemini for content extraction
     for (const file of files) {
       if ((file.type === 'image' || file.type === 'pdf' || file.type === 'document') && file.data && file.processing_status === 'pending') {
-        console.log(`Attempting to extract content from ${file.name} using Gemini.`);
+        (`Attempting to extract content from ${file.name} using Gemini.`);
         try {
           const extractionPrompt = `Extract all readable text content from the provided document. Focus on the main body of text, ignoring headers, footers, page numbers, or any non-essential formatting unless explicitly part of the content. If the document contains structured data like tables, present it clearly. Return only the extracted text.`;
 
@@ -170,7 +170,7 @@ serve(async (req) => {
               file.content = extractedText;
               file.processing_status = 'completed';
               file.processing_error = null;
-              console.log(`Successfully extracted content from ${file.name}. Length: ${extractedText.length}`);
+              (`Successfully extracted content from ${file.name}. Length: ${extractedText.length}`);
             } else {
               file.processing_status = 'failed';
               file.processing_error = 'Gemini did not return extracted text.';

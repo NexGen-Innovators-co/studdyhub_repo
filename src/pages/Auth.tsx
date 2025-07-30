@@ -17,10 +17,29 @@ const Auth = () => {
   const [currentTab, setCurrentTab] = useState<'signin' | 'signup'>('signin');
   const navigate = useNavigate();
 
-  // Helper function for basic email validation
+  // Helper function for basic email format validation
   const isValidEmail = (email: string) => {
-    // Basic regex for email format validation
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  // Helper function to check if full_name already exists in profiles table
+  const checkFullNameExists = async (name: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('full_name', name)
+        .maybeSingle(); // Use maybeSingle to get null if no record found
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is fine
+        throw error;
+      }
+      return data !== null; // Returns true if data is found (name exists), false otherwise
+    } catch (error) {
+      console.error('Error checking full name existence:', error);
+      toast.error('An error occurred while checking username availability.');
+      return true; // Assume true to prevent sign-up on error
+    }
   };
 
   useEffect(() => {
@@ -37,11 +56,24 @@ const Auth = () => {
     e.preventDefault();
 
     if (!isValidEmail(email)) {
-      toast.error('Please enter a valid email address.');
+      toast.error('Please enter a valid email address format.');
+      return;
+    }
+
+    if (!fullName.trim()) {
+      toast.error('Please enter your full name.');
       return;
     }
 
     setIsLoading(true);
+
+    // Check if full_name already exists before attempting Supabase sign-up
+    const nameExists = await checkFullNameExists(fullName.trim());
+    if (nameExists) {
+      toast.error('This full name is already taken. Please choose a different one.');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const { error } = await supabase.auth.signUp({
@@ -50,7 +82,7 @@ const Auth = () => {
         options: {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
-            full_name: fullName,
+            full_name: fullName.trim(), // Ensure trimmed name is saved
           }
         }
       });
@@ -62,11 +94,10 @@ const Auth = () => {
           toast.error(error.message);
         }
       } else {
-        // Enhanced success message for user guidance
         toast.success('Account created! Please check your email for a confirmation link to activate your account.');
       }
     } catch (error) {
-      toast.error('An unexpected error occurred');
+      toast.error('An unexpected error occurred during sign-up.');
     } finally {
       setIsLoading(false);
     }
@@ -76,7 +107,7 @@ const Auth = () => {
     e.preventDefault();
 
     if (!isValidEmail(email)) {
-      toast.error('Please enter a valid email address.');
+      toast.error('Please enter a valid email address format.');
       return;
     }
 
@@ -99,7 +130,7 @@ const Auth = () => {
         navigate('/note', { replace: true });
       }
     } catch (error) {
-      toast.error('An unexpected error occurred');
+      toast.error('An unexpected error occurred during sign-in.');
     } finally {
       setIsLoading(false);
     }
@@ -268,10 +299,9 @@ const Auth = () => {
                           onChange={(e) => setEmail(e.target.value)}
                           className="pl-10 h-12 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 bg-gray-800 text-gray-100 dark:focus:border-blue-400"
                           required
-                          // Add onBlur to trigger validation when user leaves the field
                           onBlur={() => {
                             if (email && !isValidEmail(email)) {
-                              toast.error('Please enter a valid email address.');
+                              toast.error('Please enter a valid email address format.');
                             }
                           }}
                         />

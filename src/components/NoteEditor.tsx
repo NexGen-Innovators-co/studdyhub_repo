@@ -132,8 +132,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         // Only set a default if one isn't already selected or if the selected one is no longer available
         if (!selectedVoiceURI || !availableVoices.some(v => v.voiceURI === selectedVoiceURI)) {
           const defaultVoice = availableVoices.find(voice => voice.name.includes('Google') && voice.lang.startsWith('en')) ||
-                               availableVoices.find(voice => voice.lang.startsWith('en')) ||
-                               availableVoices[0];
+            availableVoices.find(voice => voice.lang.startsWith('en')) ||
+            availableVoices[0];
           if (defaultVoice) {
             setSelectedVoiceURI(defaultVoice.voiceURI);
           }
@@ -301,7 +301,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("handleFileSelect triggered!");
+    ("handleFileSelect triggered!");
     const file = event.target.files?.[0];
     if (!file || !userProfile) {
       if (!userProfile) toast.error("Cannot upload: User profile is missing.");
@@ -329,7 +329,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     try {
       const filePath = `${userProfile.id}/${Date.now()}_${file.name}`;
-      console.log('Uploading file to path:', filePath);
+      ('Uploading file to path:', filePath);
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(filePath, file);
@@ -342,7 +342,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (!urlData?.publicUrl) {
         throw new Error("Could not get public URL for the uploaded file.");
       }
-      console.log('Public URL generated:', urlData.publicUrl);
+      ('Public URL generated:', urlData.publicUrl);
       setUploadedDocumentPublicUrl(urlData.publicUrl);
 
       await handleDocumentProcessingAndNoteUpdate(file, urlData.publicUrl, file.type, toastId.toString());
@@ -382,7 +382,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       if (note.id && note.document_id) {
         documentRecordId = note.document_id;
-        console.log(`Updating existing document record with ID: ${documentRecordId}`);
+        (`Updating existing document record with ID: ${documentRecordId}`);
         const { error: updateDocError } = await supabase
           .from('documents')
           .update({
@@ -401,7 +401,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         if (updateDocError) throw new Error(updateDocError.message || 'Failed to update existing document record.');
 
       } else {
-        console.log('Creating new document record.');
+        ('Creating new document record.');
         const { data: newDocument, error: createDocError } = await supabase
           .from('documents')
           .insert({
@@ -421,7 +421,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
         if (createDocError || !newDocument) throw new Error(createDocError?.message || 'Failed to create new document record.');
         documentRecordId = newDocument.id;
-        console.log('New document record created with ID:', documentRecordId);
+        ('New document record created with ID:', documentRecordId);
 
         onNoteUpdate({ ...note, document_id: documentRecordId });
       }
@@ -506,10 +506,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     toast.loading('Generating AI note content...', { id: toastId });
 
     try {
-      console.log('generateAIContentForNote: Checking parameters before invoking Edge Function:');
-      console.log('  documentIdForGeneration:', documentIdForGeneration);
-      console.log('  user.id (from userProfile):', user?.id);
-      console.log('  selectedSection:', selectedSection);
+      ('generateAIContentForNote: Checking parameters before invoking Edge Function:');
+      ('  documentIdForGeneration:', documentIdForGeneration);
+      ('  user.id (from userProfile):', user?.id);
+      ('  selectedSection:', selectedSection);
 
       const requestBody = {
         documentId: documentIdForGeneration,
@@ -517,7 +517,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         selectedSection: selectedSection,
       };
 
-      console.log('generateAIContentForNote: Request body being sent to Edge Function:', JSON.stringify(requestBody, null, 2));
+      ('generateAIContentForNote: Request body being sent to Edge Function:', JSON.stringify(requestBody, null, 2));
 
       const { data: aiGeneratedNote, error: generationError } = await supabase.functions.invoke('generate-note-from-document', {
         body: requestBody,
@@ -685,8 +685,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     const textToRead = processMarkdownForSpeech(content);
     if (!textToRead) {
-        toast.info("The note has no readable content after processing.");
-        return;
+      toast.info("The note has no readable content after processing.");
+      return;
     }
 
     const utterance = new SpeechSynthesisUtterance(textToRead);
@@ -697,26 +697,26 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     // Try to find the previously selected voice first among current voices
     if (selectedVoiceURI) {
-        voiceToUse = currentAvailableVoices.find(v => v.voiceURI === selectedVoiceURI);
+      voiceToUse = currentAvailableVoices.find(v => v.voiceURI === selectedVoiceURI);
     }
 
     // If selected voice not found or not set, try to find a suitable default
     if (!voiceToUse && currentAvailableVoices.length > 0) {
-        voiceToUse = currentAvailableVoices.find(voice => voice.name.includes('Google') && voice.lang.startsWith('en')) ||
-                     currentAvailableVoices.find(voice => voice.lang.startsWith('en')) ||
-                     currentAvailableVoices[0];
-        if (voiceToUse) {
-            setSelectedVoiceURI(voiceToUse.voiceURI); // Update state with the fallback voice
-        }
+      voiceToUse = currentAvailableVoices.find(voice => voice.name.includes('Google') && voice.lang.startsWith('en')) ||
+        currentAvailableVoices.find(voice => voice.lang.startsWith('en')) ||
+        currentAvailableVoices[0];
+      if (voiceToUse) {
+        setSelectedVoiceURI(voiceToUse.voiceURI); // Update state with the fallback voice
+      }
     }
 
     if (voiceToUse) {
-        utterance.voice = voiceToUse;
+      utterance.voice = voiceToUse;
     } else {
-        // If no voice is found after all attempts, show error and prevent speaking
-        toast.error("No suitable text-to-speech voice found on your device. Please check your device settings.");
-        console.error("No suitable voice found for speech synthesis.");
-        return;
+      // If no voice is found after all attempts, show error and prevent speaking
+      toast.error("No suitable text-to-speech voice found on your device. Please check your device settings.");
+      console.error("No suitable voice found for speech synthesis.");
+      return;
     }
 
     utterance.onstart = () => setIsSpeaking(true);
@@ -736,11 +736,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     };
 
     try {
-        speechSynthesis.speak(utterance);
+      speechSynthesis.speak(utterance);
     } catch (error) {
-        console.error("Error calling speechSynthesis.speak:", error);
-        toast.error("Failed to start reading. Your browser might have restrictions.");
-        setIsSpeaking(false);
+      console.error("Error calling speechSynthesis.speak:", error);
+      toast.error("Failed to start reading. Your browser might have restrictions.");
+      setIsSpeaking(false);
     }
   };
 
@@ -754,7 +754,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const toastId = toast.loading('Loading original document...');
 
     try {
-      console.log('Attempting to fetch document with ID:', note.document_id);
+      ('Attempting to fetch document with ID:', note.document_id);
       const { data, error } = await supabase
         .from('documents')
         .select('content_extracted, file_url, file_type')
@@ -764,7 +764,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (error) throw new Error(error.message);
       if (!data) throw new Error('Document not found.');
 
-      console.log('Fetched document URL:', data.file_url);
+      ('Fetched document URL:', data.file_url);
       setOriginalDocumentContent(data.content_extracted);
       setOriginalDocumentFileType(data.file_type);
       setOriginalDocumentFileUrl(data.file_url);
@@ -857,7 +857,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleAudioFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("handleAudioFileSelect triggered!");
+    ("handleAudioFileSelect triggered!");
     toast.info("Audio file selected, starting upload...");
     const file = event.target.files?.[0];
     if (!file || !userProfile) {
@@ -878,7 +878,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const filePath = `${userProfile.id}/audio/${Date.now()}_${safeFileName}`;
-      console.log('Uploading audio file to path:', filePath);
+      ('Uploading audio file to path:', filePath);
 
       const { error: uploadError } = await supabase.storage
         .from('documents')

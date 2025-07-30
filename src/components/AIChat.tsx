@@ -1032,7 +1032,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
                   <FileText className="h-5 w-5" />
                 </Button>
                 {/* Image Generation Button */}
-                <Button
+                {/* <Button
                   type="button"
                   variant="ghost"
                   size="icon"
@@ -1042,7 +1042,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
                   disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || !inputMessage.trim()}
                 >
                   <Sparkles className="h-5 w-5" />
-                </Button>
+                </Button> */}
                 <Button
                   type="submit"
                   disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || (!inputMessage.trim() && !selectedImageFile)}
