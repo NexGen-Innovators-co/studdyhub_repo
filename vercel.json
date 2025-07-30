@@ -39,6 +39,10 @@
   ],
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
       "source": "/privacy-policy",
       "destination": "/privacy-policy"
     },
