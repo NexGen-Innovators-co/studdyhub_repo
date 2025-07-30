@@ -1,6 +1,6 @@
 // src/components/AIChat.tsx
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
-import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp, Image, Upload, XCircle, BookOpen, StickyNote, Sparkles, GripVertical } from 'lucide-react';
+import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp, Image, Upload, XCircle, BookOpen, StickyNote, Sparkles, GripVertical, Camera } from 'lucide-react'; // Added Camera icon
 import { Button } from './ui/button';
 import { Input } from './ui/input'; // Keep Input for other uses if any, but will replace for message input
 import { Card, CardContent } from './ui/card';
@@ -10,265 +10,17 @@ import { Note } from '../types/Note';
 import { supabase } from '@/integrations/supabase/client';
 import { DocumentSelector } from './DocumentSelector';
 import { toast } from 'sonner';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
-import { Element } from 'hast';
-import { Chart, registerables } from 'chart.js'; // Keep Chart and registerables for global registration if needed elsewhere
 
 // Import the new DiagramPanel component
 import { DiagramPanel } from './DiagramPanel'; // <--- NEW IMPORT
 
+// NEW: Import MemoizedMarkdownRenderer from the new file
+// Removed CodeBlockErrorBoundary from this import as it's used internally by MarkdownRenderer
+import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
+
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { generateId } from '@/utils/helpers';
 
-// Declare global types for libraries loaded via CDN
-declare global {
-  interface Window {
-    jspdf: any; // jsPDF library
-    html2canvas: any; // html2canvas library
-  }
-}
-
-// Load Chart.js components (still needed here for global registration)
-Chart.register(...registerables);
-
-// Error Boundary for Code Blocks
-export class CodeBlockErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback?: React.ReactNode },
-  { hasError: boolean; error?: Error }
-> {
-  constructor(props: { children: React.ReactNode; fallback?: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('CodeBlock error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback || (
-        <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950 dark:border-red-800">
-          <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm font-medium">Rendering Error</span>
-          </div>
-          <p className="text-sm text-red-600 mt-1 dark:text-red-400">
-            Failed to render this content. Please try refreshing or contact support if the issue persists.
-          </p>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-const CodeBlock = memo(({ node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, ...props }: any) => {
-  const { copied, copy } = useCopyToClipboard();
-  const match = /language-(\w+)/.exec(className || '');
-  const lang = match && match[1];
-  const codeContent = String(children).trim();
-  const [showRawCode, setShowRawCode] = useState(false);
-
-  // If it's a raw code block (not mermaid, chartjs, or dot), show a "View Code" button
-  if (!inline && lang && !['mermaid', 'chartjs', 'dot'].includes(lang)) {
-    return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center gap-2 text-sm md:text-base text-slate-700 dark:text-gray-200"> {/* Adjusted font size */}
-          <FileText className="h-4 w-4" />
-          <span className="text-sm md:text-base font-medium">{lang.toUpperCase()} Code</span> {/* Adjusted font size */}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)} // Pass 'code' type and language
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Code
-        </Button>
-      </div>
-    );
-  }
-
-  if (showRawCode) {
-    return (
-      <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-          <span className="text-xs md:text-sm font-medium text-gray-600 uppercase tracking-wide dark:text-gray-300"> {/* Adjusted font size */}
-            Raw Code ({lang})
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowRawCode(false)}
-            className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
-            title="Attempt rendering"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="p-4 bg-white overflow-x-auto dark:bg-gray-900">
-          <pre className="font-mono text-sm md:text-base leading-relaxed"> {/* Adjusted font size */}
-            <code className="text-gray-800 dark:text-gray-200">{codeContent}</code>
-          </pre>
-        </div>
-      </div>
-    );
-  }
-
-  if (!inline && lang === 'mermaid') {
-    // Render a button to view the diagram in the side panel
-    return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center gap-2 text-sm md:text-base text-slate-700 dark:text-gray-200"> {/* Adjusted font size */}
-          <FileText className="h-4 w-4" />
-          <span className="text-sm md:text-base font-medium">Mermaid Diagram</span> {/* Adjusted font size */}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram('mermaid', codeContent)}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Diagram
-        </Button>
-      </div>
-    );
-  }
-
-  if (!inline && lang === 'chartjs') {
-    // Modified to show a button instead of direct rendering
-    return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center gap-2 text-sm md:text-base text-slate-700 dark:text-gray-200"> {/* Adjusted font size */}
-          <FileText className="h-4 w-4" />
-          <span className="text-sm md:text-base font-medium">Chart.js Graph</span> {/* Adjusted font size */}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram('chartjs', codeContent)}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Full Chart
-        </Button>
-      </div>
-    );
-  }
-
-  if (!inline && lang === 'dot') {
-    // Render a button to view the diagram in the side panel for DOT graphs
-    return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center gap-2 text-sm md:text-base text-slate-700 dark:text-gray-200"> {/* Adjusted font size */}
-          <FileText className="h-4 w-4" />
-          <span className="text-sm md:text-base font-medium">DOT Graph</span> {/* Adjusted font size */}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram('dot', codeContent)}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Diagram
-        </Button>
-      </div>
-    );
-  }
-
-  // Fallback for inline code or unhandled languages
-  return (
-    <code className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md font-mono text-sm md:text-base border border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700" {...props}> {/* Adjusted font size */}
-      {children}
-    </code>
-  );
-});
-
-// Memoize MarkdownRenderer to prevent unnecessary re-renders
-const MemoizedMarkdownRenderer: React.FC<{
-  content: string;
-  isUserMessage?: boolean;
-  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
-  onSuggestAiCorrection: (prompt: string) => void;
-  onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text', content?: string, language?: string, imageUrl?: string) => void; // Added 'document-text'
-  onToggleUserMessageExpansion: (messageId: string) => void;
-  expandedMessages: Set<string>;
-}> = memo(({ content, isUserMessage, onMermaidError, onSuggestAiCorrection, onViewDiagram, onToggleUserMessageExpansion, expandedMessages }) => {
-  const textColorClass = isUserMessage ? 'text-white dark:text-gray-100' : 'text-slate-700 dark:text-gray-300';
-  const linkColorClass = isUserMessage ? 'text-blue-200 hover:underline dark:text-blue-400' : 'text-blue-600 hover:underline dark:text-blue-400';
-  const listTextColorClass = isUserMessage ? 'text-white dark:text-gray-100' : 'text-slate-700 dark:text-gray-300';
-  const blockquoteTextColorClass = isUserMessage ? 'text-blue-100 dark:text-blue-300' : 'text-slate-600 dark:text-gray-300';
-  const blockquoteBgClass = isUserMessage ? 'bg-blue-700 border-blue-400 dark:bg-blue-900 dark:border-blue-600' : 'bg-blue-50 border-blue-500 dark:bg-blue-950 dark:border-blue-700';
-  const MAX_USER_MESSAGE_LENGTH = 200; // Define a threshold for collapsing
-  const isExpanded = expandedMessages.has(content); // Use content as key for now, ideally message.id
-  const needsExpansion = isUserMessage && content.length > MAX_USER_MESSAGE_LENGTH;
-  const displayedContent = needsExpansion && !isExpanded ? content.substring(0, MAX_USER_MESSAGE_LENGTH) + '...' : content;
-
-  return (
-    <CodeBlockErrorBoundary>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw]}
-        components={{
-          code: (props) => <CodeBlock {...props} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} onViewDiagram={onViewDiagram} />,
-          h1: ({ node, ...props }) => <h1 className={`text-2xl md:text-3xl font-extrabold ${isUserMessage ? 'text-white dark:text-gray-100' : 'text-blue-700 dark:text-blue-400'} mt-4 mb-2`} {...props} />, 
-          h2: ({ node, ...props }) => <h2 className={`text-xl md:text-2xl font-bold ${isUserMessage ? 'text-white dark:text-gray-100' : 'text-purple-700 dark:text-purple-400'} mt-3 mb-2`} {...props} />, 
-          h3: ({ node, ...props }) => <h3 className={`text-lg md:text-xl font-semibold ${isUserMessage ? 'text-white dark:text-gray-100' : 'text-green-700 dark:text-green-400'} mt-2 mb-1`} {...props} />,
-          h4: ({ node, ...props }) => <h4 className={`text-base md:text-lg font-semibold ${isUserMessage ? 'text-white dark:text-gray-100' : 'text-orange-700 dark:text-orange-400'} mt-1 mb-1`} {...props} />, 
-          p: ({ node, ...props }) => <p className={`mb-2 ${textColorClass} leading-relaxed prose-sm md:prose-base lg:prose-lg`} {...props} />,
-          a: ({ node, ...props }) => <a className={`${linkColorClass} font-medium`} {...props} />,
-          ul: ({ node, ...props }) => <ul className={`list-disc list-inside space-y-1 ${listTextColorClass} mb-2 md:text-base`} {...props} />, 
-          ol: ({ node, ...props }) => <ol className={`list-decimal list-inside space-y-1 ${listTextColorClass} mb-2 md:text-base`} {...props} />, 
-          li: ({ node, ...props }) => <li className="mb-1" {...props} />,
-          blockquote: ({ node, ...props }) => <blockquote className={`border-l-4 ${blockquoteBgClass} pl-4 py-2 italic ${blockquoteTextColorClass} rounded-r-md my-3`} {...props} />,
-          table: ({ node, ...props }) => (
-            // Ensure the table container takes full width and allows horizontal scrolling
-            <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200 w-full dark:border-gray-700">
-              <table className="w-full border-collapse" {...props} />
-            </div>
-          ),
-          thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900" {...props} />,
-          th: ({ node, ...props }) => (
-            <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-700 md:text-base" {...props} />
-          ),
-          td: ({ node, ...props }) => (
-            <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors dark:border-gray-700 dark:even:bg-gray-800 dark:hover:bg-blue-950 dark:text-gray-300 md:text-base" {...props} /> 
-          ),
-        }}
-      >
-        {displayedContent}
-      </ReactMarkdown>
-      {needsExpansion && (
-        <Button variant="link" size="sm" onClick={() => onToggleUserMessageExpansion(content)} // Pass content or message.id
-          className="text-white text-xs md:text-sm p-0 h-auto mt-1 flex items-center justify-end" 
-        >
-          {isExpanded ? (
-            <>
-              Show Less
-              <ChevronUp className="h-3 w-3 ml-1" />
-            </>
-          ) : (
-            <>
-              Show More
-              <ChevronDown className="h-3 w-3 ml-1" />
-            </>
-          )}
-        </Button>
-      )}
-    </CodeBlockErrorBoundary>
-  );
-});
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -281,16 +33,16 @@ interface ConfirmationModalProps {
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 font-sans">
       <Card className="bg-white rounded-lg shadow-xl max-w-sm w-full dark:bg-gray-800">
         <CardContent className="p-6">
-          <h3 className="text-lg md:text-xl font-semibold text-slate-800 mb-3 dark:text-gray-100">{title}</h3> {/* Adjusted font size */}
-          <p className="text-slate-600 md:text-base mb-6 dark:text-gray-300">{message}</p> {/* Adjusted font size */}
+          <h3 className="text-lg md:text-xl font-semibold text-slate-800 mb-3 dark:text-gray-100">{title}</h3>
+          <p className="text-slate-600 text-base md:text-lg mb-6 dark:text-gray-300">{message}</p>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose} className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700">
+            <Button variant="outline" onClick={onClose} className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700 font-sans">
               Cancel
             </Button>
-            <Button onClick={onConfirm} className="bg-red-600 text-white shadow-md hover:bg-red-700">
+            <Button onClick={onConfirm} className="bg-red-600 text-white shadow-md hover:bg-red-700 font-sans">
               Delete
             </Button>
           </div>
@@ -325,7 +77,6 @@ export interface Message {
 }
 
 interface AIChatProps {
-  // REMOVED: onSendMessage as the component will now handle sending directly
   messages: Message[];
   isLoading: boolean;
   setIsLoading: (isLoading: boolean) => void;
@@ -352,6 +103,15 @@ interface AIChatProps {
   // NEW PROPS for learning style and preferences required by the Edge Function
   learningStyle: string;
   learningPreferences: any; // Use a more specific type if known
+  // Add a prop for the actual send message function from Index.tsx
+  onSendMessageToBackend: (
+    messageContent: string,
+    attachedDocumentIds?: string[],
+    attachedNoteIds?: string[],
+    imageUrl?: string,
+    imageMimeType?: string,
+    imageDataBase64?: string
+  ) => Promise<void>;
 }
 
 const AIChat: React.FC<AIChatProps> = ({
@@ -376,6 +136,7 @@ const AIChat: React.FC<AIChatProps> = ({
   isLoadingSessionMessages, // NEW: Destructure new prop
   learningStyle, // NEW: Destructure new prop
   learningPreferences, // NEW: Destructure new prop
+  onSendMessageToBackend, // Destructure the new prop
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -387,21 +148,18 @@ const AIChat: React.FC<AIChatProps> = ({
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set()); // State to track expanded messages
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false); // State for scroll button visibility
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false); // New state for older message loading
-  // const [isSessionLoading, setIsSessionLoading] = useState(false); // REMOVED: Local state for session loading
   // Image upload states (for UI preview only, not directly sent to AI anymore)
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null); // State for the side-out diagram/image panel
-  const [activeDiagram, setActiveDiagram] = useState<{ content?: string; type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text'; language?: string; imageUrl?: string } | null>(null); // Added imageUrl property
+  const imageInputRef = useRef<HTMLInputElement>(null); // Ref for file input (for both upload and camera)
+  const cameraInputRef = useRef<HTMLInputElement>(null); // Ref for camera input
+  const [activeDiagram, setActiveDiagram] = useState<{ content?: string; type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs'; language?: string; imageUrl?: string } | null>(null); // Added imageUrl property
   const isDiagramPanelOpen = !!activeDiagram; // Derived state
   // State for image generation
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState(''); // Local state to merge documents from prop and newly uploaded/updated documents
   const [mergedDocuments, setMergedDocuments] = useState<Document[]>(documents);
-  
-  // Define the URL for your Deno Edge Function
-  const EDGE_FUNCTION_URL = "https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/gemini-chat"; // <<< IMPORTANT: Replace with your actual Edge Function URL
 
   // Sync mergedDocuments with the prop whenever the prop changes (e.g., parent fetches new data)
   useEffect(() => {
@@ -499,21 +257,13 @@ const AIChat: React.FC<AIChatProps> = ({
 
 
   const handleDeleteClick = (messageId: string) => {
-    // Re-added setters for ConfirmationModal
-    // setMessageToDelete(messageId);
-    // setShowDeleteConfirm(true);
-    // For now, directly delete without modal to avoid circular dependency/complexity
     onDeleteMessage(messageId);
     toast.success('Message deleted.');
   };
 
   const handleConfirmDelete = () => {
-    // This function is still here but not directly called from handleDeleteClick anymore
-    // It would be used if ConfirmationModal was fully integrated.
     if (messageToDelete) {
       onDeleteMessage(messageToDelete);
-      // setMessageToDelete(null);
-      // setShowDeleteConfirm(false);
     }
   };
 
@@ -529,13 +279,13 @@ const AIChat: React.FC<AIChatProps> = ({
     toast.info(`Mermaid diagram encountered a ${errorType} error. Click 'AI Fix' to get help.`);
   }, []); // Memoize this callback
 
-  const handleSuggestMermaidAiCorrection = useCallback((prompt: string) => {
+  const handleSuggestAiCorrection = useCallback((prompt: string) => {
     setInputMessage(prompt);
     textareaRef.current?.focus();
   }, []);
 
   // New callback to handle viewing a diagram, code, or image in the side panel
-  const handleViewContent = useCallback((type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text', content?: string, language?: string, imageUrl?: string) => {
+  const handleViewContent = useCallback((type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs', content?: string, language?: string, imageUrl?: string) => {
     setActiveDiagram({ content, type, language, imageUrl });
   }, []);
 
@@ -626,179 +376,53 @@ const AIChat: React.FC<AIChatProps> = ({
     if (imageInputRef.current) {
       imageInputRef.current.value = ''; // Clear file input
     }
+    if (cameraInputRef.current) { // Clear camera input as well
+      cameraInputRef.current.value = '';
+    }
   };
-
-  // NEW: handleSendMessage function to directly call the Deno Edge Function
-  // Key fixes for the handleSendMessage function in AIChat.tsx
-
-// Replace the existing handleSendMessage function with this improved version:
-// Replace the handleSendMessage function in your AIChat.tsx with this version that includes authentication:
 
 const handleSendMessage = async (e: React.FormEvent) => {
   e.preventDefault();
   if (!inputMessage.trim() && !selectedImageFile) return;
 
   setIsLoading(true);
-  
+
   try {
     const userId = userProfile?.id;
-    const sessionId = activeChatSessionId;
 
-    if (!userId || !sessionId) {
-      toast.error("User ID or Session ID is missing. Please ensure you are logged in and a chat session is active.");
+    if (!userId) {
+      toast.error("User ID is missing. Please ensure you are logged in.");
       setIsLoading(false);
       return;
     }
 
-    // Get the current session for authentication
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError || !session) {
-      toast.error("Authentication failed. Please log in again.");
-      setIsLoading(false);
-      return;
-    }
+    await onSendMessageToBackend(
+      inputMessage.trim(),
+      selectedDocumentIds,
+      [],
+      selectedImagePreview || undefined,
+      selectedImageFile?.type || undefined,
+      selectedImagePreview || undefined
+    );
 
-    // Create FormData for multipart request
-    const formData = new FormData();
-    formData.append('userId', userId);
-    formData.append('sessionId', sessionId);
-    formData.append('learningStyle', learningStyle || 'balanced');
-    formData.append('learningPreferences', JSON.stringify(learningPreferences || {}));
-    
-    // Convert current chat history to the format expected by the Deno function
-    const chatHistoryForEdge = messages.map(msg => {
-      if (msg.role === 'user') {
-        // Define the correct type for message parts
-        const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
-        
-        // Add text content
-        if (msg.content) {
-          parts.push({ text: msg.content });
-        }
-        
-        // Add image data if present in the message
-        if (msg.imageUrl && msg.imageMimeType) {
-          try {
-            // Extract base64 data from data URL
-            const base64Data = msg.imageUrl.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
-            parts.push({
-              inlineData: {
-                mimeType: msg.imageMimeType,
-                data: base64Data
-              }
-            });
-          } catch (error) {
-            console.warn('Failed to process image from message history:', error);
-          }
-        }
-        
-        return { role: 'user', parts };
-      } else {
-        return { role: 'model', parts: [{ text: msg.content }] };
-      }
-    });
-    
-    formData.append('chatHistory', JSON.stringify(chatHistoryForEdge));
-    formData.append('message', inputMessage.trim());
-
-    // Add image file if selected
-    if (selectedImageFile) {
-      formData.append('file', selectedImageFile);
-    }
-
-    console.log('Sending request to:', EDGE_FUNCTION_URL);
-    console.log('FormData contents:', {
-      userId,
-      sessionId,
-      learningStyle: learningStyle || 'balanced',
-      hasFile: !!selectedImageFile,
-      messageLength: inputMessage.trim().length,
-      historyLength: chatHistoryForEdge.length
-    });
-
-    // Include authorization header with the session token
-    const response = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        // Don't set Content-Type header - let browser set it for FormData
-      },
-      body: formData,
-    });
-
-    console.log('Response status:', response.status);
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-    if (!response.ok) {
-      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-      
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorData.message || errorMessage;
-        console.error('Edge Function error response:', errorData);
-      } catch (parseError) {
-        // If we can't parse the error as JSON, try to get it as text
-        try {
-          const errorText = await response.text();
-          console.error('Edge Function error (text):', errorText);
-          if (errorText) {
-            errorMessage = errorText;
-          }
-        } catch (textError) {
-          console.error('Failed to read error response:', textError);
-        }
-      }
-      
-      throw new Error(errorMessage);
-    }
-
-    const data = await response.json();
-    console.log('Success response:', data);
-
-    if (!data.response) {
-      throw new Error('No response content received from Edge Function');
-    }
-
-    const aiResponseContent = data.response;
-
-    // Create user message
-    const newUserMessage: Message = {
-      id: generateId(),
-      content: inputMessage.trim(),
-      role: 'user',
-      timestamp: new Date().toISOString(),
-      imageUrl: selectedImagePreview || undefined,
-      imageMimeType: selectedImageFile?.type || undefined,
-      attachedDocumentIds: selectedDocumentIds.length > 0 ? [...selectedDocumentIds] : undefined,
-    };
-    onNewMessage(newUserMessage);
-
-    // Create AI response message
-    const newAiMessage: Message = {
-      id: generateId(),
-      content: aiResponseContent,
-      role: 'assistant',
-      timestamp: new Date().toISOString(),
-    };
-    onNewMessage(newAiMessage);
-
-    // Clear input and selections
     setInputMessage('');
     setSelectedImageFile(null);
     setSelectedImagePreview(null);
     if (imageInputRef.current) {
       imageInputRef.current.value = '';
     }
+    if (cameraInputRef.current) { // Clear camera input as well
+      cameraInputRef.current.value = '';
+    }
+    onSelectionChange([]);
 
     toast.success("Message sent successfully!");
 
   } catch (error: any) {
-    console.error("Error sending message to Edge Function:", error);
-    
-    // Provide more specific error messages
+    console.error("Error sending message:", error);
+
     let errorMessage = 'Failed to send message.';
-    
+
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       errorMessage = 'Network error: Unable to connect to the server. Please check your internet connection.';
     } else if (error.message.includes('401')) {
@@ -810,19 +434,9 @@ const handleSendMessage = async (e: React.FormEvent) => {
     } else if (error.message) {
       errorMessage = error.message;
     }
-    
+
     toast.error(`Error: ${errorMessage}`);
-    
-    // Add error message to chat for user visibility
-    const errorMessage_chat: Message = {
-      id: generateId(),
-      content: `Failed to send message: ${errorMessage}`,
-      role: 'assistant',
-      timestamp: new Date().toISOString(),
-      isError: true,
-    };
-    onNewMessage(errorMessage_chat);
-    
+
   } finally {
     setIsLoading(false);
   }
@@ -851,6 +465,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
       const result = await response.json();
 
       if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+        // Corrected base66 to base64 here
         const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
         setGeneratedImageUrl(imageUrl);
         toast.success('Image generated successfully!', { id: 'image-gen' });
@@ -932,12 +547,13 @@ const handleSendMessage = async (e: React.FormEvent) => {
       }
       handleRemoveImage(); // Clear selected image and its preview
       setInputMessage(''); // Clear input message
+      handleCloseDiagramPanel(); // NEW: Close diagram panel when session changes
     }
-  }, [activeChatSessionId, onSelectionChange]); // Depend on activeChatSessionId and onSelectionChange
+  }, [activeChatSessionId, onSelectionChange, handleCloseDiagramPanel]);
 
 
   return (
-    <CodeBlockErrorBoundary>
+    <>
       {/* Custom scrollbar styles */}
       <style>
         {`
@@ -983,35 +599,35 @@ const handleSendMessage = async (e: React.FormEvent) => {
           }
         `}
       </style>
-      <div className="flex flex-col h-full border-none relative bg-transparent justify-center overflow-hidden md:flex-row md:p-6 md:gap-6"> {/* Added md:gap-6 here */}
+      {/* Main container for chat and diagram panel */}
+      <div className="flex flex-col h-full border-none relative justify-center overflow-hidden md:flex-row md:gap-6 font-sans">
         {/* Main Chat Area */}
-        <div className={`
-          flex-1 flex flex-col h-full bg-white rounded-lg  transition-all duration-300 ease-in-out
-          ${isDiagramPanelOpen ? 'md:w-[calc(100%-300px-1.5rem)]' : 'w-full'}
+        <div className={`relative flex flex-col h-full rounded-lg transition-all duration-300 ease-in-out
+          ${isDiagramPanelOpen ? 'md:w-[35%] flex-shrink-0' : 'w-full flex-1'}
           dark:bg-gray-900
         `}>
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col modern-scrollbar pb-32 md:pb-6">
             {(displayMessages ?? []).length === 0 && (activeChatSessionId === null) && (
               <div className="text-center py-8 text-slate-400 flex-grow flex flex-col justify-center items-center dark:text-gray-500">
                 <Bot className="h-12 w-12 mx-auto text-slate-300 mb-4 dark:text-gray-600" />
-                <h3 className="text-lg md:text-xl font-medium text-slate-700 mb-2 dark:text-gray-200">Welcome to your AI Study Assistant!</h3> {/* Adjusted font size */}
-                <p className="text-sm md:text-base text-slate-500 max-w-md mx-auto dark:text-gray-400"> {/* Adjusted font size */}
+                <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200">Welcome to your AI Study Assistant!</h3>
+                <p className="text-base md:text-lg text-slate-500 max-w-md mx-auto dark:text-gray-400">
                   I can help you with questions about your notes, create study guides, explain concepts,
                   and assist with your academic work. Select some documents and start chatting!
                 </p>
               </div>
             )}
             {/* NEW: Session Loading Indicator */}
-            {isLoadingSessionMessages && ( // Use the new prop
+            {isLoadingSessionMessages && (
               <div className="flex gap-3 justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                <span className="text-slate-500 md:text-base dark:text-gray-400">Loading session...</span>
+                <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading session...</span>
               </div>
             )}
-            {activeChatSessionId !== null && messages.length === 0 && !isLoadingSessionMessages && isLoading && ( // Use the new prop
+            {activeChatSessionId !== null && messages.length === 0 && !isLoadingSessionMessages && isLoading && (
               <div className="flex gap-3 justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                <span className="text-slate-500 md:text-base dark:text-gray-400">Loading messages...</span> {/* Adjusted font size */}
+                <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading messages...</span>
               </div>
             )}
 
@@ -1019,23 +635,20 @@ const handleSendMessage = async (e: React.FormEvent) => {
             {isLoadingOlderMessages && (
               <div className="flex justify-center py-2">
                 <Loader2 className="h-5 w-5 animate-spin text-blue-500 mr-2" />
-                <span className="text-slate-500 md:text-base dark:text-gray-400">Loading older messages...</span> {/* Adjusted font size */}
+                <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading older messages...</span>
               </div>
             )}
 
-            {!isLoadingSessionMessages && (displayMessages ?? []).map((message, index) => { // Only render messages if not session loading
-              const messageDate = formatDate(message.timestamp); // Use message.timestamp
+            {!isLoadingSessionMessages && (displayMessages ?? []).map((message, index) => {
+              const messageDate = formatDate(message.timestamp);
               const showDateHeader = messageDate !== lastDate;
-              lastDate = messageDate; // Update lastDate for the next iteration
+              lastDate = messageDate;
 
               let cardClasses = '';
               let contentToRender;
               const isLastMessage = index === displayMessages.length - 1;
 
               if (message.role === 'user') {
-                // Updated user message card classes for dark mode
-                // Restyled user message with a more vibrant gradient, deeper shadow, and rounded corners
-                // Changed to a more subtle, yet distinct, gradient for user messages
                 cardClasses = 'bg-white text00 shadow-md rounded-xl border border-slate-200 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600';
                 const isExpanded = expandedMessages.has(message.content);
                 const needsExpansion = message.content.length > MAX_USER_MESSAGE_LENGTH;
@@ -1058,7 +671,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
                         />
                       </div>
                     )}
-                    <p className="mb-2 text-slate-800 md:text-base dark:text-gray-100 leading-relaxed whitespace-pre-wrap"> {/* Adjusted font size */}
+                    <p className="mb-2 text-base md:text-lg text-slate-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap font-sans">
                       {displayedContent}
                     </p>
                     {needsExpansion && (
@@ -1066,7 +679,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
                         variant="link"
                         size="sm"
                         onClick={() => handleToggleUserMessageExpansion(message.content)}
-                        className="text-blue-600 text-xs md:text-sm p-0 h-auto mt-1 flex items-center justify-end dark:text-blue-400" 
+                        className="text-blue-600 text-base md:text-base p-0 h-auto mt-1 flex items-center justify-end dark:text-blue-400 font-sans"
                       >
                         {isExpanded ? (
                           <>
@@ -1084,17 +697,17 @@ const handleSendMessage = async (e: React.FormEvent) => {
                       <div className="flex flex-wrap gap-1 mt-2 justify-end">
                         {/* Image indicator for historical images that were part of the message */}
                         {message.imageUrl && ( // Only show if an image was part of this specific message
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700 flex items-center gap-1 text-xs md:text-sm"> {/* Adjusted font size */}
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700 flex items-center gap-1 text-base md:text-base font-sans">
                             <Image className="h-3 w-3" /> Image
                           </Badge>
                         )}
                         {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
-                          <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900 dark:text-purple-300 dark:border-purple-700 text-xs md:text-sm"> {/* Adjusted font size */}
+                          <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900 dark:text-purple-300 dark:border-purple-700 text-base md:text-base font-sans">
                             <BookOpen className="h-3 w-3 mr-1" /> {message.attachedDocumentIds.length} Docs
                           </Badge>
                         )}
                         {message.attachedNoteIds && message.attachedNoteIds.length > 0 && (
-                          <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-300 dark:border-green-700 text-xs md:text-sm"> {/* Adjusted font size */}
+                          <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-300 dark:border-green-700 text-base md:text-base font-sans">
                             <StickyNote className="h-3 w-3 mr-1" /> {message.attachedNoteIds.length} Notes
                           </Badge>
                         )}
@@ -1105,7 +718,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
               } else { // message.role === 'assistant'
                 if (message.isError) {
                   cardClasses = ' text-red-800 dark:text-red-300';
-                  contentToRender = <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewContent} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
+                  contentToRender = <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestAiCorrection} onViewDiagram={handleViewContent} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
                 } else {
                   cardClasses = 'bg-white border border-slate-200 dark:bg-gray-800 dark:border-gray-700';
                   contentToRender = (
@@ -1124,7 +737,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
                           />
                         </div>
                       )}
-                      <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestMermaidAiCorrection} onViewDiagram={handleViewContent} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />
+                      <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestAiCorrection} onViewDiagram={handleViewContent} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />
                     </>
                   );
                 }
@@ -1135,31 +748,36 @@ const handleSendMessage = async (e: React.FormEvent) => {
               return (
                 <React.Fragment key={message.id}>
                   {showDateHeader && (
-                    <div className="flex justify-center my-4">
-                      <Badge variant="secondary" className="px-3 py-1 text-xs md:text-sm text-slate-500 bg-slate-100 rounded-full shadow-sm dark:bg-gray-700 dark:text-gray-300"> {/* Adjusted font size */}
+                    <div className="flex justify-center my-4 font-sans">
+                      <Badge variant="secondary" className="px-3 py-1 text-sm md:text-base text-slate-500 bg-slate-100 rounded-full shadow-sm dark:bg-gray-700 dark:text-gray-300">
                         {messageDate}
                       </Badge>
                     </div>
                   )}
-                  <div className="flex justify-center">
+                  {/* The outer div that controls the max width of the entire message row */}
+                  <div className="flex justify-center font-sans">
+                    {/* Apply max-w-4xl mx-auto to this div to center the entire message row */}
                     <div className={`
-                      w-full max-w-4xl flex gap-3 group
+                      flex gap-3 group
                       ${message.role === 'user' ? 'justify-end' : 'justify-start'}
+                      ${isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto'}
                     `}>
                       {message.role === 'assistant' && (
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.isError ? 'bg-red-500' : 'bg-transparent'} hidden sm:flex dark:bg-gray-700`}> {/* Added hidden sm:flex */}
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.isError ? 'bg-red-500' : 'bg-transparent'} hidden sm:flex dark:bg-gray-700`}>
                           {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
                         </div>
                       )}
-                      <div className={`flex flex-col ${message.role === 'user' ? 'items-end max-w-sm' : 'items-start'}`}>
-                        <Card className={`max-w-sm sm:max-w-4xl overflow-hidden rounded-lg ${message.role === 'assistant' ? 'border-none shadow-none bg-transparent dark:bg-transparent' : 'dark:bg-gray-800 dark:border-gray-700'} ${cardClasses}`}>
-                          <CardContent className={`p-2 prose border-none prose-base max-w-full leading-relaxed dark:prose-invert`}> {/* Changed prose-sm to prose-base */}
+                      {/* Removed sm:max-w-4xl from Card to allow it to be max-w-full of its parent */}
+                      <div className={`flex flex-col flex-1 min-w-0 ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        <Card className={`flex flex-col max-w-full overflow-hidden rounded-lg ${message.role === 'assistant' ? 'border-none shadow-none bg-transparent dark:bg-transparent' : 'dark:bg-gray-800 dark:border-gray-700'} ${cardClasses}`}>
+                          {/* Added !max-w-full to CardContent to ensure prose respects parent width */}
+                          <CardContent className={`p-2 prose prose-lg border-none !max-w-full leading-relaxed dark:prose-invert overflow-x-auto`}>
                             {contentToRender}
 
                             {/* Render attached files if attachedDocumentIds exist */}
                             {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
                               <div className={`mt-3 pt-3 border-t border-dashed ${message.role === 'user' ? 'border-blue-300/50' : 'border-gray-300'} dark:border-gray-600/50`}>
-                                <p className={`text-sm md:text-base font-semibold mb-2 ${message.role === 'user' ? 'text-slate-700' : 'text-slate-700'} dark:text-gray-100`}>Attached Files:</p> {/* Adjusted font size */}
+                                <p className={`text-base md:text-lg font-semibold mb-2 ${message.role === 'user' ? 'text-slate-700' : 'text-slate-700'} dark:text-gray-100`}>Attached Files:</p>
                                 <div className="flex flex-wrap gap-2">
                                   {message.attachedDocumentIds.map(docId => {
                                     // Use mergedDocuments for finding the document
@@ -1168,14 +786,14 @@ const handleSendMessage = async (e: React.FormEvent) => {
                                       <Badge
                                         key={doc.id}
                                         variant="secondary"
-                                        className={`cursor-pointer hover:opacity-80 transition-opacity text-xs md:text-sm ${doc.processing_status === 'pending' ? 'bg-yellow-500/30 text-yellow-800 border-yellow-400 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-700' : doc.processing_status === 'failed' ? 'bg-red-500/30 text-red-800 border-red-400 dark:bg-red-950 dark:text-red-300 dark:border-red-700' : (message.role === 'user' ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700' : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600')}`}
+                                        className={`cursor-pointer hover:opacity-80 transition-opacity text-sm md:text-base font-sans ${doc.processing_status === 'pending' ? 'bg-yellow-500/30 text-yellow-800 border-yellow-400 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-700' : doc.processing_status === 'failed' ? 'bg-red-500/30 text-red-800 border-red-400 dark:bg-red-950 dark:text-red-300 dark:border-red-700' : (message.role === 'user' ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700' : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600')}`}
                                         onClick={() => handleViewAttachedFile(doc)}
                                       >
                                         {doc.processing_status === 'pending' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : doc.processing_status === 'failed' ? <AlertTriangle className="h-3 w-3 mr-1" /> : <FileText className="h-3 w-3 mr-1" />}
                                         {doc.file_name} {/* Use file_name here */}
                                       </Badge>
                                     ) : (
-                                      <Badge key={docId} variant="destructive" className="text-red-600 dark:text-red-400 text-xs md:text-sm"> {/* Adjusted font size */}
+                                      <Badge key={docId} variant="destructive" className="text-sm md:text-base text-red-600 dark:text-red-400 font-sans">
                                         File Not Found: {docId}
                                       </Badge>
                                     );
@@ -1184,34 +802,46 @@ const handleSendMessage = async (e: React.FormEvent) => {
                               </div>
                             )}
                           </CardContent>
-                        </Card>
-                        <div className={`flex gap-1 mt-1 ${message.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
-                          <span className={`text-xs md:text-sm text-slate-500 ${message.role === 'user' ? 'text-gray-600 dark:text-gray-300' : 'text-slate-500 dark:text-gray-400'}`}> {/* Adjusted font size */}
-                            {formatTime(message.timestamp)} {/* Use message.timestamp */}
-                          </span>
-                          <div className={`flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity`}>
-                            {message.role === 'assistant' && (
-                              <>
-                                {isLastAIMessage && !isLoading && (
+                          {/* Moved timestamp and action buttons inside the Card */}
+                          <div className={`flex gap-1 px-4 pb-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'} w-full font-sans`}>
+                            <span className={`text-xs md:text-sm text-slate-500 ${message.role === 'user' ? 'text-gray-600 dark:text-gray-300' : 'text-slate-500 dark:text-gray-400'}`}>
+                              {formatTime(message.timestamp)}
+                            </span>
+                            <div className={`flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity`}>
+                              {message.role === 'assistant' && (
+                                <>
+                                  {isLastAIMessage && !isLoading && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleRegenerateClick(messages[index - 1]?.content || '')} // Pass previous user message content
+                                      className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
+                                      title="Regenerate response"
+                                    >
+                                      <RefreshCw className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    onClick={() => handleRegenerateClick(messages[index - 1]?.content || '')} // Pass previous user message content
-                                    className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
-                                    title="Regenerate response"
+                                    onClick={() => copy(message.content)}
+                                    className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+                                    title="Copy message"
                                   >
-                                    <RefreshCw className="h-4 w-4" />
+                                    <Copy className="h-4 w-4" />
                                   </Button>
-                                )}
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => copy(message.content)}
-                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-                                  title="Copy message"
-                                >
-                                  <Copy className="h-4 w-4" />
-                                </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteClick(message.id)}
+                                    className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                                    title="Delete message"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                              {message.role === 'user' && ( // Keep delete for user messages
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1219,52 +849,36 @@ const handleSendMessage = async (e: React.FormEvent) => {
                                   className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
                                   title="Delete message"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <X className="h-4 w-4" />
                                 </Button>
-                              </>
-                            )}
-                            {message.role === 'user' && ( // Keep delete for user messages
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteClick(message.id)}
-                                className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                                title="Delete message"
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {message.role === 'assistant' && message.isError && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
-                                  if (prevUserMessage) {
-                                    handleRetryClick(prevUserMessage.content, message.id);
-                                  }
-                                }}
-                                className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-                                title="Retry failed message"
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                              </Button>
-                            )}
+                              )}
+                              {message.role === 'assistant' && message.isError && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
+                                    if (prevUserMessage) {
+                                      handleRetryClick(prevUserMessage.content, message.id);
+                                    }
+                                  }}
+                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+                                  title="Retry failed message"
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        </Card>
                       </div>
-                      {message.role === 'user' && (
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-green-500 to-blue-500 flex items-center justify-center flex-shrink-0 hidden sm:flex"> {/* Added hidden sm:flex */}
-                          <User className="h-4 w-4 text-white" />
-                        </div>
-                      )}
                     </div>
                   </div>
                 </React.Fragment>
               );
             })}
-            {isLoading && !isLoadingSessionMessages && ( // Only show general loading if not session loading
-              <div className="flex justify-center">
+            {isLoading && !isLoadingSessionMessages && (
+              <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
                   <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
                     <Bot className="h-4 w-4 text-white" />
@@ -1280,15 +894,16 @@ const handleSendMessage = async (e: React.FormEvent) => {
               </div>
             )}
             {isGeneratingImage && (
-              <div className="flex justify-center">
+              <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
                   <div className="h-8 w-8 rounded-full bg-gradient-to-r from-pink-500 to-red-500 flex items-center justify-center">
-                    <Sparkles className="h-4 w-4 text-white" />
+                  {/* Replaced local image path with a placeholder and fixed animation class */}
+                  <img src="https://placehold.co/64x64/FF69B4/FFFFFF/png?text=AI" alt="Loading..." className="w-16 h-16 animate-spin" />
                   </div>
                   <div className="w-fit p-3 rounded-lg bg-white shadow-sm border border-slate-200 dark:bg-gray-800 dark:border-gray-700">
                     <div className="flex gap-1">
                       <Loader2 className="h-4 w-4 animate-spin text-pink-500" />
-                      <span className="text-slate-500 md:text-base dark:text-gray-400">Generating image...</span> {/* Adjusted font size */}
+                      <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Generating image...</span>
                     </div>
                   </div>
                 </div>
@@ -1296,32 +911,34 @@ const handleSendMessage = async (e: React.FormEvent) => {
             )}
             <div ref={messagesEndRef} />
           </div>
-          {/* Input area - now with a wrapper div for the full-width background */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 sm:bg-transparent md:bg-transparent md:shadow-none md:static md:rounded-lgz-10 md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent">
+          {/* Input area - now absolutely positioned within the main chat area */}
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 shadow-lg md:shadow-none md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10`}>
             {/* Display selected documents/notes/image */}
             {(selectedDocumentIds.length > 0 || selectedImagePreview) && (
-              <div className="max-w-4xl mx-auto mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700">
-                <span className="text-sm md:text-base font-medium text-slate-700 dark:text-gray-200">Context:</span> {/* Adjusted font size */}
+              <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700
+                ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'}
+              `}>
+                <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200">Context:</span>
                 {selectedImagePreview && (
-                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-xs md:text-sm"> {/* Adjusted font size */}
+                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
                     <Image className="h-3 w-3" /> Preview
                     <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={handleRemoveImage} />
                   </Badge>
                 )}
                 {selectedImageDocuments.length > 0 && (
-                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-xs md:text-sm"> {/* Adjusted font size */}
+                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
                     <Image className="h-3 w-3" /> {selectedImageDocuments.length} Image Doc{selectedImageDocuments.length > 1 ? 's' : ''}
                     <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !selectedImageDocuments.map(imgDoc => imgDoc.id).includes(id)))} />
                   </Badge>
                 )}
                 {selectedDocumentTitles.length > 0 && (
-                  <Badge variant="secondary" className="bg-purple-500/20 text-purple-800 border-purple-400 flex items-center gap-1 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700 text-xs md:text-sm"> {/* Adjusted font size */}
+                  <Badge variant="secondary" className="bg-purple-500/20 text-purple-800 border-purple-400 flex items-center gap-1 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700 text-sm md:text-base font-sans">
                     <BookOpen className="h-3 w-3 mr-1" /> {selectedDocumentTitles.length} Text Doc{selectedDocumentTitles.length > 1 ? 's' : ''}
                     <XCircle className="h-3 w-3 ml-1 cursor-pointer text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !documents.filter(doc => doc.type === 'text').map(d => d.id).includes(id)))} />
                   </Badge>
                 )}
                 {selectedNoteTitles.length > 0 && (
-                  <Badge variant="secondary" className="bg-green-500/20 text-green-800 border-green-400 flex items-center gap-1 dark:bg-green-950 dark:text-green-300 dark:border-green-700 text-xs md:text-sm"> {/* Adjusted font size */}
+                  <Badge variant="secondary" className="bg-green-500/20 text-green-800 border-green-400 flex items-center gap-1 dark:bg-green-950 dark:text-green-300 dark:border-green-700 text-sm md:text-base font-sans">
                     <StickyNote className="h-3 w-3 mr-1" /> {selectedNoteTitles.length} Note{selectedNoteTitles.length > 1 ? 's' : ''}
                     <XCircle className="h-3 w-3 ml-1 cursor-pointer text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !notes.map(n => n.id).includes(id)))} />
                   </Badge>
@@ -1329,7 +946,9 @@ const handleSendMessage = async (e: React.FormEvent) => {
               </div>
             )}
 
-            <form onSubmit={handleSendMessage} className="flex items-end gap-2 p-3 rounded-lg bg-white border border-slate-200 shadow-lg max-w-4xl mx-auto dark:bg-gray-800 dark:border-gray-700"> {/* Added shadow-lg */}
+            <form onSubmit={handleSendMessage} className={`flex items-end gap-2 p-3 rounded-lg bg-white border border-slate-200 shadow-lg dark:bg-gray-800 dark:border-gray-700 font-sans
+              ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'}
+            `}>
               {/* Image Preview in Input Area */}
               {selectedImagePreview && (
                 <div className="relative w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 mr-2 mb-2">
@@ -1346,18 +965,40 @@ const handleSendMessage = async (e: React.FormEvent) => {
                   </Button>
                 </div>
               )}
-              <textarea // Changed from Input to textarea
+              <textarea
                 ref={textareaRef}
                 value={inputMessage}
                 onChange={(e) => {
                   setInputMessage(e.target.value);
                 }}
                 placeholder="Ask a question about your notes or study topics..."
-                className="flex-1 text-slate-700 md:text-base focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-transparent px-2 dark:text-gray-200 dark:placeholder-gray-400" 
+                className="flex-1 text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-transparent px-2 dark:text-gray-200 dark:placeholder-gray-400"
                 disabled={isLoading || isSubmittingUserMessage || isGeneratingImage}
                 rows={1}
               />
               <div className="flex items-end gap-2">
+                {/* Hidden input for camera capture */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="user" // 'user' for front camera, 'environment' for rear camera
+                  ref={cameraInputRef}
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+                {/* Take Picture Button */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
+                  title="Take Picture"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage}
+                >
+                  <Camera className="h-5 w-5" />
+                </Button>
+
                 {/* Image Upload Button */}
                 <input
                   type="file"
@@ -1404,8 +1045,8 @@ const handleSendMessage = async (e: React.FormEvent) => {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || (!inputMessage.trim() && !selectedImageFile)} // Disable if no text and no image
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || (!inputMessage.trim() && !selectedImageFile)}
+                  className="bg-blue-600 hover:bg-blue-900 text-white shadow-md disabled:opacity-50 h-10 w-10 flex-shrink-0 rounded-lg p-0 font-sans"
                   title="Send Message"
                 >
                   {isLoading || isSubmittingUserMessage ? (
@@ -1419,7 +1060,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
           </div>
           {showDocumentSelector && (
             <DocumentSelector
-              documents={mergedDocuments} // Pass mergedDocuments to DocumentSelector
+              documents={mergedDocuments}
               notes={notes}
               selectedDocumentIds={selectedDocumentIds}
               onSelectionChange={onSelectionChange}
@@ -1445,7 +1086,10 @@ const handleSendMessage = async (e: React.FormEvent) => {
             size="icon"
             onClick={scrollToBottom}
             // Adjusted bottom position for mobile (bottom-28 = 112px)
-            className="fixed bottom-28 right-6 md:bottom-8 md:right-8 bg-white rounded-full shadow-lg p-2 z-20 transition-opacity duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
+            // Dynamic right position based on panel open state
+            className={`fixed bottom-28 right-6 md:bottom-8 bg-white rounded-full shadow-lg p-2 z-20 transition-all duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 font-sans
+              ${isDiagramPanelOpen ? 'md:right-[calc(65%+1.5rem)]' : 'md:right-8'}
+            `}
             title="Scroll to bottom"
           >
             <ChevronDown className="h-5 w-5 text-slate-600 dark:text-gray-300" />
@@ -1454,21 +1098,24 @@ const handleSendMessage = async (e: React.FormEvent) => {
 
         {/* Diagram/Image Panel - Conditionally rendered and responsive */}
         {isDiagramPanelOpen && (
-          <DiagramPanel
-            key={`${activeDiagram?.content || ''}-${activeDiagram?.type || ''}-${activeDiagram?.language || ''}-${activeDiagram?.imageUrl || ''}`} // Add all relevant props to key
-            diagramContent={activeDiagram?.content}
-            diagramType={activeDiagram?.type || 'unknown'}
-            onClose={handleCloseDiagramPanel}
-            onMermaidError={handleMermaidError}
-            onSuggestAiCorrection={handleSuggestMermaidAiCorrection}
-            isOpen={isDiagramPanelOpen}
-            language={activeDiagram?.language}
-            imageUrl={activeDiagram?.imageUrl} // Pass imageUrl
-          />
+          <div className="md:w-[65%] h-full flex-shrink-0"> {/* Wrapper div to control 60% width and full height */}
+            <DiagramPanel
+              key={`${activeDiagram?.content || ''}-${activeDiagram?.type || ''}-${activeDiagram?.language || ''}-${activeDiagram?.imageUrl || ''}`} // Add all relevant props to key
+              diagramContent={activeDiagram?.content}
+              diagramType={activeDiagram?.type || 'unknown'}
+              onClose={handleCloseDiagramPanel}
+              onMermaidError={handleMermaidError}
+              onSuggestAiCorrection={handleSuggestAiCorrection}
+              isOpen={isDiagramPanelOpen}
+              language={activeDiagram?.language}
+              imageUrl={activeDiagram?.imageUrl} // Pass imageUrl
+              initialWidthPercentage={60} // NEW PROP: Pass initial width percentage
+            />
+          </div>
         )}
       </div>
-    </CodeBlockErrorBoundary>
+    </>
   );
 };
 
-export default memo(AIChat); 
+export default memo(AIChat);

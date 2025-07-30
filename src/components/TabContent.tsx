@@ -428,6 +428,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     isLoadingSessionMessages: props.isLoadingSessionMessages, // NEW: Pass new prop
     learningStyle: userProfile?.learning_style || 'visual',
     learningPreferences: userProfile?.learning_preferences || {},
+    onSendMessageToBackend: props.onSendMessage, // Pass the onSendMessage prop as onSendMessageToBackend
   }), [
     props.activeChatSessionId,
     props.chatMessages,
@@ -458,6 +459,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.isLoadingSessionMessages, // NEW: Dependency
     userProfile?.learning_style,
     userProfile?.learning_preferences,
+    props.onSendMessage, // Add onSendMessage to dependencies
   ]);
 
   const documentsProps = useMemo(() => ({

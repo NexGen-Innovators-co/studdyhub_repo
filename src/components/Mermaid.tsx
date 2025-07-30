@@ -10,162 +10,6 @@ interface MermaidProps {
   diagramRef: React.RefObject<HTMLDivElement>;
 }
 
-// Function to clean the Mermaid string (less aggressive)
-const cleanMermaidString = (input: string): string => {
-  let cleaned = input;
-
-  // 1. Remove Byte Order Mark (BOM) if present
-  if (cleaned.charCodeAt(0) === 0xFEFF) {
-    cleaned = cleaned.slice(1);
-  }
-
-  // 2. Normalize all line endings to LF
-  cleaned = cleaned.replace(/\r\n|\r/g, '\n');
-
-  // 3. Replace common invisible/non-standard spaces with regular spaces
-  cleaned = cleaned.replace(/[\u00A0\u202F\u200B\uFEFF\u00AD]/g, ' ');
-
-  // 4. Normalize multiple spaces to single spaces within each line, then trim each line
-  cleaned = cleaned.split('\n').map(line => line.replace(/\s+/g, ' ').trim()).join('\n');
-
-  // 5. Trim leading/trailing whitespace for the entire cleaned string
-  cleaned = cleaned.trim();
-
-  return cleaned;
-};
-
-// Function to auto-fix common Mermaid syntax errors
-const autoFixMermaidSyntax = (input: string): { fixed: string; wasFixed: boolean } => {
-  let fixed = input;
-  let wasFixed = false;
-
-  const lines = fixed.split('\n');
-  const fixedLines: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-    const originalLine = line;
-
-    // Skip empty lines or initial directive lines
-    if (i === 0 && (line.startsWith('graph') || line.startsWith('sequenceDiagram') || line.startsWith('flowchart') || line.startsWith('gantt') || line.startsWith('classDiagram') || line.startsWith('stateDiagram') || line.startsWith('pie') || line.startsWith('erDiagram') || line.startsWith('journey') || line.startsWith('gitGraph') || line.startsWith('quadrantChart') || line.startsWith('requirementDiagram') || line.startsWith('mindmap') || line.startsWith('timeline') || line.startsWith('C4Context') || line.startsWith('C4Container') || line.startsWith('C4Component') || line.startsWith('C4Dynamic') || line.startsWith('C4Deployment'))) {
-      fixedLines.push(line);
-      continue;
-    }
-    if (line.trim() === '') {
-      fixedLines.push(line);
-      continue;
-    }
-
-    // --- Specific Mermaid Sequence Diagram Fixes ---
-    if (lines[0].trim().startsWith('sequenceDiagram')) {
-      const seqLineRegex = /^\s*([^->]+?)\s*(->>|-->|->|--|x-->>|x-->|--x|->>x|--x)\s*([^:]+?)(?::\s*(.*))?$/;
-      const match = line.match(seqLineRegex);
-
-      if (match) {
-        const source = match[1].trim();
-        const arrow = match[2].trim();
-        const target = match[3].trim();
-        let message = match[4] ? match[4].trim() : '';
-
-        let correctedArrow = arrow;
-        if (arrow.includes(' ') && arrow.includes('>')) {
-          correctedArrow = arrow.replace(/\s+/g, '');
-          wasFixed = true;
-        }
-
-        if (message.includes(' ') && !message.startsWith('"') && !message.endsWith('"') && !message.startsWith('`') && !message.endsWith('`')) {
-          message = `"${message}"`;
-          wasFixed = true;
-        }
-
-        line = `${source}${correctedArrow}${target}${message ? `: ${message}` : ''}`;
-      } else {
-        if (line.startsWith('participant')) {
-          const parts = line.split(':');
-          if (parts.length > 1) {
-            const participantName = parts[0].substring('participant'.length).trim();
-            const alias = parts.slice(1).join(':').trim();
-            if (alias) {
-              line = `participant ${participantName} as ${alias}`;
-            } else {
-              line = `participant ${participantName}`;
-            }
-            wasFixed = true;
-          } else {
-            line = `participant ${line.substring('participant'.length).trim()}`;
-            wasFixed = true;
-          }
-        }
-      }
-    }
-    // --- End Specific Mermaid Sequence Diagram Fixes ---
-
-    // Handle special characters within node definitions
-    const nodeDefinitionRegex = /([A-Z0-9_]+\s*(?:\[.*?\]|\{.*?\}|\(.*?\)|<.*?>|\|.*?\|))/g;
-    line = line.replace(nodeDefinitionRegex, (match) => {
-      const contentMatch = match.match(/\[(.*?)\]|\{(.*?)\}|\((.*?)\}|<(.*?)>|\|(.*?)\|/);
-      if (contentMatch) {
-        const content = contentMatch[1] || contentMatch[2] || contentMatch[3] || contentMatch[4] || contentMatch[5];
-        const nodeTypeChar = match.includes('[') ? '[' : (match.includes('{') ? '{' : (match.includes('(') ? '(' : (match.includes('<') ? '<' : '|')));
-        const endChar = nodeTypeChar === '[' ? ']' : (nodeTypeChar === '{' ? '}' : (nodeTypeChar === '(') ? ')' : (nodeTypeChar === '<' ? '>' : '|'));
-
-        const hasSpecialChars = /[()\/=\[\]∂∫+\-\^]/.test(content);
-
-        if (hasSpecialChars) {
-          const isAlreadyFormatted = content.startsWith('`') && content.endsWith('`');
-
-          if (!isAlreadyFormatted) {
-            let fixedContent = content
-              .replace(/\(/g, '(')
-              .replace(/\)/g, ')')
-              .replace(/\//g, '/')
-              .replace(/=/g, '=')
-              .replace(/\[/g, '[')
-              .replace(/\]/g, ']')
-              .replace(/∂/g, '∂')
-              .replace(/∫/g, '∫')
-              .replace(/\+/g, '+')
-              .replace(/\^/g, '^')
-              .replace(/(?<!-)(--)(?!>)/g, '−−')
-              .replace(/(?<!-)(-{1})(?![->])/g, '−');
-
-            fixedContent = `\`${fixedContent}\``;
-            const nodeId = match.split(nodeTypeChar)[0].trim();
-            wasFixed = true;
-            return `${nodeId}${nodeTypeChar}${fixedContent}${endChar}`;
-          }
-        }
-      }
-      return match;
-    });
-
-    // Handle unquoted labels in edges
-    const edgeLabelRegex = /(\s(?:-+|==|~~)(?:>)?\s)([^\s"'][\w\s]*?[^\s"'])\s((?:-+|==|~~)(?:>)?\s)/g;
-    line = line.replace(edgeLabelRegex, (match, p1, p2, p3) => {
-      if (p2.includes(' ') && !p2.startsWith('"') && !p2.endsWith('"') && !p2.startsWith('`') && !p2.endsWith('`')) {
-        wasFixed = true;
-        return `${p1}"${p2}"${p3}`;
-      }
-      return match;
-    });
-
-    // Trim spaces around operators and ensure single spaces
-    line = line.replace(/\s*(-->|--|---|-+>|==>|==|=+>|~~>|~~)\s*/g, '$1');
-    line = line.replace(/\s+/g, ' ').trim();
-
-    if (line !== originalLine) {
-      wasFixed = true;
-    }
-
-    fixedLines.push(line);
-  }
-
-  return {
-    fixed: fixedLines.join('\n'),
-    wasFixed
-  };
-};
-
 // Function to download SVG as PNG without canvas taint issues
 const downloadSvgAsPng = (svgString: string, filename: string = 'mermaid-diagram') => {
   try {
@@ -247,7 +91,6 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
   const [copied, setCopied] = useState(false);
   const [isMermaidLoaded, setIsMermaidLoaded] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
-  const [wasAutoFixed, setWasAutoFixed] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
   const [lastRenderedChart, setLastRenderedChart] = useState<string>('');
   const [showSourceCode, setShowSourceCode] = useState(false);
@@ -448,15 +291,6 @@ Here's the error message received: "${error}". Please provide only the corrected
           responsive: true
         });
 
-        let cleanedChart = cleanMermaidString(chart);
-        const { fixed: fixedChart, wasFixed } = autoFixMermaidSyntax(cleanedChart);
-        setWasAutoFixed(wasFixed);
-
-        const finalChart = fixedChart;
-
-        console.log("Mermaid input string (raw):", finalChart);
-        console.log("Mermaid input string (char codes):", finalChart.split('').map(c => c.charCodeAt(0)));
-
         const renderPromise = new Promise<any>((resolve, reject) => {
           renderTimeoutRef.current = setTimeout(() => {
             reject(new Error("Mermaid rendering timed out after 7 seconds."));
@@ -464,7 +298,7 @@ Here's the error message received: "${error}". Please provide only the corrected
 
           mermaidInstance.render(
             'mermaid-chart-' + Date.now(), // Unique ID for each render
-            finalChart
+            chart
           ).then(result => {
             if (renderTimeoutRef.current) {
               clearTimeout(renderTimeoutRef.current);
@@ -748,12 +582,6 @@ Here's the error message received: "${error}". Please provide only the corrected
           <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
             Mermaid Diagram
           </span>
-          {wasAutoFixed && (
-            <div className="flex items-center gap-1 text-xs bg-green-900/50 text-green-300 px-2 py-1 rounded">
-              <Wrench className="h-3 w-3" />
-              <span className="hidden sm:inline">Auto-fixed</span>
-            </div>
-          )}
         </div>
         <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
           {/* Custom Zoom Controls */}

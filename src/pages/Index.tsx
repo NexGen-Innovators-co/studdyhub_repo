@@ -66,7 +66,7 @@ const Index = () => {
     notes,
     recordings,
     scheduleItems,
-    chatMessages,
+    chatMessages: allChatMessages, // Renamed to avoid conflict and signify it's the global list
     documents, // Get documents from useAppData
     userProfile,
     activeNote,
@@ -79,7 +79,7 @@ const Index = () => {
     setNotes,
     setRecordings,
     setScheduleItems,
-    setChatMessages,
+    setChatMessages, // Still need this setter from useAppData
     setDocuments, // Get setDocuments from useAppData
     setUserProfile,
     setActiveNote,
@@ -88,7 +88,6 @@ const Index = () => {
     setIsSidebarOpen,
     setActiveTab,
     setIsAILoading,
-    loadUserData,
   } = useAppData();
 
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -158,52 +157,73 @@ const Index = () => {
     setChatSessionsLoadedCount(prevCount => prevCount + CHAT_SESSIONS_PER_PAGE);
   }, []);
 
+  // NEW: Filter chat messages based on activeChatSessionId
+  const filteredChatMessages = useMemo(() => {
+    if (!activeChatSessionId) {
+      return [];
+    }
+    return allChatMessages.filter(msg => msg.session_id === activeChatSessionId)
+                          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  }, [allChatMessages, activeChatSessionId]);
+
+
+  // IMPORTANT: loadSessionMessages now fetches messages for the specific session
+  // and updates the global `allChatMessages` state.
   const loadSessionMessages = useCallback(async (sessionId: string) => {
+    if (!user) return;
+    setIsLoadingSessionMessages(true);
+
     try {
-      if (!user) return;
-
-      setIsLoadingSessionMessages(true); // Start loading indicator for session messages
-
-      // Fetch the latest N messages initially
+      // Fetch messages for the specific session
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
         .eq('session_id', sessionId)
-        .order('timestamp', { ascending: false }) // Get most recent messages first
-        .limit(CHAT_MESSAGES_PER_PAGE);
+        .order('timestamp', { ascending: true }) // Get oldest first
+        .limit(CHAT_MESSAGES_PER_PAGE); // Load initial batch
 
       if (error) throw error;
 
-      const formattedMessages: Message[] = data.map((msg: any) => ({ // Cast msg to any for direct Supabase property access
+      const fetchedMessages: Message[] = data.map((msg: any) => ({
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
         timestamp: msg.timestamp || new Date().toISOString(),
-        isError: msg.is_error || false, // Ensure isError is populated
-        // Corrected property names from snake_case to camelCase for Message interface
+        isError: msg.is_error || false,
         attachedDocumentIds: msg.attached_document_ids || [],
         attachedNoteIds: msg.attached_note_ids || [],
         imageUrl: msg.image_url || undefined,
         imageMimeType: msg.image_mime_type || undefined,
-      })).reverse(); // Reverse to display oldest first
+        session_id: msg.session_id,
+      }));
 
-      setChatMessages(formattedMessages);
+      // Update the global allChatMessages state with these fetched messages
+      // Ensure we don't add duplicates if real-time listener already added some
+      setChatMessages(prevAllMessages => {
+        const newMessagesToAdd = fetchedMessages.filter(
+          fm => !prevAllMessages.some(pm => pm.id === fm.id)
+        );
+        return [...prevAllMessages, ...newMessagesToAdd].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      });
+
       setHasMoreMessages(data.length === CHAT_MESSAGES_PER_PAGE); // If we got exactly limit, there might be more
+
     } catch (error) {
       console.error('Error loading session messages:', error);
-      setChatMessages([]);
       toast.error('Failed to load chat messages for this session.');
     } finally {
-      setIsLoadingSessionMessages(false); // End loading indicator
+      setIsLoadingSessionMessages(false);
     }
-  }, [user, setChatMessages]);
+  }, [user, setChatMessages]); // Depends on user and setChatMessages
+
 
   const handleLoadOlderChatMessages = useCallback(async () => {
-    if (!activeChatSessionId || !user || chatMessages.length === 0) return;
+    if (!activeChatSessionId || !user || filteredChatMessages.length === 0) return;
 
-    const oldestMessageTimestamp = chatMessages[0].timestamp;
+    const oldestMessageTimestamp = filteredChatMessages[0].timestamp;
 
     try {
+      setIsLoadingSessionMessages(true); // Indicate loading
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
@@ -225,15 +245,25 @@ const Index = () => {
         attachedNoteIds: msg.attached_note_ids || [],
         imageUrl: msg.image_url || undefined,
         imageMimeType: msg.image_mime_type || undefined,
+        session_id: msg.session_id, // Ensure session_id is included
       })).reverse(); // Reverse to display oldest first
 
-      setChatMessages(prevMessages => [...olderMessages, ...prevMessages]);
+      // Add older messages to the global allChatMessages state
+      setChatMessages(prevAllMessages => {
+        const newMessagesToAdd = olderMessages.filter(
+          om => !prevAllMessages.some(pm => pm.id === om.id)
+        );
+        return [...prevAllMessages, ...newMessagesToAdd].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      });
+
       setHasMoreMessages(data.length === CHAT_MESSAGES_PER_PAGE); // If we got exactly limit, there might be more
     } catch (error) {
       console.error('Error loading older messages:', error);
       toast.error('Failed to load older messages.');
+    } finally {
+      setIsLoadingSessionMessages(false); // End loading
     }
-  }, [activeChatSessionId, user, chatMessages, setChatMessages]);
+  }, [activeChatSessionId, user, filteredChatMessages, setChatMessages]);
 
 
   useEffect(() => {
@@ -244,9 +274,11 @@ const Index = () => {
 
   useEffect(() => {
     if (activeChatSessionId) {
+      // When activeChatSessionId changes, trigger a load of messages for that session.
       loadSessionMessages(activeChatSessionId);
     } else {
-      setChatMessages([]);
+      // If no active session, ensure filtered messages are cleared
+      // This is handled by filteredChatMessages useMemo returning []
       setHasMoreMessages(false); // No active session, no more messages
     }
   }, [activeChatSessionId, user, loadSessionMessages]);
@@ -310,7 +342,6 @@ const Index = () => {
       console.log('createNewChatSession: Chat sessions reloaded.');
 
       setActiveChatSessionId(newSession.id);
-      setChatMessages([]);
       setHasMoreMessages(false); // New chat, no older messages yet
       console.log('createNewChatSession: Active chat session ID set to:', newSession.id);
 
@@ -320,7 +351,7 @@ const Index = () => {
       toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
       return null;
     }
-  }, [user, selectedDocumentIds, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId, setChatMessages]);
+  }, [user, selectedDocumentIds, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId]);
 
   const deleteChatSession = useCallback(async (sessionId: string) => {
     try {
@@ -348,12 +379,10 @@ const Index = () => {
             setActiveChatSessionId(mostRecent.id);
           } else {
             setActiveChatSessionId(null);
-            setChatMessages([]);
             setHasMoreMessages(false);
           }
         } else { // If this was the last session
           setActiveChatSessionId(null);
-          setChatMessages([]);
           setHasMoreMessages(false);
         }
       }
@@ -363,7 +392,7 @@ const Index = () => {
       console.error('Error deleting session:', error);
       toast.error(`Failed to delete chat session: ${error.message || 'Unknown error'}`);
     }
-  }, [user, chatSessions, activeChatSessionId, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId, setChatMessages]);
+  }, [user, chatSessions, activeChatSessionId, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId]);
 
   const renameChatSession = useCallback(async (sessionId: string, newTitle: string) => {
     try {
@@ -459,280 +488,6 @@ const Index = () => {
   // Refresh a single document and update state
 
 
-  // Modified _getAIResponse to accept attached document and note IDs directly
-  const _getAIResponse = useCallback(async (
-    userMessageContent: string,
-    currentUser: User,
-    sessionId: string,
-    attachedDocumentIds: string[], // New parameter
-    attachedNoteIds: string[],     // New parameter
-    aiMessageIdToUpdate: string | null = null,
-    imageDataBase64?: string,
-    imageMimeType?: string,
-    currentImageDescription?: string, // NEW: Pass the extracted image description for the current turn
-  ) => {
-    console.log('_getAIResponse: Called with currentUser:', currentUser?.id, 'sessionId:', sessionId);
-    if (!currentUser || !sessionId) {
-      console.error('_getAIResponse: Authentication or active session missing. currentUser:', currentUser, 'sessionId:', sessionId);
-      toast.error('Authentication required or no active chat session.');
-      return;
-    }
-
-    setIsAILoading(true);
-
-    try {
-      // Prepare chat history for AI, including inline image data for the *current* user message
-      let chatHistory: Array<{ role: string; parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> }> = [];
-
-      // Add previous messages to chat history, including attached document/note content for user messages
-      const historicalMessages = (chatMessages || []).filter(msg => {
-        if (aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate) {
-          return false; // Exclude the AI message that is being regenerated/retried
-        }
-        return true;
-      });
-
-      historicalMessages.forEach(msg => {
-        if (msg.role === 'user') {
-          const userParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: msg.content }];
-
-          // Re-build context for historical user messages if they had attachments
-          if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 || msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
-            const historicalContext = buildRichContext(msg.attachedDocumentIds || [], msg.attachedNoteIds || [], documents, notes);
-            if (historicalContext) {
-              userParts.push({ text: `\n\nContext from previous attachments:\n${historicalContext}` });
-            }
-          }
-          // Note: For historical images, we don't re-send base64 data to Gemini.
-          // We rely on the text description that was extracted and saved with the document.
-          // If the AI needs to "see" the image again, you'd need to re-fetch its base64 here,
-          // which is generally not efficient for long chat histories.
-          chatHistory.push({ role: 'user', parts: userParts });
-        } else if (msg.role === 'assistant') {
-          chatHistory.push({ role: 'model', parts: [{ text: msg.content }] });
-        }
-      });
-
-      // Add the current user message (and image if present) as the last turn.
-      const currentUserParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
-      if (userMessageContent) {
-        currentUserParts.push({
-          text: userMessageContent
-        });
-      }
-
-      // Only include inlineData if imageDataBase64 is provided for the *current* turn
-      if (imageDataBase64 && imageMimeType) {
-        const base64Data = imageDataBase64.split(',')[1];
-        currentUserParts.push({
-          inlineData: {
-            mimeType: imageMimeType,
-            data: base64Data
-          }
-        });
-      }
-
-      // NEW: Add the extracted image description for the *current* image to the current user turn
-      if (currentImageDescription) {
-        currentUserParts.push({
-          text: `\n\nAttached Image Description: ${currentImageDescription}`
-        });
-      }
-
-      // NEW: Add context from currently selected documents/notes to the current user turn
-      // This ensures that even if documents were selected without an image, their context is sent.
-      const currentAttachedContext = buildRichContext(attachedDocumentIds || [], attachedNoteIds || [], documents, notes);
-      if (currentAttachedContext) {
-        currentUserParts.push({ text: `\n\nContext for current query:\n${currentAttachedContext}` });
-      }
-
-
-      chatHistory.push({
-        role: 'user',
-        parts: currentUserParts.map(part => {
-          if (part.text) {
-            return { text: part.text };
-          } else if (part.inlineData) {
-            return { inlineData: part.inlineData };
-          }
-          throw new Error('Invalid part structure');
-        }),
-      });
-
-      console.log('_getAIResponse: Invoking gemini-chat function...');
-      const { data, error } = await supabase.functions.invoke('gemini-chat', {
-        body: {
-          userId: currentUser.id,
-          sessionId: sessionId,
-          learningStyle: userProfile?.learning_style || 'visual',
-          learningPreferences: userProfile?.learning_preferences || {
-            explanation_style: userProfile?.learning_preferences?.explanation_style || 'detailed',
-            examples: userProfile?.learning_preferences?.examples || false,
-            difficulty: userProfile?.learning_preferences?.difficulty || 'intermediate',
-          },
-          chatHistory: chatHistory, // Pass the prepared chat history
-        },
-      });
-
-      if (error) {
-        console.error('_getAIResponse: AI service error:', error);
-        throw new Error(`AI service error: ${error.message}`);
-      }
-
-      const aiResponseContent = data.response;
-      if (!aiResponseContent) {
-        console.error('_getAIResponse: Empty response from AI service');
-        throw new Error('Empty response from AI service');
-      }
-
-      console.log('_getAIResponse: AI response received. Content length:', aiResponseContent.length);
-
-      if (aiMessageIdToUpdate) {
-        console.log('_getAIResponse: Updating existing AI message with ID:', aiMessageIdToUpdate);
-        const { error: updateDbError } = await supabase
-          .from('chat_messages')
-          .update({
-            content: aiResponseContent,
-            timestamp: new Date().toISOString(),
-            is_error: false,
-          })
-          .eq('id', aiMessageIdToUpdate)
-          .eq('session_id', sessionId);
-
-        if (updateDbError) {
-          console.error('_getAIResponse: Error updating AI message:', updateDbError);
-          throw new Error('Failed to save AI response');
-        }
-        console.log('_getAIResponse: AI message updated in DB.');
-
-        setChatMessages(prev =>
-          prev.map(msg =>
-            msg.id === aiMessageIdToUpdate
-              ? { ...msg, content: aiResponseContent, timestamp: new Date().toISOString(), isError: false }
-              : msg
-          )
-        );
-      } else {
-        console.log('_getAIResponse: Inserting new AI message...');
-        const { data: newAiMessageData, error: insertDbError } = await supabase
-          .from('chat_messages')
-          .insert({
-            session_id: sessionId,
-            user_id: currentUser.id,
-            content: aiResponseContent,
-            role: 'assistant',
-            timestamp: new Date().toISOString(),
-            is_error: false,
-          })
-          .select()
-          .single();
-
-        if (insertDbError) {
-          console.error('_getAIResponse: Error inserting AI message:', insertDbError);
-          throw new Error('Failed to save AI response');
-        }
-        console.log('_getAIResponse: New AI message inserted with ID:', newAiMessageData?.id);
-
-        const newAiMessage: Message = {
-          id: newAiMessageData?.id || crypto.randomUUID(),
-          content: aiResponseContent,
-          role: 'assistant',
-          timestamp: newAiMessageData?.timestamp || new Date().toISOString(),
-          isError: false,
-        };
-        setChatMessages(prev => [...(prev || []), newAiMessage]);
-      }
-
-      console.log('_getAIResponse: Updating chat session last_message_at...');
-      const { error: updateSessionError } = await supabase
-        .from('chat_sessions')
-        .update({
-          last_message_at: new Date().toISOString(),
-          document_ids: attachedDocumentIds, // Update session with the documents used for this message
-        })
-        .eq('id', sessionId);
-
-      if (updateSessionError) {
-        console.error('_getAIResponse: Error updating session:', updateSessionError);
-      }
-      console.log('_getAIResponse: Chat session updated.');
-
-      setChatSessions(prev => {
-        const updated = prev.map(session =>
-          session.id === sessionId
-            ? { ...session, last_message_at: new Date().toISOString(), document_ids: attachedDocumentIds }
-            : session
-        );
-        return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
-      });
-    } catch (error: any) {
-      console.error('_getAIResponse: Caught error:', error);
-      toast.error(`Failed to get AI response: ${error.message || 'Unknown error'}`);
-
-      if (aiMessageIdToUpdate) {
-        setChatMessages(prev =>
-          prev.map(msg =>
-            msg.id === aiMessageIdToUpdate
-              ? {
-                  ...msg,
-                  content: `Failed to regenerate response: ${error.message || 'Unknown error'}. Please try again.`,
-                  isError: true,
-                  timestamp: new Date().toISOString(),
-                }
-              : msg
-          )
-        );
-      } else {
-        const errorMessage: Message = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `I'm sorry, I couldn't generate a response: ${error.message || 'Unknown error'}. Please try again.`,
-          timestamp: new Date().toISOString(),
-          isError: true,
-          originalUserMessageContent: userMessageContent,
-        };
-        setChatMessages(prev => [...(prev || []), errorMessage]);
-      }
-    } finally {
-      // Introduce a small delay to ensure the UI has a chance to render the new message
-      // before the loading spinner disappears. This helps prevent the "disappearing earlier" issue.
-      setTimeout(() => {
-        setIsAILoading(false);
-        console.log('_getAIResponse: Finished, isAILoading set to false after delay.');
-      }, 100); // A small delay like 100ms is usually sufficient
-    }
-  }, [setIsAILoading, buildRichContext, documents, notes, chatMessages, userProfile, setChatMessages, setChatSessions]);
-
-  const validateActiveSession = useCallback(async (): Promise<boolean> => {
-    if (!activeChatSessionId) {
-      console.log('validateActiveSession: No activeChatSessionId, returning false.');
-      return false;
-    }
-
-    try {
-      console.log('validateActiveSession: Checking session ID:', activeChatSessionId, 'for user:', user?.id);
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .select('id')
-        .eq('id', activeChatSessionId)
-        .eq('user_id', user?.id)
-        .single();
-
-      if (error || !data) {
-        console.log('validateActiveSession: Active session no longer exists or unauthorized. Error:', error);
-        setActiveChatSessionId(null);
-        setChatMessages([]);
-        setHasMoreMessages(false); // No active session, no more messages
-        return false;
-      }
-      console.log('validateActiveSession: Session is valid.');
-      return true;
-    } catch (error) {
-      console.error('validateActiveSession: Error validating session:', error);
-      return false;
-    }
-  }, [activeChatSessionId, user, setActiveChatSessionId, setChatMessages]);
-
   // FIX: Added explicit type casting for processing_error and processing_status
   const refreshUploadedDocument = async (docId: string) => {
     const { data, error } = await supabase
@@ -740,12 +495,12 @@ const Index = () => {
       .select('*')
       .eq('id', docId)
       .single();
-  
+
     if (error) {
       console.error('Failed to refresh uploaded document:', error.message);
       return null;
     }
-  
+
     // Explicitly convert String objects to primitive strings if they exist
     // This addresses the 'String' vs 'string' type incompatibility.
     const refreshedDocData: AppDocument = {
@@ -761,11 +516,11 @@ const Index = () => {
     setDocuments((prev) =>
       prev.map((doc) => (doc.id === docId ? refreshedDocData : doc))
     );
-  
+
     return refreshedDocData; // Return the correctly typed data
   };
-  
-  
+
+
   // Modified handleSubmit to accept attachedDocumentIds and attachedNoteIds, and image data
   const handleSubmit = useCallback(async (
     messageContent: string,
@@ -773,7 +528,8 @@ const Index = () => {
     attachedNoteIds?: string[],
     imageUrl?: string, // Public URL for display
     imageMimeType?: string, // MIME type for image
-    imageDataBase64?: string // Base64 data for AI consumption
+    imageDataBase64?: string, // Base64 data for AI consumption
+    aiMessageIdToUpdate: string | null = null, // For retry/regenerate
   ) => {
     console.log('handleSubmit: Initiated with message:', messageContent, 'attached docs:', attachedDocumentIds, 'attached notes:', attachedNoteIds, 'imageUrl:', imageUrl ? 'present' : 'absent');
     console.log('handleSubmit: Current isAILoading:', isAILoading, 'isSubmittingUserMessage:', isSubmittingUserMessage);
@@ -785,13 +541,12 @@ const Index = () => {
 
     const trimmedMessage = messageContent.trim();
     setIsSubmittingUserMessage(true);
-    console.log('handleSubmit: setIsSubmittingUserMessage set to true.');
+    setIsAILoading(true); // Start AI loading immediately
+    console.log('handleSubmit: setIsSubmittingUserMessage set to true, setIsAILoading set to true.');
 
-    // Declare these variables at the top of the function scope
     let attachedImageDocumentId: string | undefined = undefined;
     let uploadedFilePath: string | undefined = undefined;
-    let imageDescriptionForAI: string | undefined; // To hold the extracted image content for the current turn
-
+    let imageDescriptionForAI: string | undefined;
 
     try {
       console.log('handleSubmit: Getting current user from Supabase auth...');
@@ -808,7 +563,7 @@ const Index = () => {
 
       if (!currentSessionId) {
         console.log('handleSubmit: No active session, creating new one...');
-        currentSessionId = await createNewChatSession(); 
+        currentSessionId = await createNewChatSession();
         if (!currentSessionId) {
           console.error('handleSubmit: Failed to create chat session.');
           toast.error('Failed to create chat session. Please try again.');
@@ -818,24 +573,22 @@ const Index = () => {
         console.log('handleSubmit: New session ID after creation:', currentSessionId);
       }
 
-      // Ensure attachedDocumentIds and attachedNoteIds are arrays, even if empty
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
 
       // If an image was just uploaded and has an ID, ensure its content_extracted is fresh
-      // This is crucial for the AI to get the image description immediately
       if (imageUrl && finalAttachedDocumentIds.length > 0) {
         const imageDoc = documents.find(d => d.type === 'image' && d.file_url === imageUrl);
         if (imageDoc) {
-            attachedImageDocumentId = imageDoc.id; // Assign the ID if found
-            uploadedFilePath = imageDoc.file_url; // Assign the file path if found
+            attachedImageDocumentId = imageDoc.id;
+            uploadedFilePath = imageDoc.file_url;
         }
-        
-        if (attachedImageDocumentId) { // Use the newly assigned variable
+
+        if (attachedImageDocumentId) {
             console.log(`handleSubmit: Refreshing document with ID ${attachedImageDocumentId} to ensure latest content_extracted.`);
             const refreshedDoc = await refreshUploadedDocument(attachedImageDocumentId);
             if (refreshedDoc) {
-                imageDescriptionForAI = refreshedDoc.content_extracted; // Capture the extracted content
+                imageDescriptionForAI = refreshedDoc.content_extracted;
                 console.log(`handleSubmit: Document ${attachedImageDocumentId} refreshed and state updated. Extracted content length: ${imageDescriptionForAI?.length || 0}`);
             } else {
                 console.warn(`handleSubmit: Failed to refresh document ${attachedImageDocumentId}. AI might not get full image context.`);
@@ -843,83 +596,137 @@ const Index = () => {
         }
       }
 
-      // Update selectedDocumentIds state with the new attachments for UI display
       setSelectedDocumentIds(finalAttachedDocumentIds);
 
       console.log('handleSubmit: Proceeding with session ID:', currentSessionId);
 
-      console.log('handleSubmit: Saving user message to DB...');
-      const { data: userMessageData, error: userMessageError } = await supabase
-        .from('chat_messages')
-        .insert({
-          session_id: currentSessionId,
-          user_id: currentUser.id,
-          content: trimmedMessage,
-          role: 'user',
-          timestamp: new Date().toISOString(),
-          attached_document_ids: finalAttachedDocumentIds,
-          attached_note_ids: finalAttachedNoteIds,
-          image_url: imageUrl, // Save image URL to DB
-          image_mime_type: imageMimeType, // Save image MIME type to DB
-        })
-        .select()
-        .single();
+      // Prepare chat history for AI (only historical messages)
+      // If aiMessageIdToUpdate is present, it means we are regenerating/retrying,
+      // so we should exclude the AI message that is being updated from the history sent to AI.
+      const historicalMessagesForAI = allChatMessages
+        .filter(msg => msg.session_id === currentSessionId)
+        .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate));
 
-      if (userMessageError) {
-        console.error('handleSubmit: Error saving user message:', userMessageError);
-        throw new Error('Failed to save your message');
+      const chatHistoryForAI: Array<{ role: string; parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> }> = [];
+
+      historicalMessagesForAI.forEach(msg => {
+        if (msg.role === 'user') {
+          const userParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: msg.content }];
+          // Add historical document/note context
+          if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 || msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
+            const historicalContext = buildRichContext(msg.attachedDocumentIds || [], msg.attachedNoteIds || [], documents, notes);
+            if (historicalContext) {
+              userParts.push({ text: `\n\nContext from previous attachments:\n${historicalContext}` });
+            }
+          }
+          chatHistoryForAI.push({ role: 'user', parts: userParts });
+        } else if (msg.role === 'assistant') {
+          chatHistoryForAI.push({ role: 'model', parts: [{ text: msg.content }] });
+        }
+      });
+
+      // Prepare files for the current message to be sent to the edge function
+      const filesForEdgeFunction = [];
+      if (imageDataBase64 && imageMimeType) {
+        filesForEdgeFunction.push({
+          name: 'uploaded_image', // Placeholder name
+          mimeType: imageMimeType,
+          data: imageDataBase64.split(',')[1], // Send only base64 data
+          type: 'image', // Custom type for edge function processing
+          size: 0, // Placeholder size
+          content: imageDescriptionForAI || null, // Pass extracted description
+          processing_status: imageDescriptionForAI ? 'completed' : 'pending',
+          processing_error: null,
+        });
       }
-      console.log('handleSubmit: User message saved. Message ID:', userMessageData.id);
 
-      const newUserMessage: Message = {
-        id: (userMessageData as any).id, // Cast to any for Supabase snake_case access
-        content: (userMessageData as any).content, // Cast to any
-        role: (userMessageData as any).role as 'user', // Cast to any
-        timestamp: (userMessageData as any).timestamp || new Date().toISOString(), // Cast to any
-        attachedDocumentIds: (userMessageData as any).attached_document_ids || [], // Cast to any
-        attachedNoteIds: (userMessageData as any).attached_note_ids || [], // Cast to any
-        imageUrl: (userMessageData as any).image_url, // Use the URL saved to DB
-        imageMimeType: (userMessageData as any).image_mime_type, // Use the MIME type saved to DB
-      };
-      setChatMessages(prev => [...(prev || []), newUserMessage]);
-      console.log('handleSubmit: User message added to state.');
-
-      console.log('handleSubmit: Calling _getAIResponse...');
-      // Pass the specific attached IDs and image data to _getAIResponse
-      // NEW: Pass imageDescriptionForAI to _getAIResponse
-      await _getAIResponse(trimmedMessage, currentUser, currentSessionId, finalAttachedDocumentIds, finalAttachedNoteIds, null, imageDataBase64, imageMimeType, imageDescriptionForAI);
-
-      const { error: updateSessionDocsError } = await supabase
-        .from('chat_sessions')
-        .update({ document_ids: finalAttachedDocumentIds })
-        .eq('id', currentSessionId);
-
-      if (updateSessionDocsError) {
-        console.error('handleSubmit: Error updating session document_ids:', updateSessionDocsError);
+      // Add current context from selected documents/notes to the message content for AI
+      let finalUserMessageContent = trimmedMessage;
+      const currentAttachedContext = buildRichContext(finalAttachedDocumentIds, finalAttachedNoteIds, documents, notes);
+      if (currentAttachedContext) {
+        finalUserMessageContent += `\n\nContext for current query:\n${currentAttachedContext}`;
       }
-      console.log('handleSubmit: _getAIResponse call completed.');
+      // If it's a new message with an image, and we have the description, add it here for the AI to process immediately.
+      // For regeneration/retry, imageDescriptionForAI is already included in finalUserMessageContent if available.
+      if (!aiMessageIdToUpdate && imageDescriptionForAI) {
+        finalUserMessageContent += `\n\nAttached Image Description: ${imageDescriptionForAI}`;
+      }
+
+
+      console.log('handleSubmit: Invoking gemini-chat function...');
+      const { data, error } = await supabase.functions.invoke('gemini-chat', {
+        body: {
+          userId: currentUser.id,
+          sessionId: currentSessionId,
+          learningStyle: userProfile?.learning_style || 'visual',
+          learningPreferences: userProfile?.learning_preferences || {
+            explanation_style: userProfile?.learning_preferences?.explanation_style || 'detailed',
+            examples: userProfile?.learning_preferences?.examples || false,
+            difficulty: userProfile?.learning_preferences?.difficulty || 'intermediate',
+          },
+          chatHistory: chatHistoryForAI, // Only historical messages
+          message: finalUserMessageContent, // Current user message with context
+          files: filesForEdgeFunction, // Current image file data
+          // Pass attachedDocumentIds and attachedNoteIds so edge function can save them with user message
+          attachedDocumentIds: finalAttachedDocumentIds,
+          attachedNoteIds: finalAttachedNoteIds,
+          imageUrl: imageUrl, // Pass imageUrl for edge function to save with user message
+          imageMimeType: imageMimeType, // Pass imageMimeType for edge function to save with user message
+          aiMessageIdToUpdate: aiMessageIdToUpdate, // Pass the ID of the AI message to update (for regenerate/retry)
+        },
+      });
+
+      if (error) {
+        console.error('handleSubmit: AI service error:', error);
+        throw new Error(`AI service error: ${error.message}`);
+      }
+
+      const aiResponseContent = data.response;
+      if (!aiResponseContent) {
+        console.error('handleSubmit: Empty response from AI service');
+        throw new Error('Empty response from AI service');
+      }
+
+      console.log('handleSubmit: AI response received. Content length:', aiResponseContent.length);
+
+      // The Edge Function has already saved both the user and assistant messages.
+      // The real-time listener in useAppData will pick them up and update the state.
+      // So, no local state updates for messages are needed here.
+
+      // Update chat session locally for immediate UI responsiveness (last_message_at, document_ids)
+      setChatSessions(prev => {
+        const updated = prev.map(session =>
+          session.id === currentSessionId
+            ? { ...session, last_message_at: new Date().toISOString(), document_ids: finalAttachedDocumentIds }
+            : session
+        );
+        return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
+      });
 
     } catch (error: any) {
       console.error('handleSubmit: Caught error:', error);
       toast.error(`Failed to send message: ${error.message || 'Unknown error'}`);
-      // If an error occurred during image upload/analysis, ensure loading is stopped
       // Clean up if initial upload or registration fails
-      if (attachedImageDocumentId) { // Use the declared variable
+      if (attachedImageDocumentId) {
         await supabase.from('documents').delete().eq('id', attachedImageDocumentId);
-        setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== attachedImageDocumentId)); // Remove from local state
+        setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== attachedImageDocumentId));
       }
-      if (uploadedFilePath) { // Use the declared variable
+      if (uploadedFilePath) {
         await supabase.storage.from('documents').remove([uploadedFilePath]);
       }
     } finally {
       setIsSubmittingUserMessage(false);
-      console.log('handleSubmit: setIsSubmittingUserMessage set to false.');
+      setIsAILoading(false); // Ensure AI loading is stopped
+      console.log('handleSubmit: setIsSubmittingUserMessage set to false, setIsAILoading set to false.');
     }
-  }, [isAILoading, activeChatSessionId, createNewChatSession, setChatMessages, _getAIResponse, isSubmittingUserMessage, documents, setSelectedDocumentIds, notes, refreshUploadedDocument, setDocuments]);
+  }, [isAILoading, activeChatSessionId, createNewChatSession, isSubmittingUserMessage, documents, setSelectedDocumentIds, notes, refreshUploadedDocument, setDocuments, allChatMessages, userProfile, setChatSessions, setIsAILoading]);
+
 
   const handleNewMessage = useCallback((message: Message) => {
-    setChatMessages(prev => [...(prev || []), message]);
-  }, [setChatMessages]);
+    // This function is no longer directly used for new messages, as useAppData's listener handles it.
+    // It might be used for optimistic updates if you reintroduce them, or for other message types.
+    // setChatMessages(prev => [...(prev || []), message]); // REMOVED: This was causing double insertion if also called by listener
+  }, []);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     try {
@@ -928,6 +735,7 @@ const Index = () => {
         return;
       }
 
+      // Optimistically remove from UI
       setChatMessages(prevMessages => (prevMessages || []).filter(msg => msg.id !== messageId));
       toast.info('Deleting message...');
 
@@ -941,6 +749,8 @@ const Index = () => {
       if (error) {
         console.error('Error deleting message from DB:', error);
         toast.error('Failed to delete message from database.');
+        // Revert UI if DB deletion fails
+        // This would require fetching the message back or storing it before optimistic delete
       } else {
         toast.success('Message deleted successfully.');
       }
@@ -956,8 +766,8 @@ const Index = () => {
       return;
     }
 
-    const lastAssistantMessage = chatMessages.slice().reverse().find(msg => msg.role === 'assistant');
-    const lastUserMessage = chatMessages.slice().reverse().find(msg => msg.role === 'user');
+    const lastAssistantMessage = filteredChatMessages.slice().reverse().find(msg => msg.role === 'assistant');
+    const lastUserMessage = filteredChatMessages.slice().reverse().find(msg => msg.role === 'user');
 
     if (!lastUserMessage) {
       toast.info('No previous user message to regenerate from.');
@@ -969,8 +779,9 @@ const Index = () => {
       return;
     }
 
-    setChatMessages(prevMessages =>
-      (prevMessages || []).map(msg =>
+    // Optimistically update the AI message to a "thinking" state
+    setChatMessages(prevAllMessages =>
+      (prevAllMessages || []).map(msg =>
         msg.id === lastAssistantMessage.id
           ? { ...msg, content: 'AI is thinking...', timestamp: new Date().toISOString(), isError: false }
           : msg
@@ -978,29 +789,18 @@ const Index = () => {
     );
 
     toast.info('Regenerating response...');
-
-    // Pass the specific attached IDs from the last user message to _getAIResponse
-    // Also pass image data if available for the last user message
-    await _getAIResponse(
+    // Call handleSubmit with the original user message content and the ID of the AI message to update
+    await handleSubmit(
       lastUserMessageContent,
-      user,
-      activeChatSessionId,
-      lastUserMessage.attachedDocumentIds || [],
-      lastUserMessage.attachedNoteIds || [],
-      lastAssistantMessage.id,
-      // For regeneration, we don't have the base64 data readily available unless stored.
-      // If the AI needs to "see" the image again, you'd need to re-fetch/convert it here.
-      // For now, it relies on the text context and the image_url being present in the message history.
-      undefined, // imageDataBase64
-      undefined, // imageMimeType
-      // For regeneration, if the last user message had an image, we need its extracted content.
-      // We can try to find it in the current 'documents' state.
-      lastUserMessage.attachedDocumentIds?.find(docId => {
-        const doc = documents.find(d => d.id === docId);
-        return doc && doc.type === 'image';
-      }) ? documents.find(d => d.id === lastUserMessage.attachedDocumentIds![0])?.content_extracted : undefined
+      lastUserMessage.attachedDocumentIds,
+      lastUserMessage.attachedNoteIds,
+      lastUserMessage.imageUrl,
+      lastUserMessage.imageMimeType,
+      undefined, // imageDataBase64 is not available for regeneration
+      lastAssistantMessage.id // Pass the ID of the AI message to update
     );
-  }, [user, activeChatSessionId, chatMessages, setChatMessages, _getAIResponse, documents]);
+  }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmit]);
+
 
   const handleRetryFailedMessage = useCallback(async (originalUserMessageContent: string, failedAiMessageId: string) => {
     if (!user || !activeChatSessionId) {
@@ -1008,14 +808,15 @@ const Index = () => {
       return;
     }
 
-    const lastUserMessage = chatMessages.slice().reverse().find(msg => msg.role === 'user' && msg.content === originalUserMessageContent);
+    const lastUserMessage = filteredChatMessages.slice().reverse().find(msg => msg.role === 'user' && msg.content === originalUserMessageContent);
     if (!lastUserMessage) {
       toast.error('Could not find original user message to retry.');
       return;
     }
 
-    setChatMessages(prevMessages =>
-      (prevMessages || []).map(msg =>
+    // Optimistically update the failed AI message to a "thinking" state
+    setChatMessages(prevAllMessages =>
+      (prevAllMessages || []).map(msg =>
         msg.id === failedAiMessageId
           ? { ...msg, content: 'AI is thinking...', timestamp: new Date().toISOString(), isError: false }
           : msg
@@ -1023,27 +824,18 @@ const Index = () => {
     );
 
     toast.info('Retrying message...');
-
-    // Pass the specific attached IDs from the original user message to _getAIResponse
-    // Also pass image data if available for the original user message
-    await _getAIResponse(
+    // Call handleSubmit with the original user message content and the ID of the failed AI message to update
+    await handleSubmit(
       originalUserMessageContent,
-      user,
-      activeChatSessionId,
-      lastUserMessage.attachedDocumentIds || [],
-      lastUserMessage.attachedNoteIds || [],
-      failedAiMessageId,
-      // For retry, similar to regeneration, we don't have the base64 data readily available.
-      // If full image data is needed for retry, it would need to be re-fetched or stored.
-      undefined, // imageDataBase64
-      undefined, // imageMimeType
-      // For retry, if the original user message had an image, we need its extracted content.
-      lastUserMessage.attachedDocumentIds?.find(docId => {
-        const doc = documents.find(d => d.id === docId);
-        return doc && doc.type === 'image';
-      }) ? documents.find(d => d.id === lastUserMessage.attachedDocumentIds![0])?.content_extracted : undefined
+      lastUserMessage.attachedDocumentIds,
+      lastUserMessage.attachedNoteIds,
+      lastUserMessage.imageUrl,
+      lastUserMessage.imageMimeType,
+      undefined, // imageDataBase64 is not available for retry
+      failedAiMessageId // Pass the ID of the AI message to update
     );
-  }, [user, activeChatSessionId, chatMessages, setChatMessages, _getAIResponse, documents]);
+  }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmit]);
+
 
   const {
     createNewNote,
@@ -1062,14 +854,14 @@ const Index = () => {
     notes,
     recordings,
     scheduleItems,
-    chatMessages,
+    chatMessages: allChatMessages, // Pass the global chatMessages
     documents, // Pass documents
     userProfile,
     activeNote,
     setNotes,
     setRecordings,
     setScheduleItems,
-    setChatMessages,
+    setChatMessages, // Pass setChatMessages
     setDocuments, // Pass setDocuments
     setUserProfile,
     setActiveNote,
@@ -1145,7 +937,7 @@ const Index = () => {
     activeNote,
     recordings: recordings ?? [],
     scheduleItems,
-    chatMessages,
+    chatMessages: filteredChatMessages, // Pass the FILTERED chat messages
     documents,
     userProfile,
     isAILoading,
@@ -1171,7 +963,7 @@ const Index = () => {
     onRenameChatSession: renameChatSession,
     onSelectedDocumentIdsChange: setSelectedDocumentIds,
     selectedDocumentIds: selectedDocumentIds,
-    onNewMessage: handleNewMessage,
+    onNewMessage: handleNewMessage, // This is still here but its usage might change
     isNotesHistoryOpen: isNotesHistoryOpen,
     onToggleNotesHistory: () => setIsNotesHistoryOpen(prev => !prev),
     onDeleteMessage: handleDeleteMessage,
@@ -1187,7 +979,7 @@ const Index = () => {
     activeNote,
     recordings,
     scheduleItems,
-    chatMessages,
+    filteredChatMessages, // Dependency for filtered messages
     documents,
     userProfile,
     isAILoading,
@@ -1247,7 +1039,7 @@ const Index = () => {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-800"> {/* Added dark mode */}
         <div className="text-center">
-          <Sparkles className="h-12 w-12 text-blue-600 mx-auto mb-4 animate-spin" />
+          <img src='/public/siteimage.png' className="h-16 w-16 text-blue-600 mx-auto mb-4 animate-spin" />
           <p className="text-slate-600 dark:text-gray-300">Loading your data...</p> {/* Added dark mode */}
         </div>
       </div>
@@ -1276,7 +1068,7 @@ const Index = () => {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0 bg-slate-50 dark:bg-gray-900"> {/* Added dark mode background */}
-        <div className="flex items-center justify-between p-3 sm:p-4 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-3 sm:p-2 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
           <Header {...headerProps} />
           <div className="hidden sm:flex items-center gap-3">
             <span className="text-sm text-slate-600 hidden md:block dark:text-gray-300">Welcome, {user.email}</span> {/* Added dark mode */}
@@ -1284,7 +1076,7 @@ const Index = () => {
               variant="outline"
               size="sm"
               onClick={handleSignOut}
-              className="flex items-center gap-2 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700" 
+              className="flex items-center gap-2 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sign Out</span>
@@ -1294,7 +1086,7 @@ const Index = () => {
             variant="outline"
             size="sm"
             onClick={handleSignOut}
-            className="sm:hidden dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700" 
+            className="sm:hidden dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
           >
             <LogOut className="h-4 w-4" />
           </Button>

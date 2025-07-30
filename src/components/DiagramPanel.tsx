@@ -7,542 +7,80 @@ import { Chart, registerables } from 'chart.js';
 import Mermaid from './Mermaid'; // Assuming Mermaid.tsx is in the same components folder
 import { Graphviz } from '@hpcc-js/wasm'; // Import Graphviz
 
-// Import lowlight and language types for syntax highlighting
-import { lowlight } from 'lowlight';
-import { LanguageFn } from 'highlight.js';
-import javascript from 'highlight.js/lib/languages/javascript';
-import python from 'highlight.js/lib/languages/python';
-import java from 'highlight.js/lib/languages/java';
-import cpp from 'highlight.js/lib/languages/cpp';
-import sql from 'highlight.js/lib/languages/sql';
-import xml from 'highlight.js/lib/languages/xml';
-import bash from 'highlight.js/lib/languages/bash';
-import json from 'highlight.js/lib/languages/json';
-import css from 'highlight.js/lib/languages/css';
-import typescript from 'highlight.js/lib/languages/typescript';
+// Import THREE.js and OrbitControls from npm packages
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+// NEW: Import GLTFLoader
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+// NEW: Import GLTFExporter
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+
+
+// NEW: Import from utility file
+import { themes, ThemeName, escapeHtml, highlightCode } from '../utils/codeHighlighting';
+
 
 // Ensure Chart.js components are registered once
 Chart.register(...registerables);
 
-// Declare global types for libraries loaded via CDN (if not already in a global d.ts)
+// Declare global types for libraries (only for those not imported directly)
 declare global {
   interface Window {
     jspdf: any; // jsPDF library
     html2canvas: any; // html2canvas library
+    Viz: any; // Viz.js library for DOT graphs
   }
 }
 
-// Register syntax highlighting languages
-const registerLanguages = () => {
-  try {
-    lowlight.registerLanguage('javascript', javascript as LanguageFn);
-    lowlight.registerLanguage('js', javascript as LanguageFn);
-    lowlight.registerLanguage('python', python as LanguageFn);
-    lowlight.registerLanguage('py', python as LanguageFn);
-    lowlight.registerLanguage('java', java as LanguageFn);
-    lowlight.registerLanguage('cpp', cpp as LanguageFn);
-    lowlight.registerLanguage('c++', cpp as LanguageFn);
-    lowlight.registerLanguage('sql', sql as LanguageFn);
-    lowlight.registerLanguage('xml', xml as LanguageFn);
-    lowlight.registerLanguage('html', xml as LanguageFn);
-    lowlight.registerLanguage('bash', bash as LanguageFn);
-    lowlight.registerLanguage('shell', bash as LanguageFn);
-    lowlight.registerLanguage('json', json as LanguageFn);
-    lowlight.registerLanguage('css', css as LanguageFn);
-    lowlight.registerLanguage('typescript', typescript as LanguageFn);
-    lowlight.registerLanguage('ts', typescript as LanguageFn);
-  } catch (error) {
-    console.warn('Error registering syntax highlighting languages:', error);
-  }
-};
+interface DiagramPanelProps {
+  diagramContent?: string;
+  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs'; // Added 'threejs'
+  onClose: () => void;
+  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
+  onSuggestAiCorrection: (prompt: string) => void;
+  isOpen: boolean;
+  language?: string; // For 'code' type, specifies the language
+  imageUrl?: string; // For 'image' type
+  initialWidthPercentage?: number; // NEW PROP
+}
 
-registerLanguages();
-
-// Enhanced syntax highlighting themes
-const themes = {
-  'github-light': {
-    background: '#ffffff',
-    foreground: '#24292f',
-    lineNumbers: '#656d76',
-    selection: '#0969da1a',
-    border: '#d1d9e0',
-    colors: {
-      'hljs-comment': '#6e7781',
-      'hljs-quote': '#6e7781',
-      'hljs-keyword': '#cf222e',
-      'hljs-selector-tag': '#116329',
-      'hljs-subst': '#24292f',
-      'hljs-built_in': '#0550ae',
-      'hljs-type': '#953800',
-      'hljs-class': '#953800',
-      'hljs-string': '#0a3069',
-      'hljs-title': '#8250df',
-      'hljs-section': '#0550ae',
-      'hljs-number': '#0550ae',
-      'hljs-literal': '#0550ae',
-      'hljs-boolean': '#0550ae',
-      'hljs-variable': '#e36209',
-      'hljs-template-variable': '#e36209',
-      'hljs-function': '#8250df',
-      'hljs-name': '#8250df',
-      'hljs-params': '#24292f',
-      'hljs-attr': '#116329',
-      'hljs-attribute': '#116329',
-      'hljs-tag': '#116329',
-      'hljs-selector-id': '#0550ae',
-      'hljs-selector-class': '#6f42c1',
-      'hljs-selector-attr': '#0550ae',
-      'hljs-selector-pseudo': '#0550ae',
-      'hljs-operator': '#cf222e',
-      'hljs-symbol': '#cf222e',
-      'hljs-bullet': '#cf222e',
-      'hljs-regexp': '#116329',
-      'hljs-meta': '#8250df',
-      'hljs-meta-keyword': '#cf222e',
-      'hljs-meta-string': '#0a3069',
-      'hljs-addition': '#116329',
-      'hljs-deletion': '#82071e',
-    }
-  },
-  'github-dark': {
-    background: '#0d1117',
-    foreground: '#e6edf3',
-    lineNumbers: '#7d8590',
-    selection: '#388bfd26',
-    border: '#30363d',
-    colors: {
-      'hljs-comment': '#8b949e',
-      'hljs-quote': '#8b949e',
-      'hljs-keyword': '#ff7b72',
-      'hljs-selector-tag': '#7ee787',
-      'hljs-subst': '#e6edf3',
-      'hljs-built_in': '#79c0ff',
-      'hljs-type': '#ffa657',
-      'hljs-class': '#ffa657',
-      'hljs-string': '#a5d6ff',
-      'hljs-title': '#d2a8ff',
-      'hljs-section': '#79c0ff',
-      'hljs-number': '#79c0ff',
-      'hljs-literal': '#79c0ff',
-      'hljs-boolean': '#79c0ff',
-      'hljs-variable': '#ffa657',
-      'hljs-template-variable': '#ffa657',
-      'hljs-function': '#d2a8ff',
-      'hljs-name': '#d2a8ff',
-      'hljs-params': '#e6edf3',
-      'hljs-attr': '#7ee787',
-      'hljs-attribute': '#7ee787',
-      'hljs-tag': '#7ee787',
-      'hljs-selector-id': '#79c0ff',
-      'hljs-selector-class': '#d2a8ff',
-      'hljs-selector-attr': '#79c0ff',
-      'hljs-selector-pseudo': '#79c0ff',
-      'hljs-operator': '#ff7b72',
-      'hljs-symbol': '#ff7b72',
-      'hljs-bullet': '#ff7b72',
-      'hljs-regexp': '#7ee787',
-      'hljs-meta': '#d2a8ff',
-      'hljs-meta-keyword': '#ff7b72',
-      'hljs-meta-string': '#a5d6ff',
-      'hljs-addition': '#aff5b4',
-      'hljs-deletion': '#ffdcd7',
-    }
-  },
-  'monokai': {
-    background: '#272822',
-    foreground: '#f8f8f2',
-    lineNumbers: '#75715e',
-    selection: '#49483e',
-    border: '#3e3d32',
-    colors: {
-      'hljs-comment': '#75715e',
-      'hljs-quote': '#75715e',
-      'hljs-keyword': '#f92672',
-      'hljs-selector-tag': '#f92672',
-      'hljs-subst': '#f8f8f2',
-      'hljs-built_in': '#66d9ef',
-      'hljs-type': '#66d9ef',
-      'hljs-class': '#a6e22e',
-      'hljs-string': '#e6db74',
-      'hljs-title': '#a6e22e',
-      'hljs-section': '#a6e22e',
-      'hljs-number': '#ae81ff',
-      'hljs-literal': '#ae81ff',
-      'hljs-boolean': '#ae81ff',
-      'hljs-variable': '#f8f8f2',
-      'hljs-template-variable': '#f8f8f2',
-      'hljs-function': '#a6e22e',
-      'hljs-name': '#a6e22e',
-      'hljs-params': '#fd971f',
-      'hljs-attr': '#a6e22e',
-      'hljs-attribute': '#a6e22e',
-      'hljs-tag': '#f92672',
-      'hljs-selector-id': '#a6e22e',
-      'hljs-selector-class': '#a6e22e',
-      'hljs-selector-attr': '#66d9ef',
-      'hljs-selector-pseudo': '#66d9ef',
-      'hljs-operator': '#f92672',
-      'hljs-symbol': '#f92672',
-      'hljs-bullet': '#f92672',
-      'hljs-regexp': '#e6db74',
-      'hljs-meta': '#75715e',
-      'hljs-meta-keyword': '#f92672',
-      'hljs-meta-string': '#e6db74',
-      'hljs-addition': '#a6e22e',
-      'hljs-deletion': '#f92672',
-    }
-  },
-  'dracula': {
-    background: '#282a36',
-    foreground: '#f8f8f2',
-    lineNumbers: '#6272a4',
-    selection: '#44475a',
-    border: '#44475a',
-    colors: {
-      'hljs-comment': '#6272a4',
-      'hljs-quote': '#6272a4',
-      'hljs-keyword': '#ff79c6',
-      'hljs-selector-tag': '#ff79c6',
-      'hljs-subst': '#f8f8f2',
-      'hljs-built_in': '#8be9fd',
-      'hljs-type': '#8be9fd',
-      'hljs-class': '#50fa7b',
-      'hljs-string': '#f1fa8c',
-      'hljs-title': '#50fa7b',
-      'hljs-section': '#50fa7b',
-      'hljs-number': '#bd93f9',
-      'hljs-literal': '#bd93f9',
-      'hljs-boolean': '#bd93f9',
-      'hljs-variable': '#f8f8f2',
-      'hljs-template-variable': '#f8f8f2',
-      'hljs-function': '#50fa7b',
-      'hljs-name': '#50fa7b',
-      'hljs-params': '#ffb86c',
-      'hljs-attr': '#50fa7b',
-      'hljs-attribute': '#50fa7b',
-      'hljs-tag': '#ff79c6',
-      'hljs-selector-id': '#50fa7b',
-      'hljs-selector-class': '#50fa7b',
-      'hljs-selector-attr': '#8be9fd',
-      'hljs-selector-pseudo': '#8be9fd',
-      'hljs-operator': '#ff79c6',
-      'hljs-symbol': '#ff79c6',
-      'hljs-bullet': '#ff79c6',
-      'hljs-regexp': '#f1fa8c',
-      'hljs-meta': '#6272a4',
-      'hljs-meta-keyword': '#ff79c6',
-      'hljs-meta-string': '#f1fa8c',
-      'hljs-addition': '#50fa7b',
-      'hljs-deletion': '#ff5555',
-    }
-  },
-  'nord': {
-    background: '#2e3440',
-    foreground: '#d8dee9',
-    lineNumbers: '#616e88',
-    selection: '#434c5e',
-    border: '#3b4252',
-    colors: {
-      'hljs-comment': '#616e88',
-      'hljs-quote': '#616e88',
-      'hljs-keyword': '#81a1c1',
-      'hljs-selector-tag': '#81a1c1',
-      'hljs-subst': '#d8dee9',
-      'hljs-built_in': '#88c0d0',
-      'hljs-type': '#88c0d0',
-      'hljs-class': '#a3be8c',
-      'hljs-string': '#a3be8c',
-      'hljs-title': '#8fbcbb',
-      'hljs-section': '#8fbcbb',
-      'hljs-number': '#b48ead',
-      'hljs-literal': '#b48ead',
-      'hljs-boolean': '#b48ead',
-      'hljs-variable': '#d8dee9',
-      'hljs-template-variable': '#d8dee9',
-      'hljs-function': '#8fbcbb',
-      'hljs-name': '#8fbcbb',
-      'hljs-params': '#d08770',
-      'hljs-attr': '#8fbcbb',
-      'hljs-attribute': '#8fbcbb',
-      'hljs-tag': '#81a1c1',
-      'hljs-selector-id': '#8fbcbb',
-      'hljs-selector-class': '#8fbcbb',
-      'hljs-selector-attr': '#88c0d0',
-      'hljs-selector-pseudo': '#88c0d0',
-      'hljs-operator': '#81a1c1',
-      'hljs-symbol': '#81a1c1',
-      'hljs-bullet': '#81a1c1',
-      'hljs-regexp': '#a3be8c',
-      'hljs-meta': '#616e88',
-      'hljs-meta-keyword': '#81a1c1',
-      'hljs-meta-string': '#a3be8c',
-      'hljs-addition': '#a3be8c',
-      'hljs-deletion': '#bf616a',
-    }
-  },
-  'one-dark': {
-    background: '#1e2127',
-    foreground: '#abb2bf',
-    lineNumbers: '#636d83',
-    selection: '#2c323d',
-    border: '#2c323d',
-    colors: {
-      'hljs-comment': '#5c6370',
-      'hljs-quote': '#5c6370',
-      'hljs-keyword': '#c678dd',
-      'hljs-selector-tag': '#e06c75',
-      'hljs-subst': '#abb2bf',
-      'hljs-built_in': '#e6c07b',
-      'hljs-type': '#e6c07b',
-      'hljs-class': '#e6c07b',
-      'hljs-string': '#98c379',
-      'hljs-title': '#61afef',
-      'hljs-section': '#61afef',
-      'hljs-number': '#d19a66',
-      'hljs-literal': '#56b6c2',
-      'hljs-boolean': '#56b6c2',
-      'hljs-variable': '#e06c75',
-      'hljs-template-variable': '#e06c75',
-      'hljs-function': '#61afef',
-      'hljs-name': '#61afef',
-      'hljs-params': '#abb2bf',
-      'hljs-attr': '#d19a66',
-      'hljs-attribute': '#d19a66',
-      'hljs-tag': '#e06c75',
-      'hljs-selector-id': '#61afef',
-      'hljs-selector-class': '#d19a66',
-      'hljs-selector-attr': '#56b6c2',
-      'hljs-selector-pseudo': '#56b6c2',
-      'hljs-operator': '#56b6c2',
-      'hljs-symbol': '#56b6c2',
-      'hljs-bullet': '#56b6c2',
-      'hljs-regexp': '#98c379',
-      'hljs-meta': '#61afef',
-      'hljs-meta-keyword': '#c678dd',
-      'hljs-meta-string': '#98c379',
-      'hljs-addition': '#98c379',
-      'hljs-deletion': '#e06c75',
-    }
-  },
-  'solarized-light': {
-    background: '#fdf6e3',
-    foreground: '#657b83',
-    lineNumbers: '#93a1a1',
-    selection: '#eee8d5',
-    border: '#eee8d5',
-    colors: {
-      'hljs-comment': '#93a1a1',
-      'hljs-quote': '#93a1a1',
-      'hljs-keyword': '#859900',
-      'hljs-selector-tag': '#859900',
-      'hljs-subst': '#657b83',
-      'hljs-built_in': '#b58900',
-      'hljs-type': '#b58900',
-      'hljs-class': '#268bd2',
-      'hljs-string': '#2aa198',
-      'hljs-title': '#268bd2',
-      'hljs-section': '#268bd2',
-      'hljs-number': '#d33682',
-      'hljs-literal': '#d33682',
-      'hljs-boolean': '#d33682',
-      'hljs-variable': '#cb4b16',
-      'hljs-template-variable': '#cb4b16',
-      'hljs-function': '#268bd2',
-      'hljs-name': '#268bd2',
-      'hljs-params': '#657b83',
-      'hljs-attr': '#268bd2',
-      'hljs-attribute': '#268bd2',
-      'hljs-tag': '#859900',
-      'hljs-selector-id': '#268bd2',
-      'hljs-selector-class': '#268bd2',
-      'hljs-selector-attr': '#2aa198',
-      'hljs-selector-pseudo': '#2aa198',
-      'hljs-operator': '#859900',
-      'hljs-symbol': '#859900',
-      'hljs-bullet': '#859900',
-      'hljs-regexp': '#2aa198',
-      'hljs-meta': '#268bd2',
-      'hljs-meta-keyword': '#859900',
-      'hljs-meta-string': '#2aa198',
-      'hljs-addition': '#859900',
-      'hljs-deletion': '#dc322f',
-    }
-  },
-  'tokyo-night': {
-    background: '#1a1b26',
-    foreground: '#9aa5ce',
-    lineNumbers: '#565f89',
-    selection: '#364a82',
-    border: '#24283b',
-    colors: {
-      'hljs-comment': '#565f89',
-      'hljs-quote': '#565f89',
-      'hljs-keyword': '#bb9af7',
-      'hljs-selector-tag': '#f7768e',
-      'hljs-subst': '#9aa5ce',
-      'hljs-built_in': '#e0af68',
-      'hljs-type': '#e0af68',
-      'hljs-class': '#9ece6a',
-      'hljs-string': '#9ece6a',
-      'hljs-title': '#7aa2f7',
-      'hljs-section': '#7aa2f7',
-      'hljs-number': '#ff9e64',
-      'hljs-literal': '#ff9e64',
-      'hljs-boolean': '#ff9e64',
-      'hljs-variable': '#f7768e',
-      'hljs-template-variable': '#f7768e',
-      'hljs-function': '#7aa2f7',
-      'hljs-name': '#7aa2f7',
-      'hljs-params': '#9aa5ce',
-      'hljs-attr': '#73daca',
-      'hljs-attribute': '#73daca',
-      'hljs-tag': '#f7768e',
-      'hljs-selector-id': '#7aa2f7',
-      'hljs-selector-class': '#9ece6a',
-      'hljs-selector-attr': '#73daca',
-      'hljs-selector-pseudo': '#73daca',
-      'hljs-operator': '#89ddff',
-      'hljs-symbol': '#89ddff',
-      'hljs-bullet': '#89ddff',
-      'hljs-regexp': '#9ece6a',
-      'hljs-meta': '#7aa2f7',
-      'hljs-meta-keyword': '#bb9af7',
-      'hljs-meta-string': '#9ece6a',
-      'hljs-addition': '#9ece6a',
-      'hljs-deletion': '#f7768e',
-    }
-  }
-};
-
-type ThemeName = keyof typeof themes;
-
-// Helper to escape HTML for plain text display
-const escapeHtml = (text: string) => {
-  const map: { [key: string]: string } = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
-};
-
-// Helper to convert Lowlight result to HTML with theme support
-const toHtml = (result: any, theme: typeof themes[ThemeName]) => {
-  const nodeToHtml = (node: any): string => {
-    if (node.type === 'text') {
-      return escapeHtml(node.value);
-    }
-    if (node.type === 'element') {
-      const { tagName, properties, children } = node;
-      const classNames = (properties?.className || []).join(' ');
-
-      let style = '';
-      classNames.split(' ').forEach(cls => {
-        if (theme.colors[cls as keyof typeof theme.colors]) {
-          style += `color: ${theme.colors[cls as keyof typeof theme.colors]}; `;
-        }
-      });
-      
-      const childrenHtml = children?.map(nodeToHtml).join('') || '';
-      return `<${tagName}${style ? ` style="${style.trim()}"` : ''}>${childrenHtml}</${tagName}>`;
-    }
-    return '';
-  };
-  return result.children.map(nodeToHtml).join('');
-};
-
-// Enhanced syntax highlighting function with theme support
-const highlightCode = (code: string, language: string, theme: typeof themes[ThemeName]) => {
-  try {
-    const result = lowlight.highlight(language, code);
-    return toHtml(result, theme);
-  } catch (error) {
-    console.warn('Syntax highlighting failed:', error);
-    return escapeHtml(code);
-  }
-};
-
-// Chart.js Renderer Component
+// NEW: ChartRenderer Component
 interface ChartRendererProps {
   chartConfig: any;
+  onInvalidConfig: (error: string | null) => void;
   chartRef: React.RefObject<HTMLCanvasElement>;
-  onInvalidConfig: (error: string) => void;
 }
 
-const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, chartRef, onInvalidConfig }) => {
+const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, onInvalidConfig, chartRef }) => {
   const chartInstance = useRef<Chart | null>(null);
-  const [chartFontSize, setChartFontSize] = useState(12);
-
-  const calculateFontSize = useCallback(() => {
-    const width = window.innerWidth;
-    if (width < 640) return 7;
-    else if (width < 1024) return 9;
-    else return 12;
-  }, []);
 
   useEffect(() => {
-    setChartFontSize(calculateFontSize());
-    const handleResize = () => setChartFontSize(calculateFontSize());
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [calculateFontSize]);
+    if (chartRef.current) {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+      }
 
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    if (chartInstance.current) {
-      chartInstance.current.destroy();
-      chartInstance.current = null;
-    }
-
-    try {
-      const configString = typeof chartConfig === 'string' ? chartConfig : JSON.stringify(chartConfig);
-      const cleanJsonString = configString.replace(/\/\/.*|\/\*[\sS]*?\*\//g, '');
-      let config = JSON.parse(cleanJsonString);
-
-      if (config.options) {
-        if (config.options.plugins?.title) {
-          config.options.plugins.title.font = { size: chartFontSize * 1.2 };
+      try {
+        const ctx = chartRef.current.getContext('2d');
+        if (ctx) {
+          chartInstance.current = new Chart(ctx, chartConfig);
+          onInvalidConfig(null); // Clear any previous error
         }
-        if (config.options.scales) {
-          Object.values(config.options.scales).forEach((scale: any) => {
-            if (scale.ticks) scale.ticks.font = { size: chartFontSize };
-            if (scale.title) scale.title.font = { size: chartFontSize * 1.1 };
-          });
-        }
-        if (config.options.plugins?.legend?.labels) {
-          config.options.plugins.legend.labels.font = { size: chartFontSize };
-        }
-
-        if (config.options?.plugins?.tooltip?.callbacks) {
-          const callbacks = config.options.plugins.tooltip.callbacks;
-          for (const key in callbacks) {
-            if (typeof callbacks[key] === 'string') {
-              try {
-                // IMPORTANT: This part attempts to convert string callbacks to functions.
-                // This is a common pattern for Chart.js configs received as JSON.
-                // However, if the AI provides invalid JS in these strings, it will fail.
-                // The prompt for the AI should discourage complex JS in these fields.
-                callbacks[key] = new Function('context', `return ${callbacks[key]}`);
-              } catch (e) {
-                console.warn(`Failed to parse Chart.js tooltip callback for ${key}:`, e);
-                // Set a fallback string or null to prevent further errors
-                callbacks[key] = `Error: Invalid callback for ${key}`;
-              }
-            }
+      } catch (error: any) {
+        console.error("Error rendering Chart.js:", error);
+        onInvalidConfig(`Error rendering chart: ${error.message}`);
+        if (chartRef.current) {
+          const ctx = chartRef.current.getContext('2d');
+          if (ctx) {
+            ctx.clearRect(0, 0, chartRef.current.width, chartRef.current.height);
+            ctx.fillStyle = '#ef4444';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Error rendering chart.', chartRef.current.width / 2, chartRef.current.height / 2);
+            ctx.fillText('Check console for details.', chartRef.current.width / 2, chartRef.current.height / 2 + 20);
           }
         }
       }
-
-      const ctx = chartRef.current.getContext('2d');
-      if (ctx) {
-        chartInstance.current = new Chart(ctx, config);
-      }
-    } catch (e: any) {
-      console.error("ChartRenderer: Error parsing or rendering Chart.js:", e);
-      onInvalidConfig(`Invalid Chart.js configuration: ${e.message}`);
     }
 
     return () => {
@@ -551,40 +89,121 @@ const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, chartRe
         chartInstance.current = null;
       }
     };
-  }, [chartConfig, chartRef, chartFontSize, onInvalidConfig]);
+  }, [chartConfig, chartRef, onInvalidConfig]);
 
   return (
-    <div className="relative w-full bg-white p-4 rounded-lg shadow-inner dark:bg-gray-900">
-      <canvas ref={chartRef}></canvas>
+    <div className="p-4 flex items-center justify-center h-full">
+      {/* Changed className to include h-full for proper sizing */}
+      <canvas ref={chartRef} className="max-w-full h-full"></canvas>
     </div>
   );
 });
 
-// DiagramPanel component
-interface DiagramPanelProps {
-  diagramContent?: string;
-  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text';
-  onClose: () => void;
-  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
-  onSuggestAiCorrection: (prompt: string) => void; // This prop is correctly defined here
-  isOpen: boolean;
-  language?: string;
-  imageUrl?: string;
+// NEW: ThreeJSRenderer Component
+interface ThreeJSRendererProps {
+  codeContent: string;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
+  onInvalidCode: (error: string | null) => void;
+  // NEW: Callback to pass scene and renderer to parent for export
+  onSceneReady: (scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => void;
 }
+
+const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, canvasRef, onInvalidCode, onSceneReady }) => {
+  const threeJsCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (canvasRef.current && codeContent) {
+      console.log("[Three.js Renderer] Attempting to render Three.js scene.");
+      if (threeJsCleanupRef.current) {
+        threeJsCleanupRef.current();
+        threeJsCleanupRef.current = null;
+        console.log("[Three.js Renderer] Cleaned up previous scene.");
+      }
+
+      try {
+        // We define the function that will execute the user's code.
+        // The arguments 'THREE', 'OrbitControls', 'GLTFLoader' are parameters to this *outer* function.
+        const createSceneWrapper = new Function('THREE', 'OrbitControls', 'GLTFLoader', `
+          ${codeContent}
+          // The user's code is expected to define a function called createThreeJSScene
+          // We return this function so it can be called with its specific arguments.
+          return createThreeJSScene;
+        `);
+
+        // Now, call the createSceneWrapper with the actual THREE, OrbitControls, GLTFLoader objects.
+        // This returns the user's 'createThreeJSScene' function.
+        const createScene = createSceneWrapper(THREE, OrbitControls, GLTFLoader);
+
+        // Finally, call the user's 'createThreeJSScene' function, passing all its expected arguments.
+        const { scene, renderer, cleanup } = createScene(canvasRef.current, THREE, OrbitControls, GLTFLoader);
+        
+        threeJsCleanupRef.current = cleanup;
+        onInvalidCode(null); // Clear any previous error
+        onSceneReady(scene, renderer, cleanup); // Pass scene, renderer, and cleanup to parent
+        console.log("[Three.js Renderer] Three.js scene rendered successfully.");
+      } catch (error: any) {
+        console.error("Error rendering Three.js scene:", error);
+        onInvalidCode(`Error rendering 3D scene: ${error.message}`);
+        if (canvasRef.current) {
+          const ctx = canvasRef.current.getContext('2d');
+          if (ctx) {
+            ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            ctx.fillStyle = '#ef4444';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Error rendering 3D scene.', canvasRef.current.width / 2, canvasRef.current.height / 2);
+            ctx.fillText('Check console for details.', canvasRef.current.width / 2, canvasRef.current.height / 2 + 20);
+          }
+        }
+      }
+    }
+
+    return () => {
+      if (threeJsCleanupRef.current) {
+        threeJsCleanupRef.current();
+        threeJsCleanupRef.current = null;
+        console.log("[Three.js Renderer] Cleanup: Three.js scene unmounted.");
+      }
+    };
+  }, [codeContent, canvasRef, onInvalidCode, onSceneReady]);
+
+  return (
+    <div className="p-4 flex items-center justify-center h-full">
+      {/* Changed className to include h-full for proper sizing */}
+      <canvas ref={canvasRef} className="max-w-full h-full"></canvas>
+    </div>
+  );
+});
+
 
 export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   diagramContent,
   diagramType,
   onClose,
   onMermaidError,
-  onSuggestAiCorrection, // Destructure the prop here
+  onSuggestAiCorrection,
   isOpen,
   language,
-  imageUrl
+  imageUrl,
+  initialWidthPercentage, // Destructure new prop
 }) => {
-  const diagramContainerRef = useRef<HTMLDivElement>(null);
-  const chartCanvasRef = useRef<HTMLCanvasElement>(null);
-  const mermaidDivRef = useRef<HTMLDivElement>(null);
+  const [showRawCode, setShowRawCode] = useState(false);
+  const chartRef = useRef<HTMLCanvasElement>(null);
+  // chartInstance is now managed within ChartRenderer
+  const diagramContainerRef = useRef<HTMLDivElement>(null); // Ref for the main content area for PDF export
+  
+  // Theme state
+  const [currentTheme, setCurrentTheme] = useState<ThemeName>('github-light');
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
+
+  // NEW: Ref for Three.js canvas and its cleanup function
+  const threeJsRef = useRef<HTMLCanvasElement>(null);
+  // threeJsCleanupRef is now managed within ThreeJSRenderer
+
+  // NEW: State to hold the Three.js scene and renderer instances for export
+  const [threeJsScene, setThreeJsScene] = useState<THREE.Scene | null>(null);
+  const [threeJsRenderer, setThreeJsRenderer] = useState<THREE.WebGLRenderer | null>(null);
+  const threeJsCleanupFunction = useRef<(() => void) | null>(null);
 
   const diagramPanelRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
@@ -598,15 +217,11 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   const initialPanelHeight = useRef(0);
 
   const [chartError, setChartError] = useState<string | null>(null);
+  const [threeJsError, setThreeJsError] = useState<string | null>(null); // State for Three.js errors
   const [dotSvg, setDotSvg] = useState<string | null>(null);
   const [dotError, setDotError] = useState<string | null>(null);
   const [isDotLoading, setIsDotLoading] = useState(false);
-  const [showRawCode, setShowRawCode] = useState(false);
   
-  // Theme state
-  const [currentTheme, setCurrentTheme] = useState<ThemeName>('github-light');
-  const [showThemeSelector, setShowThemeSelector] = useState(false);
-
   // Auto-detect system theme preference
   useEffect(() => {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -617,15 +232,36 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   useEffect(() => {
     if (isOpen && diagramPanelRef.current) {
       if (window.innerWidth >= 768) {
-        if (panelWidth === null) {
-          setPanelWidth(window.innerWidth * 0.7);
+        if (panelWidth === null && initialWidthPercentage !== undefined) {
+          setPanelWidth(window.innerWidth * (initialWidthPercentage / 100)); // Use prop for initial width
+        } else if (panelWidth === null) { // Fallback if no prop is provided
+          setPanelWidth(window.innerWidth * 0.7); // Keep existing default if no specific percentage
         }
         if (panelHeight === null) {
           setPanelHeight(window.innerHeight * 0.8);
         }
       }
     }
-  }, [isOpen, panelWidth, panelHeight]);
+  }, [isOpen, panelWidth, panelHeight, initialWidthPercentage]);
+
+  // Cleanup Three.js scene when panel closes or diagram content changes
+  useEffect(() => {
+    return () => {
+      if (threeJsCleanupFunction.current) {
+        threeJsCleanupFunction.current();
+        threeJsCleanupFunction.current = null;
+        setThreeJsScene(null);
+        setThreeJsRenderer(null);
+      }
+    };
+  }, [diagramContent, diagramType]); // Dependency on diagramContent and diagramType to trigger cleanup on change
+
+  // Callback to receive Three.js scene and renderer from ThreeJSRenderer
+  const handleThreeJsSceneReady = useCallback((scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => {
+    setThreeJsScene(scene);
+    setThreeJsRenderer(renderer);
+    threeJsCleanupFunction.current = cleanup;
+  }, []);
 
   // Width Resize Handlers
   const handleWidthResizeMouseDown = useCallback((e: React.MouseEvent) => {
@@ -680,7 +316,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     const handleGlobalMouseUp = () => {
       setIsResizingWidth(false);
       setIsResizingHeight(false);
-      document.body.style.cursor = 'default';
+      document.body.style.cursor = 'default'; // Reset cursor
     };
 
     const handleGlobalMouseMove = (e: MouseEvent) => {
@@ -692,20 +328,24 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       }
     };
 
+    // Attach listeners when resizing starts
     if (isResizingWidth || isResizingHeight) {
       window.addEventListener('mousemove', handleGlobalMouseMove);
       window.addEventListener('mouseup', handleGlobalMouseUp);
-      window.addEventListener('mouseleave', handleGlobalMouseUp, { capture: true });
+      // Add mouseleave to window to catch releases outside the iframe
+      window.addEventListener('mouseleave', handleGlobalMouseUp);
     } else {
+      // Clean up listeners when resizing stops
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
-      window.removeEventListener('mouseleave', handleGlobalMouseUp, { capture: true });
+      window.removeEventListener('mouseleave', handleGlobalMouseUp);
     }
 
+    // Cleanup on component unmount
     return () => {
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
-      window.removeEventListener('mouseleave', handleGlobalMouseUp, { capture: true });
+      window.removeEventListener('mouseleave', handleGlobalMouseUp);
     };
   }, [isResizingWidth, isResizingHeight, handleWidthResizeMouseMove, handleHeightResizeMouseMove]);
 
@@ -752,8 +392,8 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         return;
       }
     } else if (diagramType === 'chartjs') {
-      if (chartCanvasRef.current) {
-        contentToDownload = chartCanvasRef.current.toDataURL('image/png');
+      if (chartRef.current) {
+        contentToDownload = chartRef.current.toDataURL('image/png');
         fileExtension = 'png';
         mimeType = 'image/png';
         const downloadLink = document.createElement('a');
@@ -768,7 +408,25 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         toast.error('Chart canvas not found for chart.js download.');
         return;
       }
-    } else if (diagramType === 'code' || diagramType === 'document-text') {
+    } else if (diagramType === 'threejs') {
+      if (threeJsRef.current) {
+        contentToDownload = threeJsRef.current.toDataURL('image/png');
+        fileExtension = 'png';
+        mimeType = 'image/png';
+        const downloadLink = document.createElement('a');
+        downloadLink.href = contentToDownload as string;
+        downloadLink.download = `${downloadFileName}.${fileExtension}`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        toast.success(`3D Scene downloaded as ${fileExtension.toUpperCase()}!`);
+        return;
+      } else {
+        toast.error('3D scene canvas not found for download.');
+        return;
+      }
+    }
+    else if (diagramType === 'code' || diagramType === 'document-text') {
       if (!diagramContent) {
           toast.error('No content available for code/document download.');
           return;
@@ -796,15 +454,57 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     downloadLink.download = `${downloadFileName}.${fileExtension}`;
 
     document.body.appendChild(downloadLink);
-    downloadLink.click();
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(url);
     toast.success(`${diagramType === 'code' ? 'Code' : 'Diagram'} downloaded as ${fileExtension.toUpperCase()}!`);
   };
 
+  // NEW: Function to download GLTF
+  const handleDownloadGltf = useCallback(() => {
+    if (!threeJsScene || !threeJsRenderer) {
+      toast.error('Three.js scene not ready for GLTF export.');
+      return;
+    }
+
+    toast.info('Exporting GLTF...');
+    const exporter = new GLTFExporter();
+    exporter.parse(
+      threeJsScene,
+      (gltf) => {
+        const output = JSON.stringify(gltf, null, 2);
+        const blob = new Blob([output], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'scene.gltf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success('GLTF scene downloaded successfully!');
+      },
+      (error) => {
+        console.error('Error exporting GLTF:', error);
+        toast.error('Failed to export GLTF scene.');
+      },
+      {} // Options, e.g., { binary: true } for GLB
+    );
+  }, [threeJsScene, threeJsRenderer]);
+
+
   // Function to download as PDF
   const handleDownloadPdf = async () => {
-    if (!diagramContainerRef.current) {
+    // Determine which ref to use for PDF generation based on diagramType
+    let targetRef;
+    if (diagramType === 'chartjs') {
+      targetRef = chartRef;
+    } else if (diagramType === 'threejs') {
+      targetRef = threeJsRef;
+    } else {
+      targetRef = diagramContainerRef;
+    }
+
+    if (!targetRef.current) {
       toast.error('Content not rendered for PDF download.');
       return;
     }
@@ -816,7 +516,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
     toast.info('Generating PDF...');
     try {
-      const canvas = await window.html2canvas(diagramContainerRef.current, {
+      const canvas = await window.html2canvas(targetRef.current, { // Use targetRef.current
         scale: 3,
         useCORS: true,
         backgroundColor: themes[currentTheme].background,
@@ -945,7 +645,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
           chart={diagramContent || ''}
           onMermaidError={onMermaidError}
           onSuggestAiCorrection={onSuggestAiCorrection} // <-- IMPORTANT: Pass the prop here!
-          diagramRef={mermaidDivRef}
+          diagramRef={diagramContainerRef}
           key={diagramContent}
         />
       );
@@ -1013,11 +713,40 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
           <ChartRenderer
             chartConfig={diagramContent ? JSON.parse(diagramContent.replace(/\/\/.*|\/\*[\sS]*?\*\//g, '')) : {}}
             onInvalidConfig={setChartError}
-            chartRef={chartCanvasRef}
+            chartRef={chartRef}
           />
         </>
       );
-    } else if (diagramType === 'code') {
+    } else if (diagramType === 'threejs') {
+      panelTitle = 'Three.js 3D Scene View';
+      downloadButtonText = 'Download 3D Scene (PNG)';
+      downloadFileName = 'threejs-scene';
+      return (
+        <>
+          {threeJsError && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 dark:bg-red-900 dark:text-red-300">
+              <AlertTriangle className="inline h-4 w-4 mr-2" />
+              <span>{threeJsError}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onSuggestAiCorrection(`Can you fix this Three.js code? Here's the code: ${diagramContent}`)}
+                className="ml-4 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+              >
+                Suggest AI Correction
+              </Button>
+            </div>
+          )}
+          <ThreeJSRenderer
+            codeContent={diagramContent || ''}
+            canvasRef={threeJsRef}
+            onInvalidCode={setThreeJsError}
+            onSceneReady={handleThreeJsSceneReady} // Pass the callback here
+          />
+        </>
+      );
+    }
+    else if (diagramType === 'code') {
       panelTitle = language ? `Code View - ${language.toUpperCase()}` : 'Code View';
       downloadButtonText = 'Download Code';
       downloadFileName = `code.${language || 'txt'}`;
@@ -1136,7 +865,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         </div>
       );
     }
-  }, [diagramContent, diagramType, imageUrl, showRawCode, currentTheme, isResizingHeight, isResizingWidth, onMermaidError, onSuggestAiCorrection, chartError, language, dotSvg, dotError, isDotLoading]);
+  }, [diagramContent, diagramType, imageUrl, showRawCode, currentTheme, isResizingHeight, isResizingWidth, onMermaidError, onSuggestAiCorrection, chartError, threeJsError, language, dotSvg, dotError, isDotLoading, handleThreeJsSceneReady]);
 
   // Click outside handler for theme selector
   useEffect(() => {
@@ -1156,16 +885,12 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
   return (
     <>
-      {/* Load jsPDF, html2canvas from CDN */}
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
       <div
         ref={diagramPanelRef}
         className={`
           absolute inset-y-0 right-0 w-full bg-white shadow-xl flex flex-col z-40 transition-transform duration-300 ease-in-out
           ${isOpen ? 'translate-x-0' : 'translate-x-full'}
-          md:relative md:translate-x-0 md:flex-shrink-0 md:rounded-lg md:shadow-md md:mb-6 md:border md:border-slate-200
+          md:rounded-lg md:shadow-md md:mb-6 md:border md:border-slate-200 
           dark:bg-gray-900 dark:border-gray-700
         `}
         style={dynamicPanelStyle}
@@ -1187,7 +912,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             )}
 
             {/* Toggle Raw Code Button */}
-            {diagramContent && (diagramType === 'code' || diagramType === 'document-text' || diagramType === 'chartjs' || diagramType === 'mermaid' || diagramType === 'dot') && (
+            {diagramContent && (diagramType === 'code' || diagramType === 'document-text' || diagramType === 'chartjs' || diagramType === 'mermaid' || diagramType === 'dot' || diagramType === 'threejs') && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1209,6 +934,21 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               <Download className="h-4 w-4 mr-0 sm:mr-2" />
               <span className="hidden sm:inline">{downloadButtonText}</span>
             </Button>
+
+            {/* NEW: Download GLTF Button */}
+            {diagramType === 'threejs' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadGltf}
+                className="text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900 dark:border-green-700"
+                title="Download 3D Model (GLTF)"
+                disabled={!threeJsScene || !threeJsRenderer} // Enable only when scene is ready
+              >
+                <Download className="h-4 w-4 mr-0 sm:mr-2" />
+                <span className="hidden sm:inline">Download GLTF</span>
+              </Button>
+            )}
             
             {(!['code', 'image', 'unknown', 'document-text'].includes(diagramType)) && (
               <Button
