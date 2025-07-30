@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Sun, Moon, Book, Lightbulb, Zap, FileText, Mic, LayoutDashboard, Calendar, Code, Users, TrendingUp } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Import Card components
+import { Sparkles, Sun, Moon, Book, Lightbulb, Zap, FileText, Mic, LayoutDashboard, Calendar, Code, Users, TrendingUp, ChevronRight, ChevronDown, List, ScrollText, Settings, HelpCircle, MessageSquare, Plug } from 'lucide-react';
 
 const UserGuidePage: React.FC = () => {
     const [isDarkMode, setIsDarkMode] = React.useState(() => {
@@ -14,6 +15,21 @@ const UserGuidePage: React.FC = () => {
         }
         return false;
     });
+
+    const sectionRefs = {
+        introduction: useRef<HTMLDivElement>(null),
+        gettingStarted: useRef<HTMLDivElement>(null),
+        coreFeatures: useRef<HTMLDivElement>(null),
+        interactiveVisualizations: useRef<HTMLDivElement>(null),
+        integrations: useRef<HTMLDivElement>(null),
+        accountManagement: useRef<HTMLDivElement>(null),
+        troubleshooting: useRef<HTMLDivElement>(null),
+        tips: useRef<HTMLDivElement>(null),
+    };
+
+    const scrollToSection = (sectionId: keyof typeof sectionRefs) => {
+        sectionRefs[sectionId].current?.scrollIntoView({ behavior: 'smooth' });
+    };
 
     React.useEffect(() => {
         if (isDarkMode) {
@@ -32,7 +48,7 @@ const UserGuidePage: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex flex-col">
             {/* Header */}
-            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md">
+            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md fixed top-0 left-0 right-0">
                 <Link to="/" className="flex items-center gap-3 group">
                     <img
                         src="/siteimage.png"
@@ -57,179 +73,309 @@ const UserGuidePage: React.FC = () => {
             </header>
 
             {/* Main Content */}
-            <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
-                <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">NoteMind AI: The Full User Guide</h1>
-                <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 prose dark:prose-invert max-w-3xl mx-auto">
-                    <p>Welcome to NoteMind AI, your intelligent companion designed to transform your academic and professional learning journey. This comprehensive guide will walk you through every feature, helping you maximize your productivity and achieve deeper understanding.</p>
+            <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24 flex flex-col lg:flex-row gap-8">
+                {/* Sticky Table of Contents */}
+                <aside className="lg:w-1/4 lg:sticky lg:top-24 h-fit bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 hidden lg:block">
+                    <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white flex items-center gap-2">
+                        <List className="h-6 w-6 text-blue-600 dark:text-blue-400" /> Table of Contents
+                    </h2>
+                    <nav>
+                        <ul className="space-y-3">
+                            <li>
+                                <button onClick={() => scrollToSection('introduction')} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
+                                    <ChevronRight className="h-4 w-4" /> 1. Introduction
+                                </button>
+                            </li>
+                            <li>
+                                <button onClick={() => scrollToSection('gettingStarted')} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
+                                    <ChevronRight className="h-4 w-4" /> 2. Getting Started
+                                </button>
+                            </li>
+                            <li>
+                                <button onClick={() => scrollToSection('coreFeatures')} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
+                                    <ChevronRight className="h-4 w-4" /> 3. Core Features
+                                </button>
+                            </li>
+                            <li>
+                                <button onClick={() => scrollToSection('interactiveVisualizations')} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
+                                    <ChevronRight className="h-4 w-4" /> 4. Interactive Visualizations
+                                </button>
+                            </li>
+                            <li>
+                                <button onClick={() => scrollToSection('integrations')} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
+                                    <ChevronRight className="h-4 w-4" /> 5. Integrations
+                                </button>
+                            </li>
+                            <li>
+                                <button onClick={() => scrollToSection('accountManagement')} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
+                                    <ChevronRight className="h-4 w-4" /> 6. Account Management
+                                </button>
+                            </li>
+                            <li>
+                                <button onClick={() => scrollToSection('troubleshooting')} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
+                                    <ChevronRight className="h-4 w-4" /> 7. Troubleshooting & Support
+                                </button>
+                            </li>
+                            <li>
+                                <button onClick={() => scrollToSection('tips')} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
+                                    <ChevronRight className="h-4 w-4" /> 8. Tips for Maximizing Learning
+                                </button>
+                            </li>
+                        </ul>
+                    </nav>
+                </aside>
 
-                    <h2>1. Introduction to NoteMind AI</h2>
-                    <p>NoteMind AI is an advanced learning and note-taking platform powered by artificial intelligence. It's built to simplify complex information, organize your thoughts, and provide personalized assistance tailored to your unique learning style. Whether you're a student, researcher, or professional, NoteMind AI helps you learn smarter, not harder.</p>
+                {/* Content Area */}
+                <div className="lg:w-3/4 bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 prose dark:prose-invert max-w-none">
+                    <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">NoteMind AI: The Full User Guide</h1>
+                    <p className="lead text-lg text-gray-700 dark:text-gray-300 mb-10">Welcome to NoteMind AI, your intelligent companion designed to transform your academic and professional learning journey. This comprehensive guide will walk you through every feature, helping you maximize your productivity and achieve deeper understanding.</p>
 
-                    <h3>Key Benefits:</h3>
-                    <ul>
-                        <li><strong>Personalized Learning:</strong> AI adapts to your preferred learning style (visual, auditory, kinesthetic, reading/writing).</li>
-                        <li><strong>Intelligent Content Processing:</strong> Automatically summarizes, organizes, and extracts key insights from notes, documents, and recordings.</li>
-                        <li><strong>Interactive Visualizations:</strong> Generate dynamic diagrams and 3D scenes directly within your chat for better comprehension.</li>
-                        <li><strong>Streamlined Workflow:</strong> Manage notes, recordings, and schedules in one intuitive platform.</li>
-                    </ul>
+                    <section ref={sectionRefs.introduction} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
+                            <Sparkles className="h-8 w-8 text-blue-600 dark:text-blue-400" /> 1. Introduction to NoteMind AI
+                        </h2>
+                        <p>NoteMind AI is an advanced learning and note-taking platform powered by artificial intelligence. It's built to simplify complex information, organize your thoughts, and provide personalized assistance tailored to your unique learning style. Whether you're a student, researcher, or professional, NoteMind AI helps you learn smarter, not harder.</p>
 
-                    <h2>2. Getting Started</h2>
-                    <h3>2.1 Account Creation & Login</h3>
-                    <ol>
-                        <li><strong>Sign Up:</strong> Visit <a href="https://notemind.lovable.app/auth" target="_blank" rel="noopener noreferrer">https://notemind.lovable.app/auth</a> and follow the prompts to create your account. You'll typically need to provide your name, email, and set a password.</li>
-                        <li><strong>Login:</strong> Once registered, use your credentials to log in.</li>
-                    </ol>
+                        <h3 className="text-2xl font-semibold mt-6 mb-3 text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                            <Lightbulb className="h-6 w-6 text-yellow-600 dark:text-yellow-400" /> Key Benefits:
+                        </h3>
+                        <ul className="list-disc list-inside space-y-2">
+                            <li><strong>Personalized Learning:</strong> AI adapts to your preferred learning style (visual, auditory, kinesthetic, reading/writing).</li>
+                            <li><strong>Intelligent Content Processing:</strong> Automatically summarizes, organizes, and extracts key insights from notes, documents, and recordings.</li>
+                            <li><strong>Interactive Visualizations:</strong> Generate dynamic diagrams and 3D scenes directly within your chat for better comprehension.</li>
+                            <li><strong>Streamlined Workflow:</strong> Manage notes, recordings, and schedules in one intuitive platform.</li>
+                        </ul>
+                    </section>
 
-                    <h3>2.2 Navigating the Interface</h3>
-                    <p>The NoteMind AI interface is designed to be intuitive. Key areas usually include:</p>
-                    <ul>
-                        <li><strong>Chat Interface:</strong> Your primary interaction point with the AI assistant.</li>
-                        <li><strong>Document/Note Library:</strong> Where your uploaded files and created notes are stored.</li>
-                        <li><strong>Settings/Profile:</strong> To manage your account, preferences, and learning style.</li>
-                    </ul>
+                    <section ref={sectionRefs.gettingStarted} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
+                            <Users className="h-8 w-8 text-green-600 dark:text-green-400" /> 2. Getting Started
+                        </h2>
+                        <h3 className="text-2xl font-semibold mt-6 mb-3 text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                            <ChevronRight className="h-5 w-5" /> 2.1 Account Creation & Login
+                        </h3>
+                        <ol className="list-decimal list-inside space-y-2">
+                            <li><strong>Sign Up:</strong> Visit <a href="https://notemind.lovable.app/auth" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">https://notemind.lovable.app/auth</a> and follow the prompts to create your account. You'll typically need to provide your name, email, and set a password.</li>
+                            <li><strong>Login:</strong> Once registered, use your credentials to log in.</li>
+                        </ol>
 
-                    <h2>3. Core Features</h2>
-                    <h3>3.1 Intelligent Note-Taking</h3>
-                    <p>NoteMind AI goes beyond traditional note-taking by leveraging AI to enhance your notes.</p>
-                    <ul>
-                        <li><strong>Creating Notes:</strong>
-                            <ul>
-                                <li>You can manually type notes into the platform.</li>
-                                <li>Upload existing text documents (<code>.txt</code>, <code>.md</code>, <code>.docx</code>) for AI processing.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Organization:</strong> The AI can help categorize and tag your notes, making them easily searchable and retrievable.</li>
-                        <li><strong>Summarization:</strong> Ask the AI to summarize lengthy notes or documents into concise bullet points or a brief overview.
-                            <ul>
-                                <li><em>Example Prompt:</em> "Summarize the key points from my 'Physics Lecture 1' notes."</li>
-                            </ul>
-                        </li>
-                        <li><strong>Key Insight Extraction:</strong> The AI can identify and extract the most important concepts and facts.
-                            <ul>
-                                <li><em>Example Prompt:</em> "Extract all the definitions of terms from this document."</li>
-                            </ul>
-                        </li>
-                    </ul>
+                        <h3 className="text-2xl font-semibold mt-6 mb-3 text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                            <LayoutDashboard className="h-5 w-5" /> 2.2 Navigating the Interface
+                        </h3>
+                        <p>The NoteMind AI interface is designed to be intuitive. Key areas usually include:</p>
+                        <ul className="list-disc list-inside space-y-2">
+                            <li><strong>Chat Interface:</strong> Your primary interaction point with the AI assistant.</li>
+                            <li><strong>Document/Note Library:</strong> Where your uploaded files and created notes are stored.</li>
+                            <li><strong>Settings/Profile:</strong> To manage your account, preferences, and learning style.</li>
+                        </ul>
+                    </section>
 
-                    <h3>3.2 Effortless Recording Analysis</h3>
-                    <p>Turn your lectures, meetings, and brainstorming sessions into searchable, actionable insights.</p>
-                    <ul>
-                        <li><strong>Voice Recording:</strong> Use the in-app voice recording feature (if available) or upload audio files (<code>.mp3</code>, <code>.wav</code>).</li>
-                        <li><strong>Transcription:</strong> The AI will automatically transcribe your audio into text.</li>
-                        <li><strong>AI Analysis:</strong> Once transcribed, you can ask the AI to:
-                            <ul>
-                                <li>Summarize the recording.</li>
-                                <li>Identify key speakers (if enabled and clear audio).</li>
-                                <li>Extract action items or important decisions.</li>
-                                <li><em>Example Prompt:</em> "Summarize the main arguments from this meeting transcript."</li>
-                            </ul>
-                        </li>
-                    </ul>
+                    <section ref={sectionRefs.coreFeatures} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
+                            <Book className="h-8 w-8 text-purple-600 dark:text-purple-400" /> 3. Core Features
+                        </h2>
 
-                    <h3>3.3 Contextual AI Chat</h3>
-                    <p>Your AI assistant is more than just a chatbot; it's a personalized learning companion.</p>
-                    <ul>
-                        <li><strong>Natural Conversation:</strong> Ask questions, seek explanations, or brainstorm ideas in a conversational style.</li>
-                        <li><strong>Contextual Understanding:</strong> The AI leverages your uploaded notes and documents to provide highly relevant and personalized responses.</li>
-                        <li><strong>Adaptive Responses:</strong> Based on your chosen learning style, the AI will adjust its explanations (e.g., more visual cues for visual learners, more practical steps for kinesthetic learners).</li>
-                        <li><strong>Clarifying Questions:</strong> The AI may ask follow-up questions to better understand your needs.</li>
-                        <li><em>Example Prompt:</em> "Explain the concept of quantum entanglement, and relate it to the 'Quantum Physics 101' document I uploaded."</li>
-                    </ul>
-
-                    <h3>3.4 Smart Document Insights</h3>
-                    <p>Upload various document types and let NoteMind AI unlock their full potential.</p>
-                    <ul>
-                        <li><strong>Supported Formats:</strong> Upload images (<code>.jpeg</code>, <code>.png</code>, <code>.gif</code>, etc.), PDFs, and text-based documents.</li>
-                        <li><strong>Content Extraction:</strong> For PDFs and images, the AI attempts to extract all readable text content.</li>
-                        <li><strong>Analysis & Search:</strong> Once processed, you can:
-                            <ul>
-                                <li>Ask questions about the document's content.</li>
-                                <li>Request summaries or key takeaways.</li>
-                                <li>Search for specific information within your uploaded library.</li>
-                                <li><em>Example Prompt:</em> "What are the main causes of climate change discussed in the 'Environmental Science Report.pdf'?"</li>
-                            </ul>
-                        </li>
-                    </ul>
-
-                    <h3>3.5 Personalized Learning Paths</h3>
-                    <p>NoteMind AI adapts to how you learn best. You can set your preferred learning style in your profile or explicitly ask the AI to adjust.</p>
-                    <ul>
-                        <li><strong>Visual Learner:</strong> Expect more diagrams, charts, and descriptions that create mental images.</li>
-                        <li><strong>Auditory Learner:</strong> Responses will be more conversational, with verbal cues and narrative explanations.</li>
-                        <li><strong>Kinesthetic Learner:</strong> Look for practical steps, real-world applications, and suggestions for interactive exercises or projects.</li>
-                        <li><strong>Reading/Writing Learner:</strong> Receive detailed, comprehensive written explanations and opportunities for written reflection.</li>
-                    </ul>
-
-                    <h2>4. Interactive Visualizations</h2>
-                    <p>One of NoteMind AI's most powerful features is its ability to generate interactive diagrams and 3D scenes directly in the chat.</p>
-                    <ul>
-                        <li><strong>How to Request:</strong> Simply ask the AI to visualize a concept using a specific type of diagram.
-                            <ul>
-                                <li><em>Example Prompt:</em> "Can you draw a flowchart showing the process of photosynthesis using Mermaid syntax?"</li>
-                                <li><em>Example Prompt:</em> "Generate a bar chart comparing quarterly sales data for Q1-Q4 with Chart.js."</li>
-                                <li><em>Example Prompt:</em> "Show me a 3D model of a simple atom with Three.js."</li>
-                            </ul>
-                        </li>
-                        <li><strong>Supported Visualization Types:</strong>
-                            <ul>
-                                <li><strong>Mermaid Diagrams:</strong> For flowcharts, sequence diagrams, class diagrams, etc. (e.g., <code>graph TD A --{`>`} B</code>).</li>
-                                <li><strong>DOT (Graphviz):</strong> For network diagrams, hierarchical structures, and complex graphs.</li>
-                                <li><strong>Chart.js:</strong> For various data visualizations like bar charts, line charts, pie charts. You provide the JSON configuration.</li>
-                                <li><strong>Three.js:</strong> For interactive 3D scenes and models. The AI will generate JavaScript code that renders in a dedicated panel.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Interacting with Visualizations:</strong>
-                            <ul>
-                                <li><strong>Diagram Panel:</strong> When a visualization is generated, it will open in a dedicated "Diagram Panel" on the right side of your screen.</li>
-                                <li><strong>Resizing:</strong> You can resize the panel by dragging its left or bottom edges.</li>
-                                <li><strong>Viewing Raw Code:</strong> For code-based visualizations (Mermaid, DOT, Chart.js, Three.js), you can toggle to "View Raw Code" to see the underlying code generated by the AI.</li>
-                                <li><strong>Downloading:</strong>
-                                    <ul>
-                                        <li><strong>SVG (Mermaid/DOT):</strong> Download diagrams as scalable vector graphics.</li>
-                                        <li><strong>PNG (Chart.js/Three.js):</strong> Download charts or 3D scene screenshots as PNG images.</li>
-                                        <li><strong>GLTF (Three.js):</strong> For Three.js scenes, you can download the 3D model in GLTF format for use in other 3D applications.</li>
-                                        <li><strong>PDF:</strong> Export the visualization as a PDF document.</li>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                            <Card className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                                <CardHeader>
+                                    <CardTitle className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+                                        <ScrollText className="h-5 w-5 text-blue-600" /> 3.1 Intelligent Note-Taking
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <p>NoteMind AI goes beyond traditional note-taking by leveraging AI to enhance your notes.</p>
+                                    <ul className="list-disc list-inside ml-4 space-y-1">
+                                        <li><strong>Creating Notes:</strong> Manually type notes or upload existing text documents (<code>.txt</code>, <code>.md</code>, <code>.docx</code>).</li>
+                                        <li><strong>Organization:</strong> AI can categorize and tag your notes for easy retrieval.</li>
+                                        <li><strong>Summarization:</strong> Ask the AI to summarize lengthy notes or documents.
+                                            <p className="text-sm italic text-gray-600 dark:text-gray-400">Example: "Summarize the key points from my 'Physics Lecture 1' notes."</p>
+                                        </li>
+                                        <li><strong>Key Insight Extraction:</strong> Identify and extract important concepts and facts.
+                                            <p className="text-sm italic text-gray-600 dark:text-gray-400">Example: "Extract all the definitions of terms from this document."</p>
+                                        </li>
                                     </ul>
-                                </li>
-                                <li><strong>AI Correction:</strong> If a generated diagram has an error, you can use the "Suggest AI Correction" button to ask the AI to fix it.</li>
-                            </ul>
-                        </li>
-                    </ul>
+                                </CardContent>
+                            </Card>
 
-                    <h2>5. Integrations</h2>
-                    <p>NoteMind AI is designed to work seamlessly with your existing tools. Check the "Integrations" page on the website for a list of supported services. Common integrations may include:</p>
-                    <ul>
-                        <li><strong>Cloud Storage:</strong> Google Drive, Dropbox for document syncing.</li>
-                        <li><strong>Communication Platforms:</strong> Slack, Microsoft Teams for meeting summaries.</li>
-                        <li><strong>Calendar Apps:</strong> Google Calendar, Outlook Calendar for schedule optimization.</li>
-                    </ul>
+                            <Card className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                                <CardHeader>
+                                    <CardTitle className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+                                        <Mic className="h-5 w-5 text-green-600" /> 3.2 Effortless Recording Analysis
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <p>Turn your lectures, meetings, and brainstorming sessions into searchable, actionable insights.</p>
+                                    <ul className="list-disc list-inside ml-4 space-y-1">
+                                        <li><strong>Voice Recording:</strong> Use in-app recording or upload audio files (<code>.mp3</code>, <code>.wav</code>).</li>
+                                        <li><strong>Transcription:</strong> AI automatically transcribes audio into text.</li>
+                                        <li><strong>AI Analysis:</strong> Ask AI to summarize, identify speakers, or extract action items.
+                                            <p className="text-sm italic text-gray-600 dark:text-gray-400">Example: "Summarize the main arguments from this meeting transcript."</p>
+                                        </li>
+                                    </ul>
+                                </CardContent>
+                            </Card>
 
-                    <h2>6. Account Management</h2>
-                    <p>Access your profile and settings to customize your NoteMind AI experience.</p>
-                    <ul>
-                        <li><strong>Profile Settings:</strong> Update your name, email, and password.</li>
-                        <li><strong>Learning Preferences:</strong> Adjust your preferred learning style and content difficulty.</li>
-                        <li><strong>Subscription:</strong> Manage your plan and billing information (if applicable).</li>
-                    </ul>
+                            <Card className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                                <CardHeader>
+                                    <CardTitle className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+                                        <MessageSquare className="h-5 w-5 text-orange-600" /> 3.3 Contextual AI Chat
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <p>Your AI assistant is more than just a chatbot; it's a personalized learning companion.</p>
+                                    <ul className="list-disc list-inside ml-4 space-y-1">
+                                        <li><strong>Natural Conversation:</strong> Ask questions, seek explanations, or brainstorm ideas.</li>
+                                        <li><strong>Contextual Understanding:</strong> AI uses your uploaded content for relevant responses.</li>
+                                        <li><strong>Adaptive Responses:</strong> Explanations adjust to your chosen learning style.</li>
+                                        <li><strong>Clarifying Questions:</strong> AI may ask follow-up questions for better understanding.
+                                            <p className="text-sm italic text-gray-600 dark:text-gray-400">Example: "Explain quantum entanglement, relating it to 'Quantum Physics 101' document."</p>
+                                        </li>
+                                    </ul>
+                                </CardContent>
+                            </Card>
 
-                    <h2>7. Troubleshooting & Support</h2>
-                    <p>If you encounter any issues or have questions, here's how to get help:</p>
-                    <ul>
-                        <li><strong>Check FAQs:</strong> Visit the "Documentation" page for a Frequently Asked Questions section.</li>
-                        <li><strong>Contact Support:</strong> Use the "Contact Us" page to send a message to our support team. Provide as much detail as possible about your issue.</li>
-                        <li><strong>Report Bugs:</strong> If you suspect a bug, please report it via the contact form with steps to reproduce it.</li>
-                    </ul>
+                            <Card className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                                <CardHeader>
+                                    <CardTitle className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+                                        <FileText className="h-5 w-5 text-red-600" /> 3.4 Smart Document Insights
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <p>Upload various document types and let NoteMind AI unlock their full potential.</p>
+                                    <ul className="list-disc list-inside ml-4 space-y-1">
+                                        <li><strong>Supported Formats:</strong> Images (<code>.jpeg</code>, <code>.png</code>, etc.), PDFs, and text-based documents.</li>
+                                        <li><strong>Content Extraction:</strong> AI extracts readable text from PDFs and images.</li>
+                                        <li><strong>Analysis & Search:</strong> Ask questions, request summaries, or search within your library.
+                                            <p className="text-sm italic text-gray-600 dark:text-gray-400">Example: "What are the main causes of climate change in 'Environmental Science Report.pdf'?"</p>
+                                        </li>
+                                    </ul>
+                                </CardContent>
+                            </Card>
 
-                    <h2>8. Tips for Maximizing Your Learning with NoteMind AI</h2>
-                    <ul>
-                        <li><strong>Be Specific with Prompts:</strong> The more detailed your questions, the better the AI can understand and respond.</li>
-                        <li><strong>Upload Relevant Documents:</strong> The AI's contextual understanding improves significantly when you provide relevant notes, articles, or books.</li>
-                        <li><strong>Experiment with Visualizations:</strong> Don't hesitate to ask for different types of diagrams or 3D models to see which best clarifies a concept for you.</li>
-                        <li><strong>Utilize Learning Styles:</strong> Change your learning style preference in settings or explicitly ask the AI to explain something using a different approach (e.g., "Explain this as if I'm a kinesthetic learner").</li>
-                        <li><strong>Review AI Responses Critically:</strong> While powerful, AI is a tool. Always cross-reference information and think critically about the responses.</li>
-                        <li><strong>Provide Feedback:</strong> Your feedback helps us improve! If something isn't working or could be better, let us know.</li>
-                    </ul>
-                    <p>Thank you for choosing NoteMind AI. We're excited to be a part of your learning journey!</p>
+                            <Card className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                                <CardHeader>
+                                    <CardTitle className="text-xl font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+                                        <Lightbulb className="h-5 w-5 text-yellow-600" /> 3.5 Personalized Learning Paths
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <p>NoteMind AI adapts to how you learn best. Set your preferred learning style in your profile or explicitly ask the AI to adjust.</p>
+                                    <ul className="list-disc list-inside ml-4 space-y-1">
+                                        <li><strong>Visual Learner:</strong> Expect more diagrams, charts, and visual descriptions.</li>
+                                        <li><strong>Auditory Learner:</strong> Responses are conversational, with verbal cues.</li>
+                                        <li><strong>Kinesthetic Learner:</strong> Look for practical steps, applications, and interactive suggestions.</li>
+                                        <li><strong>Reading/Writing Learner:</strong> Receive detailed written explanations and opportunities for written reflection.</li>
+                                    </ul>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </section>
+
+                    <section ref={sectionRefs.interactiveVisualizations} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
+                            <Code className="h-8 w-8 text-indigo-600 dark:text-indigo-400" /> 4. Interactive Visualizations
+                        </h2>
+                        <p>One of NoteMind AI's most powerful features is its ability to generate interactive diagrams and 3D scenes directly in the chat.</p>
+
+                        <h3 className="text-2xl font-semibold mt-6 mb-3 text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                            <ChevronRight className="h-5 w-5" /> How to Request:
+                        </h3>
+                        <p>Simply ask the AI to visualize a concept using a specific type of diagram.</p>
+                        <ul className="list-disc list-inside ml-4 space-y-1">
+                            <li><em>Example:</em> "Can you draw a flowchart showing the process of photosynthesis using Mermaid syntax?"</li>
+                            <li><em>Example:</em> "Generate a bar chart comparing quarterly sales data for Q1-Q4 with Chart.js."</li>
+                            <li><em>Example:</em> "Show me a 3D model of a simple atom with Three.js."</li>
+                        </ul>
+
+                        <h3 className="text-2xl font-semibold mt-6 mb-3 text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                            <ChevronRight className="h-5 w-5" /> Supported Visualization Types:
+                        </h3>
+                        <ul className="list-disc list-inside ml-4 space-y-2">
+                            <li><strong>Mermaid Diagrams:</strong> For flowcharts, sequence diagrams, class diagrams, etc. (e.g., <code>graph TD A --{`>`} B</code>).</li>
+                            <li><strong>DOT (Graphviz):</strong> For network diagrams, hierarchical structures, and complex graphs.</li>
+                            <li><strong>Chart.js:</strong> For various data visualizations like bar charts, line charts, pie charts. You provide the JSON configuration.</li>
+                            <li><strong>Three.js:</strong> For interactive 3D scenes and models. The AI will generate JavaScript code that renders in a dedicated panel.</li>
+                        </ul>
+
+                        <h3 className="text-2xl font-semibold mt-6 mb-3 text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                            <ChevronRight className="h-5 w-5" /> Interacting with Visualizations:
+                        </h3>
+                        <ul className="list-disc list-inside ml-4 space-y-2">
+                            <li><strong>Diagram Panel:</strong> When a visualization is generated, it will open in a dedicated "Diagram Panel" on the right side of your screen.</li>
+                            <li><strong>Resizing:</strong> You can resize the panel by dragging its left or bottom edges.</li>
+                            <li><strong>Viewing Raw Code:</strong> For code-based visualizations, toggle to "View Raw Code" to see the underlying code.</li>
+                            <li><strong>Downloading:</strong>
+                                <ul className="list-circle list-inside ml-6 space-y-1">
+                                    <li><strong>SVG (Mermaid/DOT):</strong> Download diagrams as scalable vector graphics.</li>
+                                    <li><strong>PNG (Chart.js/Three.js):</strong> Download charts or 3D scene screenshots as PNG images.</li>
+                                    <li><strong>GLTF (Three.js):</strong> Download 3D models in GLTF format.</li>
+                                    <li><strong>PDF:</strong> Export the visualization as a PDF document.</li>
+                                </ul>
+                            </li>
+                            <li><strong>AI Correction:</strong> If a diagram has an error, use "Suggest AI Correction" to ask the AI to fix it.</li>
+                        </ul>
+                    </section>
+
+                    <section ref={sectionRefs.integrations} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
+                            <Plug className="h-8 w-8 text-teal-600 dark:text-teal-400" /> 5. Integrations
+                        </h2>
+                        <p>NoteMind AI is designed to work seamlessly with your existing tools. Check the "Integrations" page on the website for a list of supported services. Common integrations may include:</p>
+                        <ul className="list-disc list-inside space-y-2">
+                            <li><strong>Cloud Storage:</strong> Google Drive, Dropbox for document syncing.</li>
+                            <li><strong>Communication Platforms:</strong> Slack, Microsoft Teams for meeting summaries.</li>
+                            <li><strong>Calendar Apps:</strong> Google Calendar, Outlook Calendar for schedule optimization.</li>
+                        </ul>
+                        <Link to="/integrations">
+                            <Button variant="outline" className="mt-4 text-blue-600 border-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-400 dark:hover:bg-blue-900">
+                                View All Integrations
+                            </Button>
+                        </Link>
+                    </section>
+
+                    <section ref={sectionRefs.accountManagement} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
+                            <Settings className="h-8 w-8 text-gray-600 dark:text-gray-400" /> 6. Account Management
+                        </h2>
+                        <p>Access your profile and settings to customize your NoteMind AI experience.</p>
+                        <ul className="list-disc list-inside space-y-2">
+                            <li><strong>Profile Settings:</strong> Update your name, email, and password.</li>
+                            <li><strong>Learning Preferences:</strong> Adjust your preferred learning style and content difficulty.</li>
+                            <li><strong>Subscription:</strong> Manage your plan and billing information (if applicable).</li>
+                        </ul>
+                        <Link to="/auth">
+                            <Button className="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+                                Go to Settings
+                            </Button>
+                        </Link>
+                    </section>
+
+                    <section ref={sectionRefs.troubleshooting} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
+                            <HelpCircle className="h-8 w-8 text-red-600 dark:text-red-400" /> 7. Troubleshooting & Support
+                        </h2>
+                        <p>If you encounter any issues or have questions, here's how to get help:</p>
+                        <ul className="list-disc list-inside space-y-2">
+                            <li><strong>Check FAQs:</strong> Visit the <Link to="/documentation" className="text-blue-600 dark:text-blue-400 hover:underline">"Documentation"</Link> page for a Frequently Asked Questions section.</li>
+                            <li><strong>Contact Support:</strong> Use the <Link to="/contact" className="text-blue-600 dark:text-blue-400 hover:underline">"Contact Us"</Link> page to send a message to our support team. Provide as much detail as possible about your issue.</li>
+                            <li><strong>Report Bugs:</strong> If you suspect a bug, please report it via the contact form with steps to reproduce it.</li>
+                        </ul>
+                    </section>
+
+                    <section ref={sectionRefs.tips} className="mb-10">
+                        <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
+                            <TrendingUp className="h-8 w-8 text-pink-600 dark:text-pink-400" /> 8. Tips for Maximizing Your Learning with NoteMind AI
+                        </h2>
+                        <ul className="list-disc list-inside space-y-2">
+                            <li><strong>Be Specific with Prompts:</strong> The more detailed your questions, the better the AI can understand and respond.</li>
+                            <li><strong>Upload Relevant Documents:</strong> The AI's contextual understanding improves significantly when you provide relevant notes, articles, or books.</li>
+                            <li><strong>Experiment with Visualizations:</strong> Don't hesitate to ask for different types of diagrams or 3D models to see which best clarifies a concept for you.</li>
+                            <li><strong>Utilize Learning Styles:</strong> Change your learning style preference in settings or explicitly ask the AI to explain something using a different approach (e.g., "Explain this as if I'm a kinesthetic learner").</li>
+                            <li><strong>Review AI Responses Critically:</strong> While powerful, AI is a tool. Always cross-reference information and think critically about the responses.</li>
+                            <li><strong>Provide Feedback:</strong> Your feedback helps us improve! If something isn't working or could be better, let us know.</li>
+                        </ul>
+                        <p className="mt-8 text-lg text-gray-700 dark:text-gray-300">Thank you for choosing NoteMind AI. We're excited to be a part of your learning journey!</p>
+                    </section>
                 </div>
             </main>
 

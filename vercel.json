@@ -1,41 +1,90 @@
 {
-    
-    "headers": [
-      {
-        "source": "/robots.txt",
-        "headers": [
-          {
-            "key": "Content-Type", 
-            "value": "text/plain"
-          }
-        ]
-      },
-      {
-        "source": "/favicon.ico",
-        "headers": [
-          {
-            "key": "Content-Type", 
-            "value": "image/x-icon"
-          }
-        ]
-      },
-      {
-        "source": "/sitemap.xml",
-        "headers": [
-          {
-            "key": "Content-Type", 
-            "value": "application/xml"
-          }
-        ]
-      },
-      {
-        "source": "/(.*)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=0, s-maxage=0, must-revalidate"
-          }
-        ]
-      }
-    ]
-  }
+  "headers": [
+    {
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain"
+        }
+      ]
+    },
+    {
+      "source": "/favicon.ico",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "image/x-icon"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=0, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/privacy-policy",
+      "destination": "/privacy-policy"
+    },
+    {
+      "source": "/about-us",
+      "destination": "/about-us"
+    },
+    {
+      "source": "/contact",
+      "destination": "/contact"
+    },
+    {
+      "source": "/blogs",
+      "destination": "/blogs"
+    },
+    {
+      "source": "/integrations",
+      "destination": "/integrations"
+    },
+    {
+      "source": "/terms-of-service",
+      "destination": "/terms-of-service"
+    },
+    {
+      "source": "/careers",
+      "destination": "/careers"
+    },
+    {
+      "source": "/api",
+      "destination": "/api"
+    },
+    {
+      "source": "/documentation-page",
+      "destination": "/documentation-page"
+    },
+    {
+      "source": "/user-guide-page",
+      "destination": "/user-guide-page"
+    },
+    {
+      "source": "/auth",
+      "destination": "/auth"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/"
+    }
+  ]
+}
