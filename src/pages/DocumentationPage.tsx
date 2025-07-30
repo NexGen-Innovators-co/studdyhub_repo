@@ -36,10 +36,10 @@ const DocumentationPage: React.FC = () => {
                 <Link to="/" className="flex items-center gap-3 group">
                     <img
                         src="/siteimage.png"
-                        alt="NoteMind AI Logo"
+                        alt="studdyhub AI Logo"
                         className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
                     />
-                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">NoteMind AI</span>
+                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
                 </Link>
                 <div className="flex items-center gap-4">
                     <Link to="/auth">
@@ -58,15 +58,15 @@ const DocumentationPage: React.FC = () => {
 
             {/* Main Content */}
             <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
-                <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">NoteMind AI Documentation</h1>
+                <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">studdyhub AI Documentation</h1>
                 <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto text-center mb-12">
-                    Comprehensive guides and references to help you get the most out of NoteMind AI.
+                    Comprehensive guides and references to help you get the most out of studdyhub AI.
                 </p>
 
                 <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 max-w-5xl mx-auto">
                     <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Getting Started</h2>
                     <p className="mb-6 text-gray-700 dark:text-gray-300">
-                        New to NoteMind AI? This section will guide you through the initial setup and core functionalities.
+                        New to studdyhub AI? This section will guide you through the initial setup and core functionalities.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
                         <div className="flex items-start gap-4">
@@ -87,7 +87,7 @@ const DocumentationPage: React.FC = () => {
 
                     <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">API Documentation</h2>
                     <p className="mb-6 text-gray-700 dark:text-gray-300">
-                        For developers looking to integrate NoteMind AI's powerful features into their own applications.
+                        For developers looking to integrate studdyhub AI's powerful features into their own applications.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
                         <div className="flex items-start gap-4">
@@ -122,7 +122,7 @@ const DocumentationPage: React.FC = () => {
 
                     <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">User Guides & Tutorials</h2>
                     <p className="mb-6 text-gray-700 dark:text-gray-300">
-                        Step-by-step instructions and video tutorials for all NoteMind AI features.
+                        Step-by-step instructions and video tutorials for all studdyhub AI features.
                     </p>
                     <div className="text-center">
                         <Link to="/user-guide-page">
@@ -149,7 +149,7 @@ const DocumentationPage: React.FC = () => {
             {/* Footer */}
             <footer className="py-10 px-6 bg-gray-800 dark:bg-black text-gray-300 text-center">
                 <div className="max-w-6xl mx-auto">
-                    <p>&copy; {new Date().getFullYear()} NoteMind AI. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
                     <div className="flex justify-center gap-4 mt-2">
                         <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
                         <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</Link>

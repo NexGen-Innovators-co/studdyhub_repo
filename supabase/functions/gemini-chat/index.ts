@@ -230,7 +230,7 @@ serve(async (req) => {
         role: 'model',
         parts: [
           {
-            text: "I understand! I'm your AI study assistant for NoteMind, ready to help students learn through personalized explanations and interactive visualizations. I'll generate clean, working code for diagrams and 3D visualizations that render properly in your chat interface. I'm here to make learning engaging and effective!"
+            text: "I understand! I'm your AI study assistant for studdyhub, ready to help students learn through personalized explanations and interactive visualizations. I'll generate clean, working code for diagrams and 3D visualizations that render properly in your chat interface. I'm here to make learning engaging and effective!"
           }
         ]
       }
@@ -751,7 +751,7 @@ async function processBase64File(fileData) {
  * @returns A string containing the comprehensive system prompt.
  */
 function createSystemPrompt(learningStyle, preferences) {
-  const basePrompt = `You are an advanced AI study assistant for NoteMind - a learning and note-taking platform for students. Your responses are rendered directly in a chat interface, and any code you generate will be executed automatically in the browser environment.
+  const basePrompt = `You are an advanced AI study assistant for studdyhub - a learning and note-taking platform for students. Your responses are rendered directly in a chat interface, and any code you generate will be executed automatically in the browser environment.
 
 **CRITICAL RENDERING CONTEXT:**
 - You are NOT generating code for users to copy and paste
@@ -770,7 +770,7 @@ function createSystemPrompt(learningStyle, preferences) {
 - Analyze and incorporate content from uploaded files
 - Generate clean, working visualizations when they enhance understanding`;
 
-  const visualizationPrompt = `**Visualization Capabilities for NoteMind Chat:**
+  const visualizationPrompt = `**Visualization Capabilities for studdyhub Chat:**
 
 You can generate interactive diagrams and visualizations that render directly in the chat. Use these formats:
 
@@ -931,7 +931,7 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
                     resolve({
                         blob: blob,
                         url: url,
-                        filename: 'notemind-3d-model.gltf'
+                        filename: 'studdyhub-3d-model.gltf'
                     });
                 },
                 function(error) {
@@ -1135,7 +1135,7 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Use humor appropriately to make learning enjoyable
 - Adapt your personality to be helpful but not overwhelming`;
 
-  const fileHandlingPrompt = `**File Processing for NoteMind:**
+  const fileHandlingPrompt = `**File Processing for studdyhub:**
 - Always acknowledge when files have been uploaded and processed
 - Integrate file content naturally into educational responses
 - For images: Analyze visual elements, diagrams, charts, or educational content
@@ -1158,7 +1158,7 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Create a supportive environment for questions and mistakes
 - Guide students toward independent thinking and problem-solving`;
 
-  const responseQualityPrompt = `**Response Quality Standards for NoteMind:**
+  const responseQualityPrompt = `**Response Quality Standards for studdyhub:**
 - Ensure all information is accurate and up-to-date
 - Provide clear, logical progression of ideas
 - Use appropriate tone and language for the learning level
@@ -1188,5 +1188,5 @@ ${interactionPrompt}
 
 ${responseQualityPrompt}
 
-**Remember:** You are part of NoteMind, helping students learn effectively through personalized, conversational AI assistance. Your visualizations render directly in the chat, so focus on creating clean, educational, and working code that enhances the learning experience.`;
+**Remember:** You are part of studdyhub, helping students learn effectively through personalized, conversational AI assistance. Your visualizations render directly in the chat, so focus on creating clean, educational, and working code that enhances the learning experience.`;
 }

@@ -19,7 +19,7 @@ Please extract and synthesize information primarily from this section. If the se
     }
 
     return `
-**You are NoteMind, an expert AI learning assistant.** Your primary goal is to generate a high-quality, structured, and visually appealing note from the provided document text, tailored to the student's learning profile. The output must be in **Markdown format** and follow the specified structure precisely.
+**You are studdyhub, an expert AI learning assistant.** Your primary goal is to generate a high-quality, structured, and visually appealing note from the provided document text, tailored to the student's learning profile. The output must be in **Markdown format** and follow the specified structure precisely.
 
 **Student's Learning Profile:**
 - Learning Style: ${userProfile.learning_style}

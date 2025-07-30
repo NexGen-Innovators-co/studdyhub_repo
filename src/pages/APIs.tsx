@@ -36,10 +36,10 @@ const APIPage: React.FC = () => {
                 <Link to="/" className="flex items-center gap-3 group">
                     <img
                         src="/siteimage.png"
-                        alt="NoteMind AI Logo"
+                        alt="studdyhub AI Logo"
                         className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
                     />
-                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">NoteMind AI</span>
+                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
                 </Link>
                 <div className="flex items-center gap-4">
                     <Link to="/auth">
@@ -58,15 +58,15 @@ const APIPage: React.FC = () => {
 
             {/* Main Content */}
             <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
-                <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">NoteMind AI API</h1>
+                <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">studdyhub AI API</h1>
                 <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto text-center mb-12">
-                    Integrate NoteMind AI's powerful features directly into your applications.
+                    Integrate studdyhub AI's powerful features directly into your applications.
                 </p>
 
                 <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 max-w-4xl mx-auto">
                     <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Overview</h2>
                     <p className="mb-6 text-gray-700 dark:text-gray-300">
-                        The NoteMind AI API allows developers to programmatically access our core AI capabilities, including intelligent summarization, document analysis, and personalized learning insights. Build custom applications that leverage the power of NoteMind AI.
+                        The studdyhub AI API allows developers to programmatically access our core AI capabilities, including intelligent summarization, document analysis, and personalized learning insights. Build custom applications that leverage the power of studdyhub AI.
                     </p>
 
                     <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Key Features</h2>
@@ -103,7 +103,7 @@ const APIPage: React.FC = () => {
 
                     <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Getting Started</h2>
                     <p className="mb-4 text-gray-700 dark:text-gray-300">
-                        To start using the NoteMind AI API, you'll need an API key.
+                        To start using the studdyhub AI API, you'll need an API key.
                     </p>
                     <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg">
                         Get Your API Key
@@ -137,10 +137,10 @@ const APIPage: React.FC = () => {
                         <div className="flex items-center gap-3 mb-6">
                             <img
                                 src="/siteimage.png"
-                                alt="NoteMind AI Logo"
+                                alt="studdyhub AI Logo"
                                 className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
                             />
-                            <span className="text-2xl font-extrabold text-white">NoteMind AI</span>
+                            <span className="text-2xl font-extrabold text-white">studdyhub AI</span>
                         </div>
                         <p className="text-gray-400 leading-relaxed mb-6">
                             Empowering students and professionals to achieve more with intelligent tools for notes, recordings, and schedules.
@@ -152,7 +152,7 @@ const APIPage: React.FC = () => {
                             <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
                                 <img
                                     src="/siteimage.png"
-                                    alt="NoteMind AI Logo"
+                                    alt="studdyhub AI Logo"
                                     className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
                                 />
                             </a>
@@ -181,7 +181,7 @@ const APIPage: React.FC = () => {
                 </div>
 
                 <div className="border-t border-gray-700 pt-8 mt-12 text-center text-gray-500 text-sm">
-                    <p>&copy; {new Date().getFullYear()} NoteMind AI. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
                     <div className="flex justify-center gap-4 mt-2">
                         <a href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</a>
                         <a href="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</a>

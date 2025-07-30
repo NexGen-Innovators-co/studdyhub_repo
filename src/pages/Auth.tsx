@@ -122,10 +122,10 @@ const Auth = () => {
               <div className="flex items-center justify-center gap-3">
                 <img
                   src="/siteimage.png"
-                  alt="NoteMind AI Logo"
+                  alt="studdyhub AI Logo"
                   className="h-9 w-9 sm:h-11 sm:w-11 object-contain"
                 />
-                <h1 className="text-3xl sm:text-4xl font-extrabold text-white">NoteMind AI</h1>
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-white">studdyhub AI</h1>
               </div>
               <div>
                 <CardTitle className="text-xl sm:text-2xl font-bold text-white">Welcome Back!</CardTitle>
@@ -300,12 +300,12 @@ const Auth = () => {
         <div className="flex-1 hidden lg:flex items-center justify-center p-8">
           <div className="max-w-xl text-center lg:text-left space-y-6">
             <blockquote className="text-3xl font-semibold leading-relaxed text-gray-200 before:content-['“'] before:text-5xl before:text-gray-600 before:mr-2 before:align-top after:content-['”'] after:text-5xl after:text-gray-600 after:ml-2 after:align-bottom">
-              <p>NoteMind AI has revolutionized my study routine! The ability to automatically summarize lectures and generate flashcards from my notes saves me hours every week. It's like having a personal study assistant that truly understands my needs as a student.</p>
+              <p>studdyhub AI has revolutionized my study routine! The ability to automatically summarize lectures and generate flashcards from my notes saves me hours every week. It's like having a personal study assistant that truly understands my needs as a student.</p>
             </blockquote>
             <div className="flex items-center justify-center lg:justify-start gap-3 mt-6">
               <img
                 src="/founder.jpg"
-                alt="Founder of NoteMind AI"
+                alt="Founder of studdyhub AI"
                 className="h-20 w-20 rounded-full object-cover border-2 border-gray-600"
               />
               <span className="text-lg font-medium text-gray-300">A dedicated student & founder</span>
