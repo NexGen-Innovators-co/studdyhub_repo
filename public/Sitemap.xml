@@ -2,43 +2,61 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://notemind.lovable.app/</loc>
-    <lastmod>2025-07-15</lastmod>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://notemind.lovable.app/notes</loc>
-    <lastmod>2025-07-15</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://notemind.lovable.app/recordings</loc>
-    <lastmod>2025-07-15</lastmod>
-    <changefreq>weekly</changefreq>
+    <loc>https://notemind.lovable.app/auth</loc>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
+    <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://notemind.lovable.app/schedule</loc>
-    <lastmod>2025-07-15</lastmod>
-    <changefreq>weekly</changefreq>
+    <loc>https://notemind.lovable.app/privacy-policy</loc>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
+    <changefreq>yearly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://notemind.lovable.app/chat</loc>
-    <lastmod>2025-07-15</lastmod>
-    <changefreq>daily</changefreq>
+    <loc>https://notemind.lovable.app/terms-of-service</loc>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://notemind.lovable.app/about-us</loc>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
+    <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://notemind.lovable.app/documents</loc>
-    <lastmod>2025-07-15</lastmod>
+    <loc>https://notemind.lovable.app/blog</loc>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://notemind.lovable.app/settings</loc>
-    <lastmod>2025-07-15</lastmod>
+    <loc>https://notemind.lovable.app/careers</loc>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://notemind.lovable.app/contact</loc>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://notemind.lovable.app/api</loc>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://notemind.lovable.app/integrations</loc>
+    <lastmod>2025-07-30T13:17:00+00:00</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>

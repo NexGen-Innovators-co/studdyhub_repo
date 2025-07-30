@@ -1,0 +1,191 @@
+NoteMind AI: The Full User Guide
+Welcome to NoteMind AI, your intelligent companion designed to transform your academic and professional learning journey. This comprehensive guide will walk you through every feature, helping you maximize your productivity and achieve deeper understanding.
+
+1. Introduction to NoteMind AI
+NoteMind AI is an advanced learning and note-taking platform powered by artificial intelligence. It's built to simplify complex information, organize your thoughts, and provide personalized assistance tailored to your unique learning style. Whether you're a student, researcher, or professional, NoteMind AI helps you learn smarter, not harder.
+
+Key Benefits:
+
+Personalized Learning: AI adapts to your preferred learning style (visual, auditory, kinesthetic, reading/writing).
+
+Intelligent Content Processing: Automatically summarizes, organizes, and extracts key insights from notes, documents, and recordings.
+
+Interactive Visualizations: Generate dynamic diagrams and 3D scenes directly within your chat for better comprehension.
+
+Streamlined Workflow: Manage notes, recordings, and schedules in one intuitive platform.
+
+2. Getting Started
+2.1 Account Creation & Login
+Sign Up: Visit https://notemind.lovable.app/auth and follow the prompts to create your account. You'll typically need to provide your name, email, and set a password.
+
+Login: Once registered, use your credentials to log in.
+
+2.2 Navigating the Interface
+The NoteMind AI interface is designed to be intuitive. Key areas usually include:
+
+Chat Interface: Your primary interaction point with the AI assistant.
+
+Document/Note Library: Where your uploaded files and created notes are stored.
+
+Settings/Profile: To manage your account, preferences, and learning style.
+
+3. Core Features
+3.1 Intelligent Note-Taking
+NoteMind AI goes beyond traditional note-taking by leveraging AI to enhance your notes.
+
+Creating Notes:
+
+You can manually type notes into the platform.
+
+Upload existing text documents (.txt, .md, .docx) for AI processing.
+
+Organization: The AI can help categorize and tag your notes, making them easily searchable and retrievable.
+
+Summarization: Ask the AI to summarize lengthy notes or documents into concise bullet points or a brief overview.
+
+Example Prompt: "Summarize the key points from my 'Physics Lecture 1' notes."
+
+Key Insight Extraction: The AI can identify and extract the most important concepts and facts.
+
+Example Prompt: "Extract all the definitions of terms from this document."
+
+3.2 Effortless Recording Analysis
+Turn your lectures, meetings, and brainstorming sessions into searchable, actionable insights.
+
+Voice Recording: Use the in-app voice recording feature (if available) or upload audio files (.mp3, .wav).
+
+Transcription: The AI will automatically transcribe your audio into text.
+
+AI Analysis: Once transcribed, you can ask the AI to:
+
+Summarize the recording.
+
+Identify key speakers (if enabled and clear audio).
+
+Extract action items or important decisions.
+
+Example Prompt: "Summarize the main arguments from this meeting transcript."
+
+3.3 Contextual AI Chat
+Your AI assistant is more than just a chatbot; it's a personalized learning companion.
+
+Natural Conversation: Ask questions, seek explanations, or brainstorm ideas in a conversational style.
+
+Contextual Understanding: The AI leverages your uploaded notes and documents to provide highly relevant and personalized responses.
+
+Adaptive Responses: Based on your chosen learning style, the AI will adjust its explanations (e.g., more visual cues for visual learners, more practical steps for kinesthetic learners).
+
+Clarifying Questions: The AI may ask follow-up questions to better understand your needs.
+
+Example Prompt: "Explain the concept of quantum entanglement, and relate it to the 'Quantum Physics 101' document I uploaded."
+
+3.4 Smart Document Insights
+Upload various document types and let NoteMind AI unlock their full potential.
+
+Supported Formats: Upload images (.jpeg, .png, .gif, etc.), PDFs, and text-based documents.
+
+Content Extraction: For PDFs and images, the AI attempts to extract all readable text content.
+
+Analysis & Search: Once processed, you can:
+
+Ask questions about the document's content.
+
+Request summaries or key takeaways.
+
+Search for specific information within your uploaded library.
+
+Example Prompt: "What are the main causes of climate change discussed in the 'Environmental Science Report.pdf'?"
+
+3.5 Personalized Learning Paths
+NoteMind AI adapts to how you learn best. You can set your preferred learning style in your profile or explicitly ask the AI to adjust.
+
+Visual Learner: Expect more diagrams, charts, and descriptions that create mental images.
+
+Auditory Learner: Responses will be more conversational, with verbal cues and narrative explanations.
+
+Kinesthetic Learner: Look for practical steps, real-world applications, and suggestions for interactive exercises or projects.
+
+Reading/Writing Learner: Receive detailed, comprehensive written explanations and opportunities for written reflection.
+
+4. Interactive Visualizations
+One of NoteMind AI's most powerful features is its ability to generate interactive diagrams and 3D scenes directly in the chat.
+
+How to Request: Simply ask the AI to visualize a concept using a specific type of diagram.
+
+Example Prompt: "Can you draw a flowchart showing the process of photosynthesis using Mermaid syntax?"
+
+Example Prompt: "Generate a bar chart comparing quarterly sales data for Q1-Q4 with Chart.js."
+
+Example Prompt: "Show me a 3D model of a simple atom with Three.js."
+
+Supported Visualization Types:
+
+Mermaid Diagrams: For flowcharts, sequence diagrams, class diagrams, etc. (e.g., graph TD A --> B).
+
+DOT (Graphviz): For network diagrams, hierarchical structures, and complex graphs.
+
+Chart.js: For various data visualizations like bar charts, line charts, pie charts. You provide the JSON configuration.
+
+Three.js: For interactive 3D scenes and models. The AI will generate JavaScript code that renders in a dedicated panel.
+
+Interacting with Visualizations:
+
+Diagram Panel: When a visualization is generated, it will open in a dedicated "Diagram Panel" on the right side of your screen.
+
+Resizing: You can resize the panel by dragging its left or bottom edges.
+
+Viewing Raw Code: For code-based visualizations (Mermaid, DOT, Chart.js, Three.js), you can toggle to "View Raw Code" to see the underlying code generated by the AI.
+
+Downloading:
+
+SVG (Mermaid/DOT): Download diagrams as scalable vector graphics.
+
+PNG (Chart.js/Three.js): Download charts or 3D scene screenshots as PNG images.
+
+GLTF (Three.js): For Three.js scenes, you can download the 3D model in GLTF format for use in other 3D applications.
+
+PDF: Export the visualization as a PDF document.
+
+AI Correction: If a generated diagram has an error, you can use the "Suggest AI Correction" button to ask the AI to fix it.
+
+5. Integrations
+NoteMind AI is designed to work seamlessly with your existing tools. Check the "Integrations" page on the website for a list of supported services. Common integrations may include:
+
+Cloud Storage: Google Drive, Dropbox for document syncing.
+
+Communication Platforms: Slack, Microsoft Teams for meeting summaries.
+
+Calendar Apps: Google Calendar, Outlook Calendar for schedule optimization.
+
+6. Account Management
+Access your profile and settings to customize your NoteMind AI experience.
+
+Profile Settings: Update your name, email, and password.
+
+Learning Preferences: Adjust your preferred learning style and content difficulty.
+
+Subscription: Manage your plan and billing information (if applicable).
+
+7. Troubleshooting & Support
+If you encounter any issues or have questions, here's how to get help:
+
+Check FAQs: Visit the "Documentation" page for a Frequently Asked Questions section.
+
+Contact Support: Use the "Contact Us" page to send a message to our support team. Provide as much detail as possible about your issue.
+
+Report Bugs: If you suspect a bug, please report it via the contact form with steps to reproduce it.
+
+8. Tips for Maximizing Your Learning with NoteMind AI
+Be Specific with Prompts: The more detailed your questions, the better the AI can understand and respond.
+
+Upload Relevant Documents: The AI's contextual understanding improves significantly when you provide relevant notes, articles, or books.
+
+Experiment with Visualizations: Don't hesitate to ask for different types of diagrams or 3D models to see which best clarifies a concept for you.
+
+Utilize Learning Styles: Change your learning style preference in settings or explicitly ask the AI to explain something using a different approach (e.g., "Explain this as if I'm a kinesthetic learner").
+
+Review AI Responses Critically: While powerful, AI is a tool. Always cross-reference information and think critically about the responses.
+
+Provide Feedback: Your feedback helps us improve! If something isn't working or could be better, let us know.
+
+Thank you for choosing NoteMind AI. We're excited to be a part of your learning journey!

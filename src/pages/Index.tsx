@@ -1039,7 +1039,7 @@ const Index = () => {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-800"> {/* Added dark mode */}
         <div className="text-center">
-          <img src='/public/siteimage.png' className="h-16 w-16 text-blue-600 mx-auto mb-4 animate-spin" />
+          <img src='/siteimage.png' className="h-16 w-16 text-blue-600 mx-auto mb-4 animate-spin" />
           <p className="text-slate-600 dark:text-gray-300">Loading your data...</p> {/* Added dark mode */}
         </div>
       </div>
