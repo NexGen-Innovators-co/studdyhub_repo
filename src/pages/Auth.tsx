@@ -17,6 +17,12 @@ const Auth = () => {
   const [currentTab, setCurrentTab] = useState<'signin' | 'signup'>('signin');
   const navigate = useNavigate();
 
+  // Helper function for basic email validation
+  const isValidEmail = (email: string) => {
+    // Basic regex for email format validation
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -29,6 +35,12 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isValidEmail(email)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -50,7 +62,8 @@ const Auth = () => {
           toast.error(error.message);
         }
       } else {
-        toast.success('Check your email for the confirmation link!');
+        // Enhanced success message for user guidance
+        toast.success('Account created! Please check your email for a confirmation link to activate your account.');
       }
     } catch (error) {
       toast.error('An unexpected error occurred');
@@ -61,6 +74,12 @@ const Auth = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isValidEmail(email)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -249,6 +268,12 @@ const Auth = () => {
                           onChange={(e) => setEmail(e.target.value)}
                           className="pl-10 h-12 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 bg-gray-800 text-gray-100 dark:focus:border-blue-400"
                           required
+                          // Add onBlur to trigger validation when user leaves the field
+                          onBlur={() => {
+                            if (email && !isValidEmail(email)) {
+                              toast.error('Please enter a valid email address.');
+                            }
+                          }}
                         />
                       </div>
                     </div>
