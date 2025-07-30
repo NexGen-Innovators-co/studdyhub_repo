@@ -3,7 +3,7 @@ import { NotesList } from './NotesList';
 import { NoteEditor } from './NoteEditor';
 import { ClassRecordings } from './ClassRecordings';
 import { Schedule } from './Schedule';
-import  AIChat  from './AIChat'; // Import AIChat
+import AIChat from './AIChat'; // Import AIChat
 import { DocumentUpload } from './DocumentUpload';
 import { LearningStyleSettings } from './LearningStyleSettings';
 import { Note } from '../types/Note';
@@ -104,20 +104,20 @@ const toHtml = (result: any) => {
         'hljs-section': 'color: #86efac;', // green-300
         'hljs-boolean': 'color: #fdba74;', // orange-200
       };
-      
+
       let style = '';
       classNames.split(' ').forEach(cls => {
         if (styleMap[cls]) {
           style += styleMap[cls] + ' ';
         }
       });
-      
+
       const childrenHtml = children?.map(nodeToHtml).join('') || '';
       return `<${tagName}${style ? ` style="${style.trim()}"` : ''}>${childrenHtml}</${tagName}>`;
     }
     return '';
   };
-  
+
   return result.children.map(nodeToHtml).join('');
 };
 
@@ -236,7 +236,7 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
           </div>
           <div className="p-4 bg-gray-900 overflow-x-auto">
             <pre className="font-mono text-sm leading-relaxed">
-              <code 
+              <code
                 className="text-gray-100"
                 dangerouslySetInnerHTML={{
                   __html: highlightCode(code, language)
@@ -247,19 +247,19 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
         </div>
       );
     } else if (type === 'image' && imageUrl) {
-        return (
-            <div className="flex items-center justify-center h-full w-full p-2 bg-gray-900">
-                <img 
-                    src={imageUrl} 
-                    alt="Full size image" 
-                    className="max-w-full max-h-full object-contain rounded-lg shadow-md" 
-                    onError={(e) => {
-                        e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Load+Error';
-                        e.currentTarget.alt = 'Image failed to load';
-                    }}
-                />
-            </div>
-        );
+      return (
+        <div className="flex items-center justify-center h-full w-full p-2 bg-gray-900">
+          <img
+            src={imageUrl}
+            alt="Full size image"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-md"
+            onError={(e) => {
+              e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Load+Error';
+              e.currentTarget.alt = 'Image failed to load';
+            }}
+          />
+        </div>
+      );
     }
     else {
       return (
@@ -373,7 +373,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   }, []);
 
 
-  console.log('TabContent received recordings prop:', props.recordings);
+
 
   const notesProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -386,7 +386,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     recordings: props.recordings ?? [],
     onAddRecording: props.onAddRecording,
     onGenerateQuiz: (recording: ClassRecording) => {
- props.onGenerateQuiz(recording.id);
+      props.onGenerateQuiz(recording.id);
     },
   }), [props.recordings, props.onAddRecording, props.onGenerateQuiz]);
 
@@ -398,7 +398,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   }), [props.scheduleItems, props.onAddScheduleItem, props.onUpdateScheduleItem, props.onDeleteScheduleItem]);
 
   const chatProps = useMemo(() => ({
- messages: props.activeChatSessionId ? props.chatMessages : [],
+    messages: props.activeChatSessionId ? props.chatMessages : [],
     documents: props.documents,
     onSendMessage: props.onSendMessage,
     notes: props.filteredNotes, // Pass filtered notes for context
@@ -412,7 +412,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     chatSessions: props.chatSessions,
     // Removed onToggleChatHistory
     isLoading: isAILoading,
- setIsLoading: props.setIsAILoading,
+    setIsLoading: props.setIsAILoading,
     onNewMessage: props.onNewMessage,
     onDeleteMessage: props.onDeleteMessage,
     onRegenerateResponse: props.onRegenerateResponse, // This is now correctly typed
@@ -420,11 +420,11 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     isSubmittingUserMessage: props.isSubmittingUserMessage,
     userProfile: userProfile,
     onViewContent: handleViewContent, // Renamed from onViewDiagram to onViewContent for clarity
- onMermaidError: handleMermaidError,
- onSuggestAiCorrection: handleSuggestAiCorrection,
+    onMermaidError: handleMermaidError,
+    onSuggestAiCorrection: handleSuggestAiCorrection,
     hasMoreMessages: props.hasMoreMessages, // Pass new prop
     onLoadOlderMessages: props.onLoadOlderMessages, // Pass new prop
- onDocumentUpdated: props.onDocumentUpdated, // Pass the new prop
+    onDocumentUpdated: props.onDocumentUpdated, // Pass the new prop
     isLoadingSessionMessages: props.isLoadingSessionMessages, // NEW: Pass new prop
     learningStyle: userProfile?.learning_style || 'visual',
     learningPreferences: userProfile?.learning_preferences || {},
@@ -434,7 +434,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.chatMessages,
     props.documents,
     props.onSendMessage,
- props.filteredNotes,
+    props.filteredNotes,
     props.selectedDocumentIds,
     props.onSelectedDocumentIdsChange, // Dependency
     props.onNewChatSession,
@@ -443,7 +443,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.onChatSessionSelect,
     props.chatSessions,
     isAILoading,
- props.setIsAILoading,
+    props.setIsAILoading,
     props.onNewMessage,
     props.onDeleteMessage,
     props.onRegenerateResponse,
@@ -451,11 +451,11 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.isSubmittingUserMessage,
     userProfile,
     handleViewContent, // Dependency
- handleMermaidError,
- handleSuggestAiCorrection,
+    handleMermaidError,
+    handleSuggestAiCorrection,
     props.hasMoreMessages, // Dependency
     props.onLoadOlderMessages, // Dependency
- props.onDocumentUpdated, // Dependency
+    props.onDocumentUpdated, // Dependency
     props.isLoadingSessionMessages, // NEW: Dependency
     userProfile?.learning_style,
     userProfile?.learning_preferences,
@@ -486,7 +486,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       return (
         <div className="flex flex-1 min-h-0 relative">
           {isNotesHistoryOpen && (
-            <div 
+            <div
               className="fixed inset-0 bg-black/50 z-40 lg:hidden"
               onClick={onToggleNotesHistory}
             />
@@ -498,8 +498,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             flex flex-col transition-transform duration-300 ease-in-out
             lg:translate-x-0 lg:w-80
             dark:bg-gray-900 dark:border-gray-800 dark:shadow-none`}>
-            <NotesList 
-              {...notesHistoryProps} 
+            <NotesList
+              {...notesHistoryProps}
               isOpen={isNotesHistoryOpen}
               onClose={onToggleNotesHistory}
             />
@@ -507,7 +507,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
           <div className="flex-1 bg-white min-h-0 dark:bg-gray-900">
             {notesProps.activeNote ? (
-              <NoteEditor 
+              <NoteEditor
                 note={notesProps.activeNote}
                 onNoteUpdate={notesProps.onNoteUpdate}
                 userProfile={userProfile}
@@ -550,7 +550,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
           {/* Main content area for chat and side panel */}
           <div className={`flex-1 flex min-h-0 transition-all duration-300 ease-in-out
             ${isSidePanelOpen ? 'lg:w-2/3' : 'lg:w-full'}`}> {/* Adjust width based on side panel */}
-            
+
             <div className={`flex-1 flex flex-col  min-w-0 ${isSidePanelOpen ? 'lg:w-1/2' : 'w-full'} dark:bg-gray-900`}>
               <AIChat {...chatProps} />
             </div>
@@ -604,7 +604,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     case 'settings':
       return (
         <div className="flex-1 p-3 sm:p-6 overflow-y-auto dark:bg-gray-900">
-          <LearningStyleSettings 
+          <LearningStyleSettings
             profile={props.userProfile}
             onProfileUpdate={props.onProfileUpdate}
           />

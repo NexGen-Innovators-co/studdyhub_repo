@@ -22,7 +22,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   onAddRecording,
   onGenerateQuiz
 }) => {
-  console.log('ClassRecordings received recordings prop:', recordings, 'Type:', Array.isArray(recordings) ? 'array' : typeof recordings); // Enhanced debug log
+  ('ClassRecordings received recordings prop:', recordings, 'Type:', Array.isArray(recordings) ? 'array' : typeof recordings); // Enhanced debug log
 
   const [selectedRecording, setSelectedRecording] = useState<ClassRecording | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,7 +44,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
   const handleRecordingComplete = async (audioBlob: Blob, title: string, subject: string) => {
     setIsProcessing(true);
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
@@ -204,7 +204,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     try {
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const filePath = `${user.id}/recordings/${generateId()}_${safeFileName}`; // Consistent path
-      console.log('Uploading audio file to path:', filePath);
+      ('Uploading audio file to path:', filePath);
 
       const { error: uploadError } = await supabase.storage
         .from('documents')
@@ -219,7 +219,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       if (!urlData?.publicUrl) {
         throw new Error('Could not get public URL for the uploaded audio file.');
       }
-      console.log('Public audio URL generated:', urlData.publicUrl);
+      ('Public audio URL generated:', urlData.publicUrl);
 
       // Create a new document entry for the audio file first
       const { data: newDocument, error: docError } = await supabase
@@ -236,7 +236,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         .single();
 
       if (docError || !newDocument) throw new Error(docError?.message || 'Failed to create document record for audio.');
-      console.log('Audio document record created with ID:', newDocument.id);
+      ('Audio document record created with ID:', newDocument.id);
 
       // Create a new ClassRecording entry (initially with empty transcript/summary)
       const newRecording: ClassRecording = {
@@ -295,8 +295,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
   const handleGenerateNoteFromAudio = async (recording?: ClassRecording) => {
     // Ensure audioDetails always has document_id
-    const audioDetails = recording 
-      ? { url: recording.audioUrl, type: 'audio/webm', name: recording.title, document_id: recording.document_id || '' } 
+    const audioDetails = recording
+      ? { url: recording.audioUrl, type: 'audio/webm', name: recording.title, document_id: recording.document_id || '' }
       : uploadedAudioDetails;
 
     if (!audioDetails || !audioDetails.document_id) { // Ensure document_id is present
@@ -330,7 +330,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         await triggerAudioProcessing(audioDetails.url, audioDetails.document_id, user.id, targetLanguage);
         // We'll rely on the polling mechanism to update the note once audio processing is complete.
         // The rest of this function will be handled by the polling success path.
-        return; 
+        return;
       }
 
       // If content is already extracted, proceed with note generation directly
@@ -376,23 +376,23 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
           .single();
 
         if (fetchedRecording && !fetchError) {
-            // Map snake_case to camelCase for ClassRecording type
-            const updatedRecording: ClassRecording = {
-                id: fetchedRecording.id,
-                title: fetchedRecording.title,
-                subject: fetchedRecording.subject,
-                audioUrl: fetchedRecording.audio_url,
-                transcript: fetchedRecording.transcript,
-                summary: fetchedRecording.summary,
-                duration: fetchedRecording.duration,
-                date: fetchedRecording.date,
-                createdAt: fetchedRecording.created_at, // Map here
-                userId: fetchedRecording.user_id, // Map here
-                document_id: fetchedRecording.document_id
-            };
-            onAddRecording(updatedRecording);
+          // Map snake_case to camelCase for ClassRecording type
+          const updatedRecording: ClassRecording = {
+            id: fetchedRecording.id,
+            title: fetchedRecording.title,
+            subject: fetchedRecording.subject,
+            audioUrl: fetchedRecording.audio_url,
+            transcript: fetchedRecording.transcript,
+            summary: fetchedRecording.summary,
+            duration: fetchedRecording.duration,
+            date: fetchedRecording.date,
+            createdAt: fetchedRecording.created_at, // Map here
+            userId: fetchedRecording.user_id, // Map here
+            document_id: fetchedRecording.document_id
+          };
+          onAddRecording(updatedRecording);
         } else {
-            console.error('Failed to refetch updated recording:', fetchError?.message);
+          console.error('Failed to refetch updated recording:', fetchError?.message);
         }
       }
 
@@ -479,17 +479,17 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             if (updatedRecording && !fetchUpdatedRecordingError) {
               // Map snake_case to camelCase for ClassRecording type
               const mappedRecording: ClassRecording = {
-                  id: updatedRecording.id,
-                  title: updatedRecording.title,
-                  subject: updatedRecording.subject,
-                  audioUrl: updatedRecording.audio_url,
-                  transcript: updatedRecording.transcript,
-                  summary: updatedRecording.summary,
-                  duration: updatedRecording.duration,
-                  date: updatedRecording.date,
-                  createdAt: updatedRecording.created_at, // Map here
-                  userId: updatedRecording.user_id, // Map here
-                  document_id: updatedRecording.document_id
+                id: updatedRecording.id,
+                title: updatedRecording.title,
+                subject: updatedRecording.subject,
+                audioUrl: updatedRecording.audio_url,
+                transcript: updatedRecording.transcript,
+                summary: updatedRecording.summary,
+                duration: updatedRecording.duration,
+                date: updatedRecording.date,
+                createdAt: updatedRecording.created_at, // Map here
+                userId: updatedRecording.user_id, // Map here
+                document_id: updatedRecording.document_id
               };
               onAddRecording(mappedRecording); // This will re-add/update the recording in the parent state
             }
@@ -630,14 +630,14 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         return;
       }
 
-        const quiz: Quiz = {
-          id: generateId(),
-          classId: recording.id,
-          title: data.title || recording.title,
-          questions: data.questions,
-          userId: user.id,
-          createdAt: new Date().toISOString()
-        };
+      const quiz: Quiz = {
+        id: generateId(),
+        classId: recording.id,
+        title: data.title || recording.title,
+        questions: data.questions,
+        userId: user.id,
+        createdAt: new Date().toISOString()
+      };
 
       const { error: insertError } = await supabase
         .from('quizzes')
@@ -703,12 +703,12 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
   const calculateScore = (): number => {
     if (!quizMode?.quiz?.questions?.length) return 0;
-    
+
     const totalQuestions = quizMode.quiz.questions.length;
     const correctAnswers = quizMode.quiz.questions.reduce((score, question, index) => {
       return userAnswers[index] === question.correctAnswer ? score + 1 : score;
     }, 0);
-    
+
     return Math.round((correctAnswers / totalQuestions) * 100);
   };
 
@@ -869,8 +869,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                       </span>
                     </div>
                   </div>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => setSelectedRecording(
                       selectedRecording?.id === recording.id ? null : recording
@@ -882,7 +882,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                   </Button>
                 </div>
               </CardHeader>
-              
+
               {selectedRecording?.id === recording.id && (
                 <CardContent className="pt-0">
                   <div className="space-y-4">
@@ -891,22 +891,22 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                         <source src={recording.audioUrl} type="audio/wav" />
                       </audio>
                     )}
-                    
+
                     <div>
                       <h4 className="font-semibold mb-2">AI Summary</h4>
                       <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded">
                         {recording.summary || 'No summary available.'}
                       </p>
                     </div>
-                    
+
                     <div>
                       <h4 className="font-semibold mb-2">Transcript</h4>
                       <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
                         {recording.transcript || 'No transcript available.'}
                       </p>
                     </div>
-                    
-                    <Button 
+
+                    <Button
                       onClick={() => handleGenerateNoteClick(recording)}
                       disabled={isGeneratingNote || isProcessingAudio}
                       className="w-full mb-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700"
@@ -918,8 +918,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                       )}
                       {isGeneratingNote ? 'Generating Note...' : 'Generate Note'}
                     </Button>
-                    
-                    <Button 
+
+                    <Button
                       onClick={() => handleGenerateQuizFromRecording(recording)}
                       className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700"
                     >
@@ -982,11 +982,10 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                           <Button
                             key={index}
                             variant={userAnswers[currentQuestionIndex] === index ? "default" : "outline"}
-                            className={`w-full text-left justify-start p-4 transition-all duration-200 ${
-                              userAnswers[currentQuestionIndex] === index
+                            className={`w-full text-left justify-start p-4 transition-all duration-200 ${userAnswers[currentQuestionIndex] === index
                                 ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
                                 : 'text-slate-600 border-slate-200 hover:bg-slate-50'
-                            }`}
+                              }`}
                             onClick={() => handleAnswerSelect(currentQuestionIndex, index)}
                           >
                             {option}

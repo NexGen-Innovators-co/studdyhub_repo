@@ -118,8 +118,8 @@ const extractContentWithGemini = async (
 
     const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
 
-    console.log(`Sending LLM request for ${fileType}. Input Base64 size: ${fileContentBase64.length} bytes.`);
-    console.log(`Payload structure (truncated data for log):`, JSON.stringify({
+    (`Sending LLM request for ${fileType}. Input Base64 size: ${fileContentBase64.length} bytes.`);
+    (`Payload structure (truncated data for log):`, JSON.stringify({
         contents: payload.contents.map(c => ({
             ...c,
             parts: c.parts.map(p => p.inline_data ? { ...p, inline_data: { mime_type: p.inline_data.mime_type, data: `[${p.inline_data.data.length} bytes]` } } : p)
@@ -136,7 +136,7 @@ const extractContentWithGemini = async (
         body: JSON.stringify(payload)
     });
 
-    console.log(`LLM API response status: ${response.status} ${response.statusText}`);
+    (`LLM API response status: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -147,11 +147,11 @@ const extractContentWithGemini = async (
     const extractedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
     const finishReason = result.candidates?.[0]?.finishReason;
 
-    console.log(`LLM raw response text length: ${extractedText?.length || 0}, finishReason: ${finishReason}`);
+    (`LLM raw response text length: ${extractedText?.length || 0}, finishReason: ${finishReason}`);
     if (extractedText && extractedText.length > 0) {
-        console.log(`LLM raw snippet (first 200 chars): "${extractedText.substring(0, Math.min(extractedText.length, 200))}..."`);
+        (`LLM raw snippet (first 200 chars): "${extractedText.substring(0, Math.min(extractedText.length, 200))}..."`);
     } else {
-        console.log(`LLM raw snippet: (empty)`);
+        (`LLM raw snippet: (empty)`);
     }
 
     if (!extractedText || extractedText.trim().length === 0) {
@@ -163,7 +163,7 @@ const extractContentWithGemini = async (
         console.warn('Gemini extraction hit token limit. Content might be truncated. Consider client-side chunking for extremely large documents.');
     }
 
-    console.log(`Successfully extracted ${extractedText.length} characters using Gemini for ${fileType}.`);
+    (`Successfully extracted ${extractedText.length} characters using Gemini for ${fileType}.`);
     return extractedText.trim(); // Final trim before returning
 };
 
@@ -173,7 +173,7 @@ const extractContentWithGemini = async (
  * @returns The extracted text content.
  */
 const extractPlainTextDirectly = async (fileUrl: string): Promise<string> => {
-    console.log('Attempting direct text file extraction...');
+    ('Attempting direct text file extraction...');
 
     const response = await fetch(fileUrl);
     if (!response.ok) {
@@ -181,7 +181,7 @@ const extractPlainTextDirectly = async (fileUrl: string): Promise<string> => {
     }
 
     const text = await response.text();
-    console.log(`Direct extraction successful: ${text.length} characters`);
+    (`Direct extraction successful: ${text.length} characters`);
     return text.trim(); // Trim whitespace from direct text extraction
 };
 
@@ -317,7 +317,7 @@ serve(async (req) => {
         }
 
         // Download file content (ArrayBuffer needed for LLM and direct text)
-        console.log(`Downloading file: ${finalFileUrl}`);
+        (`Downloading file: ${finalFileUrl}`);
         const fileResponse = await fetch(finalFileUrl, {
             method: 'GET',
             headers: { 'User-Agent': 'Supabase-Edge-Function/1.0' }
@@ -330,7 +330,7 @@ serve(async (req) => {
         const arrayBuffer = await fileResponse.arrayBuffer();
         const fileContentBase64 = encodeBase64(arrayBuffer); // Base64 for LLM
 
-        console.log(`File downloaded successfully: ${arrayBuffer.byteLength} bytes, Type: ${finalFileType}`);
+        (`File downloaded successfully: ${arrayBuffer.byteLength} bytes, Type: ${finalFileType}`);
 
         // Extract text using the optimal strategy (single-pass LLM or direct text read)
         const extractedText = await extractTextWithOptimalStrategy(
@@ -347,7 +347,7 @@ serve(async (req) => {
             throw new Error('No content could be extracted from the document.');
         }
 
-        console.log(`Final extraction completed: ${extractedText.length} characters.`);
+        (`Final extraction completed: ${extractedText.length} characters.`);
 
         // Update document with final results in Supabase
         const { error: updateError } = await supabaseAdmin
