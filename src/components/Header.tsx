@@ -68,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
         <Button
           onClick={onNewNote}
           size="sm"
-          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md flex-shrink-0"
+          className="bg-blue-500 hover:bg-blue-600 text-white shadow-md flex-shrink-0"
         >
           <Plus className="h-4 w-4 sm:mr-2" />
           {/* Hide "New Note" text on extra small screens for better fit */}

@@ -5,8 +5,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Textarea } from './ui/textarea';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
-import { CodeBlockErrorBoundary } from './AIChat';
+// import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+// import { CodeBlockErrorBoundary } from './AIChat';
 import { AlertTriangle, Check, Copy, Loader2, X, Sparkles, Lightbulb } from 'lucide-react';
 import { Button } from './ui/button';
 import Mermaid from './Mermaid';
@@ -687,8 +687,8 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
           />
           
           {/* Live Preview */}
-          <div className="w-full lg:w-1/2 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[600px] lg:max-h-none">
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900 dark:to-purple-900 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <div className="w-full lg:w-1/2 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[600px] lg:max-h-none">
+            <div className="bg-blue-50  px-4 py-2 border-b bg-blue-100 dark:bg-blue-900  border-gray-200 dark:border-gray-700 flex-shrink-0">
               <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300">
                 Live Preview {isTypingAI && <span className="text-sm text-blue-600 dark:text-blue-400">(AI Typing...)</span>}
               </h3>
@@ -799,7 +799,7 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
             transform: 'translateX(-50%)'
           }}
         >
-          <div className="flex items-center space-x-2 px-2 py-1 mb-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900 dark:to-purple-900 rounded">
+          <div className="flex items-center space-x-2 px-2 py-1 mb-2 bg-blue-50  dark:from-blue-900 dark:to-purple-900 rounded">
             <Lightbulb className="w-5 h-5 text-yellow-500" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">AI Suggestions</span>
           </div>
