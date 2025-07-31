@@ -5,6 +5,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 interface RequestBody {
   file_url: string;
   target_language?: string; // Optional target language for translation
+  // Removed user_id and document_id as they are no longer needed for job tracking within the function
 }
 
 // Initialize Supabase client
@@ -21,6 +22,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
 // Gemini API configuration
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
 
 serve(async (req) => {
   // Define CORS headers directly within the function
@@ -51,9 +53,19 @@ serve(async (req) => {
     }
     const audioBlob = await audioResponse.blob();
 
-    // Convert Blob to Base64
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    // Convert Blob to Base64 efficiently for large files
+    const base64Audio = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result.split(',')[1]); // Get only the base64 part
+        } else {
+          reject(new Error("FileReader did not return a string result."));
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(audioBlob);
+    });
 
     // 2. Transcribe Audio using Gemini
     const transcriptionPayload = {
@@ -143,14 +155,15 @@ serve(async (req) => {
       }
     }
 
+    // Return all processed data directly
     return new Response(JSON.stringify({ transcript, summary, translated_content: translatedContent }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
 
-  } catch (error) {
+  } catch (error: any) { // Explicitly type error as 'any' for easier access to .message
     console.error('Error processing audio:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error.message || 'An unknown error occurred' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });

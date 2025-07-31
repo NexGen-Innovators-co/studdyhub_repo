@@ -17,13 +17,13 @@ export interface Quiz {
   id: string;
   title: string;
   questions: QuizQuestion[];
-  classId?: string;
+  classId?: string; // Optional: Link to the class recording it was generated from
   userId: string;
   createdAt: string;
 }
 
 export interface QuizQuestion {
-  id?: string;
+  id?: string; // Optional, can be generated client-side or by AI
   question: string;
   options: string[];
   correctAnswer: number;

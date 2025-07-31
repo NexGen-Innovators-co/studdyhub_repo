@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { Note } from '../types/Note';
-import { ClassRecording, ScheduleItem, Message } from '../types/Class';
+import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class'; // Import Quiz
 import { Document, UserProfile } from '../types/Document';
 import { generateId } from '../utils/helpers';
 import { toast } from 'sonner';
@@ -145,7 +145,7 @@ export const useAppOperations = ({
     }
   };
 
-  const addRecording = async (recording: ClassRecording) => {
+  const addRecording = useCallback(async (recording: ClassRecording) => {
     try {
       // Recording is already inserted by ClassRecordings.tsx; only update local state
       setRecordings(prev => [recording, ...prev]);
@@ -153,32 +153,29 @@ export const useAppOperations = ({
       console.error('Error adding recording to state:', error);
       toast.error('Failed to update recordings state');
     }
-  };
+  }, [setRecordings]);
 
-  const generateQuiz = async (classId: string) => {
-    const recording = recordings.find(r => r.id === classId);
-    if (!recording) return;
-
+  const updateRecording = useCallback(async (updatedRecording: ClassRecording) => {
     try {
-      toast.success(`Generating quiz for "${recording.title}"...`);
-
-      const { data, error } = await supabase.functions.invoke('generate-quiz', {
-        body: {
-          title: recording.title,
-          subject: recording.subject,
-          transcript: recording.transcript,
-          summary: recording.summary
-        }
-      });
-
-      if (error) {
-        throw new Error('Failed to generate quiz');
-      }
-
-      toast.success('Quiz generated! Check your notes section.');
+      setRecordings(prev =>
+        prev.map(rec => (rec.id === updatedRecording.id ? updatedRecording : rec))
+      );
     } catch (error) {
-      toast.error('Failed to generate quiz');
-      console.error('Error generating quiz:', error);
+      console.error('Error updating recording in state:', error);
+      toast.error('Failed to update recording state');
+    }
+  }, [setRecordings]);
+
+
+  const generateQuiz = async (recording: ClassRecording, quiz: Quiz) => {
+    try {
+      // Quiz is already inserted by useQuizManagement; only update local state
+      // No direct action needed here, as the quiz is managed within the ClassRecordings component's state
+      // and the recording itself is updated via onUpdateRecording if needed.
+      // This function is kept for consistency with the prop signature, but its body is empty.
+    } catch (error) {
+      console.error('Error generating quiz (operation hook):', error);
+      toast.error('Failed to generate quiz (operation hook)');
     }
   };
 
@@ -408,6 +405,7 @@ export const useAppOperations = ({
     updateNote,
     deleteNote,
     addRecording,
+    updateRecording, // Expose new updateRecording
     generateQuiz,
     addScheduleItem,
     updateScheduleItem,

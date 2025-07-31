@@ -77,14 +77,14 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
   };
 
   return (
-    <Card>
+    <Card className='max-w-6xl mx-auto mt-6 p-4 shadow-lg'>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Brain className="h-5 w-5 text-purple-600" />
           Learning Style Preferences
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 ">
         <div className="space-y-2">
           <Label htmlFor="learning-style">Primary Learning Style</Label>
           <Select value={learningStyle} onValueChange={(value: UserProfile['learning_style']) => setLearningStyle(value)}>
