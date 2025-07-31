@@ -15,7 +15,7 @@ interface QuizModalProps {
   onNextQuestion: () => void;
   onPreviousQuestion: () => void;
   onExitQuizMode: () => void;
-  onCalculateScore: () => number;
+  calculateScore: () => number; // Changed from onCalculateScore to calculateScore
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
@@ -27,7 +27,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onNextQuestion,
   onPreviousQuestion,
   onExitQuizMode,
-  onCalculateScore,
+  calculateScore, // Changed from onCalculateScore
 }) => {
   if (!quizMode) {
     return null; // Don't render modal if not in quiz mode
@@ -40,7 +40,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const isLastQuestion = currentQuestionIndex === quiz.questions.length - 1;
   const isFirstQuestion = currentQuestionIndex === 0;
 
-  const score = showResults ? onCalculateScore() : 0;
+  const score = showResults ? calculateScore() : 0; // Changed from onCalculateScore to calculateScore
 
   return (
     <Dialog open={!!quizMode} onOpenChange={onExitQuizMode}>

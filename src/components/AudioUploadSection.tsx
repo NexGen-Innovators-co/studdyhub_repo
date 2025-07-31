@@ -27,10 +27,9 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
     handleAudioEnded,
     handleDownloadAudio,
     handleCopyAudioUrl,
-    handleClearAudioProcessing, // Destructure setTranslatedContent here
-    handleRecordingComplete, // This will be passed to VoiceRecorder
+    handleClearAudioProcessing,
     handleGenerateNoteFromAudio,
-    setTranslatedContent, // Destructure setTranslatedContent here
+    setTranslatedContent,
   } = useAudioProcessing({ onAddRecording, onUpdateRecording });
 
   return (
@@ -60,11 +59,11 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
         />
       </div>
 
-      {isProcessingAudio && ( // Use isProcessingAudio for overall processing state
-        <Card className="border-blue-200 bg-blue-50">
+      {isProcessingAudio && (
+        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-700">
           <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Brain className="h-5 w-5 text-blue-600 animate-pulse" />
+            <div className="flex items-center gap-3 text-blue-600 dark:text-blue-300">
+              <Brain className="h-5 w-5 animate-pulse" />
               <span>Processing audio with AI...</span>
             </div>
           </CardContent>
@@ -72,9 +71,9 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
       )}
 
       {uploadedAudioDetails && isAudioOptionsVisible && (
-        <Card className="border-slate-200 bg-slate-50">
+        <Card className="border-slate-200 bg-slate-50 dark:bg-gray-800 dark:border-gray-700">
           <CardContent className="p-4">
-            <h3 className="text-lg font-semibold text-slate-800 mb-3">Audio Options: {uploadedAudioDetails.name}</h3>
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100 mb-3">Audio Options: {uploadedAudioDetails.name}</h3>
             <audio ref={audioPlayerRef} src={uploadedAudioDetails.url} onEnded={handleAudioEnded} className="w-full hidden" />
             <div className="flex items-center gap-2 flex-wrap mb-3">
               <Button
@@ -82,7 +81,7 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
                 size="sm"
                 onClick={handlePlayAudio}
                 disabled={isGeneratingNote || isProcessingAudio}
-                className="text-slate-600 border-slate-200 hover:bg-slate-50"
+                className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
               >
                 {isPlayingAudio ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
                 {isPlayingAudio ? 'Pause Audio' : 'Play Audio'}
@@ -92,7 +91,7 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
                 size="sm"
                 onClick={handleDownloadAudio}
                 disabled={isGeneratingNote || isProcessingAudio}
-                className="text-slate-600 border-slate-200 hover:bg-slate-50"
+                className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Download Audio
@@ -102,7 +101,7 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
                 size="sm"
                 onClick={handleCopyAudioUrl}
                 disabled={isGeneratingNote || isProcessingAudio}
-                className="text-slate-600 border-slate-200 hover:bg-slate-50"
+                className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
               >
                 <Copy className="h-4 w-4 mr-2" />
                 Copy Audio URL
@@ -112,7 +111,7 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
                 size="sm"
                 onClick={handleClearAudioProcessing}
                 disabled={isGeneratingNote || isProcessingAudio}
-                className="text-slate-600 hover:bg-slate-50"
+                className="text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900"
               >
                 <XCircle className="h-4 w-4 mr-2" />
                 Clear Audio
@@ -138,27 +137,26 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
       )}
 
       {translatedContent && (
-        <Card className="border-slate-200 bg-slate-50">
+        <Card className="border-slate-200 bg-slate-50 dark:bg-gray-800 dark:border-gray-700">
           <CardContent className="p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-slate-600" />
-                <h4 className="font-medium text-slate-800">Translated Content</h4>
+              <div className="flex items-center gap-2 text-slate-600 dark:text-gray-300">
+                <FileText className="h-4 w-4" />
+                <h4 className="font-medium text-slate-800 dark:text-gray-100">Translated Content</h4>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setTranslatedContent(null)}
-                className="h-6 w-6 p-0 text-slate-600 hover:bg-slate-50"
+                className="h-6 w-6 p-0 text-slate-600 hover:bg-slate-50 dark:text-gray-400 dark:hover:bg-gray-700"
               >
                 <XCircle className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-sm text-slate-700">{translatedContent}</p>
+            <p className="text-sm text-slate-700 dark:text-gray-200">{translatedContent}</p>
           </CardContent>
         </Card>
       )}
-      {/* VoiceRecorder will be here, but its onRecordingComplete uses handleRecordingComplete from useAudioProcessing */}
     </div>
   );
 };
