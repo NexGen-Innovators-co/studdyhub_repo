@@ -12,7 +12,7 @@ export const useQuizManagement = ({ onGenerateQuiz }: { onGenerateQuiz: (recordi
   const [userAnswers, setUserAnswers] = useState<(number | null)[]>([]);
   const [showResults, setShowResults] = useState(false);
 
-  // Updated signature to accept numQuestions and difficulty
+  // Modified handleGenerateQuizFromRecording to accept numQuestions and difficulty
   const handleGenerateQuizFromRecording = useCallback(async (recording: ClassRecording, numQuestions: number, difficulty: string) => {
     const toastId = toast.loading('Generating quiz...');
     try {
@@ -24,14 +24,13 @@ export const useQuizManagement = ({ onGenerateQuiz }: { onGenerateQuiz: (recordi
         return;
       }
 
-      // Pass numQuestions and difficulty to the Edge Function
       const { data, error } = await supabase.functions.invoke('generate-quiz', {
         body: {
           name: recording.title,
-          file_url: recording.audioUrl,
+          file_url: recording.audioUrl, // Pass file_url if needed by generate-quiz, though transcript is primary
           transcript: recording.transcript,
-          numQuestions: numQuestions, // New parameter
-          difficulty: difficulty,     // New parameter
+          num_questions: numQuestions, // Pass numQuestions
+          difficulty: difficulty,     // Pass difficulty
         },
       });
 
@@ -88,7 +87,7 @@ export const useQuizManagement = ({ onGenerateQuiz }: { onGenerateQuiz: (recordi
       console.error('Error generating quiz:', error);
       setQuizMode(null);
     }
-  }, [onGenerateQuiz]);
+  }, [onGenerateQuiz]); // Dependency on onGenerateQuiz
 
   const handleAnswerSelect = useCallback((questionIndex: number, optionIndex: number) => {
     setUserAnswers(prev => {
@@ -142,9 +141,6 @@ export const useQuizManagement = ({ onGenerateQuiz }: { onGenerateQuiz: (recordi
     handlePreviousQuestion,
     handleExitQuizMode,
     calculateScore,
-    setQuizMode, // Expose setQuizMode
-    setCurrentQuestionIndex, // Expose setCurrentQuestionIndex
-    setUserAnswers, // Expose setUserAnswers
-    setShowResults // Expose setShowResults
+    setQuizMode, // Explicitly return setQuizMode
   };
 };

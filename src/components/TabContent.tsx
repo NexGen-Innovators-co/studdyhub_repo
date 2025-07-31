@@ -16,34 +16,30 @@ import { AlertTriangle, Copy, Check, Code, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 import { lowlight } from 'lowlight';
+// DiagramPanel and MemoizedMarkdownRenderer are not used directly in TabContent,
+// but their imports might be here if they were previously used or for other reasons.
+// For this update, they are not directly relevant to the prop passing.
 
 // Register Chart.js components if not already done globally
 Chart.register(...registerables);
 
-// Helper for copy to clipboard
+// Helper for copy to clipboard (can be moved to a shared utility if needed elsewhere)
 const useCopyToClipboard = () => {
   const [copied, setCopied] = useState(false);
-  const copy = useCallback(async (text: string) => {
+  const copy = useCallback((text: string) => {
     try {
-      // Use document.execCommand('copy') as navigator.clipboard.writeText() might not work in iframes
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.position = "fixed"; // Avoid scrolling to bottom
-      textArea.style.left = "-9999px";
-      textArea.style.top = "-9999px";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
       document.execCommand('copy');
-      textArea.remove();
-
+      document.body.removeChild(textarea);
       setCopied(true);
-      toast.success('Code copied to clipboard!');
       setTimeout(() => setCopied(false), 2000);
+      toast.success('Copied to clipboard!');
     } catch (err) {
       console.error('Failed to copy text: ', err);
-      toast.error('Failed to copy code');
-      setCopied(false);
+      toast.error('Failed to copy to clipboard.');
     }
   }, []);
   return { copied, copy };
@@ -171,8 +167,7 @@ interface SidePanelViewerProps {
   imageUrl?: string;
   type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs';
   onClose: () => void;
-  // Corrected signature for onMermaidError to match Mermaid component's likely expectation
-  onMermaidError: (error: string) => void; // Expects a single string error
+  onMermaidError: (error: string) => void;
   onSuggestAiCorrection: (prompt?: string) => void;
 }
 
@@ -181,7 +176,6 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
 
   const renderContent = () => {
     if (type === 'mermaid' && code) {
-      // Pass the onMermaidError directly, as its signature now matches
       return <Mermaid chart={code} onMermaidError={onMermaidError} onSuggestAiCorrection={() => onSuggestAiCorrection()} diagramRef={null} />;
     } else if (type === 'chartjs' && code) {
       try {
@@ -269,10 +263,9 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
           />
         </div>
       );
-    } else if (type === 'document-text' && code) { // Handle 'document-text' type
+    } else if (type === 'document-text' && code) {
       return (
         <div className="prose dark:prose-invert max-w-none">
-          {/* Render text content as markdown */}
           <div dangerouslySetInnerHTML={{ __html: code }} />
         </div>
       );
@@ -325,42 +318,44 @@ interface TabContentProps {
   chatMessages: Message[];
   documents: Document[];
   userProfile: UserProfile | null;
-  quizzes: Quiz[]; // Added quizzes prop
+  quizzes: Quiz[];
   isAILoading: boolean;
-  setIsAILoading: (isLoading: boolean) => void;
-  onNoteSelect: (note: Note) => void;
-  onNoteUpdate: (note: Note) => void;
-  onNoteDelete: (noteId: string) => void;
+  setIsAILoading: (loading: boolean) => void;
+  onNoteSelect: (note: Note | null) => void;
+  onNoteUpdate: (note: Note) => Promise<void>;
+  onNoteDelete: (noteId: string) => Promise<void>;
   onAddRecording: (recording: ClassRecording) => void;
   onUpdateRecording: (recording: ClassRecording) => void;
-  onGenerateQuiz: (recording: ClassRecording, quiz: Quiz) => void;
-  onAddScheduleItem: (item: ScheduleItem) => void;
-  onUpdateScheduleItem: (item: ScheduleItem) => void;
-  onDeleteScheduleItem: (id: string) => void;
-  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[], imageUrl?: string, imageMimeType?: string, imageDataBase64?: string) => Promise<void>;
-  onDocumentUploaded: (document: Document) => void;
-  onDocumentDeleted: (documentId: string) => void;
-  onProfileUpdate: (profile: UserProfile) => void;
+  onGenerateQuiz: (recording: ClassRecording, quiz: Quiz) => Promise<void>;
+  onGenerateNote?: (recording: ClassRecording) => Promise<void>;
+  onAddScheduleItem: (item: ScheduleItem) => Promise<void>;
+  onUpdateScheduleItem: (item: ScheduleItem) => Promise<void>;
+  onDeleteScheduleItem: (id: string) => Promise<void>;
+  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[], imageUrl?: string, imageMimeType?: string, imageDataBase64?: string, aiMessageIdToUpdate?: string | null) => Promise<void>;
+  onDocumentUploaded: (document: Document) => Promise<void>;
+  onDocumentDeleted: (documentId: string) => Promise<void>;
+  onDocumentUpdated: (document: Document) => void;
+  onProfileUpdate: (profile: UserProfile) => Promise<void>;
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
-  onChatSessionSelect: (sessionId: string) => void;
+  onChatSessionSelect: React.Dispatch<React.SetStateAction<string | null>>;
   onNewChatSession: () => Promise<string | null>;
   onDeleteChatSession: (sessionId: string) => Promise<void>;
   onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
-  // Renamed from onSelectedDocumentIdsChange to onSelectionChange for consistency
-  onSelectionChange: (ids: string[]) => void;
+  onSelectedDocumentIdsChange: React.Dispatch<React.SetStateAction<string[]>>;
   selectedDocumentIds: string[];
   onNewMessage: (message: Message) => void;
   isNotesHistoryOpen: boolean;
   onRegenerateResponse: (lastUserMessageContent: string) => Promise<void>;
-  onDeleteMessage: (messageId: string) => void;
+  onDeleteMessage: (messageId: string) => Promise<void>;
   onToggleNotesHistory: () => void;
   onRetryFailedMessage: (originalUserMessageContent: string, failedAiMessageId: string) => Promise<void>;
   isSubmittingUserMessage: boolean;
   hasMoreMessages: boolean;
   onLoadOlderMessages: () => Promise<void>;
-  onDocumentUpdated: (updatedDocument: Document) => void;
   isLoadingSessionMessages: boolean;
+  onReprocessAudio: (audioUrl: string, documentId: string) => Promise<void>; // Add reprocessAudio prop
+  onDeleteRecording: (recordingId: string, documentId: string | null, audioUrl: string | null) => Promise<void>; // Add deleteRecording prop
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -373,8 +368,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     setActiveSidePanelContent({ type, code: content, language, imageUrl });
   }, []);
 
-  // Updated handleMermaidError to match the signature expected by Mermaid component
-  const handleMermaidError = useCallback((error: string) => { // Simplified to expect a single string error
+  const handleMermaidError = useCallback((error: string) => {
     toast.info(`Mermaid diagram encountered an error: ${error}. Click 'AI Fix' to get help.`);
   }, []);
 
@@ -382,7 +376,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
   }, []);
 
-  // Memoize handleCloseSidePanel
   const handleCloseSidePanel = useCallback(() => {
     setActiveSidePanelContent(null);
   }, []);
@@ -400,13 +393,19 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onAddRecording: props.onAddRecording,
     onUpdateRecording: props.onUpdateRecording,
     onGenerateQuiz: props.onGenerateQuiz,
-    quizzes: props.quizzes, // Correctly pass the quizzes prop
+    onGenerateNote: props.onGenerateNote,
+    quizzes: props.quizzes,
+    onReprocessAudio: props.onReprocessAudio, // Pass reprocessAudio
+    onDeleteRecording: props.onDeleteRecording, // Pass onDeleteRecording
   }), [
     props.recordings,
     props.onAddRecording,
     props.onUpdateRecording,
     props.onGenerateQuiz,
-    props.quizzes, // Add quizzes to dependency array
+    props.onGenerateNote,
+    props.quizzes,
+    props.onReprocessAudio, // Add to dependencies
+    props.onDeleteRecording, // Add to dependencies
   ]);
 
   const scheduleProps = useMemo(() => ({
@@ -422,7 +421,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onSendMessage: props.onSendMessage,
     notes: props.filteredNotes,
     selectedDocumentIds: props.selectedDocumentIds,
-    onSelectionChange: props.onSelectionChange, // Correctly pass this prop
+    onSelectionChange: props.onSelectedDocumentIdsChange,
     activeChatSessionId: props.activeChatSessionId,
     onNewChatSession: props.onNewChatSession,
     onDeleteChatSession: props.onDeleteChatSession,
@@ -454,7 +453,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.onSendMessage,
     props.filteredNotes,
     props.selectedDocumentIds,
-    props.onSelectionChange,
+    props.onSelectedDocumentIdsChange,
     props.onNewChatSession,
     props.onDeleteChatSession,
     props.onRenameChatSession,
@@ -544,7 +543,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'recordings':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto  modern-scrollbar dark:bg-gray-900">
           <ErrorBoundary>
             <ClassRecordings {...recordingsProps} />
           </ErrorBoundary>
@@ -553,7 +552,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'schedule':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto  modern-scrollbar dark:bg-gray-900">
           <Schedule {...scheduleProps} />
         </div>
       );
@@ -575,7 +574,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                   code={activeSidePanelContent!.code}
                   language={activeSidePanelContent!.language}
                   imageUrl={activeSidePanelContent!.imageUrl}
-                  onClose={handleCloseSidePanel} 
+                  onClose={handleCloseSidePanel}
                   onMermaidError={handleMermaidError}
                   onSuggestAiCorrection={handleSuggestAiCorrection}
                 />
@@ -585,7 +584,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             {isSidePanelOpen && (
               <div
                 className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-                onClick={handleCloseSidePanel} 
+                onClick={handleCloseSidePanel}
               />
             )}
             {isSidePanelOpen && (
@@ -595,7 +594,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                   code={activeSidePanelContent!.code}
                   language={activeSidePanelContent!.language}
                   imageUrl={activeSidePanelContent!.imageUrl}
-                  onClose={handleCloseSidePanel} 
+                  onClose={handleCloseSidePanel}
                   onMermaidError={handleMermaidError}
                   onSuggestAiCorrection={handleSuggestAiCorrection}
                 />
@@ -607,14 +606,14 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'documents':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto  modern-scrollbar modern-scrollbar dark:bg-gray-900">
           <DocumentUpload {...documentsProps} />
         </div>
       );
 
     case 'settings':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto  modern-scrollbar bardark:bg-gray-900">
           <LearningStyleSettings
             profile={props.userProfile}
             onProfileUpdate={props.onProfileUpdate}
