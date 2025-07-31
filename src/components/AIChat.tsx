@@ -199,6 +199,8 @@ const AIChat: React.FC<AIChatProps> = ({
   const speechSynthesisRef = useRef<SpeechSynthesis>(window.speechSynthesis);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const lastSpokenChunkRef = useRef<string>('');
+  const lastProcessedMessageIdRef = useRef<string | null>(null);
+  const blockAutoSpeakRef = useRef<boolean>(false);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
@@ -357,47 +359,25 @@ const AIChat: React.FC<AIChatProps> = ({
 
   // Auto-speak new assistant message chunks on phones
   useEffect(() => {
-    if (!isPhone() || isLoading || isLoadingSessionMessages || !speechSynthesisRef.current) return;
+    if (
+      !isPhone() ||
+      isLoading ||
+      isLoadingSessionMessages ||
+      !speechSynthesisRef.current ||
+      blockAutoSpeakRef.current ||
+      !messages.length
+    ) {
+      return;
+    }
 
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.role === 'assistant' && !lastMessage.isError && lastMessage.id === speakingMessageId && isSpeaking) {
-      const cleanedContent = stripCodeBlocks(lastMessage.content);
-      const newChunk = cleanedContent.slice(lastSpokenChunkRef.current.length);
-      if (newChunk.trim() && !isPaused) {
-        const utterance = new SpeechSynthesisUtterance(newChunk);
-        utterance.lang = 'en-US';
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-
-        utterance.onend = () => {
-          if (lastMessage.content === messages[messages.length - 1]?.content) {
-            setIsSpeaking(false);
-            setSpeakingMessageId(null);
-            setIsPaused(false);
-            currentUtteranceRef.current = null;
-            lastSpokenChunkRef.current = '';
-          }
-        };
-
-        utterance.onerror = (event) => {
-          if (event.error === 'interrupted') return; // Ignore interruption errors
-          console.error('Speech synthesis error:', event.error);
-          toast.error(`Speech synthesis failed: ${event.error}`);
-          setIsSpeaking(false);
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-          currentUtteranceRef.current = null;
-          lastSpokenChunkRef.current = '';
-        };
-
-        speechSynthesisRef.current.cancel();
-        currentUtteranceRef.current = utterance;
-        speechSynthesisRef.current.speak(utterance);
-        setIsSpeaking(true);
-        lastSpokenChunkRef.current = cleanedContent;
-      }
-    } else if (lastMessage?.role === 'assistant' && !lastMessage.isError && !isSpeaking && !isPaused) {
+    if (
+      lastMessage?.role === 'assistant' &&
+      !lastMessage.isError &&
+      lastMessage.id !== lastProcessedMessageIdRef.current &&
+      !isSpeaking &&
+      !isPaused
+    ) {
       const cleanedContent = stripCodeBlocks(lastMessage.content);
       if (cleanedContent) {
         const utterance = new SpeechSynthesisUtterance(cleanedContent);
@@ -412,10 +392,12 @@ const AIChat: React.FC<AIChatProps> = ({
           setIsPaused(false);
           currentUtteranceRef.current = null;
           lastSpokenChunkRef.current = '';
+          lastProcessedMessageIdRef.current = lastMessage.id;
+          blockAutoSpeakRef.current = false;
         };
 
         utterance.onerror = (event) => {
-          if (event.error === 'interrupted') return; // Ignore interruption errors
+          if (event.error === 'interrupted') return;
           console.error('Speech synthesis error:', event.error);
           toast.error(`Speech synthesis failed: ${event.error}`);
           setIsSpeaking(false);
@@ -423,6 +405,8 @@ const AIChat: React.FC<AIChatProps> = ({
           setIsPaused(false);
           currentUtteranceRef.current = null;
           lastSpokenChunkRef.current = '';
+          lastProcessedMessageIdRef.current = lastMessage.id;
+          blockAutoSpeakRef.current = false;
         };
 
         speechSynthesisRef.current.cancel();
@@ -431,9 +415,10 @@ const AIChat: React.FC<AIChatProps> = ({
         setIsSpeaking(true);
         setSpeakingMessageId(lastMessage.id);
         lastSpokenChunkRef.current = cleanedContent;
+        lastProcessedMessageIdRef.current = lastMessage.id;
       }
     }
-  }, [messages, isLoading, isLoadingSessionMessages, isPhone, isSpeaking, speakingMessageId, isPaused]);
+  }, [messages, isLoading, isLoadingSessionMessages, isPhone, isSpeaking, isPaused]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -524,9 +509,8 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const displayMessages = messages;
 
+  let lastDate: string | null = null;
   const MAX_USER_MESSAGE_LENGTH = 100;
-
-  let lastDate = '';
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -665,7 +649,7 @@ const AIChat: React.FC<AIChatProps> = ({
       } else {
         throw new Error('No image data received from API.');
       }
-    } catch (error: any) {
+    } catch (error: Error | any) {
       console.error('Error generating image:', error);
       toast.error(`Failed to generate image: ${error.message}`, { id: 'image-gen' });
     } finally {
@@ -724,6 +708,7 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsPaused(false);
       currentUtteranceRef.current = null;
       lastSpokenChunkRef.current = '';
+      blockAutoSpeakRef.current = true; // Block auto-speak until new message
     }
   }, []);
 
@@ -767,10 +752,12 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsPaused(false);
       currentUtteranceRef.current = null;
       lastSpokenChunkRef.current = '';
+      lastProcessedMessageIdRef.current = messageId;
+      blockAutoSpeakRef.current = true;
     };
 
     utterance.onerror = (event) => {
-      if (event.error === 'interrupted') return; // Ignore interruption errors
+      if (event.error === 'interrupted') return;
       console.error('Speech synthesis error:', event.error);
       toast.error(`Speech synthesis failed: ${event.error}`);
       setIsSpeaking(false);
@@ -778,16 +765,21 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsPaused(false);
       currentUtteranceRef.current = null;
       lastSpokenChunkRef.current = '';
+      lastProcessedMessageIdRef.current = messageId;
+      blockAutoSpeakRef.current = true;
     };
 
+    speechSynthesisRef.current.cancel();
     currentUtteranceRef.current = utterance;
     speechSynthesisRef.current.speak(utterance);
     setIsSpeaking(true);
     setSpeakingMessageId(messageId);
     setIsPaused(false);
     lastSpokenChunkRef.current = cleanedContent;
+    lastProcessedMessageIdRef.current = messageId;
   }, [stopSpeech]);
 
+  // Cleanup on component unmount
   useEffect(() => {
     return () => {
       stopSpeech();
@@ -795,22 +787,27 @@ const AIChat: React.FC<AIChatProps> = ({
     };
   }, [stopSpeech, stopRecognition]);
 
-  const prevActiveChatSessionId = useRef(activeChatSessionId);
-
+  // Cleanup on session change
   useEffect(() => {
-    if (activeChatSessionId !== null && activeChatSessionId !== prevActiveChatSessionId.current) {
+    if (activeChatSessionId !== null) {
+      stopSpeech();
+      stopRecognition();
+      setInputMessage('');
+      setSelectedImageFile(null);
+      setSelectedImagePreview(null);
+      setActiveDiagram(null);
+      setExpandedMessages(new Set());
       if (selectedDocumentIds.length > 0) {
         onSelectionChange([]);
       }
-      handleRemoveImage();
-      setInputMessage('');
-      handleCloseDiagramPanel();
-      setExpandedMessages(new Set());
-      stopSpeech();
-      stopRecognition();
+      if (imageInputRef.current) {
+        imageInputRef.current.value = '';
+      }
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = '';
+      }
     }
-    prevActiveChatSessionId.current = activeChatSessionId;
-  }, [activeChatSessionId, onSelectionChange, handleRemoveImage, handleCloseDiagramPanel, selectedDocumentIds.length, stopSpeech, stopRecognition]);
+  }, [activeChatSessionId, onSelectionChange, selectedDocumentIds.length, stopSpeech, stopRecognition]);
 
   return (
     <>
