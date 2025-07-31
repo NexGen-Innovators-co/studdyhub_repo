@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { Note } from '../types/Note';
-import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class'; // Import Quiz
+import { ClassRecording, ScheduleItem, Message } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import { generateId } from '../utils/helpers';
 import { toast } from 'sonner';
@@ -18,7 +18,7 @@ interface UseAppOperationsProps {
   setRecordings: (recordings: ClassRecording[] | ((prev: ClassRecording[]) => ClassRecording[])) => void;
   setScheduleItems: (items: ScheduleItem[] | ((prev: ScheduleItem[]) => ScheduleItem[])) => void;
   setChatMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
-  setDocuments: (documents: Document[] | ((prev: Document[]) => Document[])) => void;
+  setDocuments: (documents: Document[] | ((prev: Document[]) => Document[])) => void; // Destructure setDocuments
   setUserProfile: (profile: UserProfile | null) => void;
   setActiveNote: (note: Note | null) => void;
   setActiveTab: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
@@ -145,7 +145,7 @@ export const useAppOperations = ({
     }
   };
 
-  const addRecording = useCallback(async (recording: ClassRecording) => {
+  const addRecording = async (recording: ClassRecording) => {
     try {
       // Recording is already inserted by ClassRecordings.tsx; only update local state
       setRecordings(prev => [recording, ...prev]);
@@ -153,29 +153,71 @@ export const useAppOperations = ({
       console.error('Error adding recording to state:', error);
       toast.error('Failed to update recordings state');
     }
-  }, [setRecordings]);
+  };
 
-  const updateRecording = useCallback(async (updatedRecording: ClassRecording) => {
+  // NEW: Function to update an existing recording
+  const onUpdateRecording = async (updatedRecording: ClassRecording) => {
     try {
+      const { data: { user } = {} } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('class_recordings')
+        .update({
+          title: updatedRecording.title,
+          subject: updatedRecording.subject,
+          transcript: updatedRecording.transcript,
+          summary: updatedRecording.summary,
+          duration: updatedRecording.duration,
+          date: updatedRecording.date,
+          audio_url: updatedRecording.audioUrl, // Ensure this matches DB column
+          document_id: updatedRecording.document_id, // Ensure this matches DB column
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', updatedRecording.id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
       setRecordings(prev =>
-        prev.map(rec => (rec.id === updatedRecording.id ? updatedRecording : rec))
+        prev.map(rec =>
+          rec.id === updatedRecording.id ? { ...updatedRecording, updatedAt: new Date() } : rec
+        )
       );
+      toast.success('Recording updated successfully');
     } catch (error) {
-      console.error('Error updating recording in state:', error);
-      toast.error('Failed to update recording state');
+      console.error('Error updating recording:', error);
+      toast.error('Failed to update recording');
     }
-  }, [setRecordings]);
+  };
 
+  // MODIFIED: generateQuiz now accepts ClassRecording directly
+  const generateQuiz = async (recording: ClassRecording) => {
+    if (!recording) return; // Should not happen if typed correctly
 
-  const generateQuiz = async (recording: ClassRecording, quiz: Quiz) => {
     try {
-      // Quiz is already inserted by useQuizManagement; only update local state
-      // No direct action needed here, as the quiz is managed within the ClassRecordings component's state
-      // and the recording itself is updated via onUpdateRecording if needed.
-      // This function is kept for consistency with the prop signature, but its body is empty.
+      toast.success(`Generating quiz for "${recording.title}"...`);
+
+      const { data, error } = await supabase.functions.invoke('generate-quiz', {
+        body: {
+          title: recording.title,
+          subject: recording.subject,
+          transcript: recording.transcript,
+          summary: recording.summary
+        }
+      });
+
+      if (error) {
+        throw new Error('Failed to generate quiz');
+      }
+
+      // Assuming the Supabase function returns the generated quiz data
+      // You might want to process this data and add it to your quizzes state in useAppData
+      // For now, just a success toast.
+      toast.success('Quiz generated! Check your notes section.');
     } catch (error) {
-      console.error('Error generating quiz (operation hook):', error);
-      toast.error('Failed to generate quiz (operation hook)');
+      toast.error('Failed to generate quiz');
+      console.error('Error generating quiz:', error);
     }
   };
 
@@ -405,8 +447,8 @@ export const useAppOperations = ({
     updateNote,
     deleteNote,
     addRecording,
-    updateRecording, // Expose new updateRecording
-    generateQuiz,
+    onUpdateRecording, // EXPOSE THE NEW FUNCTION HERE
+    generateQuiz, // This is now updated to take ClassRecording
     addScheduleItem,
     updateScheduleItem,
     deleteScheduleItem,

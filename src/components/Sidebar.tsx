@@ -235,7 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     dark:bg-gray-900 dark:border-gray-700`}> {/* Added dark mode classes */}
 
       {/* Content area, takes up remaining vertical space and allows scrolling */}
-      <div className="p-6 sm:p-4 flex-1 overflow-y-auto modern-scrollbar"> {/* Added overflow-y-auto and custom-scrollbar */}
+      <div className="p-6 sm:p-4 flex-1 overflow-y-auto modern-scrollbar"> { }
         {/* Main Navigation Section */}
         <div className="mb-2">
           {/* "Navigation" heading: visible when 'isOpen' (mobile) or on desktop hover */}
@@ -324,10 +324,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Dynamic max-height and overflow for scrollability and hiding when collapsed */}
             <nav className={`space-y-1 transition-all duration-300 ease-in-out
               ${isOpen // If sidebar is open (mobile or desktop explicitly opened)
-                ? 'max-h-[50vh] overflow-y-auto custom-scrollbar'
+                ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
                 : 'max-h-0 overflow-hidden' // If sidebar is closed (mobile) or collapsed (desktop)
               }
-              lg:group-hover:max-h-[50vh] lg:group-hover:overflow-y-auto lg:group-hover:custom-scrollbar
+              lg:group-hover:max-h-[50vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar
               lg:max-h-0 lg:overflow-hidden // Default for desktop when not hovered
             `}>
               {chatSessions.length === 0 && (isOpen || window.innerWidth >= 1024) ? (

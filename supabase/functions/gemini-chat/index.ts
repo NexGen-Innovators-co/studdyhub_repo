@@ -1,13 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
-
 // File type mappings for MIME types
 const SUPPORTED_FILE_TYPES = {
   'image/jpeg': 'image',
@@ -24,23 +22,18 @@ const SUPPORTED_FILE_TYPES = {
   'application/msword': 'document',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'document'
 };
-
 // Initialize Supabase client
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
 if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error('Missing Supabase configuration: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables are not set.');
 }
-
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 /**
  * Helper function to convert ArrayBuffer to base64 string safely for large files.
  * @param buffer The ArrayBuffer to convert.
  * @returns The base64 encoded string.
- */
-function arrayBufferToBase64(buffer) {
+ */ function arrayBufferToBase64(buffer) {
   let binary = '';
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
@@ -49,7 +42,6 @@ function arrayBufferToBase64(buffer) {
   }
   return btoa(binary);
 }
-
 // Main server handler for incoming requests
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -57,16 +49,13 @@ serve(async (req) => {
       headers: corsHeaders
     });
   }
-
   let requestData = null;
   let files = [];
   let uploadedDocumentIds = [];
   let userMessageImageUrl = null;
   let userMessageImageMimeType = null;
-
   try {
     const contentType = req.headers.get('content-type') || '';
-
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
       const userId = formData.get('userId');
@@ -75,7 +64,6 @@ serve(async (req) => {
       const learningPreferences = formData.get('learningPreferences') ? JSON.parse(formData.get('learningPreferences')) : {};
       const chatHistory = formData.get('chatHistory') ? JSON.parse(formData.get('chatHistory')) : [];
       const message = formData.get('message') || '';
-
       requestData = {
         userId,
         sessionId,
@@ -84,7 +72,6 @@ serve(async (req) => {
         chatHistory,
         message
       };
-
       for (const [key, value] of formData.entries()) {
         if (value instanceof File) {
           const processedFile = await processFile(value);
@@ -95,7 +82,6 @@ serve(async (req) => {
       const body = await req.json();
       requestData = body;
       const userId = body.userId;
-
       if (body.files && Array.isArray(body.files)) {
         for (const fileData of body.files) {
           const processedFile = await processBase64File(fileData);
@@ -103,9 +89,7 @@ serve(async (req) => {
         }
       }
     }
-
     const { userId, sessionId, learningStyle, learningPreferences, chatHistory, message } = requestData;
-
     if (!userId || !sessionId) {
       return new Response(JSON.stringify({
         error: 'Missing required parameters: userId or sessionId'
@@ -117,17 +101,14 @@ serve(async (req) => {
         }
       });
     }
-
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) throw new Error('GEMINI_API_KEY environment variable not configured.');
-
     // Process files with Gemini for content extraction
     for (const file of files) {
       if ((file.type === 'image' || file.type === 'pdf' || file.type === 'document') && file.data && file.processing_status === 'pending') {
-        (`Attempting to extract content from ${file.name} using Gemini.`);
+        console.log(`Attempting to extract content from ${file.name} using Gemini.`);
         try {
           const extractionPrompt = `Extract all readable text content from the provided document. Focus on the main body of text, ignoring headers, footers, page numbers, or any non-essential formatting unless explicitly part of the content. If the document contains structured data like tables, present it clearly. Return only the extracted text.`;
-
           const extractionContents = [
             {
               role: 'user',
@@ -144,10 +125,8 @@ serve(async (req) => {
               ]
             }
           ];
-
           const extractionApiUrl = new URL(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`);
           extractionApiUrl.searchParams.append('key', geminiApiKey);
-
           const extractionResponse = await fetch(extractionApiUrl.toString(), {
             method: 'POST',
             headers: {
@@ -161,16 +140,14 @@ serve(async (req) => {
               }
             })
           });
-
           if (extractionResponse.ok) {
             const extractionData = await extractionResponse.json();
             const extractedText = extractionData.candidates?.[0]?.content?.parts?.[0]?.text;
-
             if (extractedText) {
               file.content = extractedText;
               file.processing_status = 'completed';
               file.processing_error = null;
-              (`Successfully extracted content from ${file.name}. Length: ${extractedText.length}`);
+              console.log(`Successfully extracted content from ${file.name}. Length: ${extractedText.length}`);
             } else {
               file.processing_status = 'failed';
               file.processing_error = 'Gemini did not return extracted text.';
@@ -189,19 +166,13 @@ serve(async (req) => {
         }
       }
     }
-
     // Save files to database and get document IDs
     for (const file of files) {
       const documentId = await saveFileToDatabase(file, userId);
       if (documentId) {
         uploadedDocumentIds.push(documentId);
         if (file.type === 'image' && !userMessageImageUrl) {
-          const { data: docData, error: docError } = await supabase
-            .from('documents')
-            .select('file_url, file_type')
-            .eq('id', documentId)
-            .single();
-
+          const { data: docData, error: docError } = await supabase.from('documents').select('file_url, file_type').eq('id', documentId).single();
           if (docData && !docError) {
             userMessageImageUrl = docData.file_url;
             userMessageImageMimeType = docData.file_type;
@@ -211,10 +182,8 @@ serve(async (req) => {
         }
       }
     }
-
     // Ensure chat session exists
     await ensureChatSession(userId, sessionId, uploadedDocumentIds);
-
     // Build Gemini conversation
     const systemPrompt = createSystemPrompt(learningStyle, learningPreferences);
     const geminiContents = [
@@ -230,12 +199,11 @@ serve(async (req) => {
         role: 'model',
         parts: [
           {
-            text: "I understand! I'm your AI study assistant for studdyhub, ready to help students learn through personalized explanations and interactive visualizations. I'll generate clean, working code for diagrams and 3D visualizations that render properly in your chat interface. I'm here to make learning engaging and effective!"
+            text: "I understand! I'm your AI study assistant for NoteMind, ready to help students learn through personalized explanations and interactive visualizations. I'll generate clean, working code for diagrams and 3D visualizations that render properly in your chat interface. I'm here to make learning engaging and effective!"
           }
         ]
       }
     ];
-
     // Add chat history
     if (chatHistory && Array.isArray(chatHistory)) {
       for (const msg of chatHistory) {
@@ -243,7 +211,9 @@ serve(async (req) => {
           const userParts = [];
           if (msg.parts && Array.isArray(msg.parts)) {
             for (const part of msg.parts) {
-              if (part.text) userParts.push({ text: part.text });
+              if (part.text) userParts.push({
+                text: part.text
+              });
               if (part.inlineData && part.inlineData.mimeType && part.inlineData.data) {
                 userParts.push({
                   inlineData: {
@@ -270,12 +240,12 @@ serve(async (req) => {
         }
       }
     }
-
     // Add current message and files
     if (message || files.length > 0) {
       const currentMessageParts = [];
-      if (message) currentMessageParts.push({ text: message });
-
+      if (message) currentMessageParts.push({
+        text: message
+      });
       for (const file of files) {
         if (file.type === 'image') {
           currentMessageParts.push({
@@ -290,14 +260,12 @@ serve(async (req) => {
           });
         }
       }
-
       if (currentMessageParts.length > 0) {
         geminiContents.push({
           role: 'user',
           parts: currentMessageParts
         });
       }
-
       // Save user message to database
       if (message || files.length > 0) {
         await saveChatMessage({
@@ -311,11 +279,9 @@ serve(async (req) => {
         });
       }
     }
-
     // Call Gemini API
     const geminiApiUrl = new URL(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`);
     geminiApiUrl.searchParams.append('key', geminiApiKey);
-
     const response = await fetch(geminiApiUrl.toString(), {
       method: 'POST',
       headers: {
@@ -331,7 +297,6 @@ serve(async (req) => {
         }
       })
     });
-
     if (!response.ok) {
       const errorBody = await response.text();
       console.error(`Gemini API error: ${response.status} - ${errorBody}`);
@@ -344,17 +309,14 @@ serve(async (req) => {
       });
       throw new Error(`Failed to get response from Gemini API: ${response.statusText}. Details: ${errorBody}`);
     }
-
     const data = await response.json();
     let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
-
     // Clean up response text
     generatedText = generatedText.split('\n').map((line) => {
       let cleanedLine = line.replace(/[^\x20-\x7E\n\r]/g, ' ');
       cleanedLine = cleanedLine.replace(/\s+/g, ' ').trim();
       return cleanedLine;
     }).filter((line) => line.length > 0 || line.trim().length === 0).join('\n');
-
     // Save assistant response
     await saveChatMessage({
       userId,
@@ -362,10 +324,8 @@ serve(async (req) => {
       content: generatedText,
       role: 'assistant'
     });
-
     // Update session timestamp
     await updateSessionLastMessage(sessionId);
-
     return new Response(JSON.stringify({
       response: generatedText,
       userId: userId,
@@ -379,7 +339,6 @@ serve(async (req) => {
         'Content-Type': 'application/json'
       }
     });
-
   } catch (error) {
     console.error('Error in gemini-chat function:', error);
     if (requestData?.userId && requestData?.sessionId) {
@@ -395,7 +354,6 @@ serve(async (req) => {
         console.error('Failed to save error message to database:', dbError);
       }
     }
-
     return new Response(JSON.stringify({
       error: error.message || 'Internal Server Error'
     }), {
@@ -407,18 +365,15 @@ serve(async (req) => {
     });
   }
 });
-
 /**
  * Uploads a file to Supabase Storage.
  * @param file - The processed file object.
  * @param userId - The ID of the user uploading the file.
  * @returns The public URL of the uploaded file, or null if upload fails.
- */
-async function uploadFileToStorage(file, userId) {
+ */ async function uploadFileToStorage(file, userId) {
   try {
     const bucketName = 'chat-documents';
     const filePath = `${userId}/${crypto.randomUUID()}-${file.name}`;
-
     let fileData;
     if (file.type === 'image' || file.type === 'pdf' || file.type === 'document') {
       const binaryString = atob(file.data);
@@ -427,47 +382,40 @@ async function uploadFileToStorage(file, userId) {
         fileData[i] = binaryString.charCodeAt(i);
       }
     } else if (file.type === 'text') {
-      fileData = new Blob([file.content], { type: file.mimeType });
+      fileData = new Blob([
+        file.content
+      ], {
+        type: file.mimeType
+      });
     } else {
       console.warn(`Unsupported file type for storage upload: ${file.type}`);
       return null;
     }
-
-    const { data, error } = await supabase.storage
-      .from(bucketName)
-      .upload(filePath, fileData, {
-        contentType: file.mimeType,
-        upsert: false
-      });
-
+    const { data, error } = await supabase.storage.from(bucketName).upload(filePath, fileData, {
+      contentType: file.mimeType,
+      upsert: false
+    });
     if (error) {
       console.error('Error uploading file to Supabase Storage:', error);
       return null;
     }
-
-    const { data: publicUrlData } = supabase.storage
-      .from(bucketName)
-      .getPublicUrl(filePath);
-
+    const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
     return publicUrlData?.publicUrl || null;
   } catch (error) {
     console.error('Error in uploadFileToStorage:', error);
     return null;
   }
 }
-
 /**
  * Save processed file to the documents table
  * @param file - The processed file object.
  * @param userId - The ID of the user.
  * @returns The ID of the saved document, or null if saving fails.
- */
-async function saveFileToDatabase(file, userId) {
+ */ async function saveFileToDatabase(file, userId) {
   let fileUrl = null;
   let contentExtracted = null;
   let processingStatus = file.processing_status || 'pending';
   let processingError = file.processing_error || null;
-
   if (file.type === 'image' || file.type === 'pdf' || file.type === 'document') {
     fileUrl = await uploadFileToStorage(file, userId);
     if (fileUrl) {
@@ -479,162 +427,126 @@ async function saveFileToDatabase(file, userId) {
       return null;
     }
   }
-
   if (file.type === 'text') {
     contentExtracted = file.content;
     processingStatus = 'completed';
   }
-
   if (file.type === 'pdf' || file.type === 'document' || file.type === 'image') {
     contentExtracted = file.content;
   }
-
   try {
-    const { data, error } = await supabase
-      .from('documents')
-      .insert({
-        user_id: userId,
-        title: file.name,
-        file_name: file.name,
-        file_url: fileUrl || '',
-        file_type: file.mimeType,
-        file_size: file.size,
-        content_extracted: contentExtracted,
-        type: file.type,
-        processing_status: processingStatus,
-        processing_error: processingError
-      })
-      .select('id')
-      .single();
-
+    const { data, error } = await supabase.from('documents').insert({
+      user_id: userId,
+      title: file.name,
+      file_name: file.name,
+      file_url: fileUrl || '',
+      file_type: file.mimeType,
+      file_size: file.size,
+      content_extracted: contentExtracted,
+      type: file.type,
+      processing_status: processingStatus,
+      processing_error: processingError
+    }).select('id').single();
     if (error) {
       console.error('Error saving file to database:', error);
       return null;
     }
-
     return data.id;
   } catch (error) {
     console.error('Database error when saving file:', error);
     return null;
   }
 }
-
 /**
  * Save chat message to the database
  * @param messageData - Object containing message details.
- */
-async function saveChatMessage({ userId, sessionId, content, role, attachedDocumentIds = null, isError = false, imageUrl = null, imageMimeType = null }) {
+ */ async function saveChatMessage({ userId, sessionId, content, role, attachedDocumentIds = null, isError = false, imageUrl = null, imageMimeType = null }) {
   try {
-    const { error } = await supabase
-      .from('chat_messages')
-      .insert({
-        user_id: userId,
-        session_id: sessionId,
-        content: content,
-        role: role,
-        attached_document_ids: attachedDocumentIds,
-        is_error: isError,
-        image_url: imageUrl,
-        image_mime_type: imageMimeType,
-        timestamp: new Date().toISOString()
-      });
-
+    const { error } = await supabase.from('chat_messages').insert({
+      user_id: userId,
+      session_id: sessionId,
+      content: content,
+      role: role,
+      attached_document_ids: attachedDocumentIds,
+      is_error: isError,
+      image_url: imageUrl,
+      image_mime_type: imageMimeType,
+      timestamp: new Date().toISOString()
+    });
     if (error) console.error('Error saving chat message:', error);
   } catch (error) {
     console.error('Database error when saving chat message:', error);
   }
 }
-
 /**
  * Ensure chat session exists and update document_ids if new files were uploaded
  * @param userId - The ID of the user.
  * @param sessionId - The ID of the chat session.
  * @param newDocumentIds - An array of new document IDs to associate with the session.
- */
-async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
+ */ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
   try {
-    const { data: existingSession, error: fetchError } = await supabase
-      .from('chat_sessions')
-      .select('id, document_ids')
-      .eq('id', sessionId)
-      .eq('user_id', userId)
-      .single();
-
+    const { data: existingSession, error: fetchError } = await supabase.from('chat_sessions').select('id, document_ids').eq('id', sessionId).eq('user_id', userId).single();
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.error('Error fetching chat session:', fetchError);
       return;
     }
-
     if (existingSession) {
       if (newDocumentIds.length > 0) {
         const currentDocIds = existingSession.document_ids || [];
-        const updatedDocIds = [...new Set([...currentDocIds, ...newDocumentIds])];
-
-        const { error: updateError } = await supabase
-          .from('chat_sessions')
-          .update({
-            document_ids: updatedDocIds,
-            updated_at: new Date().toISOString(),
-            last_message_at: new Date().toISOString()
-          })
-          .eq('id', sessionId);
-
+        const updatedDocIds = [
+          ...new Set([
+            ...currentDocIds,
+            ...newDocumentIds
+          ])
+        ];
+        const { error: updateError } = await supabase.from('chat_sessions').update({
+          document_ids: updatedDocIds,
+          updated_at: new Date().toISOString(),
+          last_message_at: new Date().toISOString()
+        }).eq('id', sessionId);
         if (updateError) console.error('Error updating chat session:', updateError);
       } else {
         await updateSessionLastMessage(sessionId);
       }
     } else {
-      const { error: insertError } = await supabase
-        .from('chat_sessions')
-        .insert({
-          id: sessionId,
-          user_id: userId,
-          title: 'New Chat',
-          document_ids: newDocumentIds,
-          last_message_at: new Date().toISOString()
-        });
-
+      const { error: insertError } = await supabase.from('chat_sessions').insert({
+        id: sessionId,
+        user_id: userId,
+        title: 'New Chat',
+        document_ids: newDocumentIds,
+        last_message_at: new Date().toISOString()
+      });
       if (insertError) console.error('Error creating chat session:', insertError);
     }
   } catch (error) {
     console.error('Database error when ensuring chat session:', error);
   }
 }
-
 /**
  * Update session's last message timestamp
  * @param sessionId - The ID of the chat session.
- */
-async function updateSessionLastMessage(sessionId) {
+ */ async function updateSessionLastMessage(sessionId) {
   try {
-    const { error } = await supabase
-      .from('chat_sessions')
-      .update({
-        last_message_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', sessionId);
-
+    const { error } = await supabase.from('chat_sessions').update({
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq('id', sessionId);
     if (error) console.error('Error updating session last message time:', error);
   } catch (error) {
     console.error('Database error when updating session:', error);
   }
 }
-
 /**
  * Process uploaded File object from FormData.
  * @param file - File object from FormData.
  * @returns Processed file data or null if unsupported.
- */
-async function processFile(file) {
+ */ async function processFile(file) {
   const mimeType = file.type;
   const fileType = SUPPORTED_FILE_TYPES[mimeType];
-
   if (!fileType) {
     console.warn(`Unsupported file type: ${mimeType}`);
     return null;
   }
-
   try {
     if (fileType === 'image') {
       const arrayBuffer = await file.arrayBuffer();
@@ -679,27 +591,22 @@ async function processFile(file) {
     console.error(`Error processing file ${file.name}:`, error);
     return null;
   }
-
   return null;
 }
-
 /**
  * Process base64 encoded file data from JSON request.
  * @param fileData - Object containing file information and base64 data.
  * @returns Processed file data or null if invalid.
- */
-async function processBase64File(fileData) {
+ */ async function processBase64File(fileData) {
   if (!fileData.name || !fileData.mimeType || !fileData.data) {
     console.warn('Invalid file data structure');
     return null;
   }
-
   const fileType = SUPPORTED_FILE_TYPES[fileData.mimeType];
   if (!fileType) {
     console.warn(`Unsupported file type: ${fileData.mimeType}`);
     return null;
   }
-
   try {
     if (fileType === 'image') {
       return {
@@ -740,18 +647,15 @@ async function processBase64File(fileData) {
     console.error(`Error processing base64 file ${fileData.name}:`, error);
     return null;
   }
-
   return null;
 }
-
 /**
  * Creates a dynamic system prompt for the AI based on user's learning style and preferences.
  * @param learningStyle - The user's preferred learning style.
  * @param preferences - Additional learning preferences.
  * @returns A string containing the comprehensive system prompt.
- */
-function createSystemPrompt(learningStyle, preferences) {
-  const basePrompt = `You are an advanced AI study assistant for studdyhub - a learning and note-taking platform for students. Your responses are rendered directly in a chat interface, and any code you generate will be executed automatically in the browser environment.
+ */ function createSystemPrompt(learningStyle, preferences) {
+  const basePrompt = `You are an advanced AI study assistant for NoteMind - a learning and note-taking platform for students. Your responses are rendered directly in a chat interface, and any code you generate will be executed automatically in the browser environment.
 
 **CRITICAL RENDERING CONTEXT:**
 - You are NOT generating code for users to copy and paste
@@ -769,8 +673,7 @@ function createSystemPrompt(learningStyle, preferences) {
 - Provide accurate, up-to-date information with proper context
 - Analyze and incorporate content from uploaded files
 - Generate clean, working visualizations when they enhance understanding`;
-
-  const visualizationPrompt = `**Visualization Capabilities for studdyhub Chat:**
+  const visualizationPrompt = `**Visualization Capabilities for NoteMind Chat:**
 
 You can generate interactive diagrams and visualizations that render directly in the chat. Use these formats:
 
@@ -824,14 +727,15 @@ digraph G {
 
 **4. Three.js** - For 3D visualizations. CRITICAL REQUIREMENTS:
 - Must return a function named \`createThreeJSScene\`
-- Function receives: (canvas, THREE, OrbitControls, GLTFExporter) as parameters
-- Must return an object with: { cleanup: function, exportGLTF: function }
-- Include GLTF export functionality for downloading 3D models
-- NO direct window access - use canvas dimensions instead
-- Handle all Three.js objects disposal properly
+- Function receives: (canvas, THREE, OrbitControls, GLTFLoader) as parameters (Note: GLTFExporter is handled internally by the panel for export, but GLTFLoader can be passed if you need to load models)
+- Must return an object with: \`{ scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void, onResize: () => void }\`
+- The \`scene\` and \`renderer\` are essential for GLTF export.
+- The \`cleanup\` function should dispose of all Three.js resources (e.g., renderer, geometries, materials) and cancel animation frames.
+- The \`onResize\` function should update the camera aspect and renderer size based on the canvas dimensions.
+- NO direct \`window.addEventListener('resize')\` or \`resizeObserver.observe(canvas)\` calls within \`createThreeJSScene\`. These are managed externally by the panel.
 
 \`\`\`threejs
-function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
+function createThreeJSScene(canvas, THREE, OrbitControls, GLTFLoader) {
     // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
@@ -853,6 +757,7 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(window.devicePixelRatio); // Added for better resolution on high-DPI screens
     
     // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -902,84 +807,58 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
     animate();
     
     // Resize handler
-    function handleResize() {
+    // This function will be called by the ThreeJSRenderer component's useEffect
+    const onResize = () => {
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
-    }
+    };
     
-    // Add resize listener using canvas parent or container
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(canvas);
-    
-    // GLTF Export functionality
-    function exportGLTF() {
-        const exporter = new GLTFExporter();
+    // Cleanup function
+    const cleanup = function() {
+        // Stop animation
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+        }
+            
+        // Dispose of geometries
+        geometry.dispose();
+        planeGeometry.dispose();
         
-        return new Promise((resolve, reject) => {
-            exporter.parse(
-                scene,
-                function(result) {
-                    // Create downloadable blob
-                    const output = JSON.stringify(result, null, 2);
-                    const blob = new Blob([output], { type: 'application/json' });
-                    
-                    // Create download URL
-                    const url = URL.createObjectURL(blob);
-                    resolve({
-                        blob: blob,
-                        url: url,
-                        filename: 'studdyhub-3d-model.gltf'
-                    });
-                },
-                function(error) {
-                    console.error('GLTF Export Error:', error);
-                    reject(error);
-                },
-                {
-                    binary: false, // Export as .gltf (JSON) instead of .glb (binary)
-                    embedImages: true,
-                    truncateDrawRange: true,
-                    includeCustomExtensions: false
+        // Dispose of materials
+        material.dispose();
+        planeMaterial.dispose();
+        
+        // Dispose of renderer
+        renderer.dispose();
+        
+        // Clean up controls
+        controls.dispose();
+        
+        // Clear scene (optional, but good practice for thorough cleanup)
+        while(scene.children.length > 0) {
+            const object = scene.children[0];
+            scene.remove(object);
+            // If objects have their own dispose methods, call them here
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) {
+                if (Array.isArray(object.material)) {
+                    object.material.forEach(m => m.dispose());
+                } else {
+                    object.material.dispose();
                 }
-            );
-        });
-    }
+            }
+        }
+    };
     
-    // CRITICAL: Return object with cleanup and export functions
+    // CRITICAL: Return the scene, renderer, cleanup, and onResize functions
     return {
-        cleanup: function() {
-            // Stop animation
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-            }
-            
-            // Dispose of geometries
-            geometry.dispose();
-            planeGeometry.dispose();
-            
-            // Dispose of materials
-            material.dispose();
-            planeMaterial.dispose();
-            
-            // Dispose of renderer
-            renderer.dispose();
-            
-            // Clean up controls
-            controls.dispose();
-            
-            // Disconnect resize observer
-            resizeObserver.disconnect();
-            
-            // Clear scene
-            while(scene.children.length > 0) {
-                scene.remove(scene.children[0]);
-            }
-        },
-        
-        exportGLTF: exportGLTF
+        scene,
+        renderer,
+        cleanup,
+        onResize // Pass the onResize function for external management
     };
 }
 \`\`\`
@@ -993,7 +872,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Test that all disposal methods exist before calling them
 - Make visualizations interactive and engaging for students
 - Ensure exported GLTF models are optimized and educational`;
-
   let stylePrompt = "";
   switch (learningStyle) {
     case 'visual':
@@ -1007,7 +885,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Create diagrams that show relationships and processes clearly
 - Use visual formatting to guide the eye through information`;
       break;
-
     case 'auditory':
       stylePrompt = `**Auditory Learning Approach:**
 - Use natural, conversational language patterns
@@ -1020,7 +897,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Focus on verbal explanations that flow naturally
 - Include discussion prompts and questions to encourage verbal processing`;
       break;
-
     case 'kinesthetic':
       stylePrompt = `**Kinesthetic Learning Approach:**
 - Provide practical, hands-on steps and activities
@@ -1034,7 +910,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Focus on movement, manipulation, and physical engagement with concepts
 - Encourage downloading GLTF models for further exploration or 3D printing`;
       break;
-
     case 'reading':
       stylePrompt = `**Reading/Writing Learning Approach:**
 - Provide comprehensive, detailed written explanations
@@ -1047,7 +922,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Create comprehensive summaries and organized information
 - Focus on text-based learning and written comprehension`;
       break;
-
     default:
       stylePrompt = `**Balanced Multi-Modal Approach:**
 - Combine visual, auditory, and kinesthetic elements appropriately
@@ -1058,7 +932,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Incorporate visualizations when they enhance understanding
 - Balance different learning modalities based on the topic`;
   }
-
   let difficultyPrompt = "";
   switch (preferences?.difficulty) {
     case 'beginner':
@@ -1072,7 +945,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Use simple visualizations (basic Mermaid flowcharts, simple Chart.js charts, basic Three.js scenes)
 - Focus on core concepts without overwhelming detail`;
       break;
-
     case 'intermediate':
       difficultyPrompt = `**Intermediate Level Approach:**
 - Assume foundational knowledge exists
@@ -1084,7 +956,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Use moderately complex visualizations to illustrate relationships
 - Balance accessibility with intellectual challenge`;
       break;
-
     case 'advanced':
       difficultyPrompt = `**Advanced Level Approach:**
 - Use sophisticated terminology and concepts appropriately
@@ -1096,7 +967,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Use complex visualizations when they add value to advanced concepts
 - Focus on nuanced understanding and expert-level insights`;
       break;
-
     default:
       difficultyPrompt = `**Adaptive Difficulty:**
 - Assess user's knowledge level through their questions and responses
@@ -1106,23 +976,19 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Use visualizations that match the user's understanding level
 - Scale complexity appropriately based on user feedback`;
   }
-
-  const examplePrompt = preferences?.examples ?
-    `**Example-Rich Explanations:**
+  const examplePrompt = preferences?.examples ? `**Example-Rich Explanations:**
 - Include relevant, practical examples for every major concept
 - Use real-world applications and case studies
 - Provide multiple examples to illustrate different aspects
 - Use content from uploaded files as examples when relevant
 - Create examples inspired by uploaded images or documents
 - Use visualizations to present examples clearly when helpful
-- Make abstract concepts concrete through specific instances` :
-    `**Focused Explanations:**
+- Make abstract concepts concrete through specific instances` : `**Focused Explanations:**
 - Provide direct, concise explanations without extensive examples
 - Focus on core concepts and principles efficiently
 - Use uploaded content to support main points without elaboration
 - Include visualizations only when they add significant educational value
 - Maintain clarity while avoiding information overload`;
-
   const conversationalPrompt = `**Natural Conversational Flow:**
 - Maintain a warm, encouraging, and supportive tone
 - Use natural language that feels like talking to a knowledgeable friend
@@ -1134,8 +1000,7 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Celebrate understanding and progress
 - Use humor appropriately to make learning enjoyable
 - Adapt your personality to be helpful but not overwhelming`;
-
-  const fileHandlingPrompt = `**File Processing for studdyhub:**
+  const fileHandlingPrompt = `**File Processing for NoteMind:**
 - Always acknowledge when files have been uploaded and processed
 - Integrate file content naturally into educational responses
 - For images: Analyze visual elements, diagrams, charts, or educational content
@@ -1145,7 +1010,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Consider generating corresponding visualizations for file content when helpful
 - Maintain educational focus when analyzing any uploaded materials
 - Ask clarifying questions about specific aspects users want to focus on`;
-
   const interactionPrompt = `**Interactive Learning Guidelines:**
 - Ask clarifying questions when requests are ambiguous
 - Encourage active participation and curiosity
@@ -1157,8 +1021,7 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Be responsive to student needs and learning pace
 - Create a supportive environment for questions and mistakes
 - Guide students toward independent thinking and problem-solving`;
-
-  const responseQualityPrompt = `**Response Quality Standards for studdyhub:**
+  const responseQualityPrompt = `**Response Quality Standards for NoteMind:**
 - Ensure all information is accurate and up-to-date
 - Provide clear, logical progression of ideas
 - Use appropriate tone and language for the learning level
@@ -1169,7 +1032,6 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFExporter) {
 - Keep responses conversational but informative
 - Balance depth with accessibility
 - Always prioritize student understanding and engagement`;
-
   return `${basePrompt}
 
 ${visualizationPrompt}
@@ -1188,5 +1050,5 @@ ${interactionPrompt}
 
 ${responseQualityPrompt}
 
-**Remember:** You are part of studdyhub, helping students learn effectively through personalized, conversational AI assistance. Your visualizations render directly in the chat, so focus on creating clean, educational, and working code that enhances the learning experience.`;
+**Remember:** You are part of NoteMind, helping students learn effectively through personalized, conversational AI assistance. Your visualizations render directly in the chat, so focus on creating clean, educational, and working code that enhances the learning experience.`;
 }

@@ -68,7 +68,7 @@ export const useAppData = () => {
   // Centralized function to load all user data
   const loadUserData = useCallback(async (user: any) => {
     if (!loading && (notes.length === 0 && recordings.length === 0 && scheduleItems.length === 0 && chatMessages.length === 0 && documents.length === 0 && quizzes.length === 0 && !userProfile)) {
-        setLoading(true);
+      setLoading(true);
     }
 
     try {
@@ -239,7 +239,7 @@ export const useAppData = () => {
           file_name: doc.file_name,
           file_type: doc.file_type,
           file_url: doc.file_url,
-          file_size: doc.file_size || 0,
+          file_size: doc.file_size || 0, // Add file_size
           content_extracted: doc.content_extracted || null,
           type: doc.type as Document['type'],
           processing_status: String(doc.processing_status) || null,
@@ -264,8 +264,14 @@ export const useAppData = () => {
         const formattedQuizzes = quizzesData.map(quiz => ({
           id: quiz.id,
           title: quiz.title,
-          // Cast 'questions' to unknown first, then to QuizQuestion[]
-          questions: quiz.questions as unknown as QuizQuestion[],
+          // Safely parse and cast 'questions' to QuizQuestion[]
+          questions: (Array.isArray(quiz.questions) ? quiz.questions.map((q: any) => ({
+            id: q.id, // Ensure id is mapped if it exists
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation
+          })) : []) as QuizQuestion[],
           classId: quiz.class_id,
           userId: quiz.user_id,
           createdAt: quiz.created_at
@@ -703,10 +709,16 @@ export const useAppData = () => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const newQuiz = payload.new as any;
               const formattedQuiz: Quiz = {
- id: newQuiz.id,
- title: newQuiz.title,
-                // Cast 'questions' to unknown first, then to QuizQuestion[]
- questions: newQuiz.questions as unknown as QuizQuestion[],
+                id: newQuiz.id,
+                title: newQuiz.title,
+                // Safely parse and cast 'questions' to QuizQuestion[]
+                questions: (Array.isArray(newQuiz.questions) ? newQuiz.questions.map((q: any) => ({
+                  id: q.id, // Ensure id is mapped if it exists
+                  question: q.question,
+                  options: q.options,
+                  correctAnswer: q.correctAnswer,
+                  explanation: q.explanation
+                })) : []) as QuizQuestion[],
                 classId: newQuiz.class_id,
                 userId: newQuiz.user_id,
                 createdAt: newQuiz.created_at
@@ -747,7 +759,7 @@ export const useAppData = () => {
   // Filter notes based on search and category
   const filteredNotes = notes.filter(note => {
     const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         note.content.toLowerCase().includes(searchQuery.toLowerCase());
+      note.content.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -769,7 +781,7 @@ export const useAppData = () => {
     filteredNotes,
     loading,
     quizzes, // Expose quizzes state
-    
+
     // Setters
     setNotes,
     setRecordings,
@@ -784,7 +796,7 @@ export const useAppData = () => {
     setActiveTab,
     setIsAILoading,
     setQuizzes, // Expose quizzes setter
-    
+
     // Functions (none exposed directly from here, as data loading is internal)
   };
 };

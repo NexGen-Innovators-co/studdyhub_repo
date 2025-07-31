@@ -74,6 +74,7 @@ export interface Message {
   imageMimeType?: string; // New: Mime type of the uploaded image (e.g., 'image/png')
   attachedDocumentIds?: string[]; // New: IDs of documents attached to this message
   attachedNoteIds?: string[]; // New: IDs of notes attached to this message
+  session_id?: string; // Added session_id to Message interface
 }
 
 interface AIChatProps {
@@ -153,7 +154,8 @@ const AIChat: React.FC<AIChatProps> = ({
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null); // Ref for file input (for both upload and camera)
   const cameraInputRef = useRef<HTMLInputElement>(null); // Ref for camera input
-  const [activeDiagram, setActiveDiagram] = useState<{ content?: string; type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs'; language?: string; imageUrl?: string } | null>(null); // Added imageUrl property
+  // Corrected type for activeDiagram to align with DiagramPanelProps and MarkdownRendererProps
+  const [activeDiagram, setActiveDiagram] = useState<{ content?: string; type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text'; language?: string; imageUrl?: string } | null>(null);
   const isDiagramPanelOpen = !!activeDiagram; // Derived state
   // State for image generation
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -275,17 +277,22 @@ const AIChat: React.FC<AIChatProps> = ({
     onRetryFailedMessage(originalUserMessageContent, failedAiMessageId);
   };
 
-  const handleMermaidError = useCallback((code: string, errorType: 'syntax' | 'rendering') => {
-    toast.info(`Mermaid diagram encountered a ${errorType} error. Click 'AI Fix' to get help.`);
+  const handleMermaidError = useCallback((error: string) => { // Simplified error signature
+    toast.info(`Mermaid diagram encountered an error: ${error}. Click 'AI Fix' to get help.`);
   }, []); // Memoize this callback
 
-  const handleSuggestAiCorrection = useCallback((prompt: string) => {
-    setInputMessage(prompt);
-    textareaRef.current?.focus();
+  const handleSuggestAiCorrection = useCallback((prompt?: string) => { // Made prompt optional
+    if (prompt) {
+      setInputMessage(prompt);
+      textareaRef.current?.focus();
+    } else {
+      toast.info("AI correction feature for diagrams is coming soon!");
+    }
   }, []);
 
   // New callback to handle viewing a diagram, code, or image in the side panel
-  const handleViewContent = useCallback((type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs', content?: string, language?: string, imageUrl?: string) => {
+  // Corrected type to include 'unknown' and 'document-text', and removed 'text/markdown'
+  const handleViewContent = useCallback((type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text', content?: string, language?: string, imageUrl?: string) => {
     setActiveDiagram({ content, type, language, imageUrl });
   }, []);
 
@@ -526,7 +533,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
     // Check if it's a text-based file that can be displayed as code/text
     else if ((doc.file_type && textMimeTypes.includes(doc.file_type)) || (fileExtension && codeExtensions.includes(fileExtension))) { // Use file_type
       // Use content_extracted for the document's text content
-      handleViewContent('document-text', doc.content_extracted || `Cannot display content for ${doc.file_name} directly. Try downloading.`, fileExtension || 'txt'); // Use content_extracted and file_name
+      handleViewContent('document-text', doc.content_extracted || `Cannot display content for ${doc.file_name} directly. Try downloading.`, fileExtension || 'txt'); // Corrected type to 'document-text'
     }
     // For other file types, offer download or open in new tab
     else if (doc.file_url) { // Use file_url
@@ -538,19 +545,25 @@ const handleSendMessage = async (e: React.FormEvent) => {
   }, [handleViewContent]);
 
   // Effect to clear context when activeChatSessionId changes
+  // This useEffect is likely the cause of "reloading" if it fires too often.
+  // We want it to fire ONLY when the activeChatSessionId actually changes to a different session.
+  const prevActiveChatSessionId = useRef(activeChatSessionId);
+
   useEffect(() => {
-    // Only clear if activeChatSessionId is not null (i.e., a session is active or newly created)
-    // And if selectedDocumentIds is not already empty (to avoid unnecessary re-renders)
-    if (activeChatSessionId !== null) {
+    // Only clear if the session ID has actually changed AND it's not null (meaning a session is active)
+    // This prevents clearing when the component first mounts with a null session, or when the session ID remains the same.
+    if (activeChatSessionId !== null && activeChatSessionId !== prevActiveChatSessionId.current) {
       if (selectedDocumentIds.length > 0) {
         onSelectionChange([]); // Clear selected documents
       }
       handleRemoveImage(); // Clear selected image and its preview
       setInputMessage(''); // Clear input message
-      handleCloseDiagramPanel(); // NEW: Close diagram panel when session changes
+      handleCloseDiagramPanel(); // Close diagram panel when session changes
+      setExpandedMessages(new Set()); // Clear expanded messages
     }
-  }, [activeChatSessionId, onSelectionChange, handleCloseDiagramPanel]);
-
+    // Update the ref for the next render
+    prevActiveChatSessionId.current = activeChatSessionId;
+  }, [activeChatSessionId, onSelectionChange, handleRemoveImage, handleCloseDiagramPanel, selectedDocumentIds.length]); // Add selectedDocumentIds.length to dependencies
 
   return (
     <>

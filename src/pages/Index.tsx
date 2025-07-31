@@ -88,6 +88,7 @@ const Index = () => {
     setIsSidebarOpen,
     setActiveTab,
     setIsAILoading,
+    quizzes, // Added quizzes from useAppData
   } = useAppData();
 
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -214,7 +215,7 @@ const Index = () => {
     } finally {
       setIsLoadingSessionMessages(false);
     }
-  }, [user, setChatMessages]);
+  }, [user, setChatMessages]); // Depends on user and setChatMessages
 
 
   const handleLoadOlderChatMessages = useCallback(async () => {
@@ -841,7 +842,7 @@ const Index = () => {
     updateNote,
     deleteNote,
     addRecording,
-    updateRecording, // Get the new updateRecording function
+    onUpdateRecording, // Destructure onUpdateRecording from useAppOperations
     generateQuiz,
     addScheduleItem,
     updateScheduleItem,
@@ -946,7 +947,7 @@ const Index = () => {
     onNoteUpdate: updateNote,
     onNoteDelete: deleteNote,
     onAddRecording: addRecording,
-    onUpdateRecording: updateRecording, // Pass new updateRecording
+    onUpdateRecording: onUpdateRecording, // Explicitly pass onUpdateRecording
     onGenerateQuiz: generateQuiz,
     onAddScheduleItem: addScheduleItem,
     onUpdateScheduleItem: updateScheduleItem,
@@ -962,7 +963,7 @@ const Index = () => {
     onNewChatSession: createNewChatSession,
     onDeleteChatSession: deleteChatSession,
     onRenameChatSession: renameChatSession,
-    onSelectedDocumentIdsChange: setSelectedDocumentIds,
+    onSelectionChange: setSelectedDocumentIds, // Explicitly pass this prop
     selectedDocumentIds: selectedDocumentIds,
     onNewMessage: handleNewMessage, // This is still here but its usage might change
     isNotesHistoryOpen: isNotesHistoryOpen,
@@ -973,7 +974,8 @@ const Index = () => {
     onRetryFailedMessage: handleRetryFailedMessage,
     hasMoreMessages: hasMoreMessages, // Pass pagination state for messages
     onLoadOlderMessages: handleLoadOlderChatMessages, // Pass load older messages function
-    isLoadingSessionMessages: isLoadingSessionMessages, // NEW: Pass new prop
+    isLoadingSessionMessages: isLoadingSessionMessages, // NEW: Add to dependencies
+    quizzes: quizzes, // Pass quizzes to TabContent
   }), [
     currentActiveTab,
     filteredNotes,
@@ -989,7 +991,7 @@ const Index = () => {
     updateNote,
     deleteNote,
     addRecording,
-    updateRecording, // Ensure updateRecording is in dependencies
+    onUpdateRecording, // Add onUpdateRecording to dependencies
     generateQuiz,
     addScheduleItem,
     updateScheduleItem,
@@ -1016,6 +1018,7 @@ const Index = () => {
     hasMoreMessages,
     handleLoadOlderChatMessages,
     isLoadingSessionMessages, // NEW: Add to dependencies
+    quizzes, // Add quizzes to dependencies
   ]);
 
 

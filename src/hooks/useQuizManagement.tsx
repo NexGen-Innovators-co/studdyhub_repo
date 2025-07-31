@@ -142,5 +142,9 @@ export const useQuizManagement = ({ onGenerateQuiz }: { onGenerateQuiz: (recordi
     handlePreviousQuestion,
     handleExitQuizMode,
     calculateScore,
+    setQuizMode, // Expose setQuizMode
+    setCurrentQuestionIndex, // Expose setCurrentQuestionIndex
+    setUserAnswers, // Expose setUserAnswers
+    setShowResults // Expose setShowResults
   };
 };
