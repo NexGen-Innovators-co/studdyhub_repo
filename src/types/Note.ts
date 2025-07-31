@@ -15,3 +15,4 @@ export interface Note {
 
 
 export type NoteCategory = Note['category'];
+

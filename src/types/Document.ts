@@ -10,8 +10,8 @@ export interface Document {
   updated_at: string;
   user_id: string;
   type: "text" | "image" | "audio";
-  processing_error: String; // Changed from 'String' to 'string'
-  processing_status: String; // Changed from 'String' to 'string'
+  processing_error: string | null; // Changed to 'string | null'
+  processing_status: string; // Changed to 'string'
 }
 
 export interface UserProfile {

@@ -7,7 +7,7 @@ import AIChat from './AIChat'; // Import AIChat
 import { DocumentUpload } from './DocumentUpload';
 import { LearningStyleSettings } from './LearningStyleSettings';
 import { Note } from '../types/Note';
-import { ClassRecording, ScheduleItem, Message } from '../types/Class';
+import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 // import { ChatHistory } from './ChatHistory'; // Removed ChatHistory import
 import ErrorBoundary from './ErrorBoundary';
@@ -315,7 +315,8 @@ interface TabContentProps {
   onNoteUpdate: (note: Note) => void;
   onNoteDelete: (noteId: string) => void;
   onAddRecording: (recording: ClassRecording) => void;
-  onGenerateQuiz: (classId: string) => Promise<void>;
+  onUpdateRecording: (recording: ClassRecording) => void; // New prop
+  onGenerateQuiz: (recording: ClassRecording, quiz: Quiz) => void; // Updated signature
   onAddScheduleItem: (item: ScheduleItem) => void;
   onUpdateScheduleItem: (item: ScheduleItem) => void;
   onDeleteScheduleItem: (id: string) => void;
@@ -385,10 +386,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   const recordingsProps = useMemo(() => ({
     recordings: props.recordings ?? [],
     onAddRecording: props.onAddRecording,
-    onGenerateQuiz: (recording: ClassRecording) => {
-      props.onGenerateQuiz(recording.id);
-    },
-  }), [props.recordings, props.onAddRecording, props.onGenerateQuiz]);
+    onUpdateRecording: props.onUpdateRecording, // Pass new prop
+    onGenerateQuiz: props.onGenerateQuiz, // Updated prop
+  }), [props.recordings, props.onAddRecording, props.onUpdateRecording, props.onGenerateQuiz]);
 
   const scheduleProps = useMemo(() => ({
     scheduleItems: props.scheduleItems,

@@ -1,7 +1,7 @@
 // useAppData.tsx
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Note } from '../types/Note';
-import { ClassRecording, ScheduleItem, Message } from '../types/Class';
+import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../types/Class'; // Import QuizQuestion
 import { Document, UserProfile } from '../types/Document';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -10,7 +10,7 @@ export const useAppData = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [recordings, setRecordings] = useState<ClassRecording[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
-  const [chatMessages, setChatMessages] = useState<Message[]>([]); // This will hold ALL messages for the user
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
@@ -19,18 +19,18 @@ export const useAppData = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
-  const [loading, setLoading] = useState(true); // Initial loading state for all app data
+  const [loading, setLoading] = useState(true);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]); // New state for quizzes
 
-  // State to hold the current user, derived from auth listener
   const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // Refs to store channel instances for proper cleanup
   const documentChannelRef = useRef<any>(null);
   const chatMessageChannelRef = useRef<any>(null);
-  const notesChannelRef = useRef<any>(null); // New ref for notes channel
-  const recordingsChannelRef = useRef<any>(null); // New ref for recordings channel
-  const scheduleChannelRef = useRef<any>(null); // New ref for schedule items channel
-  const profileChannelRef = useRef<any>(null); // New ref for profile channel
+  const notesChannelRef = useRef<any>(null);
+  const recordingsChannelRef = useRef<any>(null);
+  const scheduleChannelRef = useRef<any>(null);
+  const profileChannelRef = useRef<any>(null);
+  const quizzesChannelRef = useRef<any>(null); // New ref for quizzes channel
 
 
   // Auth listener to set currentUser
@@ -50,27 +50,24 @@ export const useAppData = () => {
   }, []);
 
   // Load data from Supabase when currentUser changes
-  // This useEffect ensures data is loaded only once per user session
   useEffect(() => {
     if (currentUser) {
       loadUserData(currentUser);
     } else {
-      // Clear data if no user is logged in
       setNotes([]);
       setRecordings([]);
       setScheduleItems([]);
-      setChatMessages([]); // Ensure chat messages are cleared
+      setChatMessages([]);
       setDocuments([]);
       setUserProfile(null);
-      setLoading(false); // Set loading to false when data is cleared
+      setQuizzes([]); // Clear quizzes on logout
+      setLoading(false);
     }
-  }, [currentUser]); // Depend on currentUser
+  }, [currentUser]);
 
   // Centralized function to load all user data
   const loadUserData = useCallback(async (user: any) => {
-    // Only set loading to true if we are actually fetching data
-    // This prevents a flicker if data is already loaded and user hasn't changed
-    if (!loading && (notes.length === 0 && recordings.length === 0 && scheduleItems.length === 0 && chatMessages.length === 0 && documents.length === 0 && !userProfile)) {
+    if (!loading && (notes.length === 0 && recordings.length === 0 && scheduleItems.length === 0 && chatMessages.length === 0 && documents.length === 0 && quizzes.length === 0 && !userProfile)) {
         setLoading(true);
     }
 
@@ -103,7 +100,6 @@ export const useAppData = () => {
           updated_at: new Date(profileData.updated_at || Date.now())
         });
       } else {
-        // Create a default profile if one doesn't exist
         const defaultProfile = {
           id: user.id,
           email: user.email || '',
@@ -193,7 +189,7 @@ export const useAppData = () => {
           aiSummary: note.ai_summary || ''
         }));
         setNotes(formattedNotes);
-        if (formattedNotes.length > 0 && !activeNote) { // Only set active note if none is active
+        if (formattedNotes.length > 0 && !activeNote) {
           setActiveNote(formattedNotes[0]);
         }
       }
@@ -254,14 +250,39 @@ export const useAppData = () => {
         setDocuments(formattedDocuments);
       }
 
+      // NEW: Load quizzes
+      const { data: quizzesData, error: quizzesError } = await supabase
+        .from('quizzes')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (quizzesError) {
+        console.error('Error fetching quizzes:', quizzesError);
+        toast.error('Failed to load quizzes');
+      } else if (quizzesData) {
+        const formattedQuizzes = quizzesData.map(quiz => ({
+          id: quiz.id,
+          title: quiz.title,
+          // Cast 'questions' to unknown first, then to QuizQuestion[]
+          questions: quiz.questions as unknown as QuizQuestion[],
+          classId: quiz.class_id,
+          userId: quiz.user_id,
+          createdAt: quiz.created_at
+        }));
+        setQuizzes(formattedQuizzes);
+      }
+
+
     } catch (error) {
       console.error('Unexpected error loading user data:', error);
       toast.error('An unexpected error occurred while loading data');
-      setRecordings([]); // Fallback to empty array on any error
+      setRecordings([]);
+      setQuizzes([]); // Fallback to empty array on error
     } finally {
-      setLoading(false); // Always set loading to false in finally block
+      setLoading(false);
     }
-  }, [loading, notes.length, recordings.length, scheduleItems.length, chatMessages.length, documents.length, userProfile, setNotes, setRecordings, setScheduleItems, setChatMessages, setDocuments, setUserProfile, setActiveNote]); // Added all state setters to dependencies
+  }, [loading, notes.length, recordings.length, scheduleItems.length, chatMessages.length, documents.length, quizzes.length, userProfile, setNotes, setRecordings, setScheduleItems, setChatMessages, setDocuments, setQuizzes, setUserProfile, setActiveNote]);
 
   // Real-time listener for documents
   useEffect(() => {
@@ -290,8 +311,8 @@ export const useAppData = () => {
                 file_name: newDoc.file_name,
                 file_type: newDoc.file_type,
                 file_url: newDoc.file_url,
-                file_size: newDoc.file_size || 0,
                 content_extracted: newDoc.content_extracted || null,
+                file_size: newDoc.file_size || 0,
                 type: newDoc.type as Document['type'],
                 processing_status: String(newDoc.processing_status) || null,
                 processing_error: String(newDoc.processing_error) || null,
@@ -661,6 +682,67 @@ export const useAppData = () => {
     setupProfileListener();
   }, [currentUser, setUserProfile]);
 
+  // NEW: Real-time listener for Quizzes
+  useEffect(() => {
+    const setupQuizzesListener = () => {
+      if (quizzesChannelRef.current) {
+        supabase.removeChannel(quizzesChannelRef.current);
+        quizzesChannelRef.current = null;
+      }
+
+      if (!currentUser) {
+        return;
+      }
+
+      const channel = supabase
+        .channel('public:quizzes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'quizzes', filter: `user_id=eq.${currentUser.id}` },
+          (payload) => {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newQuiz = payload.new as any;
+              const formattedQuiz: Quiz = {
+ id: newQuiz.id,
+ title: newQuiz.title,
+                // Cast 'questions' to unknown first, then to QuizQuestion[]
+ questions: newQuiz.questions as unknown as QuizQuestion[],
+                classId: newQuiz.class_id,
+                userId: newQuiz.user_id,
+                createdAt: newQuiz.created_at
+              };
+
+              setQuizzes(prevQuizzes => {
+                const existingIndex = prevQuizzes.findIndex(quiz => quiz.id === formattedQuiz.id);
+                if (existingIndex > -1) {
+                  const updatedQuizzes = [...prevQuizzes];
+                  updatedQuizzes[existingIndex] = formattedQuiz;
+                  return updatedQuizzes;
+                } else {
+                  return [formattedQuiz, ...prevQuizzes];
+                }
+              });
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setQuizzes(prevQuizzes => prevQuizzes.filter(quiz => quiz.id !== deletedId));
+            }
+          }
+        )
+        .subscribe();
+
+      quizzesChannelRef.current = channel;
+
+      return () => {
+        if (quizzesChannelRef.current) {
+          supabase.removeChannel(quizzesChannelRef.current);
+          quizzesChannelRef.current = null;
+        }
+      };
+    };
+
+    setupQuizzesListener();
+  }, [currentUser, setQuizzes]);
+
 
   // Filter notes based on search and category
   const filteredNotes = notes.filter(note => {
@@ -675,7 +757,7 @@ export const useAppData = () => {
     notes,
     recordings,
     scheduleItems,
-    chatMessages, // This is the global, unfiltered list
+    chatMessages,
     documents,
     userProfile,
     activeNote,
@@ -685,13 +767,14 @@ export const useAppData = () => {
     activeTab,
     isAILoading,
     filteredNotes,
-    loading, // Expose loading state
+    loading,
+    quizzes, // Expose quizzes state
     
     // Setters
     setNotes,
     setRecordings,
     setScheduleItems,
-    setChatMessages, // Still exposed for consistency, but less direct use now
+    setChatMessages,
     setDocuments,
     setUserProfile,
     setActiveNote,
@@ -700,6 +783,7 @@ export const useAppData = () => {
     setIsSidebarOpen,
     setActiveTab,
     setIsAILoading,
+    setQuizzes, // Expose quizzes setter
     
     // Functions (none exposed directly from here, as data loading is internal)
   };

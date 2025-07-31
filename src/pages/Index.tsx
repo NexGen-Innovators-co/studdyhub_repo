@@ -214,7 +214,7 @@ const Index = () => {
     } finally {
       setIsLoadingSessionMessages(false);
     }
-  }, [user, setChatMessages]); // Depends on user and setChatMessages
+  }, [user, setChatMessages]);
 
 
   const handleLoadOlderChatMessages = useCallback(async () => {
@@ -295,10 +295,10 @@ const Index = () => {
   }, [activeChatSessionId, chatSessions]);
 
   const createNewChatSession = useCallback(async (): Promise<string | null> => {
-    ('createNewChatSession: Attempting to create new session...');
+    console.log('createNewChatSession: Attempting to create new session...');
     try {
       if (!user) {
-        ('createNewChatSession: User is null, cannot create session.');
+        console.log('createNewChatSession: User is null, cannot create session.');
         toast.error('Please sign in to create a new chat session.');
         return null;
       }
@@ -534,21 +534,21 @@ const Index = () => {
 
 
     if (!messageContent.trim() && (!attachedDocumentIds || attachedDocumentIds.length === 0) && (!attachedNoteIds || attachedNoteIds.length === 0) && !imageUrl || isAILoading || isSubmittingUserMessage) {
-      ('handleSubmit: Aborting due to empty message/no attachments/no image, AI loading, or already submitting.');
+      console.log('handleSubmit: Aborting due to empty message/no attachments/no image, AI loading, or already submitting.');
       return;
     }
 
     const trimmedMessage = messageContent.trim();
     setIsSubmittingUserMessage(true);
     setIsAILoading(true); // Start AI loading immediately
-    ('handleSubmit: setIsSubmittingUserMessage set to true, setIsAILoading set to true.');
+    console.log('handleSubmit: setIsSubmittingUserMessage set to true, setIsAILoading set to true.');
 
     let attachedImageDocumentId: string | undefined = undefined;
     let uploadedFilePath: string | undefined = undefined;
     let imageDescriptionForAI: string | undefined;
 
     try {
-      ('handleSubmit: Getting current user from Supabase auth...');
+      console.log('handleSubmit: Getting current user from Supabase auth...');
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         console.error('handleSubmit: No current user found after auth.getUser().');
@@ -561,7 +561,7 @@ const Index = () => {
 
 
       if (!currentSessionId) {
-        ('handleSubmit: No active session, creating new one...');
+        console.log('handleSubmit: No active session, creating new one...');
         currentSessionId = await createNewChatSession();
         if (!currentSessionId) {
           console.error('handleSubmit: Failed to create chat session.');
@@ -584,11 +584,11 @@ const Index = () => {
         }
 
         if (attachedImageDocumentId) {
-          (`handleSubmit: Refreshing document with ID ${attachedImageDocumentId} to ensure latest content_extracted.`);
+          console.log(`handleSubmit: Refreshing document with ID ${attachedImageDocumentId} to ensure latest content_extracted.`);
           const refreshedDoc = await refreshUploadedDocument(attachedImageDocumentId);
           if (refreshedDoc) {
             imageDescriptionForAI = refreshedDoc.content_extracted;
-            (`handleSubmit: Document ${attachedImageDocumentId} refreshed and state updated. Extracted content length: ${imageDescriptionForAI?.length || 0}`);
+            console.log(`handleSubmit: Document ${attachedImageDocumentId} refreshed and state updated. Extracted content length: ${imageDescriptionForAI?.length || 0}`);
           } else {
             console.warn(`handleSubmit: Failed to refresh document ${attachedImageDocumentId}. AI might not get full image context.`);
           }
@@ -652,7 +652,7 @@ const Index = () => {
       }
 
 
-      ('handleSubmit: Invoking gemini-chat function...');
+      console.log('handleSubmit: Invoking gemini-chat function...');
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
           userId: currentUser.id,
@@ -716,7 +716,7 @@ const Index = () => {
     } finally {
       setIsSubmittingUserMessage(false);
       setIsAILoading(false); // Ensure AI loading is stopped
-      ('handleSubmit: setIsSubmittingUserMessage set to false, setIsAILoading set to false.');
+      console.log('handleSubmit: setIsSubmittingUserMessage set to false, setIsAILoading set to false.');
     }
   }, [isAILoading, activeChatSessionId, createNewChatSession, isSubmittingUserMessage, documents, setSelectedDocumentIds, notes, refreshUploadedDocument, setDocuments, allChatMessages, userProfile, setChatSessions, setIsAILoading]);
 
@@ -841,6 +841,7 @@ const Index = () => {
     updateNote,
     deleteNote,
     addRecording,
+    updateRecording, // Get the new updateRecording function
     generateQuiz,
     addScheduleItem,
     updateScheduleItem,
@@ -945,6 +946,7 @@ const Index = () => {
     onNoteUpdate: updateNote,
     onNoteDelete: deleteNote,
     onAddRecording: addRecording,
+    onUpdateRecording: updateRecording, // Pass new updateRecording
     onGenerateQuiz: generateQuiz,
     onAddScheduleItem: addScheduleItem,
     onUpdateScheduleItem: updateScheduleItem,
@@ -987,6 +989,7 @@ const Index = () => {
     updateNote,
     deleteNote,
     addRecording,
+    updateRecording, // Ensure updateRecording is in dependencies
     generateQuiz,
     addScheduleItem,
     updateScheduleItem,
