@@ -6,42 +6,40 @@
 All colors MUST be HSL.
 */
 .modern-scrollbar::-webkit-scrollbar {
-  width: 8px;
+  width: 0px; /* Completely hide the scrollbar for Webkit browsers */
 }
 .modern-scrollbar::-webkit-scrollbar-track {
-  background: #f1f5f900;
-  border-radius: 10px;
+  background: transparent; /* Ensure track is transparent */
 }
 .modern-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e100;
-  border-radius: 10px;
-  border: 2px solid #f1f5f900;
+  background: transparent; /* Ensure thumb is transparent */
+  border: none; /* Remove any border */
 }
 .modern-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b800;
+  background: transparent;
 }
 .modern-scrollbar::-webkit-scrollbar-thumb:active {
-  background: #767f8b00;
+  background: transparent;
 }
 /* Firefox */
 .modern-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e100 #f1f5f900;
+  scrollbar-width: none; /* Completely hide the scrollbar for Firefox */
+  scrollbar-color: transparent transparent; /* Ensure thumb and track are transparent */
 }
 /* In your global CSS file (e.g., index.css or globals.css) */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px; /* Width for vertical scrollbar */
-  height: 6px; /* Height for horizontal scrollbar */
+  width: 0px; /* Width for vertical scrollbar */
+  height: 1px; /* Height for horizontal scrollbar */
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background: #f1f1f1; /* Color of the track */
-  border-radius: 10px;
+  border-radius: 1px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #888; /* Color of the scroll thumb */
-  border-radius: 10px;
+  border-radius: 1px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {

@@ -113,11 +113,11 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
 
   useEffect(() => {
     if (canvasRef.current && codeContent) {
-      ("[Three.js Renderer] Attempting to render Three.js scene.");
+      console.log("[Three.js Renderer] Attempting to render Three.js scene.");
       if (threeJsCleanupRef.current) {
         threeJsCleanupRef.current();
         threeJsCleanupRef.current = null;
-        ("[Three.js Renderer] Cleaned up previous scene.");
+        console.log("[Three.js Renderer] Cleaned up previous scene.");
       }
 
       try {
@@ -140,7 +140,7 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
         threeJsCleanupRef.current = cleanup;
         onInvalidCode(null); // Clear any previous error
         onSceneReady(scene, renderer, cleanup); // Pass scene, renderer, and cleanup to parent
-        ("[Three.js Renderer] Three.js scene rendered successfully.");
+        console.log("[Three.js Renderer] Three.js scene rendered successfully.");
       } catch (error: any) {
         console.error("Error rendering Three.js scene:", error);
         onInvalidCode(`Error rendering 3D scene: ${error.message}`);
@@ -162,7 +162,7 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
       if (threeJsCleanupRef.current) {
         threeJsCleanupRef.current();
         threeJsCleanupRef.current = null;
-        ("[Three.js Renderer] Cleanup: Three.js scene unmounted.");
+        console.log("[Three.js Renderer] Cleanup: Three.js scene unmounted.");
       }
     };
   }, [codeContent, canvasRef, onInvalidCode, onSceneReady]);
@@ -336,13 +336,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       window.addEventListener('mouseleave', handleGlobalMouseUp);
     } else {
       // Clean up listeners when resizing stops
-      window.removeEventListener('mousemove', handleGlobalMouseMove);
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
-      window.removeEventListener('mouseleave', handleGlobalMouseUp);
-    }
-
-    // Cleanup on component unmount
-    return () => {
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
       window.removeEventListener('mouseleave', handleGlobalMouseUp);
@@ -693,6 +686,17 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       panelTitle = 'Chart.js Graph View';
       downloadButtonText = 'Download Chart (PNG)';
       downloadFileName = 'chartjs-graph';
+      let chartConfigToRender: any = {};
+      try {
+        // Attempt to parse after stripping comments
+        const cleanedContent = diagramContent ? diagramContent.replace(/\/\/.*|\/\*[\sS]*?\*\//g, '') : '';
+        chartConfigToRender = cleanedContent ? JSON.parse(cleanedContent) : {};
+      } catch (e: any) {
+        // If parsing fails, set an error and provide a way to suggest correction
+        setChartError(`Invalid Chart.js JSON: ${e.message}. The AI might have included non-JSON elements.`);
+        chartConfigToRender = {}; // Fallback to empty config to prevent further errors
+      }
+
       return (
         <>
           {chartError && (
@@ -710,7 +714,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             </div>
           )}
           <ChartRenderer
-            chartConfig={diagramContent ? JSON.parse(diagramContent.replace(/\/\/.*|\/\*[\sS]*?\*\//g, '')) : {}}
+            chartConfig={chartConfigToRender}
             onInvalidConfig={setChartError}
             chartRef={chartRef}
           />

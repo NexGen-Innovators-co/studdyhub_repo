@@ -1,12 +1,13 @@
 // components/QuizModal.tsx
 import React from 'react';
+import { Quiz, QuizQuestion } from '../types/Class';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
-import { X, Check, BookOpen } from 'lucide-react';
-import { Quiz, ClassRecording, QuizQuestion } from '../types/Class';
-// No longer importing useQuizManagement here
+import { Card, CardContent } from './ui/card';
+import { CheckCircle, XCircle, ArrowLeft, ArrowRight, Trophy, Lightbulb } from 'lucide-react';
 
 interface QuizModalProps {
-  quizMode: { recording: ClassRecording; quiz: Quiz } | null;
+  quizMode: { recording: any; quiz: Quiz } | null;
   currentQuestionIndex: number;
   userAnswers: (number | null)[];
   showResults: boolean;
@@ -28,142 +29,136 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onExitQuizMode,
   onCalculateScore,
 }) => {
-  // Removed internal useQuizManagement hook call
+  if (!quizMode) {
+    return null; // Don't render modal if not in quiz mode
+  }
 
-  if (!quizMode) return null;
+  const { quiz, recording } = quizMode;
+  const currentQuestion = quiz.questions[currentQuestionIndex];
+  const selectedAnswer = userAnswers[currentQuestionIndex];
 
-  const { quiz } = quizMode;
+  const isLastQuestion = currentQuestionIndex === quiz.questions.length - 1;
+  const isFirstQuestion = currentQuestionIndex === 0;
+
+  const score = showResults ? onCalculateScore() : 0;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto dark:bg-gray-800">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-gray-100">{quiz.title}</h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onExitQuizMode}
-              className="text-slate-600 hover:bg-slate-50 dark:text-gray-400 dark:hover:bg-gray-700"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
+    <Dialog open={!!quizMode} onOpenChange={onExitQuizMode}>
+      <DialogContent className="sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl">
+        <DialogHeader className="border-b pb-4 mb-4 dark:border-gray-700">
+          <DialogTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
+            <Lightbulb className="h-6 w-6 text-yellow-500" /> {quiz.title || 'Generated Quiz'}
+          </DialogTitle>
+          {recording && (
+            <DialogDescription className="text-center text-gray-600 dark:text-gray-400">
+              Based on: <span className="font-medium text-blue-600 dark:text-blue-400">{recording.title}</span>
+            </DialogDescription>
+          )}
+        </DialogHeader>
 
-          {!showResults ? (
-            quiz.questions && quiz.questions.length > 0 && quiz.questions[currentQuestionIndex] ? (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600 dark:text-gray-300">
-                    Question {currentQuestionIndex + 1} of {quiz.questions.length}
-                  </span>
-                  <div className="w-64 h-2 bg-slate-200 rounded-full dark:bg-gray-700">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-600 to-purple-600 rounded-full transition-all duration-300"
-                      style={{ width: `${((currentQuestionIndex + 1) / quiz.questions.length) * 100}%` }}
-                    />
-                  </div>
-                </div>
+        <div className="relative">
+          {showResults ? (
+            <div className="text-center py-8">
+              <Trophy className="h-20 w-20 text-yellow-500 mx-auto mb-6 animate-bounce" />
+              <h3 className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 mb-4">Quiz Completed!</h3>
+              <p className="text-xl text-gray-700 dark:text-gray-300 mb-6">
+                Your Score: <span className="font-bold">{score}%</span>
+              </p>
+              <Button
+                onClick={onExitQuizMode}
+                className="w-full max-w-xs bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+              >
+                Exit Quiz
+              </Button>
 
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-4 dark:text-gray-100">
-                    {quiz.questions?.[currentQuestionIndex]?.question || 'Question not available'}
-                  </h3>
+              <div className="mt-8 space-y-4 text-left">
+                <h4 className="text-xl font-bold text-slate-800 dark:text-gray-100 mb-4">Review Your Answers</h4>
+                {quiz.questions.length > 0 ? (
+                  quiz.questions.map((question, index) => (
+                    <Card key={index} className="p-4 rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+                      <div className="flex items-start gap-3 mb-2">
+                        {userAnswers[index] === question.correctAnswer ? (
+                          <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-1" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-1" />
+                        )}
+                        <h4 className="font-semibold text-slate-800 dark:text-gray-100 flex-1">
+                          {index + 1}. {question.question}
+                        </h4>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 ml-8">
+                        Your answer: <span className="font-medium">
+                          {question.options[userAnswers[index] ?? -1] || 'Not answered'}
+                        </span>
+                      </p>
+                      {userAnswers[index] !== question.correctAnswer && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 ml-8">
+                          Correct answer: <span className="font-medium text-green-600 dark:text-green-400">
+                            {question.options[question.correctAnswer]}
+                          </span>
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2 ml-8 italic">
+                        Explanation: {question.explanation}
+                      </p>
+                    </Card>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">No questions available for review.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            // Quiz in progress
+            <div className="space-y-6">
+              <div className="text-center text-lg font-medium text-gray-700 dark:text-gray-300">
+                Question {currentQuestionIndex + 1} of {quiz.questions.length}
+              </div>
+              <Card className="p-6 rounded-lg shadow-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+                <CardContent className="p-0">
+                  <p className="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100">
+                    {currentQuestion.question}
+                  </p>
                   <div className="space-y-3">
-                    {(quiz.questions?.[currentQuestionIndex]?.options || []).map((option, index) => (
+                    {currentQuestion.options.map((option, optionIndex) => (
                       <Button
-                        key={index}
-                        variant={userAnswers[currentQuestionIndex] === index ? "default" : "outline"}
-                        className={`w-full text-left justify-start p-4 transition-all duration-200 ${userAnswers[currentQuestionIndex] === index
-                          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                          : 'text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700'
-                          }`}
-                        onClick={() => onAnswerSelect(currentQuestionIndex, index)}
+                        key={optionIndex}
+                        variant="outline"
+                        className={`w-full justify-start text-left py-3 px-4 rounded-md transition-colors duration-200
+                          ${selectedAnswer === optionIndex
+                            ? 'bg-blue-100 border-blue-500 text-blue-800 dark:bg-blue-900 dark:border-blue-500 dark:text-blue-200'
+                            : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600'
+                          }
+                        `}
+                        onClick={() => onAnswerSelect(currentQuestionIndex, optionIndex)}
                       >
                         {option}
                       </Button>
                     ))}
                   </div>
-                </div>
+                </CardContent>
+              </Card>
 
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant="outline"
-                    onClick={onPreviousQuestion}
-                    disabled={currentQuestionIndex === 0}
-                    className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    onClick={onNextQuestion}
-                    disabled={userAnswers[currentQuestionIndex] === null}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
-                  >
-                    {currentQuestionIndex < (quiz.questions?.length || 0) - 1 ? 'Next' : 'Finish'}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <BookOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-500 mb-2">No questions available</h3>
-                <p className="text-gray-400">The quiz could not be generated. Please try again.</p>
+              <div className="flex justify-between mt-6">
                 <Button
-                  onClick={onExitQuizMode}
-                  className="mt-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+                  onClick={onPreviousQuestion}
+                  disabled={isFirstQuestion}
+                  variant="outline"
+                  className="flex items-center gap-2 text-gray-600 border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
                 >
-                  Close
+                  <ArrowLeft className="h-4 w-4" /> Previous
+                </Button>
+                <Button
+                  onClick={onNextQuestion}
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600"
+                >
+                  {isLastQuestion ? 'Submit Quiz' : 'Next Question'} <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
-            )
-          ) : (
-            <div className="space-y-6">
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-slate-800 dark:text-gray-100">Quiz Results</h3>
-                <p className="text-lg text-slate-600 mt-2 dark:text-gray-300">
-                  Your score: <span className="font-semibold text-blue-600">{onCalculateScore()}%</span>
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {quiz.questions && Array.isArray(quiz.questions) && quiz.questions.length > 0 ? (
-                  quiz.questions.map((question, index) => (
-                    <div key={question.id || index} className="border border-slate-200 rounded-lg p-4 dark:border-gray-700">
-                      <div className="flex items-center gap-2 mb-2">
-                        {userAnswers[index] === question.correctAnswer ? (
-                          <Check className="h-5 w-5 text-green-600" />
-                        ) : (
-                          <X className="h-5 w-5 text-red-600" />
-                        )}
-                        <h4 className="font-semibold text-slate-800 dark:text-gray-100">{question.question}</h4>
-                      </div>
-                      <p className="text-sm text-slate-600 dark:text-gray-300">
-                        Your answer: {question.options[userAnswers[index] ?? -1] || 'Not answered'}
-                      </p>
-                      {userAnswers[index] !== question.correctAnswer && (
-                        <p className="text-sm text-slate-600 dark:text-gray-300">
-                          Correct answer: {question.options[question.correctAnswer]}
-                        </p>
-                      )}
-                      <p className="text-sm text-slate-700 mt-2 dark:text-gray-200">{question.explanation}</p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-slate-600 dark:text-gray-300">No questions available.</p>
-                )}
-              </div>
-
-              <Button
-                onClick={onExitQuizMode}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
-              >
-                Exit Quiz
-              </Button>
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };

@@ -1,55 +1,55 @@
-import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'; // Import useState and useCallback
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { NotesList } from './NotesList';
 import { NoteEditor } from './NoteEditor';
 import { ClassRecordings } from './ClassRecordings';
 import { Schedule } from './Schedule';
-import AIChat from './AIChat'; // Import AIChat
+import AIChat from './AIChat';
 import { DocumentUpload } from './DocumentUpload';
 import { LearningStyleSettings } from './LearningStyleSettings';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
-// import { ChatHistory } from './ChatHistory'; // Removed ChatHistory import
 import ErrorBoundary from './ErrorBoundary';
-import Mermaid from './Mermaid'; // Import Mermaid here for SidePanelViewer
-import { Chart, registerables } from 'chart.js'; // Import Chart and registerables for SidePanelViewer
-import { AlertTriangle, Copy, Check, Code, X } from 'lucide-react'; // Import necessary icons for SidePanelViewer
-import { Button } from './ui/button'; // Import Button for SidePanelViewer
-import { toast } from 'sonner'; // Import toast for SidePanelViewer
-import { lowlight } from 'lowlight'; // Make sure lowlight is imported if used directly here
+import Mermaid from './Mermaid';
+import { Chart, registerables } from 'chart.js';
+import { AlertTriangle, Copy, Check, Code, X } from 'lucide-react';
+import { Button } from './ui/button';
+import { toast } from 'sonner';
+import { lowlight } from 'lowlight';
 
 // Register Chart.js components if not already done globally
 Chart.register(...registerables);
 
-// Helper for copy to clipboard (can be moved to a shared utility if needed elsewhere)
+// Helper for copy to clipboard
 const useCopyToClipboard = () => {
   const [copied, setCopied] = useState(false);
-  const copy = async (text: string) => {
+  const copy = useCallback(async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      // Use document.execCommand('copy') as navigator.clipboard.writeText() might not work in iframes
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed"; // Avoid scrolling to bottom
+      textArea.style.left = "-9999px";
+      textArea.style.top = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      textArea.remove();
+
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
       toast.success('Code copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
     } catch (err) {
+      console.error('Failed to copy text: ', err);
       toast.error('Failed to copy code');
+      setCopied(false);
     }
-  };
+  }, []);
   return { copied, copy };
 };
 
 // Helper for syntax highlighting (from AIChat, needed for SidePanelViewer)
-const highlightCode = (code: string, language: string) => {
-  try {
-    // Ensure lowlight is available in this scope
-    // This assumes lowlight and its languages are registered globally or available
-    const result = lowlight.highlight(language, code);
-    return toHtml(result);
-  } catch (error) {
-    console.warn('Syntax highlighting failed:', error);
-    return escapeHtml(code);
-  }
-};
-
 const escapeHtml = (text: string) => {
   const map: { [key: string]: string } = {
     '&': '&amp;',
@@ -121,6 +121,16 @@ const toHtml = (result: any) => {
   return result.children.map(nodeToHtml).join('');
 };
 
+const highlightCode = (code: string, language: string) => {
+  try {
+    const result = lowlight.highlight(language, code);
+    return toHtml(result);
+  } catch (error) {
+    console.warn('Syntax highlighting failed:', error);
+    return escapeHtml(code);
+  }
+};
+
 interface ChartRendererProps {
   chartConfig: any;
 }
@@ -155,15 +165,15 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig }) => {
   );
 };
 
-
 interface SidePanelViewerProps {
-  code?: string; // Made optional for image view
-  language?: string; // Made optional for image view
-  imageUrl?: string; // New prop for image URL
-  type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown'; // Added 'image' type
+  code?: string;
+  language?: string;
+  imageUrl?: string;
+  type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs';
   onClose: () => void;
-  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
-  onSuggestAiCorrection: (prompt: string) => void;
+  // Corrected signature for onMermaidError to match Mermaid component's likely expectation
+  onMermaidError: (error: string) => void; // Expects a single string error
+  onSuggestAiCorrection: (prompt?: string) => void;
 }
 
 const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, imageUrl, type, onClose, onMermaidError, onSuggestAiCorrection }) => {
@@ -171,7 +181,8 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
 
   const renderContent = () => {
     if (type === 'mermaid' && code) {
-      return <Mermaid chart={code} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} diagramRef={null} />;
+      // Pass the onMermaidError directly, as its signature now matches
+      return <Mermaid chart={code} onMermaidError={onMermaidError} onSuggestAiCorrection={() => onSuggestAiCorrection()} diagramRef={null} />;
     } else if (type === 'chartjs' && code) {
       try {
         const chartConfig = JSON.parse(code);
@@ -192,12 +203,10 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
           </div>
         );
       }
-    } else if (type === 'dot' && code) { // Handle DOT graphs in side panel
-      // Note: This is a placeholder. Full DOT rendering requires @hpcc-js/wasm setup
-      // which is typically done in AIChat.tsx. For SidePanelViewer, we'll show raw code for now.
+    } else if (type === 'dot' && code) {
       return (
         <div className="flex flex-col items-center justify-center h-full p-4">
-          <p className="text-gray-300 mb-2">DOT Graph Rendering Not Available Here.</p>
+          <p className="text-gray-300 mb-2">DOT Graph Rendering Not Available Here. Displaying raw code:</p>
           <pre className="bg-gray-800 p-3 rounded-md text-sm overflow-x-auto max-w-full text-gray-200">
             {code}
           </pre>
@@ -260,6 +269,13 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
           />
         </div>
       );
+    } else if (type === 'document-text' && code) { // Handle 'document-text' type
+      return (
+        <div className="prose dark:prose-invert max-w-none">
+          {/* Render text content as markdown */}
+          <div dangerouslySetInnerHTML={{ __html: code }} />
+        </div>
+      );
     }
     else {
       return (
@@ -275,7 +291,7 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
   };
 
   return (
-    <div className="flex flex-col bg-slate-50 border-l border-slate-200 shadow-xl dark:bg-gray-900 dark:border-gray-800"> {/* Removed fixed positioning */}
+    <div className="flex flex-col bg-slate-50 border-l border-slate-200 shadow-xl dark:bg-gray-900 dark:border-gray-800">
       <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white dark:bg-gray-900 dark:border-gray-800">
         <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100">Content Viewer: {type === 'image' ? 'Image' : (language || type)}</h3>
         <Button variant="ghost" size="icon" onClick={onClose} title="Close Panel" className="dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100">
@@ -301,26 +317,27 @@ interface ChatSession {
 }
 
 interface TabContentProps {
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'; // Still explicitly passed from Routes
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
   filteredNotes: Note[];
   activeNote: Note | null;
-  recordings: ClassRecording[] | undefined; // Allow undefined
+  recordings: ClassRecording[] | undefined;
   scheduleItems: ScheduleItem[];
   chatMessages: Message[];
   documents: Document[];
   userProfile: UserProfile | null;
+  quizzes: Quiz[]; // Added quizzes prop
   isAILoading: boolean;
   setIsAILoading: (isLoading: boolean) => void;
   onNoteSelect: (note: Note) => void;
   onNoteUpdate: (note: Note) => void;
   onNoteDelete: (noteId: string) => void;
   onAddRecording: (recording: ClassRecording) => void;
-  onUpdateRecording: (recording: ClassRecording) => void; // New prop
-  onGenerateQuiz: (recording: ClassRecording, quiz: Quiz) => void; // Updated signature
+  onUpdateRecording: (recording: ClassRecording) => void;
+  onGenerateQuiz: (recording: ClassRecording, quiz: Quiz) => void;
   onAddScheduleItem: (item: ScheduleItem) => void;
   onUpdateScheduleItem: (item: ScheduleItem) => void;
   onDeleteScheduleItem: (id: string) => void;
-  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[], imageUrl?: string, imageMimeType?: string, imageDataBase64?: string) => Promise<void>; // Updated signature
+  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[], imageUrl?: string, imageMimeType?: string, imageDataBase64?: string) => Promise<void>;
   onDocumentUploaded: (document: Document) => void;
   onDocumentDeleted: (documentId: string) => void;
   onProfileUpdate: (profile: UserProfile) => void;
@@ -330,9 +347,9 @@ interface TabContentProps {
   onNewChatSession: () => Promise<string | null>;
   onDeleteChatSession: (sessionId: string) => Promise<void>;
   onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
-  onSelectedDocumentIdsChange: (ids: string[]) => void;
+  // Renamed from onSelectedDocumentIdsChange to onSelectionChange for consistency
+  onSelectionChange: (ids: string[]) => void;
   selectedDocumentIds: string[];
-  // Removed isChatHistoryOpen and onToggleChatHistory
   onNewMessage: (message: Message) => void;
   isNotesHistoryOpen: boolean;
   onRegenerateResponse: (lastUserMessageContent: string) => Promise<void>;
@@ -340,40 +357,35 @@ interface TabContentProps {
   onToggleNotesHistory: () => void;
   onRetryFailedMessage: (originalUserMessageContent: string, failedAiMessageId: string) => Promise<void>;
   isSubmittingUserMessage: boolean;
-  // New props for message pagination (added to TabContentProps)
   hasMoreMessages: boolean;
   onLoadOlderMessages: () => Promise<void>;
-  onDocumentUpdated: (updatedDocument: Document) => void; // NEW PROP
-  isLoadingSessionMessages: boolean; // NEW PROP
+  onDocumentUpdated: (updatedDocument: Document) => void;
+  isLoadingSessionMessages: boolean;
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
-  const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory } = props; // Removed isChatHistoryOpen, onToggleChatHistory
+  const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory } = props;
 
-  // State for the side-out code/diagram/image panel
-  const [activeSidePanelContent, setActiveSidePanelContent] = useState<{ code?: string, language?: string, imageUrl?: string, type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' } | null>(null);
-  const isSidePanelOpen = !!activeSidePanelContent; // Derived state
+  const [activeSidePanelContent, setActiveSidePanelContent] = useState<{ code?: string, language?: string, imageUrl?: string, type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' } | null>(null);
+  const isSidePanelOpen = !!activeSidePanelContent;
 
-  // Callbacks for side panel management
-  const handleViewContent = useCallback((type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown', content?: string, language?: string, imageUrl?: string) => {
+  const handleViewContent = useCallback((type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs', content?: string, language?: string, imageUrl?: string) => {
     setActiveSidePanelContent({ type, code: content, language, imageUrl });
   }, []);
 
+  // Updated handleMermaidError to match the signature expected by Mermaid component
+  const handleMermaidError = useCallback((error: string) => { // Simplified to expect a single string error
+    toast.info(`Mermaid diagram encountered an error: ${error}. Click 'AI Fix' to get help.`);
+  }, []);
+
+  const handleSuggestAiCorrection = useCallback((prompt?: string) => {
+    toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
+  }, []);
+
+  // Memoize handleCloseSidePanel
   const handleCloseSidePanel = useCallback(() => {
     setActiveSidePanelContent(null);
   }, []);
-
-  const handleMermaidError = useCallback((code: string, errorType: 'syntax' | 'rendering') => {
-    toast.info(`Mermaid diagram encountered a ${errorType} error. Click 'AI Fix' to get help.`);
-  }, []);
-
-  const handleSuggestAiCorrection = useCallback((prompt: string) => {
-    // This will be passed to AIChat, which then sets its inputMessage
-    // We don't directly set inputMessage here in TabContent
-    // The AIChat component will handle setting its own input field
-  }, []);
-
-
 
 
   const notesProps = useMemo(() => ({
@@ -381,14 +393,21 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     activeNote: props.activeNote,
     onNoteSelect: props.onNoteSelect,
     onNoteUpdate: props.onNoteUpdate,
-  }), [props.filteredNotes, props.activeNote, props.onNoteSelect, props.onNoteDelete, props.onNoteUpdate]);
+  }), [props.filteredNotes, props.activeNote, props.onNoteSelect, props.onNoteUpdate]);
 
   const recordingsProps = useMemo(() => ({
     recordings: props.recordings ?? [],
     onAddRecording: props.onAddRecording,
-    onUpdateRecording: props.onUpdateRecording, // Pass new prop
-    onGenerateQuiz: props.onGenerateQuiz, // Updated prop
-  }), [props.recordings, props.onAddRecording, props.onUpdateRecording, props.onGenerateQuiz]);
+    onUpdateRecording: props.onUpdateRecording,
+    onGenerateQuiz: props.onGenerateQuiz,
+    quizzes: props.quizzes, // Correctly pass the quizzes prop
+  }), [
+    props.recordings,
+    props.onAddRecording,
+    props.onUpdateRecording,
+    props.onGenerateQuiz,
+    props.quizzes, // Add quizzes to dependency array
+  ]);
 
   const scheduleProps = useMemo(() => ({
     scheduleItems: props.scheduleItems,
@@ -401,34 +420,33 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     messages: props.activeChatSessionId ? props.chatMessages : [],
     documents: props.documents,
     onSendMessage: props.onSendMessage,
-    notes: props.filteredNotes, // Pass filtered notes for context
+    notes: props.filteredNotes,
     selectedDocumentIds: props.selectedDocumentIds,
-    onSelectionChange: props.onSelectedDocumentIdsChange, // This is the correct prop
+    onSelectionChange: props.onSelectionChange, // Correctly pass this prop
     activeChatSessionId: props.activeChatSessionId,
     onNewChatSession: props.onNewChatSession,
     onDeleteChatSession: props.onDeleteChatSession,
     onRenameChatSession: props.onRenameChatSession,
     onChatSessionSelect: props.onChatSessionSelect,
     chatSessions: props.chatSessions,
-    // Removed onToggleChatHistory
     isLoading: isAILoading,
     setIsLoading: props.setIsAILoading,
     onNewMessage: props.onNewMessage,
     onDeleteMessage: props.onDeleteMessage,
-    onRegenerateResponse: props.onRegenerateResponse, // This is now correctly typed
+    onRegenerateResponse: props.onRegenerateResponse,
     onRetryFailedMessage: props.onRetryFailedMessage,
     isSubmittingUserMessage: props.isSubmittingUserMessage,
     userProfile: userProfile,
-    onViewContent: handleViewContent, // Renamed from onViewDiagram to onViewContent for clarity
+    onViewContent: handleViewContent,
     onMermaidError: handleMermaidError,
     onSuggestAiCorrection: handleSuggestAiCorrection,
-    hasMoreMessages: props.hasMoreMessages, // Pass new prop
-    onLoadOlderMessages: props.onLoadOlderMessages, // Pass new prop
-    onDocumentUpdated: props.onDocumentUpdated, // Pass the new prop
-    isLoadingSessionMessages: props.isLoadingSessionMessages, // NEW: Pass new prop
+    hasMoreMessages: props.hasMoreMessages,
+    onLoadOlderMessages: props.onLoadOlderMessages,
+    onDocumentUpdated: props.onDocumentUpdated,
+    isLoadingSessionMessages: props.isLoadingSessionMessages,
     learningStyle: userProfile?.learning_style || 'visual',
     learningPreferences: userProfile?.learning_preferences || {},
-    onSendMessageToBackend: props.onSendMessage, // Pass the onSendMessage prop as onSendMessageToBackend
+    onSendMessageToBackend: props.onSendMessage,
   }), [
     props.activeChatSessionId,
     props.chatMessages,
@@ -436,7 +454,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.onSendMessage,
     props.filteredNotes,
     props.selectedDocumentIds,
-    props.onSelectedDocumentIdsChange, // Dependency
+    props.onSelectionChange,
     props.onNewChatSession,
     props.onDeleteChatSession,
     props.onRenameChatSession,
@@ -450,26 +468,23 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.onRetryFailedMessage,
     props.isSubmittingUserMessage,
     userProfile,
-    handleViewContent, // Dependency
+    handleViewContent,
     handleMermaidError,
     handleSuggestAiCorrection,
-    props.hasMoreMessages, // Dependency
-    props.onLoadOlderMessages, // Dependency
-    props.onDocumentUpdated, // Dependency
-    props.isLoadingSessionMessages, // NEW: Dependency
+    props.hasMoreMessages,
+    props.onLoadOlderMessages,
+    props.onDocumentUpdated,
+    props.isLoadingSessionMessages,
     userProfile?.learning_style,
     userProfile?.learning_preferences,
-    props.onSendMessage, // Add onSendMessage to dependencies
   ]);
 
   const documentsProps = useMemo(() => ({
     documents: props.documents,
     onDocumentUploaded: props.onDocumentUploaded,
     onDocumentDeleted: props.onDocumentDeleted,
-    onDocumentUpdated: props.onDocumentUpdated, // ADD THIS LINE
+    onDocumentUpdated: props.onDocumentUpdated,
   }), [props.documents, props.onDocumentUploaded, props.onDocumentDeleted, props.onDocumentUpdated]);
-
-  // Removed chatHistoryProps as ChatHistory component is removed
 
   const notesHistoryProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -529,7 +544,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'recordings':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
           <ErrorBoundary>
             <ClassRecordings {...recordingsProps} />
           </ErrorBoundary>
@@ -538,7 +553,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'schedule':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
           <Schedule {...scheduleProps} />
         </div>
       );
@@ -546,45 +561,41 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     case 'chat':
       return (
         <div className="flex flex-1 min-h-0 relative">
-          {/* Removed isChatHistoryOpen overlay and ChatHistory component */}
-          {/* Main content area for chat and side panel */}
           <div className={`flex-1 flex min-h-0 transition-all duration-300 ease-in-out
-            ${isSidePanelOpen ? 'lg:w-2/3' : 'lg:w-full'}`}> {/* Adjust width based on side panel */}
+            ${isSidePanelOpen ? 'lg:w-2/3' : 'lg:w-full'}`}>
 
             <div className={`flex-1 flex flex-col  min-w-0 ${isSidePanelOpen ? 'lg:w-1/2' : 'w-full'} dark:bg-gray-900`}>
               <AIChat {...chatProps} />
             </div>
 
             {isSidePanelOpen && (
-              <div className={`hidden lg:flex lg:w-1/2 flex-shrink-0 min-h-0 max-w-sm `}> {/* Side panel on desktop */}
+              <div className={`hidden lg:flex lg:w-1/2 flex-shrink-0 min-h-0 max-w-sm `}>
                 <SidePanelViewer
-                  type={activeSidePanelContent!.type} // Pass type
+                  type={activeSidePanelContent!.type}
                   code={activeSidePanelContent!.code}
                   language={activeSidePanelContent!.language}
-                  imageUrl={activeSidePanelContent!.imageUrl} // Pass imageUrl
-                  onClose={handleCloseSidePanel}
+                  imageUrl={activeSidePanelContent!.imageUrl}
+                  onClose={handleCloseSidePanel} 
                   onMermaidError={handleMermaidError}
                   onSuggestAiCorrection={handleSuggestAiCorrection}
                 />
               </div>
             )}
 
-            {/* Overlay for mobile when side panel is open */}
             {isSidePanelOpen && (
               <div
-                className="fixed inset-0 bg-black/50 z-30 lg:hidden" // Lower z-index than panel, higher than chat history
-                onClick={handleCloseSidePanel}
+                className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+                onClick={handleCloseSidePanel} 
               />
             )}
-            {/* Mobile side panel (fixed position) */}
             {isSidePanelOpen && (
               <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40 lg:hidden dark:bg-gray-900 dark:border-gray-800">
                 <SidePanelViewer
-                  type={activeSidePanelContent!.type} // Pass type
+                  type={activeSidePanelContent!.type}
                   code={activeSidePanelContent!.code}
                   language={activeSidePanelContent!.language}
-                  imageUrl={activeSidePanelContent!.imageUrl} // Pass imageUrl
-                  onClose={handleCloseSidePanel}
+                  imageUrl={activeSidePanelContent!.imageUrl}
+                  onClose={handleCloseSidePanel} 
                   onMermaidError={handleMermaidError}
                   onSuggestAiCorrection={handleSuggestAiCorrection}
                 />
@@ -596,14 +607,14 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'documents':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar modern-scrollbar dark:bg-gray-900">
           <DocumentUpload {...documentsProps} />
         </div>
       );
 
     case 'settings':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
           <LearningStyleSettings
             profile={props.userProfile}
             onProfileUpdate={props.onProfileUpdate}
