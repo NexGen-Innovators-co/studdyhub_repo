@@ -11,6 +11,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { themes, ThemeName, escapeHtml, highlightCode } from '../utils/codeHighlighting';
+import { Easing } from 'framer-motion';
 
 // Ensure Chart.js components are registered once
 Chart.register(...registerables);
@@ -110,9 +111,9 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
 
       try {
         const createSceneWrapper = new Function('THREE', 'OrbitControls', 'GLTFLoader', `
-          ${codeContent}
-          return createThreeJSScene;
-        `);
+${codeContent}
+return createThreeJSScene;
+`);
 
         const createScene = createSceneWrapper(THREE, OrbitControls, GLTFLoader);
         const { scene, renderer, cleanup } = createScene(canvasRef.current, THREE, OrbitControls, GLTFLoader);
@@ -202,7 +203,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       const updateDimensions = () => {
         if (window.innerWidth >= 768) {
           setPanelWidth(initialWidthPercentage || 65);
-          setPanelHeight(window.innerHeight * 0.8);
+          setPanelHeight(window.innerHeight * .9);
         } else {
           setPanelWidth(100);
           setPanelHeight(window.innerHeight);
@@ -580,7 +581,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     </div>
   );
 
-  // Memoize render content
   const renderContent = useMemo(() => {
     if (!diagramContent && !imageUrl) {
       return <p className="text-gray-500">No content to display.</p>;
@@ -758,10 +758,9 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         >
           <div className="p-6 overflow-auto h-full">
             <pre className="font-mono text-sm leading-relaxed h-full whitespace-pre-wrap" style={{ color: theme.foreground }}>
-              <code dangerouslySetInnerHTML={{ __html: diagramContent ? escapeHtml(diagramContent) : '' }} />
+              <code dangerouslySetInnerHTML={{ __html: escapeHtml(diagramContent || '') }} style={{ color: theme.foreground }} />
             </pre>
-          </div>
-        </div>
+          </div></div>
       );
     } else if (diagramType === 'image' && imageUrl) {
       panelTitle = 'Image Viewer';
@@ -812,69 +811,91 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
   if (!isOpen) return null;
 
+  const panelVariants = {
+    initial: { x: '100%', opacity: 0, scale: 0.95 },
+    animate: {
+      x: 0,
+      opacity: 1,
+      scale: 1,
+      transition: {
+        duration: 0.3,
+        ease: "easeInOut" as Easing,
+      },
+    },
+    exit: {
+      x: '100%',
+      opacity: 0,
+      scale: 0.95,
+      transition: {
+        duration: 0.2,
+        ease: "easeInOut" as Easing,
+      },
+    },
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
           ref={diagramPanelRef}
           className={`fixed inset-0 md:relative md:inset-y-0 md:right-0 bg-white shadow-xl flex flex-col z-40 md:rounded-l-lg md:shadow-md md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full' : ''}`}
-          initial={{ x: '100%', opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: '100%', opacity: 0 }}
-          transition={{ duration: 0.3, ease: 'easeInOut' }}
+          variants={panelVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
           style={dynamicPanelStyle}
         >
           <style>
             {`
-              .canvas-container {
-                transition: transform 0.2s ease-out;
-                position: relative;
-                width: 100%;
-                height: 100%;
-                overflow: hidden;
-              }
-              .resize-handle {
-                background: linear-gradient(to right, #e2e8f0, #f8fafc);
-                transition: background 0.2s;
-                position: relative;
-              }
-              .resize-handle:hover {
-                background: linear-gradient(to right, #94a3b8, #cbd5e1);
-              }
-              .resize-handle::after {
-                content: '';
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 4px;
-                height: 20px;
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 2px;
-              }
-              .resize-handle-height {
-                background: linear-gradient(to bottom, #e2e8f0, #f8fafc);
-              }
-              .resize-handle-height:hover {
-                background: linear-gradient(to bottom, #94a3b8, #cbd5e1);
-              }
-              .resize-handle-height::after {
-                width: 20px;
-                height: 4px;
-              }
-              .dark .resize-handle {
-                background: linear-gradient(to right, #4b5563, #6b7280);
-              }
-              .dark .resize-handle:hover {
-                background: linear-gradient(to right, #6b7280, #9ca3af);
-              }
-              .dark .resize-handle-height {
-                background: linear-gradient(to bottom, #4b5563, #6b7280);
-              }
-              .dark .resize-handle-height:hover {
-                background: linear-gradient(to bottom, #6b7280, #9ca3af);
-              }
-            `}
+.canvas-container {
+transition: transform 0.2s ease-out;
+position: relative;
+width: 100%;
+height: 100%;
+overflow: hidden;
+}
+.resize-handle {
+background: linear-gradient(to right, #e2e8f0, #f8fafc);
+transition: background 0.2s;
+position: relative;
+}
+.resize-handle:hover {
+background: linear-gradient(to right, #94a3b8, #cbd5e1);
+}
+.resize-handle::after {
+content: '';
+position: absolute;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+width: 4px;
+height: 20px;
+background: rgba(0, 0, 0, 0.2);
+border-radius: 2px;
+}
+.resize-handle-height {
+background: linear-gradient(to bottom, #e2e8f0, #f8fafc);
+}
+.resize-handle-height:hover {
+background: linear-gradient(to bottom, #94a3b8, #cbd5e1);
+}
+.resize-handle-height::after {
+width: 20px;
+height: 4px;
+}
+.dark .resize-handle {
+background: linear-gradient(to right, #4b5563, #6b7280);
+}
+.dark .resize-handle:hover {
+background: linear-gradient(to right, #6b7280, #9ca3af);
+}
+.dark .resize-handle-height {
+background: linear-gradient(to bottom, #4b5563, #6b7280);
+}
+.dark .resize-handle-height:hover {
+background: linear-gradient(to bottom, #6b7280, #9ca3af);
+}
+`}
           </style>
           <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700">
             <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0 dark:text-gray-100">{panelTitle}</h3>
@@ -972,9 +993,9 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             </div>
           </div>
 
-          <div 
-            ref={diagramContainerRef} 
-            className="flex-1 overflow-auto modern-scrollbar dark:bg-gray-900 canvas-container" 
+          <div
+            ref={diagramContainerRef}
+            className="flex-1 overflow-auto modern-scrollbar dark:bg-gray-900 canvas-container"
             style={contentStyle}
             onMouseDown={handlePanStart}
             onTouchStart={handlePanStart}
@@ -982,12 +1003,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             {renderContent}
           </div>
           <div
-            className="absolute bottom-0 left-0 right-0 h-4 flex items-center justify-center cursor-ns-resize text-gray-500 hover:text-gray-300 z-50 md:flex resize-handle resize-handle-height"
-            onMouseDown={(e) => startResize(e, 'height')}
-            onTouchStart={(e) => startResize(e, 'height')}
-          />
-          <div
-            className="hidden md:block absolute left-0 top-0 bottom-0 w-4 resize-handle cursor-ew-resize z-50"
+            className=" absolute bottom-0 right-0 top-0 h-7 flex items-center justify-center cursor-ew-resize text-gray-500 hover:text-gray-300 z-50 md:flex resize-handle resize-handle-width"
             onMouseDown={(e) => startResize(e, 'width')}
             onTouchStart={(e) => startResize(e, 'width')}
           />
