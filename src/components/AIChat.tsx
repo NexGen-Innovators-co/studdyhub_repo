@@ -1202,44 +1202,6 @@ const AIChat: React.FC<AIChatProps> = ({
     <>
       <style>
         {`
-          .modern-scrollbar::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-          }
-
-          .modern-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-            border-radius: 10px;
-          }
-
-          .modern-scrollbar::-webkit-scrollbar-thumb {
-            background-color: #cbd5e1;
-            border-radius: 10px;
-            border: 2px solid transparent;
-            background-clip: padding-box;
-          }
-
-          .modern-scrollbar::-webkit-scrollbar-thumb:hover {
-            background-color: #94a3b8;
-          }
-
-          .dark .modern-scrollbar::-webkit-scrollbar-thumb {
-            background-color: #4b5563;
-          }
-
-          .dark .modern-scrollbar::-webkit-scrollbar-thumb:hover {
-            background-color: #6b7280;
-          }
-
-          .modern-scrollbar {
-            scrollbar-width: thin;
-            scrollbar-color: #cbd5e1 transparent;
-          }
-
-          .dark .modern-scrollbar {
-            scrollbar-color: #4b5563 transparent;
-          }
-
           .mic-active {
             background-color: #fef2f2;
             animation: pulse 1.5s infinite;
