@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
-import { Send, Bot, User, Loader2, FileText, History, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp, Image, Upload, XCircle, BookOpen, StickyNote, Sparkles, GripVertical, Camera, Volume2, Pause, Square, Mic } from 'lucide-react';
+import React, { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Send, Bot, User, Loader2, FileText, X, RefreshCw, AlertTriangle, Copy, Check, Maximize2, Minimize2, Trash2, Download, ChevronDown, ChevronUp, Image, Upload, XCircle, BookOpen, StickyNote, Camera, Volume2, Pause, Square, Mic, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
@@ -51,7 +52,6 @@ interface SpeechRecognitionAlternative {
   confidence: number;
 }
 
-// Extend Window interface for SpeechRecognition
 declare global {
   interface Window {
     SpeechRecognition: { new(): SpeechRecognition };
@@ -149,6 +149,407 @@ interface AIChatProps {
   ) => Promise<void>;
 }
 
+interface MemoizedMessageListProps {
+  messages: Message[];
+  isLoading: boolean;
+  isLoadingSessionMessages: boolean;
+  isLoadingOlderMessages: boolean;
+  hasMoreMessages: boolean;
+  mergedDocuments: Document[];
+  onDeleteClick: (messageId: string) => void;
+  onRegenerateClick: (lastUserMessageContent: string) => void;
+  onRetryClick: (originalUserMessageContent: string, failedAiMessageId: string) => void;
+  onViewContent: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text', content?: string, language?: string, imageUrl?: string) => void;
+  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
+  onSuggestAiCorrection: (prompt: string) => void;
+  onToggleUserMessageExpansion: (messageContent: string) => void;
+  expandedMessages: Set<string>;
+  isSpeaking: boolean;
+  speakingMessageId: string | null;
+  isPaused: boolean;
+  speakMessage: (messageId: string, content: string) => void;
+  pauseSpeech: () => void;
+  resumeSpeech: () => void;
+  stopSpeech: () => void;
+  isDiagramPanelOpen: boolean;
+}
+
+const MemoizedMessageList = memo(({
+  messages,
+  isLoading,
+  isLoadingSessionMessages,
+  isLoadingOlderMessages,
+  hasMoreMessages,
+  mergedDocuments,
+  onDeleteClick,
+  onRegenerateClick,
+  onRetryClick,
+  onViewContent,
+  onMermaidError,
+  onSuggestAiCorrection,
+  onToggleUserMessageExpansion,
+  expandedMessages,
+  isSpeaking,
+  speakingMessageId,
+  isPaused,
+  speakMessage,
+  pauseSpeech,
+  resumeSpeech,
+  stopSpeech,
+  isDiagramPanelOpen,
+}: MemoizedMessageListProps) => {
+  let lastDate: string | null = null;
+
+  const formatDate = useCallback((dateString: string): string => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    } else {
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    }
+  }, []);
+
+  const formatTime = useCallback((dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  }, []);
+  const { copied, copy } = useCopyToClipboard();
+
+  const handleViewAttachedFile = useCallback((doc: Document) => {
+    const fileExtension = doc.file_name.split('.').pop()?.toLowerCase();
+    const textMimeTypes = [
+      'text/plain',
+      'application/json',
+      'text/markdown',
+      'text/csv',
+      'application/xml',
+    ];
+    const codeExtensions = [
+      'js', 'ts', 'py', 'java', 'c', 'cpp', 'html', 'css', 'json', 'xml', 'sql', 'sh', 'bash'
+    ];
+
+    if (doc.file_type && doc.file_type.startsWith('image/')) {
+      onViewContent('image', undefined, undefined, doc.file_url);
+    } else if ((doc.file_type && textMimeTypes.includes(doc.file_type)) || (fileExtension && codeExtensions.includes(fileExtension))) {
+      onViewContent('document-text', doc.content_extracted || `Cannot display content for ${doc.file_name} directly. Try downloading.`, fileExtension || 'txt');
+    } else if (doc.file_url) {
+      window.open(doc.file_url, '_blank');
+      toast.info(`Opening ${doc.file_name} in a new tab.`);
+    } else {
+      toast.error(`Cannot preview or open ${doc.file_name}. No URL available.`);
+    }
+  }, [onViewContent]);
+
+  const MAX_USER_MESSAGE_LENGTH = 100;
+
+  return (
+    <>
+      {(messages ?? []).length === 0 && !isLoadingSessionMessages && !isLoading && (
+        <div className="text-center py-8 text-slate-400 flex-grow flex flex-col justify-center items-center dark:text-gray-500">
+          <Bot className="h-12 w-12 mx-auto text-slate-300 mb-4 dark:text-gray-600" />
+          <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200">Welcome to your AI Study Assistant!</h3>
+          <p className="text-base md:text-lg text-slate-500 max-w-md mx-auto dark:text-gray-400">
+            I can help you with questions about your notes, create study guides, explain concepts,
+            and assist with your academic work. Select some documents and start chatting or use the microphone to speak!
+          </p>
+        </div>
+      )}
+      {isLoadingSessionMessages && (
+        <div className="flex gap-3 justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+          <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading session...</span>
+        </div>
+      )}
+      {messages.length === 0 && !isLoadingSessionMessages && isLoading && (
+        <div className="flex gap-3 justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+          <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading messages...</span>
+        </div>
+      )}
+      {isLoadingOlderMessages && (
+        <div className="flex justify-center py-2">
+          <Loader2 className="h-5 w-5 animate-spin text-blue-500 mr-2" />
+          <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading older messages...</span>
+        </div>
+      )}
+      {messages.map((message, index) => {
+        const messageDate = formatDate(message.timestamp);
+        const showDateHeader = messageDate !== lastDate;
+        lastDate = messageDate;
+
+        let cardClasses = '';
+        let contentToRender;
+        const isLastMessage = index === messages.length - 1;
+
+        if (message.role === 'user') {
+          cardClasses = 'bg-white text00 shadow-md rounded-xl border border-slate-200 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600';
+          const isExpanded = expandedMessages.has(message.content);
+          const needsExpansion = message.content.length > MAX_USER_MESSAGE_LENGTH;
+          const displayedContent = needsExpansion && !isExpanded ? message.content.substring(0, MAX_USER_MESSAGE_LENGTH) + '...' : message.content;
+
+          contentToRender = (
+            <>
+              {message.imageUrl && (
+                <div className="mb-3">
+                  <img
+                    src={message.imageUrl}
+                    alt="Uploaded by user"
+                    className="max-w-full h-auto rounded-lg shadow-md cursor-pointer border border-slate-200 dark:border-gray-600"
+                    onClick={() => onViewContent('image', undefined, undefined, message.imageUrl!)}
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://placehold.co/150x100/e0e0e0/666666?text=Image+Error';
+                      e.currentTarget.alt = 'Image failed to load';
+                    }}
+                  />
+                </div>
+              )}
+              <p className="mb-2 text-base md:text-lg text-slate-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap font-sans">
+                {displayedContent}
+              </p>
+              {needsExpansion && (
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => onToggleUserMessageExpansion(message.content)}
+                  className="text-blue-600 text-base md:text-base p-0 h-auto mt-1 flex items-center justify-end dark:text-blue-400 font-sans"
+                >
+                  {isExpanded ? (
+                    <>
+                      Show Less <ChevronUp className="h-3 w-3 ml-1" />
+                    </>
+                  ) : (
+                    <>
+                      Show More <ChevronDown className="h-3 w-3 ml-1" />
+                    </>
+                  )}
+                </Button>
+              )}
+              {(message.attachedDocumentIds && message.attachedDocumentIds.length > 0 || message.attachedNoteIds && message.attachedNoteIds.length > 0 || message.imageUrl) && (
+                <div className="flex flex-wrap gap-1 mt-2 justify-end">
+                  {message.imageUrl && (
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700 flex items-center gap-1 text-base md:text-base font-sans">
+                      <Image className="h-3 w-3" /> Image
+                    </Badge>
+                  )}
+                  {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
+                    <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900 dark:text-purple-300 dark:border-purple-700 text-base md:text-base font-sans">
+                      <BookOpen className="h-3 w-3 mr-1" /> {message.attachedDocumentIds.length} Docs
+                    </Badge>
+                  )}
+                  {message.attachedNoteIds && message.attachedNoteIds.length > 0 && (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-300 dark:border-green-700 text-base md:text-base font-sans">
+                      <StickyNote className="h-3 w-3 mr-1" /> {message.attachedNoteIds.length} Notes
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </>
+          );
+        } else {
+          if (message.isError) {
+            cardClasses = ' text-red-800 dark:text-red-300';
+            contentToRender = <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} onViewDiagram={onViewContent} onToggleUserMessageExpansion={onToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
+          } else {
+            cardClasses = 'bg-white border border-slate-200 dark:bg-gray-800 dark:border-gray-700';
+            contentToRender = (
+              <>
+                {message.imageUrl && (
+                  <div className="mb-3">
+                    <img
+                      src={message.imageUrl}
+                      alt="Generated by AI"
+                      className="max-w-full h-auto rounded-lg shadow-md cursor-pointer"
+                      onClick={() => onViewContent('image', undefined, undefined, message.imageUrl!)}
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://placehold.co/150x100/e0e0e0/666666?text=Image+Error';
+                        e.currentTarget.alt = 'Image failed to load';
+                      }}
+                    />
+                  </div>
+                )}
+                <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} onViewDiagram={onViewContent} onToggleUserMessageExpansion={onToggleUserMessageExpansion} expandedMessages={expandedMessages} />
+              </>
+            );
+          }
+        }
+
+        const isLastAIMessage = message.role === 'assistant' && index === messages.length - 1;
+
+        return (
+          <React.Fragment key={message.id}>
+            {showDateHeader && (
+              <div className="flex justify-center my-4 font-sans">
+                <Badge variant="secondary" className="px-3 py-1 text-sm md:text-base text-slate-500 bg-slate-100 rounded-full shadow-sm dark:bg-gray-700 dark:text-gray-300">
+                  {messageDate}
+                </Badge>
+              </div>
+            )}
+            <div className="flex justify-center font-sans">
+              <div className={`
+                flex gap-3 group
+                ${message.role === 'user' ? 'justify-end' : 'justify-start'}
+                ${isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto'}
+              `}>
+                {message.role === 'assistant' && (
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.isError ? 'bg-red-500' : 'bg-transparent'} hidden sm:flex dark:bg-gray-700`}>
+                    {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
+                  </div>
+                )}
+                <div className={`flex flex-col flex-1 min-w-0 ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <Card className={`flex flex-col max-w-full overflow-hidden rounded-lg ${message.role === 'assistant' ? 'border-none shadow-none bg-transparent dark:bg-transparent' : 'dark:bg-gray-800 dark:border-gray-700'} ${cardClasses}`}>
+                    <CardContent className={`p-2 prose prose-lg border-none !max-w-full leading-relaxed dark:prose-invert overflow-x-auto`}>
+                      {contentToRender}
+                      {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
+                        <div className={`mt-3 pt-3 border-t border-dashed ${message.role === 'user' ? 'border-blue-300/50' : 'border-gray-300'} dark:border-gray-600/50`}>
+                          <p className={`text-base md:text-lg font-semibold mb-2 ${message.role === 'user' ? 'text-slate-700' : 'text-slate-700'} dark:text-gray-100`}>Attached Files:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {message.attachedDocumentIds.map(docId => {
+                              const doc = mergedDocuments.find(d => d.id === docId);
+                              return doc ? (
+                                <Badge
+                                  key={doc.id}
+                                  variant="secondary"
+                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-sm md:text-base font-sans ${doc.processing_status === 'pending' ? 'bg-yellow-500/30 text-yellow-800 border-yellow-400 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-700' : doc.processing_status === 'failed' ? 'bg-red-500/30 text-red-800 border-red-400 dark:bg-red-950 dark:text-red-300 dark:border-red-700' : (message.role === 'user' ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700' : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600')}`}
+                                  onClick={() => handleViewAttachedFile(doc)}
+                                >
+                                  {doc.processing_status === 'pending' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : doc.processing_status === 'failed' ? <AlertTriangle className="h-3 w-3 mr-1" /> : <FileText className="h-3 w-3 mr-1" />}
+                                  {doc.file_name}
+                                </Badge>
+                              ) : (
+                                <Badge key={docId} variant="destructive" className="text-sm md:text-base text-red-600 dark:text-red-400 font-sans">
+                                  File Not Found: {docId}
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                    <div className={`flex gap-1 px-4 pb-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'} w-full font-sans`}>
+                      <span className={`text-xs md:text-sm text-slate-500 ${message.role === 'user' ? 'text-gray-600 dark:text-gray-300' : 'text-slate-500 dark:text-gray-400'}`}>
+                        {formatTime(message.timestamp)}
+                      </span>
+                      <div className={`flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity`}>
+                        {message.role === 'assistant' && (
+                          <>
+                            {isLastAIMessage && !isLoading && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onRegenerateClick(messages[index - 1]?.content || '')}
+                                className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
+                                title="Regenerate response"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => copy(message.content)} // Assuming 'copy' is a function from useCopyToClipboard
+                              className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+                              title="Copy message"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => onDeleteClick(message.id)}
+                              className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                              title="Delete message"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            {isSpeaking && speakingMessageId === message.id ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={isPaused ? resumeSpeech : pauseSpeech}
+                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-yellow-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-yellow-400 dark:hover:bg-gray-700"
+                                  title={isPaused ? "Resume speech" : "Pause speech"}
+                                >
+                                  {isPaused ? <Volume2 className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={stopSpeech}
+                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                                  title="Stop speech"
+                                >
+                                  <Square className="h-4 w-4" />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => speakMessage(message.id, message.content)}
+                                className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
+                                title="Read aloud"
+                                disabled={isLoading}
+                              >
+                                <Volume2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </>
+                        )}
+                        {message.role === 'user' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onDeleteClick(message.id)}
+                            className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                            title="Delete message"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {message.role === 'assistant' && message.isError && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
+                              if (prevUserMessage) {
+                                onRetryClick(prevUserMessage.content, message.id);
+                              }
+                            }}
+                            className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+                            title="Retry failed message"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
+});
+
 const AIChat: React.FC<AIChatProps> = ({
   messages,
   isLoading,
@@ -175,8 +576,8 @@ const AIChat: React.FC<AIChatProps> = ({
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
-  const [showDeleteConfirm] = useState(false);
-  const [messageToDelete] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -203,6 +604,13 @@ const AIChat: React.FC<AIChatProps> = ({
   const blockAutoSpeakRef = useRef<boolean>(false);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('diagramPanelWidth');
+    return saved ? parseFloat(saved) : 65; // Default 65% of viewport
+  });
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
 
   // Detect if the device is a phone
   const isPhone = useCallback(() => {
@@ -212,7 +620,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
   // Initialize SpeechRecognition
   useEffect(() => {
-    const SpeechRecognitionConstructor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognitionConstructor) {
       recognitionRef.current = new SpeechRecognitionConstructor() as SpeechRecognition;
       recognitionRef.current.continuous = true;
@@ -285,28 +693,11 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [isRecognizing]);
 
-  useEffect(() => {
-    setMergedDocuments(documents);
-  }, [documents]);
-
-  const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
-    setMergedDocuments(prevDocs => {
-      const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
-      if (existingIndex > -1) {
-        const newDocs = [...prevDocs];
-        newDocs[existingIndex] = updatedDoc;
-        return newDocs;
-      } else {
-        return [...prevDocs, updatedDoc];
-      }
-    });
-  }, []);
-
   const { copied, copy } = useCopyToClipboard();
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
 
   const handleScroll = useCallback(async () => {
     const chatContainer = chatContainerRef.current;
@@ -355,9 +746,19 @@ const AIChat: React.FC<AIChatProps> = ({
         scrollToBottom();
       }
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, scrollToBottom]);
 
-  // Auto-speak new assistant message chunks on phones
+  const stripCodeBlocks = useCallback((content: string): string => {
+    let cleanedContent = content;
+    cleanedContent = cleanedContent.replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, '');
+    cleanedContent = cleanedContent.replace(/`[^`]+`/g, '');
+    cleanedContent = cleanedContent.replace(/(\*\*\*|\*\*|\*|_|==)/g, '');
+    cleanedContent = cleanedContent.replace(/(\n|^)(\*\*\*|---+)\s*\n/g, '');
+    cleanedContent = cleanedContent.replace(/\n\s*\n/g, '\n').replace(/\s+/g, ' ').trim();
+    return cleanedContent;
+  }, []);
+
+  // Auto-speak new assistant message on phones
   useEffect(() => {
     if (
       !isPhone() ||
@@ -393,7 +794,7 @@ const AIChat: React.FC<AIChatProps> = ({
           currentUtteranceRef.current = null;
           lastSpokenChunkRef.current = '';
           lastProcessedMessageIdRef.current = lastMessage.id;
-          blockAutoSpeakRef.current = false;
+          blockAutoSpeakRef.current = true;
         };
 
         utterance.onerror = (event) => {
@@ -406,7 +807,7 @@ const AIChat: React.FC<AIChatProps> = ({
           currentUtteranceRef.current = null;
           lastSpokenChunkRef.current = '';
           lastProcessedMessageIdRef.current = lastMessage.id;
-          blockAutoSpeakRef.current = false;
+          blockAutoSpeakRef.current = true;
         };
 
         speechSynthesisRef.current.cancel();
@@ -418,7 +819,7 @@ const AIChat: React.FC<AIChatProps> = ({
         lastProcessedMessageIdRef.current = lastMessage.id;
       }
     }
-  }, [messages, isLoading, isLoadingSessionMessages, isPhone, isSpeaking, isPaused]);
+  }, [messages, isLoading, isLoadingSessionMessages, isPhone, isSpeaking, isPaused, stripCodeBlocks]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -427,44 +828,60 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [inputMessage, selectedImageFile]);
 
-  const handleDeleteClick = (messageId: string) => {
-    onDeleteMessage(messageId);
-    toast.success('Message deleted.');
-  };
-
-  const handleConfirmDelete = () => {
-    if (messageToDelete) {
-      onDeleteMessage(messageToDelete);
-    }
-  };
-
-  const handleRegenerateClick = (lastUserMessageContent: string) => {
-    onRegenerateResponse(lastUserMessageContent);
-  };
-
-  const handleRetryClick = (originalUserMessageContent: string, failedAiMessageId: string) => {
-    onRetryFailedMessage(originalUserMessageContent, failedAiMessageId);
-  };
-
-  const handleMermaidError = useCallback((error: string) => {
-    toast.info(`Mermaid diagram encountered an error: ${error}. Click 'AI Fix' to get help.`);
+  const handleDeleteClick = useCallback((messageId: string) => {
+    setMessageToDelete(messageId);
+    setShowDeleteConfirm(true);
   }, []);
 
-  const handleSuggestAiCorrection = useCallback((prompt?: string) => {
-    if (prompt) {
-      setInputMessage(prompt);
-      textareaRef.current?.focus();
-    } else {
-      toast.info("AI correction feature for diagrams is coming soon!");
+  const handleConfirmDelete = useCallback(() => {
+    if (messageToDelete) {
+      onDeleteMessage(messageToDelete);
+      toast.success('Message deleted.');
+      setShowDeleteConfirm(false);
+      setMessageToDelete(null);
     }
+  }, [messageToDelete, onDeleteMessage]);
+
+  const handleRegenerateClick = useCallback((lastUserMessageContent: string) => {
+    onRegenerateResponse(lastUserMessageContent);
+  }, [onRegenerateResponse]);
+
+  const handleRetryClick = useCallback((originalUserMessageContent: string, failedAiMessageId: string) => {
+    onRetryFailedMessage(originalUserMessageContent, failedAiMessageId);
+  }, [onRetryFailedMessage]);
+
+  const handleMermaidError = useCallback((code: string, errorType: 'syntax' | 'rendering') => {
+    toast.info(`Mermaid diagram error (${errorType}): ${code}. Click 'AI Fix' to get help.`);
+  }, []);
+
+  const handleSuggestAiCorrection = useCallback((prompt: string) => {
+    setInputMessage(prompt);
+    textareaRef.current?.focus();
   }, []);
 
   const handleViewContent = useCallback((type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text', content?: string, language?: string, imageUrl?: string) => {
     setActiveDiagram({ content, type, language, imageUrl });
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
   }, []);
 
   const handleCloseDiagramPanel = useCallback(() => {
     setActiveDiagram(null);
+    setIsFullScreen(false);
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
+  }, []);
+
+  const handleToggleFullScreen = useCallback(() => {
+    setIsFullScreen(prev => !prev);
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + 0.1, 2));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
   }, []);
 
   const handleToggleUserMessageExpansion = useCallback((messageContent: string) => {
@@ -479,40 +896,7 @@ const AIChat: React.FC<AIChatProps> = ({
     });
   }, []);
 
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    }
-  };
-
-  const formatTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
-  const displayMessages = messages;
-
-  let lastDate: string | null = null;
-  const MAX_USER_MESSAGE_LENGTH = 100;
-
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
@@ -537,9 +921,9 @@ const AIChat: React.FC<AIChatProps> = ({
       setSelectedImageFile(null);
       setSelectedImagePreview(null);
     }
-  };
+  }, []);
 
-  const handleRemoveImage = () => {
+  const handleRemoveImage = useCallback(() => {
     setSelectedImageFile(null);
     setSelectedImagePreview(null);
     if (imageInputRef.current) {
@@ -548,9 +932,9 @@ const AIChat: React.FC<AIChatProps> = ({
     if (cameraInputRef.current) {
       cameraInputRef.current.value = '';
     }
-  };
+  }, []);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim() && !selectedImageFile) return;
 
@@ -609,9 +993,9 @@ const AIChat: React.FC<AIChatProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [inputMessage, selectedImageFile, selectedImagePreview, userProfile, selectedDocumentIds, onSendMessageToBackend, onSelectionChange]);
 
-  const handleGenerateImageFromText = async () => {
+  const handleGenerateImageFromText = useCallback(async () => {
     if (!imagePrompt.trim()) {
       toast.error('Please enter a prompt for image generation.');
       return;
@@ -655,50 +1039,20 @@ const AIChat: React.FC<AIChatProps> = ({
     } finally {
       setIsGeneratingImage(false);
     }
-  };
+  }, [imagePrompt, onNewMessage]);
 
-  const selectedDocumentTitles = mergedDocuments
-    .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'text')
-    .map(doc => doc.title);
-
-  const selectedNoteTitles = notes
-    .filter(note => selectedDocumentIds.includes(note.id))
-    .map(note => note.title);
-
-  const selectedImageDocuments = mergedDocuments
-    .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'image');
-
-  const handleViewAttachedFile = useCallback((doc: Document) => {
-    const fileExtension = doc.file_name.split('.').pop()?.toLowerCase();
-    const textMimeTypes = [
-      'text/plain',
-      'application/json',
-      'text/markdown',
-      'text/csv',
-      'application/xml',
-    ];
-    const codeExtensions = [
-      'js', 'ts', 'py', 'java', 'c', 'cpp', 'html', 'css', 'json', 'xml', 'sql', 'sh', 'bash'
-    ];
-
-    if (doc.file_type && doc.file_type.startsWith('image/')) {
-      handleViewContent('image', undefined, undefined, doc.file_url);
-    } else if ((doc.file_type && textMimeTypes.includes(doc.file_type)) || (fileExtension && codeExtensions.includes(fileExtension))) {
-      handleViewContent('document-text', doc.content_extracted || `Cannot display content for ${doc.file_name} directly. Try downloading.`, fileExtension || 'txt');
-    } else if (doc.file_url) {
-      window.open(doc.file_url, '_blank');
-      toast.info(`Opening ${doc.file_name} in a new tab.`);
-    } else {
-      toast.error(`Cannot preview or open ${doc.file_name}. No URL available.`);
-    }
-  }, [handleViewContent]);
-
-  const stripCodeBlocks = (content: string): string => {
-    const codeBlockRegex = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
-    let cleanedContent = content.replace(codeBlockRegex, '');
-    cleanedContent = cleanedContent.replace(/`[^`]+`/g, '');
-    return cleanedContent.replace(/\n\s*\n/g, '\n').trim();
-  };
+  const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
+    setMergedDocuments(prevDocs => {
+      const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
+      if (existingIndex > -1) {
+        const newDocs = [...prevDocs];
+        newDocs[existingIndex] = updatedDoc;
+        return newDocs;
+      } else {
+        return [...prevDocs, updatedDoc];
+      }
+    });
+  }, []);
 
   const stopSpeech = useCallback(() => {
     if (speechSynthesisRef.current) {
@@ -708,7 +1062,7 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsPaused(false);
       currentUtteranceRef.current = null;
       lastSpokenChunkRef.current = '';
-      blockAutoSpeakRef.current = true; // Block auto-speak until new message
+      blockAutoSpeakRef.current = true;
     }
   }, []);
 
@@ -736,7 +1090,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
     const cleanedContent = stripCodeBlocks(content);
     if (!cleanedContent) {
-      toast.info('No readable text found after removing code blocks.');
+      toast.info('No readable text found after sanitization.');
       return;
     }
 
@@ -777,7 +1131,7 @@ const AIChat: React.FC<AIChatProps> = ({
     setIsPaused(false);
     lastSpokenChunkRef.current = cleanedContent;
     lastProcessedMessageIdRef.current = messageId;
-  }, [stopSpeech]);
+  }, [stopSpeech, stripCodeBlocks]);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -796,7 +1150,10 @@ const AIChat: React.FC<AIChatProps> = ({
       setSelectedImageFile(null);
       setSelectedImagePreview(null);
       setActiveDiagram(null);
+      setIsFullScreen(false);
       setExpandedMessages(new Set());
+      setZoomLevel(1);
+      setPanOffset({ x: 0, y: 0 });
       if (selectedDocumentIds.length > 0) {
         onSelectionChange([]);
       }
@@ -807,7 +1164,26 @@ const AIChat: React.FC<AIChatProps> = ({
         cameraInputRef.current.value = '';
       }
     }
-  }, [activeChatSessionId, onSelectionChange, selectedDocumentIds.length, stopSpeech, stopRecognition]);
+  }, [activeChatSessionId, onSelectionChange, selectedDocumentIds, stopSpeech, stopRecognition]);
+
+  const selectedDocumentTitles = useMemo(() => {
+    return mergedDocuments
+      .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'text')
+      .map(doc => doc.title);
+  }, [mergedDocuments, selectedDocumentIds]);
+
+  const selectedNoteTitles = useMemo(() => {
+    return notes
+      .filter(note => selectedDocumentIds.includes(note.id))
+      .map(note => note.title);
+  }, [notes, selectedDocumentIds]);
+
+  const selectedImageDocuments = useMemo(() => {
+    return mergedDocuments
+      .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'image');
+  }, [mergedDocuments, selectedDocumentIds]);
+
+  const displayMessages = useMemo(() => messages, [messages]);
 
   return (
     <>
@@ -865,302 +1241,72 @@ const AIChat: React.FC<AIChatProps> = ({
             50% { opacity: 0.5; }
             100% { opacity: 1; }
           }
+
+          .resize-handle {
+            width: 8px;
+            background: #e2e8f0;
+            cursor: col-resize;
+            transition: background 0.2s;
+          }
+
+          .resize-handle:hover {
+            background: #94a3b8;
+          }
+
+          .dark .resize-handle {
+            background: #4b5563;
+          }
+
+          .dark .resize-handle:hover {
+            background: #6b7280;
+          }
+
+          .panel-transition {
+            transition: all 0.3s ease-in-out;
+          }
+
+          .fullscreen-panel {
+            width: 100% !important;
+            right: 0;
+            transform: translateX(0);
+          }
         `}
       </style>
-      <div className="flex flex-col h-full border-none relative justify-center overflow-hidden md:flex-row md:gap-6 font-sans">
-        <div className={`relative flex flex-col h-full rounded-lg transition-all duration-300 ease-in-out
-          ${isDiagramPanelOpen ? 'md:w-[35%] flex-shrink-0' : 'w-full flex-1'}
-          dark:bg-gray-900
-        `}>
+      <div className="flex flex-col h-full border-none relative justify-center overflow-hidden md:flex-row md:gap-0 font-sans">
+        <motion.div
+          className={`relative flex flex-col h-full rounded-lg panel-transition
+            ${isDiagramPanelOpen ? `md:w-[${100 - panelWidth}%] flex-shrink-0` : 'w-full flex-1'}
+            dark:bg-gray-900
+          `}
+          initial={{ width: '100%' }}
+          animate={{ width: isDiagramPanelOpen ? `${100 - panelWidth}%` : '100%' }}
+          transition={{ duration: 0.3, ease: 'easeInOut' }}
+        >
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col modern-scrollbar pb-32 md:pb-6">
-            {(displayMessages ?? []).length === 0 && (activeChatSessionId === null) && (
-              <div className="text-center py-8 text-slate-400 flex-grow flex flex-col justify-center items-center dark:text-gray-500">
-                <Bot className="h-12 w-12 mx-auto text-slate-300 mb-4 dark:text-gray-600" />
-                <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200">Welcome to your AI Study Assistant!</h3>
-                <p className="text-base md:text-lg text-slate-500 max-w-md mx-auto dark:text-gray-400">
-                  I can help you with questions about your notes, create study guides, explain concepts,
-                  and assist with your academic work. Select some documents and start chatting or use the microphone to speak!
-                </p>
-              </div>
-            )}
-            {isLoadingSessionMessages && (
-              <div className="flex gap-3 justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading session...</span>
-              </div>
-            )}
-            {activeChatSessionId !== null && messages.length === 0 && !isLoadingSessionMessages && isLoading && (
-              <div className="flex gap-3 justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading messages...</span>
-              </div>
-            )}
-            {isLoadingOlderMessages && (
-              <div className="flex justify-center py-2">
-                <Loader2 className="h-5 w-5 animate-spin text-blue-500 mr-2" />
-                <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading older messages...</span>
-              </div>
-            )}
-            {!isLoadingSessionMessages && (displayMessages ?? []).map((message, index) => {
-              const messageDate = formatDate(message.timestamp);
-              const showDateHeader = messageDate !== lastDate;
-              lastDate = messageDate;
-
-              let cardClasses = '';
-              let contentToRender;
-              const isLastMessage = index === displayMessages.length - 1;
-
-              if (message.role === 'user') {
-                cardClasses = 'bg-white text00 shadow-md rounded-xl border border-slate-200 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600';
-                const isExpanded = expandedMessages.has(message.content);
-                const needsExpansion = message.content.length > MAX_USER_MESSAGE_LENGTH;
-                const displayedContent = needsExpansion && !isExpanded ? message.content.substring(0, MAX_USER_MESSAGE_LENGTH) + '...' : message.content;
-
-                contentToRender = (
-                  <>
-                    {message.imageUrl && (
-                      <div className="mb-3">
-                        <img
-                          src={message.imageUrl}
-                          alt="Uploaded by user"
-                          className="max-w-full h-auto rounded-lg shadow-md cursor-pointer border border-slate-200 dark:border-gray-600"
-                          onClick={() => handleViewContent('image', undefined, undefined, message.imageUrl!)}
-                          onError={(e) => {
-                            e.currentTarget.src = 'https://placehold.co/150x100/e0e0e0/666666?text=Image+Error';
-                            e.currentTarget.alt = 'Image failed to load';
-                          }}
-                        />
-                      </div>
-                    )}
-                    <p className="mb-2 text-base md:text-lg text-slate-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap font-sans">
-                      {displayedContent}
-                    </p>
-                    {needsExpansion && (
-                      <Button
-                        variant="link"
-                        size="sm"
-                        onClick={() => handleToggleUserMessageExpansion(message.content)}
-                        className="text-blue-600 text-base md:text-base p-0 h-auto mt-1 flex items-center justify-end dark:text-blue-400 font-sans"
-                      >
-                        {isExpanded ? (
-                          <>
-                            Show Less <ChevronUp className="h-3 w-3 ml-1" />
-                          </>
-                        ) : (
-                          <>
-                            Show More <ChevronDown className="h-3 w-3 ml-1" />
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    {(message.attachedDocumentIds && message.attachedDocumentIds.length > 0 || message.attachedNoteIds && message.attachedNoteIds.length > 0 || message.imageUrl) && (
-                      <div className="flex flex-wrap gap-1 mt-2 justify-end">
-                        {message.imageUrl && (
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700 flex items-center gap-1 text-base md:text-base font-sans">
-                            <Image className="h-3 w-3" /> Image
-                          </Badge>
-                        )}
-                        {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
-                          <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900 dark:text-purple-300 dark:border-purple-700 text-base md:text-base font-sans">
-                            <BookOpen className="h-3 w-3 mr-1" /> {message.attachedDocumentIds.length} Docs
-                          </Badge>
-                        )}
-                        {message.attachedNoteIds && message.attachedNoteIds.length > 0 && (
-                          <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-300 dark:border-green-700 text-base md:text-base font-sans">
-                            <StickyNote className="h-3 w-3 mr-1" /> {message.attachedNoteIds.length} Notes
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                  </>
-                );
-              } else {
-                if (message.isError) {
-                  cardClasses = ' text-red-800 dark:text-red-300';
-                  contentToRender = <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestAiCorrection} onViewDiagram={handleViewContent} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />;
-                } else {
-                  cardClasses = 'bg-white border border-slate-200 dark:bg-gray-800 dark:border-gray-700';
-                  contentToRender = (
-                    <>
-                      {message.imageUrl && (
-                        <div className="mb-3">
-                          <img
-                            src={message.imageUrl}
-                            alt="Generated by AI"
-                            className="max-w-full h-auto rounded-lg shadow-md cursor-pointer"
-                            onClick={() => handleViewContent('image', undefined, undefined, message.imageUrl!)}
-                            onError={(e) => {
-                              e.currentTarget.src = 'https://placehold.co/150x100/e0e0e0/666666?text=Image+Error';
-                              e.currentTarget.alt = 'Image failed to load';
-                            }}
-                          />
-                        </div>
-                      )}
-                      <MemoizedMarkdownRenderer content={message.content} isUserMessage={false} onMermaidError={handleMermaidError} onSuggestAiCorrection={handleSuggestAiCorrection} onViewDiagram={handleViewContent} onToggleUserMessageExpansion={handleToggleUserMessageExpansion} expandedMessages={expandedMessages} />
-                    </>
-                  );
-                }
-              }
-
-              const isLastAIMessage = message.role === 'assistant' && index === displayMessages.length - 1;
-
-              return (
-                <React.Fragment key={message.id}>
-                  {showDateHeader && (
-                    <div className="flex justify-center my-4 font-sans">
-                      <Badge variant="secondary" className="px-3 py-1 text-sm md:text-base text-slate-500 bg-slate-100 rounded-full shadow-sm dark:bg-gray-700 dark:text-gray-300">
-                        {messageDate}
-                      </Badge>
-                    </div>
-                  )}
-                  <div className="flex justify-center font-sans">
-                    <div className={`
-                      flex gap-3 group
-                      ${message.role === 'user' ? 'justify-end' : 'justify-start'}
-                      ${isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto'}
-                    `}>
-                      {message.role === 'assistant' && (
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.isError ? 'bg-red-500' : 'bg-transparent'} hidden sm:flex dark:bg-gray-700`}>
-                          {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
-                        </div>
-                      )}
-                      <div className={`flex flex-col flex-1 min-w-0 ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
-                        <Card className={`flex flex-col max-w-full overflow-hidden rounded-lg ${message.role === 'assistant' ? 'border-none shadow-none bg-transparent dark:bg-transparent' : 'dark:bg-gray-800 dark:border-gray-700'} ${cardClasses}`}>
-                          <CardContent className={`p-2 prose prose-lg border-none !max-w-full leading-relaxed dark:prose-invert overflow-x-auto`}>
-                            {contentToRender}
-                            {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
-                              <div className={`mt-3 pt-3 border-t border-dashed ${message.role === 'user' ? 'border-blue-300/50' : 'border-gray-300'} dark:border-gray-600/50`}>
-                                <p className={`text-base md:text-lg font-semibold mb-2 ${message.role === 'user' ? 'text-slate-700' : 'text-slate-700'} dark:text-gray-100`}>Attached Files:</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {message.attachedDocumentIds.map(docId => {
-                                    const doc = mergedDocuments.find(d => d.id === docId);
-                                    return doc ? (
-                                      <Badge
-                                        key={doc.id}
-                                        variant="secondary"
-                                        className={`cursor-pointer hover:opacity-80 transition-opacity text-sm md:text-base font-sans ${doc.processing_status === 'pending' ? 'bg-yellow-500/30 text-yellow-800 border-yellow-400 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-700' : doc.processing_status === 'failed' ? 'bg-red-500/30 text-red-800 border-red-400 dark:bg-red-950 dark:text-red-300 dark:border-red-700' : (message.role === 'user' ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700' : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600')}`}
-                                        onClick={() => handleViewAttachedFile(doc)}
-                                      >
-                                        {doc.processing_status === 'pending' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : doc.processing_status === 'failed' ? <AlertTriangle className="h-3 w-3 mr-1" /> : <FileText className="h-3 w-3 mr-1" />}
-                                        {doc.file_name}
-                                      </Badge>
-                                    ) : (
-                                      <Badge key={docId} variant="destructive" className="text-sm md:text-base text-red-600 dark:text-red-400 font-sans">
-                                        File Not Found: {docId}
-                                      </Badge>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                          </CardContent>
-                          <div className={`flex gap-1 px-4 pb-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'} w-full font-sans`}>
-                            <span className={`text-xs md:text-sm text-slate-500 ${message.role === 'user' ? 'text-gray-600 dark:text-gray-300' : 'text-slate-500 dark:text-gray-400'}`}>
-                              {formatTime(message.timestamp)}
-                            </span>
-                            <div className={`flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity`}>
-                              {message.role === 'assistant' && (
-                                <>
-                                  {isLastAIMessage && !isLoading && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleRegenerateClick(messages[index - 1]?.content || '')}
-                                      className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
-                                      title="Regenerate response"
-                                    >
-                                      <RefreshCw className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => copy(message.content)}
-                                    className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-                                    title="Copy message"
-                                  >
-                                    <Copy className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleDeleteClick(message.id)}
-                                    className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                                    title="Delete message"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                  {isSpeaking && speakingMessageId === message.id ? (
-                                    <>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={isPaused ? resumeSpeech : pauseSpeech}
-                                        className="h-6 w-6 rounded-full text-slate-400 hover:text-yellow-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-yellow-400 dark:hover:bg-gray-700"
-                                        title={isPaused ? "Resume speech" : "Pause speech"}
-                                      >
-                                        {isPaused ? <Volume2 className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={stopSpeech}
-                                        className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                                        title="Stop speech"
-                                      >
-                                        <Square className="h-4 w-4" />
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => speakMessage(message.id, message.content)}
-                                      className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
-                                      title="Read aloud"
-                                      disabled={isLoading}
-                                    >
-                                      <Volume2 className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                              {message.role === 'user' && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeleteClick(message.id)}
-                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                                  title="Delete message"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              )}
-                              {message.role === 'assistant' && message.isError && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
-                                    if (prevUserMessage) {
-                                      handleRetryClick(prevUserMessage.content, message.id);
-                                    }
-                                  }}
-                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-                                  title="Retry failed message"
-                                >
-                                  <RefreshCw className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </Card>
-                      </div>
-                    </div>
-                  </div>
-                </React.Fragment>
-              );
-            })}
+            <MemoizedMessageList
+              messages={displayMessages}
+              isLoading={isLoading}
+              isLoadingSessionMessages={isLoadingSessionMessages}
+              isLoadingOlderMessages={isLoadingOlderMessages}
+              hasMoreMessages={hasMoreMessages}
+              mergedDocuments={mergedDocuments}
+              onDeleteClick={handleDeleteClick}
+              onRegenerateClick={handleRegenerateClick}
+              onRetryClick={handleRetryClick}
+              onViewContent={handleViewContent}
+              onMermaidError={handleMermaidError}
+              onSuggestAiCorrection={handleSuggestAiCorrection}
+              onToggleUserMessageExpansion={handleToggleUserMessageExpansion}
+              expandedMessages={expandedMessages}
+              isSpeaking={isSpeaking}
+              speakingMessageId={speakingMessageId}
+              isPaused={isPaused}
+              speakMessage={speakMessage}
+              pauseSpeech={pauseSpeech}
+              resumeSpeech={resumeSpeech}
+              stopSpeech={stopSpeech}
+              isDiagramPanelOpen={isDiagramPanelOpen}
+            />
             {isLoading && !isLoadingSessionMessages && (
               <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
@@ -1194,7 +1340,7 @@ const AIChat: React.FC<AIChatProps> = ({
             )}
             <div ref={messagesEndRef} />
           </div>
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 shadow-lg md:shadow-none md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10`}>
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 shadow-lg md:shadow-none md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
             {(selectedDocumentIds.length > 0 || selectedImagePreview) && (
               <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700
                 ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'}
@@ -1338,44 +1484,43 @@ const AIChat: React.FC<AIChatProps> = ({
               onSelectionChange={onSelectionChange}
               isOpen={showDocumentSelector}
               onClose={() => setShowDocumentSelector(false)}
+              onDocumentUpdated={onDocumentUpdated}
             />
           )}
           <ConfirmationModal
             isOpen={showDeleteConfirm}
-            onClose={() => {}}
+            onClose={() => setShowDeleteConfirm(false)}
             onConfirm={handleConfirmDelete}
             title="Delete Message"
             message="Are you sure you want to delete this message? This action cannot be undone."
           />
-        </div>
+        </motion.div>
+        {isDiagramPanelOpen && (
+          <DiagramPanel
+            key={`${activeDiagram?.content || ''}-${activeDiagram?.type || ''}-${activeDiagram?.language || ''}-${activeDiagram?.imageUrl || ''}`}
+            diagramContent={activeDiagram?.content}
+            diagramType={activeDiagram?.type || 'unknown'}
+            onClose={handleCloseDiagramPanel}
+            onMermaidError={handleMermaidError}
+            onSuggestAiCorrection={handleSuggestAiCorrection}
+            isOpen={isDiagramPanelOpen}
+            language={activeDiagram?.language}
+            imageUrl={activeDiagram?.imageUrl}
+            initialWidthPercentage={panelWidth}
+          />
+        )}
         {showScrollToBottomButton && (
           <Button
             variant="outline"
             size="icon"
             onClick={scrollToBottom}
             className={`fixed bottom-28 right-6 md:bottom-8 bg-white rounded-full shadow-lg p-2 z-20 transition-all duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 font-sans
-              ${isDiagramPanelOpen ? 'md:right-[calc(65%+1.5rem)]' : 'md:right-8'}
+              ${isDiagramPanelOpen ? 'md:right-[calc(' + panelWidth + '%+1.5rem)]' : 'md:right-8'}
             `}
             title="Scroll to bottom"
           >
             <ChevronDown className="h-5 w-5 text-slate-600 dark:text-gray-300" />
           </Button>
-        )}
-        {isDiagramPanelOpen && (
-          <div className="md:w-[65%] h-full flex-shrink-0">
-            <DiagramPanel
-              key={`${activeDiagram?.content || ''}-${activeDiagram?.type || ''}-${activeDiagram?.language || ''}-${activeDiagram?.imageUrl || ''}`}
-              diagramContent={activeDiagram?.content}
-              diagramType={activeDiagram?.type || 'unknown'}
-              onClose={handleCloseDiagramPanel}
-              onMermaidError={handleMermaidError}
-              onSuggestAiCorrection={handleSuggestAiCorrection}
-              isOpen={isDiagramPanelOpen}
-              language={activeDiagram?.language}
-              imageUrl={activeDiagram?.imageUrl}
-              initialWidthPercentage={60}
-            />
-          </div>
         )}
       </div>
     </>
