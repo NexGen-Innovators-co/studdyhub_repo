@@ -1,50 +1,41 @@
-// src/components/DiagramPanel.tsx
 import React, { useRef, useEffect, useState, useCallback, memo, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
-import { X, RefreshCw, AlertTriangle, Code, ChevronRight, ChevronLeft, Download, GripVertical, Loader2, Palette, Sun, Moon } from 'lucide-react';
+import { X, RefreshCw, AlertTriangle, Code, Download, GripVertical, Loader2, Palette, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { Chart, registerables } from 'chart.js';
-import Mermaid from './Mermaid'; // Assuming Mermaid.tsx is in the same components folder
-import { Graphviz } from '@hpcc-js/wasm'; // Import Graphviz
-
-// Import THREE.js and OrbitControls from npm packages
+import Mermaid from './Mermaid';
+import { Graphviz } from '@hpcc-js/wasm';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-// NEW: Import GLTFLoader
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-// NEW: Import GLTFExporter
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
-
-
-// NEW: Import from utility file
 import { themes, ThemeName, escapeHtml, highlightCode } from '../utils/codeHighlighting';
-
 
 // Ensure Chart.js components are registered once
 Chart.register(...registerables);
 
-// Declare global types for libraries (only for those not imported directly)
+// Declare global types for libraries
 declare global {
   interface Window {
-    jspdf: any; // jsPDF library
-    html2canvas: any; // html2canvas library
-    Viz: any; // Viz.js library for DOT graphs
+    jspdf: any;
+    html2canvas: any;
+    Viz: any;
   }
 }
 
 interface DiagramPanelProps {
   diagramContent?: string;
-  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs'; // Added 'threejs'
+  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs';
   onClose: () => void;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
   onSuggestAiCorrection: (prompt: string) => void;
   isOpen: boolean;
-  language?: string; // For 'code' type, specifies the language
-  imageUrl?: string; // For 'image' type
-  initialWidthPercentage?: number; // NEW PROP
+  language?: string;
+  imageUrl?: string;
+  initialWidthPercentage?: number;
 }
 
-// NEW: ChartRenderer Component
 interface ChartRendererProps {
   chartConfig: any;
   onInvalidConfig: (error: string | null) => void;
@@ -64,7 +55,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, onInval
         const ctx = chartRef.current.getContext('2d');
         if (ctx) {
           chartInstance.current = new Chart(ctx, chartConfig);
-          onInvalidConfig(null); // Clear any previous error
+          onInvalidConfig(null);
         }
       } catch (error: any) {
         console.error("Error rendering Chart.js:", error);
@@ -93,18 +84,15 @@ const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, onInval
 
   return (
     <div className="p-4 flex items-center justify-center h-full">
-      {/* Changed className to include h-full for proper sizing */}
       <canvas ref={chartRef} className="max-w-full h-full"></canvas>
     </div>
   );
 });
 
-// NEW: ThreeJSRenderer Component
 interface ThreeJSRendererProps {
   codeContent: string;
   canvasRef: React.RefObject<HTMLCanvasElement>;
   onInvalidCode: (error: string | null) => void;
-  // NEW: Callback to pass scene and renderer to parent for export
   onSceneReady: (scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => void;
 }
 
@@ -121,25 +109,17 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
       }
 
       try {
-        // We define the function that will execute the user's code.
-        // The arguments 'THREE', 'OrbitControls', 'GLTFLoader' are parameters to this *outer* function.
         const createSceneWrapper = new Function('THREE', 'OrbitControls', 'GLTFLoader', `
           ${codeContent}
-          // The user's code is expected to define a function called createThreeJSScene
-          // We return this function so it can be called with its specific arguments.
           return createThreeJSScene;
         `);
 
-        // Now, call the createSceneWrapper with the actual THREE, OrbitControls, GLTFLoader objects.
-        // This returns the user's 'createThreeJSScene' function.
         const createScene = createSceneWrapper(THREE, OrbitControls, GLTFLoader);
-
-        // Finally, call the user's 'createThreeJSScene' function, passing all its expected arguments.
         const { scene, renderer, cleanup } = createScene(canvasRef.current, THREE, OrbitControls, GLTFLoader);
 
         threeJsCleanupRef.current = cleanup;
-        onInvalidCode(null); // Clear any previous error
-        onSceneReady(scene, renderer, cleanup); // Pass scene, renderer, and cleanup to parent
+        onInvalidCode(null);
+        onSceneReady(scene, renderer, cleanup);
         console.log("[Three.js Renderer] Three.js scene rendered successfully.");
       } catch (error: any) {
         console.error("Error rendering Three.js scene:", error);
@@ -169,12 +149,10 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
 
   return (
     <div className="p-4 flex items-center justify-center h-full">
-      {/* Changed className to include h-full for proper sizing */}
       <canvas ref={canvasRef} className="max-w-full h-full"></canvas>
     </div>
   );
 });
-
 
 export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   diagramContent,
@@ -185,42 +163,32 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   isOpen,
   language,
   imageUrl,
-  initialWidthPercentage, // Destructure new prop
+  initialWidthPercentage,
 }) => {
-  const [showRawCode, setShowRawCode] = useState(false);
+  const [panelWidth, setPanelWidth] = useState<number>(initialWidthPercentage || 65);
+  const [panelHeight, setPanelHeight] = useState<number>(window.innerHeight * 0.8);
+  const [isResizing, setIsResizing] = useState<{ width: boolean; height: boolean }>({ width: false, height: false });
+  const initialPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const initialSize = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   const chartRef = useRef<HTMLCanvasElement>(null);
-  // chartInstance is now managed within ChartRenderer
-  const diagramContainerRef = useRef<HTMLDivElement>(null); // Ref for the main content area for PDF export
-
-  // Theme state
+  const diagramContainerRef = useRef<HTMLDivElement>(null);
   const [currentTheme, setCurrentTheme] = useState<ThemeName>('github-light');
   const [showThemeSelector, setShowThemeSelector] = useState(false);
-
-  // NEW: Ref for Three.js canvas and its cleanup function
   const threeJsRef = useRef<HTMLCanvasElement>(null);
-  // threeJsCleanupRef is now managed within ThreeJSRenderer
-
-  // NEW: State to hold the Three.js scene and renderer instances for export
   const [threeJsScene, setThreeJsScene] = useState<THREE.Scene | null>(null);
   const [threeJsRenderer, setThreeJsRenderer] = useState<THREE.WebGLRenderer | null>(null);
   const threeJsCleanupFunction = useRef<(() => void) | null>(null);
-
   const diagramPanelRef = useRef<HTMLDivElement>(null);
-  const [panelWidth, setPanelWidth] = useState<number | null>(null);
-  const [isResizingWidth, setIsResizingWidth] = useState(false);
-  const initialX = useRef(0);
-  const initialPanelWidth = useRef(0);
-
-  const [panelHeight, setPanelHeight] = useState<number | null>(null);
-  const [isResizingHeight, setIsResizingHeight] = useState(false);
-  const initialY = useRef(0);
-  const initialPanelHeight = useRef(0);
-
   const [chartError, setChartError] = useState<string | null>(null);
-  const [threeJsError, setThreeJsError] = useState<string | null>(null); // State for Three.js errors
+  const [threeJsError, setThreeJsError] = useState<string | null>(null);
   const [dotSvg, setDotSvg] = useState<string | null>(null);
   const [dotError, setDotError] = useState<string | null>(null);
   const [isDotLoading, setIsDotLoading] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  const startPanPos = useRef({ x: 0, y: 0 });
 
   // Auto-detect system theme preference
   useEffect(() => {
@@ -228,23 +196,25 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     setCurrentTheme(prefersDark ? 'github-dark' : 'github-light');
   }, []);
 
-  // Effect to set initial width/height based on responsive classes when panel opens
+  // Set initial dimensions
   useEffect(() => {
     if (isOpen && diagramPanelRef.current) {
-      if (window.innerWidth >= 768) {
-        if (panelWidth === null && initialWidthPercentage !== undefined) {
-          setPanelWidth(window.innerWidth * (initialWidthPercentage / 100)); // Use prop for initial width
-        } else if (panelWidth === null) { // Fallback if no prop is provided
-          setPanelWidth(window.innerWidth * 0.7); // Keep existing default if no specific percentage
-        }
-        if (panelHeight === null) {
+      const updateDimensions = () => {
+        if (window.innerWidth >= 768) {
+          setPanelWidth(initialWidthPercentage || 65);
           setPanelHeight(window.innerHeight * 0.8);
+        } else {
+          setPanelWidth(100);
+          setPanelHeight(window.innerHeight);
         }
-      }
+      };
+      updateDimensions();
+      window.addEventListener('resize', updateDimensions);
+      return () => window.removeEventListener('resize', updateDimensions);
     }
-  }, [isOpen, panelWidth, panelHeight, initialWidthPercentage]);
+  }, [isOpen, initialWidthPercentage]);
 
-  // Cleanup Three.js scene when panel closes or diagram content changes
+  // Cleanup Three.js scene
   useEffect(() => {
     return () => {
       if (threeJsCleanupFunction.current) {
@@ -254,105 +224,136 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         setThreeJsRenderer(null);
       }
     };
-  }, [diagramContent, diagramType]); // Dependency on diagramContent and diagramType to trigger cleanup on change
+  }, [diagramContent, diagramType]);
 
-  // Callback to receive Three.js scene and renderer from ThreeJSRenderer
+  // Handle Three.js scene ready
   const handleThreeJsSceneReady = useCallback((scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => {
     setThreeJsScene(scene);
     setThreeJsRenderer(renderer);
     threeJsCleanupFunction.current = cleanup;
   }, []);
 
-  // Width Resize Handlers
-  const handleWidthResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    if (window.innerWidth < 768) return;
-
+  // Resize handlers
+  const startResize = useCallback((e: React.MouseEvent | React.TouchEvent, type: 'width' | 'height') => {
     e.preventDefault();
-    setIsResizingWidth(true);
-    initialX.current = e.clientX;
-    initialPanelWidth.current = diagramPanelRef.current?.offsetWidth || 0;
-    document.body.style.cursor = 'ew-resize';
+    setIsResizing(prev => ({ ...prev, [type]: true }));
+    initialPos.current = {
+      x: 'touches' in e ? e.touches[0].clientX : e.clientX,
+      y: 'touches' in e ? e.touches[0].clientY : e.clientY
+    };
+    initialSize.current = {
+      width: diagramPanelRef.current?.offsetWidth || 0,
+      height: diagramPanelRef.current?.offsetHeight || 0
+    };
+    document.body.style.cursor = type === 'width' ? 'ew-resize' : 'ns-resize';
   }, []);
 
-  const handleWidthResizeMouseMove = useCallback((e: MouseEvent) => {
-    if (!isResizingWidth) return;
+  const handleResize = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isResizing.width && !isResizing.height) return;
 
-    const deltaX = initialX.current - e.clientX;
-    let newWidth = initialPanelWidth.current + deltaX;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
-    const minWidth = 300;
-    const maxWidth = window.innerWidth * 0.9;
+    if (isResizing.width) {
+      const deltaX = clientX - initialPos.current.x;
+      const newWidth = initialSize.current.width + deltaX;
+      const minWidth = 300;
+      const maxWidth = window.innerWidth * 0.9;
+      const constrainedWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+      setPanelWidth((constrainedWidth / window.innerWidth) * 100);
+    }
 
-    newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
-    setPanelWidth(newWidth);
-  }, [isResizingWidth]);
+    if (isResizing.height) {
+      const deltaY = clientY - initialPos.current.y;
+      const newHeight = initialSize.current.height + deltaY;
+      const minHeight = 200;
+      const maxHeight = window.innerHeight * 0.9;
+      const constrainedHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+      setPanelHeight(constrainedHeight);
+    }
+  }, [isResizing]);
 
-  // Height Resize Handlers
-  const handleHeightResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    setIsResizingHeight(true);
-    initialY.current = e.clientY;
-    initialPanelHeight.current = diagramPanelRef.current?.offsetHeight || 0;
-    document.body.style.cursor = 'ns-resize';
+  const stopResize = useCallback(() => {
+    setIsResizing({ width: false, height: false });
+    document.body.style.cursor = 'default';
   }, []);
 
-  const handleHeightResizeMouseMove = useCallback((e: MouseEvent) => {
-    if (!isResizingHeight) return;
-
-    const deltaY = e.clientY - initialY.current;
-    let newHeight = initialPanelHeight.current + deltaY;
-
-    const minHeight = 200;
-    const maxHeight = window.innerHeight * 0.9;
-
-    newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
-    setPanelHeight(newHeight);
-  }, [isResizingHeight]);
-
-  // Global event listeners for resizing
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      setIsResizingWidth(false);
-      setIsResizingHeight(false);
-      document.body.style.cursor = 'default'; // Reset cursor
+    if (isResizing.width || isResizing.height) {
+      window.addEventListener('mousemove', handleResize);
+      window.addEventListener('mouseup', stopResize);
+      window.addEventListener('touchmove', handleResize);
+      window.addEventListener('touchend', stopResize);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleResize);
+      window.removeEventListener('mouseup', stopResize);
+      window.removeEventListener('touchmove', handleResize);
+      window.removeEventListener('touchend', stopResize);
     };
+  }, [isResizing, handleResize, stopResize]);
 
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (isResizingWidth) {
-        handleWidthResizeMouseMove(e);
-      }
-      if (isResizingHeight) {
-        handleHeightResizeMouseMove(e);
-      }
+  // Pan handlers
+  const handlePanStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (isFullScreen || window.innerWidth < 768) return;
+    isPanningRef.current = true;
+    startPanPos.current = {
+      x: 'touches' in e ? e.touches[0].clientX : e.clientX,
+      y: 'touches' in e ? e.touches[0].clientY : e.clientY
     };
+  }, [isFullScreen]);
 
-    // Attach listeners when resizing starts
-    if (isResizingWidth || isResizingHeight) {
-      window.addEventListener('mousemove', handleGlobalMouseMove);
-      window.addEventListener('mouseup', handleGlobalMouseUp);
-      // Add mouseleave to window to catch releases outside the iframe
-      window.addEventListener('mouseleave', handleGlobalMouseUp);
-    } else {
-      // Clean up listeners when resizing stops
-      window.removeEventListener('mousemove', handleGlobalMouseMove);
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
-      window.removeEventListener('mouseleave', handleGlobalMouseUp);
+  const handlePanMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isPanningRef.current || isFullScreen || window.innerWidth < 768) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const deltaX = (clientX - startPanPos.current.x) / zoomLevel;
+    const deltaY = (clientY - startPanPos.current.y) / zoomLevel;
+    setPanOffset(prev => ({
+      x: prev.x + deltaX,
+      y: prev.y + deltaY
+    }));
+    startPanPos.current = { x: clientX, y: clientY };
+  }, [zoomLevel, isFullScreen]);
+
+  const handlePanEnd = useCallback(() => {
+    isPanningRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (isPanningRef.current) {
+      window.addEventListener('mousemove', handlePanMove);
+      window.addEventListener('mouseup', handlePanEnd);
+      window.addEventListener('touchmove', handlePanMove);
+      window.addEventListener('touchend', handlePanEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handlePanMove);
+      window.removeEventListener('mouseup', handlePanEnd);
+      window.removeEventListener('touchmove', handlePanMove);
+      window.removeEventListener('touchend', handlePanEnd);
     };
-  }, [isResizingWidth, isResizingHeight, handleWidthResizeMouseMove, handleHeightResizeMouseMove]);
+  }, [handlePanMove, handlePanEnd]);
 
-  // Apply dynamic width and height styles
+  // Dynamic styles
   const dynamicPanelStyle: React.CSSProperties = {
-    ...(panelWidth !== null && window.innerWidth >= 768 ? { width: `${panelWidth}px` } : {}),
-    ...(panelHeight !== null ? { height: `${panelHeight}px` } : {}),
+    width: window.innerWidth >= 768 ? `${panelWidth}%` : '100%',
+    height: panelHeight,
+    overflow: 'hidden',
+    touchAction: isResizing.width || isResizing.height ? 'none' : 'auto'
+  };
+
+  const contentStyle: React.CSSProperties = {
+    transform: `scale(${zoomLevel}) translate(${panOffset.x}px, ${panOffset.y}px)`,
+    transformOrigin: 'center center',
+    transition: isResizing.width || isResizing.height ? 'none' : 'transform 0.2s ease-out'
   };
 
   let panelTitle = 'Viewer';
   let downloadButtonText = 'Download Content';
   let downloadFileName = 'content';
 
-  // Function to download content
+  // Download content
   const handleDownloadContent = () => {
     if (!diagramContainerRef.current && !imageUrl) {
       toast.error('Content not rendered for download.');
@@ -389,14 +390,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         contentToDownload = chartRef.current.toDataURL('image/png');
         fileExtension = 'png';
         mimeType = 'image/png';
-        const downloadLink = document.createElement('a');
-        downloadLink.href = contentToDownload as string;
-        downloadLink.download = `${downloadFileName}.${fileExtension}`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-        toast.success(`Chart downloaded as ${fileExtension.toUpperCase()}!`);
-        return;
       } else {
         toast.error('Chart canvas not found for chart.js download.');
         return;
@@ -406,20 +399,11 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         contentToDownload = threeJsRef.current.toDataURL('image/png');
         fileExtension = 'png';
         mimeType = 'image/png';
-        const downloadLink = document.createElement('a');
-        downloadLink.href = contentToDownload as string;
-        downloadLink.download = `${downloadFileName}.${fileExtension}`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-        toast.success(`3D Scene downloaded as ${fileExtension.toUpperCase()}!`);
-        return;
       } else {
         toast.error('3D scene canvas not found for download.');
         return;
       }
-    }
-    else if (diagramType === 'code' || diagramType === 'document-text') {
+    } else if (diagramType === 'code' || diagramType === 'document-text') {
       if (!diagramContent) {
         toast.error('No content available for code/document download.');
         return;
@@ -441,18 +425,17 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
     const blob = new Blob([contentToDownload], { type: mimeType });
     const url = URL.createObjectURL(blob);
-
     const downloadLink = document.createElement('a');
     downloadLink.href = url;
     downloadLink.download = `${downloadFileName}.${fileExtension}`;
-
     document.body.appendChild(downloadLink);
+    downloadLink.click();
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(url);
     toast.success(`${diagramType === 'code' ? 'Code' : 'Diagram'} downloaded as ${fileExtension.toUpperCase()}!`);
   };
 
-  // NEW: Function to download GLTF
+  // Download GLTF
   const handleDownloadGltf = useCallback(() => {
     if (!threeJsScene || !threeJsRenderer) {
       toast.error('Three.js scene not ready for GLTF export.');
@@ -480,14 +463,12 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         console.error('Error exporting GLTF:', error);
         toast.error('Failed to export GLTF scene.');
       },
-      {} // Options, e.g., { binary: true } for GLB
+      {}
     );
   }, [threeJsScene, threeJsRenderer]);
 
-
-  // Function to download as PDF
+  // Download as PDF
   const handleDownloadPdf = async () => {
-    // Determine which ref to use for PDF generation based on diagramType
     let targetRef;
     if (diagramType === 'chartjs') {
       targetRef = chartRef;
@@ -509,20 +490,19 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
     toast.info('Generating PDF...');
     try {
-      const canvas = await window.html2canvas(targetRef.current, { // Use targetRef.current
-        scale: 3,
+      const canvas = await window.html2canvas(targetRef.current, {
+        scale: 3 * zoomLevel,
         useCORS: true,
         backgroundColor: themes[currentTheme].background,
       });
 
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new window.jspdf.jsPDF({
         orientation: canvas.width > canvas.height ? 'l' : 'p',
         unit: 'px',
         format: [canvas.width, canvas.height],
       });
 
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
       pdf.save(`content-${Date.now()}.pdf`);
       toast.success('Content downloaded as PDF!');
     } catch (error) {
@@ -590,9 +570,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                     className="w-4 h-4 rounded border"
                     style={{ backgroundColor: themes[themeName as ThemeName].background }}
                   />
-                  <span className="capitalize">
-                    {themeName.replace('-', ' ')}
-                  </span>
+                  <span className="capitalize">{themeName.replace('-', ' ')}</span>
                 </div>
               </button>
             ))}
@@ -602,31 +580,13 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     </div>
   );
 
-  // Memoize the render content function
+  // Memoize render content
   const renderContent = useMemo(() => {
     if (!diagramContent && !imageUrl) {
       return <p className="text-gray-500">No content to display.</p>;
     }
 
     const theme = themes[currentTheme];
-
-    if (showRawCode) {
-      return (
-        <div
-          className="relative rounded-lg overflow-hidden h-full"
-          style={{ backgroundColor: theme.background }}
-        >
-          <div className="p-4 overflow-x-auto h-full">
-            <pre
-              className="font-mono text-sm leading-relaxed h-full whitespace-pre-wrap"
-              style={{ color: theme.foreground }}
-            >
-              <code>{diagramContent || imageUrl}</code>
-            </pre>
-          </div>
-        </div>
-      );
-    }
 
     if (diagramType === 'mermaid') {
       panelTitle = 'Mermaid Diagram View';
@@ -636,7 +596,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         <Mermaid
           chart={diagramContent || ''}
           onMermaidError={onMermaidError}
-          onSuggestAiCorrection={onSuggestAiCorrection} // <-- IMPORTANT: Pass the prop here!
+          onSuggestAiCorrection={onSuggestAiCorrection}
           diagramRef={diagramContainerRef}
           key={diagramContent}
         />
@@ -645,7 +605,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       panelTitle = 'DOT Graph View';
       downloadButtonText = 'Download Graph (SVG)';
       downloadFileName = 'dot-graph';
-
       return isDotLoading ? (
         <div className="flex flex-col items-center justify-center h-full text-blue-600 dark:text-blue-400">
           <Loader2 className="h-8 w-8 animate-spin mb-2" />
@@ -671,8 +630,8 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       ) : (
         <div className="relative w-full h-full bg-gray-900 rounded-lg overflow-hidden">
           <div
-            className="w-full h-full flex items-center justify-center relative"
-            style={{ cursor: isResizingHeight || isResizingWidth ? 'default' : 'grab' }}
+            className="w-full h-full flex items-center justify-center"
+            style={{ cursor: isResizing.height || isResizing.width ? 'default' : 'grab' }}
           >
             <div
               dangerouslySetInnerHTML={{ __html: dotSvg || '' }}
@@ -688,13 +647,11 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       downloadFileName = 'chartjs-graph';
       let chartConfigToRender: any = {};
       try {
-        // Attempt to parse after stripping comments
-        const cleanedContent = diagramContent ? diagramContent.replace(/\/\/.*|\/\*[\sS]*?\*\//g, '') : '';
+        const cleanedContent = diagramContent ? diagramContent.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '') : '';
         chartConfigToRender = cleanedContent ? JSON.parse(cleanedContent) : {};
       } catch (e: any) {
-        // If parsing fails, set an error and provide a way to suggest correction
         setChartError(`Invalid Chart.js JSON: ${e.message}. The AI might have included non-JSON elements.`);
-        chartConfigToRender = {}; // Fallback to empty config to prevent further errors
+        chartConfigToRender = {};
       }
 
       return (
@@ -744,59 +701,38 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             codeContent={diagramContent || ''}
             canvasRef={threeJsRef}
             onInvalidCode={setThreeJsError}
-            onSceneReady={handleThreeJsSceneReady} // Pass the callback here
+            onSceneReady={handleThreeJsSceneReady}
           />
         </>
       );
-    }
-    else if (diagramType === 'code') {
+    } else if (diagramType === 'code') {
       panelTitle = language ? `Code View - ${language.toUpperCase()}` : 'Code View';
       downloadButtonText = 'Download Code';
       downloadFileName = `code.${language || 'txt'}`;
       return (
         <div
           className="relative rounded-lg overflow-hidden h-full shadow-lg"
-          style={{
-            backgroundColor: theme.background,
-            border: `1px solid ${theme.border}`
-          }}
+          style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}
         >
-          {/* Header with language indicator and line numbers toggle */}
           <div
             className="px-4 py-2 border-b text-sm font-medium flex items-center justify-between"
-            style={{
-              backgroundColor: theme.background,
-              borderColor: theme.border,
-              color: theme.foreground
-            }}
+            style={{ backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }}
           >
             <span className="flex items-center space-x-2">
               <Code className="h-4 w-4" />
               <span>{language?.toUpperCase() || 'PLAINTEXT'}</span>
             </span>
-            <span
-              className="text-xs opacity-75"
-              style={{ color: theme.lineNumbers }}
-            >
+            <span className="text-xs opacity-75" style={{ color: theme.lineNumbers }}>
               {diagramContent?.split('\n').length || 0} lines
             </span>
           </div>
-
           <div className="p-4 overflow-auto h-full">
             <div className="flex">
-              {/* Line numbers */}
-              <div
-                className="select-none pr-4 text-right font-mono text-sm leading-relaxed"
-                style={{ color: theme.lineNumbers }}
-              >
+              <div className="select-none pr-4 text-right font-mono text-sm leading-relaxed" style={{ color: theme.lineNumbers }}>
                 {diagramContent?.split('\n').map((_, index) => (
-                  <div key={index + 1} className="min-h-[1.5rem]">
-                    {index + 1}
-                  </div>
+                  <div key={index + 1} className="min-h-[1.5rem]">{index + 1}</div>
                 ))}
               </div>
-
-              {/* Code content */}
               <div className="flex-1 overflow-x-auto">
                 <pre className="font-mono text-sm leading-relaxed">
                   <code
@@ -818,21 +754,11 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       return (
         <div
           className="relative rounded-lg overflow-hidden h-full shadow-lg"
-          style={{
-            backgroundColor: theme.background,
-            border: `1px solid ${theme.border}`
-          }}
+          style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}
         >
           <div className="p-6 overflow-auto h-full">
-            <pre
-              className="font-mono text-sm leading-relaxed h-full whitespace-pre-wrap"
-              style={{ color: theme.foreground }}
-            >
-              <code
-                dangerouslySetInnerHTML={{
-                  __html: diagramContent ? escapeHtml(diagramContent) : ''
-                }}
-              />
+            <pre className="font-mono text-sm leading-relaxed h-full whitespace-pre-wrap" style={{ color: theme.foreground }}>
+              <code dangerouslySetInnerHTML={{ __html: diagramContent ? escapeHtml(diagramContent) : '' }} />
             </pre>
           </div>
         </div>
@@ -868,7 +794,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         </div>
       );
     }
-  }, [diagramContent, diagramType, imageUrl, showRawCode, currentTheme, isResizingHeight, isResizingWidth, onMermaidError, onSuggestAiCorrection, chartError, threeJsError, language, dotSvg, dotError, isDotLoading, handleThreeJsSceneReady]);
+  }, [diagramContent, diagramType, imageUrl, currentTheme, isResizing, onMermaidError, onSuggestAiCorrection, chartError, threeJsError, language, dotSvg, dotError, isDotLoading, handleThreeJsSceneReady]);
 
   // Click outside handler for theme selector
   useEffect(() => {
@@ -887,103 +813,186 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   if (!isOpen) return null;
 
   return (
-    <>
-      <div
-        ref={diagramPanelRef}
-        className={`
-          absolute inset-y-0 right-0 w-full bg-white shadow-xl flex flex-col z-40 transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : 'translate-x-full'}
-          md:rounded-lg md:shadow-md md:mb-6 md:border md:border-slate-200 
-          dark:bg-gray-900 dark:border-gray-700
-        `}
-        style={dynamicPanelStyle}
-      >
-        {/* Resizer Handle for Width - only visible on desktop */}
-        <div
-          className="hidden md:block absolute left-0 top-0 bottom-0 w-2 bg-transparent cursor-ew-resize z-50 hover:bg-gray-200 transition-colors duration-200 dark:hover:bg-gray-700"
-          onMouseDown={handleWidthResizeMouseDown}
-        />
-
-        <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0 dark:text-gray-100">{panelTitle}</h3>
-          <div className="flex flex-wrap items-center gap-2 justify-end">
-            {/* Theme selector for code and document types */}
-            {diagramContent && (diagramType === 'code' || diagramType === 'document-text') && (
-              <div className="theme-selector-container">
-                <ThemeSelector />
-              </div>
-            )}
-
-            {/* Toggle Raw Code Button */}
-            {diagramContent && (diagramType === 'code' || diagramType === 'document-text' || diagramType === 'chartjs' || diagramType === 'mermaid' || diagramType === 'dot' || diagramType === 'threejs') && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowRawCode(!showRawCode)}
-                className="text-sm px-3 py-1"
-              >
-                <Code className="h-4 w-4 mr-2" /> {showRawCode ? 'Hide Raw Code' : 'View Raw Code'}
-              </Button>
-            )}
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadContent}
-              className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 dark:border-blue-700"
-              title={downloadButtonText}
-              disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
-            >
-              <Download className="h-4 w-4 mr-0 sm:mr-2" />
-              <span className="hidden sm:inline">{downloadButtonText}</span>
-            </Button>
-
-            {/* NEW: Download GLTF Button */}
-            {diagramType === 'threejs' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadGltf}
-                className="text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900 dark:border-green-700"
-                title="Download 3D Model (GLTF)"
-                disabled={!threeJsScene || !threeJsRenderer} // Enable only when scene is ready
-              >
-                <Download className="h-4 w-4 mr-0 sm:mr-2" />
-                <span className="hidden sm:inline">Download GLTF</span>
-              </Button>
-            )}
-
-            {(!['code', 'image', 'unknown', 'document-text'].includes(diagramType)) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadPdf}
-                className="text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900 dark:border-purple-700"
-                title="Download Content (PDF)"
-                disabled={!diagramContent || diagramType === 'unknown'}
-              >
-                <Download className="h-4 w-4 mr-0 sm:mr-2" />
-                <span className="hidden sm:inline">Download PDF</span>
-              </Button>
-            )}
-
-            <Button variant="ghost" size="icon" onClick={onClose} title="Close Panel" className="flex-shrink-0 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200">
-              <X className="h-5 w-5 text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200" />
-            </Button>
-          </div>
-        </div>
-
-        <div ref={diagramContainerRef} className="flex-1 overflow-auto modern-scrollbar dark:bg-gray-900">
-          {renderContent}
-        </div>
-
-        <div
-          className="absolute bottom-0 left-0 right-0 h-3 flex items-center justify-center cursor-ns-resize text-gray-500 hover:text-gray-300 z-50"
-          onMouseDown={handleHeightResizeMouseDown}
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          ref={diagramPanelRef}
+          className={`fixed inset-0 md:relative md:inset-y-0 md:right-0 bg-white shadow-xl flex flex-col z-40 md:rounded-l-lg md:shadow-md md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full' : ''}`}
+          initial={{ x: '100%', opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: '100%', opacity: 0 }}
+          transition={{ duration: 0.3, ease: 'easeInOut' }}
+          style={dynamicPanelStyle}
         >
-          <GripVertical className="h-4 w-4" />
-        </div>
-      </div>
-    </>
+          <style>
+            {`
+              .canvas-container {
+                transition: transform 0.2s ease-out;
+                position: relative;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+              }
+              .resize-handle {
+                background: linear-gradient(to right, #e2e8f0, #f8fafc);
+                transition: background 0.2s;
+                position: relative;
+              }
+              .resize-handle:hover {
+                background: linear-gradient(to right, #94a3b8, #cbd5e1);
+              }
+              .resize-handle::after {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 4px;
+                height: 20px;
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 2px;
+              }
+              .resize-handle-height {
+                background: linear-gradient(to bottom, #e2e8f0, #f8fafc);
+              }
+              .resize-handle-height:hover {
+                background: linear-gradient(to bottom, #94a3b8, #cbd5e1);
+              }
+              .resize-handle-height::after {
+                width: 20px;
+                height: 4px;
+              }
+              .dark .resize-handle {
+                background: linear-gradient(to right, #4b5563, #6b7280);
+              }
+              .dark .resize-handle:hover {
+                background: linear-gradient(to right, #6b7280, #9ca3af);
+              }
+              .dark .resize-handle-height {
+                background: linear-gradient(to bottom, #4b5563, #6b7280);
+              }
+              .dark .resize-handle-height:hover {
+                background: linear-gradient(to bottom, #6b7280, #9ca3af);
+              }
+            `}
+          </style>
+          <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0 dark:text-gray-100">{panelTitle}</h3>
+            <div className="flex flex-wrap items-center gap-2 justify-end">
+              {(diagramType === 'code' || diagramType === 'document-text') && (
+                <div className="theme-selector-container">
+                  <ThemeSelector />
+                </div>
+              )}
+              {(diagramType === 'code' || diagramType === 'document-text' || diagramType === 'chartjs' || diagramType === 'mermaid' || diagramType === 'dot' || diagramType === 'threejs') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowThemeSelector(!showThemeSelector)}
+                  className="text-sm px-3 py-1"
+                >
+                  <Code className="h-4 w-4 mr-2" /> View Raw Code
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadContent}
+                className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 dark:border-blue-700"
+                title={downloadButtonText}
+                disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
+              >
+                <Download className="h-4 w-4 mr-0 sm:mr-2" />
+                <span className="hidden sm:inline">{downloadButtonText}</span>
+              </Button>
+              {diagramType === 'threejs' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadGltf}
+                  className="text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900 dark:border-green-700"
+                  title="Download 3D Model (GLTF)"
+                  disabled={!threeJsScene || !threeJsRenderer}
+                >
+                  <Download className="h-4 w-4 mr-0 sm:mr-2" />
+                  <span className="hidden sm:inline">Download GLTF</span>
+                </Button>
+              )}
+              {(!['code', 'image', 'unknown', 'document-text'].includes(diagramType)) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadPdf}
+                  className="text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900 dark:border-purple-700"
+                  title="Download Content (PDF)"
+                  disabled={!diagramContent || diagramType === 'unknown'}
+                >
+                  <Download className="h-4 w-4 mr-0 sm:mr-2" />
+                  <span className="hidden sm:inline">Download PDF</span>
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsFullScreen(prev => !prev)}
+                title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
+                className="text-slate-600 hover:bg-slate-200 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                {isFullScreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                title="Close Panel"
+                className="flex-shrink-0 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              >
+                <X className="h-5 w-5 text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setZoomLevel(prev => Math.min(prev + 0.1, 2))}
+                title="Zoom In"
+                className="text-slate-600 hover:bg-slate-200 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <ZoomIn className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setZoomLevel(prev => Math.max(prev - 0.1, 0.5))}
+                title="Zoom Out"
+                className="text-slate-600 hover:bg-slate-200 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <ZoomOut className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+
+          <div 
+            ref={diagramContainerRef} 
+            className="flex-1 overflow-auto modern-scrollbar dark:bg-gray-900 canvas-container" 
+            style={contentStyle}
+            onMouseDown={handlePanStart}
+            onTouchStart={handlePanStart}
+          >
+            {renderContent}
+          </div>
+          <div
+            className="absolute bottom-0 left-0 right-0 h-4 flex items-center justify-center cursor-ns-resize text-gray-500 hover:text-gray-300 z-50 md:flex resize-handle resize-handle-height"
+            onMouseDown={(e) => startResize(e, 'height')}
+            onTouchStart={(e) => startResize(e, 'height')}
+          />
+          <div
+            className="hidden md:block absolute left-0 top-0 bottom-0 w-4 resize-handle cursor-ew-resize z-50"
+            onMouseDown={(e) => startResize(e, 'width')}
+            onTouchStart={(e) => startResize(e, 'width')}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
-})
+});
