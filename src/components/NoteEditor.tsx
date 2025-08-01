@@ -329,7 +329,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     try {
       const filePath = `${userProfile.id}/${Date.now()}_${file.name}`;
-      ('Uploading file to path:', filePath);
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(filePath, file);
@@ -342,7 +341,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (!urlData?.publicUrl) {
         throw new Error("Could not get public URL for the uploaded file.");
       }
-      ('Public URL generated:', urlData.publicUrl);
       setUploadedDocumentPublicUrl(urlData.publicUrl);
 
       await handleDocumentProcessingAndNoteUpdate(file, urlData.publicUrl, file.type, toastId.toString());
@@ -421,7 +419,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
         if (createDocError || !newDocument) throw new Error(createDocError?.message || 'Failed to create new document record.');
         documentRecordId = newDocument.id;
-        ('New document record created with ID:', documentRecordId);
 
         onNoteUpdate({ ...note, document_id: documentRecordId });
       }
@@ -506,10 +503,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     toast.loading('Generating AI note content...', { id: toastId });
 
     try {
-      ('generateAIContentForNote: Checking parameters before invoking Edge Function:');
-      ('  documentIdForGeneration:', documentIdForGeneration);
-      ('  user.id (from userProfile):', user?.id);
-      ('  selectedSection:', selectedSection);
 
       const requestBody = {
         documentId: documentIdForGeneration,
@@ -517,7 +510,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         selectedSection: selectedSection,
       };
 
-      ('generateAIContentForNote: Request body being sent to Edge Function:', JSON.stringify(requestBody, null, 2));
 
       const { data: aiGeneratedNote, error: generationError } = await supabase.functions.invoke('generate-note-from-document', {
         body: requestBody,
@@ -754,7 +746,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const toastId = toast.loading('Loading original document...');
 
     try {
-      ('Attempting to fetch document with ID:', note.document_id);
       const { data, error } = await supabase
         .from('documents')
         .select('content_extracted, file_url, file_type')
@@ -764,7 +755,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (error) throw new Error(error.message);
       if (!data) throw new Error('Document not found.');
 
-      ('Fetched document URL:', data.file_url);
       setOriginalDocumentContent(data.content_extracted);
       setOriginalDocumentFileType(data.file_type);
       setOriginalDocumentFileUrl(data.file_url);
@@ -878,7 +868,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const filePath = `${userProfile.id}/audio/${Date.now()}_${safeFileName}`;
-      ('Uploading audio file to path:', filePath);
 
       const { error: uploadError } = await supabase.storage
         .from('documents')
