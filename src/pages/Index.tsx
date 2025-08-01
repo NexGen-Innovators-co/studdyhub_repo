@@ -274,12 +274,12 @@ const Index = () => {
     if (activeChatSessionId && chatSessions.length > 0) {
       const currentSession = chatSessions.find(s => s.id === activeChatSessionId);
       if (currentSession) {
-        setSelectedDocumentIds(currentSession.document_ids || []);
+        setSelectedDocumentIds(currentSession.document_ids || []); // Load document_ids from session
       }
     } else if (!activeChatSessionId) {
-      setSelectedDocumentIds([]);
+      setSelectedDocumentIds([]); // Clear only if no session is active
     }
-  }, [activeChatSessionId, chatSessions]);
+  }, [activeChatSessionId, chatSessions, setSelectedDocumentIds]);
 
   const createNewChatSession = useCallback(async (): Promise<string | null> => {
     try {
@@ -287,20 +287,20 @@ const Index = () => {
         toast.error('Please sign in to create a new chat session.');
         return null;
       }
-
+  
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({
           user_id: user.id,
           title: 'New Chat',
-          document_ids: selectedDocumentIds,
+          document_ids: selectedDocumentIds, // Ensure selectedDocumentIds are included
         })
         .select()
         .single();
-
+  
       if (error) throw error;
       if (!data) throw new Error('No data returned from session creation');
-
+  
       const newSession: ChatSession = {
         id: data.id,
         title: data.title,
@@ -309,21 +309,23 @@ const Index = () => {
         last_message_at: data.last_message_at,
         document_ids: data.document_ids || [],
       };
-
+  
+      setChatSessions(prev => [...prev, newSession].sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()));
       setChatSessionsLoadedCount(CHAT_SESSIONS_PER_PAGE);
       await loadChatSessions();
-
+  
       setActiveChatSessionId(newSession.id);
+      setSelectedDocumentIds(newSession.document_ids || []); // Explicitly set selectedDocumentIds
       setHasMoreMessages(false);
-
+  
+      toast.success('New chat session created with selected documents.');
       return newSession.id;
     } catch (error: any) {
       console.error('Error creating new session:', error);
       toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
       return null;
     }
-  }, [user, selectedDocumentIds, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId]);
-
+  }, [user, selectedDocumentIds, setChatSessions, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId, setSelectedDocumentIds]);
   const deleteChatSession = useCallback(async (sessionId: string) => {
     try {
       if (!user) return;

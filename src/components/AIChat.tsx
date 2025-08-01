@@ -460,7 +460,7 @@ const MemoizedMessageList = memo(({
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => copy(message.content)} // Assuming 'copy' is a function from useCopyToClipboard
+                              onClick={() => copy(message.content)}
                               className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
                               title="Copy message"
                             >
@@ -611,6 +611,7 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isUpdatingDocuments, setIsUpdatingDocuments] = useState(false); // New state for document update feedback
 
   // Detect if the device is a phone
   const isPhone = useCallback(() => {
@@ -936,7 +937,10 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim() && !selectedImageFile) return;
+    if (!inputMessage.trim() && !selectedImageFile && selectedDocumentIds.length === 0) {
+      toast.error('Please enter a message, attach an image, or select documents/notes.');
+      return;
+    }
 
     setIsLoading(true);
 
@@ -949,10 +953,19 @@ const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
+      // Update chat session with selected document IDs
+      if (activeChatSessionId) {
+        await supabase
+          .from('chat_sessions')
+          .update({ document_ids: selectedDocumentIds })
+          .eq('id', activeChatSessionId)
+          .eq('user_id', userId);
+      }
+
       await onSendMessageToBackend(
         inputMessage.trim(),
-        selectedDocumentIds,
-        [],
+        selectedDocumentIds.filter(id => documents.some(doc => doc.id === id)),
+        selectedDocumentIds.filter(id => notes.some(note => note.id === id)),
         selectedImagePreview || undefined,
         selectedImageFile?.type || undefined,
         selectedImagePreview || undefined
@@ -967,7 +980,8 @@ const AIChat: React.FC<AIChatProps> = ({
       if (cameraInputRef.current) {
         cameraInputRef.current.value = '';
       }
-      onSelectionChange([]);
+      // Do not clear selectedDocumentIds here to maintain selections
+      // onSelectionChange([]);
 
       toast.success("Message sent successfully!");
 
@@ -993,7 +1007,7 @@ const AIChat: React.FC<AIChatProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [inputMessage, selectedImageFile, selectedImagePreview, userProfile, selectedDocumentIds, onSendMessageToBackend, onSelectionChange]);
+  }, [inputMessage, selectedImageFile, selectedImagePreview, userProfile, selectedDocumentIds, documents, notes, activeChatSessionId, onSendMessageToBackend]);
 
   const handleGenerateImageFromText = useCallback(async () => {
     if (!imagePrompt.trim()) {
@@ -1052,7 +1066,8 @@ const AIChat: React.FC<AIChatProps> = ({
         return [...prevDocs, updatedDoc];
       }
     });
-  }, []);
+    onDocumentUpdated(updatedDoc); // Propagate update to parent
+  }, [onDocumentUpdated]);
 
   const stopSpeech = useCallback(() => {
     if (speechSynthesisRef.current) {
@@ -1154,17 +1169,15 @@ const AIChat: React.FC<AIChatProps> = ({
       setExpandedMessages(new Set());
       setZoomLevel(1);
       setPanOffset({ x: 0, y: 0 });
-      if (selectedDocumentIds.length > 0) {
-        onSelectionChange([]);
-      }
       if (imageInputRef.current) {
         imageInputRef.current.value = '';
       }
       if (cameraInputRef.current) {
         cameraInputRef.current.value = '';
       }
+      // Remove the line that clears selectedDocumentIds: onSelectionChange([])
     }
-  }, [activeChatSessionId, onSelectionChange, selectedDocumentIds, stopSpeech, stopRecognition]);
+  }, [activeChatSessionId, stopSpeech, stopRecognition]);
 
   const selectedDocumentTitles = useMemo(() => {
     return mergedDocuments
@@ -1398,7 +1411,7 @@ const AIChat: React.FC<AIChatProps> = ({
                 }}
                 placeholder="Ask a question about your notes or study topics, or use the microphone..."
                 className="flex-1 text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-transparent px-2 dark:text-gray-200 dark:placeholder-gray-400"
-                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage}
+                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
                 rows={1}
               />
               <div className="flex items-end gap-2">
@@ -1409,7 +1422,7 @@ const AIChat: React.FC<AIChatProps> = ({
                   onClick={isRecognizing ? stopRecognition : startRecognition}
                   className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'mic-active text-red-600 dark:text-red-400' : 'text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-700'}`}
                   title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || !recognitionRef.current}
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
                 >
                   <Mic className="h-5 w-5" />
                 </Button>
@@ -1428,7 +1441,7 @@ const AIChat: React.FC<AIChatProps> = ({
                   onClick={() => cameraInputRef.current?.click()}
                   className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
                   title="Take Picture"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage}
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
                 >
                   <Camera className="h-5 w-5" />
                 </Button>
@@ -1446,7 +1459,7 @@ const AIChat: React.FC<AIChatProps> = ({
                   onClick={() => imageInputRef.current?.click()}
                   className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
                   title="Upload Image"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage}
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
                 >
                   <Upload className="h-5 w-5" />
                 </Button>
@@ -1457,13 +1470,13 @@ const AIChat: React.FC<AIChatProps> = ({
                   onClick={() => setShowDocumentSelector(true)}
                   className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
                   title="Select Documents/Notes for Context"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage}
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
                 >
-                  <FileText className="h-5 w-5" />
+                  {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || (!inputMessage.trim() && !selectedImageFile)}
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && !selectedImageFile && selectedDocumentIds.length === 0)}
                   className="bg-blue-600 hover:bg-blue-900 text-white shadow-md disabled:opacity-50 h-10 w-10 flex-shrink-0 rounded-lg p-0 font-sans"
                   title="Send Message"
                 >
@@ -1483,8 +1496,12 @@ const AIChat: React.FC<AIChatProps> = ({
               selectedDocumentIds={selectedDocumentIds}
               onSelectionChange={onSelectionChange}
               isOpen={showDocumentSelector}
-              onClose={() => setShowDocumentSelector(false)}
-              onDocumentUpdated={onDocumentUpdated}
+              onClose={() => {
+                setShowDocumentSelector(false);
+                setIsUpdatingDocuments(false); // Reset updating state
+              }}
+              onDocumentUpdated={handleDocumentUpdatedLocally}
+              activeChatSessionId={activeChatSessionId}
             />
           )}
           <ConfirmationModal

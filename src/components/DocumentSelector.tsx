@@ -1,21 +1,24 @@
-// DocumentSelector.tsx
-import React, { useState } from 'react';
-import { FileText, Check, X, Search } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Card, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { ScrollArea } from './ui/scroll-area';
+import { FileText, StickyNote, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Document } from '../types/Document';
 import { Note } from '../types/Note';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DocumentSelectorProps {
   documents: Document[];
   notes: Note[];
   selectedDocumentIds: string[];
-  onSelectionChange: (selectedIds: string[]) => void;
+  onSelectionChange: (ids: string[]) => void;
   isOpen: boolean;
   onClose: () => void;
-  onDocumentUpdated: (updatedDoc: Document) => void; // Added to match AIChat.tsx
+  onDocumentUpdated: (updatedDocument: Document) => void;
+  activeChatSessionId: string | null;
 }
 
 export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
@@ -26,173 +29,131 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   isOpen,
   onClose,
   onDocumentUpdated,
+  activeChatSessionId,
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(selectedDocumentIds);
 
-  const filteredDocuments = documents.filter(doc =>
-    doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doc.file_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    // Sync localSelectedIds with selectedDocumentIds when the modal opens or selectedDocumentIds changes
+    setLocalSelectedIds(selectedDocumentIds);
+  }, [selectedDocumentIds, isOpen]);
 
-  const filteredNotes = notes.filter(note =>
-    note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    note.content.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleSelectionChange = (id: string, isChecked: boolean) => {
+    setLocalSelectedIds((prev) => {
+      const newIds = isChecked ? [...prev, id] : prev.filter((itemId) => itemId !== id);
+      return newIds;
+    });
+  };
 
-  const toggleSelection = (id: string) => {
-    if (selectedDocumentIds.includes(id)) {
-      onSelectionChange(selectedDocumentIds.filter(docId => docId !== id));
-    } else {
-      onSelectionChange([...selectedDocumentIds, id]);
+  const handleConfirmSelection = async () => {
+    try {
+      if (activeChatSessionId) {
+        const { error } = await supabase
+          .from('chat_sessions')
+          .update({ document_ids: localSelectedIds })
+          .eq('id', activeChatSessionId);
+        if (error) {
+          toast.error(`Failed to update chat session documents: ${error.message}`);
+          return;
+        }
+        toast.success('Chat session documents updated.');
+      }
+      // Only update parent state after successful Supabase update (or for new sessions)
+      onSelectionChange(localSelectedIds);
+      onClose();
+    } catch (error: any) {
+      toast.error(`Error: ${error.message || 'Failed to update selections.'}`);
     }
   };
 
-  const selectAll = () => {
-    const allIds = [...documents.map(d => d.id), ...notes.map(n => n.id)];
-    onSelectionChange(allIds);
+  const handleCancel = () => {
+    // Reset local selections to parent state
+    setLocalSelectedIds(selectedDocumentIds);
+    onClose();
   };
-
-  const clearAll = () => {
-    onSelectionChange([]);
-  };
-
-  // Function to handle attaching selected documents/notes
-  const handleAttachSelected = () => {
-    onClose(); // Close the modal, changes are already applied via onSelectionChange
-  };
-
-  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center overflow-y-auto justify-center p-4 sm:p-6" onClick={onClose}>
-      <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-lg shadow-xl bg-white dark:bg-gray-800 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
-        <CardContent className="p-4 sm:p-6 flex flex-col h-full">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100">Select Documents & Notes</h3>
-            <Button variant="ghost" size="sm" onClick={onClose} className="text-slate-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-gray-700">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-gray-500 h-4 w-4" />
-            <Input
-              placeholder="Search documents and notes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 border-slate-200 focus-visible:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2 mb-4 items-center">
-            <Button variant="outline" size="sm" onClick={selectAll} className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
-              Select All
-            </Button>
-            <Button variant="outline" size="sm" onClick={clearAll} className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
-              Clear All
-            </Button>
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full dark:bg-blue-900 dark:text-blue-200">
-              {selectedDocumentIds.length} selected
-            </Badge>
-          </div>
-
-          <div className="flex-1 max-h-[calc(90vh-200px)] overflow-y-scroll space-y-4 pr-2 modern-scrollbar">
-            {filteredDocuments.length > 0 && (
+    <Dialog open={isOpen} onOpenChange={handleCancel}>
+      <DialogContent className="sm:max-w-[600px] font-sans">
+        <DialogHeader>
+          <DialogTitle className="text-xl md:text-2xl text-slate-800 dark:text-gray-200">Select Documents and Notes</DialogTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleCancel}
+            className="absolute right-4 top-4 text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </DialogHeader>
+        <ScrollArea className="max-h-[60vh] pr-4">
+          <div className="space-y-4 mt-4">
+            {documents.length > 0 && (
               <div>
-                <h4 className="font-medium text-sm text-slate-500 mb-2 dark:text-gray-400">Documents</h4>
-                <div className="space-y-2">
-                  {filteredDocuments.map((document) => (
-                    <div
-                      key={document.id}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors flex items-center gap-3 ${selectedDocumentIds.includes(document.id)
-                          ? 'bg-blue-50 border-blue-500 dark:bg-blue-950 dark:border-blue-700'
-                          : 'hover:bg-slate-50 border-slate-200 dark:hover:bg-gray-700 dark:border-gray-600 dark:bg-gray-800'
-                        }`}
-                      onClick={() => toggleSelection(document.id)}
+                <h3 className="text-base md:text-lg font-semibold text-slate-700 dark:text-gray-200 mb-2">Documents</h3>
+                {documents.map((doc) => (
+                  <div key={doc.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-gray-700 rounded-md">
+                    <Checkbox
+                      id={`doc-${doc.id}`}
+                      checked={localSelectedIds.includes(doc.id)}
+                      onCheckedChange={(checked) => handleSelectionChange(doc.id, checked as boolean)}
+                    />
+                    <label
+                      htmlFor={`doc-${doc.id}`}
+                      className="flex items-center gap-2 text-base md:text-lg text-slate-600 dark:text-gray-300 cursor-pointer flex-1"
                     >
-                      <div className="flex-shrink-0">
-                        {selectedDocumentIds.includes(document.id) ? (
-                          <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center dark:bg-blue-500">
-                            <Check className="h-3 w-3 text-white" />
-                          </div>
-                        ) : (
-                          <div className="w-5 h-5 border-2 border-slate-300 rounded-full dark:border-gray-500" />
-                        )}
-                      </div>
-                      <FileText className="h-4 w-4 text-slate-500 flex-shrink-0 dark:text-gray-400" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate text-slate-800 dark:text-gray-100">{document.title}</p>
-                        <p className="text-sm text-slate-500 truncate dark:text-gray-400">
-                          {document.file_name}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      <FileText className="h-4 w-4" />
+                      {doc.title || doc.file_name}
+                    </label>
+                  </div>
+                ))}
               </div>
             )}
-
-            {filteredNotes.length > 0 && (
-              <div className={filteredDocuments.length > 0 ? "mt-6" : ""}>
-                <h4 className="font-medium text-sm text-slate-500 mb-2 dark:text-gray-400">Notes</h4>
-                <div className="space-y-2">
-                  {filteredNotes.map((note) => (
-                    <div
-                      key={note.id}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors flex items-center gap-3 ${selectedDocumentIds.includes(note.id)
-                          ? 'bg-blue-50 border-blue-500 dark:bg-blue-950 dark:border-blue-700'
-                          : 'hover:bg-slate-50 border-slate-200 dark:hover:bg-gray-700 dark:border-gray-600 dark:bg-gray-800'
-                        }`}
-                      onClick={() => toggleSelection(note.id)}
+            {notes.length > 0 && (
+              <div>
+                <h3 className="text-base md:text-lg font-semibold text-slate-700 dark:text-gray-200 mb-2">Notes</h3>
+                {notes.map((note) => (
+                  <div key={note.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-gray-700 rounded-md">
+                    <Checkbox
+                      id={`note-${note.id}`}
+                      checked={localSelectedIds.includes(note.id)}
+                      onCheckedChange={(checked) => handleSelectionChange(note.id, checked as boolean)}
+                    />
+                    <label
+                      htmlFor={`note-${note.id}`}
+                      className="flex items-center gap-2 text-base md:text-lg text-slate-600 dark:text-gray-300 cursor-pointer flex-1"
                     >
-                      <div className="flex-shrink-0">
-                        {selectedDocumentIds.includes(note.id) ? (
-                          <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center dark:bg-blue-500">
-                            <Check className="h-3 w-3 text-white" />
-                          </div>
-                        ) : (
-                          <div className="w-5 h-5 border-2 border-slate-300 rounded-full dark:border-gray-500" />
-                        )}
-                      </div>
-                      <FileText className="h-4 w-4 text-slate-500 flex-shrink-0 dark:text-gray-400" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate text-slate-800 dark:text-gray-100">{note.title}</p>
-                        <p className="text-sm text-slate-500 line-clamp-2 dark:text-gray-400">
-                          {note.content || 'No content'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      <StickyNote className="h-4 w-4" />
+                      {note.title}
+                    </label>
+                  </div>
+                ))}
               </div>
             )}
-
-            {filteredDocuments.length === 0 && filteredNotes.length === 0 && (
-              <div className="text-center py-8 text-slate-400 dark:text-gray-500">
-                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No documents or notes found</p>
-              </div>
+            {documents.length === 0 && notes.length === 0 && (
+              <p className="text-base md:text-lg text-slate-500 dark:text-gray-400 text-center py-4">
+                No documents or notes available.
+              </p>
             )}
           </div>
-
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-gray-700">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAttachSelected}
-              disabled={selectedDocumentIds.length === 0}
-              className="bg-blue-600 text-white hover:bg-blue-700 shadow-md disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-800"
-            >
-              Attach Selected ({selectedDocumentIds.length})
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+        </ScrollArea>
+        <DialogFooter className="mt-4">
+          <Button
+            variant="outline"
+            onClick={handleCancel}
+            className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmSelection}
+            disabled={localSelectedIds.length === 0 && selectedDocumentIds.length === 0}
+            className="bg-blue-600 text-white shadow-md hover:bg-blue-700"
+          >
+            Attach Selected
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
