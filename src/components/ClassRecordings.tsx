@@ -1,5 +1,4 @@
-// components/ClassRecordings.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -38,10 +37,10 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 }) => {
   const [selectedRecording, setSelectedRecording] = useState<ClassRecording | null>(null);
 
-  // Destructure all necessary audio processing functions and states
+  // Audio processing hook
   const {
     handleRecordingComplete,
-    audioPlayerRef, // The ref for the audio player
+    audioPlayerRef,
     isPlayingAudio,
     handlePlayAudio,
     handlePauseAudio,
@@ -62,7 +61,6 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     handleExitQuizMode,
     calculateScore,
     setQuizMode,
-
   } = useQuizManagement({ onGenerateQuiz });
 
   const formatDuration = (seconds: number | null) => {
@@ -84,7 +82,6 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       setQuizMode({ recording: {} as ClassRecording, quiz: quiz });
       toast.info("Associated recording not found, but quiz details are displayed.");
     }
-
   };
 
   const handleReprocessAudioClick = useCallback(async (recording: ClassRecording) => {
@@ -115,194 +112,223 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       await onDeleteRecording(recording.id, recording.document_id || null, recording.audioUrl || null);
       if (selectedRecording?.id === recording.id) {
         setSelectedRecording(null);
+        if (isPlayingAudio) {
+          handlePauseAudio();
+        }
       }
     }
-  }, [onDeleteRecording, selectedRecording]);
+  }, [onDeleteRecording, selectedRecording, isPlayingAudio, handlePauseAudio]);
 
+  // Ensure audio is paused when switching recordings
+  useEffect(() => {
+    if (selectedRecording && audioPlayerRef.current && selectedRecording.audioUrl !== audioPlayerRef.current.src) {
+      handlePauseAudio();
+    }
+  }, [selectedRecording, audioPlayerRef, handlePauseAudio]);
 
   return (
-    <div className="flex flex-col lg:flex-row flex-1 min-h-0">
+    <div className="flex flex-col h-full min-h-0">
+      <audio ref={audioPlayerRef} className="hidden" />
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0">
+        <div
+          className={`
+            flex-1 p-4 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900
+            ${selectedRecording ? 'lg:w-2/3' : 'lg:w-full'}
+            transition-all duration-300 ease-in-out
+          `}
+        >
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-100 mb-4 sm:mb-6 flex items-center gap-3">
+            <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" /> Your Recordings
+          </h2>
 
-      <div className={`
-        flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900
-        ${selectedRecording ? 'lg:w-2/3' : 'lg:w-full'}
-        transition-all duration-300 ease-in-out
-      `}>
-        <h2 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100 mb-6 flex items-center gap-3">
-          <FileText className="h-8 w-8 text-blue-600" /> Your Recordings
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 dark:bg-gray-800 dark:border-gray-700">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                <Lightbulb className="h-5 w-5 text-purple-500" /> Upload Audio
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AudioUploadSection onAddRecording={onAddRecording} onUpdateRecording={onUpdateRecording} />
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 dark:bg-gray-800 dark:border-gray-700">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                <Mic className="h-5 w-5 text-purple-500" /> Record New Class
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <VoiceRecorder onRecordingComplete={handleRecordingComplete} />
-            </CardContent>
-          </Card>
-        </div>
-
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-10 mb-4 flex items-center gap-2">
-          <BookOpen className="h-6 w-6 text-purple-600" /> All Class Recordings
-        </h3>
-        <div className="grid gap-4">
-          {Array.isArray(recordings) && recordings.length > 0 ? (
-            recordings.map((recording) => (
-              <Card
-                key={recording.id}
-                className={`hover:shadow-md transition-shadow duration-200 border border-gray-200 dark:bg-gray-800 dark:border-gray-700
-                  ${selectedRecording?.id === recording.id ? 'border-2 border-blue-500 shadow-lg' : ''}`}
-              >
-                <CardHeader className="p-4 sm:p-6">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100">{recording.title}</CardTitle>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-gray-500 dark:text-gray-400">
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">{recording.subject}</Badge>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatDuration(recording.duration)}
-                        </div>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          {recording.date ? formatDate(new Date(recording.date)) : 'No date'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-3 sm:mt-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownloadRecording(recording)}
-                        className="flex items-center gap-1 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-700"
-                        title="Download Audio"
-                        disabled={!recording.audioUrl}
-                      >
-                        <Download className="h-4 w-4" />
-                        <span className="hidden sm:inline">Download</span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedRecording(
-                          selectedRecording?.id === recording.id ? null : recording
-                        )}
-                        className="flex items-center gap-1 text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
-                        title="View Details"
-                      >
-                        <FileText className="h-4 w-4" />
-                        <span className="hidden sm:inline">{selectedRecording?.id === recording.id ? 'Hide' : 'View'}</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteRecordingClick(recording)}
-                        className="flex items-center gap-1 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900"
-                        title="Delete Recording"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span className="hidden sm:inline">Delete</span>
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-              </Card>
-            ))
-          ) : (
-            <Card className="text-center py-8 bg-white shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 dark:bg-gray-800 dark:border-gray-700">
+              <CardHeader className="p-4 sm:pb-4">
+                <CardTitle className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" /> Upload Audio
+                </CardTitle>
+              </CardHeader>
               <CardContent>
-                <BookOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-500 mb-2 dark:text-gray-300">No recordings yet</h3>
-                <p className="text-gray-400">Start recording or uploading audio to get AI-powered summaries and transcripts</p>
+                <AudioUploadSection onAddRecording={onAddRecording} onUpdateRecording={onUpdateRecording} />
               </CardContent>
             </Card>
-          )}
+
+            <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 dark:bg-gray-800 dark:border-gray-700">
+              <CardHeader className="p-4 sm:pb-4">
+                <CardTitle className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <Mic className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" /> Record New Class
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VoiceRecorder onRecordingComplete={handleRecordingComplete} />
+              </CardContent>
+            </Card>
+          </div>
+
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-6 sm:mt-10 mb-4 flex items-center gap-2">
+            <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" /> All Class Recordings
+          </h3>
+          <div className="grid gap-4">
+            {Array.isArray(recordings) && recordings.length > 0 ? (
+              recordings.map((recording) => (
+                <Card
+                  key={recording.id}
+                  className={`hover:shadow-md transition-shadow duration-200 border border-gray-200 dark:bg-gray-800 dark:border-gray-700
+                    ${selectedRecording?.id === recording.id ? 'border-2 border-blue-500 shadow-lg' : ''}`}
+                >
+                  <CardHeader className="p-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <CardTitle className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-100">{recording.title}</CardTitle>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">{recording.subject}</Badge>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatDuration(recording.duration)}
+                          </div>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                            {recording.date ? formatDate(new Date(recording.date)) : 'No date'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-3 sm:mt-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadRecording(recording)}
+                          className="flex items-center gap-1 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-700"
+                          title="Download Audio"
+                          disabled={!recording.audioUrl}
+                        >
+                          <Download className="h-4 w-4" />
+                          <span className="hidden sm:inline">Download</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (selectedRecording?.id !== recording.id && isPlayingAudio) {
+                              handlePauseAudio();
+                            }
+                            setSelectedRecording(selectedRecording?.id === recording.id ? null : recording);
+                          }}
+                          className="flex items-center gap-1 text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+                          title="View Details"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span className="hidden sm:inline">{selectedRecording?.id === recording.id ? 'Hide' : 'View'}</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteRecordingClick(recording)}
+                          className="flex items-center gap-1 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900"
+                          title="Delete Recording"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span className="hidden sm:inline">Delete</span>
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                </Card>
+              ))
+            ) : (
+              <Card className="text-center py-8 bg-white shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                <CardContent>
+                  <BookOpen className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-base sm:text-lg font-medium text-gray-500 mb-2 dark:text-gray-300">No recordings yet</h3>
+                  <p className="text-xs sm:text-sm text-gray-400">Start recording or uploading audio to get AI-powered summaries and transcripts</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-6 sm:mt-10 mb-4 flex items-center gap-2">
+            <History className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" /> Your Quiz History
+          </h3>
+          <div className="overflow-y-auto max-h-[40vh] sm:max-h-[50vh]">
+            <QuizHistory quizzes={quizzes} onSelectQuiz={handleViewHistoricalQuiz} />
+          </div>
         </div>
 
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-10 mb-4 flex items-center gap-2">
-          <History className="h-6 w-6 text-green-600" /> Your Quiz History
-        </h3>
-        <QuizHistory quizzes={quizzes} onSelectQuiz={handleViewHistoricalQuiz} />
-
-      </div>
-
-      {selectedRecording && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-            onClick={() => setSelectedRecording(null)}
-          />
-          <div className={`
-            ${selectedRecording ? 'translate-x-0' : 'translate-x-full'}
-            fixed inset-y-0 right-0 w-full max-w-sm bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40
-            lg:relative lg:translate-x-0 lg:w-1/3 lg:max-w-none lg:shadow-none lg:border-l
-            transition-transform duration-300 ease-in-out
-            dark:bg-gray-900 dark:border-gray-800
-          `}>
-            <RecordingDetailsPanel
-              recording={selectedRecording}
-              onClose={() => setSelectedRecording(null)}
-              onUpdateRecording={onUpdateRecording}
-              onGenerateQuiz={handleGenerateQuizFromPanel}
-              onGenerateNote={onGenerateNote}
-              onReprocessAudio={handleReprocessAudioClick}
-              onDeleteRecording={handleDeleteRecordingClick}
-              // Pass audio playback props to RecordingDetailsPanel
-              audioUrl={selectedRecording.audioUrl}
-              isPlayingAudio={isPlayingAudio && selectedRecording.audioUrl === audioPlayerRef.current?.src} // Only true if this recording is playing
-              onPlayAudio={() => {
-                // Only play if the current selected recording's audio URL matches the audio player's source
-                // This prevents playing the wrong audio if multiple recordings are in the list
-                if (audioPlayerRef.current && selectedRecording.audioUrl) {
-                  audioPlayerRef.current.src = selectedRecording.audioUrl;
-                  handlePlayAudio();
-                }
-              }}
-              onPauseAudio={handlePauseAudio} // Assuming handlePauseAudio exists in useAudioProcessing
-              onAudioEnded={handleAudioEnded}
-              onDownloadAudio={() => handleDownloadRecording(selectedRecording)} // Use the local download handler
-              onCopyAudioUrl={() => {
-                if (selectedRecording.audioUrl) {
-                  // Use document.execCommand('copy') as navigator.clipboard.writeText() might not work in iframes
-                  const textArea = document.createElement("textarea");
-                  textArea.value = selectedRecording.audioUrl;
-                  document.body.appendChild(textArea);
-                  textArea.focus();
-                  textArea.select();
-                  document.execCommand('copy');
-                  textArea.remove();
-                  toast.success('Audio URL copied to clipboard!');
+        {selectedRecording && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+              onClick={() => {
+                setSelectedRecording(null);
+                if (isPlayingAudio) {
+                  handlePauseAudio();
                 }
               }}
             />
-          </div>
-        </>
-      )}
+            <div
+              className={`
+                fixed inset-y-0 right-0 w-full sm:w-80 bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40
+                lg:relative lg:w-1/3 lg:max-w-[400px] lg:shadow-none lg:border-l
+                transition-transform duration-300 ease-in-out
+                dark:bg-gray-900 dark:border-gray-800 overflow-y-auto
+                ${selectedRecording ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
+              `}
+            >
+              <RecordingDetailsPanel
+                recording={selectedRecording}
+                onClose={() => {
+                  setSelectedRecording(null);
+                  if (isPlayingAudio) {
+                    handlePauseAudio();
+                  }
+                }}
+                onUpdateRecording={onUpdateRecording}
+                onGenerateQuiz={handleGenerateQuizFromPanel}
+                onGenerateNote={onGenerateNote}
+                onReprocessAudio={handleReprocessAudioClick}
+                onDeleteRecording={handleDeleteRecordingClick}
+                audioUrl={selectedRecording.audioUrl}
+                audioPlayerRef={audioPlayerRef} // Pass the shared audioPlayerRef
+                isPlayingAudio={isPlayingAudio}
+                onPlayAudio={() => {
+                  if (audioPlayerRef.current && selectedRecording.audioUrl) {
+                    if (audioPlayerRef.current.src !== selectedRecording.audioUrl) {
+                      audioPlayerRef.current.src = selectedRecording.audioUrl;
+                    }
+                    handlePlayAudio();
+                  } else {
+                    toast.error('No audio available to play.');
+                  }
+                }}
+                onPauseAudio={handlePauseAudio}
+                onAudioEnded={handleAudioEnded}
+                onDownloadAudio={() => handleDownloadRecording(selectedRecording)}
+                onCopyAudioUrl={() => {
+                  if (selectedRecording.audioUrl) {
+                    navigator.clipboard.writeText(selectedRecording.audioUrl).then(() => {
+                      toast.success('Audio URL copied to clipboard!');
+                    }).catch(() => {
+                      toast.error('Failed to copy audio URL.');
+                    });
+                  } else {
+                    toast.error('No audio URL available.');
+                  }
+                }}
+              />
+            </div>
+          </>
+        )}
 
-      <QuizModal
-        quizMode={quizMode}
-        currentQuestionIndex={currentQuestionIndex}
-        userAnswers={userAnswers}
-        showResults={showResults}
-        onAnswerSelect={handleAnswerSelect}
-        onNextQuestion={handleNextQuestion}
-        onPreviousQuestion={handlePreviousQuestion}
-        onExitQuizMode={handleExitQuizMode}
-        calculateScore={calculateScore}
-      />
+        <QuizModal
+          quizMode={quizMode}
+          currentQuestionIndex={currentQuestionIndex}
+          userAnswers={userAnswers}
+          showResults={showResults}
+          onAnswerSelect={handleAnswerSelect}
+          onNextQuestion={handleNextQuestion}
+          onPreviousQuestion={handlePreviousQuestion}
+          onExitQuizMode={handleExitQuizMode}
+          calculateScore={calculateScore}
+        />
+      </div>
     </div>
   );
 };

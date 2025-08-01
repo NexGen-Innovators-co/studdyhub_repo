@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
@@ -21,8 +21,7 @@ import {
   Book,
   AudioWaveform,
   Volume2,
-  Settings,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -35,6 +34,7 @@ interface RecordingDetailsPanelProps {
   onDeleteRecording: (recording: ClassRecording) => Promise<void>;
   onClose: () => void;
   audioUrl: string | null | undefined;
+  audioPlayerRef: React.RefObject<HTMLAudioElement>;
   isPlayingAudio: boolean;
   onPlayAudio: () => void;
   onPauseAudio: () => void;
@@ -52,6 +52,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
   onDeleteRecording,
   onClose,
   audioUrl,
+  audioPlayerRef,
   isPlayingAudio,
   onPlayAudio,
   onPauseAudio,
@@ -63,19 +64,63 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
   const [numQuestions, setNumQuestions] = useState<number>(5);
   const [difficulty, setDifficulty] = useState<string>('medium');
   const [activeSection, setActiveSection] = useState<string>('transcript');
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(0);
 
-  const audioPlayerRef = useRef<HTMLAudioElement>(null);
-
+  // Manage audio playback state
   useEffect(() => {
-    if (audioPlayerRef.current) {
-      audioPlayerRef.current.src = audioUrl || '';
-      if (isPlayingAudio) {
-        audioPlayerRef.current.play().catch(e => console.error("Error playing audio:", e));
-      } else {
-        audioPlayerRef.current.pause();
-      }
+    const audio = audioPlayerRef.current;
+    if (!audio || !audioUrl) return;
+
+    // Set audio source if it’s different
+    if (audio.src !== audioUrl) {
+      audio.src = audioUrl;
     }
-  }, [audioUrl, isPlayingAudio]);
+
+    // Event handlers
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleError = (e: Event) => {
+      console.error('Audio error:', e);
+      toast.error('Failed to load audio. Please try again.');
+      onPauseAudio();
+    };
+
+    const handleEnded = () => {
+      onAudioEnded();
+      setCurrentTime(0);
+    };
+
+    // Add event listeners
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('ended', handleEnded);
+
+    // Cleanup
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [audioUrl, audioPlayerRef, onPauseAudio, onAudioEnded]);
+
+  // Reset audio when the panel is closed
+  useEffect(() => {
+    return () => {
+      if (audioPlayerRef.current && isPlayingAudio) {
+        audioPlayerRef.current.pause();
+        setCurrentTime(0);
+      }
+    };
+  }, [audioPlayerRef, isPlayingAudio]);
 
   const handleCopyTranscript = () => {
     if (recording.transcript) {
@@ -105,18 +150,27 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
     return text ? text.split(/\s+/).filter(word => word.length > 0).length : 0;
   };
 
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioPlayerRef.current;
+    if (audio) {
+      const newTime = Number(e.target.value);
+      audio.currentTime = newTime;
+      setCurrentTime(newTime);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
-      <div className="p-6 border-b border-slate-200/50 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 dark:border-gray-700/50">
+      <div className="p-4 sm:p-6 border-b border-slate-200/50 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 dark:border-gray-700/50">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <AudioWaveform className="h-5 w-5 text-white" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <AudioWaveform className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-800 dark:text-gray-100">Recording Details</h3>
-              <p className="text-sm text-slate-500 dark:text-gray-400">Manage and analyze your recording</p>
+              <h3 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-gray-100">Recording Details</h3>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-gray-400">Manage and analyze your recording</p>
             </div>
           </div>
           <Button 
@@ -125,7 +179,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
             onClick={onClose} 
             className="rounded-full hover:bg-slate-100 dark:hover:bg-gray-700 transition-colors"
           >
-            <X className="h-5 w-5 text-slate-500 dark:text-gray-400" />
+            <X className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500 dark:text-gray-400" />
           </Button>
         </div>
 
@@ -136,7 +190,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
               <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Date</span>
             </div>
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+            <p className="text-xs sm:text-sm font-semibold text-blue-900 dark:text-blue-100">
               {new Date(recording.date).toLocaleDateString()}
             </p>
           </div>
@@ -146,7 +200,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
               <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Duration</span>
             </div>
-            <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+            <p className="text-xs sm:text-sm font-semibold text-emerald-900 dark:text-emerald-100">
               {formatDuration(recording.duration)}
             </p>
           </div>
@@ -156,61 +210,79 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
         <div className="mt-4 space-y-2">
           <div className="flex items-center gap-2">
             <Book className="h-4 w-4 text-slate-600 dark:text-gray-400" />
-            <span className="text-sm font-medium text-slate-700 dark:text-gray-300">Subject:</span>
-            <span className="text-sm text-slate-900 dark:text-gray-100 font-semibold">{recording.subject}</span>
+            <span className="text-xs sm:text-sm font-medium text-slate-700 dark:text-gray-300">Subject:</span>
+            <span className="text-xs sm:text-sm text-slate-900 dark:text-gray-100 font-semibold">{recording.subject}</span>
           </div>
-          <h4 className="text-lg font-bold text-slate-900 dark:text-gray-100 leading-tight">
+          <h4 className="text-base sm:text-lg font-bold text-slate-900 dark:text-gray-100 leading-tight">
             {recording.title}
           </h4>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 modern-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 modern-scrollbar">
         <div className="space-y-6">
           {/* Audio Player */}
           {recording.audioUrl && (
-            <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-5 rounded-2xl border border-slate-200/50 dark:border-gray-700/50 shadow-sm">
+            <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-4 sm:p-5 rounded-2xl border border-slate-200/50 dark:border-gray-700/50 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
                   <Volume2 className="h-4 w-4 text-white" />
                 </div>
-                <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Audio Playback</h4>
+                <h4 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-100">Audio Playback</h4>
               </div>
               
-              <audio ref={audioPlayerRef} src={recording.audioUrl} onEnded={onAudioEnded} className="hidden" />
-              
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={isPlayingAudio ? onPauseAudio : onPlayAudio}
-                  className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/50 transition-colors"
-                  disabled={!recording.audioUrl}
-                >
-                  {isPlayingAudio ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
-                  {isPlayingAudio ? 'Pause' : 'Play'}
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onDownloadAudio}
-                  className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/50 transition-colors"
-                  disabled={!recording.audioUrl}
-                >
-                  <Download className="h-4 w-4 mr-2" /> Download
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onCopyAudioUrl}
-                  className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-900/50 transition-colors"
-                  disabled={!recording.audioUrl}
-                >
-                  <Copy className="h-4 w-4 mr-2" /> Copy URL
-                </Button>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={isPlayingAudio ? onPauseAudio : onPlayAudio}
+                    className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/50 transition-colors"
+                    disabled={!recording.audioUrl}
+                  >
+                    {isPlayingAudio ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                    {isPlayingAudio ? 'Pause' : 'Play'}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onDownloadAudio}
+                    className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/50 transition-colors"
+                    disabled={!recording.audioUrl}
+                  >
+                    <Download className="h-4 w-4 mr-2" /> Download
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onCopyAudioUrl}
+                    className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-blue-900/50 transition-colors"
+                    disabled={!recording.audioUrl}
+                  >
+                    <Copy className="h-4 w-4 mr-2" /> Copy URL
+                  </Button>
+                </div>
+
+                {/* Playback Progress */}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {formatDuration(currentTime)}
+                  </span>
+                  <input
+                    type="range"
+                    min="0"
+                    max={duration || 100}
+                    value={currentTime}
+                    onChange={handleSeek}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                  />
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {formatDuration(duration)}
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -221,7 +293,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
             <div className="flex border-b border-slate-200/50 dark:border-gray-700/50 bg-slate-50/50 dark:bg-gray-900/50">
               <button
                 onClick={() => setActiveSection('transcript')}
-                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                className={`flex-1 px-4 py-3 text-xs sm:text-sm font-medium transition-colors ${
                   activeSection === 'transcript'
                     ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-white dark:bg-gray-800'
                     : 'text-slate-600 dark:text-gray-400 hover:text-slate-800 dark:hover:text-gray-200'
@@ -240,7 +312,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
               
               <button
                 onClick={() => setActiveSection('summary')}
-                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                className={`flex-1 px-4 py-3 text-xs sm:text-sm font-medium transition-colors ${
                   activeSection === 'summary'
                     ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-white dark:bg-gray-800'
                     : 'text-slate-600 dark:text-gray-400 hover:text-slate-800 dark:hover:text-gray-200'
@@ -254,13 +326,13 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
             </div>
 
             {/* Tab Content */}
-            <div className="p-5">
+            <div className="p-4 sm:p-5">
               {activeSection === 'transcript' && (
                 <div className="relative">
                   {recording.transcript ? (
                     <>
                       <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto modern-scrollbar">
+                        <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto modern-scrollbar">
                           {recording.transcript}
                         </p>
                       </div>
@@ -280,8 +352,8 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
                     </>
                   ) : (
                     <div className="text-center py-8">
-                      <Clipboard className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No transcript available</p>
+                      <Clipboard className="h-10 w-10 sm:h-12 sm:w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">No transcript available</p>
                     </div>
                   )}
                 </div>
@@ -291,14 +363,14 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
                 <div>
                   {recording.summary ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none">
-                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                      <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                         {recording.summary}
                       </p>
                     </div>
                   ) : (
                     <div className="text-center py-8">
-                      <Sparkles className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No AI summary available</p>
+                      <Sparkles className="h-10 w-10 sm:h-12 sm:w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">No AI summary available</p>
                     </div>
                   )}
                 </div>
@@ -307,17 +379,17 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
           </div>
 
           {/* Quiz Generation */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-5 rounded-2xl border border-blue-200/50 dark:border-blue-800/50">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-4 sm:p-5 rounded-2xl border border-blue-200/50 dark:border-blue-800/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
                 <Lightbulb className="h-4 w-4 text-white" />
               </div>
-              <h4 className="text-lg font-semibold text-blue-800 dark:text-blue-200">Generate Quiz</h4>
+              <h4 className="text-base sm:text-lg font-semibold text-blue-800 dark:text-blue-200">Generate Quiz</h4>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
               <div className="space-y-2">
-                <Label htmlFor="num-questions" className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                <Label htmlFor="num-questions" className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300">
                   Questions
                 </Label>
                 <Select value={String(numQuestions)} onValueChange={(value) => setNumQuestions(Number(value))}>
@@ -333,7 +405,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="difficulty" className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                <Label htmlFor="difficulty" className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300">
                   Difficulty
                 </Label>
                 <Select value={difficulty} onValueChange={setDifficulty}>

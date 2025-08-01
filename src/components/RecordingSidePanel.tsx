@@ -1,6 +1,3 @@
-
-
-// components/RecordingSidePanel.tsx
 import React from 'react';
 import { X, Maximize2, Minimize2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,6 +14,7 @@ interface RecordingSidePanelProps {
   onDeleteRecording: (recording: ClassRecording) => Promise<void>;
   onGenerateNote: (recording: ClassRecording) => Promise<void>;
   audioUrl: string | null | undefined;
+  audioPlayerRef: React.RefObject<HTMLAudioElement>; // Add audioPlayerRef prop
   isPlayingAudio: boolean;
   onPlayAudio: () => void;
   onPauseAudio: () => void;
@@ -32,6 +30,7 @@ export const RecordingSidePanel: React.FC<RecordingSidePanelProps> = ({
   onDeleteRecording,
   onGenerateNote,
   audioUrl,
+  audioPlayerRef, // Receive audioPlayerRef
   isPlayingAudio,
   onPlayAudio,
   onPauseAudio,
@@ -110,6 +109,7 @@ export const RecordingSidePanel: React.FC<RecordingSidePanelProps> = ({
             onGenerateNote={onGenerateNote}
             onClose={onClose}
             audioUrl={audioUrl}
+            audioPlayerRef={audioPlayerRef} // Pass audioPlayerRef to RecordingDetailsPanel
             isPlayingAudio={isPlayingAudio}
             onPlayAudio={onPlayAudio}
             onPauseAudio={onPauseAudio}
@@ -123,6 +123,8 @@ export const RecordingSidePanel: React.FC<RecordingSidePanelProps> = ({
                 link.click();
                 document.body.removeChild(link);
                 toast.success('Recording downloaded!');
+              } else {
+                toast.error('No audio file available to download.');
               }
             }}
             onCopyAudioUrl={() => {
@@ -132,6 +134,8 @@ export const RecordingSidePanel: React.FC<RecordingSidePanelProps> = ({
                 }).catch(() => {
                   toast.error('Failed to copy URL');
                 });
+              } else {
+                toast.error('No audio URL available.');
               }
             }}
           />

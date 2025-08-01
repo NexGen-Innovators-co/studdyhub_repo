@@ -1,4 +1,3 @@
-// hooks/useAudioProcessing.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,7 +14,7 @@ interface AudioDetails {
   url: string;
   type: string;
   name: string;
-  document_id: string; // Still needed to link back to the document
+  document_id: string;
 }
 
 export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAudioProcessingProps) => {
@@ -23,7 +22,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
   const [uploadedAudioDetails, setUploadedAudioDetails] = useState<AudioDetails | null>(null);
   const [isAudioOptionsVisible, setIsAudioOptionsVisible] = useState(false);
   const audioInputRef = useRef<HTMLInputElement>(null);
-  const audioPlayerRef = useRef<HTMLAudioElement>(null); // This ref will be shared
+  const audioPlayerRef = useRef<HTMLAudioElement>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isGeneratingNote, setIsGeneratingNote] = useState(false);
   const [translatedContent, setTranslatedContent] = useState<string | null>(null);
@@ -33,9 +32,16 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
   }, []);
 
   const handlePlayAudio = useCallback(() => {
-    if (audioPlayerRef.current) {
-      audioPlayerRef.current.play().catch(e => console.error("Error playing audio:", e));
-      setIsPlayingAudio(true);
+    if (audioPlayerRef.current && audioPlayerRef.current.src) {
+      audioPlayerRef.current.play().then(() => {
+        setIsPlayingAudio(true);
+      }).catch(e => {
+        console.error("Error playing audio:", e);
+        toast.error('Failed to play audio. Please try again.');
+        setIsPlayingAudio(false);
+      });
+    } else {
+      toast.error('No audio file loaded.');
     }
   }, []);
 
@@ -57,7 +63,6 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
     }
     const link = document.createElement('a');
     link.href = audioPlayerRef.current.src;
-    // Try to infer filename from URL or use a generic one
     const urlParts = audioPlayerRef.current.src.split('/');
     const fileName = urlParts[urlParts.length - 1].split('?')[0] || 'downloaded_audio.webm';
     link.download = fileName;
@@ -72,23 +77,14 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
       toast.info('No audio URL to copy.');
       return;
     }
-    const textarea = document.createElement('textarea');
-    textarea.value = audioPlayerRef.current.src;
-    document.body.appendChild(textarea);
-    textarea.select();
-    try {
-      document.execCommand('copy');
+    navigator.clipboard.writeText(audioPlayerRef.current.src).then(() => {
       toast.success('Audio URL copied to clipboard!');
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
+    }).catch(err => {
+      console.error('Failed to copy audio URL:', err);
       toast.error('Failed to copy audio URL.');
-    } finally {
-      document.body.removeChild(textarea);
-    }
+    });
   }, []);
 
-
-  // Centralized function to trigger audio processing Edge Function (direct response)
   const triggerAudioProcessing = useCallback(async (fileUrl: string, documentId: string, targetLang: string = 'en') => {
     setIsProcessingAudio(true);
     const toastId = toast.loading('Sending audio for AI processing (transcription, summary)...');
@@ -200,8 +196,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
       setIsProcessingAudio(false);
       setIsAudioOptionsVisible(false);
     }
-  }, [onUpdateRecording, setTranslatedContent]);
-
+  }, [onUpdateRecording]);
 
   const handleAudioFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -412,7 +407,6 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
     }
   }, [onAddRecording, triggerAudioProcessing]);
 
-
   const handleGenerateNoteFromAudio = useCallback(async (recording: ClassRecording) => {
     if (!recording.document_id) {
       toast.error('Linked document ID missing for this recording.');
@@ -530,6 +524,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
     if (audioPlayerRef.current) {
       audioPlayerRef.current.pause();
       audioPlayerRef.current.currentTime = 0;
+      audioPlayerRef.current.src = '';
       setIsPlayingAudio(false);
     }
     toast.dismiss('audio-job-status');
@@ -549,7 +544,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
     handleRecordingComplete,
     handleGenerateNoteFromAudio,
     handlePlayAudio,
-    handlePauseAudio, // Expose handlePauseAudio
+    handlePauseAudio,
     handleAudioEnded,
     handleDownloadAudio,
     handleCopyAudioUrl,
