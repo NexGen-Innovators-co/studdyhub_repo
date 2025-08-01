@@ -1,8 +1,8 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Clock, BookOpen, FileText, History, Lightbulb, Mic, X, Download, Trash2, RefreshCw } from 'lucide-react';
+import { Clock, BookOpen, FileText, History, Lightbulb, Mic, Download, Trash2, RefreshCw } from 'lucide-react';
 import { ClassRecording, Quiz } from '../types/Class';
 import { formatDate } from '../utils/helpers';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -11,7 +11,7 @@ import { QuizModal } from './QuizModal';
 import { QuizHistory } from './QuizHistory';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
 import { useQuizManagement } from '../hooks/useQuizManagement';
-import { RecordingDetailsPanel } from './RecordingDetailsPanel';
+import { RecordingSidePanel } from './RecordingSidePanel';
 import { toast } from 'sonner';
 
 interface ClassRecordingsProps {
@@ -130,11 +130,12 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     <div className="flex flex-col h-full min-h-0">
       <audio ref={audioPlayerRef} className="hidden" />
       <div className="flex flex-col lg:flex-row flex-1 min-h-0">
+        {/* Centered container for recordings list when side panel is closed */}
         <div
           className={`
             flex-1 p-4 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900
-            ${selectedRecording ? 'lg:w-2/3' : 'lg:w-full'}
             transition-all duration-300 ease-in-out
+            ${selectedRecording ? 'lg:w-2/3' : 'lg:w-full lg:max-w-4xl mx-auto'}
           `}
         >
           <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-100 mb-4 sm:mb-6 flex items-center gap-3">
@@ -263,57 +264,35 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                 }
               }}
             />
-            <div
-              className={`
-                fixed inset-y-0 right-0 w-full sm:w-80 bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40
-                lg:relative lg:w-1/3 lg:max-w-[400px] lg:shadow-none lg:border-l
-                transition-transform duration-300 ease-in-out
-                dark:bg-gray-900 dark:border-gray-800 overflow-y-auto
-                ${selectedRecording ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
-              `}
-            >
-              <RecordingDetailsPanel
-                recording={selectedRecording}
-                onClose={() => {
-                  setSelectedRecording(null);
-                  if (isPlayingAudio) {
-                    handlePauseAudio();
+            <RecordingSidePanel
+              recording={selectedRecording}
+              onClose={() => {
+                setSelectedRecording(null);
+                if (isPlayingAudio) {
+                  handlePauseAudio();
+                }
+              }}
+              onUpdateRecording={onUpdateRecording}
+              onGenerateQuiz={handleGenerateQuizFromPanel}
+              onReprocessAudio={handleReprocessAudioClick}
+              onDeleteRecording={handleDeleteRecordingClick}
+              onGenerateNote={onGenerateNote}
+              audioUrl={selectedRecording.audioUrl}
+              audioPlayerRef={audioPlayerRef}
+              isPlayingAudio={isPlayingAudio}
+              onPlayAudio={() => {
+                if (audioPlayerRef.current && selectedRecording.audioUrl) {
+                  if (audioPlayerRef.current.src !== selectedRecording.audioUrl) {
+                    audioPlayerRef.current.src = selectedRecording.audioUrl;
                   }
-                }}
-                onUpdateRecording={onUpdateRecording}
-                onGenerateQuiz={handleGenerateQuizFromPanel}
-                onGenerateNote={onGenerateNote}
-                onReprocessAudio={handleReprocessAudioClick}
-                onDeleteRecording={handleDeleteRecordingClick}
-                audioUrl={selectedRecording.audioUrl}
-                audioPlayerRef={audioPlayerRef} // Pass the shared audioPlayerRef
-                isPlayingAudio={isPlayingAudio}
-                onPlayAudio={() => {
-                  if (audioPlayerRef.current && selectedRecording.audioUrl) {
-                    if (audioPlayerRef.current.src !== selectedRecording.audioUrl) {
-                      audioPlayerRef.current.src = selectedRecording.audioUrl;
-                    }
-                    handlePlayAudio();
-                  } else {
-                    toast.error('No audio available to play.');
-                  }
-                }}
-                onPauseAudio={handlePauseAudio}
-                onAudioEnded={handleAudioEnded}
-                onDownloadAudio={() => handleDownloadRecording(selectedRecording)}
-                onCopyAudioUrl={() => {
-                  if (selectedRecording.audioUrl) {
-                    navigator.clipboard.writeText(selectedRecording.audioUrl).then(() => {
-                      toast.success('Audio URL copied to clipboard!');
-                    }).catch(() => {
-                      toast.error('Failed to copy audio URL.');
-                    });
-                  } else {
-                    toast.error('No audio URL available.');
-                  }
-                }}
-              />
-            </div>
+                  handlePlayAudio();
+                } else {
+                  toast.error('No audio available to play.');
+                }
+              }}
+              onPauseAudio={handlePauseAudio}
+              onAudioEnded={handleAudioEnded}
+            />
           </>
         )}
 
