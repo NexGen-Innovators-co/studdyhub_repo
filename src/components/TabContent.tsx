@@ -16,14 +16,9 @@ import { AlertTriangle, Copy, Check, Code, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 import { lowlight } from 'lowlight';
-// DiagramPanel and MemoizedMarkdownRenderer are not used directly in TabContent,
-// but their imports might be here if they were previously used or for other reasons.
-// For this update, they are not directly relevant to the prop passing.
 
-// Register Chart.js components if not already done globally
 Chart.register(...registerables);
 
-// Helper for copy to clipboard (can be moved to a shared utility if needed elsewhere)
 const useCopyToClipboard = () => {
   const [copied, setCopied] = useState(false);
   const copy = useCallback((text: string) => {
@@ -45,7 +40,6 @@ const useCopyToClipboard = () => {
   return { copied, copy };
 };
 
-// Helper for syntax highlighting (from AIChat, needed for SidePanelViewer)
 const escapeHtml = (text: string) => {
   const map: { [key: string]: string } = {
     '&': '&amp;',
@@ -66,39 +60,39 @@ const toHtml = (result: any) => {
       const { tagName, properties, children } = node;
       const classNames = (properties?.className || []).join(' ');
       const styleMap: { [key: string]: string } = {
-        'hljs-comment': 'color: #9ca3af; font-style: italic;', // gray-400
-        'hljs-keyword': 'color: #c084fc; font-weight: 600;', // purple-300
-        'hljs-string': 'color: #86efac;', // green-300
-        'hljs-number': 'color: #fdba74;', // orange-200
-        'hljs-built_in': 'color: #93c5fd; font-weight: 500;', // blue-300
-        'hljs-function': 'color: #93c5fd; font-weight: 500;', // blue-300
-        'hljs-variable': 'color: #bfdbfe;', // blue-200
-        'hljs-type': 'color: #5eead4;', // teal-300
-        'hljs-class': 'color: #fcd34d;', // amber-300
-        'hljs-attr': 'color: #93c5fd;', // blue-300
-        'hljs-tag': 'color: #f472b6;', // pink-300
-        'hljs-operator': 'color: #fbcfe8;', // pink-200
-        'hljs-literal': 'color: #fdba74;', // orange-200
-        'hljs-meta': 'color: #7dd3fc;', // sky-300
-        'hljs-title': 'color: #86efac;', // green-300
-        'hljs-selector-tag': 'color: #c084fc;', // purple-300
-        'hljs-regexp': 'color: #f472b6;', // pink-300
-        'hljs-symbol': 'color: #fca5a5;', // red-300
-        'hljs-bullet': 'color: #fbcfe8;', // pink-200
-        'hljs-params': 'color: #fde68a;', // yellow-200
-        'hljs-name': 'color: #93c5fd;', // blue-300
-        'hljs-attribute': 'color: #fcd34d;', // amber-300
-        'hljs-selector-attr': 'color: #67e8f9;', // cyan-300
-        'hljs-selector-pseudo': 'color: #fbcfe8;', // pink-200
-        'hljs-template-variable': 'color: #bfdbfe;', // blue-200
-        'hljs-quote': 'color: #9ca3af; font-style: italic;', // gray-400
-        'hljs-deletion': 'color: #f87171; background-color: #450a0a;', // red-400, bg-red-950
-        'hljs-addition': 'color: #4ade80; background-color: #064e3b;', // green-400, bg-green-950
-        'hljs-meta-keyword': 'color: #7dd3fc; font-weight: 600;', // sky-300
-        'hljs-meta-string': 'color: #38bdf8;', // sky-400
-        'hljs-subst': 'color: #c084fc;', // purple-300
-        'hljs-section': 'color: #86efac;', // green-300
-        'hljs-boolean': 'color: #fdba74;', // orange-200
+        'hljs-comment': 'color: #9ca3af; font-style: italic;',
+        'hljs-keyword': 'color: #c084fc; font-weight: 600;',
+        'hljs-string': 'color: #86efac;',
+        'hljs-number': 'color: #fdba74;',
+        'hljs-built_in': 'color: #93c5fd; font-weight: 500;',
+        'hljs-function': 'color: #93c5fd; font-weight: 500;',
+        'hljs-variable': 'color: #bfdbfe;',
+        'hljs-type': 'color: #5eead4;',
+        'hljs-class': 'color: #fcd34d;',
+        'hljs-attr': 'color: #93c5fd;',
+        'hljs-tag': 'color: #f472b6;',
+        'hljs-operator': 'color: #fbcfe8;',
+        'hljs-literal': 'color: #fdba74;',
+        'hljs-meta': 'color: #7dd3fc;',
+        'hljs-title': 'color: #86efac;',
+        'hljs-selector-tag': 'color: #c084fc;',
+        'hljs-regexp': 'color: #f472b6;',
+        'hljs-symbol': 'color: #fca5a5;',
+        'hljs-bullet': 'color: #fbcfe8;',
+        'hljs-params': 'color: #fde68a;',
+        'hljs-name': 'color: #93c5fd;',
+        'hljs-attribute': 'color: #fcd34d;',
+        'hljs-selector-attr': 'color: #67e8f9;',
+        'hljs-selector-pseudo': 'color: #fbcfe8;',
+        'hljs-template-variable': 'color: #bfdbfe;',
+        'hljs-quote': 'color: #9ca3af; font-style: italic;',
+        'hljs-deletion': 'color: #f87171; background-color: #450a0a;',
+        'hljs-addition': 'color: #4ade80; background-color: #064e3b;',
+        'hljs-meta-keyword': 'color: #7dd3fc; font-weight: 600;',
+        'hljs-meta-string': 'color: #38bdf8;',
+        'hljs-subst': 'color: #c084fc;',
+        'hljs-section': 'color: #86efac;',
+        'hljs-boolean': 'color: #fdba74;',
       };
 
       let style = '';
@@ -298,7 +292,6 @@ const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, image
   );
 };
 
-
 interface ChatSession {
   id: string;
   title: string;
@@ -354,8 +347,8 @@ interface TabContentProps {
   hasMoreMessages: boolean;
   onLoadOlderMessages: () => Promise<void>;
   isLoadingSessionMessages: boolean;
-  onReprocessAudio: (audioUrl: string, documentId: string) => Promise<void>; // Add reprocessAudio prop
-  onDeleteRecording: (recordingId: string, documentId: string | null, audioUrl: string | null) => Promise<void>; // Add deleteRecording prop
+  onReprocessAudio: (audioUrl: string, documentId: string) => Promise<void>;
+  onDeleteRecording: (recordingId: string, documentId: string | null, audioUrl: string | null) => Promise<void>;
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -380,7 +373,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     setActiveSidePanelContent(null);
   }, []);
 
-
   const notesProps = useMemo(() => ({
     notes: props.filteredNotes,
     activeNote: props.activeNote,
@@ -395,8 +387,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onGenerateQuiz: props.onGenerateQuiz,
     onGenerateNote: props.onGenerateNote,
     quizzes: props.quizzes,
-    onReprocessAudio: props.onReprocessAudio, // Pass reprocessAudio
-    onDeleteRecording: props.onDeleteRecording, // Pass onDeleteRecording
+    onReprocessAudio: props.onReprocessAudio,
+    onDeleteRecording: props.onDeleteRecording,
   }), [
     props.recordings,
     props.onAddRecording,
@@ -404,8 +396,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.onGenerateQuiz,
     props.onGenerateNote,
     props.quizzes,
-    props.onReprocessAudio, // Add to dependencies
-    props.onDeleteRecording, // Add to dependencies
+    props.onReprocessAudio,
+    props.onDeleteRecording,
   ]);
 
   const scheduleProps = useMemo(() => ({
@@ -494,7 +486,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onClose: onToggleNotesHistory,
   }), [props.filteredNotes, props.activeNote, props.onNoteSelect, props.onNoteDelete, isNotesHistoryOpen, onToggleNotesHistory]);
 
-
   switch (activeTab) {
     case 'notes':
       return (
@@ -506,12 +497,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             />
           )}
 
-          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
-            fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
-            w-80 bg-white border-r border-slate-200 shadow-lg lg:shadow-none
-            flex flex-col transition-transform duration-300 ease-in-out
-            lg:translate-x-0 lg:w-80
-            dark:bg-gray-900 dark:border-gray-800 dark:shadow-none`}>
+          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'} fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-80 bg-white border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-gray-900 dark:border-gray-800 dark:shadow-none`}>
             <NotesList
               {...notesHistoryProps}
               isOpen={isNotesHistoryOpen}
@@ -543,7 +529,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'recordings':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto  modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
           <ErrorBoundary>
             <ClassRecordings {...recordingsProps} />
           </ErrorBoundary>
@@ -552,7 +538,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'schedule':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto  modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
           <Schedule {...scheduleProps} />
         </div>
       );
@@ -560,15 +546,14 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     case 'chat':
       return (
         <div className="flex flex-1 min-h-0 relative">
-          <div className={`flex-1 flex min-h-0 transition-all duration-300 ease-in-out
-            ${isSidePanelOpen ? 'lg:w-2/3' : 'lg:w-full'}`}>
+          <div className={`flex-1 flex min-h-0 transition-all duration-300 ease-in-out ${isSidePanelOpen ? 'lg:w-2/3' : 'lg:w-full'}`}>
 
-            <div className={`flex-1 flex flex-col  min-w-0 ${isSidePanelOpen ? 'lg:w-1/2' : 'w-full'} dark:bg-gray-900`}>
+            <div className={`flex-1 flex flex-col min-w-0 ${isSidePanelOpen ? 'lg:w-1/2' : 'w-full'} dark:bg-gray-900`}>
               <AIChat {...chatProps} />
             </div>
 
             {isSidePanelOpen && (
-              <div className={`hidden lg:flex lg:w-1/2 flex-shrink-0 min-h-0 max-w-sm `}>
+              <div className={`hidden lg:flex lg:w-1/2 flex-shrink-0 min-h-0 max-w-sm`}>
                 <SidePanelViewer
                   type={activeSidePanelContent!.type}
                   code={activeSidePanelContent!.code}
@@ -606,14 +591,14 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'documents':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto  modern-scrollbar modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
           <DocumentUpload {...documentsProps} />
         </div>
       );
 
     case 'settings':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto  modern-scrollbar bardark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
           <LearningStyleSettings
             profile={props.userProfile}
             onProfileUpdate={props.onProfileUpdate}
