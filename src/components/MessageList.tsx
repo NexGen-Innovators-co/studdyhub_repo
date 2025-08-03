@@ -1,4 +1,5 @@
-import React, { memo, useCallback } from 'react';
+// Enhanced MessageList.tsx with typing animation
+import React, { memo, useCallback, useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -8,7 +9,8 @@ import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Document } from '../types/Document';
 import { Message } from '../types/Class';
-import { cn } from '../lib/utils'; // Assuming a utility like `cn` exists for class name management
+import { cn } from '../lib/utils';
+import { TypingAnimation } from './TypingAnimation.tsx';
 
 interface MessageListProps {
   messages: Message[];
@@ -59,6 +61,8 @@ export const MessageList = memo(({
   stopSpeech,
   isDiagramPanelOpen,
 }: MessageListProps) => {
+  const [typingMessages, setTypingMessages] = useState<Set<string>>(new Set());
+  const [completedTyping, setCompletedTyping] = useState<Set<string>>(new Set());
   let lastDate: string | null = null;
 
   const formatDate = useCallback((dateString: string): string => {
@@ -76,6 +80,29 @@ export const MessageList = memo(({
   }, []);
 
   const { copied, copy } = useCopyToClipboard();
+
+  // Track new AI messages for typing animation
+  useEffect(() => {
+    const latestMessage = messages[messages.length - 1];
+
+    if (latestMessage &&
+      latestMessage.role === 'assistant' &&
+      !latestMessage.isError &&
+      !completedTyping.has(latestMessage.id) &&
+      !isLoading) {
+
+      setTypingMessages(prev => new Set(prev).add(latestMessage.id));
+    }
+  }, [messages, isLoading, completedTyping]);
+
+  const handleTypingComplete = useCallback((messageId: string) => {
+    setTypingMessages(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(messageId);
+      return newSet;
+    });
+    setCompletedTyping(prev => new Set(prev).add(messageId));
+  }, []);
 
   const handleViewAttachedFile = useCallback((doc: Document) => {
     const fileExtension = doc.file_name.split('.').pop()?.toLowerCase();
@@ -100,28 +127,47 @@ export const MessageList = memo(({
   const MAX_USER_MESSAGE_LENGTH = 50;
 
   return (
-    <div className="flex flex-col gap-4 mb-8 bg-transparent" style={{ position: 'relative', zIndex: 1 }}> {/* Made background transparent and added zIndex */}
+    <div className="flex flex-col gap-4 mb-8 bg-transparent" style={{ position: 'relative', zIndex: 1 }}>
       {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && (
         <div className="text-center py-8 flex-grow flex flex-col justify-center items-center text-slate-400 dark:text-gray-500">
           <Bot className="h-12 w-12 mx-auto mb-4 text-slate-300 dark:text-gray-600" />
-          <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200">Welcome to your AI Study Assistant!</h3>
-          <p className="text-base md:text-lg text-slate-500 max-w-md mx-auto dark:text-gray-400">
-            I can help with questions about your notes, create study guides, explain concepts, and assist with academic work. Select documents and start chatting or use the microphone!
-          </p>
+          <TypingAnimation
+            text="Welcome to your AI Study Assistant!"
+            speed={50}
+            className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200"
+          />
+          <div className="mt-2">
+            <TypingAnimation
+              text="I can help with questions about your notes, create study guides, explain concepts, and assist with academic work. Select documents and start chatting or use the microphone!"
+              speed={25}
+              className="text-base md:text-lg text-slate-500 max-w-md mx-auto dark:text-gray-400"
+            />
+          </div>
         </div>
       )}
+
       {messages.length === 0 && isLoadingSessionMessages && (
         <div className="flex gap-3 justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-          <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading messages...</span>
+          <TypingAnimation
+            text="Loading messages..."
+            speed={100}
+            className="text-base md:text-lg text-slate-500 dark:text-gray-400"
+          />
         </div>
       )}
+
       {isLoadingOlderMessages && (
         <div className="flex justify-center py-2">
           <Loader2 className="h-5 w-5 animate-spin text-blue-500 mr-2" />
-          <span className="text-base text-slate-500 dark:text-gray-400">Loading older messages...</span>
+          <TypingAnimation
+            text="Loading older messages..."
+            speed={80}
+            className="text-base text-slate-500 dark:text-gray-400"
+          />
         </div>
       )}
+
       {messages.map((message, index) => {
         const messageDate = formatDate(message.timestamp);
         const showDateHeader = messageDate !== lastDate;
@@ -131,21 +177,36 @@ export const MessageList = memo(({
         const isLastMessage = index === messages.length - 1;
         const isExpanded = expandedMessages.has(message.content);
         const needsExpansion = isUserMessage && message.content.length > MAX_USER_MESSAGE_LENGTH;
+        const shouldType = typingMessages.has(message.id);
+        const hasCompletedTyping = completedTyping.has(message.id);
 
         const cardClasses = cn(
-          'flex flex-col max-w-full overflow-hidden rounded-lg',
+          'flex flex-col max-w-full overflow-hidden rounded-lg transition-all duration-300',
           isUserMessage
             ? 'bg-white shadow-md border border-slate-200 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100'
             : message.isError
               ? 'text-red-800 dark:text-red-300'
-              : 'bg-transparent border-none dark:bg-transparent'
+              : 'bg-transparent border-none dark:bg-transparent',
+          shouldType && 'shadow-lg transform scale-[1.01]'
         );
 
         const contentToRender = isUserMessage ? (
           <>
-            <p className="mb-2 text-base leading-relaxed whitespace-pre-wrap font-sans text-slate-800 dark:text-gray-100">
-              {needsExpansion && !isExpanded ? `${message.content.substring(0, MAX_USER_MESSAGE_LENGTH)}...` : message.content}
-            </p>
+            <div className="mb-2 text-base leading-relaxed whitespace-pre-wrap font-sans text-slate-800 dark:text-gray-100">
+              {needsExpansion && !isExpanded ? (
+                <TypingAnimation
+                  text={`${message.content.substring(0, MAX_USER_MESSAGE_LENGTH)}...`}
+                  speed={20}
+                  isActive={false} // User messages don't need typing effect
+                />
+              ) : (
+                <TypingAnimation
+                  text={message.content}
+                  speed={20}
+                  isActive={false} // User messages don't need typing effect
+                />
+              )}
+            </div>
             {needsExpansion && (
               <Button
                 variant="link"
@@ -194,15 +255,27 @@ export const MessageList = memo(({
                 }}
               />
             )}
-            <MemoizedMarkdownRenderer
-              content={message.content}
-              isUserMessage={false}
-              onMermaidError={onMermaidError}
-              onSuggestAiCorrection={onSuggestAiCorrection}
-              onViewDiagram={onViewContent}
-              onToggleUserMessageExpansion={onToggleUserMessageExpansion}
-              expandedMessages={expandedMessages}
-            />
+            {shouldType ? (
+              <div className="prose prose-lg !max-w-full leading-relaxed dark:prose-invert overflow-x-auto">
+                <TypingAnimation
+                  text={message.content}
+                  speed={25}
+                  onComplete={() => handleTypingComplete(message.id)}
+                  className="whitespace-pre-wrap"
+                  isActive={true}
+                />
+              </div>
+            ) : (
+              <MemoizedMarkdownRenderer
+                content={message.content}
+                isUserMessage={false}
+                onMermaidError={onMermaidError}
+                onSuggestAiCorrection={onSuggestAiCorrection}
+                onViewDiagram={onViewContent}
+                onToggleUserMessageExpansion={onToggleUserMessageExpansion}
+                expandedMessages={expandedMessages}
+              />
+            )}
           </>
         );
 
@@ -215,47 +288,28 @@ export const MessageList = memo(({
                 </Badge>
               </div>
             )}
-            <div className={cn('flex gap-3 group', isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto', isUserMessage ? 'justify-end' : 'justify-start')}>
+            <div className={cn(
+              'flex gap-3 group transition-all duration-300',
+              isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto',
+              isUserMessage ? 'justify-end' : 'justify-start',
+              shouldType && 'animate-pulse'
+            )}>
               {message.role === 'assistant' && (
-                <div className={cn('h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 hidden sm:flex', message.isError ? 'bg-red-500' : 'bg-transparent dark:bg-gray-700')}>
+                <div className={cn(
+                  'h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 hidden sm:flex transition-all duration-300',
+                  message.isError ? 'bg-red-500' : 'bg-gradient-to-r from-blue-600 to-purple-600',
+                  shouldType && 'animate-bounce'
+                )}>
                   {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
                 </div>
               )}
               <div className={cn('flex flex-col flex-1 min-w-0', isUserMessage ? 'items-end' : 'items-start')}>
                 <Card className={cardClasses}>
-                  <CardContent className="p-2 prose prose-lg !max-w-full leading-relaxed dark:prose-invert overflow-x-auto">
+                  <CardContent className="p-4 prose prose-lg !max-w-full leading-relaxed dark:prose-invert overflow-x-auto">
                     {contentToRender}
                     {message.attachedDocumentIds?.length > 0 && (
                       <div className={cn('mt-3 pt-3 border-t border-dashed', isUserMessage ? 'border-blue-300/50' : 'border-gray-300 dark:border-gray-600/50')}>
                         <p className={cn('text-base font-semibold mb-2', isUserMessage ? 'text-slate-700' : 'text-slate-700 dark:text-gray-100')}>Attached Files:</p>
-                        {/* <div className="flex flex-wrap gap-2">
-{message.attachedDocumentIds.map(docId => {
-const doc = mergedDocuments.find(d => d.id === docId);
-return doc ? (
-<Badge
-key={doc.id}
-variant="secondary"
-className={cn(
-'cursor-pointer hover:opacity-80 transition-opacity font-sans',
-doc.processing_status === 'pending' ? 'bg-yellow-500/30 text-yellow-800 border-yellow-400 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-700' :
-doc.processing_status === 'failed' ? 'bg-red-500/30 text-red-800 border-red-400 dark:bg-red-950 dark:text-red-300 dark:border-red-700' :
-isUserMessage ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700' :
-'bg-slate-200 text-slate-700 border-slate-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600'
-)}
-onClick={() => handleViewAttachedFile(doc)}
->
-{doc.processing_status === 'pending' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> :
-doc.processing_status === 'failed' ? <AlertTriangle className="h-3 w-3 mr-1" /> :
-<FileText className="h-3 w-3 mr-1" />}
-{doc.file_name}
-</Badge>
-) : (
-<Badge key={docId} variant="destructive" className="text-sm text-red-600 dark:text-red-400 font-sans">
-File Not Found: {docId}
-</Badge>
-);
-})}
-</div> */}
                       </div>
                     )}
                   </CardContent>
@@ -263,15 +317,18 @@ File Not Found: {docId}
                     <span className={cn('text-xs text-slate-500', isUserMessage ? 'text-gray-600 dark:text-gray-300' : 'text-slate-500 dark:text-gray-400')}>
                       {formatTime(message.timestamp)}
                     </span>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className={cn(
+                      'flex gap-1 transition-opacity duration-200',
+                      shouldType ? 'opacity-30' : 'opacity-0 group-hover:opacity-100'
+                    )}>
                       {message.role === 'assistant' && (
                         <>
-                          {isLastMessage && !isLoading && (
+                          {isLastMessage && !isLoading && hasCompletedTyping && (
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => onRegenerateClick(messages[index - 1]?.content || '')}
-                              className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
+                              className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700 transition-all duration-200"
                               title="Regenerate response"
                             >
                               <RefreshCw className="h-4 w-4" />
@@ -281,8 +338,9 @@ File Not Found: {docId}
                             variant="ghost"
                             size="icon"
                             onClick={() => copy(message.content)}
-                            className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+                            className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700 transition-all duration-200"
                             title="Copy message"
+                            disabled={shouldType}
                           >
                             <Copy className="h-4 w-4" />
                           </Button>
@@ -290,7 +348,7 @@ File Not Found: {docId}
                             variant="ghost"
                             size="icon"
                             onClick={() => onDeleteClick(message.id)}
-                            className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                            className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700 transition-all duration-200"
                             title="Delete message"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -301,7 +359,7 @@ File Not Found: {docId}
                                 variant="ghost"
                                 size="icon"
                                 onClick={isPaused ? resumeSpeech : pauseSpeech}
-                                className="h-6 w-6 rounded-full text-slate-400 hover:text-yellow-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-yellow-400 dark:hover:bg-gray-700"
+                                className="h-6 w-6 rounded-full text-slate-400 hover:text-yellow-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-yellow-400 dark:hover:bg-gray-700 transition-all duration-200"
                                 title={isPaused ? "Resume speech" : "Pause speech"}
                               >
                                 {isPaused ? <Volume2 className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
@@ -310,7 +368,7 @@ File Not Found: {docId}
                                 variant="ghost"
                                 size="icon"
                                 onClick={stopSpeech}
-                                className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                                className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700 transition-all duration-200"
                                 title="Stop speech"
                               >
                                 <Square className="h-4 w-4" />
@@ -321,9 +379,9 @@ File Not Found: {docId}
                               variant="ghost"
                               size="icon"
                               onClick={() => speakMessage(message.id, message.content)}
-                              className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
+                              className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700 transition-all duration-200"
                               title="Read aloud"
-                              disabled={isLoading}
+                              disabled={isLoading || shouldType}
                             >
                               <Volume2 className="h-4 w-4" />
                             </Button>
@@ -335,7 +393,7 @@ File Not Found: {docId}
                           variant="ghost"
                           size="icon"
                           onClick={() => onDeleteClick(message.id)}
-                          className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                          className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700 transition-all duration-200"
                           title="Delete message"
                         >
                           <X className="h-4 w-4" />
@@ -349,7 +407,7 @@ File Not Found: {docId}
                             const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
                             if (prevUserMessage) onRetryClick(prevUserMessage.content, message.id);
                           }}
-                          className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+                          className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700 transition-all duration-200"
                           title="Retry failed message"
                         >
                           <RefreshCw className="h-4 w-4" />
