@@ -502,13 +502,13 @@ const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
-      if (activeChatSessionId) {
-        await supabase
-          .from('chat_sessions')
-          .update({ document_ids: selectedDocumentIds })
-          .eq('id', activeChatSessionId)
-          .eq('user_id', userId);
-      }
+      // if (activeChatSessionId) {
+      //   await supabase
+      //     .from('chat_sessions')
+      //     .update({ document_ids: selectedDocumentIds })
+      //     .eq('id', activeChatSessionId)
+      //     .eq('user_id', userId);
+      // }
 
       // Separate document IDs and note IDs properly
       const documentIds = selectedDocumentIds.filter(id =>
@@ -960,7 +960,7 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
           <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 shadow-lg md:shadow-none md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
-            {/* {(selectedDocumentIds.length > 0 || selectedImagePreview) && (
+            {(selectedDocumentIds.length > 0 || selectedImagePreview) && (
               <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700
                 ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'}
               `}>
@@ -990,7 +990,7 @@ const AIChat: React.FC<AIChatProps> = ({
                   </Badge>
                 )}
               </div>
-            )} */}
+            )}
             <div className={`flex flex-col gap-2 p-3 rounded-lg bg-white border border-slate-200 shadow-lg dark:bg-gray-800 dark:border-gray-700 font-sans ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'} input-container`}>
               {selectedImagePreview && (
                 <div className="relative w-1/6 h-24 rounded-lg overflow-hidden flex-shrink-0 mb-2">
