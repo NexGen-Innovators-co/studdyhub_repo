@@ -1,4 +1,4 @@
-// Index.tsx
+// Index.tsx - Updated to work with optimized useAppData
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
@@ -11,12 +11,12 @@ import { Button } from '../components/ui/button';
 import { LogOut, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Message, Quiz, ClassRecording } from '../types/Class'; // Import ClassRecording
+import { Message, Quiz, ClassRecording } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { User } from '@supabase/supabase-js';
 import { generateId } from '@/utils/helpers';
-import { useAudioProcessing } from '../hooks/useAudioProcessing'; // Import useAudioProcessing to get handleGenerateNoteFromAudio and triggerAudioProcessing
+import { useAudioProcessing } from '../hooks/useAudioProcessing';
 
 interface ChatSession {
   id: string;
@@ -74,6 +74,8 @@ const Index = () => {
     filteredNotes,
     loading: dataLoading,
     quizzes,
+    dataLoading: specificDataLoading,
+    dataPagination,
     setNotes,
     setRecordings,
     setScheduleItems,
@@ -86,14 +88,22 @@ const Index = () => {
     setIsSidebarOpen,
     setActiveTab,
     setIsAILoading,
+    loadDataIfNeeded,
+    loadMoreNotes,
+    loadMoreRecordings,
+    loadMoreDocuments,
+    loadMoreSchedule,
+    loadMoreQuizzes,
   } = useAppData();
 
   // Get audio processing handlers from useAudioProcessing hook
   const {
-    handleGenerateNoteFromAudio, // This is the function we need to pass down
-    triggerAudioProcessing, // This is the function for reprocessing audio
-  } = useAudioProcessing({ onAddRecording: (rec) => setRecordings(prev => [...prev, rec]), onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r)) });
-
+    handleGenerateNoteFromAudio,
+    triggerAudioProcessing,
+  } = useAudioProcessing({ 
+    onAddRecording: (rec) => setRecordings(prev => [...prev, rec]), 
+    onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r)) 
+  });
 
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [activeChatSessionId, setActiveChatSessionId] = useState<string | null>(null);
@@ -104,7 +114,6 @@ const Index = () => {
 
   const [chatSessionsLoadedCount, setChatSessionsLoadedCount] = useState(CHAT_SESSIONS_PER_PAGE);
   const [hasMoreChatSessions, setHasMoreChatSessions] = useState(true);
-
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
 
   const currentActiveTab = useMemo(() => {
@@ -123,6 +132,25 @@ const Index = () => {
   useEffect(() => {
     setActiveTab(currentActiveTab);
   }, [currentActiveTab, setActiveTab]);
+
+  // Auto-load data when switching tabs
+  useEffect(() => {
+    switch (currentActiveTab) {
+      case 'recordings':
+        loadDataIfNeeded('recordings');
+        break;
+      case 'schedule':
+        loadDataIfNeeded('scheduleItems');
+        break;
+      case 'documents':
+        loadDataIfNeeded('documents');
+        break;
+      case 'settings':
+        // Load quizzes when accessing settings (if quizzes are shown there)
+        loadDataIfNeeded('quizzes');
+        break;
+    }
+  }, [currentActiveTab, loadDataIfNeeded]);
 
   const loadChatSessions = useCallback(async () => {
     try {
@@ -158,8 +186,6 @@ const Index = () => {
     setChatSessionsLoadedCount(prevCount => prevCount + CHAT_SESSIONS_PER_PAGE);
   }, []);
 
-  // Replace the filteredChatMessages useMemo in Index.tsx with this improved version:
-
   const filteredChatMessages = useMemo(() => {
     console.log('Filtering messages - Active session:', activeChatSessionId);
     console.log('Total messages to filter:', allChatMessages.length);
@@ -189,6 +215,7 @@ const Index = () => {
 
     return filtered;
   }, [allChatMessages, activeChatSessionId]);
+
   const loadSessionMessages = useCallback(async (sessionId: string) => {
     if (!user) return;
     setIsLoadingSessionMessages(true);
@@ -233,56 +260,7 @@ const Index = () => {
       setIsLoadingSessionMessages(false);
     }
   }, [user, setChatMessages]);
-  // Add this debug useEffect near the top of your Index component:
 
-  useEffect(() => {
-    console.log('=== DEBUG: Index.tsx data state ===');
-    console.log('User:', user?.email);
-    console.log('Loading states:', { loading, dataLoading });
-    console.log('Data counts:', {
-      notes: notes.length,
-      recordings: recordings.length,
-      scheduleItems: scheduleItems.length,
-      chatMessages: allChatMessages.length,
-      documents: documents.length,
-      quizzes: quizzes.length,
-      userProfile: !!userProfile
-    });
-    console.log('Active states:', {
-      activeNote: !!activeNote,
-      activeChatSessionId,
-      currentActiveTab
-    });
-    console.log('Chat sessions:', chatSessions.length);
-    console.log('Filtered chat messages:', filteredChatMessages.length);
-    console.log('===================================');
-  }, [user, loading, dataLoading, notes, recordings, scheduleItems, allChatMessages, documents, quizzes, userProfile, activeNote, activeChatSessionId, currentActiveTab, chatSessions, filteredChatMessages]);
-
-  // Add this debug useEffect to your Index.tsx component to monitor chat message updates:
-
-  useEffect(() => {
-    console.log('=== CHAT DEBUG: Index.tsx ===');
-    console.log('All chat messages count:', allChatMessages.length);
-    console.log('Active chat session ID:', activeChatSessionId);
-    console.log('Filtered chat messages count:', filteredChatMessages.length);
-    console.log('Recent messages:', allChatMessages.slice(-3).map(m => ({
-      id: m.id.substring(0, 8),
-      role: m.role,
-      session_id: m.session_id,
-      content: m.content.substring(0, 50) + '...',
-      timestamp: new Date(m.timestamp).toLocaleTimeString()
-    })));
-    console.log('================================');
-  }, [allChatMessages, activeChatSessionId, filteredChatMessages]);
-
-  // Also add this to monitor when messages are passed to AIChat
-  useEffect(() => {
-    console.log('=== AIChat Props Debug ===');
-    console.log('Messages passed to AIChat:', filteredChatMessages.length);
-    console.log('Is AI Loading:', isAILoading);
-    console.log('Is Submitting:', isSubmittingUserMessage);
-    console.log('============================');
-  }, [filteredChatMessages, isAILoading, isSubmittingUserMessage]);
   const handleLoadOlderChatMessages = useCallback(async () => {
     if (!activeChatSessionId || !user || filteredChatMessages.length === 0) return;
 
@@ -348,10 +326,10 @@ const Index = () => {
     if (activeChatSessionId && chatSessions.length > 0) {
       const currentSession = chatSessions.find(s => s.id === activeChatSessionId);
       if (currentSession) {
-        setSelectedDocumentIds(currentSession.document_ids || []); // Load document_ids from session
+        setSelectedDocumentIds(currentSession.document_ids || []);
       }
     } else if (!activeChatSessionId) {
-      setSelectedDocumentIds([]); // Clear only if no session is active
+      setSelectedDocumentIds([]);
     }
   }, [activeChatSessionId, chatSessions, setSelectedDocumentIds]);
 
@@ -367,7 +345,7 @@ const Index = () => {
         .insert({
           user_id: user.id,
           title: 'New Chat',
-          document_ids: selectedDocumentIds, // Ensure selectedDocumentIds are included
+          document_ids: selectedDocumentIds,
         })
         .select()
         .single();
@@ -389,7 +367,7 @@ const Index = () => {
       await loadChatSessions();
 
       setActiveChatSessionId(newSession.id);
-      setSelectedDocumentIds(newSession.document_ids || []); // Explicitly set selectedDocumentIds
+      setSelectedDocumentIds(newSession.document_ids || []);
       setHasMoreMessages(false);
 
       toast.success('New chat session created with selected documents.');
@@ -400,6 +378,7 @@ const Index = () => {
       return null;
     }
   }, [user, selectedDocumentIds, setChatSessions, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId, setSelectedDocumentIds]);
+
   const deleteChatSession = useCallback(async (sessionId: string) => {
     try {
       if (!user) return;
@@ -944,12 +923,20 @@ const Index = () => {
     isSubmittingUserMessage: isSubmittingUserMessage,
     onRetryFailedMessage: handleRetryFailedMessage,
     hasMoreMessages: hasMoreMessages,
-    onLoadOlderMessages: handleLoadOlderChatMessages, // Corrected here
+    onLoadOlderMessages: handleLoadOlderChatMessages,
     isLoadingSessionMessages: isLoadingSessionMessages,
     quizzes: quizzes,
-    onReprocessAudio: triggerAudioProcessing, // Pass triggerAudioProcessing for reprocess
-    onDeleteRecording: deleteRecording, // Pass deleteRecording
-    onGenerateNote: handleGenerateNoteFromAudio, // Pass handleGenerateNoteFromAudio
+    onReprocessAudio: triggerAudioProcessing,
+    onDeleteRecording: deleteRecording,
+    onGenerateNote: handleGenerateNoteFromAudio,
+    // New pagination props
+    dataLoading: specificDataLoading,
+    dataPagination: dataPagination,
+    onLoadMoreNotes: loadMoreNotes,
+    onLoadMoreRecordings: loadMoreRecordings,
+    onLoadMoreDocuments: loadMoreDocuments,
+    onLoadMoreSchedule: loadMoreSchedule,
+    onLoadMoreQuizzes: loadMoreQuizzes,
   }), [
     currentActiveTab,
     filteredNotes,
@@ -990,12 +977,19 @@ const Index = () => {
     isSubmittingUserMessage,
     handleRetryFailedMessage,
     hasMoreMessages,
-    handleLoadOlderChatMessages, // Dependency for onLoadOlderMessages
+    handleLoadOlderChatMessages,
     isLoadingSessionMessages,
     quizzes,
     triggerAudioProcessing,
     deleteRecording,
     handleGenerateNoteFromAudio,
+    specificDataLoading,
+    dataPagination,
+    loadMoreNotes,
+    loadMoreRecordings,
+    loadMoreDocuments,
+    loadMoreSchedule,
+    loadMoreQuizzes,
   ]);
 
   useEffect(() => {
@@ -1030,7 +1024,7 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen flex  overflow-hidden">
+    <div className="h-screen flex overflow-hidden">
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"

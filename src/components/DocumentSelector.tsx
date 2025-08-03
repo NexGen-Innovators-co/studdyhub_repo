@@ -150,7 +150,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
             disabled={localSelectedIds.length === 0 && selectedDocumentIds.length === 0}
             className="bg-blue-600 text-white shadow-md hover:bg-blue-700"
           >
-            Attach Selected
+            Save Changes
           </Button>
         </DialogFooter>
       </DialogContent>
