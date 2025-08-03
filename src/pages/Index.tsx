@@ -214,6 +214,7 @@ const Index = () => {
         imageUrl: msg.image_url || undefined,
         imageMimeType: msg.image_mime_type || undefined,
         session_id: msg.session_id,
+        has_been_displayed: msg.has_been_displayed || false,
       }));
 
       setChatMessages(prevAllMessages => {
@@ -310,6 +311,7 @@ const Index = () => {
         imageUrl: msg.image_url || undefined,
         imageMimeType: msg.image_mime_type || undefined,
         session_id: msg.session_id,
+        has_been_displayed: msg.has_been_displayed || false,
       })).reverse();
 
       setChatMessages(prevAllMessages => {

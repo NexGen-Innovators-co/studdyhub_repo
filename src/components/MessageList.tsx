@@ -11,6 +11,7 @@ import { Document } from '../types/Document';
 import { Message } from '../types/Class';
 import { cn } from '../lib/utils';
 import { TypingAnimation } from './TypingAnimation.tsx';
+import { markMessageAsDisplayed } from '../utils/messageUtils';
 
 interface MessageListProps {
   messages: Message[];
@@ -83,25 +84,33 @@ export const MessageList = memo(({
 
   // Track new AI messages for typing animation
   useEffect(() => {
-    const latestMessage = messages[messages.length - 1];
+    if (isLoading || isLoadingSessionMessages) return;
 
-    if (latestMessage &&
-      latestMessage.role === 'assistant' &&
-      !latestMessage.isError &&
-      !completedTyping.has(latestMessage.id) &&
-      !isLoading) {
+    const messagesToAnimate = messages.filter(
+      msg => msg.role === 'assistant' && 
+             !msg.isError && 
+             !msg.has_been_displayed
+    );
 
-      setTypingMessages(prev => new Set(prev).add(latestMessage.id));
+    if (messagesToAnimate.length > 0) {
+      setTypingMessages(prev => {
+        const newSet = new Set(prev);
+        messagesToAnimate.forEach(msg => newSet.add(msg.id));
+        return newSet;
+      });
     }
-  }, [messages, isLoading, completedTyping]);
+  }, [messages, isLoading, isLoadingSessionMessages]);
 
-  const handleTypingComplete = useCallback((messageId: string) => {
+  const handleTypingComplete = useCallback(async (messageId: string) => {
+    // Optimistically update UI
     setTypingMessages(prev => {
       const newSet = new Set(prev);
       newSet.delete(messageId);
       return newSet;
     });
-    setCompletedTyping(prev => new Set(prev).add(messageId));
+
+    // Update database
+    await markMessageAsDisplayed(messageId);
   }, []);
 
   const handleViewAttachedFile = useCallback((doc: Document) => {
@@ -259,7 +268,7 @@ export const MessageList = memo(({
               <div className="prose prose-lg !max-w-full leading-relaxed dark:prose-invert overflow-x-auto">
                 <TypingAnimation
                   text={message.content}
-                  speed={25}
+                  speed={1}
                   onComplete={() => handleTypingComplete(message.id)}
                   className="whitespace-pre-wrap"
                   isActive={true}
