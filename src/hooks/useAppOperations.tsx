@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'; // Added useCallback
+import { useCallback } from 'react';
 import { Note } from '../types/Note';
-import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class'; // Import Quiz
+import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import { generateId } from '../utils/helpers';
 import { toast } from 'sonner';
@@ -23,6 +23,8 @@ interface UseAppOperationsProps {
   setActiveNote: (note: Note | null) => void;
   setActiveTab: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
   setIsAILoading: (loading: boolean) => void;
+  isRealtimeConnected?: boolean;
+  refreshData?: () => void;
 }
 
 export const useAppOperations = ({
@@ -34,121 +36,158 @@ export const useAppOperations = ({
   setRecordings,
   setScheduleItems,
   setChatMessages,
-  setDocuments, // Destructure setDocuments
+  setDocuments,
   setUserProfile,
   setActiveNote,
   setActiveTab,
   setIsAILoading,
+  isRealtimeConnected = false,
+  refreshData = () => {},
 }: UseAppOperationsProps) => {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000;
 
-  const createNewNote = async () => {
+  const withRetry = async <T extends any[]>(
+    operation: (...args: T) => Promise<void>,
+    ...args: T
+  ) => {
+    let attempt = 0;
+    while (attempt < MAX_RETRIES) {
+      try {
+        await operation(...args);
+        return;
+      } catch (error) {
+        attempt++;
+        if (attempt >= MAX_RETRIES) throw error;
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+      }
+    }
+  };
+
+  const createNewNote = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      await withRetry(async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
 
-      const newNote = {
-        title: 'Untitled Note',
-        content: '',
-        category: 'general' as const,
-        tags: [],
-        user_id: user.id,
-        ai_summary: ''
-      };
+        const newNote = {
+          title: 'Untitled Note',
+          content: '',
+          category: 'general' as const,
+          tags: [],
+          user_id: user.id,
+          ai_summary: ''
+        };
 
-      const { data, error } = await supabase
-        .from('notes')
-        .insert(newNote)
-        .select()
-        .single();
+        const { data, error } = await supabase
+          .from('notes')
+          .insert(newNote)
+          .select()
+          .single();
 
-      if (error) throw error;
+        if (error) throw error;
 
-      const formattedNote: Note = {
-        id: data.id,
-        title: data.title,
-        content: data.content || '',
-        category: data.category || 'general',
-        tags: data.tags || [],
-        createdAt: new Date(data.created_at || Date.now()),
-        updatedAt: new Date(data.updated_at || Date.now()),
-        aiSummary: data.ai_summary || '',
-        document_id: ''
-      };
+        if (!isRealtimeConnected) {
+          const formattedNote: Note = {
+            id: data.id,
+            title: data.title,
+            content: data.content || '',
+            category: data.category || 'general',
+            tags: data.tags || [],
+            createdAt: new Date(data.created_at || Date.now()),
+            updatedAt: new Date(data.updated_at || Date.now()),
+            aiSummary: data.ai_summary || '',
+            document_id: data.document_id || null,
+            user_id: data.user_id
+          };
+          setNotes(prev => [formattedNote, ...prev]);
+          setActiveNote(formattedNote);
+        }
 
-      setNotes(prev => [formattedNote, ...prev]);
-      setActiveNote(formattedNote);
-      setActiveTab('notes');
+        setActiveTab('notes');
+      });
     } catch (error) {
       console.error('Error creating note:', error);
-      toast.error('Failed to create note');
+      toast.error('Failed to create note after multiple attempts');
+      if (!isRealtimeConnected) refreshData();
     }
-  };
+  }, [isRealtimeConnected, refreshData, setActiveNote, setActiveTab, setNotes]);
 
-  const updateNote = async (updatedNote: Note) => {
+  const updateNote = useCallback(async (updatedNote: Note) => {
     try {
-      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
-      if (!user) throw new Error('Not authenticated');
+      await withRetry(async () => {
+        const { data: { user } = {} } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
 
-      const { error } = await supabase
-        .from('notes')
-        .update({
-          title: updatedNote.title,
-          content: updatedNote.content,
-          category: updatedNote.category,
-          tags: updatedNote.tags,
-          ai_summary: updatedNote.aiSummary,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', updatedNote.id)
-        .eq('user_id', user.id);
+        const { error } = await supabase
+          .from('notes')
+          .update({
+            title: updatedNote.title,
+            content: updatedNote.content,
+            category: updatedNote.category,
+            tags: updatedNote.tags,
+            ai_summary: updatedNote.aiSummary,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', updatedNote.id)
+          .eq('user_id', user.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      const noteWithUpdatedTime = {
-        ...updatedNote,
-        updatedAt: new Date()
-      };
-
-      setNotes(prev =>
-        prev.map(note =>
-          note.id === updatedNote.id ? noteWithUpdatedTime : note
-        )
-      );
-      setActiveNote(noteWithUpdatedTime);
+        if (!isRealtimeConnected) {
+          const noteWithUpdatedTime = {
+            ...updatedNote,
+            updatedAt: new Date()
+          };
+          setNotes(prev =>
+            prev.map(note =>
+              note.id === updatedNote.id ? noteWithUpdatedTime : note
+            )
+          );
+          setActiveNote(noteWithUpdatedTime);
+        }
+      });
     } catch (error) {
       console.error('Error updating note:', error);
-      toast.error('Failed to update note');
+      toast.error('Failed to update note after multiple attempts');
+      if (!isRealtimeConnected) refreshData();
     }
-  };
+  }, [isRealtimeConnected, refreshData, setActiveNote, setNotes]);
 
-  const deleteNote = async (noteId: string) => {
+  const deleteNote = useCallback(async (noteId: string) => {
     try {
-      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
-      if (!user) throw new Error('Not authenticated');
+      await withRetry(async () => {
+        const { data: { user } = {} } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
 
-      const { error } = await supabase
-        .from('notes')
-        .delete()
-        .eq('id', noteId)
-        .eq('user_id', user.id);
+        const { error } = await supabase
+          .from('notes')
+          .delete()
+          .eq('id', noteId)
+          .eq('user_id', user.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      setNotes(prev => prev.filter(note => note.id !== noteId));
-      if (activeNote?.id === noteId) {
-        const remainingNotes = notes.filter(note => note.id !== noteId);
-        setActiveNote(remainingNotes.length > 0 ? remainingNotes[0] : null);
-      }
+        if (!isRealtimeConnected) {
+          setNotes(prev => prev.filter(note => note.id !== noteId));
+          if (activeNote?.id === noteId) {
+            const remainingNotes = notes.filter(note => note.id !== noteId);
+            setActiveNote(remainingNotes.length > 0 ? remainingNotes[0] : null);
+          }
+        }
+      });
     } catch (error) {
       console.error('Error deleting note:', error);
-      toast.error('Failed to delete note');
+      toast.error('Failed to delete note after multiple attempts');
+      if (!isRealtimeConnected) refreshData();
     }
-  };
+  }, [activeNote, isRealtimeConnected, notes, refreshData, setActiveNote, setNotes]);
 
   const addRecording = useCallback(async (recording: ClassRecording) => {
     try {
-      // Recording is already inserted by ClassRecordings.tsx; only update local state
-      setRecordings(prev => [recording, ...prev]);
+      await withRetry(async () => {
+        setRecordings(prev => [recording, ...prev]);
+      });
     } catch (error) {
       console.error('Error adding recording to state:', error);
       toast.error('Failed to update recordings state');
@@ -157,60 +196,136 @@ export const useAppOperations = ({
 
   const updateRecording = useCallback(async (updatedRecording: ClassRecording) => {
     try {
-      setRecordings(prev =>
-        prev.map(rec => (rec.id === updatedRecording.id ? updatedRecording : rec))
-      );
+      await withRetry(async () => {
+        setRecordings(prev =>
+          prev.map(rec => (rec.id === updatedRecording.id ? updatedRecording : rec))
+        );
+      });
     } catch (error) {
       console.error('Error updating recording in state:', error);
       toast.error('Failed to update recording state');
     }
   }, [setRecordings]);
 
-  // NEW: Delete Recording Function
-  const deleteRecording = useCallback(async (recordingId: string, documentId: string | null, audioUrl: string | null) => {
+  const deleteRecording = useCallback(async (
+    recordingId: string,
+    documentId: string | null,
+    audioUrl: string | null
+  ) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      await withRetry(async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
 
-      // 1. Delete from class_recordings table
-      const { error: recordingError } = await supabase
-        .from('class_recordings')
-        .delete()
-        .eq('id', recordingId)
-        .eq('user_id', user.id);
-
-      if (recordingError) throw new Error(`Failed to delete recording from database: ${recordingError.message}`);
-
-      // 2. Delete from documents table if a document_id is linked
-      if (documentId) {
-        const { error: documentError } = await supabase
-          .from('documents')
+        // 1. Delete recording
+        const { error: recordingError } = await supabase
+          .from('class_recordings')
           .delete()
-          .eq('id', documentId)
+          .eq('id', recordingId)
           .eq('user_id', user.id);
 
-        if (documentError) console.error(`Failed to delete linked document ${documentId}: ${documentError.message}`);
-      }
+        if (recordingError) throw recordingError;
 
-      // 3. Delete audio file from storage if audioUrl is present
-      if (audioUrl) {
-        const filePath = audioUrl.split('/public/documents/')[1]; // Extract path from public URL
-        if (filePath) {
-          const { error: storageError } = await supabase.storage
+        // 2. Delete linked document if exists
+        if (documentId) {
+          const { error: documentError } = await supabase
             .from('documents')
-            .remove([filePath]);
+            .delete()
+            .eq('id', documentId)
+            .eq('user_id', user.id);
 
-          if (storageError) console.error(`Failed to delete audio file from storage: ${storageError.message}`);
+          if (documentError) console.error('Failed to delete linked document:', documentError);
         }
-      }
 
-      setRecordings(prev => prev.filter(rec => rec.id !== recordingId));
-      toast.success('Recording deleted successfully!');
+        // 3. Delete audio file if exists
+        if (audioUrl) {
+          const filePath = audioUrl.split('/public/documents/')[1];
+          if (filePath) {
+            const { error: storageError } = await supabase.storage
+              .from('documents')
+              .remove([filePath]);
+
+            if (storageError) console.error('Failed to delete audio file:', storageError);
+          }
+        }
+
+        if (!isRealtimeConnected) {
+          setRecordings(prev => prev.filter(rec => rec.id !== recordingId));
+        }
+      });
     } catch (error: any) {
       console.error('Error deleting recording:', error);
       toast.error(`Failed to delete recording: ${error.message || 'Unknown error'}`);
+      if (!isRealtimeConnected) refreshData();
     }
-  }, [setRecordings]);
+  }, [isRealtimeConnected, refreshData, setRecordings]);
+
+  // const addRecording = useCallback(async (recording: ClassRecording) => {
+  //   try {
+  //     // Recording is already inserted by ClassRecordings.tsx; only update local state
+  //     setRecordings(prev => [recording, ...prev]);
+  //   } catch (error) {
+  //     console.error('Error adding recording to state:', error);
+  //     toast.error('Failed to update recordings state');
+  //   }
+  // }, [setRecordings]);
+
+  // const updateRecording = useCallback(async (updatedRecording: ClassRecording) => {
+  //   try {
+  //     setRecordings(prev =>
+  //       prev.map(rec => (rec.id === updatedRecording.id ? updatedRecording : rec))
+  //     );
+  //   } catch (error) {
+  //     console.error('Error updating recording in state:', error);
+  //     toast.error('Failed to update recording state');
+  //   }
+  // }, [setRecordings]);
+
+  // // NEW: Delete Recording Function
+  // const deleteRecording = useCallback(async (recordingId: string, documentId: string | null, audioUrl: string | null) => {
+  //   try {
+  //     const { data: { user } } = await supabase.auth.getUser();
+  //     if (!user) throw new Error('Not authenticated');
+
+  //     // 1. Delete from class_recordings table
+  //     const { error: recordingError } = await supabase
+  //       .from('class_recordings')
+  //       .delete()
+  //       .eq('id', recordingId)
+  //       .eq('user_id', user.id);
+
+  //     if (recordingError) throw new Error(`Failed to delete recording from database: ${recordingError.message}`);
+
+  //     // 2. Delete from documents table if a document_id is linked
+  //     if (documentId) {
+  //       const { error: documentError } = await supabase
+  //         .from('documents')
+  //         .delete()
+  //         .eq('id', documentId)
+  //         .eq('user_id', user.id);
+
+  //       if (documentError) console.error(`Failed to delete linked document ${documentId}: ${documentError.message}`);
+  //     }
+
+  //     // 3. Delete audio file from storage if audioUrl is present
+  //     if (audioUrl) {
+  //       const filePath = audioUrl.split('/public/documents/')[1]; // Extract path from public URL
+  //       if (filePath) {
+  //         const { error: storageError } = await supabase.storage
+  //           .from('documents')
+  //           .remove([filePath]);
+
+  //         if (storageError) console.error(`Failed to delete audio file from storage: ${storageError.message}`);
+  //       }
+  //     }
+
+  //     setRecordings(prev => prev.filter(rec => rec.id !== recordingId));
+  //     toast.success('Recording deleted successfully!');
+  //   } catch (error: any) {
+  //     console.error('Error deleting recording:', error);
+  //     toast.error(`Failed to delete recording: ${error.message || 'Unknown error'}`);
+  //   }
+  // }, [setRecordings]);
 
 
   const generateQuiz = async (recording: ClassRecording, quiz: Quiz) => {
@@ -301,61 +416,63 @@ export const useAppOperations = ({
       toast.error('Failed to delete schedule item');
     }
   };
-
-  // Updated sendChatMessage to only insert into DB, relying on real-time listener for state update
-  const sendChatMessage = async (
+  const sendChatMessage = useCallback(async (
     messageContent: string,
+    session_id?: string,
     attachedDocumentIds?: string[],
     attachedNoteIds?: string[],
-    imageUrl?: string, // New: imageUrl for storage
-    imageMimeType?: string, // New: imageMimeType for storage
+    imageUrl?: string,
+    imageMimeType?: string
   ) => {
     try {
-      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
-      if (!user) throw new Error('Not authenticated');
+      await withRetry(async () => {
+        const { data: { user } = {} } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
 
-      const userMessageId = generateId(); // Generate ID for the user message
+        const userMessageId = generateId();
 
-      // Insert the user message with attached IDs into the database
-      const { error: insertError } = await supabase
-        .from('chat_messages')
-        .insert({
-          id: userMessageId, // Use the generated ID
-          content: messageContent,
-          role: 'user',
-          timestamp: new Date().toISOString(),
-          user_id: user.id,
-          attached_document_ids: attachedDocumentIds || [],
-          attached_note_ids: attachedNoteIds || [],
-          image_url: imageUrl || null, // Store image URL
-          image_mime_type: imageMimeType || null, // Store image MIME type
-        });
+        const { error: insertError } = await supabase
+          .from('chat_messages')
+          .insert({
+            id: userMessageId,
+            content: messageContent,
+            role: 'user',
+            timestamp: new Date().toISOString(),
+            user_id: user.id,
+            attached_document_ids: attachedDocumentIds || [],
+            attached_note_ids: attachedNoteIds || [],
+            image_url: imageUrl || null,
+            image_mime_type: imageMimeType || null,
+            session_id: session_id || null,
+          });
 
-      if (insertError) {
-        console.error('Error inserting user message into DB:', insertError);
-        throw insertError;
-      }
-      toast.success('Message sent!');
+        if (insertError) throw insertError;
 
-      // NO LONGER SETTING LOCAL STATE HERE.
-      // The real-time listener in useAppData will pick up this insert and update the state.
+        if (!isRealtimeConnected) {
+          const newMessage: Message = {
+            id: userMessageId,
+            content: messageContent,
+            role: 'user',
+            timestamp: new Date().toISOString(),
+            isError: false,
+            attachedDocumentIds: attachedDocumentIds || [],
+            attachedNoteIds: attachedNoteIds || [],
+            imageUrl,
+            imageMimeType,
+            session_id: session_id || undefined,
+          };
+          setChatMessages(prev => [...prev, newMessage]);
+        }
 
-      // The AI response generation is assumed to be handled by a backend function
-      // (e.g., a Supabase Edge Function triggered by the 'chat_messages' insert).
-      // This backend function will read the message, its attached IDs, fetch content,
-      // call the LLM, and then insert the AI's response into 'chat_messages'.
-      // The real-time listener in useAppData will then pick up the AI's response.
-
+        toast.success('Message sent!');
+      });
     } catch (error) {
-      toast.error('Failed to send message.');
+      toast.error('Failed to send message after multiple attempts');
       console.error('Error in sendChatMessage:', error);
-      // If the initial insert of the user message fails, we need to handle it.
-      // The UI will not show the user message if it's not inserted into DB and picked up by listener.
-      // For now, rely on the toast for feedback.
-    } finally {
-      // setIsAILoading(false); // This should be managed by Index.tsx based on AI response status
+      if (!isRealtimeConnected) refreshData();
     }
-  };
+  }, [isRealtimeConnected, refreshData, setChatMessages]);
+
 
 
   const handleDocumentUploaded = async (document: Document) => {
@@ -451,15 +568,15 @@ export const useAppOperations = ({
     updateNote,
     deleteNote,
     addRecording,
-    updateRecording, // Expose new updateRecording
-    deleteRecording, // NEW: Expose deleteRecording
+    updateRecording,
+    deleteRecording,
     generateQuiz,
     addScheduleItem,
     updateScheduleItem,
     deleteScheduleItem,
-    sendChatMessage, // Updated function
+    sendChatMessage,
     handleDocumentUploaded,
-    updateDocument, // EXPOSE NEW FUNCTION
+    updateDocument,
     handleDocumentDeleted,
     handleProfileUpdate,
   };

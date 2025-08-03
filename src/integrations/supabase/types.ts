@@ -103,10 +103,10 @@ export type Database = {
           session_id: string | null
           timestamp: string | null
           user_id: string
-          imageUrl?: string;
-          imageMimeType?: string;
-          attachedDocumentIds?: string[] | null; // Array of document IDs attached to this message
-          attachedNoteIds?: string[] | null; // Array of note IDs attached to this message
+          image_url?: string;
+          image_mime_type?: string;
+            attached_document_ids?: string[] | null; // Array of document IDs attached to this message
+            attached_note_ids?: string[] | null; // Array of note IDs attached to this message
         }
         Insert: {
           content: string
@@ -116,10 +116,10 @@ export type Database = {
           session_id?: string | null
           timestamp?: string | null
           user_id: string
-          imageUrl?: string;
-          imageMimeType?: string;
-          attachedDocumentIds?: string[] | null; // Array of document IDs attached to this message
-          attachedNoteIds?: string[] | null; // Array of note IDs attached to this message
+          image_url?: string;
+          image_mime_type?: string;
+            attached_document_ids?: string[] | null; // Array of document IDs attached to this message
+            attached_note_ids?: string[] | null; // Array of note IDs attached to this message
         }
         Update: {
           content?: string
@@ -129,10 +129,10 @@ export type Database = {
           session_id?: string | null
           timestamp?: string | null
           user_id?: string
-          imageUrl?: string;
-          imageMimeType?: string;
-          attachedDocumentIds?: string[] | null; // Array of document IDs attached to this message
-          attachedNoteIds?: string[] | null; // Array of note IDs attached to this message
+          image_url?: string;
+          image_mime_type?: string;
+            attached_document_ids?: string[] | null; // Array of document IDs attached to this message
+            attached_note_ids?: string[] | null; // Array of note IDs attached to this message
         }
         Relationships: [
           {

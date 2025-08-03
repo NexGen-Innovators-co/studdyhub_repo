@@ -423,17 +423,17 @@ const AIChat: React.FC<AIChatProps> = ({
     setPanOffset({ x: 0, y: 0 });
   }, []);
 
-  const handleToggleFullScreen = useCallback(() => {
-    setIsFullScreen(prev => !prev);
-  }, []);
+  // const handleToggleFullScreen = useCallback(() => {
+  //   setIsFullScreen(prev => !prev);
+  // }, []);
 
-  const handleZoomIn = useCallback(() => {
-    setZoomLevel(prev => Math.min(prev + 0.1, 2));
-  }, []);
+  // const handleZoomIn = useCallback(() => {
+  //   setZoomLevel(prev => Math.min(prev + 0.1, 2));
+  // }, []);
 
-  const handleZoomOut = useCallback(() => {
-    setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
-  }, []);
+  // const handleZoomOut = useCallback(() => {
+  //   setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
+  // }, []);
 
   const handleToggleUserMessageExpansion = useCallback((messageContent: string) => {
     setExpandedMessages(prev => {
@@ -491,18 +491,16 @@ const AIChat: React.FC<AIChatProps> = ({
       toast.error('Please enter a message, attach an image, or select documents/notes.');
       return;
     }
-
-    setIsLoading(true);
-
+  
     try {
       const userId = userProfile?.id;
-
+  
       if (!userId) {
         toast.error("User ID is missing. Please ensure you are logged in.");
         setIsLoading(false);
         return;
       }
-
+  
       if (activeChatSessionId) {
         await supabase
           .from('chat_sessions')
@@ -510,16 +508,43 @@ const AIChat: React.FC<AIChatProps> = ({
           .eq('id', activeChatSessionId)
           .eq('user_id', userId);
       }
-
+  
+      // Separate document IDs and note IDs properly
+      const documentIds = selectedDocumentIds.filter(id => 
+        documents.some(doc => doc.id === id)
+      );
+      
+      const noteIds = selectedDocumentIds.filter(id => 
+        notes.some(note => note.id === id)
+      );
+  
+      // Handle image data properly
+      let imageUrl: string | undefined;
+      let imageMimeType: string | undefined;
+      let imageDataBase64: string | undefined;
+  
+      if (selectedImageFile && selectedImagePreview) {
+        imageUrl = selectedImagePreview; // This should be the display URL
+        imageMimeType = selectedImageFile.type;
+        
+        // Convert file to base64 for backend processing
+        const reader = new FileReader();
+        imageDataBase64 = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(selectedImageFile);
+        });
+      }
+  
       await onSendMessageToBackend(
         inputMessage.trim(),
-        selectedDocumentIds.filter(id => documents.some(doc => doc.id === id)),
-        selectedDocumentIds.filter(id => notes.some(note => note.id === id)),
-        selectedImagePreview || undefined,
-        selectedImageFile?.type || undefined,
-        selectedImagePreview || undefined
+        documentIds,        // Only actual document IDs
+        noteIds,           // Only actual note IDs  
+        imageUrl,
+        imageMimeType,
+        imageDataBase64,   // Proper base64 data for backend
       );
-
+  
+      // Clear form
       setInputMessage('');
       setSelectedImageFile(null);
       setSelectedImagePreview(null);
@@ -529,14 +554,12 @@ const AIChat: React.FC<AIChatProps> = ({
       if (cameraInputRef.current) {
         cameraInputRef.current.value = '';
       }
-
-      toast.success("Message sent successfully!");
-
+  
     } catch (error: any) {
       console.error("Error sending message:", error);
-
+  
       let errorMessage = 'Failed to send message.';
-
+  
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = 'Network error: Unable to connect to the server. Please check your internet connection.';
       } else if (error.message.includes('401')) {
@@ -548,13 +571,23 @@ const AIChat: React.FC<AIChatProps> = ({
       } else if (error.message) {
         errorMessage = error.message;
       }
-
+  
       toast.error(`Error: ${errorMessage}`);
-
+  
     } finally {
       setIsLoading(false);
     }
-  }, [inputMessage, selectedImageFile, selectedImagePreview, userProfile, selectedDocumentIds, documents, notes, activeChatSessionId, onSendMessageToBackend]);
+  }, [
+    inputMessage, 
+    selectedImageFile, 
+    selectedImagePreview, 
+    userProfile, 
+    selectedDocumentIds, 
+    documents, 
+    notes, 
+    activeChatSessionId, 
+    onSendMessageToBackend
+  ]);
 
   const handleGenerateImageFromText = useCallback(async () => {
     if (!imagePrompt.trim()) {
@@ -844,7 +877,7 @@ const AIChat: React.FC<AIChatProps> = ({
               stopSpeech={stopSpeech}
               isDiagramPanelOpen={isDiagramPanelOpen}
             />
-            {isLoading && !isLoadingSessionMessages && (
+            {isLoading && isSubmittingUserMessage && (
               <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
                   <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
@@ -878,7 +911,7 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
           <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 shadow-lg md:shadow-none md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
-            {(selectedDocumentIds.length > 0 || selectedImagePreview) && (
+            {/* {(selectedDocumentIds.length > 0 || selectedImagePreview) && (
               <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700
                 ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'}
               `}>
@@ -908,7 +941,7 @@ const AIChat: React.FC<AIChatProps> = ({
                   </Badge>
                 )}
               </div>
-            )}
+            )} */}
             <div className={`flex flex-col gap-2 p-3 rounded-lg bg-white border border-slate-200 shadow-lg dark:bg-gray-800 dark:border-gray-700 font-sans ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'} input-container`}>
               {selectedImagePreview && (
                 <div className="relative w-1/6 h-24 rounded-lg overflow-hidden flex-shrink-0 mb-2">
@@ -998,10 +1031,10 @@ const AIChat: React.FC<AIChatProps> = ({
                   type="submit"
                   onClick={handleSendMessage}
                   disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && !selectedImageFile && selectedDocumentIds.length === 0)}
-                  className="bg-blue-600 hover:bg-blue-900 text-white shadow-md disabled:opacity-50 h-10 w-10 flex-shrink-0 rounded-lg p-0 font-sans"
+                  className="bg-blue-600  hover:bg-blue-900 text-white shadow-md disabled:opacity-50 h-10 w-10 flex-shrink-0 rounded-lg p-0 font-sans"
                   title="Send Message"
                 >
-                  {isLoading || isSubmittingUserMessage ? (
+                  { isSubmittingUserMessage ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />

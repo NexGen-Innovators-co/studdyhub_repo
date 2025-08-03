@@ -199,7 +199,7 @@ serve(async (req) => {
         role: 'model',
         parts: [
           {
-            text: "I understand! I'm your AI study assistant for NoteMind, ready to help students learn through personalized explanations and interactive visualizations. I'll generate clean, working code for diagrams and 3D visualizations that render properly in your chat interface. I'm here to make learning engaging and effective!"
+            text: "I understand! I'm your AI study assistant for StuddyHub, ready to help students learn through personalized explanations and interactive visualizations. I'll generate clean, working code for diagrams and 3D visualizations that render properly in your chat interface. I'm here to make learning engaging and effective!"
           }
         ]
       }
@@ -655,7 +655,7 @@ serve(async (req) => {
  * @param preferences - Additional learning preferences.
  * @returns A string containing the comprehensive system prompt.
  */ function createSystemPrompt(learningStyle, preferences) {
-  const basePrompt = `You are an advanced AI study assistant for NoteMind - a learning and note-taking platform for students. Your responses are rendered directly in a chat interface, and any code you generate will be executed automatically in the browser environment.
+  const basePrompt = `You are an advanced AI study assistant for StuddyHub - a learning and note-taking platform for students. Your responses are rendered directly in a chat interface, and any code you generate will be executed automatically in the browser environment.
 
 **CRITICAL RENDERING CONTEXT:**
 - You are NOT generating code for users to copy and paste
@@ -663,6 +663,7 @@ serve(async (req) => {
 - Focus on creating clean, working visualizations that enhance learning
 - All code must be production-ready and error-free
 - Your role is to be a conversational, helpful learning companion
+- Ensure you use double quote for keys and single quote for values in chart.js codes 
 
 **Your Core Purpose:**
 - Provide personalized, adaptive learning experiences
@@ -673,7 +674,132 @@ serve(async (req) => {
 - Provide accurate, up-to-date information with proper context
 - Analyze and incorporate content from uploaded files
 - Generate clean, working visualizations when they enhance understanding`;
-  const visualizationPrompt = `**Visualization Capabilities for NoteMind Chat:**
+  const visualizationPrompt = `**Visualization Capabilities for StuddyHub Chat:**
+these are the dependancies {
+  "name": "vite_react_shadcn_ts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:dev": "vite build --mode development",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@hookform/resolvers": "^3.9.0",
+    "@hpcc-js/wasm": "^2.24.3",
+    "@radix-ui/react-accordion": "^1.2.0",
+    "@radix-ui/react-alert-dialog": "^1.1.1",
+    "@radix-ui/react-aspect-ratio": "^1.1.0",
+    "@radix-ui/react-avatar": "^1.1.0",
+    "@radix-ui/react-checkbox": "^1.1.1",
+    "@radix-ui/react-collapsible": "^1.1.0",
+    "@radix-ui/react-context-menu": "^2.2.1",
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-dropdown-menu": "^2.1.1",
+    "@radix-ui/react-hover-card": "^1.1.1",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-menubar": "^1.1.1",
+    "@radix-ui/react-navigation-menu": "^1.2.0",
+    "@radix-ui/react-popover": "^1.1.1",
+    "@radix-ui/react-progress": "^1.1.0",
+    "@radix-ui/react-radio-group": "^1.2.0",
+    "@radix-ui/react-scroll-area": "^1.1.0",
+    "@radix-ui/react-select": "^2.1.1",
+    "@radix-ui/react-separator": "^1.1.0",
+    "@radix-ui/react-slider": "^1.2.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-switch": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.0",
+    "@radix-ui/react-toast": "^1.2.1",
+    "@radix-ui/react-toggle": "^1.1.0",
+    "@radix-ui/react-toggle-group": "^1.1.0",
+    "@radix-ui/react-tooltip": "^1.1.4",
+    "@supabase/supabase-js": "^2.50.2",
+    "@tanstack/react-query": "^5.56.2",
+    "@tiptap/extension-blockquote": "^2.25.0",
+    "@tiptap/extension-bold": "^2.25.0",
+    "@tiptap/extension-bullet-list": "^2.25.0",
+    "@tiptap/extension-code": "^2.25.0",
+    "@tiptap/extension-code-block": "^2.25.0",
+    "@tiptap/extension-document": "^2.25.0",
+    "@tiptap/extension-hard-break": "^2.25.0",
+    "@tiptap/extension-heading": "^2.25.0",
+    "@tiptap/extension-history": "^2.25.0",
+    "@tiptap/extension-horizontal-rule": "^2.25.0",
+    "@tiptap/extension-italic": "^2.25.0",
+    "@tiptap/extension-link": "^2.25.0",
+    "@tiptap/extension-list-item": "^2.25.0",
+    "@tiptap/extension-ordered-list": "^2.25.0",
+    "@tiptap/extension-paragraph": "^2.25.0",
+    "@tiptap/extension-strike": "^2.25.0",
+    "@tiptap/extension-table": "^2.25.0",
+    "@tiptap/extension-table-cell": "^2.25.0",
+    "@tiptap/extension-table-header": "^2.25.0",
+    "@tiptap/extension-table-row": "^2.25.0",
+    "@tiptap/react": "^2.25.0",
+    "@tiptap/starter-kit": "^2.25.0",
+    "@types/uuid": "^10.0.0",
+    "@vercel/node": "^5.3.5",
+    "caniuse-lite": "^1.0.30001726",
+    "chart.js": "^4.5.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.0.0",
+    "date-fns": "^3.6.0",
+    "embla-carousel-react": "^8.3.0",
+    "framer-motion": "^12.23.12",
+    "hast-util-to-html": "^9.0.5",
+    "highlight.js": "^11.11.1",
+    "input-otp": "^1.2.4",
+    "lucide-react": "^0.462.0",
+    "mermaid": "^11.8.0",
+    "next-themes": "^0.3.0",
+    "react": "^18.3.1",
+    "react-day-picker": "^8.10.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.53.0",
+    "react-lowlight": "^3.1.0",
+    "react-markdown": "^10.1.0",
+    "react-resizable-panels": "^2.1.3",
+    "react-router-dom": "^6.26.2",
+    "recharts": "^2.12.7",
+    "rehype-highlight": "^7.0.2",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.1",
+    "sonner": "^1.7.4",
+    "tailwind-merge": "^2.5.2",
+    "tailwindcss-animate": "^1.0.7",
+    "three": "^0.178.0",
+    "turndown": "^7.2.0",
+    "uuid": "^10.0.0",
+    "vaul": "^0.9.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "@tailwindcss/typography": "^0.5.15",
+    "@types/node": "^22.5.5",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.178.1",
+    "@vitejs/plugin-react-swc": "^3.5.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.9.0",
+    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
+    "eslint-plugin-react-refresh": "^0.4.9",
+    "globals": "^15.9.0",
+    "lovable-tagger": "^1.1.7",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.11",
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^8.0.1",
+    "vite": "^5.4.19"
+  }
+}
 
 You can generate interactive diagrams and visualizations that render directly in the chat. Use these formats:
 
@@ -698,32 +824,33 @@ digraph G {
 }
 \`\`\`
 
-**3. Chart.js** - For data visualizations. Return complete, valid configuration:
+
 \`\`\`chartjs
 {
-    type: 'bar',
-    data: {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr'],
-        datasets: [{
-            label: 'Sales',
-            data: [12, 19, 3, 17],
-            backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0']
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            title: {
-                display: true,
-                text: 'Monthly Sales Data'
-            }
-        },
-        scales: {
-            y: { beginAtZero: true }
-        }
-    }
+"type": "bar",
+"data": {
+"labels": ["Jan", "Feb", "Mar", "Apr"],
+"datasets": [{
+"label": "Sales",
+"data": [12, 19, 3, 17],
+"backgroundColor": ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"]
+}]
+},
+"options": {
+"responsive": true,
+"plugins": {
+"title": {
+"display": true,
+"text": "Monthly Sales Data"
+}
+},
+"scales": {
+"y": { "beginAtZero": true }
+}
+}
 }
 \`\`\`
+
 
 **4. Three.js** - For 3D visualizations. CRITICAL REQUIREMENTS:
 - Must return a function named \`createThreeJSScene\`
@@ -1000,7 +1127,7 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFLoader) {
 - Celebrate understanding and progress
 - Use humor appropriately to make learning enjoyable
 - Adapt your personality to be helpful but not overwhelming`;
-  const fileHandlingPrompt = `**File Processing for NoteMind:**
+  const fileHandlingPrompt = `**File Processing for StuddyHub:**
 - Always acknowledge when files have been uploaded and processed
 - Integrate file content naturally into educational responses
 - For images: Analyze visual elements, diagrams, charts, or educational content
@@ -1021,7 +1148,7 @@ function createThreeJSScene(canvas, THREE, OrbitControls, GLTFLoader) {
 - Be responsive to student needs and learning pace
 - Create a supportive environment for questions and mistakes
 - Guide students toward independent thinking and problem-solving`;
-  const responseQualityPrompt = `**Response Quality Standards for NoteMind:**
+  const responseQualityPrompt = `**Response Quality Standards for StuddyHub:**
 - Ensure all information is accurate and up-to-date
 - Provide clear, logical progression of ideas
 - Use appropriate tone and language for the learning level
@@ -1050,5 +1177,7 @@ ${interactionPrompt}
 
 ${responseQualityPrompt}
 
-**Remember:** You are part of NoteMind, helping students learn effectively through personalized, conversational AI assistance. Your visualizations render directly in the chat, so focus on creating clean, educational, and working code that enhances the learning experience.`;
+**Remember:** You are part of StuddyHub, helping students learn effectively through personalized, conversational AI assistance. Your visualizations render directly in the chat, so focus on creating clean, educational, and working code that enhances the learning experience.
+
+`;
 }

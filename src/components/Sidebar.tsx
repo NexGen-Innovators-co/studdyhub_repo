@@ -232,7 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className={`bg-white border-r h-full border-slate-200 transition-all duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'
       } fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg lg:shadow-none
     lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden
-    dark:bg-gray-900 dark:border-gray-700`}> {/* Added dark mode classes */}
+    dark:bg-gray-900 dark:border-gray-600`}> {/* Added dark mode classes */}
 
       {/* Content area, takes up remaining vertical space and allows scrolling */}
       <div className="p-6 sm:p-4 flex-1 overflow-y-auto modern-scrollbar"> { }
