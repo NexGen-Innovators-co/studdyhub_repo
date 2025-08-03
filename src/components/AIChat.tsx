@@ -14,6 +14,7 @@ import { generateId } from '@/utils/helpers';
 import { MessageList } from './MessageList';
 import { ConfirmationModal } from './ConfirmationModal';
 import { Message } from '../types/Class';
+import { TypingAnimation } from './TypingAnimation';
 
 // Declare Web Speech API types for TypeScript
 interface SpeechRecognition extends EventTarget {
@@ -491,16 +492,16 @@ const AIChat: React.FC<AIChatProps> = ({
       toast.error('Please enter a message, attach an image, or select documents/notes.');
       return;
     }
-  
+
     try {
       const userId = userProfile?.id;
-  
+
       if (!userId) {
         toast.error("User ID is missing. Please ensure you are logged in.");
         setIsLoading(false);
         return;
       }
-  
+
       if (activeChatSessionId) {
         await supabase
           .from('chat_sessions')
@@ -508,25 +509,25 @@ const AIChat: React.FC<AIChatProps> = ({
           .eq('id', activeChatSessionId)
           .eq('user_id', userId);
       }
-  
+
       // Separate document IDs and note IDs properly
-      const documentIds = selectedDocumentIds.filter(id => 
+      const documentIds = selectedDocumentIds.filter(id =>
         documents.some(doc => doc.id === id)
       );
-      
-      const noteIds = selectedDocumentIds.filter(id => 
+
+      const noteIds = selectedDocumentIds.filter(id =>
         notes.some(note => note.id === id)
       );
-  
+
       // Handle image data properly
       let imageUrl: string | undefined;
       let imageMimeType: string | undefined;
       let imageDataBase64: string | undefined;
-  
+
       if (selectedImageFile && selectedImagePreview) {
         imageUrl = selectedImagePreview; // This should be the display URL
         imageMimeType = selectedImageFile.type;
-        
+
         // Convert file to base64 for backend processing
         const reader = new FileReader();
         imageDataBase64 = await new Promise<string>((resolve) => {
@@ -534,7 +535,7 @@ const AIChat: React.FC<AIChatProps> = ({
           reader.readAsDataURL(selectedImageFile);
         });
       }
-  
+
       await onSendMessageToBackend(
         inputMessage.trim(),
         documentIds,        // Only actual document IDs
@@ -543,7 +544,7 @@ const AIChat: React.FC<AIChatProps> = ({
         imageMimeType,
         imageDataBase64,   // Proper base64 data for backend
       );
-  
+
       // Clear form
       setInputMessage('');
       setSelectedImageFile(null);
@@ -554,12 +555,12 @@ const AIChat: React.FC<AIChatProps> = ({
       if (cameraInputRef.current) {
         cameraInputRef.current.value = '';
       }
-  
+
     } catch (error: any) {
       console.error("Error sending message:", error);
-  
+
       let errorMessage = 'Failed to send message.';
-  
+
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = 'Network error: Unable to connect to the server. Please check your internet connection.';
       } else if (error.message.includes('401')) {
@@ -571,21 +572,21 @@ const AIChat: React.FC<AIChatProps> = ({
       } else if (error.message) {
         errorMessage = error.message;
       }
-  
+
       toast.error(`Error: ${errorMessage}`);
-  
+
     } finally {
       setIsLoading(false);
     }
   }, [
-    inputMessage, 
-    selectedImageFile, 
-    selectedImagePreview, 
-    userProfile, 
-    selectedDocumentIds, 
-    documents, 
-    notes, 
-    activeChatSessionId, 
+    inputMessage,
+    selectedImageFile,
+    selectedImagePreview,
+    userProfile,
+    selectedDocumentIds,
+    documents,
+    notes,
+    activeChatSessionId,
     onSendMessageToBackend
   ]);
 
@@ -779,6 +780,50 @@ const AIChat: React.FC<AIChatProps> = ({
     <>
       <style>
         {`
+
+                @keyframes typewriter {
+            from { width: 0; }
+            to { width: 100%; }
+          }
+
+          @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+          }
+
+          .typing-cursor {
+            animation: blink 1s infinite;
+          }
+
+          .message-appear {
+            animation: slideInUp 0.3s ease-out;
+          }
+
+          @keyframes slideInUp {
+            from {
+              opacity: 0;
+              transform: translateY(20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+
+          .bot-thinking {
+            animation: pulse 2s ease-in-out infinite;
+          }
+
+          @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+          }
+
+          .message-typing {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+            transition: box-shadow 0.3s ease;
+          }
           .mic-active {
             background-color: #fef2f2;
             animation: pulse 1.5s infinite;
@@ -880,14 +925,16 @@ const AIChat: React.FC<AIChatProps> = ({
             {isLoading && isSubmittingUserMessage && (
               <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center animate-pulse">
                     <Bot className="h-4 w-4 text-white" />
                   </div>
                   <div className="w-fit p-3 rounded-lg bg-white shadow-sm border border-slate-200 dark:bg-gray-800 dark:border-gray-700">
                     <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse dark:bg-gray-500"></div>
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-75 dark:bg-gray-500"></div>
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-150 dark:bg-gray-500"></div>
+                      <TypingAnimation
+                        text="Thinking..."
+                        speed={150}
+                        className="text-slate-400 dark:text-gray-500"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1034,7 +1081,7 @@ const AIChat: React.FC<AIChatProps> = ({
                   className="bg-blue-600  hover:bg-blue-900 text-white shadow-md disabled:opacity-50 h-10 w-10 flex-shrink-0 rounded-lg p-0 font-sans"
                   title="Send Message"
                 >
-                  { isSubmittingUserMessage ? (
+                  {isSubmittingUserMessage ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
