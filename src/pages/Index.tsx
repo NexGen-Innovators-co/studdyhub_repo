@@ -158,14 +158,37 @@ const Index = () => {
     setChatSessionsLoadedCount(prevCount => prevCount + CHAT_SESSIONS_PER_PAGE);
   }, []);
 
+  // Replace the filteredChatMessages useMemo in Index.tsx with this improved version:
+
   const filteredChatMessages = useMemo(() => {
+    console.log('Filtering messages - Active session:', activeChatSessionId);
+    console.log('Total messages to filter:', allChatMessages.length);
+
     if (!activeChatSessionId) {
+      console.log('No active session, returning empty array');
       return [];
     }
-    return allChatMessages.filter(msg => msg.session_id === activeChatSessionId)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  }, [allChatMessages, activeChatSessionId]);
 
+    const filtered = allChatMessages
+      .filter(msg => {
+        const matches = msg.session_id === activeChatSessionId;
+        if (!matches) {
+          console.log(`Message ${msg.id} session ${msg.session_id} doesn't match active session ${activeChatSessionId}`);
+        }
+        return matches;
+      })
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    console.log('Filtered messages count:', filtered.length);
+    console.log('Filtered messages:', filtered.map(m => ({
+      id: m.id.substring(0, 8),
+      role: m.role,
+      timestamp: new Date(m.timestamp).toLocaleTimeString(),
+      session_id: m.session_id
+    })));
+
+    return filtered;
+  }, [allChatMessages, activeChatSessionId]);
   const loadSessionMessages = useCallback(async (sessionId: string) => {
     if (!user) return;
     setIsLoadingSessionMessages(true);
@@ -209,7 +232,56 @@ const Index = () => {
       setIsLoadingSessionMessages(false);
     }
   }, [user, setChatMessages]);
+  // Add this debug useEffect near the top of your Index component:
 
+  useEffect(() => {
+    console.log('=== DEBUG: Index.tsx data state ===');
+    console.log('User:', user?.email);
+    console.log('Loading states:', { loading, dataLoading });
+    console.log('Data counts:', {
+      notes: notes.length,
+      recordings: recordings.length,
+      scheduleItems: scheduleItems.length,
+      chatMessages: allChatMessages.length,
+      documents: documents.length,
+      quizzes: quizzes.length,
+      userProfile: !!userProfile
+    });
+    console.log('Active states:', {
+      activeNote: !!activeNote,
+      activeChatSessionId,
+      currentActiveTab
+    });
+    console.log('Chat sessions:', chatSessions.length);
+    console.log('Filtered chat messages:', filteredChatMessages.length);
+    console.log('===================================');
+  }, [user, loading, dataLoading, notes, recordings, scheduleItems, allChatMessages, documents, quizzes, userProfile, activeNote, activeChatSessionId, currentActiveTab, chatSessions, filteredChatMessages]);
+
+  // Add this debug useEffect to your Index.tsx component to monitor chat message updates:
+
+  useEffect(() => {
+    console.log('=== CHAT DEBUG: Index.tsx ===');
+    console.log('All chat messages count:', allChatMessages.length);
+    console.log('Active chat session ID:', activeChatSessionId);
+    console.log('Filtered chat messages count:', filteredChatMessages.length);
+    console.log('Recent messages:', allChatMessages.slice(-3).map(m => ({
+      id: m.id.substring(0, 8),
+      role: m.role,
+      session_id: m.session_id,
+      content: m.content.substring(0, 50) + '...',
+      timestamp: new Date(m.timestamp).toLocaleTimeString()
+    })));
+    console.log('================================');
+  }, [allChatMessages, activeChatSessionId, filteredChatMessages]);
+
+  // Also add this to monitor when messages are passed to AIChat
+  useEffect(() => {
+    console.log('=== AIChat Props Debug ===');
+    console.log('Messages passed to AIChat:', filteredChatMessages.length);
+    console.log('Is AI Loading:', isAILoading);
+    console.log('Is Submitting:', isSubmittingUserMessage);
+    console.log('============================');
+  }, [filteredChatMessages, isAILoading, isSubmittingUserMessage]);
   const handleLoadOlderChatMessages = useCallback(async () => {
     if (!activeChatSessionId || !user || filteredChatMessages.length === 0) return;
 
@@ -287,7 +359,7 @@ const Index = () => {
         toast.error('Please sign in to create a new chat session.');
         return null;
       }
-  
+
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({
@@ -297,10 +369,10 @@ const Index = () => {
         })
         .select()
         .single();
-  
+
       if (error) throw error;
       if (!data) throw new Error('No data returned from session creation');
-  
+
       const newSession: ChatSession = {
         id: data.id,
         title: data.title,
@@ -309,15 +381,15 @@ const Index = () => {
         last_message_at: data.last_message_at,
         document_ids: data.document_ids || [],
       };
-  
+
       setChatSessions(prev => [...prev, newSession].sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()));
       setChatSessionsLoadedCount(CHAT_SESSIONS_PER_PAGE);
       await loadChatSessions();
-  
+
       setActiveChatSessionId(newSession.id);
       setSelectedDocumentIds(newSession.document_ids || []); // Explicitly set selectedDocumentIds
       setHasMoreMessages(false);
-  
+
       toast.success('New chat session created with selected documents.');
       return newSession.id;
     } catch (error: any) {
@@ -494,11 +566,11 @@ const Index = () => {
     imageDataBase64?: string,
     aiMessageIdToUpdate: string | null = null,
   ) => {
-    if (!messageContent.trim() && (!attachedDocumentIds || attachedDocumentIds.length === 0) && (!attachedNoteIds || attachedNoteIds.length === 0) && !imageUrl || isAILoading || isSubmittingUserMessage) {
+    if (!messageContent && (!attachedDocumentIds || attachedDocumentIds.length === 0) && (!attachedNoteIds || attachedNoteIds.length === 0) && !imageUrl || isAILoading || isSubmittingUserMessage) {
       return;
     }
 
-    const trimmedMessage = messageContent.trim();
+    const trimmedMessage = messageContent;
     setIsSubmittingUserMessage(true);
     setIsAILoading(true);
 

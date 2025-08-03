@@ -321,20 +321,20 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     isPanningRef.current = false;
   }, []);
 
-  useEffect(() => {
-    if (isPanningRef.current) {
-      window.addEventListener('mousemove', handlePanMove);
-      window.addEventListener('mouseup', handlePanEnd);
-      window.addEventListener('touchmove', handlePanMove);
-      window.addEventListener('touchend', handlePanEnd);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handlePanMove);
-      window.removeEventListener('mouseup', handlePanEnd);
-      window.removeEventListener('touchmove', handlePanMove);
-      window.removeEventListener('touchend', handlePanEnd);
-    };
-  }, [handlePanMove, handlePanEnd]);
+  // useEffect(() => {
+  //   if (isPanningRef.current) {
+  //     window.addEventListener('mousemove', handlePanMove);
+  //     window.addEventListener('mouseup', handlePanEnd);
+  //     window.addEventListener('touchmove', handlePanMove);
+  //     window.addEventListener('touchend', handlePanEnd);
+  //   }
+  //   return () => {
+  //     window.removeEventListener('mousemove', handlePanMove);
+  //     window.removeEventListener('mouseup', handlePanEnd);
+  //     window.removeEventListener('touchmove', handlePanMove);
+  //     window.removeEventListener('touchend', handlePanEnd);
+  //   };
+  // }, [handlePanMove, handlePanEnd]);
 
   // Dynamic styles
   const dynamicPanelStyle: React.CSSProperties = {
@@ -834,144 +834,142 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          ref={diagramPanelRef}
-          className={`fixed inset-0 md:relative md:inset-y-0 md:right-0 bg-white shadow-xl flex flex-col z-40 md:rounded-l-lg md:shadow-md md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full' : ''}`}
-          variants={panelVariants}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          style={dynamicPanelStyle}
-        >
-          <style>
-            {`
-.canvas-container {
-transition: transform 0.2s ease-out;
-position: relative;
-width: 100%;
-height: 100%;
-overflow: hidden;
-}
-.resize-handle {
-background: linear-gradient(to right, #e2e8f0, #f8fafc);
-transition: background 0.2s;
-position: relative;
-}
-.resize-handle:hover {
-background: linear-gradient(to right, #94a3b8, #cbd5e1);
-}
-.resize-handle::after {
-content: '';
-position: absolute;
-top: 50%;
-left: 50%;
-transform: translate(-50%, -50%);
-width: 4px;
-height: 20px;
-background: rgba(0, 0, 0, 0.2);
-border-radius: 2px;
-}
-.resize-handle-height {
-background: linear-gradient(to bottom, #e2e8f0, #f8fafc);
-}
-.resize-handle-height:hover {
-background: linear-gradient(to bottom, #94a3b8, #cbd5e1);
-}
-.resize-handle-height::after {
-width: 20px;
-height: 4px;
-}
-.dark .resize-handle {
-background: linear-gradient(to right, #4b5563, #6b7280);
-}
-.dark .resize-handle:hover {
-background: linear-gradient(to right, #6b7280, #9ca3af);
-}
-.dark .resize-handle-height {
-background: linear-gradient(to bottom, #4b5563, #6b7280);
-}
-.dark .resize-handle-height:hover {
-background: linear-gradient(to bottom, #6b7280, #9ca3af);
-}
-`}
-          </style>
-          <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0 dark:text-gray-100">{panelTitle}</h3>
-            <div className="flex flex-wrap items-center gap-2 justify-end">
-              {(diagramType === 'code' || diagramType === 'document-text') && (
-                <div className="theme-selector-container">
-                  <ThemeSelector />
-                </div>
-              )}
-              {(diagramType === 'code' || diagramType === 'document-text' || diagramType === 'chartjs' || diagramType === 'mermaid' || diagramType === 'dot' || diagramType === 'threejs') && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowThemeSelector(!showThemeSelector)}
-                  className="text-sm px-3 py-1"
-                >
-                  <Code className="h-4 w-4 mr-2" /> View Raw Code
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadContent}
-                className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 dark:border-blue-700"
-                title={downloadButtonText}
-                disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
-              >
-                <Download className="h-4 w-4 mr-0 sm:mr-2" />
-                <span className="hidden sm:inline">{downloadButtonText}</span>
-              </Button>
-              {diagramType === 'threejs' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDownloadGltf}
-                  className="text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900 dark:border-green-700"
-                  title="Download 3D Model (GLTF)"
-                  disabled={!threeJsScene || !threeJsRenderer}
-                >
-                  <Download className="h-4 w-4 mr-0 sm:mr-2" />
-                  <span className="hidden sm:inline">Download GLTF</span>
-                </Button>
-              )}
-              {(!['code', 'image', 'unknown', 'document-text'].includes(diagramType)) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDownloadPdf}
-                  className="text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900 dark:border-purple-700"
-                  title="Download Content (PDF)"
-                  disabled={!diagramContent || diagramType === 'unknown'}
-                >
-                  <Download className="h-4 w-4 mr-0 sm:mr-2" />
-                  <span className="hidden sm:inline">Download PDF</span>
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsFullScreen(prev => !prev)}
-                title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
-                className="text-slate-600 hover:bg-slate-200 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                {isFullScreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                title="Close Panel"
-                className="flex-shrink-0 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-              >
-                <X className="h-5 w-5 text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200" />
-              </Button>
+    <motion.div
+      ref={diagramPanelRef}
+      className={`fixed inset-0 md:relative md:inset-y-0 md:right-0 bg-white shadow-xl flex flex-col z-40 md:rounded-l-lg md:shadow-md md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full' : ''}`}
+      variants={panelVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      style={dynamicPanelStyle}
+    >
+      <style>
+        {`
+        .canvas-container {
+        transition: transform 0.2s ease-out;
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        }
+        .resize-handle {
+        background: linear-gradient(to right, #e2e8f0, #f8fafc);
+        transition: background 0.2s;
+        position: relative;
+        }
+        .resize-handle:hover {
+        background: linear-gradient(to right, #94a3b8, #cbd5e1);
+        }
+        .resize-handle::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 4px;
+        height: 20px;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 2px;
+        }
+        .resize-handle-height {
+        background: linear-gradient(to bottom, #e2e8f0, #f8fafc);
+        }
+        .resize-handle-height:hover {
+        background: linear-gradient(to bottom, #94a3b8, #cbd5e1);
+        }
+        .resize-handle-height::after {
+        width: 20px;
+        height: 4px;
+        }
+        .dark .resize-handle {
+        background: linear-gradient(to right, #4b5563, #6b7280);
+        }
+        .dark .resize-handle:hover {
+        background: linear-gradient(to right, #6b7280, #9ca3af);
+        }
+        .dark .resize-handle-height {
+        background: linear-gradient(to bottom, #4b5563, #6b7280);
+        }
+        .dark .resize-handle-height:hover {
+        background: linear-gradient(to bottom, #6b7280, #9ca3af);
+        }
+        `}
+      </style>
+      <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0 dark:text-gray-100">{panelTitle}</h3>
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          {(diagramType === 'code' || diagramType === 'document-text') && (
+            <div className="theme-selector-container">
+              <ThemeSelector />
             </div>
-            <div className="flex items-center gap-2 pt-2">
+          )}
+          {(diagramType === 'code' || diagramType === 'document-text' || diagramType === 'chartjs' || diagramType === 'mermaid' || diagramType === 'dot' || diagramType === 'threejs') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowThemeSelector(!showThemeSelector)}
+              className="text-sm px-3 py-1"
+            >
+              <Code className="h-4 w-4 mr-2" /> View Raw Code
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadContent}
+            className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 dark:border-blue-700"
+            title={downloadButtonText}
+            disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
+          >
+            <Download className="h-4 w-4 mr-0 sm:mr-2" />
+            <span className="hidden sm:inline">{downloadButtonText}</span>
+          </Button>
+          {diagramType === 'threejs' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadGltf}
+              className="text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900 dark:border-green-700"
+              title="Download 3D Model (GLTF)"
+              disabled={!threeJsScene || !threeJsRenderer}
+            >
+              <Download className="h-4 w-4 mr-0 sm:mr-2" />
+              <span className="hidden sm:inline">Download GLTF</span>
+            </Button>
+          )}
+          {(!['code', 'image', 'unknown', 'document-text'].includes(diagramType)) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPdf}
+              className="text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900 dark:border-purple-700"
+              title="Download Content (PDF)"
+              disabled={!diagramContent || diagramType === 'unknown'}
+            >
+              <Download className="h-4 w-4 mr-0 sm:mr-2" />
+              <span className="hidden sm:inline">Download PDF</span>
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsFullScreen(prev => !prev)}
+            title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
+            className="text-slate-600 hover:bg-slate-200 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            {isFullScreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            title="Close Panel"
+            className="flex-shrink-0 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+          >
+            <X className="h-5 w-5 text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200" />
+          </Button>
+        </div>
+        {/* <div className="flex items-center gap-2 pt-2">
               <Button
                 variant="ghost"
                 size="icon"
@@ -990,25 +988,20 @@ background: linear-gradient(to bottom, #6b7280, #9ca3af);
               >
                 <ZoomOut className="h-5 w-5" />
               </Button>
-            </div>
-          </div>
+            </div> */}
+      </div>
 
-          <div
-            ref={diagramContainerRef}
-            className="flex-1 overflow-auto modern-scrollbar dark:bg-gray-900 canvas-container"
-            style={contentStyle}
-            onMouseDown={handlePanStart}
-            onTouchStart={handlePanStart}
-          >
-            {renderContent}
-          </div>
-          <div
-            className=" absolute bottom-0 right-0 top-0 h-7 flex items-center justify-center cursor-ew-resize text-gray-500 hover:text-gray-300 z-50 md:flex resize-handle resize-handle-width"
-            onMouseDown={(e) => startResize(e, 'width')}
-            onTouchStart={(e) => startResize(e, 'width')}
-          />
-        </motion.div>
-      )}
-    </AnimatePresence>
+      <div
+        ref={diagramContainerRef}
+        className="flex-1 overflow-auto modern-scrollbar dark:bg-gray-900 canvas-container"
+        style={contentStyle}
+        onMouseDown={handlePanStart}
+        onTouchStart={handlePanStart}
+      >
+        {renderContent}
+      </div>
+
+    </motion.div>
+
   );
 });
