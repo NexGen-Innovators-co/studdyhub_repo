@@ -1,7 +1,8 @@
 // useAppData.tsx
+// useAppData.tsx
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Note } from '../types/Note';
-import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../types/Class'; // Import QuizQuestion
+import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -20,9 +21,9 @@ export const useAppData = () => {
   const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]); // New state for quizzes
-
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [lastUserId, setLastUserId] = useState<string | null>(null);
 
   const documentChannelRef = useRef<any>(null);
   const chatMessageChannelRef = useRef<any>(null);
@@ -30,8 +31,7 @@ export const useAppData = () => {
   const recordingsChannelRef = useRef<any>(null);
   const scheduleChannelRef = useRef<any>(null);
   const profileChannelRef = useRef<any>(null);
-  const quizzesChannelRef = useRef<any>(null); // New ref for quizzes channel
-
+  const quizzesChannelRef = useRef<any>(null);
 
   // Auth listener to set currentUser
   useEffect(() => {
@@ -51,27 +51,32 @@ export const useAppData = () => {
 
   // Load data from Supabase when currentUser changes
   useEffect(() => {
-    if (currentUser) {
-      console.log('User authenticated, loading data...');
+    if (currentUser?.id && currentUser.id !== lastUserId) {
+      console.log('User changed, loading data...');
+      setLastUserId(currentUser.id);
       loadUserData(currentUser);
-    } else {
-      console.log('No user, clearing data...');
-      setNotes([]);
-      setRecordings([]);
-      setScheduleItems([]);
-      setChatMessages([]);
-      setDocuments([]);
-      setUserProfile(null);
-      setQuizzes([]);
-      setActiveNote(null);
-      setLoading(false);
+    } else if (!currentUser && lastUserId !== null) {
+      console.log('User logged out, clearing data...');
+      setLastUserId(null);
+      clearAllData();
     }
-  }, [currentUser]); 
+  }, [currentUser, lastUserId]);
 
-  // Centralized function to load all user data
-  // Replace the loadUserData useCallback in useAppData.tsx with this simplified version:
+  const clearAllData = () => {
+    setNotes([]);
+    setRecordings([]);
+    setScheduleItems([]);
+    setChatMessages([]);
+    setDocuments([]);
+    setUserProfile(null);
+    setQuizzes([]);
+    setActiveNote(null);
+    setLoading(false);
+  };
 
   const loadUserData = useCallback(async (user: any) => {
+    if (!user?.id) return;
+
     console.log('Loading user data for:', user.id);
     setLoading(true);
 
@@ -146,54 +151,31 @@ export const useAppData = () => {
         chatResult,
         quizzesResult
       ] = await Promise.allSettled([
-        // Recordings
         supabase
           .from('class_recordings')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
-
-        // Notes
         supabase
           .from('notes')
           .select('*')
           .eq('user_id', user.id)
           .order('updated_at', { ascending: false }),
-
-        // Schedule items
         supabase
           .from('schedule_items')
           .select('*')
           .eq('user_id', user.id)
           .order('start_time', { ascending: true }),
-
-        // Documents
         supabase
           .from('documents')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
-
-        // Chat messages - with all required fields
         supabase
           .from('chat_messages')
-          .select(`
-          id,
-          content,
-          role,
-          timestamp,
-          session_id,
-          is_error,
-          attached_document_ids,
-          attached_note_ids,
-          image_url,
-          image_mime_type,
-          user_id
-        `)
+          .select(`*`)
           .eq('user_id', user.id)
           .order('timestamp', { ascending: true }),
-
-        // Quizzes
         supabase
           .from('quizzes')
           .select('*')
@@ -203,7 +185,7 @@ export const useAppData = () => {
 
       // Process recordings
       if (recordingsResult.status === 'fulfilled' && recordingsResult.value.data) {
-        const formattedRecordings = recordingsResult.value.data.map(recording => ({
+        setRecordings(recordingsResult.value.data.map(recording => ({
           id: recording.id,
           title: recording.title || 'Untitled Recording',
           subject: recording.subject || '',
@@ -215,11 +197,7 @@ export const useAppData = () => {
           createdAt: recording.created_at || new Date().toISOString(),
           userId: recording.user_id,
           document_id: recording.document_id
-        }));
-        setRecordings(formattedRecordings);
-      } else {
-        console.error('Failed to load recordings:', recordingsResult);
-        setRecordings([]);
+        })));
       }
 
       // Process notes
@@ -240,14 +218,11 @@ export const useAppData = () => {
         if (formattedNotes.length > 0 && !activeNote) {
           setActiveNote(formattedNotes[0]);
         }
-      } else {
-        console.error('Failed to load notes:', notesResult);
-        setNotes([]);
       }
 
       // Process schedule items
       if (scheduleResult.status === 'fulfilled' && scheduleResult.value.data) {
-        const formattedSchedule = scheduleResult.value.data.map(item => ({
+        setScheduleItems(scheduleResult.value.data.map(item => ({
           id: item.id,
           title: item.title || 'Untitled Event',
           subject: item.subject || '',
@@ -259,16 +234,12 @@ export const useAppData = () => {
           color: item.color || '#3B82F6',
           userId: item.user_id,
           createdAt: item.created_at || new Date().toISOString()
-        }));
-        setScheduleItems(formattedSchedule);
-      } else {
-        console.error('Failed to load schedule:', scheduleResult);
-        setScheduleItems([]);
+        })));
       }
 
       // Process documents
       if (documentsResult.status === 'fulfilled' && documentsResult.value.data) {
-        const formattedDocuments = documentsResult.value.data.map(doc => ({
+        setDocuments(documentsResult.value.data.map(doc => ({
           id: doc.id,
           title: doc.title || 'Untitled Document',
           user_id: doc.user_id,
@@ -282,16 +253,12 @@ export const useAppData = () => {
           processing_error: String(doc.processing_error) || null,
           created_at: new Date(doc.created_at).toISOString(),
           updated_at: new Date(doc.updated_at).toISOString()
-        }));
-        setDocuments(formattedDocuments);
-      } else {
-        console.error('Failed to load documents:', documentsResult);
-        setDocuments([]);
+        })));
       }
 
-      // Process chat messages - FIXED VERSION
+      // Process chat messages
       if (chatResult.status === 'fulfilled' && chatResult.value.data) {
-        const formattedChatMessages: Message[] = chatResult.value.data.map(msg => ({
+        setChatMessages(chatResult.value.data.map(msg => ({
           id: msg.id,
           content: msg.content || '',
           role: msg.role as 'user' | 'assistant',
@@ -302,16 +269,13 @@ export const useAppData = () => {
           attachedNoteIds: msg.attached_note_ids || [],
           imageUrl: msg.image_url || undefined,
           imageMimeType: msg.image_mime_type || undefined,
-        }));
-        setChatMessages(formattedChatMessages);
-      } else {
-        console.error('Failed to load chat messages:', chatResult);
-        setChatMessages([]);
+          has_been_displayed: msg.has_been_displayed || false
+        })));
       }
 
       // Process quizzes
       if (quizzesResult.status === 'fulfilled' && quizzesResult.value.data) {
-        const formattedQuizzes = quizzesResult.value.data.map(quiz => ({
+        setQuizzes(quizzesResult.value.data.map(quiz => ({
           id: quiz.id,
           title: quiz.title || 'Untitled Quiz',
           questions: (Array.isArray(quiz.questions) ? quiz.questions.map((q: any) => ({
@@ -324,29 +288,32 @@ export const useAppData = () => {
           classId: quiz.class_id,
           userId: quiz.user_id,
           createdAt: quiz.created_at
-        }));
-        setQuizzes(formattedQuizzes);
-      } else {
-        console.error('Failed to load quizzes:', quizzesResult);
-        setQuizzes([]);
+        })));
       }
 
       console.log('User data loaded successfully');
-
     } catch (error) {
       console.error('Unexpected error loading user data:', error);
       toast.error('An unexpected error occurred while loading data');
-      // Set fallback empty states
-      setRecordings([]);
-      setNotes([]);
-      setScheduleItems([]);
-      setDocuments([]);
-      setChatMessages([]);
-      setQuizzes([]);
+      clearAllData();
     } finally {
       setLoading(false);
     }
-  }, []); // Simplified dependency array - only recreate when needed
+  }, []);
+
+  // Cleanup all real-time listeners on unmount
+  useEffect(() => {
+    return () => {
+      [documentChannelRef, chatMessageChannelRef, notesChannelRef,
+        recordingsChannelRef, scheduleChannelRef, profileChannelRef,
+        quizzesChannelRef].forEach(channelRef => {
+          if (channelRef.current) {
+            supabase.removeChannel(channelRef.current);
+            channelRef.current = null;
+          }
+        });
+    };
+  }, []);
   // Real-time listener for documents
   useEffect(() => {
     const setupDocumentListener = () => {
@@ -422,124 +389,128 @@ export const useAppData = () => {
   }, [currentUser, setDocuments]);
 
   // Real-time listener for ALL chat messages for the current user
- // Replace the existing chat message listener in useAppData.tsx with this improved version:
+  // Replace the existing chat message listener in useAppData.tsx with this improved version:
 
-useEffect(() => {
-  const setupChatMessageListener = () => {
-    if (chatMessageChannelRef.current) {
-      supabase.removeChannel(chatMessageChannelRef.current);
-      chatMessageChannelRef.current = null;
-    }
-
-    if (!currentUser) {
-      setChatMessages([]);
-      return;
-    }
-
-    console.log('Setting up chat message listener for user:', currentUser.id);
-
-    const channel = supabase
-      .channel(`chat_messages_${currentUser.id}`) // Unique channel name
-      .on(
-        'postgres_changes',
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'chat_messages', 
-          filter: `user_id=eq.${currentUser.id}` 
-        },
-        (payload) => {
-          console.log('Chat message real-time event:', payload.eventType, payload);
-          
-          if (payload.eventType === 'INSERT') {
-            const newMessage: Message = {
-              id: payload.new.id,
-              content: payload.new.content || '',
-              role: payload.new.role as 'user' | 'assistant',
-              timestamp: payload.new.timestamp,
-              isError: payload.new.is_error || false,
-              attachedDocumentIds: payload.new.attached_document_ids || [],
-              attachedNoteIds: payload.new.attached_note_ids || [],
-              imageUrl: payload.new.image_url || undefined,
-              imageMimeType: payload.new.image_mime_type || undefined,
-              session_id: payload.new.session_id,
-            };
-
-            console.log('Adding new message to state:', newMessage);
-            
-            setChatMessages(prevMessages => {
-              // Check if message already exists to prevent duplicates
-              const exists = prevMessages.some(msg => msg.id === newMessage.id);
-              if (exists) {
-                console.log('Message already exists, skipping:', newMessage.id);
-                return prevMessages;
-              }
-              
-              const updatedMessages = [...prevMessages, newMessage].sort(
-                (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-              );
-              console.log('Updated messages count:', updatedMessages.length);
-              return updatedMessages;
-            });
-          } 
-          else if (payload.eventType === 'UPDATE') {
-            const updatedMessage: Message = {
-              id: payload.new.id,
-              content: payload.new.content || '',
-              role: payload.new.role as 'user' | 'assistant',
-              timestamp: payload.new.timestamp,
-              isError: payload.new.is_error || false,
-              attachedDocumentIds: payload.new.attached_document_ids || [],
-              attachedNoteIds: payload.new.attached_note_ids || [],
-              imageUrl: payload.new.image_url || undefined,
-              imageMimeType: payload.new.image_mime_type || undefined,
-              session_id: payload.new.session_id,
-            };
-
-            console.log('Updating message in state:', updatedMessage);
-
-            setChatMessages(prevMessages => {
-              const updatedMessages = prevMessages.map(msg => 
-                msg.id === updatedMessage.id ? updatedMessage : msg
-              ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-              
-              console.log('Updated messages count after update:', updatedMessages.length);
-              return updatedMessages;
-            });
-          } 
-          else if (payload.eventType === 'DELETE') {
-            console.log('Deleting message from state:', payload.old.id);
-            
-            setChatMessages(prevMessages => {
-              const filteredMessages = prevMessages.filter(msg => msg.id !== payload.old.id);
-              console.log('Messages count after delete:', filteredMessages.length);
-              return filteredMessages;
-            });
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('Chat message channel subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to chat messages real-time updates');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Failed to subscribe to chat messages real-time updates');
-          toast.error('Failed to connect to real-time chat updates');
-        }
-      });
-
-    chatMessageChannelRef.current = channel;
-
-    return () => {
+  useEffect(() => {
+    const setupChatMessageListener = () => {
       if (chatMessageChannelRef.current) {
         supabase.removeChannel(chatMessageChannelRef.current);
         chatMessageChannelRef.current = null;
       }
-    };
-  };
 
-  return setupChatMessageListener();
-}, [currentUser, setChatMessages]);
+      if (!currentUser) {
+        setChatMessages([]);
+        return;
+      }
+
+      console.log('Setting up chat message listener for user:', currentUser.id);
+
+      const channel = supabase
+        .channel(`chat_messages_${currentUser.id}`) // Unique channel name
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'chat_messages',
+            filter: `user_id=eq.${currentUser.id}`
+          },
+          (payload) => {
+            console.log('Chat message real-time event:', payload.eventType, payload);
+
+            if (payload.eventType === 'INSERT') {
+              const newMessage: Message = {
+                id: payload.new.id,
+                content: payload.new.content || '',
+                role: payload.new.role as 'user' | 'assistant',
+                timestamp: payload.new.timestamp,
+                isError: payload.new.is_error || false,
+                attachedDocumentIds: payload.new.attached_document_ids || [],
+                attachedNoteIds: payload.new.attached_note_ids || [],
+                imageUrl: payload.new.image_url || undefined,
+                imageMimeType: payload.new.image_mime_type || undefined,
+                session_id: payload.new.session_id,
+                originalUserMessageContent: payload.new.original_user_message_content || '',
+                has_been_displayed: payload.new.has_been_displayed || false
+              };
+
+              console.log('Adding new message to state:', newMessage);
+
+              setChatMessages(prevMessages => {
+                // Check if message already exists to prevent duplicates
+                const exists = prevMessages.some(msg => msg.id === newMessage.id);
+                if (exists) {
+                  console.log('Message already exists, skipping:', newMessage.id);
+                  return prevMessages;
+                }
+
+                const updatedMessages = [...prevMessages, newMessage].sort(
+                  (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                );
+                console.log('Updated messages count:', updatedMessages.length);
+                return updatedMessages;
+              });
+            }
+            else if (payload.eventType === 'UPDATE') {
+              const updatedMessage: Message = {
+                id: payload.new.id,
+                content: payload.new.content || '',
+                role: payload.new.role as 'user' | 'assistant',
+                timestamp: payload.new.timestamp,
+                isError: payload.new.is_error || false,
+                attachedDocumentIds: payload.new.attached_document_ids || [],
+                attachedNoteIds: payload.new.attached_note_ids || [],
+                imageUrl: payload.new.image_url || undefined,
+                imageMimeType: payload.new.image_mime_type || undefined,
+                session_id: payload.new.session_id,
+                originalUserMessageContent: payload.new.original_user_message_content || '',
+                has_been_displayed: payload.new.has_been_displayed || false
+              };
+
+              console.log('Updating message in state:', updatedMessage);
+
+              setChatMessages(prevMessages => {
+                const updatedMessages = prevMessages.map(msg =>
+                  msg.id === updatedMessage.id ? updatedMessage : msg
+                ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+                console.log('Updated messages count after update:', updatedMessages.length);
+                return updatedMessages;
+              });
+            }
+            else if (payload.eventType === 'DELETE') {
+              console.log('Deleting message from state:', payload.old.id);
+
+              setChatMessages(prevMessages => {
+                const filteredMessages = prevMessages.filter(msg => msg.id !== payload.old.id);
+                console.log('Messages count after delete:', filteredMessages.length);
+                return filteredMessages;
+              });
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('Chat message channel subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('Successfully subscribed to chat messages real-time updates');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Failed to subscribe to chat messages real-time updates');
+            toast.error('Failed to connect to real-time chat updates');
+          }
+        });
+
+      chatMessageChannelRef.current = channel;
+
+      return () => {
+        if (chatMessageChannelRef.current) {
+          supabase.removeChannel(chatMessageChannelRef.current);
+          chatMessageChannelRef.current = null;
+        }
+      };
+    };
+
+    return setupChatMessageListener();
+  }, [currentUser, setChatMessages]);
 
   // NEW: Real-time listener for Notes
   useEffect(() => {
@@ -855,8 +826,6 @@ useEffect(() => {
     setupQuizzesListener();
   }, [currentUser, setQuizzes]);
 
-
-  // Filter notes based on search and category
   const filteredNotes = notes.filter(note => {
     const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       note.content.toLowerCase().includes(searchQuery.toLowerCase());
@@ -880,7 +849,8 @@ useEffect(() => {
     isAILoading,
     filteredNotes,
     loading,
-    quizzes, // Expose quizzes state
+    quizzes,
+    currentUser,
 
     // Setters
     setNotes,
@@ -895,8 +865,6 @@ useEffect(() => {
     setIsSidebarOpen,
     setActiveTab,
     setIsAILoading,
-    setQuizzes, // Expose quizzes setter
-
-    // Functions (none exposed directly from here, as data loading is internal)
+    setQuizzes,
   };
 };

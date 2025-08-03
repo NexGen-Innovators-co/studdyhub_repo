@@ -623,6 +623,8 @@ const AIChat: React.FC<AIChatProps> = ({
           timestamp: new Date().toISOString(),
           imageUrl: imageUrl,
           imageMimeType: 'image/png',
+          has_been_displayed: false,
+          isError: false,
         });
         setImagePrompt('');
       } else {

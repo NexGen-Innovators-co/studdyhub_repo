@@ -444,6 +444,7 @@ export const useAppOperations = ({
             image_url: imageUrl || null,
             image_mime_type: imageMimeType || null,
             session_id: session_id || null,
+            has_been_displayed: false, // NEW: Default to false
           });
 
         if (insertError) throw insertError;
@@ -460,6 +461,7 @@ export const useAppOperations = ({
             imageUrl,
             imageMimeType,
             session_id: session_id || undefined,
+            has_been_displayed: false, // NEW: Default to false
           };
           setChatMessages(prev => [...prev, newMessage]);
         }

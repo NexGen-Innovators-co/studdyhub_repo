@@ -107,6 +107,7 @@ export type Database = {
           image_mime_type?: string;
             attached_document_ids?: string[] | null; // Array of document IDs attached to this message
             attached_note_ids?: string[] | null; // Array of note IDs attached to this message
+            has_been_displayed: boolean // Indicates if the message has been displayed to the user
         }
         Insert: {
           content: string
@@ -120,6 +121,7 @@ export type Database = {
           image_mime_type?: string;
             attached_document_ids?: string[] | null; // Array of document IDs attached to this message
             attached_note_ids?: string[] | null; // Array of note IDs attached to this message
+            has_been_displayed:boolean
         }
         Update: {
           content?: string
@@ -133,6 +135,7 @@ export type Database = {
           image_mime_type?: string;
             attached_document_ids?: string[] | null; // Array of document IDs attached to this message
             attached_note_ids?: string[] | null; // Array of note IDs attached to this message
+            has_been_displayed:boolean
         }
         Relationships: [
           {
