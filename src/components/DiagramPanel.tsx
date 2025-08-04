@@ -12,6 +12,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { themes, ThemeName, escapeHtml, highlightCode } from '../utils/codeHighlighting';
 import { Easing } from 'framer-motion';
+import DOMPurify from 'dompurify';
 
 // Ensure Chart.js components are registered once
 Chart.register(...registerables);
@@ -27,7 +28,7 @@ declare global {
 
 interface DiagramPanelProps {
   diagramContent?: string;
-  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs';
+  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html';
   onClose: () => void;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
   onSuggestAiCorrection: (prompt: string) => void;
@@ -321,21 +322,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     isPanningRef.current = false;
   }, []);
 
-  // useEffect(() => {
-  //   if (isPanningRef.current) {
-  //     window.addEventListener('mousemove', handlePanMove);
-  //     window.addEventListener('mouseup', handlePanEnd);
-  //     window.addEventListener('touchmove', handlePanMove);
-  //     window.addEventListener('touchend', handlePanEnd);
-  //   }
-  //   return () => {
-  //     window.removeEventListener('mousemove', handlePanMove);
-  //     window.removeEventListener('mouseup', handlePanEnd);
-  //     window.removeEventListener('touchmove', handlePanMove);
-  //     window.removeEventListener('touchend', handlePanEnd);
-  //   };
-  // }, [handlePanMove, handlePanEnd]);
-
   // Dynamic styles
   const dynamicPanelStyle: React.CSSProperties = {
     width: window.innerWidth >= 768 ? `${panelWidth}%` : '100%',
@@ -356,7 +342,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
   // Download content
   const handleDownloadContent = () => {
-    if (!diagramContainerRef.current && !imageUrl) {
+    if (!diagramContainerRef.current && !imageUrl && diagramType !== 'html') {
       toast.error('Content not rendered for download.');
       return;
     }
@@ -365,7 +351,11 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     let contentToDownload: string | Blob = '';
     let mimeType = '';
 
-    if (diagramType === 'image' && imageUrl) {
+    if (diagramType === 'html') {
+      contentToDownload = diagramContent || '';
+      fileExtension = 'html';
+      mimeType = 'text/html;charset=utf-8';
+    } else if (diagramType === 'image' && imageUrl) {
       const link = document.createElement('a');
       link.href = imageUrl;
       link.download = `image-${Date.now()}.png`;
@@ -374,9 +364,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       document.body.removeChild(link);
       toast.success('Image downloaded!');
       return;
-    }
-
-    if (diagramType === 'mermaid' || diagramType === 'dot') {
+    } else if (diagramType === 'mermaid' || diagramType === 'dot') {
       const svgElement = diagramContainerRef.current?.querySelector('svg');
       if (svgElement) {
         contentToDownload = new XMLSerializer().serializeToString(svgElement);
@@ -433,7 +421,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     downloadLink.click();
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(url);
-    toast.success(`${diagramType === 'code' ? 'Code' : 'Diagram'} downloaded as ${fileExtension.toUpperCase()}!`);
+    toast.success(`${diagramType === 'code' ? 'Code' : diagramType === 'html' ? 'Web Page' : 'Diagram'} downloaded as ${fileExtension.toUpperCase()}!`);
   };
 
   // Download GLTF
@@ -475,6 +463,8 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       targetRef = chartRef;
     } else if (diagramType === 'threejs') {
       targetRef = threeJsRef;
+    } else if (diagramType === 'html') {
+      targetRef = diagramContainerRef;
     } else {
       targetRef = diagramContainerRef;
     }
@@ -559,8 +549,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             {Object.keys(themes).map((themeName) => (
               <button
                 key={themeName}
-                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${currentTheme === themeName ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''
-                  }`}
+                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${currentTheme === themeName ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
                 onClick={() => {
                   setCurrentTheme(themeName as ThemeName);
                   setShowThemeSelector(false);
@@ -588,7 +577,18 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
     const theme = themes[currentTheme];
 
-    if (diagramType === 'mermaid') {
+    if (diagramType === 'html') {
+      panelTitle = 'Web Page View';
+      downloadButtonText = 'Download HTML';
+      downloadFileName = 'webpage';
+      return (
+        <div
+          className="relative w-full h-full bg-white rounded-lg overflow-auto p-4"
+          style={{ backgroundColor: theme.background }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(diagramContent || '') }}
+        />
+      );
+    } else if (diagramType === 'mermaid') {
       panelTitle = 'Mermaid Diagram View';
       downloadButtonText = 'Download Diagram (SVG)';
       downloadFileName = 'mermaid-diagram';
@@ -760,7 +760,8 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             <pre className="font-mono text-sm leading-relaxed h-full whitespace-pre-wrap" style={{ color: theme.foreground }}>
               <code dangerouslySetInnerHTML={{ __html: escapeHtml(diagramContent || '') }} style={{ color: theme.foreground }} />
             </pre>
-          </div></div>
+          </div>
+        </div>
       );
     } else if (diagramType === 'image' && imageUrl) {
       panelTitle = 'Image Viewer';
@@ -903,7 +904,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               <ThemeSelector />
             </div>
           )}
-          {(diagramType === 'code' || diagramType === 'document-text' || diagramType === 'chartjs' || diagramType === 'mermaid' || diagramType === 'dot' || diagramType === 'threejs') && (
+          {(diagramType === 'code' || diagramType === 'document-text' || diagramType === 'chartjs' || diagramType === 'mermaid' || diagramType === 'dot' || diagramType === 'threejs' || diagramType === 'html') && (
             <Button
               variant="outline"
               size="sm"
@@ -969,26 +970,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             <X className="h-5 w-5 text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200" />
           </Button>
         </div>
-        {/* <div className="flex items-center gap-2 pt-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setZoomLevel(prev => Math.min(prev + 0.1, 2))}
-                title="Zoom In"
-                className="text-slate-600 hover:bg-slate-200 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                <ZoomIn className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setZoomLevel(prev => Math.max(prev - 0.1, 0.5))}
-                title="Zoom Out"
-                className="text-slate-600 hover:bg-slate-200 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                <ZoomOut className="h-5 w-5" />
-              </Button>
-            </div> */}
       </div>
 
       <div
@@ -1000,8 +981,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       >
         {renderContent}
       </div>
-
     </motion.div>
-
   );
 });
