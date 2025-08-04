@@ -103,7 +103,7 @@ interface CodeBlockProps {
   children: React.ReactNode;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
   onSuggestAiCorrection: (prompt: string) => void;
-  onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs', content?: string, language?: string, imageUrl?: string) => void;
+  onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
 }
 
 const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, ...props }) => {
@@ -113,27 +113,39 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
   const codeContent = String(children).trim();
   const [showRawCode, setShowRawCode] = useState(false);
 
-  // If it's a raw code block (not mermaid, chartjs, dot, or threejs), show a "View Code" button
-  if (!inline && lang && !['mermaid', 'chartjs', 'dot', 'threejs'].includes(lang)) {
+  // Handle HTML code blocks
+  if (!inline && lang === 'html') {
     return (
       <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700 font-sans">
         <div className="flex items-center gap-2 text-base md:text-lg text-slate-700 dark:text-gray-200">
           <FileText className="h-4 w-4" />
-          <span className="text-base md:text-lg font-medium">{lang.toUpperCase()} Code</span>
+          <span className="text-base md:text-lg font-medium">Web Page</span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Code
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewDiagram && onViewDiagram('html', codeContent, lang)}
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
+          >
+            <Maximize2 className="h-4 w-4 mr-2" />
+            View Web Page
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowRawCode(!showRawCode)}
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
+            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+          >
+            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
     );
   }
 
+  // Show raw code if toggled
   if (showRawCode) {
     return (
       <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 font-sans">
@@ -146,9 +158,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
             size="sm"
             onClick={() => setShowRawCode(false)}
             className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
-            title="Attempt rendering"
+            title="Hide raw code"
           >
-            <RefreshCw className="h-4 w-4" />
+            <X className="h-4 w-4" />
           </Button>
         </div>
         <div className="p-4 bg-white overflow-x-auto dark:bg-gray-900">
@@ -160,6 +172,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
     );
   }
 
+  // Handle other diagram types
   if (!inline && lang === 'mermaid') {
     return (
       <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700 font-sans">
@@ -167,15 +180,26 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
           <FileText className="h-4 w-4" />
           <span className="text-base md:text-lg font-medium">Mermaid Diagram</span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram('mermaid', codeContent)}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Diagram
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewDiagram && onViewDiagram('mermaid', codeContent)}
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
+          >
+            <Maximize2 className="h-4 w-4 mr-2" />
+            View Diagram
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowRawCode(!showRawCode)}
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
+            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+          >
+            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -187,15 +211,26 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
           <FileText className="h-4 w-4" />
           <span className="text-base md:text-lg font-medium">Chart.js Graph</span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram('chartjs', codeContent)}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Diagram
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewDiagram && onViewDiagram('chartjs', codeContent)}
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
+          >
+            <Maximize2 className="h-4 w-4 mr-2" />
+            View Diagram
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowRawCode(!showRawCode)}
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
+            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+          >
+            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -207,15 +242,26 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
           <FileText className="h-4 w-4" />
           <span className="text-base md:text-lg font-medium">Three.js 3D Scene</span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram('threejs', codeContent)}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Diagram
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewDiagram && onViewDiagram('threejs', codeContent)}
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
+          >
+            <Maximize2 className="h-4 w-4 mr-2" />
+            View Diagram
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowRawCode(!showRawCode)}
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
+            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+          >
+            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -227,15 +273,58 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
           <FileText className="h-4 w-4" />
           <span className="text-base md:text-lg font-medium">DOT Graph</span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram('dot', codeContent)}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Diagram
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewDiagram && onViewDiagram('dot', codeContent)}
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
+          >
+            <Maximize2 className="h-4 w-4 mr-2" />
+            View Diagram
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowRawCode(!showRawCode)}
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
+            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+          >
+            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle other code blocks (e.g., js, py, java)
+  if (!inline && lang) {
+    return (
+      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700 font-sans">
+        <div className="flex items-center gap-2 text-base md:text-lg text-slate-700 dark:text-gray-200">
+          <FileText className="h-4 w-4" />
+          <span className="text-base md:text-lg font-medium">{lang.toUpperCase()} Code</span>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
+          >
+            <Maximize2 className="h-4 w-4 mr-2" />
+            View Code
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowRawCode(!showRawCode)}
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
+            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+          >
+            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -253,7 +342,7 @@ interface MemoizedMarkdownRendererProps {
   isUserMessage?: boolean;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
   onSuggestAiCorrection: (prompt: string) => void;
-  onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs', content?: string, language?: string, imageUrl?: string) => void;
+  onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
   onToggleUserMessageExpansion: (messageId: string) => void;
   expandedMessages: Set<string>;
 }
