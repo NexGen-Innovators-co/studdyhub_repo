@@ -225,39 +225,7 @@ export const MessageList = memo(({
                 <Card className={cardClasses}>
                   <CardContent className="p-2 prose prose-lg !max-w-full leading-relaxed dark:prose-invert overflow-x-auto">
                     {contentToRender}
-                    {message.attachedDocumentIds?.length > 0 && (
-                      <div className={cn('mt-3 pt-3 border-t border-dashed', isUserMessage ? 'border-blue-300/50' : 'border-gray-300 dark:border-gray-600/50')}>
-                        <p className={cn('text-base font-semibold mb-2', isUserMessage ? 'text-slate-700' : 'text-slate-700 dark:text-gray-100')}>Attached Files:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {message.attachedDocumentIds.map(docId => {
-                            const doc = mergedDocuments.find(d => d.id === docId);
-                            return doc ? (
-                              <Badge
-                                key={doc.id}
-                                variant="secondary"
-                                className={cn(
-                                  'cursor-pointer hover:opacity-80 transition-opacity font-sans',
-                                  doc.processing_status === 'pending' ? 'bg-yellow-500/30 text-yellow-800 border-yellow-400 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-700' :
-                                  doc.processing_status === 'failed' ? 'bg-red-500/30 text-red-800 border-red-400 dark:bg-red-950 dark:text-red-300 dark:border-red-700' :
-                                  isUserMessage ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-700' :
-                                  'bg-slate-200 text-slate-700 border-slate-300 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600'
-                                )}
-                                onClick={() => handleViewAttachedFile(doc)}
-                              >
-                                {doc.processing_status === 'pending' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> :
-                                 doc.processing_status === 'failed' ? <AlertTriangle className="h-3 w-3 mr-1" /> :
-                                 <FileText className="h-3 w-3 mr-1" />}
-                                {doc.file_name}
-                              </Badge>
-                            ) : (
-                              <Badge key={docId} variant="destructive" className="text-sm text-red-600 dark:text-red-400 font-sans">
-                                File Not Found: {docId}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    
                   </CardContent>
                   <div className={cn('flex gap-1 px-4 pb-2', isUserMessage ? 'justify-end' : 'justify-start')}>
                     <span className={cn('text-xs text-slate-500', isUserMessage ? 'text-gray-600 dark:text-gray-300' : 'text-slate-500 dark:text-gray-400')}>

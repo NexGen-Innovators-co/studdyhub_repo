@@ -25,7 +25,18 @@ declare global {
     Viz: any;
   }
 }
+const IsolatedHtml = ({ html }: { html: string }) => {
+  const ref = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (ref.current) {
+      const shadowRoot = ref.current.attachShadow({ mode: 'open' });
+      shadowRoot.innerHTML = DOMPurify.sanitize(html);
+    }
+  }, [html]);
+
+  return <div ref={ref} className="w-full h-full" />;
+};
 interface DiagramPanelProps {
   diagramContent?: string;
   diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html';
@@ -578,16 +589,15 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     const theme = themes[currentTheme];
 
     if (diagramType === 'html') {
-      panelTitle = 'Web Page View';
-      downloadButtonText = 'Download HTML';
-      downloadFileName = 'webpage';
+      IsolatedHtml({ html: diagramContent || '' });
       return (
         <div
-          className="relative w-full h-full bg-white rounded-lg overflow-auto p-4"
-          style={{ backgroundColor: theme.background }}
+          className="relative"
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(diagramContent || '') }}
+          style={{ backgroundColor: theme.background }}
         />
       );
+
     } else if (diagramType === 'mermaid') {
       panelTitle = 'Mermaid Diagram View';
       downloadButtonText = 'Download Diagram (SVG)';
@@ -844,58 +854,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       exit="exit"
       style={dynamicPanelStyle}
     >
-      <style>
-        {`
-        .canvas-container {
-        transition: transform 0.2s ease-out;
-        position: relative;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        }
-        .resize-handle {
-        background: linear-gradient(to right, #e2e8f0, #f8fafc);
-        transition: background 0.2s;
-        position: relative;
-        }
-        .resize-handle:hover {
-        background: linear-gradient(to right, #94a3b8, #cbd5e1);
-        }
-        .resize-handle::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 4px;
-        height: 20px;
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 2px;
-        }
-        .resize-handle-height {
-        background: linear-gradient(to bottom, #e2e8f0, #f8fafc);
-        }
-        .resize-handle-height:hover {
-        background: linear-gradient(to bottom, #94a3b8, #cbd5e1);
-        }
-        .resize-handle-height::after {
-        width: 20px;
-        height: 4px;
-        }
-        .dark .resize-handle {
-        background: linear-gradient(to right, #4b5563, #6b7280);
-        }
-        .dark .resize-handle:hover {
-        background: linear-gradient(to right, #6b7280, #9ca3af);
-        }
-        .dark .resize-handle-height {
-        background: linear-gradient(to bottom, #4b5563, #6b7280);
-        }
-        .dark .resize-handle-height:hover {
-        background: linear-gradient(to bottom, #6b7280, #9ca3af);
-        }
-        `}
-      </style>
+
       <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0 dark:text-gray-100">{panelTitle}</h3>
         <div className="flex flex-wrap items-center gap-2 justify-end">

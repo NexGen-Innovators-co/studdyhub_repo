@@ -392,8 +392,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   className="w-full justify-center h-10 text-sm text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800" // Added dark mode
                   onClick={onLoadMoreChatSessions}
                 >
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Load More
+                  load more
                 </Button>
               )}
             </nav>

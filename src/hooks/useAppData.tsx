@@ -565,6 +565,12 @@ export const useAppData = () => {
       case 'quizzes':
         loadQuizzesPage(currentUser.id, true);
         break;
+      case 'notes':
+        loadNotesPage(currentUser.id, true);
+      case 'profile':
+        if (!dataLoading.profile) {
+          loadUserProfile(currentUser);
+        }  
     }
   }, [currentUser, dataLoaded, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage]);
 
