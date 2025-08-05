@@ -492,59 +492,56 @@ const AIChat: React.FC<AIChatProps> = ({
       toast.error('Please enter a message, attach an image, or select documents/notes.');
       return;
     }
-
+  
     try {
       const userId = userProfile?.id;
-
+  
       if (!userId) {
         toast.error("User ID is missing. Please ensure you are logged in.");
         setIsLoading(false);
         return;
       }
-
-      // if (activeChatSessionId) {
-      //   await supabase
-      //     .from('chat_sessions')
-      //     .update({ document_ids: selectedDocumentIds })
-      //     .eq('id', activeChatSessionId)
-      //     .eq('user_id', userId);
-      // }
-
-      // Separate document IDs and note IDs properly
+  
+      if (activeChatSessionId) {
+        await supabase
+          .from('chat_sessions')
+          .update({ document_ids: selectedDocumentIds })
+          .eq('id', activeChatSessionId)
+          .eq('user_id', userId);
+      }
+  
       const documentIds = selectedDocumentIds.filter(id =>
         documents.some(doc => doc.id === id)
       );
-
+  
       const noteIds = selectedDocumentIds.filter(id =>
         notes.some(note => note.id === id)
       );
-
-      // Handle image data properly
+  
       let imageUrl: string | undefined;
       let imageMimeType: string | undefined;
       let imageDataBase64: string | undefined;
-
+  
       if (selectedImageFile && selectedImagePreview) {
-        imageUrl = selectedImagePreview; // This should be the display URL
+        imageUrl = selectedImagePreview;
         imageMimeType = selectedImageFile.type;
-
-        // Convert file to base64 for backend processing
+  
         const reader = new FileReader();
         imageDataBase64 = await new Promise<string>((resolve) => {
           reader.onload = () => resolve(reader.result as string);
           reader.readAsDataURL(selectedImageFile);
         });
       }
-
+  
       await onSendMessageToBackend(
         inputMessage.trim(),
-        documentIds,        // Only actual document IDs
-        noteIds,           // Only actual note IDs  
+        documentIds,
+        noteIds,
         imageUrl,
         imageMimeType,
-        imageDataBase64,   // Proper base64 data for backend
+        imageDataBase64
       );
-
+  
       // Clear form
       setInputMessage('');
       setSelectedImageFile(null);
@@ -555,13 +552,15 @@ const AIChat: React.FC<AIChatProps> = ({
       if (cameraInputRef.current) {
         cameraInputRef.current.value = '';
       }
-
+  
     } catch (error: any) {
       console.error("Error sending message:", error);
-
+  
       let errorMessage = 'Failed to send message.';
-
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+  
+      if (error.message.includes('Content size exceeds limit')) {
+        errorMessage = 'Message or context too large. Some older messages or document content was truncated.';
+      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = 'Network error: Unable to connect to the server. Please check your internet connection.';
       } else if (error.message.includes('401')) {
         errorMessage = 'Authentication failed. Please try logging in again.';
@@ -572,9 +571,9 @@ const AIChat: React.FC<AIChatProps> = ({
       } else if (error.message) {
         errorMessage = error.message;
       }
-
+  
       toast.error(`Error: ${errorMessage}`);
-
+  
     } finally {
       setIsLoading(false);
     }
@@ -589,7 +588,6 @@ const AIChat: React.FC<AIChatProps> = ({
     activeChatSessionId,
     onSendMessageToBackend
   ]);
-
   const handleGenerateImageFromText = useCallback(async () => {
     if (!imagePrompt.trim()) {
       toast.error('Please enter a prompt for image generation.');
