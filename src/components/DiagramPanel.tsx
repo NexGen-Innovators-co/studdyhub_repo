@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
-import { X, RefreshCw, AlertTriangle, Code, Download, GripVertical, Loader2, Palette, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { X, RefreshCw, AlertTriangle, Code, Download, GripVertical, Loader2, Palette, Maximize2, Minimize2, ZoomIn, ZoomOut, Eye, FileCode } from 'lucide-react';
 import { toast } from 'sonner';
 import { Chart, registerables } from 'chart.js';
 import Mermaid from './Mermaid';
@@ -45,7 +45,6 @@ const IsolatedHtml = ({ html }: { html: string }) => {
           ADD_ATTR: ['target', 'sandbox']
         });
 
-        // Create a complete HTML document with proper DOCTYPE
         const fullHtml = `
 <!DOCTYPE html>
 <html lang="en">
@@ -54,7 +53,6 @@ const IsolatedHtml = ({ html }: { html: string }) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Generated Content</title>
     <style>
-        /* Reset styles to ensure clean slate */
         * {
             box-sizing: border-box;
         }
@@ -64,7 +62,6 @@ const IsolatedHtml = ({ html }: { html: string }) => {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             line-height: 1.5;
         }
-        /* Allow the AI content to define its own styles */
     </style>
 </head>
 <body>
@@ -72,14 +69,12 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 </body>
 </html>`;
 
-        // Write content to iframe
         const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
         if (iframeDoc) {
           iframeDoc.open();
           iframeDoc.write(fullHtml);
           iframeDoc.close();
           
-          // Handle iframe load events
           iframe.onload = () => {
             setIsLoading(false);
           };
@@ -301,6 +296,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const isPanningRef = useRef(false);
   const startPanPos = useRef({ x: 0, y: 0 });
+  const [showSourceCode, setShowSourceCode] = useState(false);
 
   // Auto-detect system theme preference
   useEffect(() => {
@@ -346,20 +342,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   }, []);
 
   // Resize handlers
-  // const startResize = useCallback((e: React.MouseEvent | React.TouchEvent, type: 'width' | 'height') => {
-  //   e.preventDefault();
-  //   setIsResizing(prev => ({ ...prev, [type]: true }));
-  //   initialPos.current = {
-  //     x: 'touches' in e ? e.touches[0].clientX : e.clientX,
-  //     y: 'touches' in e ? e.touches[0].clientY : e.clientY
-  //   };
-  //   initialSize.current = {
-  //     width: diagramPanelRef.current?.offsetWidth || 0,
-  //     height: diagramPanelRef.current?.offsetHeight || 0
-  //   };
-  //   document.body.style.cursor = type === 'width' ? 'ew-resize' : 'ns-resize';
-  // }, []);
-
   const handleResize = useCallback((e: MouseEvent | TouchEvent) => {
     if (!isResizing.width && !isResizing.height) return;
 
@@ -414,23 +396,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       y: 'touches' in e ? e.touches[0].clientY : e.clientY
     };
   }, [isFullScreen]);
-
-  // const handlePanMove = useCallback((e: MouseEvent | TouchEvent) => {
-  //   if (!isPanningRef.current || isFullScreen || window.innerWidth < 768) return;
-  //   const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-  //   const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-  //   const deltaX = (clientX - startPanPos.current.x) / zoomLevel;
-  //   const deltaY = (clientY - startPanPos.current.y) / zoomLevel;
-  //   setPanOffset(prev => ({
-  //     x: prev.x + deltaX,
-  //     y: prev.y + deltaY
-  //   }));
-  //   startPanPos.current = { x: clientX, y: clientY };
-  // }, [zoomLevel, isFullScreen]);
-
-  // const handlePanEnd = useCallback(() => {
-  //   isPanningRef.current = false;
-  // }, []);
 
   // Dynamic styles
   const dynamicPanelStyle: React.CSSProperties = {
@@ -680,12 +645,58 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     </div>
   );
 
+  const renderSourceCode = useMemo(() => {
+    const theme = themes[currentTheme];
+    return (
+      <div
+        className="relative rounded-lg overflow-hidden h-full shadow-lg"
+        style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}
+      >
+        <div
+          className="px-4 py-2 border-b text-sm font-medium flex items-center justify-between"
+          style={{ backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }}
+        >
+          <span className="flex items-center space-x-2">
+            <Code className="h-4 w-4" />
+            <span>{language?.toUpperCase() || 'PLAINTEXT'}</span>
+          </span>
+          <span className="text-xs opacity-75" style={{ color: theme.lineNumbers }}>
+            {diagramContent?.split('\n').length || 0} lines
+          </span>
+        </div>
+        <div className="p-4 overflow-auto h-full">
+          <div className="flex">
+            <div className="select-none pr-4 text-right font-mono text-sm leading-relaxed" style={{ color: theme.lineNumbers }}>
+              {diagramContent?.split('\n').map((_, index) => (
+                <div key={index + 1} className="min-h-[1.5rem]">{index + 1}</div>
+              ))}
+            </div>
+            <div className="flex-1 overflow-x-auto">
+              <pre className="font-mono text-sm leading-relaxed">
+                <code
+                  dangerouslySetInnerHTML={{
+                    __html: diagramContent ? highlightCode(diagramContent, language || 'plaintext', theme) : ''
+                  }}
+                  style={{ color: theme.foreground }}
+                />
+              </pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }, [diagramContent, language, currentTheme]);
+
   const renderContent = useMemo(() => {
     if (!diagramContent && !imageUrl) {
       return <p className="text-gray-500">No content to display.</p>;
     }
 
     const theme = themes[currentTheme];
+
+    if (showSourceCode && diagramContent && diagramType !== 'image' && diagramType !== 'unknown') {
+      return renderSourceCode;
+    }
 
     if (diagramType === 'html') {
       panelTitle = 'HTML Web Page View';
@@ -813,44 +824,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       panelTitle = language ? `Code View - ${language.toUpperCase()}` : 'Code View';
       downloadButtonText = 'Download Code';
       downloadFileName = `code.${language || 'txt'}`;
-      return (
-        <div
-          className="relative rounded-lg overflow-hidden h-full shadow-lg"
-          style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}
-        >
-          <div
-            className="px-4 py-2 border-b text-sm font-medium flex items-center justify-between"
-            style={{ backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }}
-          >
-            <span className="flex items-center space-x-2">
-              <Code className="h-4 w-4" />
-              <span>{language?.toUpperCase() || 'PLAINTEXT'}</span>
-            </span>
-            <span className="text-xs opacity-75" style={{ color: theme.lineNumbers }}>
-              {diagramContent?.split('\n').length || 0} lines
-            </span>
-          </div>
-          <div className="p-4 overflow-auto h-full">
-            <div className="flex">
-              <div className="select-none pr-4 text-right font-mono text-sm leading-relaxed" style={{ color: theme.lineNumbers }}>
-                {diagramContent?.split('\n').map((_, index) => (
-                  <div key={index + 1} className="min-h-[1.5rem]">{index + 1}</div>
-                ))}
-              </div>
-              <div className="flex-1 overflow-x-auto">
-                <pre className="font-mono text-sm leading-relaxed">
-                  <code
-                    dangerouslySetInnerHTML={{
-                      __html: diagramContent ? highlightCode(diagramContent, language || 'plaintext', theme) : ''
-                    }}
-                    style={{ color: theme.foreground }}
-                  />
-                </pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
+      return renderSourceCode;
     } else if (diagramType === 'document-text') {
       panelTitle = language ? `Document View - ${language.toUpperCase()}` : 'Document View';
       downloadButtonText = 'Download Document';
@@ -898,7 +872,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         </div>
       );
     }
-  }, [diagramContent, diagramType, imageUrl, currentTheme, isResizing, onMermaidError, onSuggestAiCorrection, chartError, threeJsError, language, dotSvg, dotError, isDotLoading, handleThreeJsSceneReady]);
+  }, [diagramContent, diagramType, imageUrl, currentTheme, isResizing, onMermaidError, onSuggestAiCorrection, chartError, threeJsError, language, dotSvg, dotError, isDotLoading, handleThreeJsSceneReady, showSourceCode]);
 
   // Click outside handler for theme selector
   useEffect(() => {
@@ -938,6 +912,19 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     },
   };
 
+  // Determine available actions based on diagram type
+  const availableActions = {
+    html: ['download', 'pdf'],
+    mermaid: ['download', 'pdf', 'toggle'],
+    dot: ['download', 'pdf', 'toggle'],
+    chartjs: ['download', 'pdf', 'toggle'],
+    threejs: ['download', 'pdf', 'gltf', 'toggle'],
+    code: ['download', 'theme'],
+    'document-text': ['download', 'theme'],
+    image: ['download'],
+    unknown: []
+  };
+
   return (
     <motion.div
       ref={diagramPanelRef}
@@ -948,37 +935,48 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       exit="exit"
       style={dynamicPanelStyle}
     >
-
       <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-slate-800 mb-2 sm:mb-0 dark:text-gray-100">{panelTitle}</h3>
         <div className="flex flex-wrap items-center gap-2 justify-end">
-          {(diagramType === 'code' || diagramType === 'document-text') && (
+          {availableActions[diagramType].includes('theme') && (
             <div className="theme-selector-container">
               <ThemeSelector />
             </div>
           )}
-          {(diagramType === 'code' || diagramType === 'document-text' || diagramType === 'chartjs' || diagramType === 'mermaid' || diagramType === 'dot' || diagramType === 'threejs' || diagramType === 'html') && (
+          {availableActions[diagramType].includes('toggle') && diagramContent && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowThemeSelector(!showThemeSelector)}
+              onClick={() => setShowSourceCode(!showSourceCode)}
               className="text-sm px-3 py-1"
             >
-              <Code className="h-4 w-4 mr-2" /> View Raw Code
+              {showSourceCode ? (
+                <>
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Preview
+                </>
+              ) : (
+                <>
+                  <FileCode className="h-4 w-4 mr-2" />
+                  View Source
+                </>
+              )}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadContent}
-            className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 dark:border-blue-700"
-            title={downloadButtonText}
-            disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
-          >
-            <Download className="h-4 w-4 mr-0 sm:mr-2" />
-            <span className="hidden sm:inline">{downloadButtonText}</span>
-          </Button>
-          {diagramType === 'threejs' && (
+          {availableActions[diagramType].includes('download') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadContent}
+              className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 dark:border-blue-700"
+              title={downloadButtonText}
+              disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
+            >
+              <Download className="h-4 w-4 mr-0 sm:mr-2" />
+              <span className="hidden sm:inline">{downloadButtonText}</span>
+            </Button>
+          )}
+          {availableActions[diagramType].includes('gltf') && (
             <Button
               variant="outline"
               size="sm"
@@ -991,7 +989,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               <span className="hidden sm:inline">Download GLTF</span>
             </Button>
           )}
-          {(!['code', 'image', 'unknown', 'document-text'].includes(diagramType)) && (
+          {availableActions[diagramType].includes('pdf') && (
             <Button
               variant="outline"
               size="sm"
