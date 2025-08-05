@@ -41,19 +41,10 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         const sanitizedHtml = DOMPurify.sanitize(html, {
           WHOLE_DOCUMENT: true,
           RETURN_DOM: false,
-          ALLOWED_TAGS: [
-            'html', 'head', 'meta', 'title', 'body', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-            'a', 'img', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'tfoot',
-            'strong', 'em', 'br', 'hr', 'style', 'script', 'button', 'input', 'textarea', 'form', 'svg'
-          ],
-          ALLOWED_ATTR: [
-            'class', 'id', 'style', 'href', 'src', 'alt', 'title', 'type', 'value', 'disabled', 'checked',
-            'placeholder', 'aria-label', 'aria-hidden', 'data-', 'width', 'height', 'viewBox'
-          ],
-          FORBID_ATTR: ['onerror', 'onload', 'oncontextmenu', 'onclick', 'onmouseover', 'onmouseout'],
-          ALLOW_DATA_ATTR: true,
-          ALLOWED_URI_REGEXP: /^(?:(?:(?:https?):)?\/\/)?(?:\S+(?::\S*)?@)?(?:(?:studdyhub\.vercel\.app|notemind\.lovable\.app)|(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff_-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}))(?::\d{2,5})?(?:[/?#]\S*)?$/i
+          ADD_TAGS: ['style', 'script'],
+          ADD_ATTR: ['target', 'sandbox']
         });
+
         // Create a complete HTML document with proper DOCTYPE
         const fullHtml = `
 <!DOCTYPE html>
@@ -61,7 +52,6 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; form-action 'self';">
     <title>AI Generated Content</title>
     <style>
         /* Reset styles to ensure clean slate */
@@ -74,6 +64,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             line-height: 1.5;
         }
+        /* Allow the AI content to define its own styles */
     </style>
 </head>
 <body>
