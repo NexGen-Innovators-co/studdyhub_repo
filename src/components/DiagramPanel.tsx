@@ -25,18 +25,117 @@ declare global {
     Viz: any;
   }
 }
+
 const IsolatedHtml = ({ html }: { html: string }) => {
-  const ref = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
-    if (ref.current) {
-      const shadowRoot = ref.current.attachShadow({ mode: 'open' });
-      shadowRoot.innerHTML = DOMPurify.sanitize(html);
+    if (iframeRef.current && html) {
+      setIsLoading(true);
+      setHasError(false);
+      
+      try {
+        const iframe = iframeRef.current;
+        const sanitizedHtml = DOMPurify.sanitize(html, {
+          WHOLE_DOCUMENT: true,
+          RETURN_DOM: false,
+          ADD_TAGS: ['style', 'script'],
+          ADD_ATTR: ['target', 'sandbox']
+        });
+
+        // Create a complete HTML document with proper DOCTYPE
+        const fullHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Generated Content</title>
+    <style>
+        /* Reset styles to ensure clean slate */
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.5;
+        }
+        /* Allow the AI content to define its own styles */
+    </style>
+</head>
+<body>
+    ${sanitizedHtml}
+</body>
+</html>`;
+
+        // Write content to iframe
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (iframeDoc) {
+          iframeDoc.open();
+          iframeDoc.write(fullHtml);
+          iframeDoc.close();
+          
+          // Handle iframe load events
+          iframe.onload = () => {
+            setIsLoading(false);
+          };
+          
+          iframe.onerror = () => {
+            setHasError(true);
+            setIsLoading(false);
+          };
+        }
+      } catch (error) {
+        console.error('Error rendering HTML content:', error);
+        setHasError(true);
+        setIsLoading(false);
+      }
     }
   }, [html]);
 
-  return <div ref={ref} className="w-full h-full" />;
+  if (hasError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-red-600 bg-red-50 p-4">
+        <AlertTriangle className="h-8 w-8 mb-2" />
+        <p className="text-center">Error rendering HTML content</p>
+        <details className="mt-4 w-full max-w-md">
+          <summary className="cursor-pointer text-sm">View raw HTML</summary>
+          <pre className="mt-2 p-2 bg-white border rounded text-xs overflow-auto max-h-32">
+            {html}
+          </pre>
+        </details>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
+          <div className="flex flex-col items-center">
+            <Loader2 className="h-6 w-6 animate-spin text-blue-600 mb-2" />
+            <p className="text-sm text-gray-600">Loading HTML content...</p>
+          </div>
+        </div>
+      )}
+      <iframe
+        ref={iframeRef}
+        className="w-full h-full border-0"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+        title="AI Generated HTML Content"
+        style={{
+          backgroundColor: 'white',
+          minHeight: '100%'
+        }}
+      />
+    </div>
+  );
 };
+
 interface DiagramPanelProps {
   diagramContent?: string;
   diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html';
@@ -589,15 +688,10 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     const theme = themes[currentTheme];
 
     if (diagramType === 'html') {
-      IsolatedHtml({ html: diagramContent || '' });
-      return (
-        <div
-          className="relative"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(diagramContent || '') }}
-          style={{ backgroundColor: theme.background }}
-        />
-      );
-
+      panelTitle = 'HTML Web Page View';
+      downloadButtonText = 'Download HTML';
+      downloadFileName = 'webpage';
+      return <IsolatedHtml html={diagramContent || ''} />;
     } else if (diagramType === 'mermaid') {
       panelTitle = 'Mermaid Diagram View';
       downloadButtonText = 'Download Diagram (SVG)';
