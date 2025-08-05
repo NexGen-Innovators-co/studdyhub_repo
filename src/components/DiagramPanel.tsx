@@ -41,7 +41,6 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         const sanitizedHtml = DOMPurify.sanitize(html, {
           WHOLE_DOCUMENT: true,
           RETURN_DOM: false,
-          // Be more restrictive with allowed tags and attributes
           ALLOWED_TAGS: [
             'html', 'head', 'meta', 'title', 'body', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
             'a', 'img', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'tfoot',
@@ -51,12 +50,9 @@ const IsolatedHtml = ({ html }: { html: string }) => {
             'class', 'id', 'style', 'href', 'src', 'alt', 'title', 'type', 'value', 'disabled', 'checked',
             'placeholder', 'aria-label', 'aria-hidden', 'data-', 'width', 'height', 'viewBox'
           ],
-          // Disallow dangerous attributes that could enable same-origin access
           FORBID_ATTR: ['onerror', 'onload', 'oncontextmenu', 'onclick', 'onmouseover', 'onmouseout'],
-          // Allow data attributes for interactivity
           ALLOW_DATA_ATTR: true,
-          // Ensure scripts are safe (optional: remove scripts entirely if not needed)
-          ALLOWED_URI_REGEXP: /^(?:(?:(?:https?|ftp):)?\/\/)?(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff_-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}))(?::\d{2,5})?(?:[/?#]\S*)?$/i
+          ALLOWED_URI_REGEXP: /^(?:(?:(?:https?):)?\/\/)?(?:\S+(?::\S*)?@)?(?:(?:studdyhub\.vercel\.app|notemind\.lovable\.app)|(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff_-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}))(?::\d{2,5})?(?:[/?#]\S*)?$/i
         });
         // Create a complete HTML document with proper DOCTYPE
         const fullHtml = `
