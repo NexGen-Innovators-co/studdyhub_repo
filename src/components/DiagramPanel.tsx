@@ -35,16 +35,29 @@ const IsolatedHtml = ({ html }: { html: string }) => {
     if (iframeRef.current && html) {
       setIsLoading(true);
       setHasError(false);
-      
+
       try {
         const iframe = iframeRef.current;
         const sanitizedHtml = DOMPurify.sanitize(html, {
           WHOLE_DOCUMENT: true,
           RETURN_DOM: false,
-          ADD_TAGS: ['style', 'script'],
-          ADD_ATTR: ['target', 'sandbox']
+          // Be more restrictive with allowed tags and attributes
+          ALLOWED_TAGS: [
+            'html', 'head', 'meta', 'title', 'body', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'a', 'img', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'tfoot',
+            'strong', 'em', 'br', 'hr', 'style', 'script', 'button', 'input', 'textarea', 'form', 'svg'
+          ],
+          ALLOWED_ATTR: [
+            'class', 'id', 'style', 'href', 'src', 'alt', 'title', 'type', 'value', 'disabled', 'checked',
+            'placeholder', 'aria-label', 'aria-hidden', 'data-', 'width', 'height', 'viewBox'
+          ],
+          // Disallow dangerous attributes that could enable same-origin access
+          FORBID_ATTR: ['onerror', 'onload', 'oncontextmenu', 'onclick', 'onmouseover', 'onmouseout'],
+          // Allow data attributes for interactivity
+          ALLOW_DATA_ATTR: true,
+          // Ensure scripts are safe (optional: remove scripts entirely if not needed)
+          ALLOWED_URI_REGEXP: /^(?:(?:(?:https?|ftp):)?\/\/)?(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff_-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}))(?::\d{2,5})?(?:[/?#]\S*)?$/i
         });
-
         // Create a complete HTML document with proper DOCTYPE
         const fullHtml = `
 <!DOCTYPE html>
@@ -52,6 +65,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; form-action 'self';">
     <title>AI Generated Content</title>
     <style>
         /* Reset styles to ensure clean slate */
@@ -64,7 +78,6 @@ const IsolatedHtml = ({ html }: { html: string }) => {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             line-height: 1.5;
         }
-        /* Allow the AI content to define its own styles */
     </style>
 </head>
 <body>
@@ -78,12 +91,12 @@ const IsolatedHtml = ({ html }: { html: string }) => {
           iframeDoc.open();
           iframeDoc.write(fullHtml);
           iframeDoc.close();
-          
+
           // Handle iframe load events
           iframe.onload = () => {
             setIsLoading(false);
           };
-          
+
           iframe.onerror = () => {
             setHasError(true);
             setIsLoading(false);
@@ -125,7 +138,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
       <iframe
         ref={iframeRef}
         className="w-full h-full border-0"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+        sandbox="allow-scripts allow-forms allow-popups allow-modals"
         title="AI Generated HTML Content"
         style={{
           backgroundColor: 'white',
@@ -346,19 +359,19 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   }, []);
 
   // Resize handlers
-  const startResize = useCallback((e: React.MouseEvent | React.TouchEvent, type: 'width' | 'height') => {
-    e.preventDefault();
-    setIsResizing(prev => ({ ...prev, [type]: true }));
-    initialPos.current = {
-      x: 'touches' in e ? e.touches[0].clientX : e.clientX,
-      y: 'touches' in e ? e.touches[0].clientY : e.clientY
-    };
-    initialSize.current = {
-      width: diagramPanelRef.current?.offsetWidth || 0,
-      height: diagramPanelRef.current?.offsetHeight || 0
-    };
-    document.body.style.cursor = type === 'width' ? 'ew-resize' : 'ns-resize';
-  }, []);
+  // const startResize = useCallback((e: React.MouseEvent | React.TouchEvent, type: 'width' | 'height') => {
+  //   e.preventDefault();
+  //   setIsResizing(prev => ({ ...prev, [type]: true }));
+  //   initialPos.current = {
+  //     x: 'touches' in e ? e.touches[0].clientX : e.clientX,
+  //     y: 'touches' in e ? e.touches[0].clientY : e.clientY
+  //   };
+  //   initialSize.current = {
+  //     width: diagramPanelRef.current?.offsetWidth || 0,
+  //     height: diagramPanelRef.current?.offsetHeight || 0
+  //   };
+  //   document.body.style.cursor = type === 'width' ? 'ew-resize' : 'ns-resize';
+  // }, []);
 
   const handleResize = useCallback((e: MouseEvent | TouchEvent) => {
     if (!isResizing.width && !isResizing.height) return;
@@ -415,22 +428,22 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     };
   }, [isFullScreen]);
 
-  const handlePanMove = useCallback((e: MouseEvent | TouchEvent) => {
-    if (!isPanningRef.current || isFullScreen || window.innerWidth < 768) return;
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    const deltaX = (clientX - startPanPos.current.x) / zoomLevel;
-    const deltaY = (clientY - startPanPos.current.y) / zoomLevel;
-    setPanOffset(prev => ({
-      x: prev.x + deltaX,
-      y: prev.y + deltaY
-    }));
-    startPanPos.current = { x: clientX, y: clientY };
-  }, [zoomLevel, isFullScreen]);
+  // const handlePanMove = useCallback((e: MouseEvent | TouchEvent) => {
+  //   if (!isPanningRef.current || isFullScreen || window.innerWidth < 768) return;
+  //   const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+  //   const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+  //   const deltaX = (clientX - startPanPos.current.x) / zoomLevel;
+  //   const deltaY = (clientY - startPanPos.current.y) / zoomLevel;
+  //   setPanOffset(prev => ({
+  //     x: prev.x + deltaX,
+  //     y: prev.y + deltaY
+  //   }));
+  //   startPanPos.current = { x: clientX, y: clientY };
+  // }, [zoomLevel, isFullScreen]);
 
-  const handlePanEnd = useCallback(() => {
-    isPanningRef.current = false;
-  }, []);
+  // const handlePanEnd = useCallback(() => {
+  //   isPanningRef.current = false;
+  // }, []);
 
   // Dynamic styles
   const dynamicPanelStyle: React.CSSProperties = {
@@ -767,7 +780,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => onSuggestAiCorrection(`Can you fix this Chart.js configuration? Here's the code: ${diagramContent}`)}
+                onClick={() => onSuggestAiCorrection(`your recent codes had and error, you fix it. Here's the code: ${diagramContent}`)}
                 className="ml-4 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
               >
                 Suggest AI Correction
