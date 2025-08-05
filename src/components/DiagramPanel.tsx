@@ -35,7 +35,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
     if (iframeRef.current && html) {
       setIsLoading(true);
       setHasError(false);
-
+      
       try {
         const iframe = iframeRef.current;
         const sanitizedHtml = DOMPurify.sanitize(html, {
@@ -78,12 +78,12 @@ const IsolatedHtml = ({ html }: { html: string }) => {
           iframeDoc.open();
           iframeDoc.write(fullHtml);
           iframeDoc.close();
-
+          
           // Handle iframe load events
           iframe.onload = () => {
             setIsLoading(false);
           };
-
+          
           iframe.onerror = () => {
             setHasError(true);
             setIsLoading(false);
@@ -125,7 +125,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
       <iframe
         ref={iframeRef}
         className="w-full h-full border-0"
-        sandbox="allow-scripts allow-forms allow-popups allow-modals"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
         title="AI Generated HTML Content"
         style={{
           backgroundColor: 'white',
