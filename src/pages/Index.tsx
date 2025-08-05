@@ -138,6 +138,7 @@ const Index = () => {
     switch (currentActiveTab) {
       case 'recordings':
         loadDataIfNeeded('recordings');
+        loadDataIfNeeded('quizzes');
         break;
       case 'schedule':
         loadDataIfNeeded('scheduleItems');
@@ -146,8 +147,13 @@ const Index = () => {
         loadDataIfNeeded('documents');
         break;
       case 'settings':
-        // Load quizzes when accessing settings (if quizzes are shown there)
-        loadDataIfNeeded('quizzes');
+          loadDataIfNeeded('quizzes');
+        break;
+      case 'chat':
+        loadDataIfNeeded('documents');
+        break;
+      default:
+        loadDataIfNeeded('notes');
         break;
     }
   }, [currentActiveTab, loadDataIfNeeded]);
@@ -187,11 +193,11 @@ const Index = () => {
   }, []);
 
   const filteredChatMessages = useMemo(() => {
-    console.log('Filtering messages - Active session:', activeChatSessionId);
-    console.log('Total messages to filter:', allChatMessages.length);
+    //console.log('Filtering messages - Active session:', activeChatSessionId);
+    //console.log('Total messages to filter:', allChatMessages.length);
 
     if (!activeChatSessionId) {
-      console.log('No active session, returning empty array');
+      //console.log('No active session, returning empty array');
       return [];
     }
 
@@ -199,19 +205,20 @@ const Index = () => {
       .filter(msg => {
         const matches = msg.session_id === activeChatSessionId;
         if (!matches) {
-          console.log(`Message ${msg.id} session ${msg.session_id} doesn't match active session ${activeChatSessionId}`);
+          //console.log(`Message ${msg.id} session ${msg.session_id} doesn't match active session ${activeChatSessionId}`);
         }
         return matches;
       })
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-    console.log('Filtered messages count:', filtered.length);
-    console.log('Filtered messages:', filtered.map(m => ({
-      id: m.id.substring(0, 8),
-      role: m.role,
-      timestamp: new Date(m.timestamp).toLocaleTimeString(),
-      session_id: m.session_id
-    })));
+    //console.log('Filtered messages count:', filtered.length);
+    //console.log('Filtered messages:', filtered.map(m => ({
+    //  id: m.id.substring(0, 8),
+      //role: m.role,
+      //timestamp: new Date(m.timestamp).toLocaleTimeString(),
+      //session_id: m.session_id
+   // })
+    //));
 
     return filtered;
   }, [allChatMessages, activeChatSessionId]);
@@ -842,6 +849,8 @@ const Index = () => {
     isSidebarOpen,
     onToggleSidebar: memoizedOnToggleSidebar,
     activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings',
+    fullName: userProfile?.full_name || '',
+    avatarUrl: userProfile?.avatar_url || '',
   }), [searchQuery, setSearchQuery, createNewNote, isSidebarOpen, memoizedOnToggleSidebar, currentActiveTab]);
 
   const sidebarProps = useMemo(() => ({
@@ -1043,8 +1052,8 @@ const Index = () => {
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0 bg-slate-50 dark:bg-gray-900">
         <div className="flex items-center justify-between p-3 sm:p-2 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
           <Header {...headerProps} />
-          <div className="hidden sm:flex items-center gap-3">
-            <span className="text-sm text-slate-600 hidden md:block dark:text-gray-300">Welcome, {user.email}</span>
+          <div className="hidden p-3 sm:flex items-center gap-3">
+            
             <Button
               variant="outline"
               size="sm"

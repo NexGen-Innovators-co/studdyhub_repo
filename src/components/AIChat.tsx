@@ -899,7 +899,7 @@ const AIChat: React.FC<AIChatProps> = ({
           animate={{ width: isDiagramPanelOpen ? `${100 - panelWidth}%` : '100%' }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
         >
-          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col modern-scrollbar pb-32 md:pb-6">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col modern-scrollbar pb-36 md:pb-6">
             <MessageList
               messages={displayMessages}
               isLoading={isLoading}
@@ -959,7 +959,9 @@ const AIChat: React.FC<AIChatProps> = ({
             )}
             <div ref={messagesEndRef} />
           </div>
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 shadow-lg md:shadow-none md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
+          {/* <div className={`fixed  left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 shadow-lg md:shadow-none md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}> */}
+            
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50  md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
             {(selectedDocumentIds.length > 0 || selectedImagePreview) && (
               <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700
                 ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'}
@@ -991,7 +993,9 @@ const AIChat: React.FC<AIChatProps> = ({
                 )}
               </div>
             )}
-            <div className={`flex flex-col gap-2 p-3 rounded-lg bg-white border border-slate-200 shadow-lg dark:bg-gray-800 dark:border-gray-700 font-sans ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'} input-container`}>
+              
+              
+              <div className="max-w-4xl w-full mx-auto flex flex-col gap-2 p-3 rounded-lg border border-gray-700 dark:bg-gray-800 bg-white transition-colors duration-300">
               {selectedImagePreview && (
                 <div className="relative w-1/6 h-24 rounded-lg overflow-hidden flex-shrink-0 mb-2">
                   <img src={selectedImagePreview} alt="Selected preview" className="w-full h-full object-fit" />
@@ -1007,90 +1011,94 @@ const AIChat: React.FC<AIChatProps> = ({
                   </Button>
                 </div>
               )}
-              <textarea
-                ref={textareaRef}
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask a question about your notes or study topics, or use the microphone..."
-                className="flex-1 text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-transparent px-2 py-2 chat-input dark:text-gray-200 dark:placeholder-gray-400"
-                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                rows={1}
-              />
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={isRecognizing ? stopRecognition : startRecognition}
-                  className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'mic-active text-red-600 dark:text-red-400' : 'text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-700'}`}
-                  title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
-                >
-                  <Mic className="h-5 w-5" />
-                </Button>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="user"
-                  ref={cameraInputRef}
-                  onChange={handleImageChange}
-                  className="hidden"
+
+                <textarea
+                  ref={textareaRef}
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  placeholder="What do you want to know?"
+                className="w-full text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                  rows={1}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
-                  title="Take Picture"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                >
-                  <Camera className="h-5 w-5" />
-                </Button>
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={imageInputRef}
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => imageInputRef.current?.click()}
-                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
-                  title="Upload Image"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                >
-                  <Upload className="h-5 w-5" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowDocumentSelector(true)}
-                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
-                  title="Select Documents/Notes for Context"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                >
-                  {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
-                </Button>
-                <Button
-                  type="submit"
-                  onClick={handleSendMessage}
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && !selectedImageFile && selectedDocumentIds.length === 0)}
-                  className="bg-blue-600  hover:bg-blue-900 text-white shadow-md disabled:opacity-50 h-10 w-10 flex-shrink-0 rounded-lg p-0 font-sans"
-                  title="Send Message"
-                >
-                  {isSubmittingUserMessage ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
+                <div className="flex items-center gap-2 mt-2 justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={isRecognizing ? stopRecognition : startRecognition}
+                      className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'bg-red-900 text-red-300 dark:bg-red-900 dark:text-red-300 bg-red-200 text-red-600' : 'text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300'}`}
+                      title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
+                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
+                    >
+                      <Mic className="h-5 w-5" />
+                    </Button>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      ref={cameraInputRef}
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                      title="Take Picture"
+                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                    >
+                      <Camera className="h-5 w-5" />
+                    </Button>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={imageInputRef}
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                      title="Upload Image"
+                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                    >
+                      <Upload className="h-5 w-5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowDocumentSelector(true)}
+                      className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
+                      title="Select Documents/Notes for Context"
+                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                    >
+                      {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
+                    </Button>
+                  </div>
+                  <Button
+                    type="submit"
+                    onClick={handleSendMessage}
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && !selectedImageFile && selectedDocumentIds.length === 0)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                    title="Send Message"
+                  >
+                    {isSubmittingUserMessage ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               </div>
-            </div>
+            {/* </div> */}
           </div>
           {showDocumentSelector && (
             <DocumentSelector
