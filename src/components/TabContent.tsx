@@ -10,287 +10,9 @@ import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import ErrorBoundary from './ErrorBoundary';
-import Mermaid from './Mermaid';
-import { Chart, registerables } from 'chart.js';
-import { AlertTriangle, Copy, Check, Code, X } from 'lucide-react';
-import { Button } from './ui/button';
+
 import { toast } from 'sonner';
-import { lowlight } from 'lowlight';
 
-Chart.register(...registerables);
-
-const useCopyToClipboard = () => {
-  const [copied, setCopied] = useState(false);
-  const copy = useCallback((text: string) => {
-    try {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast.success('Copied to clipboard!');
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
-      toast.error('Failed to copy to clipboard.');
-    }
-  }, []);
-  return { copied, copy };
-};
-
-const escapeHtml = (text: string) => {
-  const map: { [key: string]: string } = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
-};
-
-const toHtml = (result: any) => {
-  const nodeToHtml = (node: any): string => {
-    if (node.type === 'text') {
-      return escapeHtml(node.value);
-    }
-    if (node.type === 'element') {
-      const { tagName, properties, children } = node;
-      const classNames = (properties?.className || []).join(' ');
-      const styleMap: { [key: string]: string } = {
-        'hljs-comment': 'color: #9ca3af; font-style: italic;',
-        'hljs-keyword': 'color: #c084fc; font-weight: 600;',
-        'hljs-string': 'color: #86efac;',
-        'hljs-number': 'color: #fdba74;',
-        'hljs-built_in': 'color: #93c5fd; font-weight: 500;',
-        'hljs-function': 'color: #93c5fd; font-weight: 500;',
-        'hljs-variable': 'color: #bfdbfe;',
-        'hljs-type': 'color: #5eead4;',
-        'hljs-class': 'color: #fcd34d;',
-        'hljs-attr': 'color: #93c5fd;',
-        'hljs-tag': 'color: #f472b6;',
-        'hljs-operator': 'color: #fbcfe8;',
-        'hljs-literal': 'color: #fdba74;',
-        'hljs-meta': 'color: #7dd3fc;',
-        'hljs-title': 'color: #86efac;',
-        'hljs-selector-tag': 'color: #c084fc;',
-        'hljs-regexp': 'color: #f472b6;',
-        'hljs-symbol': 'color: #fca5a5;',
-        'hljs-bullet': 'color: #fbcfe8;',
-        'hljs-params': 'color: #fde68a;',
-        'hljs-name': 'color: #93c5fd;',
-        'hljs-attribute': 'color: #fcd34d;',
-        'hljs-selector-attr': 'color: #67e8f9;',
-        'hljs-selector-pseudo': 'color: #fbcfe8;',
-        'hljs-template-variable': 'color: #bfdbfe;',
-        'hljs-quote': 'color: #9ca3af; font-style: italic;',
-        'hljs-deletion': 'color: #f87171; background-color: #450a0a;',
-        'hljs-addition': 'color: #4ade80; background-color: #064e3b;',
-        'hljs-meta-keyword': 'color: #7dd3fc; font-weight: 600;',
-        'hljs-meta-string': 'color: #38bdf8;',
-        'hljs-subst': 'color: #c084fc;',
-        'hljs-section': 'color: #86efac;',
-        'hljs-boolean': 'color: #fdba74;',
-      };
-
-      let style = '';
-      classNames.split(' ').forEach(cls => {
-        if (styleMap[cls]) {
-          style += styleMap[cls] + ' ';
-        }
-      });
-
-      const childrenHtml = children?.map(nodeToHtml).join('') || '';
-      return `<${tagName}${style ? ` style="${style.trim()}"` : ''}>${childrenHtml}</${tagName}>`;
-    }
-    return '';
-  };
-
-  return result.children.map(nodeToHtml).join('');
-};
-
-const highlightCode = (code: string, language: string) => {
-  try {
-    const result = lowlight.highlight(language, code);
-    return toHtml(result);
-  } catch (error) {
-    console.warn('Syntax highlighting failed:', error);
-    return escapeHtml(code);
-  }
-};
-
-interface ChartRendererProps {
-  chartConfig: any;
-}
-
-const ChartRenderer: React.FC<ChartRendererProps> = ({ chartConfig }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartInstance = useRef<any>(null);
-
-  useEffect(() => {
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        if (chartInstance.current) {
-          chartInstance.current.destroy();
-        }
-        chartInstance.current = new Chart(ctx, chartConfig);
-      }
-    }
-
-    return () => {
-      if (chartInstance.current) {
-        chartInstance.current.destroy();
-        chartInstance.current = null;
-      }
-    };
-  }, [chartConfig]);
-
-  return (
-    <div className="relative w-full h-80 bg-gray-700 p-4 rounded-lg shadow-inner">
-      <canvas ref={canvasRef}></canvas>
-    </div>
-  );
-};
-
-interface SidePanelViewerProps {
-  code?: string;
-  language?: string;
-  imageUrl?: string;
-  type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs';
-  onClose: () => void;
-  onMermaidError: (error: string) => void;
-  onSuggestAiCorrection: (prompt?: string) => void;
-}
-
-const SidePanelViewer: React.FC<SidePanelViewerProps> = ({ code, language, imageUrl, type, onClose, onMermaidError, onSuggestAiCorrection }) => {
-  const { copied, copy } = useCopyToClipboard();
-
-  const renderContent = () => {
-    if (type === 'mermaid' && code) {
-      return <Mermaid chart={code} onMermaidError={onMermaidError} onSuggestAiCorrection={() => onSuggestAiCorrection()} diagramRef={null} />;
-    } else if (type === 'chartjs' && code) {
-      try {
-        const chartConfig = JSON.parse(code);
-        return <ChartRenderer chartConfig={chartConfig} />;
-      } catch (e) {
-        return (
-          <div className="my-4 p-4 bg-red-900 border border-red-700 rounded-lg">
-            <div className="flex items-center gap-2 text-red-300">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="text-sm font-medium">Chart.js Error</span>
-            </div>
-            <p className="text-sm text-red-400 mt-1">
-              Invalid Chart.js JSON configuration. Please check the code.
-            </p>
-            <pre className="text-sm text-gray-300 mt-2 p-2 bg-gray-800 rounded overflow-x-auto">
-              {code}
-            </pre>
-          </div>
-        );
-      }
-    } else if (type === 'dot' && code) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full p-4">
-          <p className="text-gray-300 mb-2">DOT Graph Rendering Not Available Here. Displaying raw code:</p>
-          <pre className="bg-gray-800 p-3 rounded-md text-sm overflow-x-auto max-w-full text-gray-200">
-            {code}
-          </pre>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onSuggestAiCorrection(`Can you fix or generate a DOT graph for me? Here's the code: ${code}`)}
-            className="mt-4 bg-blue-700 text-white hover:bg-blue-800"
-          >
-            Suggest AI Correction
-          </Button>
-        </div>
-      );
-    } else if (type === 'code' && code && language) {
-      return (
-        <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-700">
-          <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-300 uppercase tracking-wide">
-                {language}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => copy(code)}
-                className="h-6 w-6 p-0 text-gray-400 hover:text-gray-100 hover:bg-gray-700"
-              >
-                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-              </Button>
-            </div>
-          </div>
-          <div className="p-4 bg-gray-900 overflow-x-auto">
-            <pre className="font-mono text-sm leading-relaxed">
-              <code
-                className="text-gray-100"
-                dangerouslySetInnerHTML={{
-                  __html: highlightCode(code, language)
-                }}
-              />
-            </pre>
-          </div>
-        </div>
-      );
-    } else if (type === 'image' && imageUrl) {
-      return (
-        <div className="flex items-center justify-center h-full w-full p-2 bg-gray-900">
-          <img
-            src={imageUrl}
-            alt="Full size image"
-            className="max-w-full max-h-full object-contain rounded-lg shadow-md"
-            onError={(e) => {
-              e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Load+Error';
-              e.currentTarget.alt = 'Image failed to load';
-            }}
-          />
-        </div>
-      );
-    } else if (type === 'document-text' && code) {
-      return (
-        <div className="prose dark:prose-invert max-w-none">
-          <div dangerouslySetInnerHTML={{ __html: code }} />
-        </div>
-      );
-    }
-    else {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-gray-400">
-          <AlertTriangle className="h-8 w-8 mb-2" />
-          <p>Unsupported Content Type</p>
-          <pre className="bg-gray-800 p-3 rounded-md text-sm overflow-x-auto max-w-full mt-2 text-gray-300">
-            {code || 'No content provided.'}
-          </pre>
-        </div>
-      );
-    }
-  };
-
-  return (
-    <div className="flex flex-col bg-slate-50 border-l border-slate-200 shadow-xl dark:bg-gray-900 dark:border-gray-800">
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white dark:bg-gray-900 dark:border-gray-800">
-        <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100">Content Viewer: {type === 'image' ? 'Image' : (language || type)}</h3>
-        <Button variant="ghost" size="icon" onClick={onClose} title="Close Panel" className="dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100">
-          <X className="h-5 w-5 text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-100" />
-        </Button>
-      </div>
-      <div className="flex-1 overflow-auto p-4 sm:p-6">
-        {renderContent()}
-      </div>
-    </div>
-  );
-};
 
 interface ChatSession {
   id: string;
@@ -354,24 +76,16 @@ interface TabContentProps {
 export const TabContent: React.FC<TabContentProps> = (props) => {
   const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory } = props;
 
-  const [activeSidePanelContent, setActiveSidePanelContent] = useState<{ code?: string, language?: string, imageUrl?: string, type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' } | null>(null);
-  const isSidePanelOpen = !!activeSidePanelContent;
+  
+ 
 
-  const handleViewContent = useCallback((type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs', content?: string, language?: string, imageUrl?: string) => {
-    setActiveSidePanelContent({ type, code: content, language, imageUrl });
-  }, []);
 
-  const handleMermaidError = useCallback((error: string) => {
-    toast.info(`Mermaid diagram encountered an error: ${error}. Click 'AI Fix' to get help.`);
-  }, []);
 
   const handleSuggestAiCorrection = useCallback((prompt?: string) => {
     toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
   }, []);
 
-  const handleCloseSidePanel = useCallback(() => {
-    setActiveSidePanelContent(null);
-  }, []);
+  
 
   const notesProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -428,8 +142,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onRetryFailedMessage: props.onRetryFailedMessage,
     isSubmittingUserMessage: props.isSubmittingUserMessage,
     userProfile: userProfile,
-    onViewContent: handleViewContent,
-    onMermaidError: handleMermaidError,
     onSuggestAiCorrection: handleSuggestAiCorrection,
     hasMoreMessages: props.hasMoreMessages,
     onLoadOlderMessages: props.onLoadOlderMessages,
@@ -459,8 +171,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.onRetryFailedMessage,
     props.isSubmittingUserMessage,
     userProfile,
-    handleViewContent,
-    handleMermaidError,
     handleSuggestAiCorrection,
     props.hasMoreMessages,
     props.onLoadOlderMessages,
@@ -546,45 +256,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     case 'chat':
       return (
         <div className="flex flex-1 min-h-0 relative">
-          <div className={`flex-1 flex min-h-0 transition-all duration-300 ease-in-out ${isSidePanelOpen ? 'lg:w-2/3' : 'lg:w-full'}`}>
-
-            <div className={`flex-1 flex flex-col min-w-0 ${isSidePanelOpen ? 'lg:w-1/2' : 'w-full'} dark:bg-gray-900`}>
-              <AIChat {...chatProps} />
-            </div>
-
-            {isSidePanelOpen && (
-              <div className={`hidden lg:flex lg:w-1/2 flex-shrink-0 min-h-0 max-w-sm`}>
-                <SidePanelViewer
-                  type={activeSidePanelContent!.type}
-                  code={activeSidePanelContent!.code}
-                  language={activeSidePanelContent!.language}
-                  imageUrl={activeSidePanelContent!.imageUrl}
-                  onClose={handleCloseSidePanel}
-                  onMermaidError={handleMermaidError}
-                  onSuggestAiCorrection={handleSuggestAiCorrection}
-                />
-              </div>
-            )}
-
-            {isSidePanelOpen && (
-              <div
-                className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-                onClick={handleCloseSidePanel}
-              />
-            )}
-            {isSidePanelOpen && (
-              <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-slate-50 border-l border-slate-200 shadow-xl flex flex-col z-40 lg:hidden dark:bg-gray-900 dark:border-gray-800">
-                <SidePanelViewer
-                  type={activeSidePanelContent!.type}
-                  code={activeSidePanelContent!.code}
-                  language={activeSidePanelContent!.language}
-                  imageUrl={activeSidePanelContent!.imageUrl}
-                  onClose={handleCloseSidePanel}
-                  onMermaidError={handleMermaidError}
-                  onSuggestAiCorrection={handleSuggestAiCorrection}
-                />
-              </div>
-            )}
+          <div className={`flex-1 flex flex-col min-w-0 dark:bg-gray-900`}>
+            <AIChat {...chatProps} />
           </div>
         </div>
       );

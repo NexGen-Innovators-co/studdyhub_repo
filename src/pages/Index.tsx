@@ -15,7 +15,7 @@ import { Message, Quiz, ClassRecording } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { User } from '@supabase/supabase-js';
-import { generateId } from '@/utils/helpers';
+import { estimateContentSize, generateId, truncateContent } from '@/utils/helpers';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
 
 interface ChatSession {
@@ -27,7 +27,11 @@ interface ChatSession {
   document_ids: string[];
   message_count?: number;
 }
-
+// Constants for content limits
+const MAX_TOTAL_CHARACTERS = 400000; // ~100,000 tokens
+const MAX_DOCUMENT_CONTENT_CHARS = 10000; // Per document
+const MAX_NOTE_CONTENT_CHARS = 5000; // Per note
+const MAX_HISTORY_MESSAGES = 50; // Limit chat history to the last 50 messages
 const CHAT_SESSIONS_PER_PAGE = 10;
 const CHAT_MESSAGES_PER_PAGE = 20;
 
@@ -456,9 +460,9 @@ const Index = () => {
   ) => {
     const selectedDocs = (allDocuments ?? []).filter(doc => (documentIdsToInclude ?? []).includes(doc.id));
     const selectedNotes = (allNotes ?? []).filter(note => (noteIdsToInclude ?? []).includes(note.id));
-
+  
     let context = '';
-
+  
     if (selectedDocs.length > 0) {
       context += 'DOCUMENTS:\n';
       selectedDocs.forEach(doc => {
@@ -469,14 +473,9 @@ const Index = () => {
         } else if (doc.type === 'text') {
           context += `Type: Text Document\n`;
         }
-        if (doc.type === 'image' && doc.content_extracted) {
-          const content = doc.content_extracted.length > 2000
-            ? doc.content_extracted.substring(0, 2000) + '...'
-            : doc.content_extracted;
-          context += `Content (Image Description): ${content}\n`;
-        } else if (doc.content_extracted) {
-          const content = doc.content_extracted.length > 2000
-            ? doc.content_extracted.substring(0, 2000) + '...'
+        if (doc.content_extracted) {
+          const content = doc.content_extracted.length > MAX_DOCUMENT_CONTENT_CHARS
+            ? doc.content_extracted.substring(0, MAX_DOCUMENT_CONTENT_CHARS - 3) + '...'
             : doc.content_extracted;
           context += `Content: ${content}\n`;
         } else {
@@ -491,20 +490,23 @@ const Index = () => {
         context += '\n';
       });
     }
-
+  
     if (selectedNotes.length > 0) {
       context += 'NOTES:\n';
       selectedNotes.forEach(note => {
         context += `Title: ${note.title}\n`;
         context += `Category: ${note.category}\n`;
         if (note.content) {
-          const content = note.content.length > 1500
-            ? note.content.substring(0, 1500) + '...'
+          const content = note.content.length > MAX_NOTE_CONTENT_CHARS
+            ? note.content.substring(0, MAX_NOTE_CONTENT_CHARS - 3) + '...'
             : note.content;
           context += `Content: ${content}\n`;
         }
         if (note.aiSummary) {
-          context += `AI Summary: ${note.aiSummary}\n`;
+          const summary = note.aiSummary.length > MAX_NOTE_CONTENT_CHARS
+            ? note.aiSummary.substring(0, MAX_NOTE_CONTENT_CHARS - 3) + '...'
+            : note.aiSummary;
+          context += `AI Summary: ${summary}\n`;
         }
         if ((note.tags ?? []).length > 0) {
           context += `Tags: ${(note.tags ?? []).join(', ')}\n`;
@@ -512,7 +514,7 @@ const Index = () => {
         context += '\n';
       });
     }
-
+  
     return context;
   }, []);
 
@@ -557,24 +559,24 @@ const Index = () => {
     if (!messageContent && (!attachedDocumentIds || attachedDocumentIds.length === 0) && (!attachedNoteIds || attachedNoteIds.length === 0) && !imageUrl || isAILoading || isSubmittingUserMessage) {
       return;
     }
-
+  
     const trimmedMessage = messageContent;
     setIsSubmittingUserMessage(true);
     setIsAILoading(true);
-
+  
     let attachedImageDocumentId: string | undefined = undefined;
     let uploadedFilePath: string | undefined = undefined;
     let imageDescriptionForAI: string | undefined;
-
+  
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         toast.error('You must be logged in to chat.');
         return;
       }
-
+  
       let currentSessionId = activeChatSessionId;
-
+  
       if (!currentSessionId) {
         currentSessionId = await createNewChatSession();
         if (!currentSessionId) {
@@ -583,17 +585,17 @@ const Index = () => {
         }
         toast.info('New chat session created.');
       }
-
+  
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
-
+  
       if (imageUrl && finalAttachedDocumentIds.length > 0) {
         const imageDoc = documents.find(d => d.type === 'image' && d.file_url === imageUrl);
         if (imageDoc) {
           attachedImageDocumentId = imageDoc.id;
           uploadedFilePath = imageDoc.file_url;
         }
-
+  
         if (attachedImageDocumentId) {
           const refreshedDoc = await refreshUploadedDocument(attachedImageDocumentId);
           if (refreshedDoc) {
@@ -601,15 +603,16 @@ const Index = () => {
           }
         }
       }
-
+  
       setSelectedDocumentIds(finalAttachedDocumentIds);
-
+  
       const historicalMessagesForAI = allChatMessages
         .filter(msg => msg.session_id === currentSessionId)
-        .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate));
-
+        .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate))
+        .slice(-MAX_HISTORY_MESSAGES); // Limit to last 50 messages
+  
       const chatHistoryForAI: Array<{ role: string; parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> }> = [];
-
+  
       historicalMessagesForAI.forEach(msg => {
         if (msg.role === 'user') {
           const userParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: msg.content }];
@@ -624,7 +627,29 @@ const Index = () => {
           chatHistoryForAI.push({ role: 'model', parts: [{ text: msg.content }] });
         }
       });
-
+  
+      let finalUserMessageContent = trimmedMessage;
+      const currentAttachedContext = buildRichContext(finalAttachedDocumentIds, finalAttachedNoteIds, documents, notes);
+      if (currentAttachedContext) {
+        finalUserMessageContent += `\n\nContext for current query:\n${currentAttachedContext}`;
+      }
+      if (!aiMessageIdToUpdate && imageDescriptionForAI) {
+        finalUserMessageContent += `\n\nAttached Image Description: ${imageDescriptionForAI}`;
+      }
+  
+      // Estimate total content size
+      const totalContent = [
+        ...chatHistoryForAI,
+        { role: 'user', parts: [{ text: finalUserMessageContent }] },
+      ];
+      const totalSize = estimateContentSize(totalContent);
+  
+      if (totalSize > MAX_TOTAL_CHARACTERS) {
+        toast.warning('Content size exceeds limit. Truncating older messages and context.');
+        const truncatedHistory = truncateContent(chatHistoryForAI, MAX_TOTAL_CHARACTERS - estimateContentSize(finalUserMessageContent));
+        totalContent.splice(0, chatHistoryForAI.length, ...(truncatedHistory as Array<{ role: string; parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> }>));
+      }
+  
       const filesForEdgeFunction = [];
       if (imageDataBase64 && imageMimeType) {
         filesForEdgeFunction.push({
@@ -638,16 +663,7 @@ const Index = () => {
           processing_error: null,
         });
       }
-
-      let finalUserMessageContent = trimmedMessage;
-      const currentAttachedContext = buildRichContext(finalAttachedDocumentIds, finalAttachedNoteIds, documents, notes);
-      if (currentAttachedContext) {
-        finalUserMessageContent += `\n\nContext for current query:\n${currentAttachedContext}`;
-      }
-      if (!aiMessageIdToUpdate && imageDescriptionForAI) {
-        finalUserMessageContent += `\n\nAttached Image Description: ${imageDescriptionForAI}`;
-      }
-
+  
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
           userId: currentUser.id,
@@ -658,7 +674,7 @@ const Index = () => {
             examples: userProfile?.learning_preferences?.examples || false,
             difficulty: userProfile?.learning_preferences?.difficulty || 'intermediate',
           },
-          chatHistory: chatHistoryForAI,
+          chatHistory: totalContent.slice(0, -1), // Exclude the final user message from history
           message: finalUserMessageContent,
           files: filesForEdgeFunction,
           attachedDocumentIds: finalAttachedDocumentIds,
@@ -668,10 +684,10 @@ const Index = () => {
           aiMessageIdToUpdate: aiMessageIdToUpdate,
         },
       });
-
+  
       if (error) throw new Error(`AI service error: ${error.message}`);
       if (!data || !data.response) throw new Error('Empty response from AI service');
-
+  
       setChatSessions(prev => {
         const updated = prev.map(session =>
           session.id === currentSessionId
@@ -680,7 +696,7 @@ const Index = () => {
         );
         return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
       });
-
+  
     } catch (error: any) {
       toast.error(`Failed to send message: ${error.message || 'Unknown error'}`);
       if (attachedImageDocumentId) {
@@ -694,8 +710,21 @@ const Index = () => {
       setIsSubmittingUserMessage(false);
       setIsAILoading(false);
     }
-  }, [isAILoading, activeChatSessionId, createNewChatSession, isSubmittingUserMessage, documents, setSelectedDocumentIds, notes, refreshUploadedDocument, setDocuments, allChatMessages, userProfile, setChatSessions, setIsAILoading]);
-
+  }, [
+    isAILoading,
+    activeChatSessionId,
+    createNewChatSession,
+    isSubmittingUserMessage,
+    documents,
+    setSelectedDocumentIds,
+    notes,
+    refreshUploadedDocument,
+    setDocuments,
+    allChatMessages,
+    userProfile,
+    setChatSessions,
+    setIsAILoading,
+  ]);
   const handleNewMessage = useCallback((message: Message) => {
     // This function is no longer directly used for new messages, as useAppData's listener handles it.
   }, []);
