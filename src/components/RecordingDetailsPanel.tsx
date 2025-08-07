@@ -87,7 +87,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
     };
 
     const handleError = (e: Event) => {
-      console.error('Audio error:', e);
+      //console.error('Audio error:', e);
       toast.error('Failed to load audio. Please try again.');
       onPauseAudio();
     };
@@ -129,7 +129,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
         toast.success('Transcript copied to clipboard!');
         setTimeout(() => setCopySuccess(false), 2000);
       }).catch(err => {
-        console.error('Failed to copy transcript:', err);
+        //console.error('Failed to copy transcript:', err);
         toast.error('Failed to copy transcript.');
       });
     }

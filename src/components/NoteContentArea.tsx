@@ -5,8 +5,24 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Textarea } from './ui/textarea';
+import { Button } from './ui/button';
 import { toast } from 'sonner';
 import { Chart, registerables } from 'chart.js';
+import {
+  Edit3,
+  Eye,
+  Copy,
+  Download,
+  Share2,
+  Printer,
+  FileText,
+  ZoomIn,
+  ZoomOut,
+  Type,
+  Maximize2,
+  Minimize2,
+  SplitSquareHorizontal
+} from 'lucide-react';
 
 // Component imports
 import { InlineAIEditor } from './InlineAIEditor';
@@ -14,7 +30,7 @@ import { AITypingOverlay } from './AITypingOverlay';
 import { AISuggestionsPopup } from './AISuggestionsPopup';
 import { commonMarkdownComponents } from './MarkdownComponent';
 
-// Type and constant imports
+// Type imports
 import { UserProfile } from '../types';
 import { AISuggestion, AI_SUGGESTIONS } from '../constants/aiSuggestions';
 
@@ -30,6 +46,7 @@ interface NoteContentAreaProps {
   setContent: (content: string) => void;
   isEditing: boolean;
   userProfile: UserProfile | null;
+  title?: string;
 }
 
 export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
@@ -37,14 +54,32 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
   setContent,
   isEditing,
   userProfile,
+  title = 'Untitled Note',
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const generatedContentBufferRef = useRef<string>('');
+  const isTypingInProgressRef = useRef<boolean>(false);
+
+  // View state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fontSize, setFontSize] = useState(16);
+  const [viewMode, setViewMode] = useState<'preview' | 'split' | 'editor'>('preview');
 
   // Typing animation hook
-  const { startTypingAnimation, stopTypingAnimation, currentTypingPosition, typingIntervalRef } =
-    useTypingAnimation({ textareaRef, setContent });
+  const { startTypingAnimation, stopTypingAnimation, currentTypingPosition, isTypingActive } = useTypingAnimation({
+    textareaRef,
+    setContent,
+    onTypingComplete: () => {
+      console.log('Typing animation completed');
+      setTypingComplete(true);
+      setIsTypingAI(false);
+      isTypingInProgressRef.current = false;
+      toast.dismiss('inline-ai-gen');
+      toast.success('AI content generated successfully!');
+    },
+  });
 
   // State for Inline AI Editor
   const [editorPosition, setEditorPosition] = useState({ top: 0, left: 0 });
@@ -55,7 +90,7 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
   const [inlineSelectionStart, setInlineSelectionStart] = useState<number | null>(null);
   const [inlineSelectionEnd, setInlineSelectionEnd] = useState<number | null>(null);
 
-  // New states for improved AI typing
+  // States for AI typing
   const [isTypingAI, setIsTypingAI] = useState(false);
   const [originalContentBeforeAI, setOriginalContentBeforeAI] = useState('');
   const [typingComplete, setTypingComplete] = useState(false);
@@ -65,16 +100,100 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
   const [aiSuggestionsPosition, setAISuggestionsPosition] = useState({ top: 0, left: 0 });
   const [suggestedActions, setSuggestedActions] = useState<AISuggestion[]>([]);
 
+  // Update view mode based on isEditing prop
+  useEffect(() => {
+    setViewMode(isEditing ? 'split' : 'preview');
+  }, [isEditing]);
+
+  // Action handlers
+  const handleCopyContent = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success('Content copied to clipboard!');
+    } catch (error) {
+      toast.error('Failed to copy content');
+    }
+  }, [content]);
+
+  const handleDownload = useCallback(() => {
+    const blob = new Blob([content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('Note downloaded!');
+  }, [content, title]);
+
+  const handleShare = useCallback(async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title,
+          text: content,
+        });
+      } catch (error) {
+        // User cancelled or error occurred
+        handleCopyContent();
+      }
+    } else {
+      handleCopyContent();
+    }
+  }, [content, title, handleCopyContent]);
+
+  const handlePrint = useCallback(() => {
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${title}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
+            h1, h2, h3, h4, h5, h6 { margin-top: 24px; margin-bottom: 16px; }
+            p { margin-bottom: 16px; }
+            code { background: #f6f8fa; padding: 2px 4px; border-radius: 3px; }
+            pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow-x: auto; }
+            blockquote { border-left: 4px solid #dfe2e5; padding-left: 16px; margin: 0 0 16px 0; color: #6a737d; }
+          </style>
+        </head>
+        <body>
+          <h1>${title}</h1>
+          <div id="content"></div>
+          <script type="module">
+            import { marked } from 'https://cdn.skypack.dev/marked';
+            const content = ${JSON.stringify(content)};
+            document.getElementById('content').innerHTML = marked(content);
+            window.print();
+          </script>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    }
+  }, [content, title]);
+
+  const adjustFontSize = useCallback((delta: number) => {
+    setFontSize(prev => Math.max(12, Math.min(24, prev + delta)));
+  }, []);
+
   // Detect AI-worthy content and show suggestions
   const detectAISuggestions = useCallback((text: string, cursorPosition: number) => {
+    // Don't show suggestions while AI is typing
+    if (isTypingInProgressRef.current || isTypingActive) return;
+
     if (!text.trim()) return;
 
-    // Get surrounding context (50 chars before and after cursor)
     const start = Math.max(0, cursorPosition - 50);
     const end = Math.min(text.length, cursorPosition + 50);
     const context = text.substring(start, end);
 
-    // Find matching suggestions
     const matchingSuggestions = AI_SUGGESTIONS
       .filter(suggestion => suggestion.trigger.test(context))
       .sort((a, b) => a.priority - b.priority)
@@ -88,38 +207,40 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
       setSuggestedActions(matchingSuggestions);
       setAISuggestionsPosition({
         top: textareaRect.top + coords.top + coords.height + 5,
-        left: textareaRect.left + coords.left
+        left: textareaRect.left + coords.left,
       });
       setShowAISuggestions(true);
 
-      // Auto-hide after 5 seconds
       setTimeout(() => setShowAISuggestions(false), 5000);
     }
-  }, []);
+  }, [isTypingActive]);
 
   // Handle textarea input changes
   const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
     const cursorPosition = e.target.selectionStart;
 
-    // Stop AI typing if user interferes
-    if (isTypingAI && !typingComplete) {
-      handleDeclineAI();
-      return;
-    }
+    // If AI is currently typing and user tries to type, interrupt the typing
+    // if (isTypingInProgressRef.current || (isTypingActive && !typingComplete)) {
+    //   console.log('User interrupted AI typing, declining changes');
+    //   handleDeclineAI();
+    //   return;
+    // }
 
     setContent(newContent);
 
-    // Detect AI suggestions on certain conditions
+    // Only detect suggestions if content is growing and cursor is in a reasonable position
     if (newContent.length > content.length && cursorPosition > 10) {
-      // Only check when content is being added and we have enough context
       detectAISuggestions(newContent, cursorPosition);
     }
-  }, [content.length, isTypingAI, typingComplete, setContent, detectAISuggestions]);
+  }, [content.length, isTypingActive, typingComplete, setContent, detectAISuggestions]);
 
   // Handle context menu for text selection AI
   const handleContextMenu = useCallback((event: React.MouseEvent<HTMLTextAreaElement>) => {
     if (!textareaRef.current || !isEditing) return;
+
+    // Don't show context menu while AI is typing
+    if (isTypingInProgressRef.current || isTypingActive) return;
 
     event.preventDefault();
 
@@ -156,56 +277,53 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
       setInlineSelectionStart(selectionStartPos);
       setInlineSelectionEnd(selectionEndPos);
       setIsEditorVisible(true);
-      setShowAISuggestions(false); // Hide other suggestions
+      setShowAISuggestions(false);
     } else {
       setIsEditorVisible(false);
     }
-  }, [isEditing]);
+  }, [isEditing, isTypingActive]);
 
   // Handler for accepting AI suggestion
-  const handleAcceptAI = useCallback(() => {
-    stopTypingAnimation();
+  // const handleAcceptAI = useCallback(() => {
+  //   console.log('Accepting AI suggestion');
 
-    // If typing wasn't complete, finish it instantly
-    if (!typingComplete && generatedContentBufferRef.current) {
-      const remainingContent = generatedContentBufferRef.current;
-      const startPos = inlineSelectionStart !== null ? inlineSelectionStart : content.length;
-      const currentContent = textareaRef.current?.value || content;
-      // Ensure we append the full remaining content from the point of current typing
-      const finalContent = currentContent.substring(0, currentTypingPosition) +
-        remainingContent.substring(currentTypingPosition - startPos + (content.length - originalContentBeforeAI.length)) + // Adjust for content length changes
-        currentContent.substring(currentTypingPosition);
-      setContent(finalContent);
-    }
+  //   // Reset all AI-related states
+  //   setIsTypingAI(false);
+  //   setTypingComplete(false);
+  //   setOriginalContentBeforeAI('');
+  //   setInlineSelectionStart(null);
+  //   setInlineSelectionEnd(null);
+  //   setIsGeneratingAIInline(false);
+  //   isTypingInProgressRef.current = false;
+  //   generatedContentBufferRef.current = '';
 
-    // Reset all states
-    setIsTypingAI(false);
-    setTypingComplete(false);
-    setOriginalContentBeforeAI('');
-    setInlineSelectionStart(null);
-    setInlineSelectionEnd(null);
-    generatedContentBufferRef.current = '';
-
-    toast.success('AI suggestion accepted!');
-  }, [typingComplete, inlineSelectionStart, content, currentTypingPosition, setContent, originalContentBeforeAI, stopTypingAnimation]);
+  //   toast.dismiss('inline-ai-gen');
+  //   toast.success('AI suggestion accepted!');
+  // }, [typingComplete, inlineSelectionStart, content, currentTypingPosition, setContent, stopTypingAnimation]);
 
   // Handler for declining AI suggestion
-  const handleDeclineAI = useCallback(() => {
-    stopTypingAnimation();
+  // const handleDeclineAI = useCallback(() => {
+  //   console.log('Declining AI suggestion');
 
-    // Revert to original content
-    setContent(originalContentBeforeAI);
+  //   // Stop any ongoing typing animation
+  //   stopTypingAnimation();
 
-    // Reset all states
-    setIsTypingAI(false);
-    setTypingComplete(false);
-    setOriginalContentBeforeAI('');
-    setInlineSelectionStart(null);
-    setInlineSelectionEnd(null);
-    generatedContentBufferRef.current = '';
+  //   // Restore original content
+  //   setContent(originalContentBeforeAI);
 
-    toast.info('AI suggestion declined');
-  }, [originalContentBeforeAI, setContent, stopTypingAnimation]);
+  //   // Reset all AI-related states
+  //   setIsTypingAI(false);
+  //   setTypingComplete(false);
+  //   setOriginalContentBeforeAI('');
+  //   setInlineSelectionStart(null);
+  //   setInlineSelectionEnd(null);
+  //   setIsGeneratingAIInline(false);
+  //   isTypingInProgressRef.current = false;
+  //   generatedContentBufferRef.current = '';
+
+  //   toast.dismiss('inline-ai-gen');
+  //   toast.info('AI suggestion declined');
+  // }, [originalContentBeforeAI, setContent, stopTypingAnimation]);
 
   // AI generation handler
   const handleAIGenerate = async (selectedText: string, actionType: string, customInstruction: string): Promise<void> => {
@@ -214,10 +332,24 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
       return;
     }
 
+    // Don't start new generation if already in progress
+    if (isGeneratingAIInline || isTypingInProgressRef.current) {
+      console.log('AI generation already in progress, skipping');
+      return;
+    }
+
+    console.log('Starting AI generation');
     setIsEditorVisible(false);
     setIsGeneratingAIInline(true);
-    toast.loading('Generating AI content...', { id: 'inline-ai-gen' });
+    isTypingInProgressRef.current = true;
 
+    // Show persistent loading toast
+    toast.loading('Generating AI content...', {
+      id: 'inline-ai-gen',
+      duration: Infinity // Keep showing until manually dismissed
+    });
+
+    // Store original content for potential rollback
     setOriginalContentBeforeAI(content);
 
     try {
@@ -229,45 +361,59 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
         customInstruction
       );
 
+      if (!generatedContent || generatedContent.trim().length === 0) {
+        throw new Error('Generated content is empty');
+      }
+
+      console.log('AI content generated, length:', generatedContent.length);
+
+      // Store generated content in buffer
       generatedContentBufferRef.current = generatedContent;
 
+      // Calculate insertion position
       const start = inlineSelectionStart !== null ? inlineSelectionStart : content.length;
       const end = inlineSelectionEnd !== null ? inlineSelectionEnd : content.length;
 
-      // Clear the original selected text
+      // Remove selected text and prepare for typing animation
       const contentWithoutSelection = content.substring(0, start) + content.substring(end);
       setContent(contentWithoutSelection);
 
+      // Update states for typing animation
       setIsTypingAI(true);
       setTypingComplete(false);
+      setIsGeneratingAIInline(false);
 
-      // Start typing animation
+      // Start typing animation after a short delay
       setTimeout(() => {
+        console.log('Starting typing animation at position:', start);
         startTypingAnimation(generatedContent, start);
-      }, 100);
+      }, 200);
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to generate content with AI.';
-      toast.error(errorMessage, { id: 'inline-ai-gen' });
       console.error('AI generation error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate content with AI.';
 
-      // Cleanup on error
+      // Reset states on error
       setContent(originalContentBeforeAI);
       setIsTypingAI(false);
+      setTypingComplete(false);
       setOriginalContentBeforeAI('');
-    } finally {
       setIsGeneratingAIInline(false);
+      isTypingInProgressRef.current = false;
+      generatedContentBufferRef.current = '';
+
+      toast.dismiss('inline-ai-gen');
+      toast.error(errorMessage);
     }
   };
 
   // Handle AI suggestion click
   const handleAISuggestionClick = useCallback((suggestion: AISuggestion) => {
-    if (!textareaRef.current) return;
+    if (!textareaRef.current || isTypingInProgressRef.current) return;
 
     const textarea = textareaRef.current;
     const cursorPos = textarea.selectionStart;
 
-    // Select some context around cursor for AI processing
     const contextStart = Math.max(0, cursorPos - 100);
     const contextEnd = Math.min(content.length, cursorPos + 100);
     const contextText = content.substring(contextStart, contextEnd);
@@ -278,27 +424,28 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
     setInlineSelectionEnd(contextEnd);
     setShowAISuggestions(false);
 
-    // Generate immediately
     handleAIGenerate(contextText, suggestion.actionType, '');
   }, [content, handleAIGenerate]);
 
   // Event listeners
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.addEventListener('contextmenu', handleContextMenu as any);
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.addEventListener('contextmenu', handleContextMenu as any);
     }
 
     return () => {
-      if (textareaRef.current) {
-        textareaRef.current.removeEventListener('contextmenu', handleContextMenu as any);
+      if (textarea) {
+        textarea.removeEventListener('contextmenu', handleContextMenu as any);
       }
     };
   }, [handleContextMenu]);
 
-  // Cleanup interval on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopTypingAnimation();
+      isTypingInProgressRef.current = false;
     };
   }, [stopTypingAnimation]);
 
@@ -319,81 +466,235 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
     };
   }, [showAISuggestions]);
 
-  return (
-    <>
-      {isEditing ? (
-        <div ref={containerRef} className="flex-1 p-3 sm:p-6 flex flex-col dark:bg-gray-800 lg:flex-row gap-4 modern-scrollbar overflow-y-auto min-w-0 relative h-full">
-          <Textarea
-            ref={textareaRef}
-            value={content}
-            onChange={handleContentChange}
-            placeholder="Start typing your note... (Right-click on selected text for AI assistance)"
-            className="w-full lg:w-1/2 h-full resize-none border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 focus:border-blue-500 dark:focus:border-blue-400 transition-colors duration-200 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-base leading-relaxed max-h-[600px] lg:max-h-none"
-            style={{ minHeight: '400px', maxHeight: '600px', fontSize: '16px' }}
-          />
+  // Render enhanced toolbar (only when not editing or when user wants quick actions)
+  const renderEnhancedToolbar = () => (
+    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-wrap gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        {isEditing && (
+          <Button
+            onClick={() => setViewMode(viewMode === 'split' ? 'editor' : 'split')}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+            disabled={isTypingInProgressRef.current}
+          >
+            <SplitSquareHorizontal className="w-4 h-4" />
+            {viewMode === 'split' ? 'Editor Only' : 'Split View'}
+          </Button>
+        )}
 
-          {/* Live Preview */}
-          <div className="w-full lg:w-1/2 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[600px] lg:max-h-none">
-            <div className="bg-blue-50 px-4 py-2 border-b bg-blue-100 dark:bg-blue-900 border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300">
-                Live Preview {isTypingAI && <span className="text-sm text-blue-600 dark:text-blue-400">(AI Typing...)</span>}
-              </h3>
-            </div>
-            <div className="p-4 overflow-y-auto flex-1 modern-scrollbar">
-              {content.trim() ? (
-                <div className="prose prose-lg prose-slate dark:prose-invert max-w-none" style={{ fontSize: '16px', lineHeight: '1.7' }}>
-                  {isTypingAI ? (
-                    // Show raw text during AI typing to prevent diagram rendering errors
-                    <pre className="whitespace-pre-wrap font-sans text-gray-700 dark:text-gray-200 text-base leading-relaxed">
-                      {content}
-                    </pre>
-                  ) : (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
-                      components={commonMarkdownComponents}
-                    >
-                      {content}
-                    </ReactMarkdown>
-                  )}
-                </div>
-              ) : (
-                <p className="text-gray-400 dark:text-gray-500 italic text-base">Preview will appear here as you type...</p>
-              )}
-            </div>
-          </div>
+        <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded">
+          <Button
+            onClick={() => adjustFontSize(-2)}
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            disabled={isTypingInProgressRef.current}
+          >
+            <ZoomOut className="w-3 h-3" />
+          </Button>
+          <span className="px-2 text-xs text-gray-600 dark:text-gray-400">{fontSize}px</span>
+          <Button
+            onClick={() => adjustFontSize(2)}
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            disabled={isTypingInProgressRef.current}
+          >
+            <ZoomIn className="w-3 h-3" />
+          </Button>
         </div>
-      ) : (
-        // Read-only view
-        <div className="flex-1 p-3 sm:p-6 bg-white dark:bg-gray-900 overflow-y-auto modern-scrollbar">
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          onClick={handleCopyContent}
+          variant="ghost"
+          size="sm"
+          className="flex items-center gap-2"
+          disabled={!content.trim() || isTypingInProgressRef.current}
+        >
+          <Copy className="w-4 h-4" />
+          <span className="hidden sm:inline">Copy</span>
+        </Button>
+
+        <Button
+          onClick={handleDownload}
+          variant="ghost"
+          size="sm"
+          className="flex items-center gap-2"
+          disabled={!content.trim() || isTypingInProgressRef.current}
+        >
+          <Download className="w-4 h-4" />
+          <span className="hidden sm:inline">Download</span>
+        </Button>
+
+        <Button
+          onClick={handleShare}
+          variant="ghost"
+          size="sm"
+          className="flex items-center gap-2"
+          disabled={!content.trim() || isTypingInProgressRef.current}
+        >
+          <Share2 className="w-4 h-4" />
+          <span className="hidden sm:inline">Share</span>
+        </Button>
+
+        <Button
+          onClick={handlePrint}
+          variant="ghost"
+          size="sm"
+          className="flex items-center gap-2"
+          disabled={!content.trim() || isTypingInProgressRef.current}
+        >
+          <Printer className="w-4 h-4" />
+          <span className="hidden sm:inline">Print</span>
+        </Button>
+
+        <Button
+          onClick={() => setIsFullscreen(!isFullscreen)}
+          variant="ghost"
+          size="sm"
+          className="flex items-center gap-2"
+          disabled={isTypingInProgressRef.current}
+        >
+          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+        </Button>
+      </div>
+    </div>
+  );
+
+  // Main content based on editing state and view mode
+  const renderContent = () => {
+    if (!isEditing) {
+      // Preview-only mode (default)
+      return (
+        <div
+          ref={previewRef}
+          className="flex-1 overflow-y-auto modern-scrollbar"
+          style={{ fontSize: `${fontSize}px` }}
+          id="note-preview-content"
+        >
           {content.trim() ? (
-            <div className="prose prose-lg prose-slate dark:prose-invert max-w-3xl mx-auto" style={{ fontSize: '16px', lineHeight: '1.7' }}>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeRaw]}
-                components={commonMarkdownComponents}
-              >
-                {content}
-              </ReactMarkdown>
+            <div className="p-6">
+              <div className="prose prose-lg prose-slate dark:prose-invert max-w-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={commonMarkdownComponents}
+                >
+                  {content}
+                </ReactMarkdown>
+              </div>
             </div>
           ) : (
-            <div className="text-center py-12">
-              <div className="text-gray-400 dark:text-gray-500 text-2xl mb-2">📝</div>
-              <p className="text-gray-500 dark:text-gray-400 text-lg">This note is empty</p>
-              <p className="text-base text-gray-400 dark:text-gray-500 mt-1">Click edit to start writing</p>
+            <div className="flex-1 flex items-center justify-center p-12">
+              <div className="text-center">
+                <div className="text-gray-400 dark:text-gray-500 text-6xl mb-4">📝</div>
+                <p className="text-gray-500 dark:text-gray-400 text-xl mb-2">This note is empty</p>
+                <p className="text-gray-400 dark:text-gray-500 mb-4">Click edit in the header to start writing</p>
+              </div>
             </div>
           )}
         </div>
-      )}
+      );
+    } else {
+      // Editing mode with split view or editor only
+      if (viewMode === 'editor') {
+        return (
+          <div className="flex-1 p-4 min-h-0">
+            <Textarea
+              ref={textareaRef}
+              value={content}
+              onChange={handleContentChange}
+              placeholder="Start typing your note... (Right-click on selected text for AI assistance)"
+              className="w-full h-full resize-none border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 focus:border-blue-500 dark:focus:border-blue-400 transition-colors duration-200 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono leading-relaxed"
+              style={{ fontSize: `${fontSize}px`, minHeight: '400px' }}
+              disabled={isTypingInProgressRef.current}
+            />
+          </div>
+        );
+      } else {
+        return (
+          <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 min-h-0">
+            {/* Editor */}
+            <div className="flex flex-col lg:w-1/2">
+              <Textarea
+                ref={textareaRef}
+                value={content}
+                onChange={handleContentChange}
+                placeholder="Start typing your note... (Right-click on selected text for AI assistance)"
+                className="flex-1 resize-none border-2 border-dashed border-gray-300 modern-scrollbar dark:border-gray-600 rounded-lg p-4 focus:border-blue-500 dark:focus:border-blue-400 transition-colors duration-200 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono leading-relaxed"
+                style={{ fontSize: `${fontSize}px`, minHeight: '400px' }}
+                disabled={isTypingInProgressRef.current}
+              />
+            </div>
+
+            {/* Live Preview */}
+            <div className="lg:w-1/2 flex flex-col">
+              <div className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
+                <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Live Preview
+                    {isGeneratingAIInline && <span className="text-blue-600 dark:text-blue-400 ml-2">(Generating...)</span>}
+                    {isTypingActive && !typingComplete && <span className="text-green-600 dark:text-green-400 ml-2">(AI Typing...)</span>}
+                  </h3>
+                </div>
+                <div
+                  className="p-4 overflow-y-scroll h-full  modern-scrollbar flex-1"
+                  style={{ fontSize: `${fontSize}px` }}
+                  id="note-preview-content"
+                >
+                  {content.trim() ? (
+                    <div className="prose prose-slate dark:prose-invert max-w-none">
+                      {isTypingActive && !typingComplete ? (
+                        <pre className="whitespace-pre-wrap font-sans text-gray-700 dark:text-gray-200 leading-relaxed">
+                          {content}
+                        </pre>
+                      ) : (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeRaw]}
+                          components={commonMarkdownComponents}
+                        >
+                          {content}
+                        </ReactMarkdown>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 dark:text-gray-500 italic">Preview will appear here as you type...</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={`flex flex-col bg-white dark:bg-gray-900 ${isFullscreen
+        ? 'fixed inset-0 z-50'
+        : 'flex-1 min-h-0'
+        }`}
+    >
+      {/* Enhanced Toolbar - Only show when not editing or when user needs quick actions */}
+      {(!isEditing || isFullscreen) && renderEnhancedToolbar()}
+
+      {/* Main Content */}
+      {renderContent()}
 
       {/* AI Typing Overlay */}
-      <AITypingOverlay
-        isTypingAI={isTypingAI}
+      {/* <AITypingOverlay
+        isTypingAI={isTypingActive || isGeneratingAIInline}
         typingComplete={typingComplete}
         isGeneratingAIInline={isGeneratingAIInline}
         onAccept={handleAcceptAI}
         onDecline={handleDeclineAI}
-      />
+      /> */}
 
       {/* Inline AI Editor Portal */}
       {isEditorVisible && createPortal(
@@ -402,9 +703,9 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
           selectedText={selectedTextForAI}
           actionType={actionTypeForAI}
           onGenerate={handleAIGenerate}
-          originalText={content} // Pass the full content of the note
-          onAccept={() => { /* Handle accept logic if needed */ }}
-          onReject={() => setIsEditorVisible(false)} // Close editor on reject
+          originalText={content}
+          onAccept={() => { }}
+          onReject={() => setIsEditorVisible(false)}
           isVisible={isEditorVisible}
           isLoading={isGeneratingAIInline}
         />,
@@ -413,11 +714,12 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
 
       {/* AI Suggestions Portal */}
       <AISuggestionsPopup
-        isVisible={showAISuggestions}
+        isVisible={showAISuggestions && !isTypingInProgressRef.current}
         position={aiSuggestionsPosition}
         suggestions={suggestedActions}
-        onSuggestionClick={handleAISuggestionClick}
+        onSuggestionClick={handleAISuggestionClick} 
+        onClose={() => setShowAISuggestions(false)}
       />
-    </>
+    </div>
   );
 };

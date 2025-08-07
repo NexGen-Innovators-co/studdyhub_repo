@@ -43,19 +43,27 @@ export interface ScheduleItem {
   userId: string;
   createdAt: string;
 }
-
+// In types/Class.ts
 export interface Message {
   id: string;
   content: string;
   role: 'user' | 'assistant';
   timestamp: string;
   isError?: boolean;
-  originalUserMessageContent?: string;
+  attachedDocumentIds?: string[];
+  attachedNoteIds?: string[];
   imageUrl?: string;
   imageMimeType?: string;
-  attachedDocumentIds?: string[]; // Array of document IDs attached to this message
-  attachedNoteIds?: string[];
-  session_id?: string; // ID of the session this message belongs to
-  has_been_displayed: boolean
+  session_id?: string;
+  has_been_displayed?: boolean;
+  isUpdating?: boolean;
+  attachedFiles?: Array<{
+    name: string;
+    mimeType: string;
+    type: 'image' | 'document' | 'other';
+    size: number;
+    content?: string | null;
+    processing_status?: string;
+    processing_error?: string | null;
+  }>;
 }
-

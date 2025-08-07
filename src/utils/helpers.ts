@@ -57,7 +57,7 @@ export const getCategoryColor = (category: string): string => {
   return colors[category] || 'bg-gray-100 text-gray-700';
 };
 // utils/helpers.ts
-export const estimateContentSize = (content: string | Array<{ role: string; parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> }>): number => {
+export const estimateContentSize = (content: string | Array<{ role: string; parts: Array<{ text: any } | { inlineData: { mimeType: any; data: any } }> }>): number => {
   if (typeof content === 'string') {
     return content.length;
   }

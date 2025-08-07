@@ -107,11 +107,11 @@ export const useAppData = () => {
   // Load essential data when user changes
   useEffect(() => {
     if (currentUser?.id && currentUser.id !== lastUserId) {
-      console.log('User changed, loading essential data...');
+      //console.log('User changed, loading essential data...');
       setLastUserId(currentUser.id);
       loadEssentialUserData(currentUser);
     } else if (!currentUser && lastUserId !== null) {
-      console.log('User logged out, clearing data...');
+      //console.log('User logged out, clearing data...');
       setLastUserId(null);
       clearAllData();
     }
@@ -149,7 +149,7 @@ export const useAppData = () => {
   const loadEssentialUserData = useCallback(async (user: any) => {
     if (!user?.id) return;
 
-    console.log('Loading essential user data for:', user.id);
+    //console.log('Loading essential user data for:', user.id);
     setLoading(true);
 
     try {
@@ -159,9 +159,9 @@ export const useAppData = () => {
       // Load initial notes (for sidebar preview)
       await loadNotesPage(user.id, true);
       
-      console.log('Essential user data loaded successfully');
+      //console.log('Essential user data loaded successfully');
     } catch (error) {
-      console.error('Unexpected error loading essential user data:', error);
+      //console.error('Unexpected error loading essential user data:', error);
       toast.error('An unexpected error occurred while loading data');
       clearAllData();
     } finally {
@@ -183,7 +183,7 @@ export const useAppData = () => {
         .maybeSingle();
 
       if (profileError) {
-        console.error('Error loading user profile:', profileError);
+        //console.error('Error loading user profile:', profileError);
         toast.error('Failed to load user profile');
         return;
       }
@@ -231,7 +231,7 @@ export const useAppData = () => {
             });
           }
         } catch (error) {
-          console.error('Error creating default profile:', error);
+          //console.error('Error creating default profile:', error);
           setUserProfile({
             ...defaultProfile,
             created_at: new Date(),
@@ -242,7 +242,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'profile']));
     } catch (error) {
-      console.error('Error loading profile:', error);
+      //console.error('Error loading profile:', error);
     } finally {
       setDataLoading(prev => ({ ...prev, profile: false }));
     }
@@ -302,7 +302,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'notes']));
     } catch (error) {
-      console.error('Error loading notes:', error);
+      //console.error('Error loading notes:', error);
       toast.error('Failed to load notes');
     } finally {
       setDataLoading(prev => ({ ...prev, notes: false }));
@@ -361,7 +361,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'recordings']));
     } catch (error) {
-      console.error('Error loading recordings:', error);
+      //console.error('Error loading recordings:', error);
       toast.error('Failed to load recordings');
     } finally {
       setDataLoading(prev => ({ ...prev, recordings: false }));
@@ -422,7 +422,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'documents']));
     } catch (error) {
-      console.error('Error loading documents:', error);
+      //console.error('Error loading documents:', error);
       toast.error('Failed to load documents');
     } finally {
       setDataLoading(prev => ({ ...prev, documents: false }));
@@ -481,7 +481,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
     } catch (error) {
-      console.error('Error loading schedule items:', error);
+      //console.error('Error loading schedule items:', error);
       toast.error('Failed to load schedule');
     } finally {
       setDataLoading(prev => ({ ...prev, scheduleItems: false }));
@@ -541,7 +541,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'quizzes']));
     } catch (error) {
-      console.error('Error loading quizzes:', error);
+      //console.error('Error loading quizzes:', error);
       toast.error('Failed to load quizzes');
     } finally {
       setDataLoading(prev => ({ ...prev, quizzes: false }));
@@ -745,7 +745,7 @@ export const useAppData = () => {
                 imageUrl: payload.new.image_url || undefined,
                 imageMimeType: payload.new.image_mime_type || undefined,
                 session_id: payload.new.session_id,
-                originalUserMessageContent: payload.new.original_user_message_content || '',
+                // originalUserMessageContent: payload.new.original_user_message_content || '',
                 has_been_displayed: payload.new.has_been_displayed || false
               };
 
@@ -773,7 +773,7 @@ export const useAppData = () => {
                 imageUrl: payload.new.image_url || undefined,
                 imageMimeType: payload.new.image_mime_type || undefined,
                 session_id: payload.new.session_id,
-                originalUserMessageContent: payload.new.original_user_message_content || '',
+                // originalUserMessageContent: payload.new.original_user_message_content || '',
                 has_been_displayed: payload.new.has_been_displayed || false
               };
 
@@ -795,9 +795,9 @@ export const useAppData = () => {
         )
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            console.log('Successfully subscribed to chat messages real-time updates');
+            //console.log('Successfully subscribed to chat messages real-time updates');
           } else if (status === 'CHANNEL_ERROR') {
-            console.error('Failed to subscribe to chat messages real-time updates');
+            //console.error('Failed to subscribe to chat messages real-time updates');
             toast.error('Failed to connect to real-time chat updates');
           }
         });

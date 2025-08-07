@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { AlertTriangle, Copy, Check, Loader2, Wrench, Play, Code, Download, Eye, EyeOff, Info, ChevronDown, ChevronUp, ZoomIn, ZoomOut, Maximize, GripVertical } from 'lucide-react';
-import { Button } from './ui/button'; // Assuming this path is correct for your Button component
+import { Button } from './ui/button';
+import mermaid from 'mermaid'; // Import Mermaid for validation
 
 // Define the MermaidProps interface
 interface MermaidProps {
@@ -48,25 +49,22 @@ const downloadSvgAsPng = (svgString: string, filename: string = 'mermaid-diagram
             link.href = downloadUrl;
             link.download = `${filename}.png`;
             document.body.appendChild(link);
-            link.click(); // Programmatically click the link
+            link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(downloadUrl);
           }
         }, 'image/png');
       } catch (error) {
-        console.error('Error converting canvas to PNG:', error);
         downloadSvg(svgString, filename); // Fallback to SVG download
       }
     };
 
     img.onerror = () => {
-      console.error('Error loading SVG image for PNG conversion.');
       downloadSvg(svgString, filename); // Fallback to SVG download
     };
 
     img.src = svgDataUrl;
   } catch (error) {
-    console.error('Error processing SVG for PNG conversion:', error);
     downloadSvg(svgString, filename); // Fallback to SVG download
   }
 };
@@ -79,7 +77,7 @@ const downloadSvg = (svgString: string, filename: string = 'mermaid-diagram') =>
   link.href = url;
   link.download = `${filename}.svg`;
   document.body.appendChild(link);
-  link.click(); // Programmatically click the link
+  link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };
@@ -103,16 +101,23 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
   const [translateY, setTranslateY] = useState(0);
   const [isPanning, setIsPanning] = useState(false);
   const lastPanPosition = useRef({ x: 0, y: 0 });
-  const svgContentRef = useRef<HTMLDivElement>(null); // Ref for the div containing the SVG
+  const svgContentRef = useRef<HTMLDivElement>(null);
+  const [initialPinchDistance, setInitialPinchDistance] = useState<number | null>(null);
+  const [initialPinchScale, setInitialPinchScale] = useState<number>(1);
 
-  // State for expand/collapse functionality
-  const [isDiagramExpanded, setIsDiagramExpanded] = useState(true); // Default to expanded
-
-  // State for resizable height
-  const [componentHeight, setComponentHeight] = useState(300); // Initial height
+  // State for expand/collapse and resizable height
+  const [isDiagramExpanded, setIsDiagramExpanded] = useState(true);
+  const [componentHeight, setComponentHeight] = useState(300);
   const isResizing = useRef(false);
   const initialResizeY = useRef(0);
   const initialComponentHeight = useRef(0);
+
+  // Helper function to calculate distance between two touch points
+  const getPinchDistance = (touch1: Touch, touch2: Touch) => {
+    const dx = touch2.clientX - touch1.clientX;
+    const dy = touch2.clientY - touch1.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
 
   const copyCode = async () => {
     try {
@@ -120,7 +125,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy Mermaid code:', err);
+      //console.error('Failed to copy Mermaid code:', err);
     }
   };
 
@@ -130,12 +135,11 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
       setSourceCodeCopied(true);
       setTimeout(() => setSourceCodeCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy source code:', err);
+      //console.error('Failed to copy source code:', err);
     }
   };
 
   const handleAiFixClick = useCallback(() => {
-    // Generate a more specific prompt for AI based on the error
     const prompt = `The following Mermaid diagram code caused a rendering error. Please correct the syntax for a Mermaid diagram (it could be a sequence, flowchart, ER, or usecase diagram). Ensure there are no trailing spaces on any line, and that the code adheres strictly to Mermaid's syntax for a single diagram type.
 
 \`\`\`mermaid
@@ -151,9 +155,20 @@ Here's the error message received: "${error}". Please provide only the corrected
 
   const triggerRender = useCallback(() => {
     if (chart.trim() && !isRendering) {
-      setShouldRender(true);
+      try {
+        // Validate syntax before triggering render
+        mermaid.parse(chart);
+        setShouldRender(true);
+        setError(null);
+      } catch (e: any) {
+        const isSyntaxError = e.message.includes('Syntax error') || e.message.includes('Parse error');
+        onMermaidError(chart, isSyntaxError ? 'syntax' : 'rendering');
+        setError(isSyntaxError ? 'Syntax error detected. Check the code or use AI Fix.' : 'Rendering error detected.');
+        setShouldRender(false);
+        setSvg(null);
+      }
     }
-  }, [chart, isRendering]);
+  }, [chart, isRendering, onMermaidError]);
 
   const cleanupRender = useCallback(() => {
     if (renderTimeoutRef.current) {
@@ -176,7 +191,6 @@ Here's the error message received: "${error}". Please provide only the corrected
         setIsMermaidLoaded(true);
       };
       script.onerror = () => {
-        console.error("Failed to load Mermaid script.");
         setError("Failed to load Mermaid library. Please check your network connection.");
         setIsMermaidLoaded(false);
       };
@@ -197,46 +211,35 @@ Here's the error message received: "${error}". Please provide only the corrected
 
       setIsRendering(true);
       setError(null);
-      setSvg(null);
-      setShouldRender(false);
 
       const mermaidInstance = (window as any).mermaid;
 
       try {
         mermaidInstance.initialize({
           startOnLoad: false,
-          theme: 'dark',
+          theme: 'base',
           themeVariables: {
-            // Primary colors
             primaryColor: '#3b82f6',
             primaryTextColor: '#e5e7eb',
             primaryBorderColor: '#2563eb',
-            // Secondary colors
             secondaryColor: '#10b981',
             tertiaryColor: '#f59e0b',
-            // Background colors
             background: '#1f2937',
             secondaryBackground: '#374151',
             tertiaryBackground: '#4b5563',
-            // Node colors
             mainBkg: '#3b82f6',
             secondBkg: '#10b981',
             tertiaryBkg: '#f59e0b',
-            // Text colors
             textColor: '#e5e7eb',
             secondaryTextColor: '#9ca3af',
-            // Line colors
             lineColor: '#9ca3af',
             arrowheadColor: '#e5e7eb',
-            // Special colors
             errorBkgColor: '#7f1d1d',
             errorTextColor: '#f87171',
-            // Flowchart specific
             nodeBkg: '#374151',
             nodeBorder: '#3b82f6',
             clusterBkg: '#1f2937',
             clusterBorder: '#4b5563',
-            // Sequence diagram
             actorBkg: '#374151',
             actorBorder: '#3b82f6',
             actorTextColor: '#e5e7eb',
@@ -250,7 +253,6 @@ Here's the error message received: "${error}". Please provide only the corrected
             noteBorderColor: '#d97706',
             noteBkgColor: '#78350f',
             noteTextColor: '#f59e0b',
-            // Gantt chart
             cScale0: '#3b82f6',
             cScale1: '#10b981',
             cScale2: '#f59e0b',
@@ -264,31 +266,15 @@ Here's the error message received: "${error}". Please provide only the corrected
             cScale10: '#14b8a6',
             cScale11: '#f43f5e'
           },
-          flowchart: {
-            useMaxWidth: true,
-            htmlLabels: true,
-            curve: 'basis'
-          },
-          sequence: {
-            useMaxWidth: true,
-            wrap: true
-          },
-          gantt: {
-            useMaxWidth: true,
-            leftPadding: 75,
-            rightPadding: 20,
-            topPadding: 50,
-            bottomPadding: 25
-          },
-          pie: {
-            useMaxWidth: true
-          },
-          xychart: {
-            useMaxWidth: true,
-            defaultBackgroundColor: '#1f2937'
-          },
+          flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+          sequence: { useMaxWidth: true, wrap: true },
+          gantt: { useMaxWidth: true, leftPadding: 75, rightPadding: 20, topPadding: 50, bottomPadding: 25 },
+          pie: { useMaxWidth: true },
+          xychart: { useMaxWidth: true, defaultBackgroundColor: '#1f2937' },
           maxWidth: '100%',
-          responsive: true
+          responsive: true,
+          errorRenderer: () => '',
+          securityLevel: 'strict',
         });
 
         const renderPromise = new Promise<any>((resolve, reject) => {
@@ -297,7 +283,7 @@ Here's the error message received: "${error}". Please provide only the corrected
           }, 7000);
 
           mermaidInstance.render(
-            'mermaid-chart-' + Date.now(), // Unique ID for each render
+            'mermaid-chart-' + Date.now(),
             chart
           ).then(result => {
             if (renderTimeoutRef.current) {
@@ -316,24 +302,20 @@ Here's the error message received: "${error}". Please provide only the corrected
 
         const { svg: generatedSvg, bindFunctions } = await renderPromise;
         setSvg(generatedSvg);
-        setLastRenderedChart(chart); // Update last rendered chart on success
+        setLastRenderedChart(chart);
 
         if (bindFunctions) {
           bindFunctions(diagramRef.current);
         }
 
-        // Reset zoom and pan when a new diagram is successfully rendered
         setScale(1);
         setTranslateX(0);
         setTranslateY(0);
 
       } catch (e: any) {
-        console.error("Rendering error (mermaid):", e);
-        // Pass the error message to onMermaidError for potential AI correction
+        onMermaidError(chart, 'rendering');
         setError(e.message || "An unknown error occurred during rendering.");
-        if (onMermaidError) {
-          onMermaidError(chart, 'rendering');
-        }
+        setSvg(null);
       } finally {
         setIsRendering(false);
       }
@@ -349,15 +331,12 @@ Here's the error message received: "${error}". Please provide only the corrected
   // Trigger render on initial mount and when diagramRef changes
   useEffect(() => {
     if (!diagramRef.current) return;
-    // Only trigger initial render if there's chart data and no error
     if (chart.trim() && !error) {
       triggerRender();
     }
 
     const resizeObserver = new ResizeObserver(entries => {
       for (let entry of entries) {
-        // Only re-render if the content box size changes and not currently rendering
-        // This helps with responsiveness while avoiding infinite loops
         if (entry.contentBoxSize && !isRendering && chart.trim()) {
           triggerRender();
         }
@@ -369,31 +348,28 @@ Here's the error message received: "${error}". Please provide only the corrected
     return () => {
       resizeObserver.disconnect();
     };
-  }, [diagramRef, chart, isRendering, triggerRender, error]); // Added error to dependencies
+  }, [diagramRef, chart, isRendering, triggerRender, error]);
 
   // Determine if the "Try Again" button should be disabled
   const disableTryAgain = !!error && chart === lastRenderedChart;
 
   const hasChanges = chart !== lastRenderedChart;
 
-  // Custom Zoom and Pan Handlers
-  const handleZoom = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-    event.preventDefault(); // Prevent page scrolling
+  // Custom Zoom and Pan Handlers (Mouse)
+  const handleZoom = useCallback((event: WheelEvent) => {
+    event.preventDefault();
     const svgElement = svgContentRef.current?.querySelector('svg');
     if (!svgElement) return;
 
     const scaleAmount = 0.1;
     const newScale = event.deltaY < 0 ? scale * (1 + scaleAmount) : scale * (1 - scaleAmount);
 
-    // Clamp scale to reasonable min/max values
     const clampedScale = Math.max(0.1, Math.min(10, newScale));
 
-    // Calculate mouse position relative to SVG content area
     const rect = svgContentRef.current!.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
 
-    // Adjust translation to zoom towards the mouse pointer
     const oldTranslateX = translateX;
     const oldTranslateY = translateY;
 
@@ -406,7 +382,7 @@ Here's the error message received: "${error}". Please provide only the corrected
   }, [scale, translateX, translateY]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button === 0) { // Left mouse button
+    if (event.button === 0) {
       setIsPanning(true);
       lastPanPosition.current = { x: event.clientX, y: event.clientY };
       event.currentTarget.style.cursor = 'grabbing';
@@ -437,12 +413,88 @@ Here's the error message received: "${error}". Please provide only the corrected
     }
   }, []);
 
+  // Touch Handlers for Panning and Zooming
+  const handleTouchStart = useCallback((event: TouchEvent) => {
+    if (event.touches.length === 1) {
+      // Single touch for panning
+      setIsPanning(true);
+      lastPanPosition.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+    } else if (event.touches.length === 2) {
+      // Two touches for pinch-to-zoom
+      event.preventDefault();
+      setIsPanning(false);
+      const distance = getPinchDistance(event.touches[0], event.touches[1]);
+      setInitialPinchDistance(distance);
+      setInitialPinchScale(scale);
+    }
+  }, [scale]);
+
+  const handleTouchMove = useCallback((event: TouchEvent) => {
+    if (event.touches.length === 1 && isPanning) {
+      // Single touch panning
+      const deltaX = event.touches[0].clientX - lastPanPosition.current.x;
+      const deltaY = event.touches[0].clientY - lastPanPosition.current.y;
+      setTranslateX(prev => prev + deltaX);
+      setTranslateY(prev => prev + deltaY);
+      lastPanPosition.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+    } else if (event.touches.length === 2) {
+      // Pinch-to-zoom
+      event.preventDefault();
+      const distance = getPinchDistance(event.touches[0], event.touches[1]);
+      if (initialPinchDistance !== null) {
+        const newScale = initialPinchScale * (distance / initialPinchDistance);
+        const clampedScale = Math.max(0.1, Math.min(10, newScale));
+        setScale(clampedScale);
+
+        // Adjust translation to zoom around pinch center
+        const rect = svgContentRef.current!.getBoundingClientRect();
+        const pinchCenterX = (event.touches[0].clientX + event.touches[1].clientX) / 2 - rect.left;
+        const pinchCenterY = (event.touches[0].clientY + event.touches[1].clientY) / 2 - rect.top;
+
+        const oldTranslateX = translateX;
+        const oldTranslateY = translateY;
+
+        const newTranslateX = pinchCenterX - ((pinchCenterX - oldTranslateX) * (clampedScale / scale));
+        const newTranslateY = pinchCenterY - ((pinchCenterY - oldTranslateY) * (clampedScale / scale));
+
+        setTranslateX(newTranslateX);
+        setTranslateY(newTranslateY);
+      }
+    }
+  }, [isPanning, scale, initialPinchDistance, initialPinchScale, translateX, translateY]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsPanning(false);
+    setInitialPinchDistance(null);
+    setInitialPinchScale(1);
+  }, []);
+
+  // Attach touch event listeners with passive: false
+  useEffect(() => {
+    const element = svgContentRef.current;
+    if (!element) return;
+
+    element.addEventListener('touchstart', handleTouchStart, { passive: false });
+    element.addEventListener('touchmove', handleTouchMove, { passive: false });
+    element.addEventListener('touchend', handleTouchEnd, { passive: false });
+    element.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+    element.addEventListener('wheel', handleZoom, { passive: false });
+
+    return () => {
+      element.removeEventListener('touchstart', handleTouchStart);
+      element.removeEventListener('touchmove', handleTouchMove);
+      element.removeEventListener('touchend', handleTouchEnd);
+      element.removeEventListener('touchcancel', handleTouchEnd);
+      element.removeEventListener('wheel', handleZoom);
+    };
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd, handleZoom]);
+
   const handleZoomIn = useCallback(() => {
-    setScale(prev => Math.min(10, prev * 1.2)); // Zoom in by 20%
+    setScale(prev => Math.min(10, prev * 1.2));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setScale(prev => Math.max(0.1, prev * 0.8)); // Zoom out by 20%
+    setScale(prev => Math.max(0.1, prev * 0.8));
   }, []);
 
   const handleResetZoom = useCallback(() => {
@@ -456,8 +508,7 @@ Here's the error message received: "${error}". Please provide only the corrected
     isResizing.current = true;
     initialResizeY.current = event.clientY;
     initialComponentHeight.current = componentHeight;
-    document.body.style.cursor = 'ns-resize'; // Change cursor globally
-    // Add global event listeners to handle mouseup outside the component
+    document.body.style.cursor = 'ns-resize';
     document.addEventListener('mousemove', handleResizeMouseMove);
     document.addEventListener('mouseup', handleResizeMouseUp);
   }, [componentHeight]);
@@ -465,51 +516,50 @@ Here's the error message received: "${error}". Please provide only the corrected
   const handleResizeMouseMove = useCallback((event: MouseEvent) => {
     if (isResizing.current) {
       const deltaY = event.clientY - initialResizeY.current;
-      const newHeight = Math.max(200, initialComponentHeight.current + deltaY); // Min height 200px
+      const newHeight = Math.max(200, initialComponentHeight.current + deltaY);
       setComponentHeight(newHeight);
     }
   }, []);
 
   const handleResizeMouseUp = useCallback(() => {
     isResizing.current = false;
-    document.body.style.cursor = 'default'; // Reset cursor globally
+    document.body.style.cursor = 'default';
     document.removeEventListener('mousemove', handleResizeMouseMove);
     document.removeEventListener('mouseup', handleResizeMouseUp);
   }, [handleResizeMouseMove]);
 
-
   if (!isMermaidLoaded) {
     return (
-      <div className="my-4 p-4 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-center h-40">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-400 mr-2" />
-        <span className="text-gray-300">Loading diagram library...</span>
+      <div className="my-4 p-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center h-40">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-500 dark:text-blue-400 mr-2" />
+        <span className="text-gray-600 dark:text-gray-300">Loading diagram library...</span>
       </div>
     );
   }
 
   if (isRendering) {
     return (
-      <div className="my-4 p-4 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-center h-40">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-400 mr-2" />
-        <span className="text-gray-300">Rendering diagram...</span>
+      <div className="my-4 p-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center h-40">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-500 dark:text-blue-400 mr-2" />
+        <span className="text-gray-600 dark:text-gray-300">Rendering diagram...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="my-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
+      <div className="my-4 p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-red-300">
+          <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
             <Info className="h-4 w-4" />
-            <span className="text-sm font-medium">Diagram Issue Detected</span>
+            <span className="text-sm font-medium">Diagram Issue</span>
           </div>
           <div className="flex gap-2">
             {onSuggestAiCorrection && (
               <Button
                 size="sm"
-                onClick={handleAiFixClick} // Call the local handler
-                className="bg-blue-600 text-white hover:bg-blue-500 h-7 px-3 text-xs"
+                onClick={handleAiFixClick}
+                className="bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600 h-7 px-3 text-xs"
               >
                 <Wrench className="h-3 w-3 mr-1" />
                 AI Fix
@@ -519,28 +569,29 @@ Here's the error message received: "${error}". Please provide only the corrected
               variant="outline"
               size="sm"
               onClick={triggerRender}
-              disabled={disableTryAgain} // Disable if no changes and still error
-              className="text-gray-300 border-gray-600 hover:bg-gray-700 h-7 px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={disableTryAgain}
+              className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 h-7 px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="h-3 w-3 mr-1" />
               Try Again
             </Button>
           </div>
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{error}</p>
       </div>
     );
   }
 
   if (!svg || hasChanges) {
     return (
-      <div className="my-4 p-3 sm:p-4 bg-gray-900 border border-gray-700 rounded-lg">
+      <div className="my-4 p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               Mermaid Diagram
             </span>
             {hasChanges && svg && (
-              <div className="flex items-center gap-1 text-xs bg-red-900/50 text-red-300 px-2 py-1 rounded">
+              <div className="flex items-center gap-1 text-xs bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 px-2 py-1 rounded">
                 <AlertTriangle className="h-3 w-3" />
                 <span className="hidden sm:inline">Changes detected</span>
               </div>
@@ -550,20 +601,20 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={copyCode}
-            className="h-6 w-6 p-0 text-gray-300 hover:bg-gray-800"
+            className="h-6 w-6 p-0 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
           >
-            {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-green-500 dark:text-green-400" /> : <Copy className="h-3 w-3" />}
           </Button>
         </div>
-        <div className="flex items-center justify-center h-32 border-2 border-dashed border-gray-600 rounded-lg bg-gray-800">
+        <div className="flex items-center justify-center h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-800">
           <div className="text-center px-4">
-            <p className="text-sm text-gray-400 mb-3">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
               {!svg ? 'Click to render your Mermaid diagram' : 'Click to update diagram with changes'}
             </p>
             <Button
               onClick={triggerRender}
               disabled={!chart.trim()}
-              className="bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="h-4 w-4 mr-2" />
               {!svg ? 'Render Diagram' : 'Update Diagram'}
@@ -576,20 +627,19 @@ Here's the error message received: "${error}". Please provide only the corrected
   }
 
   return (
-    <div className="my-4 p-3 sm:p-4 bg-gray-900 rounded-lg border border-gray-700">
+    <div className="my-4 p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
             Mermaid Diagram
           </span>
         </div>
         <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
-          {/* Custom Zoom Controls */}
           <Button
             variant="ghost"
             size="sm"
             onClick={handleZoomIn}
-            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
             title="Zoom In"
           >
             <ZoomIn className="h-3 w-3" />
@@ -598,7 +648,7 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={handleZoomOut}
-            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
             title="Zoom Out"
           >
             <ZoomOut className="h-3 w-3" />
@@ -607,17 +657,16 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={handleResetZoom}
-            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
             title="Reset Zoom"
           >
             <Maximize className="h-3 w-3" />
           </Button>
-
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowSourceCode(!showSourceCode)}
-            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
             title="Toggle source code"
           >
             {showSourceCode ? <EyeOff className="h-3 w-3 sm:mr-1" /> : <Eye className="h-3 w-3 sm:mr-1" />}
@@ -627,17 +676,17 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={copyCode}
-            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
             title="Copy source code"
           >
-            {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-400" /> : <Copy className="h-3 w-3 sm:mr-1" />}
+            {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-500 dark:text-green-400" /> : <Copy className="h-3 w-3 sm:mr-1" />}
             <span className="hidden sm:inline">Copy</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => svg && downloadSvg(svg)}
-            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
             title="Download as SVG"
           >
             <Download className="h-3 w-3 sm:mr-1" />
@@ -647,7 +696,7 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={() => svg && downloadSvgAsPng(svg)}
-            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
             title="Download as PNG"
           >
             <Download className="h-3 w-3 sm:mr-1" />
@@ -657,17 +706,16 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={triggerRender}
-            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
             title="Re-render diagram"
           >
             <Play className="h-3 w-3" />
           </Button>
-          {/* Expand/Collapse Button */}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsDiagramExpanded(prev => !prev)}
-            className="h-7 px-2 text-xs text-gray-300 hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
             title={isDiagramExpanded ? 'Collapse Diagram' : 'Expand Diagram'}
           >
             {isDiagramExpanded ? <ChevronUp className="h-3 w-3 sm:mr-1" /> : <ChevronDown className="h-3 w-3 sm:mr-1" />}
@@ -677,11 +725,11 @@ Here's the error message received: "${error}". Please provide only the corrected
       </div>
 
       {showSourceCode && (
-        <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
+        <div className="mb-4 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
             <div className="flex items-center gap-2">
-              <Code className="h-4 w-4 text-gray-400" />
-              <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+              <Code className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                 Source Code
               </span>
             </div>
@@ -689,12 +737,12 @@ Here's the error message received: "${error}". Please provide only the corrected
               variant="ghost"
               size="sm"
               onClick={copySourceCode}
-              className="h-6 w-6 p-0 text-gray-300 hover:bg-gray-700 self-end sm:self-auto"
+              className="h-6 w-6 p-0 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 self-end sm:self-auto"
             >
-              {sourceCodeCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3 text-gray-400" />}
+              {sourceCodeCopied ? <Check className="h-3 w-3 text-green-500 dark:text-green-400" /> : <Copy className="h-3 w-3 text-gray-600 dark:text-gray-400" />}
             </Button>
           </div>
-          <pre className="text-sm text-gray-300 overflow-x-auto">
+          <pre className="text-sm text-gray-600 dark:text-gray-300 overflow-x-auto">
             <code>{chart}</code>
           </pre>
         </div>
@@ -702,14 +750,13 @@ Here's the error message received: "${error}". Please provide only the corrected
 
       {isDiagramExpanded && (
         <div
-          className="bg-gray-800 rounded-lg border border-gray-700 p-2 overflow-hidden relative" // Added relative for resize handle positioning
-          style={{ height: `${componentHeight}px` }} // Apply dynamic height
+          className="bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-2 overflow-hidden relative"
+          style={{ height: `${componentHeight}px` }}
         >
           <div
-            ref={svgContentRef} // Assign ref here for mouse events
-            className="w-full h-full flex items-center justify-center" // Removed min-h, using parent height
-            style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
-            onWheel={handleZoom}
+            ref={svgContentRef}
+            className="w-full h-full flex items-center justify-center"
+            style={{ cursor: isPanning ? 'grabbing' : 'grab', touchAction: 'none' }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -719,15 +766,14 @@ Here's the error message received: "${error}". Please provide only the corrected
               dangerouslySetInnerHTML={{ __html: svg || '' }}
               style={{
                 transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
-                transformOrigin: '0 0', // Set transform origin to top-left for consistent translation
-                transition: isPanning ? 'none' : 'transform 0.1s ease-out', // Smooth transition for zoom, instant for pan
+                transformOrigin: '0 0',
+                transition: isPanning ? 'none' : 'transform 0.1s ease-out',
               }}
               className="min-w-0 [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:w-full"
             />
           </div>
-          {/* Resize Handle */}
           <div
-            className="absolute bottom-0 left-0 right-0 h-3 flex items-center justify-center cursor-ns-resize text-gray-500 hover:text-gray-300"
+            className="absolute bottom-0 left-0 right-0 h-3 flex items-center justify-center cursor-ns-resize text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
             onMouseDown={handleResizeMouseDown}
           >
             <GripVertical className="h-4 w-4" />

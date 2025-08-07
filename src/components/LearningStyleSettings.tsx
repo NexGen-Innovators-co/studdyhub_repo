@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Brain, 
-  Settings, 
-  Save, 
-  User, 
-  ImageIcon, 
-  Lock, 
+import {
+  Brain,
+  Settings,
+  Save,
+  User,
+  ImageIcon,
+  Lock,
   Eye,
   EyeOff,
   Upload,
@@ -35,7 +35,7 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
 }) => {
   // You can integrate this with your global theme context or pass isDarkMode as a prop
   const [isDarkMode, setIsDarkMode] = useState(true);
-  
+
   // Original form states
   const [learningStyle, setLearningStyle] = useState<UserProfile['learning_style']>('visual');
   const [explanationStyle, setExplanationStyle] = useState<'simple' | 'detailed' | 'comprehensive'>('detailed');
@@ -43,7 +43,7 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
   const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('intermediate');
   const [fullName, setFullName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
-  
+
   // Enhanced password states
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -51,7 +51,7 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   // Enhanced UI states
   const [isLoading, setIsLoading] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -74,20 +74,20 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
     const file = event.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        setErrors({...errors, avatar: 'Please select an image file.'});
+        setErrors({ ...errors, avatar: 'Please select an image file.' });
         toast.error('Please select an image file.');
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
-        setErrors({...errors, avatar: 'Image size must be less than 5MB.'});
+        setErrors({ ...errors, avatar: 'Image size must be less than 5MB.' });
         toast.error('Image size must be less than 5MB.');
         return;
       }
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarPreview(reader.result as string);
-        setErrors({...errors, avatar: ''});
+        setErrors({ ...errors, avatar: '' });
       };
       reader.readAsDataURL(file);
       setAvatarUrl(file as any);
@@ -96,29 +96,29 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    
+
     if (newPassword && newPassword.length < 8) {
       newErrors.newPassword = 'Password must be at least 8 characters long.';
     }
-    
+
     if (newPassword && confirmPassword && newPassword !== confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match.';
     }
-    
+
     if (!fullName.trim()) {
       newErrors.fullName = 'Full name is required.';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSave = async () => {
     if (!validateForm()) return;
-    
+
     setIsLoading(true);
     setSaveSuccess(false);
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
@@ -198,20 +198,20 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
   ];
 
   const themeClasses = {
-    container: isDarkMode 
-      ? 'bg-gray-900 text-gray-100' 
+    container: isDarkMode
+      ? 'bg-gray-900 text-gray-100'
       : 'bg-gray-50 text-gray-900',
-    card: isDarkMode 
-      ? 'bg-gray-800 border-gray-700' 
+    card: isDarkMode
+      ? 'bg-gray-800 border-gray-700'
       : 'bg-white border-gray-200',
-    input: isDarkMode 
-      ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:border-blue-500' 
+    input: isDarkMode
+      ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:border-blue-500'
       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500',
-    button: isDarkMode 
-      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+    button: isDarkMode
+      ? 'bg-blue-600 hover:bg-blue-700 text-white'
       : 'bg-blue-600 hover:bg-blue-700 text-white',
-    secondaryButton: isDarkMode 
-      ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border-gray-600' 
+    secondaryButton: isDarkMode
+      ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border-gray-600'
       : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300',
     text: isDarkMode ? 'text-gray-300' : 'text-gray-600',
     accent: 'text-blue-500'
@@ -244,11 +244,10 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
               <button
                 key={id}
                 onClick={() => setActiveSection(id as any)}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg transition-all ${
-                  activeSection === id
+                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg transition-all ${activeSection === id
                     ? 'bg-blue-600 text-white shadow-lg'
                     : `${themeClasses.text} hover:bg-gray-100 dark:hover:bg-gray-700`
-                }`}
+                  }`}
               >
                 <Icon className="h-4 w-4" />
                 {label}
@@ -259,7 +258,7 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
 
         {/* Content Sections */}
         <Card className={`rounded-2xl border shadow-lg ${themeClasses.card}`}>
-          
+
           {/* Profile Section */}
           {activeSection === 'profile' && (
             <CardContent className="p-8">
@@ -267,7 +266,7 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
                 <User className="h-5 w-5 text-blue-500" />
                 <h2 className="text-xl font-semibold">Profile Information</h2>
               </div>
-              
+
               <div className="flex flex-col md:flex-row gap-8">
                 {/* Avatar Section */}
                 <div className="flex flex-col items-center">
@@ -357,11 +356,10 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
                       <button
                         key={value}
                         onClick={() => setLearningStyle(value as any)}
-                        className={`p-4 rounded-xl border-2 transition-all text-left ${
-                          learningStyle === value
+                        className={`p-4 rounded-xl border-2 transition-all text-left ${learningStyle === value
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                             : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-3 mb-2">
                           <Icon className={`h-5 w-5 ${learningStyle === value ? 'text-blue-500' : themeClasses.text}`} />
@@ -388,11 +386,10 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
                       <button
                         key={value}
                         onClick={() => setExplanationStyle(value as any)}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          explanationStyle === value
+                        className={`p-4 rounded-xl border-2 transition-all ${explanationStyle === value
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                             : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
-                        }`}
+                          }`}
                       >
                         <div className="font-medium mb-1">{label}</div>
                         <div className={`text-xs ${themeClasses.text}`}>{desc}</div>
@@ -415,11 +412,10 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
                       <button
                         key={value}
                         onClick={() => setDifficulty(value as any)}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          difficulty === value
+                        className={`p-4 rounded-xl border-2 transition-all ${difficulty === value
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                             : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
-                        }`}
+                          }`}
                       >
                         <div className="font-medium mb-1">{label}</div>
                         <div className={`text-xs ${themeClasses.text}`}>{desc}</div>
@@ -558,7 +554,7 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
                   </>
                 )}
               </Button>
-              
+
               {saveSuccess && (
                 <div className="flex items-center gap-2 text-green-500 animate-pulse">
                   <Check className="h-5 w-5" />

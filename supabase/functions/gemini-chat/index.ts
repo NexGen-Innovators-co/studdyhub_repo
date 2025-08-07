@@ -1,13 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
-// File type mappings for MIME types
+
+// Expanded file type mappings for MIME types
 const SUPPORTED_FILE_TYPES = {
+  // Images - highest priority for visual processing
   'image/jpeg': 'image',
   'image/jpg': 'image',
   'image/png': 'image',
@@ -15,13 +18,238 @@ const SUPPORTED_FILE_TYPES = {
   'image/webp': 'image',
   'image/bmp': 'image',
   'image/svg+xml': 'image',
+  'image/tiff': 'image',
+  'image/tif': 'image',
+  'image/ico': 'image',
+  'image/heic': 'image',
+  'image/heif': 'image',
+  // Documents - structured processing
   'application/pdf': 'pdf',
-  'text/plain': 'text',
-  'text/csv': 'text',
-  'text/markdown': 'text',
   'application/msword': 'document',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'document'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'document',
+  'application/vnd.ms-excel': 'spreadsheet',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'spreadsheet',
+  'application/vnd.ms-powerpoint': 'presentation',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'presentation',
+  'application/rtf': 'document',
+  'application/vnd.oasis.opendocument.text': 'document',
+  'application/vnd.oasis.opendocument.spreadsheet': 'spreadsheet',
+  'application/vnd.oasis.opendocument.presentation': 'presentation',
+  // Text files - direct processing
+  'text/plain': 'text',
+  'text/csv': 'csv',
+  'text/markdown': 'markdown',
+  'text/html': 'html',
+  'text/xml': 'xml',
+  'application/json': 'json',
+  'application/xml': 'xml',
+  // Code files - syntax-aware processing
+  'text/javascript': 'code',
+  'application/javascript': 'code',
+  'text/typescript': 'code',
+  'application/typescript': 'code',
+  'text/css': 'code',
+  'text/x-python': 'code',
+  'text/x-java': 'code',
+  'text/x-c': 'code',
+  'text/x-cpp': 'code',
+  'text/x-csharp': 'code',
+  'text/x-php': 'code',
+  'text/x-ruby': 'code',
+  'text/x-go': 'code',
+  'text/x-rust': 'code',
+  'text/x-sql': 'code',
+  // Archives (for metadata extraction)
+  'application/zip': 'archive',
+  'application/x-rar-compressed': 'archive',
+  'application/x-7z-compressed': 'archive',
+  'application/x-tar': 'archive',
+  'application/gzip': 'archive',
+  // Audio (for transcription potential)
+  'audio/mpeg': 'audio',
+  'audio/wav': 'audio',
+  'audio/ogg': 'audio',
+  'audio/m4a': 'audio',
+  'audio/webm': 'audio',
+  'audio/flac': 'audio',
+  // Video (for frame extraction potential)
+  'video/mp4': 'video',
+  'video/avi': 'video',
+  'video/mov': 'video',
+  'video/wmv': 'video',
+  'video/webm': 'video',
+  'video/mkv': 'video'
 };
+
+// Optimized processing configuration with smart chunking
+const PROCESSING_CONFIG = {
+  image: {
+    maxSize: 20 * 1024 * 1024,
+    prompt: `Analyze this image comprehensively and extract ALL visible information:
+    
+    1. TEXT EXTRACTION: Extract every piece of visible text including:
+       - Main headings and titles
+       - Body text and paragraphs  
+       - Labels, captions, and annotations
+       - Text in charts, diagrams, or graphs
+       - Handwritten text if legible
+       - Text in different languages
+    
+    2. VISUAL CONTENT: Describe in detail:
+       - Objects, people, scenes
+       - Charts, graphs, diagrams, and their data
+       - Document structure and layout
+       - Colors, styling, and formatting
+    
+    3. CONTEXT: Provide meaningful interpretation of:
+       - Document type and purpose
+       - Key information and insights
+       - Relationships between elements
+    
+    Format your response clearly with sections for extracted text and visual description.`,
+    temperature: 0.1,
+    maxTokens: 32768,
+    useChunking: false
+  },
+  pdf: {
+    maxSize: 100 * 1024 * 1024,
+    prompt: `Extract and structure ALL content from this PDF document:
+    
+    1. COMPLETE TEXT EXTRACTION:
+       - All headings, subheadings, and body text
+       - Table contents with proper structure
+       - List items and bullet points
+       - Footnotes and references
+       - Page numbers and headers/footers if relevant
+    
+    2. DOCUMENT STRUCTURE:
+       - Maintain hierarchical organization
+       - Preserve formatting context
+       - Identify sections and chapters
+    
+    3. SPECIAL ELEMENTS:
+       - Extract text from images/charts within PDF
+       - Describe non-text elements (diagrams, charts)
+       - Note any forms or interactive elements
+    
+    Provide comprehensive extraction maintaining document logic and flow.`,
+    temperature: 0.05,
+    maxTokens: 65536,
+    useChunking: true,
+    chunkSize: 4 * 1024 * 1024
+  },
+  document: {
+    maxSize: 50 * 1024 * 1024,
+    prompt: `Extract ALL content from this document with full fidelity:
+    
+    1. TEXT CONTENT:
+       - Complete text including headers and footers
+       - All paragraphs, lists, and sections
+       - Table data with structure preserved
+       - Comments and tracked changes if visible
+    
+    2. FORMATTING CONTEXT:
+       - Document structure and organization
+       - Important styling that affects meaning
+       - Section breaks and page layouts
+    
+    3. METADATA:
+       - Document type and apparent purpose
+       - Key topics and themes identified
+    
+    Maintain logical flow and completeness of extraction.`,
+    temperature: 0.05,
+    maxTokens: 65536,
+    useChunking: true,
+    chunkSize: 3 * 1024 * 1024
+  },
+  spreadsheet: {
+    maxSize: 30 * 1024 * 1024,
+    prompt: `Extract and organize ALL data from this spreadsheet:
+    
+    1. DATA EXTRACTION:
+       - All cell contents including headers
+       - Sheet names and organization
+       - Formulas and calculated values
+       - Data relationships and structure
+    
+    2. TABLE STRUCTURE:
+       - Column headers and meanings
+       - Row organization and groupings
+       - Data types and formats
+    
+    3. INSIGHTS:
+       - Key data patterns or trends
+       - Purpose and context of data
+       - Important calculations or summaries
+    
+    Present data in a clear, structured format.`,
+    temperature: 0.05,
+    maxTokens: 32768,
+    useChunking: true,
+    chunkSize: 2 * 1024 * 1024
+  },
+  presentation: {
+    maxSize: 40 * 1024 * 1024,
+    prompt: `Extract comprehensive content from this presentation:
+    
+    1. SLIDE CONTENT:
+       - All slide titles and text content
+       - Bullet points and lists
+       - Speaker notes if accessible
+       - Slide sequence and organization
+    
+    2. VISUAL ELEMENTS:
+       - Charts, graphs, and their data
+       - Images and diagrams with descriptions
+       - Layout and design context
+    
+    3. STRUCTURE:
+       - Presentation flow and logic
+       - Key themes and messages
+       - Conclusion and takeaways
+    
+    Maintain the narrative flow of the presentation.`,
+    temperature: 0.1,
+    maxTokens: 32768,
+    useChunking: true,
+    chunkSize: 2 * 1024 * 1024
+  },
+  text: { maxSize: 10 * 1024 * 1024, directProcess: true },
+  csv: { maxSize: 20 * 1024 * 1024, directProcess: true, structured: true },
+  markdown: { maxSize: 5 * 1024 * 1024, directProcess: true },
+  html: { maxSize: 5 * 1024 * 1024, directProcess: true },
+  xml: { maxSize: 5 * 1024 * 1024, directProcess: true },
+  json: { maxSize: 5 * 1024 * 1024, directProcess: true, structured: true },
+  code: { maxSize: 2 * 1024 * 1024, directProcess: true, preserveFormat: true },
+  archive: {
+    maxSize: 100 * 1024 * 1024,
+    prompt: 'This is an archive file. Extract any readable metadata, file structure information, or accessible text content. Describe what type of archive this is and what it might contain.',
+    temperature: 0.2,
+    maxTokens: 4096,
+    useChunking: false
+  },
+  audio: {
+    maxSize: 100 * 1024 * 1024,
+    prompt: 'This is an audio file. Provide information about the audio format and any metadata that might be available. Note: Actual transcription would require specialized audio processing.',
+    temperature: 0.2,
+    maxTokens: 2048,
+    useChunking: false
+  },
+  video: {
+    maxSize: 200 * 1024 * 1024,
+    prompt: 'This is a video file. Analyze any extractable frames or metadata. Describe the video format and any available information. Note: Full video analysis would require specialized video processing.',
+    temperature: 0.2,
+    maxTokens: 4096,
+    useChunking: false
+  }
+};
+
+// Content size management constants
+const MAX_TOTAL_CONTEXT = 2 * 1024 * 1024; // 2MB total context limit
+const MAX_SINGLE_FILE_CONTENT = 500 * 1024; // 500KB per file in context
+const MAX_GEMINI_INPUT_TOKENS = 2 * 1024 * 1024; // Gemini 2.0 Flash limit
+
 // Initialize Supabase client
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -29,364 +257,475 @@ if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error('Missing Supabase configuration: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables are not set.');
 }
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// FileData interface to match frontend expectations
+interface FileData {
+  name: string;
+  type: string;
+  mimeType: string;
+  data: string | null;
+  content: string | null;
+  size: number;
+  processing_status: string;
+  processing_error: string | null;
+}
+
 /**
- * Helper function to convert ArrayBuffer to base64 string safely for large files.
- * @param buffer The ArrayBuffer to convert.
- * @returns The base64 encoded string.
- */ function arrayBufferToBase64(buffer) {
-  let binary = '';
+ * Optimized base64 conversion with chunking for large files
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  let binary = '';
+  const chunkSize = 32768; // Larger chunks for better performance
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
 }
-// Main server handler for incoming requests
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: corsHeaders
-    });
-  }
-  let requestData = null;
-  let files = [];
-  let uploadedDocumentIds = [];
-  let userMessageImageUrl = null;
-  let userMessageImageMimeType = null;
-  try {
-    const contentType = req.headers.get('content-type') || '';
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      const userId = formData.get('userId');
-      const sessionId = formData.get('sessionId');
-      const learningStyle = formData.get('learningStyle');
-      const learningPreferences = formData.get('learningPreferences') ? JSON.parse(formData.get('learningPreferences')) : {};
-      const chatHistory = formData.get('chatHistory') ? JSON.parse(formData.get('chatHistory')) : [];
-      const message = formData.get('message') || '';
-      requestData = {
-        userId,
-        sessionId,
-        learningStyle,
-        learningPreferences,
-        chatHistory,
-        message
-      };
-      for (const [key, value] of formData.entries()) {
-        if (value instanceof File) {
-          const processedFile = await processFile(value);
-          if (processedFile) files.push(processedFile);
-        }
-      }
-    } else {
-      const body = await req.json();
-      requestData = body;
-      const userId = body.userId;
-      if (body.files && Array.isArray(body.files)) {
-        for (const fileData of body.files) {
-          const processedFile = await processBase64File(fileData);
-          if (processedFile) files.push(processedFile);
-        }
-      }
-    }
-    const { userId, sessionId, learningStyle, learningPreferences, chatHistory, message } = requestData;
-    if (!userId || !sessionId) {
-      return new Response(JSON.stringify({
-        error: 'Missing required parameters: userId or sessionId'
-      }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
-      });
-    }
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!geminiApiKey) throw new Error('GEMINI_API_KEY environment variable not configured.');
-    // Process files with Gemini for content extraction
-    for (const file of files) {
-      if ((file.type === 'image' || file.type === 'pdf' || file.type === 'document') && file.data && file.processing_status === 'pending') {
-        console.log(`Attempting to extract content from ${file.name} using Gemini.`);
-        try {
-          const extractionPrompt = `Extract all readable text content from the provided document. Focus on the main body of text, ignoring headers, footers, page numbers, or any non-essential formatting unless explicitly part of the content. If the document contains structured data like tables, present it clearly. Return only the extracted text.`;
-          const extractionContents = [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: extractionPrompt
-                },
-                {
-                  inlineData: {
-                    mimeType: file.mimeType,
-                    data: file.data
-                  }
-                }
-              ]
-            }
-          ];
-          const extractionApiUrl = new URL(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`);
-          extractionApiUrl.searchParams.append('key', geminiApiKey);
-          const extractionResponse = await fetch(extractionApiUrl.toString(), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              contents: extractionContents,
-              generationConfig: {
-                temperature: 0.1,
-                maxOutputTokens: 678987
-              }
-            })
-          });
-          if (extractionResponse.ok) {
-            const extractionData = await extractionResponse.json();
-            const extractedText = extractionData.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (extractedText) {
-              file.content = extractedText;
-              file.processing_status = 'completed';
-              file.processing_error = null;
-              console.log(`Successfully extracted content from ${file.name}. Length: ${extractedText.length}`);
-            } else {
-              file.processing_status = 'failed';
-              file.processing_error = 'Gemini did not return extracted text.';
-              console.warn(`Gemini failed to extract content from ${file.name}.`);
-            }
-          } else {
-            const errorBody = await extractionResponse.text();
-            file.processing_status = 'failed';
-            file.processing_error = `Gemini extraction API error: ${extractionResponse.status} - ${errorBody}`;
-            console.error(`Gemini extraction API error for ${file.name}: ${errorBody}`);
-          }
-        } catch (extractionError) {
-          file.processing_status = 'failed';
-          file.processing_error = `Error during Gemini extraction: ${extractionError.message}`;
-          console.error(`Error during Gemini extraction for ${file.name}:`, extractionError);
-        }
-      }
-    }
-    // Save files to database and get document IDs
-    for (const file of files) {
-      const documentId = await saveFileToDatabase(file, userId);
-      if (documentId) {
-        uploadedDocumentIds.push(documentId);
-        if (file.type === 'image' && !userMessageImageUrl) {
-          const { data: docData, error: docError } = await supabase.from('documents').select('file_url, file_type').eq('id', documentId).single();
-          if (docData && !docError) {
-            userMessageImageUrl = docData.file_url;
-            userMessageImageMimeType = docData.file_type;
-          } else {
-            console.error('Error fetching document URL:', docError);
-          }
-        }
-      }
-    }
-    // Ensure chat session exists
-    await ensureChatSession(userId, sessionId, uploadedDocumentIds);
-    // Build Gemini conversation
-    const systemPrompt = createSystemPrompt(learningStyle, learningPreferences);
-    const geminiContents = [
-      {
-        role: 'user',
-        parts: [
-          {
-            text: systemPrompt
-          }
-        ]
-      },
-      {
-        role: 'model',
-        parts: [
-          {
-            text: "I understand! I'm your AI study assistant for StuddyHub, ready to help students learn through personalized explanations and interactive visualizations. I'll generate clean, working code for diagrams and 3D visualizations that render properly in your chat interface. I'm here to make learning engaging and effective!"
-          }
-        ]
-      }
-    ];
-    // Add chat history
-    if (chatHistory && Array.isArray(chatHistory)) {
-      for (const msg of chatHistory) {
-        if (msg.role === 'user') {
-          const userParts = [];
-          if (msg.parts && Array.isArray(msg.parts)) {
-            for (const part of msg.parts) {
-              if (part.text) userParts.push({
-                text: part.text
-              });
-              if (part.inlineData && part.inlineData.mimeType && part.inlineData.data) {
-                userParts.push({
-                  inlineData: {
-                    mimeType: part.inlineData.mimeType,
-                    data: part.inlineData.data
-                  }
-                });
-              }
-            }
-          }
-          geminiContents.push({
-            role: 'user',
-            parts: userParts
-          });
-        } else if (msg.role === 'assistant' || msg.role === 'model') {
-          geminiContents.push({
-            role: 'model',
-            parts: [
-              {
-                text: msg.content || msg.parts?.[0]?.text || ''
-              }
-            ]
-          });
-        }
-      }
-    }
-    // Add current message and files
-    if (message || files.length > 0) {
-      const currentMessageParts = [];
-      if (message) currentMessageParts.push({
-        text: message
-      });
-      for (const file of files) {
-        if (file.type === 'image') {
-          currentMessageParts.push({
-            inlineData: {
-              mimeType: file.mimeType,
-              data: file.data
-            }
-          });
-        } else if (file.type === 'text' || file.type === 'pdf' || file.type === 'document') {
-          currentMessageParts.push({
-            text: `[File: ${file.name} (${file.type.toUpperCase()}) Content Start]\n${file.content}\n[File Content End]`
-          });
-        }
-      }
-      if (currentMessageParts.length > 0) {
-        geminiContents.push({
-          role: 'user',
-          parts: currentMessageParts
-        });
-      }
-      // Save user message to database
-      if (message || files.length > 0) {
-        await saveChatMessage({
-          userId,
-          sessionId,
-          content: message,
-          role: 'user',
-          attachedDocumentIds: uploadedDocumentIds.length > 0 ? uploadedDocumentIds : null,
-          imageUrl: userMessageImageUrl,
-          imageMimeType: userMessageImageMimeType
-        });
-      }
-    }
-    // Call Gemini API
-    const geminiApiUrl = new URL(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`);
-    geminiApiUrl.searchParams.append('key', geminiApiKey);
-    const response = await fetch(geminiApiUrl.toString(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: geminiContents,
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 678987
-        }
-      })
-    });
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`Gemini API error: ${response.status} - ${errorBody}`);
-      await saveChatMessage({
-        userId,
-        sessionId,
-        content: `Error: Failed to get response from Gemini API: ${response.statusText}`,
-        role: 'assistant',
-        isError: true
-      });
-      throw new Error(`Failed to get response from Gemini API: ${response.statusText}. Details: ${errorBody}`);
-    }
-    const data = await response.json();
-    let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
-    // Clean up response text
-    generatedText = generatedText.split('\n').map((line) => {
-      let cleanedLine = line.replace(/[^\x20-\x7E\n\r]/g, ' ');
-      cleanedLine = cleanedLine.replace(/\s+/g, ' ').trim();
-      return cleanedLine;
-    }).filter((line) => line.length > 0 || line.trim().length === 0).join('\n');
-    // Save assistant response
-    await saveChatMessage({
-      userId,
-      sessionId,
-      content: generatedText,
-      role: 'assistant'
-    });
-    // Update session timestamp
-    await updateSessionLastMessage(sessionId);
-    return new Response(JSON.stringify({
-      response: generatedText,
-      userId: userId,
-      sessionId: sessionId,
-      timestamp: new Date().toISOString(),
-      filesProcessed: files.length,
-      documentIds: uploadedDocumentIds
-    }), {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
-  } catch (error) {
-    console.error('Error in gemini-chat function:', error);
-    if (requestData?.userId && requestData?.sessionId) {
-      try {
-        await saveChatMessage({
-          userId: requestData.userId,
-          sessionId: requestData.sessionId,
-          content: `System Error: ${error.message || 'Internal Server Error'}`,
-          role: 'assistant',
-          isError: true
-        });
-      } catch (dbError) {
-        console.error('Failed to save error message to database:', dbError);
-      }
-    }
-    return new Response(JSON.stringify({
-      error: error.message || 'Internal Server Error'
-    }), {
-      status: 500,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
-  }
-});
+
 /**
- * Uploads a file to Supabase Storage.
- * @param file - The processed file object.
- * @param userId - The ID of the user uploading the file.
- * @returns The public URL of the uploaded file, or null if upload fails.
- */ async function uploadFileToStorage(file, userId) {
+ * Smart content truncation that preserves structure
+ */
+function intelligentTruncate(content: string, maxLength: number, fileType: string): string {
+  if (content.length <= maxLength) return content;
+  const truncated = content.substring(0, maxLength - 100); // Leave room for suffix
+  let cutPoint = truncated.length;
+  if (['document', 'pdf', 'text'].includes(fileType)) {
+    const lastParagraph = truncated.lastIndexOf('\n\n');
+    const lastSentence = truncated.lastIndexOf('. ');
+    cutPoint = Math.max(lastParagraph, lastSentence);
+  } else if (['json', 'xml'].includes(fileType)) {
+    const lastBrace = Math.max(truncated.lastIndexOf('}'), truncated.lastIndexOf('>'));
+    if (lastBrace > truncated.length * 0.8) cutPoint = lastBrace + 1;
+  } else if (fileType === 'csv') {
+    const lastLine = truncated.lastIndexOf('\n');
+    if (lastLine > truncated.length * 0.9) cutPoint = lastLine;
+  }
+  if (cutPoint < truncated.length * 0.7) cutPoint = truncated.length;
+  const result = content.substring(0, cutPoint);
+  const remainingChars = content.length - cutPoint;
+  return result + `\n\n[TRUNCATED: ${remainingChars.toLocaleString()} more characters not shown for processing efficiency]`;
+}
+
+/**
+ * Enhanced file validation with detailed feedback
+ */
+function validateFile(file: any, fileType: string): { valid: boolean; error?: string; warnings?: string[] } {
+  const config = PROCESSING_CONFIG[fileType];
+  if (!config) {
+    return { valid: false, error: `Unsupported file type: ${fileType}` };
+  }
+  const warnings: string[] = [];
+  if (file.size > config.maxSize) {
+    return {
+      valid: false,
+      error: `File size (${Math.round(file.size / 1024 / 1024)}MB) exceeds limit for ${fileType} files (${Math.round(config.maxSize / 1024 / 1024)}MB)`
+    };
+  }
+  if (file.size > config.maxSize * 0.7) {
+    warnings.push('Large file may take longer to process');
+  }
+  return { valid: true, warnings };
+}
+
+/**
+ * Process file content with chunking support for large files
+ */
+async function processFileContent(file: FileData, geminiApiKey: string): Promise<void> {
+  const fileType = SUPPORTED_FILE_TYPES[file.mimeType];
+  const config = PROCESSING_CONFIG[fileType];
+  if (!config) {
+    file.processing_status = 'failed';
+    file.processing_error = `Unsupported file type: ${fileType}`;
+    return;
+  }
+  const validation = validateFile(file, fileType);
+  if (!validation.valid) {
+    file.processing_status = 'failed';
+    file.processing_error = validation.error;
+    return;
+  }
+  try {
+    if (config.directProcess) {
+      await processDirectContent(file, fileType, config);
+      return;
+    }
+    if (config.useChunking && file.size > (config.chunkSize || 1024 * 1024)) {
+      await processWithChunking(file, config, geminiApiKey);
+    } else {
+      await processWithGemini(file, config, geminiApiKey);
+    }
+  } catch (error: any) {
+    file.processing_status = 'failed';
+    file.processing_error = `Processing error: ${error.message}`;
+    console.error(`Error processing file ${file.name}:`, error);
+  }
+}
+
+/**
+ * Direct processing for text-based files
+ */
+async function processDirectContent(file: FileData, fileType: string, config: any): Promise<void> {
+  try {
+    const decodedContent = atob(file.data || '');
+    let processedContent = decodedContent;
+    if (fileType === 'csv' && config.structured) {
+      processedContent = `[CSV Data Structure]\n${processedContent}`;
+    } else if (fileType === 'json' && config.structured) {
+      try {
+        const parsed = JSON.parse(decodedContent);
+        processedContent = `[JSON Structure]\n${JSON.stringify(parsed, null, 2)}`;
+      } catch {
+        processedContent = `[JSON File - Raw Content]\n${decodedContent}`;
+      }
+    } else if (fileType === 'code' && config.preserveFormat) {
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'unknown';
+      processedContent = `[${extension.toUpperCase()} Code File: ${file.name}]\n\`\`\`${extension}\n${decodedContent}\n\`\`\``;
+    }
+    if (processedContent.length > MAX_SINGLE_FILE_CONTENT) {
+      processedContent = intelligentTruncate(processedContent, MAX_SINGLE_FILE_CONTENT, fileType);
+    }
+    file.content = processedContent;
+    file.processing_status = 'completed';
+    file.processing_error = null;
+    console.log(`Successfully processed ${fileType} file: ${file.name} (${processedContent.length} chars)`);
+  } catch (error: any) {
+    file.processing_status = 'failed';
+    file.processing_error = `Direct processing failed: ${error.message}`;
+  }
+}
+
+/**
+ * Process with Gemini API using optimized prompts
+ */
+async function processWithGemini(file: FileData, config: any, geminiApiKey: string): Promise<void> {
+  if (!file.data) {
+    file.processing_status = 'failed';
+    file.processing_error = 'No file data available for processing';
+    return;
+  }
+  const contents = [{
+    role: 'user',
+    parts: [
+      { text: config.prompt },
+      { inlineData: { mimeType: file.mimeType, data: file.data } }
+    ]
+  }];
+  const response = await callGeminiAPI(contents, config, geminiApiKey);
+  if (response.success && response.content) {
+    let processedContent = response.content;
+    if (processedContent.length > MAX_SINGLE_FILE_CONTENT) {
+      processedContent = intelligentTruncate(processedContent, MAX_SINGLE_FILE_CONTENT, SUPPORTED_FILE_TYPES[file.mimeType]);
+    }
+    file.content = processedContent;
+    file.processing_status = 'completed';
+    file.processing_error = null;
+    console.log(`Successfully processed ${SUPPORTED_FILE_TYPES[file.mimeType]} file: ${file.name} (${processedContent.length} chars)`);
+  } else {
+    file.processing_status = 'failed';
+    file.processing_error = response.error || 'Failed to process with Gemini';
+  }
+}
+
+/**
+ * Process large files with intelligent chunking
+ */
+async function processWithChunking(file: FileData, config: any, geminiApiKey: string): Promise<void> {
+  console.log(`Large file detected: ${file.name}. Processing with size optimization.`);
+  const optimizedConfig = {
+    ...config,
+    maxTokens: Math.min(config.maxTokens, 32768),
+    prompt: config.prompt + '\n\nNote: Focus on extracting the most important and relevant content due to file size constraints.'
+  };
+  await processWithGemini(file, optimizedConfig, geminiApiKey);
+}
+
+/**
+ * Optimized Gemini API call with retry logic
+ */
+async function callGeminiAPI(contents: any[], config: any, geminiApiKey: string, retries = 2): Promise<{ success: boolean; content?: string; error?: string }> {
+  const apiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent');
+  apiUrl.searchParams.append('key', geminiApiKey);
+  const requestBody = {
+    contents,
+    generationConfig: {
+      temperature: config.temperature || 0.1,
+      maxOutputTokens: config.maxTokens || 8192,
+      topK: 40,
+      topP: 0.95
+    }
+  };
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(apiUrl.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const extractedContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (extractedContent) {
+          return { success: true, content: extractedContent };
+        } else {
+          return { success: false, error: 'No content returned from Gemini' };
+        }
+      } else {
+        const errorText = await response.text();
+        if (response.status === 429 && attempt < retries) {
+          const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+          console.log(`Rate limited, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        return { success: false, error: `API error ${response.status}: ${errorText}` };
+      }
+    } catch (error: any) {
+      if (attempt === retries) {
+        return { success: false, error: `Network error: ${error.message}` };
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+  return { success: false, error: 'Max retries exceeded' };
+}
+
+/**
+ * Process multiple files with optimized concurrency and rate limiting
+ */
+async function processFilesInBatches(files: FileData[], geminiApiKey: string): Promise<void> {
+  const filesToProcess = files.filter(f =>
+    f.processing_status === 'pending' && SUPPORTED_FILE_TYPES[f.mimeType]
+  );
+  if (filesToProcess.length === 0) return;
+  filesToProcess.sort((a, b) => {
+    const aType = SUPPORTED_FILE_TYPES[a.mimeType];
+    const bType = SUPPORTED_FILE_TYPES[b.mimeType];
+    const aConfig = PROCESSING_CONFIG[aType];
+    const bConfig = PROCESSING_CONFIG[bType];
+    if (aConfig?.directProcess && !bConfig?.directProcess) return -1;
+    if (!aConfig?.directProcess && bConfig?.directProcess) return 1;
+    return a.size - b.size;
+  });
+  console.log(`Processing ${filesToProcess.length} files in optimized order`);
+  const directFiles = filesToProcess.filter(f =>
+    PROCESSING_CONFIG[SUPPORTED_FILE_TYPES[f.mimeType]]?.directProcess
+  );
+  if (directFiles.length > 0) {
+    console.log(`Processing ${directFiles.length} direct files...`);
+    await Promise.all(directFiles.map(file => processFileContent(file, geminiApiKey)));
+  }
+  const apiFiles = filesToProcess.filter(f =>
+    !PROCESSING_CONFIG[SUPPORTED_FILE_TYPES[f.mimeType]]?.directProcess
+  );
+  if (apiFiles.length > 0) {
+    console.log(`Processing ${apiFiles.length} API files...`);
+    const batchSize = 2;
+    for (let i = 0; i < apiFiles.length; i += batchSize) {
+      const batch = apiFiles.slice(i, i + batchSize);
+      await Promise.all(batch.map(file => processFileContent(file, geminiApiKey)));
+      if (i + batchSize < apiFiles.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+  }
+  console.log('File processing completed');
+}
+
+/**
+ * Process file from multipart/form-data
+ */
+async function processFile(file: File): Promise<FileData | null> {
+  const mimeType = file.type;
+  const fileType = SUPPORTED_FILE_TYPES[mimeType];
+  if (!fileType) {
+    console.warn(`Unsupported file type: ${mimeType}`);
+    return null;
+  }
+  try {
+    const validation = validateFile(file, fileType);
+    if (!validation.valid) {
+      console.warn(`File validation failed for ${file.name}: ${validation.error}`);
+      return {
+        name: file.name,
+        type: fileType,
+        mimeType,
+        data: null,
+        content: null,
+        size: file.size,
+        processing_status: 'failed',
+        processing_error: validation.error
+      };
+    }
+    if (['text', 'code'].includes(fileType)) {
+      const textContent = await file.text();
+      return {
+        name: file.name,
+        type: fileType,
+        mimeType,
+        content: textContent,
+        data: btoa(textContent),
+        size: file.size,
+        processing_status: 'completed',
+        processing_error: null
+      };
+    } else {
+      const arrayBuffer = await file.arrayBuffer();
+      const base64Data = arrayBufferToBase64(arrayBuffer);
+      return {
+        name: file.name,
+        type: fileType,
+        mimeType,
+        data: base64Data,
+        content: `[File: ${file.name} - ${file.size} bytes. Processing ${fileType} content...]`,
+        size: file.size,
+        processing_status: 'pending',
+        processing_error: null
+      };
+    }
+  } catch (error: any) {
+    console.error(`Error processing file ${file.name}:`, error);
+    return {
+      name: file.name,
+      type: fileType,
+      mimeType,
+      data: null,
+      content: null,
+      size: file.size,
+      processing_status: 'failed',
+      processing_error: `Error processing file: ${error.message}`
+    };
+  }
+}
+
+/**
+ * Process file from JSON payload
+ */
+async function processBase64File(fileData: any): Promise<FileData | null> {
+  if (!fileData.name || !fileData.mimeType) {
+    console.warn('Invalid file data structure');
+    return null;
+  }
+  const fileType = SUPPORTED_FILE_TYPES[fileData.mimeType];
+  if (!fileType) {
+    console.warn(`Unsupported file type: ${fileData.mimeType}`);
+    return null;
+  }
+  const validation = validateFile(fileData, fileType);
+  if (!validation.valid) {
+    console.warn(`File validation failed for ${fileData.name}: ${validation.error}`);
+    return {
+      name: fileData.name,
+      type: fileType,
+      mimeType: fileData.mimeType,
+      data: fileData.data,
+      content: null,
+      size: fileData.size || 0,
+      processing_status: 'failed',
+      processing_error: validation.error
+    };
+  }
+  let decodedContent = fileData.content;
+  if (['text', 'code'].includes(fileType) && fileData.data && !decodedContent) {
+    try {
+      decodedContent = atob(fileData.data);
+    } catch (error) {
+      console.warn(`Failed to decode base64 data for ${fileData.name}`);
+    }
+  }
+  return {
+    name: fileData.name,
+    type: fileType,
+    mimeType: fileData.mimeType,
+    data: fileData.data || (decodedContent ? btoa(decodedContent) : null),
+    content: decodedContent || `[File: ${fileData.name}. Processing ${fileType} content...]`,
+    size: fileData.size || (decodedContent ? decodedContent.length : 0),
+    processing_status: fileData.processing_status || (['text', 'code'].includes(fileType) ? 'completed' : 'pending'),
+    processing_error: fileData.processing_error || null
+  };
+}
+
+/**
+ * Build attached context for documents and notes
+ */
+async function buildAttachedContext(documentIds: string[], noteIds: string[], userId: string): Promise<string> {
+  let context = '';
+  if (documentIds.length > 0) {
+    const { data: documents, error } = await supabase.from('documents').select('id, title, file_name, file_type, content_extracted, type, processing_status').eq('user_id', userId).in('id', documentIds);
+    if (error) {
+      console.error('Error fetching documents:', error);
+    } else if (documents) {
+      context += 'DOCUMENTS:\n';
+      for (const doc of documents) {
+        context += `Title: ${doc.title}\n`;
+        context += `File: ${doc.file_name}\n`;
+        context += `Type: ${doc.type.charAt(0).toUpperCase() + doc.type.slice(1)}\n`;
+        if (doc.content_extracted) {
+          const content = doc.content_extracted.length > MAX_SINGLE_FILE_CONTENT
+            ? intelligentTruncate(doc.content_extracted, MAX_SINGLE_FILE_CONTENT, doc.type)
+            : doc.content_extracted;
+          context += `Content: ${content}\n`;
+        } else {
+          if (doc.type === 'image' && doc.processing_status !== 'completed') {
+            context += `Content: Image processing ${doc.processing_status || 'pending'}. No extracted text yet.\n`;
+          } else if (doc.type === 'image' && doc.processing_status === 'completed' && !doc.content_extracted) {
+            context += `Content: Image analysis completed, but no text or detailed description was extracted.\n`;
+          } else {
+            context += `Content: No content extracted or available.\n`;
+          }
+        }
+        context += '\n';
+      }
+    }
+  }
+  if (noteIds.length > 0) {
+    const { data: notes, error } = await supabase.from('notes').select('id, title, category, content, ai_summary, tags').eq('user_id', userId).in('id', noteIds);
+    if (error) {
+      console.error('Error fetching notes:', error);
+    } else if (notes) {
+      context += 'NOTES:\n';
+      for (const note of notes) {
+        context += `Title: ${note.title}\n`;
+        context += `Category: ${note.category}\n`;
+        if (note.content) {
+          const content = note.content.length > MAX_SINGLE_FILE_CONTENT
+            ? intelligentTruncate(note.content, MAX_SINGLE_FILE_CONTENT, 'text')
+            : note.content;
+          context += `Content: ${content}\n`;
+        }
+        if (note.ai_summary) {
+          const summary = note.ai_summary.length > MAX_SINGLE_FILE_CONTENT
+            ? intelligentTruncate(note.ai_summary, MAX_SINGLE_FILE_CONTENT, 'text')
+            : note.ai_summary;
+          context += `AI Summary: ${summary}\n`;
+        }
+        if (note.tags && note.tags.length > 0) {
+          context += `Tags: ${note.tags.join(', ')}\n`;
+        }
+        context += '\n';
+      }
+    }
+  }
+  return context;
+}
+
+/**
+ * Upload file to Supabase storage
+ */
+async function uploadFileToStorage(file: FileData, userId: string): Promise<string | null> {
   try {
     const bucketName = 'chat-documents';
     const filePath = `${userId}/${crypto.randomUUID()}-${file.name}`;
     let fileData;
-    if (file.type === 'image' || file.type === 'pdf' || file.type === 'document') {
-      const binaryString = atob(file.data);
+    if (['image', 'pdf', 'document', 'spreadsheet', 'presentation', 'archive', 'audio', 'video'].includes(file.type)) {
+      const binaryString = atob(file.data || '');
       fileData = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         fileData[i] = binaryString.charCodeAt(i);
       }
-    } else if (file.type === 'text') {
-      fileData = new Blob([
-        file.content
-      ], {
-        type: file.mimeType
-      });
+    } else if (['text', 'code', 'csv', 'markdown', 'html', 'xml', 'json'].includes(file.type)) {
+      fileData = new Blob([file.content || ''], { type: file.mimeType });
     } else {
       console.warn(`Unsupported file type for storage upload: ${file.type}`);
       return null;
@@ -401,22 +740,21 @@ serve(async (req) => {
     }
     const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
     return publicUrlData?.publicUrl || null;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in uploadFileToStorage:', error);
     return null;
   }
 }
+
 /**
- * Save processed file to the documents table
- * @param file - The processed file object.
- * @param userId - The ID of the user.
- * @returns The ID of the saved document, or null if saving fails.
- */ async function saveFileToDatabase(file, userId) {
+ * Save file metadata to database
+ */
+async function saveFileToDatabase(file: FileData, userId: string): Promise<string | null> {
   let fileUrl = null;
   let contentExtracted = null;
   let processingStatus = file.processing_status || 'pending';
   let processingError = file.processing_error || null;
-  if (file.type === 'image' || file.type === 'pdf' || file.type === 'document') {
+  if (['image', 'pdf', 'document', 'spreadsheet', 'presentation', 'archive', 'audio', 'video'].includes(file.type)) {
     fileUrl = await uploadFileToStorage(file, userId);
     if (fileUrl) {
       if (processingStatus === 'pending') processingStatus = 'completed';
@@ -427,11 +765,11 @@ serve(async (req) => {
       return null;
     }
   }
-  if (file.type === 'text') {
+  if (['text', 'code', 'csv', 'markdown', 'html', 'xml', 'json'].includes(file.type)) {
     contentExtracted = file.content;
     processingStatus = 'completed';
   }
-  if (file.type === 'pdf' || file.type === 'document' || file.type === 'image') {
+  if (['pdf', 'document', 'spreadsheet', 'presentation', 'image', 'archive'].includes(file.type)) {
     contentExtracted = file.content;
   }
   try {
@@ -452,38 +790,49 @@ serve(async (req) => {
       return null;
     }
     return data.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Database error when saving file:', error);
     return null;
   }
 }
+
 /**
- * Save chat message to the database
- * @param messageData - Object containing message details.
- */ async function saveChatMessage({ userId, sessionId, content, role, attachedDocumentIds = null, isError = false, imageUrl = null, imageMimeType = null }) {
+ * Save chat message to database
+ */
+async function saveChatMessage({ userId, sessionId, content, role, attachedDocumentIds = null, attachedNoteIds = null, isError = false, imageUrl = null, imageMimeType = null }: {
+  userId: string;
+  sessionId: string;
+  content: string;
+  role: string;
+  attachedDocumentIds?: string[] | null;
+  attachedNoteIds?: string[] | null;
+  isError?: boolean;
+  imageUrl?: string | null;
+  imageMimeType?: string | null;
+}): Promise<void> {
   try {
     const { error } = await supabase.from('chat_messages').insert({
       user_id: userId,
       session_id: sessionId,
-      content: content,
-      role: role,
+      content,
+      role,
       attached_document_ids: attachedDocumentIds,
+      attached_note_ids: attachedNoteIds,
       is_error: isError,
       image_url: imageUrl,
       image_mime_type: imageMimeType,
       timestamp: new Date().toISOString()
     });
     if (error) console.error('Error saving chat message:', error);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Database error when saving chat message:', error);
   }
 }
+
 /**
- * Ensure chat session exists and update document_ids if new files were uploaded
- * @param userId - The ID of the user.
- * @param sessionId - The ID of the chat session.
- * @param newDocumentIds - An array of new document IDs to associate with the session.
- */ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
+ * Ensure chat session exists
+ */
+async function ensureChatSession(userId: string, sessionId: string, newDocumentIds: string[] = []): Promise<void> {
   try {
     const { data: existingSession, error: fetchError } = await supabase.from('chat_sessions').select('id, document_ids').eq('id', sessionId).eq('user_id', userId).single();
     if (fetchError && fetchError.code !== 'PGRST116') {
@@ -493,12 +842,7 @@ serve(async (req) => {
     if (existingSession) {
       if (newDocumentIds.length > 0) {
         const currentDocIds = existingSession.document_ids || [];
-        const updatedDocIds = [
-          ...new Set([
-            ...currentDocIds,
-            ...newDocumentIds
-          ])
-        ];
+        const updatedDocIds = [...new Set([...currentDocIds, ...newDocumentIds])];
         const { error: updateError } = await supabase.from('chat_sessions').update({
           document_ids: updatedDocIds,
           updated_at: new Date().toISOString(),
@@ -518,143 +862,30 @@ serve(async (req) => {
       });
       if (insertError) console.error('Error creating chat session:', insertError);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Database error when ensuring chat session:', error);
   }
 }
+
 /**
- * Update session's last message timestamp
- * @param sessionId - The ID of the chat session.
- */ async function updateSessionLastMessage(sessionId) {
+ * Update session last message timestamp
+ */
+async function updateSessionLastMessage(sessionId: string): Promise<void> {
   try {
     const { error } = await supabase.from('chat_sessions').update({
       last_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }).eq('id', sessionId);
     if (error) console.error('Error updating session last message time:', error);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Database error when updating session:', error);
   }
 }
+
 /**
- * Process uploaded File object from FormData.
- * @param file - File object from FormData.
- * @returns Processed file data or null if unsupported.
- */ async function processFile(file) {
-  const mimeType = file.type;
-  const fileType = SUPPORTED_FILE_TYPES[mimeType];
-  if (!fileType) {
-    console.warn(`Unsupported file type: ${mimeType}`);
-    return null;
-  }
-  try {
-    if (fileType === 'image') {
-      const arrayBuffer = await file.arrayBuffer();
-      const base64Data = arrayBufferToBase64(arrayBuffer);
-      return {
-        name: file.name,
-        type: 'image',
-        mimeType: mimeType,
-        data: base64Data,
-        size: file.size,
-        content: null,
-        processing_status: 'pending',
-        processing_error: null
-      };
-    } else if (fileType === 'text') {
-      const textContent = await file.text();
-      return {
-        name: file.name,
-        type: 'text',
-        mimeType: mimeType,
-        content: textContent,
-        data: btoa(textContent),
-        size: file.size,
-        processing_status: 'completed',
-        processing_error: null
-      };
-    } else if (fileType === 'pdf' || fileType === 'document') {
-      const arrayBuffer = await file.arrayBuffer();
-      const base64Data = arrayBufferToBase64(arrayBuffer);
-      return {
-        name: file.name,
-        type: fileType,
-        mimeType: mimeType,
-        data: base64Data,
-        content: `[File: ${file.name} - ${file.size} bytes. Attempting text extraction...]`,
-        size: file.size,
-        processing_status: 'pending',
-        processing_error: null
-      };
-    }
-  } catch (error) {
-    console.error(`Error processing file ${file.name}:`, error);
-    return null;
-  }
-  return null;
-}
-/**
- * Process base64 encoded file data from JSON request.
- * @param fileData - Object containing file information and base64 data.
- * @returns Processed file data or null if invalid.
- */ async function processBase64File(fileData) {
-  if (!fileData.name || !fileData.mimeType || !fileData.data) {
-    console.warn('Invalid file data structure');
-    return null;
-  }
-  const fileType = SUPPORTED_FILE_TYPES[fileData.mimeType];
-  if (!fileType) {
-    console.warn(`Unsupported file type: ${fileData.mimeType}`);
-    return null;
-  }
-  try {
-    if (fileType === 'image') {
-      return {
-        name: fileData.name,
-        type: 'image',
-        mimeType: fileData.mimeType,
-        data: fileData.data,
-        size: fileData.size || 0,
-        content: null,
-        processing_status: 'pending',
-        processing_error: null
-      };
-    } else if (fileType === 'text') {
-      const decodedContent = atob(fileData.data);
-      return {
-        name: fileData.name,
-        type: 'text',
-        mimeType: fileData.mimeType,
-        content: decodedContent,
-        data: fileData.data,
-        size: fileData.size || decodedContent.length,
-        processing_status: 'completed',
-        processing_error: null
-      };
-    } else if (fileType === 'pdf' || fileType === 'document') {
-      return {
-        name: fileData.name,
-        type: fileType,
-        mimeType: fileData.mimeType,
-        data: fileData.data,
-        content: `[File: ${fileData.name}. Attempting text extraction...]`,
-        size: fileData.size || 0,
-        processing_status: 'pending',
-        processing_error: null
-      };
-    }
-  } catch (error) {
-    console.error(`Error processing base64 file ${fileData.name}:`, error);
-    return null;
-  }
-  return null;
-}
-/**
- * Creates a dynamic system prompt for the AI based on user's learning style and preferences.
- * @param learningStyle - The user's preferred learning style.
- * @param preferences - Additional learning preferences.
- * @returns A string containing the comprehensive system prompt.
- */ function createSystemPrompt(learningStyle, preferences) {
+ * Create system prompt based on learning style and preferences
+ */
+function createSystemPrompt(learningStyle, preferences) {
   const basePrompt = `You are StuddyHub AI - an advanced learning assistant that generates production-ready educational content and interactive visualizations. Your responses render directly in a chat interface with automatic code execution.
 
 **CORE MISSION:**
@@ -1420,3 +1651,290 @@ You are StuddyHub AI - every interaction should feel like working with an expert
 
 Always maintain your role as a supportive learning companion while delivering production-quality educational technology solutions.`;
 }
+
+
+/**
+ * Main server handler
+ */
+serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+  const startTime = Date.now();
+  let requestData = null;
+  let files: FileData[] = [];
+  let uploadedDocumentIds: string[] = [];
+  let userMessageImageUrl: string | null = null;
+  let userMessageImageMimeType: string | null = null;
+  try {
+    const contentType = req.headers.get('content-type') || '';
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      requestData = {
+        userId: formData.get('userId') as string,
+        sessionId: formData.get('sessionId') as string,
+        learningStyle: formData.get('learningStyle') as string,
+        learningPreferences: formData.get('learningPreferences') ? JSON.parse(formData.get('learningPreferences') as string) : {},
+        chatHistory: formData.get('chatHistory') ? JSON.parse(formData.get('chatHistory') as string) : [],
+        message: formData.get('message') as string || '',
+        files: [],
+        attachedDocumentIds: formData.get('attachedDocumentIds') ? JSON.parse(formData.get('attachedDocumentIds') as string) : [],
+        attachedNoteIds: formData.get('attachedNoteIds') ? JSON.parse(formData.get('attachedNoteIds') as string) : [],
+        imageUrl: formData.get('imageUrl') as string | null,
+        imageMimeType: formData.get('imageMimeType') as string | null,
+        aiMessageIdToUpdate: formData.get('aiMessageIdToUpdate') as string | null
+      };
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          const processedFile = await processFile(value);
+          if (processedFile) files.push(processedFile);
+        }
+      }
+    } else if (contentType.includes('application/json')) {
+      requestData = await req.json();
+      if (requestData.files && Array.isArray(requestData.files)) {
+        for (const fileData of requestData.files) {
+          const processedFile = await processBase64File(fileData);
+          if (processedFile) files.push(processedFile);
+        }
+      }
+    } else {
+      return new Response(JSON.stringify({ error: 'Unsupported content type' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+    const {
+      userId,
+      sessionId,
+      learningStyle = 'visual',
+      learningPreferences = {},
+      chatHistory = [],
+      message = '',
+      attachedDocumentIds = [],
+      attachedNoteIds = [],
+      imageUrl = null,
+      imageMimeType = null,
+      aiMessageIdToUpdate = null
+    } = requestData;
+    if (!userId || !sessionId) {
+      return new Response(JSON.stringify({
+        error: 'Missing required parameters: userId or sessionId'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+    if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
+    console.log(`Starting processing of ${files.length} files...`);
+    await processFilesInBatches(files, geminiApiKey);
+    for (const file of files) {
+      const documentId = await saveFileToDatabase(file, userId);
+      if (documentId) {
+        uploadedDocumentIds.push(documentId);
+        if (file.type === 'image' && !userMessageImageUrl) {
+          const { data: docData, error: docError } = await supabase.from('documents').select('file_url, file_type').eq('id', documentId).single();
+          if (docData && !docError) {
+            userMessageImageUrl = docData.file_url;
+            userMessageImageMimeType = docData.file_type;
+          }
+        }
+      }
+    }
+    const allDocumentIds = [...new Set([...uploadedDocumentIds, ...attachedDocumentIds])];
+    await ensureChatSession(userId, sessionId, allDocumentIds);
+    let attachedContext = '';
+    if (allDocumentIds.length > 0 || attachedNoteIds.length > 0) {
+      attachedContext = await buildAttachedContext(allDocumentIds, attachedNoteIds, userId);
+    }
+    const systemPrompt = createSystemPrompt(learningStyle, learningPreferences);
+    const geminiContents = [
+      {
+        role: 'user',
+        parts: [{ text: systemPrompt }]
+      }
+    ];
+    if (chatHistory && Array.isArray(chatHistory)) {
+      for (const msg of chatHistory) {
+        if (msg.role === 'user') {
+          const userParts = [];
+          if (msg.parts && Array.isArray(msg.parts)) {
+            for (const part of msg.parts) {
+              if (part.text) userParts.push({ text: part.text });
+              if (part.inlineData && part.inlineData.mimeType && part.inlineData.data) {
+                userParts.push({
+                  inlineData: {
+                    mimeType: part.inlineData.mimeType,
+                    data: part.inlineData.data
+                  }
+                });
+              }
+            }
+          }
+          geminiContents.push({
+            role: 'user',
+            parts: userParts
+          });
+        } else if (msg.role === 'assistant' || msg.role === 'model') {
+          geminiContents.push({
+            role: 'model',
+            parts: [{ text: msg.parts?.[0]?.text || msg.content || '' }]
+          });
+        }
+      }
+    }
+    if (message || files.length > 0 || attachedContext) {
+      const currentMessageParts = [];
+      if (message) currentMessageParts.push({ text: message });
+      if (attachedContext) currentMessageParts.push({ text: attachedContext });
+      for (const file of files) {
+        if (file.type === 'image' && file.data) {
+          currentMessageParts.push({
+            inlineData: {
+              mimeType: file.mimeType,
+              data: file.data
+            }
+          });
+        } else if (file.content) {
+          const fileTypeLabel = file.type.toUpperCase();
+          currentMessageParts.push({
+            text: `[File: ${file.name} (${fileTypeLabel}) Content Start]\n${file.content}\n[File Content End]`
+          });
+        }
+      }
+      if (currentMessageParts.length > 0) {
+        geminiContents.push({
+          role: 'user',
+          parts: currentMessageParts
+        });
+      }
+      const userMessageData = {
+        userId,
+        sessionId,
+        content: message,
+        role: 'user',
+        attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
+        attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
+        imageUrl: userMessageImageUrl || imageUrl,
+        imageMimeType: userMessageImageMimeType || imageMimeType
+      };
+      await saveChatMessage(userMessageData);
+    }
+    if (aiMessageIdToUpdate) {
+      await supabase.from('chat_messages').update({
+        is_updating: true,
+        is_error: false
+      }).eq('id', aiMessageIdToUpdate).eq('session_id', sessionId).eq('user_id', userId);
+    }
+    const geminiApiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent');
+    geminiApiUrl.searchParams.append('key', geminiApiKey);
+    const response = await fetch(geminiApiUrl.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: geminiContents,
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: Math.min(678987, MAX_GEMINI_INPUT_TOKENS)
+        }
+      })
+    });
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`Gemini API error: ${response.status} - ${errorBody}`);
+      const errorMessageData = {
+        userId,
+        sessionId,
+        content: `Error: Failed to get response from Gemini API: ${response.statusText}`,
+        role: 'assistant',
+        isError: true,
+        attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
+        attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
+        imageUrl: userMessageImageUrl || imageUrl,
+        imageMimeType: userMessageImageMimeType || imageMimeType
+      };
+      if (aiMessageIdToUpdate) {
+        await supabase.from('chat_messages').update({
+          content: errorMessageData.content,
+          is_error: true,
+          is_updating: false
+        }).eq('id', aiMessageIdToUpdate).eq('session_id', sessionId).eq('user_id', userId);
+      } else {
+        await saveChatMessage(errorMessageData);
+      }
+      throw new Error(`Failed to get response from Gemini API: ${response.statusText}. Details: ${errorBody}`);
+    }
+    const data = await response.json();
+    let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+    generatedText = generatedText.split('\n').map((line: string) => line.replace(/[^\x20-\x7E\n\r]/g, ' ').replace(/\s+/g, ' ').trim()).filter((line: string) => line.length > 0 || line.trim().length === 0).join('\n');
+    const assistantMessageData = {
+      userId,
+      sessionId,
+      content: generatedText,
+      role: 'assistant',
+      attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
+      attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
+      imageUrl: userMessageImageUrl || imageUrl,
+      imageMimeType: userMessageImageMimeType || imageMimeType
+    };
+    if (aiMessageIdToUpdate) {
+      await supabase.from('chat_messages').update({
+        content: generatedText,
+        is_updating: false,
+        is_error: false
+      }).eq('id', aiMessageIdToUpdate).eq('session_id', sessionId).eq('user_id', userId);
+    } else {
+      await saveChatMessage(assistantMessageData);
+    }
+    await updateSessionLastMessage(sessionId);
+    const processingTime = Date.now() - startTime;
+    return new Response(JSON.stringify({
+      response: generatedText,
+      userId,
+      sessionId,
+      timestamp: new Date().toISOString(),
+      processingTime,
+      filesProcessed: files.length,
+      documentIds: allDocumentIds,
+      processingResults: files.map(f => ({
+        name: f.name,
+        type: f.type,
+        status: f.processing_status,
+        error: f.processing_error
+      }))
+    }), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error: any) {
+    const processingTime = Date.now() - startTime;
+    console.error('Error in gemini-chat function:', error);
+    if (requestData?.userId && requestData?.sessionId) {
+      try {
+        await saveChatMessage({
+          userId: requestData.userId,
+          sessionId: requestData.sessionId,
+          content: `System Error: ${error.message || 'Internal Server Error'}`,
+          role: 'assistant',
+          isError: true,
+          attachedDocumentIds: uploadedDocumentIds.length > 0 ? uploadedDocumentIds : null,
+          attachedNoteIds: requestData.attachedNoteIds?.length > 0 ? requestData.attachedNoteIds : null,
+          imageUrl: userMessageImageUrl || requestData.imageUrl,
+          imageMimeType: userMessageImageMimeType || requestData.imageMimeType
+        });
+      } catch (dbError) {
+        console.error('Failed to save error message to database:', dbError);
+      }
+    }
+    return new Response(JSON.stringify({
+      error: error.message || 'Internal Server Error',
+      processingTime,
+      filesProcessed: files.length
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+});

@@ -212,7 +212,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           errorMessage = error.message;
         }
         toast.error(errorMessage, { id: 'audio-job-status' });
-        console.error('Polling error:', error);
+        //console.error('Polling error:', error);
         setAudioProcessingJobId(null);
         setIsProcessingAudio(false);
         setIsGeneratingAudioNote(false);
@@ -294,7 +294,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error regenerating note:', error);
+      //console.error('Error regenerating note:', error);
     } finally {
       setIsGeneratingAI(false);
     }
@@ -359,7 +359,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error during upload process:', error);
+      //console.error('Error during upload process:', error);
     } finally {
       setIsUploading(false);
       if (event.target) event.target.value = '';
@@ -476,7 +476,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error during document processing and note update:', error);
+      //console.error('Error during document processing and note update:', error);
       if (documentRecordId) {
         await supabase
           .from('documents')
@@ -587,7 +587,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error during AI note generation:', error);
+      //console.error('Error during AI note generation:', error);
     } finally {
       setIsGeneratingAI(false);
       setIsSectionDialogOpen(false);
@@ -707,14 +707,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     } else {
       // If no voice is found after all attempts, show error and prevent speaking
       toast.error("No suitable text-to-speech voice found on your device. Please check your device settings.");
-      console.error("No suitable voice found for speech synthesis.");
+      //console.error("No suitable voice found for speech synthesis.");
       return;
     }
 
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = (e: SpeechSynthesisErrorEvent) => {
-      console.error("Speech synthesis error:", e);
+      //console.error("Speech synthesis error:", e);
       let errorMessage = "An unknown error occurred while reading the note.";
       if (e.error === "interrupted") {
         errorMessage = "Speech was interrupted. This can happen if you switch apps, receive a call, or rapidly tap the read button.";
@@ -730,7 +730,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       speechSynthesis.speak(utterance);
     } catch (error) {
-      console.error("Error calling speechSynthesis.speak:", error);
+      //console.error("Error calling speechSynthesis.speak:", error);
       toast.error("Failed to start reading. Your browser might have restrictions.");
       setIsSpeaking(false);
     }
@@ -766,7 +766,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         errorMessage = error.message;
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error loading original document:', error);
+      //console.error('Error loading original document:', error);
     } finally {
       setIsLoadingDocument(false);
     }
@@ -800,7 +800,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       toast.loading('Generating PDF...', { id: 'pdf-download' });
       if (typeof window.html2pdf === 'undefined') {
         toast.error('PDF generation library not loaded. Please try again later.', { id: 'pdf-download' });
-        console.error('html2pdf.js is not loaded. Please ensure it is included in your project, e.g., in public/index.html via <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>');
+        //console.error('html2pdf.js is not loaded. Please ensure it is included in your project, e.g., in public/index.html via <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>');
         return;
       }
 
@@ -819,7 +819,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         })
         .catch((error: any) => {
           toast.error('Failed to generate PDF.', { id: 'pdf-download' });
-          console.error('Error generating PDF:', error);
+          //console.error('Error generating PDF:', error);
         });
     } else {
       toast.error('Could not find the note preview content to generate PDF.');
@@ -839,7 +839,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       document.execCommand('copy');
       toast.success('Note content copied to clipboard!');
     } catch (err) {
-      console.error('Failed to copy text: ', err);
+      //console.error('Failed to copy text: ', err);
       toast.error('Failed to copy note content.');
     } finally {
       document.body.removeChild(textarea);
@@ -897,7 +897,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         errorMessage = error.message;
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error uploading audio file:', error);
+      //console.error('Error uploading audio file:', error);
       setIsProcessingAudio(false);
     } finally {
       if (event.target) event.target.value = '';
@@ -944,7 +944,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           errorMessage = error.message;
         }
         toast.error(errorMessage);
-        console.error(errorMessage, error);
+        //console.error(errorMessage, error);
         setIsProcessingAudio(false);
         return;
       }
@@ -1003,7 +1003,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         errorMessage = error.message;
       }
       toast.error(errorMessage, { id: toastId });
-      console.error(`Error starting audio ${action}:`, error);
+      //console.error(`Error starting audio ${action}:`, error);
       setIsProcessingAudio(false);
       setIsGeneratingAudioNote(false);
       setIsGeneratingAudioSummary(false);
@@ -1079,6 +1079,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           setContent={setDraftContent}
           isEditing={isEditing}
           userProfile={userProfile}
+          
         />
 
         {note.aiSummary && (

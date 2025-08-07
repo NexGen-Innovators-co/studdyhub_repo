@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Bot, Loader2, FileText, XCircle, BookOpen, StickyNote, Camera, Upload, Image, Mic, ChevronDown, X } from 'lucide-react';
+import { Send, Bot, Loader2, FileText, XCircle, BookOpen, StickyNote, Camera, Upload, Image, Mic, ChevronDown, X, File, Paperclip } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -70,6 +70,13 @@ interface ChatSession {
   message_count?: number;
 }
 
+interface AttachedFile {
+  file: File;
+  preview?: string;
+  type: 'image' | 'document' | 'other';
+  id: string;
+}
+
 interface AIChatProps {
   messages: Message[];
   isLoading: boolean;
@@ -100,11 +107,106 @@ interface AIChatProps {
     messageContent: string,
     attachedDocumentIds?: string[],
     attachedNoteIds?: string[],
-    imageUrl?: string,
-    imageMimeType?: string,
-    imageDataBase64?: string
+    attachedFiles?: Array<{
+      name: string;
+      mimeType: string;
+      data: string | null;
+      type: 'image' | 'document' | 'other';
+      size: number;
+      content: string | null;
+      processing_status: string;
+      processing_error: string | null;
+    }>
   ) => Promise<void>;
 }
+
+// File type detection and validation
+const getFileType = (file: File): 'image' | 'document' | 'other' => {
+  const imageTypes = [
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/bmp',
+    'image/svg+xml',
+    'image/tiff',
+    'image/tif',
+    'image/ico',
+    'image/heic',
+    'image/heif',];
+  const documentTypes = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain',
+    'text/csv',
+    'application/json',
+    'application/xml',
+    'text/xml',
+    'text/html',
+    'text/css',
+    'text/javascript',
+    'application/javascript'
+  ];
+
+  if (imageTypes.includes(file.type)) {
+    return 'image';
+  } else if (documentTypes.includes(file.type)) {
+    return 'document';
+  } else {
+    return 'other';
+  }
+};
+
+const getFileIcon = (file: File) => {
+  const type = getFileType(file);
+  switch (type) {
+    case 'image':
+      return <Image className="h-4 w-4" />;
+    case 'document':
+      return <FileText className="h-4 w-4" />;
+    default:
+      return <File className="h-4 w-4" />;
+  }
+};
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+const validateFile = (file: File): { isValid: boolean; error?: string } => {
+  const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB limit like Claude
+  const type = getFileType(file);
+
+  // Check file size
+  if (file.size > MAX_FILE_SIZE) {
+    return {
+      isValid: false,
+      error: `File size (${formatFileSize(file.size)}) exceeds the 25MB limit. Please choose a smaller file.`
+    };
+  }
+
+  // Check for potentially problematic files
+  const problematicExtensions = ['.exe', '.bat', '.cmd', '.scr', '.com', '.pif'];
+  const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+
+  if (problematicExtensions.includes(fileExtension)) {
+    return {
+      isValid: false,
+      error: 'This file type is not supported for security reasons.'
+    };
+  }
+
+  return { isValid: true };
+};
 
 const AIChat: React.FC<AIChatProps> = ({
   messages,
@@ -140,9 +242,8 @@ const AIChat: React.FC<AIChatProps> = ({
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
-  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
-  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [activeDiagram, setActiveDiagram] = useState<{ content?: string; type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text'; language?: string; imageUrl?: string } | null>(null);
   const isDiagramPanelOpen = !!activeDiagram;
@@ -378,7 +479,7 @@ const AIChat: React.FC<AIChatProps> = ({
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
     }
-  }, [inputMessage, selectedImageFile]);
+  }, [inputMessage, attachedFiles]);
 
   const handleDeleteClick = useCallback((messageId: string) => {
     setMessageToDelete(messageId);
@@ -424,18 +525,6 @@ const AIChat: React.FC<AIChatProps> = ({
     setPanOffset({ x: 0, y: 0 });
   }, []);
 
-  // const handleToggleFullScreen = useCallback(() => {
-  //   setIsFullScreen(prev => !prev);
-  // }, []);
-
-  // const handleZoomIn = useCallback(() => {
-  //   setZoomLevel(prev => Math.min(prev + 0.1, 2));
-  // }, []);
-
-  // const handleZoomOut = useCallback(() => {
-  //   setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
-  // }, []);
-
   const handleToggleUserMessageExpansion = useCallback((messageContent: string) => {
     setExpandedMessages(prev => {
       const newSet = new Set(prev);
@@ -448,60 +537,66 @@ const AIChat: React.FC<AIChatProps> = ({
     });
   }, []);
 
-  const handleImageChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        toast.error('Please select an image file.');
-        setSelectedImageFile(null);
-        setSelectedImagePreview(null);
+  const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+
+    files.forEach(file => {
+      const validation = validateFile(file);
+
+      if (!validation.isValid) {
+        toast.error(validation.error);
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image size exceeds 5MB limit.');
-        setSelectedImageFile(null);
-        setSelectedImagePreview(null);
-        return;
-      }
-      setSelectedImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImagePreview(reader.result as string);
+
+      const fileId = generateId();
+      const fileType = getFileType(file);
+      const attachedFile: AttachedFile = {
+        file,
+        type: fileType,
+        id: fileId
       };
-      reader.readAsDataURL(file);
-    } else {
-      setSelectedImageFile(null);
-      setSelectedImagePreview(null);
-    }
+
+      // Generate preview for images
+      if (fileType === 'image') {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          attachedFile.preview = reader.result as string;
+          setAttachedFiles(prev => [...prev, attachedFile]);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setAttachedFiles(prev => [...prev, attachedFile]);
+      }
+    });
+
+    // Clear the input
+    event.target.value = '';
   }, []);
 
-  const handleRemoveImage = useCallback(() => {
-    setSelectedImageFile(null);
-    setSelectedImagePreview(null);
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
-    }
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = '';
-    }
+  const handleRemoveFile = useCallback((fileId: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
+  }, []);
+
+  const handleRemoveAllFiles = useCallback(() => {
+    setAttachedFiles([]);
   }, []);
 
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim() && !selectedImageFile && selectedDocumentIds.length === 0) {
-      toast.error('Please enter a message, attach an image, or select documents/notes.');
+    if (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) {
+      toast.error('Please enter a message, attach files, or select documents/notes.');
       return;
     }
-  
+
     try {
       const userId = userProfile?.id;
-  
+
       if (!userId) {
         toast.error("User ID is missing. Please ensure you are logged in.");
         setIsLoading(false);
         return;
       }
-  
+
       if (activeChatSessionId) {
         await supabase
           .from('chat_sessions')
@@ -509,55 +604,91 @@ const AIChat: React.FC<AIChatProps> = ({
           .eq('id', activeChatSessionId)
           .eq('user_id', userId);
       }
-  
+
       const documentIds = selectedDocumentIds.filter(id =>
         documents.some(doc => doc.id === id)
       );
-  
+
       const noteIds = selectedDocumentIds.filter(id =>
         notes.some(note => note.id === id)
       );
-  
-      let imageUrl: string | undefined;
-      let imageMimeType: string | undefined;
-      let imageDataBase64: string | undefined;
-  
-      if (selectedImageFile && selectedImagePreview) {
-        imageUrl = selectedImagePreview;
-        imageMimeType = selectedImageFile.type;
-  
-        const reader = new FileReader();
-        imageDataBase64 = await new Promise<string>((resolve) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(selectedImageFile);
-        });
-      }
-  
+
+      // Convert attached files to a format suitable for the backend
+      const filesForBackend = await Promise.all(
+        attachedFiles.map(async (attachedFile) => {
+          const fileType = getFileType(attachedFile.file);
+          let data: string | null = null;
+          let content: string | null = null;
+
+          // FIXED: Process ALL file types, not just images and documents
+          try {
+            // Always read file as base64 for ALL file types
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve, reject) => {
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = () => reject(new Error('Failed to read file'));
+              reader.readAsDataURL(attachedFile.file);
+            });
+
+            const base64Result = await base64Promise;
+            data = base64Result.split(',')[1]; // Remove data URL prefix
+
+            // For text files, also try to extract content
+            if (fileType === 'document' || attachedFile.file.type.startsWith('text/')) {
+              try {
+                const textReader = new FileReader();
+                const textPromise = new Promise<string>((resolve, reject) => {
+                  textReader.onloadend = () => resolve(textReader.result as string);
+                  textReader.onerror = () => reject(new Error('Failed to read text content'));
+                  textReader.readAsText(attachedFile.file);
+                });
+                content = await textPromise;
+              } catch (textError) {
+                console.warn('Could not extract text content from file:', textError);
+                // This is fine, we'll still send the file with base64 data
+              }
+            }
+          } catch (error) {
+            console.error('Error processing file:', attachedFile.file.name, error);
+            toast.error(`Failed to process file: ${attachedFile.file.name}`);
+            throw error; // This will prevent the message from being sent with a broken file
+          }
+
+          return {
+            name: attachedFile.file.name,
+            mimeType: attachedFile.file.type,
+            data, // Now this will have data for ALL file types
+            type: fileType,
+            size: attachedFile.file.size,
+            content,
+            processing_status: 'pending',
+            processing_error: null,
+          };
+        })
+      );
+
       await onSendMessageToBackend(
         inputMessage.trim(),
         documentIds,
         noteIds,
-        imageUrl,
-        imageMimeType,
-        imageDataBase64
+        filesForBackend
       );
-  
+
       // Clear form
       setInputMessage('');
-      setSelectedImageFile(null);
-      setSelectedImagePreview(null);
-      if (imageInputRef.current) {
-        imageInputRef.current.value = '';
+      setAttachedFiles([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
       if (cameraInputRef.current) {
         cameraInputRef.current.value = '';
       }
-  
+
     } catch (error: any) {
       console.error("Error sending message:", error);
-  
+
       let errorMessage = 'Failed to send message.';
-  
+
       if (error.message.includes('Content size exceeds limit')) {
         errorMessage = 'Message or context too large. Some older messages or document content was truncated.';
       } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -571,16 +702,15 @@ const AIChat: React.FC<AIChatProps> = ({
       } else if (error.message) {
         errorMessage = error.message;
       }
-  
+
       toast.error(`Error: ${errorMessage}`);
-  
+
     } finally {
       setIsLoading(false);
     }
   }, [
     inputMessage,
-    selectedImageFile,
-    selectedImagePreview,
+    attachedFiles,
     userProfile,
     selectedDocumentIds,
     documents,
@@ -741,15 +871,14 @@ const AIChat: React.FC<AIChatProps> = ({
       stopSpeech();
       stopRecognition();
       setInputMessage('');
-      setSelectedImageFile(null);
-      setSelectedImagePreview(null);
+      setAttachedFiles([]);
       setActiveDiagram(null);
       setIsFullScreen(false);
       setExpandedMessages(new Set());
       setZoomLevel(1);
       setPanOffset({ x: 0, y: 0 });
-      if (imageInputRef.current) {
-        imageInputRef.current.value = '';
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
       if (cameraInputRef.current) {
         cameraInputRef.current.value = '';
@@ -780,8 +909,7 @@ const AIChat: React.FC<AIChatProps> = ({
     <>
       <style>
         {`
-
-                @keyframes typewriter {
+          @keyframes typewriter {
             from { width: 0; }
             to { width: 100%; }
           }
@@ -885,6 +1013,37 @@ const AIChat: React.FC<AIChatProps> = ({
             max-height: 300px;
             overflow-y: auto;
           }
+
+          .file-preview {
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            transition: border-color 0.2s;
+          }
+
+          .file-preview:hover {
+            border-color: #d1d5db;
+          }
+
+          .dark .file-preview {
+            border-color: #4b5563;
+          }
+
+          .dark .file-preview:hover {
+            border-color: #6b7280;
+          }
+
+          .file-drop-zone {
+            transition: all 0.2s ease;
+          }
+
+          .file-drop-zone.drag-over {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+          }
+
+          .dark .file-drop-zone.drag-over {
+            background-color: #1e3a8a;
+          }
         `}
       </style>
       <div className="flex flex-col h-full border-none relative justify-center overflow-hidden md:flex-row md:gap-0 font-sans">
@@ -957,20 +1116,29 @@ const AIChat: React.FC<AIChatProps> = ({
             )}
             <div ref={messagesEndRef} />
           </div>
-          {/* <div className={`fixed  left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 shadow-lg md:shadow-none md:static md:p-0 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}> */}
-            
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50  md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
-            {(selectedDocumentIds.length > 0 || selectedImagePreview) && (
+
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
+            {(selectedDocumentIds.length > 0 || attachedFiles.length > 0) && (
               <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700
                 ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'}
               `}>
                 <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200">Context:</span>
-                {selectedImagePreview && (
-                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
-                    <Image className="h-3 w-3" /> Preview
-                    <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={handleRemoveImage} />
+
+                {/* Show attached files */}
+                {attachedFiles.length > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-orange-500/20 text-orange-800 border-orange-400 flex items-center gap-1 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700 text-sm md:text-base font-sans"
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    {attachedFiles.length} File{attachedFiles.length > 1 ? 's' : ''}
+                    <XCircle
+                      className="h-3 w-3 ml-1 cursor-pointer text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-200"
+                      onClick={handleRemoveAllFiles}
+                    />
                   </Badge>
                 )}
+
                 {selectedImageDocuments.length > 0 && (
                   <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
                     <Image className="h-3 w-3" /> {selectedImageDocuments.length} Image Doc{selectedImageDocuments.length > 1 ? 's' : ''}
@@ -991,112 +1159,137 @@ const AIChat: React.FC<AIChatProps> = ({
                 )}
               </div>
             )}
-              
-              
-              <div className="max-w-4xl w-full mx-auto flex flex-col gap-2 p-3 rounded-lg border border-gray-700 dark:bg-gray-800 bg-white transition-colors duration-300">
-              {selectedImagePreview && (
-                <div className="relative w-1/6 h-24 rounded-lg overflow-hidden flex-shrink-0 mb-2">
-                  <img src={selectedImagePreview} alt="Selected preview" className="w-full h-full object-fit" />
+
+            <div className="max-w-4xl w-full mx-auto flex flex-col gap-2 p-3 rounded-lg border border-gray-700 dark:bg-gray-800 bg-white transition-colors duration-300">
+              {/* Show attached file previews */}
+              {attachedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {attachedFiles.map((attachedFile) => (
+                    <div key={attachedFile.id} className="relative flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg file-preview">
+                      {attachedFile.type === 'image' && attachedFile.preview ? (
+                        <img
+                          src={attachedFile.preview}
+                          alt={attachedFile.file.name}
+                          className="w-12 h-12 object-cover rounded"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded flex items-center justify-center">
+                          {getFileIcon(attachedFile.file)}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {attachedFile.file.name}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatFileSize(attachedFile.file.size)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveFile(attachedFile.id)}
+                        className="h-6 w-6 rounded-full bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800 p-0"
+                        title="Remove file"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <textarea
+                ref={textareaRef}
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="What do you want to know?"
+                className="w-full text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300"
+                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                rows={1}
+              />
+              <div className="flex items-center gap-2 mt-2 justify-between">
+                <div className="flex items-center gap-2">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    onClick={handleRemoveImage}
-                    className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/50 text-white hover:bg-black/70 p-0"
-                    title="Remove image"
+                    onClick={isRecognizing ? stopRecognition : startRecognition}
+                    className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'bg-red-900 text-red-300 dark:bg-red-900 dark:text-red-300 bg-red-200 text-red-600' : 'text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300'}`}
+                    title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
                   >
-                    <X className="h-4 w-4" />
+                    <Mic className="h-5 w-5" />
                   </Button>
-                </div>
-              )}
 
-                <textarea
-                  ref={textareaRef}
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="What do you want to know?"
-                className="w-full text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                  rows={1}
-                />
-                <div className="flex items-center gap-2 mt-2 justify-between">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={isRecognizing ? stopRecognition : startRecognition}
-                      className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'bg-red-900 text-red-300 dark:bg-red-900 dark:text-red-300 bg-red-200 text-red-600' : 'text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300'}`}
-                      title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
-                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
-                    >
-                      <Mic className="h-5 w-5" />
-                    </Button>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      ref={cameraInputRef}
-                      onChange={handleImageChange}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => cameraInputRef.current?.click()}
-                      className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                      title="Take Picture"
-                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                    >
-                      <Camera className="h-5 w-5" />
-                    </Button>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      ref={imageInputRef}
-                      onChange={handleImageChange}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => imageInputRef.current?.click()}
-                      className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                      title="Upload Image"
-                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                    >
-                      <Upload className="h-5 w-5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowDocumentSelector(true)}
-                      className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
-                      title="Select Documents/Notes for Context"
-                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                    >
-                      {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
-                    </Button>
-                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    ref={cameraInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
                   <Button
-                    type="submit"
-                    onClick={handleSendMessage}
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && !selectedImageFile && selectedDocumentIds.length === 0)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                    title="Send Message"
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                    title="Take Picture"
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
                   >
-                    {isSubmittingUserMessage ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
+                    <Camera className="h-5 w-5" />
+                  </Button>
+
+                  <input
+                    type="file"
+                    accept="*/*"
+                    multiple
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                    title="Upload Files"
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowDocumentSelector(true)}
+                    className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
+                    title="Select Documents/Notes for Context"
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                  >
+                    {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
                   </Button>
                 </div>
+                <Button
+                  type="submit"
+                  onClick={handleSendMessage}
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                  title="Send Message"
+                >
+                  {isSubmittingUserMessage ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
-            {/* </div> */}
+            </div>
           </div>
           {showDocumentSelector && (
             <DocumentSelector
