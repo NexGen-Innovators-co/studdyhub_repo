@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { NoteCategory, UserProfile } from '../types';
-import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle, Menu, FileText, ChevronDown, ChevronUp, Download, Copy, FileDown, Mic, Play, Pause, XCircle, Check, AlertTriangle, Loader2, TypeOutline } from 'lucide-react';
+import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle, Menu, FileText, ChevronDown, ChevronUp, Download, Copy, FileDown, Mic, Play, Pause, XCircle, Check, AlertTriangle, Loader2, TypeOutline, Edit3, Eye } from 'lucide-react';
 
 interface NoteEditorHeaderProps {
   title: string;
@@ -168,39 +168,6 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={handleDownloadNote}
-            disabled={!title.trim()} // Assuming title indicates content presence for download
-            className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download Markdown
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadPdf}
-            disabled={!title.trim()} // Assuming title indicates content presence for download
-            className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-          >
-            <FileDown className="h-4 w-4 mr-2" />
-            Download PDF
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopyNoteContent}
-            disabled={!title.trim()} // Assuming title indicates content presence for copy
-            className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-          >
-            <Copy className="h-4 w-4 mr-2" />
-            Copy Content
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
             onClick={handleTextToSpeech}
             disabled={isUploading || isGeneratingAI || isProcessingAudio}
             className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
@@ -212,17 +179,30 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
             )}
             {isSpeaking ? 'Stop' : 'Read Aloud'}
           </Button>
-          <Button onClick={handleSave} size="sm" className="bg-blue-500   text-white shadow-md hover:from-blue-700 hover:to-purple-700">
-            <Save className="h-4 w-4 mr-2" />
-            Save
-          </Button>
+
+          {/* Enhanced Edit/Preview Toggle */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => setIsEditing(!isEditing)}
             className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
           >
-            {isEditing ? 'Full Preview' : 'Edit with Live Preview'}
+            {isEditing ? (
+              <>
+                <Eye className="h-4 w-4 mr-2" />
+                Preview Mode
+              </>
+            ) : (
+              <>
+                <Edit3 className="h-4 w-4 mr-2" />
+                Edit Mode
+              </>
+            )}
+          </Button>
+
+          <Button onClick={handleSave} size="sm" className="bg-blue-500 text-white shadow-md hover:bg-blue-600">
+            <Save className="h-4 w-4 mr-2" />
+            Save
           </Button>
         </div>
 
@@ -338,21 +318,33 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
                 )}
                 {isSpeaking ? 'Stop' : 'Read Aloud'}
               </Button>
-              <Button
-                variant="ghost"
-                className="justify-start px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700"
-                onClick={() => { handleSave(); handleMobileMenuClose(); }}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Save
-              </Button>
+
+              {/* Enhanced Mobile Edit/Preview Toggle */}
               <Button
                 variant="ghost"
                 className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                 onClick={() => { setIsEditing(!isEditing); handleMobileMenuClose(); }}
               >
-                {isEditing ? <FileText className="h-4 w-4 mr-2" /> : <Menu className="h-4 w-4 mr-2" />}
-                {isEditing ? 'Full Preview' : 'Edit with Live Preview'}
+                {isEditing ? (
+                  <>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Preview Mode
+                  </>
+                ) : (
+                  <>
+                    <Edit3 className="h-4 w-4 mr-2" />
+                    Edit Mode
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="justify-start px-4 py-2 bg-blue-500 text-white shadow-md hover:bg-blue-600"
+                onClick={() => { handleSave(); handleMobileMenuClose(); }}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Save
               </Button>
 
               <div className="border-t border-slate-200 my-2 mx-4 dark:border-gray-700" />

@@ -24,6 +24,8 @@ interface ChatSession {
   message_count?: number;
 }
 
+// Updated TabContentProps interface to include attachedFiles parameter
+
 interface TabContentProps {
   activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
   filteredNotes: Note[];
@@ -46,7 +48,28 @@ interface TabContentProps {
   onAddScheduleItem: (item: ScheduleItem) => Promise<void>;
   onUpdateScheduleItem: (item: ScheduleItem) => Promise<void>;
   onDeleteScheduleItem: (id: string) => Promise<void>;
-  onSendMessage: (message: string, attachedDocumentIds?: string[], attachedNoteIds?: string[], imageUrl?: string, imageMimeType?: string, imageDataBase64?: string, aiMessageIdToUpdate?: string | null) => Promise<void>;
+
+  // FIXED: Updated onSendMessage to include attachedFiles parameter
+  onSendMessage: (
+    message: string,
+    attachedDocumentIds?: string[],
+    attachedNoteIds?: string[],
+    imageUrl?: string,
+    imageMimeType?: string,
+    imageDataBase64?: string,
+    aiMessageIdToUpdate?: string | null,
+    attachedFiles?: Array<{
+      name: string;
+      mimeType: string;
+      data: string | null;
+      type: 'image' | 'document' | 'other';
+      size: number;
+      content: string | null;
+      processing_status: string;
+      processing_error: string | null;
+    }>
+  ) => Promise<void>;
+
   onDocumentUploaded: (document: Document) => Promise<void>;
   onDocumentDeleted: (documentId: string) => Promise<void>;
   onDocumentUpdated: (document: Document) => void;
@@ -76,8 +99,8 @@ interface TabContentProps {
 export const TabContent: React.FC<TabContentProps> = (props) => {
   const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory } = props;
 
-  
- 
+
+
 
 
 
@@ -85,7 +108,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
   }, []);
 
-  
+
 
   const notesProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -148,37 +171,86 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onDocumentUpdated: props.onDocumentUpdated,
     isLoadingSessionMessages: props.isLoadingSessionMessages,
     learningStyle: userProfile?.learning_style || 'visual',
-    learningPreferences: userProfile?.learning_preferences || {},
-    onSendMessageToBackend: props.onSendMessage,
-  }), [
-    props.activeChatSessionId,
-    props.chatMessages,
-    props.documents,
-    props.onSendMessage,
-    props.filteredNotes,
-    props.selectedDocumentIds,
-    props.onSelectedDocumentIdsChange,
-    props.onNewChatSession,
-    props.onDeleteChatSession,
-    props.onRenameChatSession,
-    props.onChatSessionSelect,
-    props.chatSessions,
-    isAILoading,
-    props.setIsAILoading,
-    props.onNewMessage,
-    props.onDeleteMessage,
-    props.onRegenerateResponse,
-    props.onRetryFailedMessage,
-    props.isSubmittingUserMessage,
-    userProfile,
-    handleSuggestAiCorrection,
-    props.hasMoreMessages,
-    props.onLoadOlderMessages,
-    props.onDocumentUpdated,
-    props.isLoadingSessionMessages,
-    userProfile?.learning_style,
-    userProfile?.learning_preferences,
-  ]);
+    learningPreferences: userProfile?.learning_preferences || {}, // Ensure this is always an object
+    onSendMessageToBackend: async (
+      messageContent: string,
+      attachedDocumentIds?: string[],
+      attachedNoteIds?: string[],
+      attachedFiles?: Array<{
+        name: string;
+        mimeType: string;
+        data: string | null;
+        type: 'image' | 'document' | 'other';
+        size: number;
+        content: string | null;
+        processing_status: string;
+        processing_error: string | null;
+      }>
+    ) => {
+      // console.log('TabContent onSendMessageToBackend called with:', {
+      //   messageContent,
+      //   attachedDocumentIds,
+      //   attachedNoteIds,
+      //   attachedFilesCount: attachedFiles?.length || 0,
+      //   attachedFileNames: attachedFiles?.map(f => f.name) || []
+      // });
+
+      // Handle backward compatibility for single image
+      let imageUrl: string | undefined;
+      let imageMimeType: string | undefined;
+      let imageDataBase64: string | undefined;
+
+      if (attachedFiles && attachedFiles.length > 0) {
+        const imageFile = attachedFiles.find(file => file.type === 'image');
+        if (imageFile && imageFile.data) {
+          imageUrl = `data:${imageFile.mimeType};base64,${imageFile.data}`;
+          imageMimeType = imageFile.mimeType;
+          imageDataBase64 = imageUrl;
+        }
+      }
+
+      // FIXED: Now properly pass attachedFiles to the handleSubmit function
+      await props.onSendMessage(
+        messageContent,
+        attachedDocumentIds,
+        attachedNoteIds,
+        imageUrl,
+        imageMimeType,
+        imageDataBase64,
+        null, // aiMessageIdToUpdate
+        attachedFiles // FIXED: Pass attachedFiles as the 8th parameter
+      );
+    },
+  }),
+    [
+      props.activeChatSessionId,
+      props.chatMessages,
+      props.documents,
+      props.onSendMessage,
+      props.filteredNotes,
+      props.selectedDocumentIds,
+      props.onSelectedDocumentIdsChange,
+      props.onNewChatSession,
+      props.onDeleteChatSession,
+      props.onRenameChatSession,
+      props.onChatSessionSelect,
+      props.chatSessions,
+      isAILoading,
+      props.setIsAILoading,
+      props.onNewMessage,
+      props.onDeleteMessage,
+      props.onRegenerateResponse,
+      props.onRetryFailedMessage,
+      props.isSubmittingUserMessage,
+      userProfile,
+      handleSuggestAiCorrection,
+      props.hasMoreMessages,
+      props.onLoadOlderMessages,
+      props.onDocumentUpdated,
+      props.isLoadingSessionMessages,
+      userProfile?.learning_style,
+      userProfile?.learning_preferences,
+    ]);
 
   const documentsProps = useMemo(() => ({
     documents: props.documents,

@@ -85,7 +85,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
           };
         }
       } catch (error) {
-        console.error('Error rendering HTML content:', error);
+        // //console.error('Error rendering HTML content:', error);
         setHasError(true);
         setIsLoading(false);
       }
@@ -165,7 +165,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, onInval
           onInvalidConfig(null);
         }
       } catch (error: any) {
-        console.error("Error rendering Chart.js:", error);
+        // //console.error("Error rendering Chart.js:", error);
         onInvalidConfig(`Error rendering chart: ${error.message}`);
         if (chartRef.current) {
           const ctx = chartRef.current.getContext('2d');
@@ -208,11 +208,11 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, can
 
   useEffect(() => {
     if (canvasRef.current && codeContent) {
-      console.log("[Three.js Renderer] Attempting to render Three.js scene.");
+      // //console.log("[Three.js Renderer] Attempting to render Three.js scene.");
       if (threeJsCleanupRef.current) {
         threeJsCleanupRef.current();
         threeJsCleanupRef.current = null;
-        console.log("[Three.js Renderer] Cleaned up previous scene.");
+        // //console.log("[Three.js Renderer] Cleaned up previous scene.");
       }
 
       try {
@@ -227,9 +227,9 @@ return createThreeJSScene;
         threeJsCleanupRef.current = cleanup;
         onInvalidCode(null);
         onSceneReady(scene, renderer, cleanup);
-        console.log("[Three.js Renderer] Three.js scene rendered successfully.");
+        //console.log("[Three.js Renderer] Three.js scene rendered successfully.");
       } catch (error: any) {
-        console.error("Error rendering Three.js scene:", error);
+        //console.error("Error rendering Three.js scene:", error);
         onInvalidCode(`Error rendering 3D scene: ${error.message}`);
         if (canvasRef.current) {
           const ctx = canvasRef.current.getContext('2d');
@@ -249,7 +249,7 @@ return createThreeJSScene;
       if (threeJsCleanupRef.current) {
         threeJsCleanupRef.current();
         threeJsCleanupRef.current = null;
-        console.log("[Three.js Renderer] Cleanup: Three.js scene unmounted.");
+        //console.log("[Three.js Renderer] Cleanup: Three.js scene unmounted.");
       }
     };
   }, [codeContent, canvasRef, onInvalidCode, onSceneReady]);
@@ -524,7 +524,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         toast.success('GLTF scene downloaded successfully!');
       },
       (error) => {
-        console.error('Error exporting GLTF:', error);
+        //console.error('Error exporting GLTF:', error);
         toast.error('Failed to export GLTF scene.');
       },
       {}
@@ -572,7 +572,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       pdf.save(`content-${Date.now()}.pdf`);
       toast.success('Content downloaded as PDF!');
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      //console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
     }
   };
@@ -590,7 +590,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
           const svg = await gv.layout(diagramContent!, 'svg', 'dot');
           setDotSvg(svg);
         } catch (e: any) {
-          console.error('DiagramPanel (DOT): DOT rendering error:', e);
+          //console.error('DiagramPanel (DOT): DOT rendering error:', e);
           setDotError(`DOT rendering failed: ${e.message || 'Invalid DOT syntax'}`);
           onMermaidError(diagramContent!, 'syntax');
         } finally {

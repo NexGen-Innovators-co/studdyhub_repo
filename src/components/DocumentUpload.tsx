@@ -1,5 +1,5 @@
 // src/components/DocumentUpload.tsx
-import React, { useState, useRef, useCallback } from 'react'; // Added useCallback
+import React, { useState, useRef, useCallback } from 'react';
 import { UploadCloud, FileText, Image, Loader2, Check, XCircle, AlertTriangle, RefreshCw, Eye, Download, Calendar, HardDrive } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -8,23 +8,21 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Document } from '../types/Document';
 import { useAuth } from '../hooks/useAuth';
-import { generateId } from '@/utils/helpers'; // Assuming generateId is available here
+import { generateId } from '@/utils/helpers';
 
 interface DocumentUploadProps {
   documents: Document[];
-  onDocumentUploaded: (document: Document) => void; // This prop is now primarily for initial DB insert feedback
+  onDocumentUploaded: (document: Document) => void;
   onDocumentDeleted: (documentId: string) => void;
-  onDocumentUpdated: (document: Document) => void; // This will now be used less directly for status updates
+  onDocumentUpdated: (document: Document) => void;
 }
 
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDocumentUploaded, onDocumentDeleted, onDocumentUpdated }) => {
   const { user } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = useState(0); // This might become less relevant with background processing
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
-  // processingDocuments now explicitly tracks documents for which analysis has been *triggered*
-  // and we are awaiting a DB update (either initial trigger or retry).
   const [processingDocuments, setProcessingDocuments] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -46,9 +44,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     });
   };
 
-  // New function to handle file selection logic
   const handleFileSelection = useCallback((file: File) => {
-    // Basic validation
     const MAX_FILE_SIZE_MB = 10;
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
       toast.error(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`);
@@ -97,114 +93,121 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     }
   };
 
-  // Centralized function to trigger analysis for a given document
   const triggerAnalysis = async (doc: Document): Promise<void> => {
     if (!user?.id) {
       toast.error('User not authenticated.');
       return;
     }
 
-    // Prevent multiple simultaneous analysis requests for the same document
     if (processingDocuments.has(doc.id)) {
       toast.warning('Analysis is already in progress for this document.');
       return;
     }
 
-    // Add document to the set of actively processing documents
     setProcessingDocuments(prev => new Set(prev).add(doc.id));
 
     try {
       toast.info(`${doc.processing_status === 'failed' ? 'Retrying' : 'Starting'} analysis for "${doc.title}"...`);
 
-      // Optimistically update document status to pending locally if it's a retry from a 'failed' state.
-      // For initial upload, the document is already inserted as 'pending' by handleUpload.
       if (doc.processing_status === 'failed') {
         onDocumentUpdated({ ...doc, processing_status: 'pending', processing_error: null });
       }
 
-      const isImage = doc.type === 'image';
-      // Determine the correct Edge Function URL based on document type
-      const functionUrl = isImage
-        ? 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/image-analyzer'
-        : 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/gemini-document-extractor';
+      const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/gemini-chat';
+      const maxImageSize = 20 * 1024 * 1024; // 20MB limit from index.ts for images
 
-      // Construct the payload for the Edge Function
-      const bodyPayload = isImage ? {
-        documentId: doc.id,
-        fileUrl: doc.file_url,
-        imageMimeType: doc.file_type,
-        userId: user.id,
-      } : {
-        documentId: doc.id,
-        file_url: doc.file_url,
-        file_type: doc.file_type,
-        userId: user.id,
-      };
+      // Validate file size and type
+      if (doc.file_size > maxImageSize) {
+        throw new Error(`File size (${formatFileSize(doc.file_size)}) exceeds maximum limit of ${formatFileSize(maxImageSize)} for analysis.`);
+      }
 
-      // Get a fresh authentication session token
+      const supportedImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!supportedImageTypes.includes(doc.file_type) && doc.type === 'image') {
+        throw new Error(`Unsupported image type: ${doc.file_type}. Supported types: ${supportedImageTypes.join(', ')}`);
+      }
+
+      // Fetch and encode file to base64
+      let base64Data: string | null = null;
+      try {
+        const response = await fetch(doc.file_url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch file from ${doc.file_url}: ${response.statusText}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        if (arrayBuffer.byteLength === 0) {
+          throw new Error('File is empty or corrupted.');
+        }
+        const binary = String.fromCharCode(...new Uint8Array(arrayBuffer));
+        base64Data = btoa(binary);
+        // Verify base64 validity
+        try {
+          atob(base64Data);
+        } catch (e) {
+          throw new Error('Invalid base64 encoding generated.');
+        }
+      } catch (fetchError: any) {
+        throw new Error(`Error preparing file for analysis: ${fetchError.message}`);
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('No valid authentication token found');
       }
 
-      // Call the Edge Function. DO NOT AWAIT HERE.
-      // The Edge Function will update the database, and the real-time listener will update the UI.
-      fetch(functionUrl, {
+      const bodyPayload = {
+        userId: user.id,
+        sessionId: generateId(),
+        message: '',
+        files: [{
+          name: doc.file_name,
+          mimeType: doc.file_type,
+          data: base64Data,
+          size: doc.file_size,
+          processing_status: 'pending',
+          type: doc.type
+        }],
+        attachedDocumentIds: [doc.id],
+        attachedNoteIds: [],
+        learningStyle: 'visual',
+        learningPreferences: {},
+        chatHistory: []
+      };
+
+      console.log(`Triggering analysis for document: ${doc.id}, type: ${doc.file_type}, size: ${formatFileSize(doc.file_size)}`);
+
+      const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify(bodyPayload),
-      })
-        .then(async response => {
-          // Handle response from the Edge Function call itself (not the processing result)
-          if (!response.ok) {
-            const errorBody = await response.json();
-            const errorMessage = `Analysis trigger failed: ${errorBody.error || 'Unknown server error'}`;
-            console.error('Edge function trigger response error:', errorMessage);
-            toast.error(errorMessage);
-            // Optimistically update local state to failed, this will be overwritten by DB if Edge Function also updates DB
-            onDocumentUpdated({
-              ...doc,
-              processing_status: 'failed',
-              processing_error: errorMessage
-            });
-          } else {
+      });
 
-          }
-        })
-        .catch(analysisError => {
-          // Handle network errors or unexpected errors during the fetch call
-          console.error('Network or unexpected error triggering analysis:', analysisError);
-          toast.error(`Failed to trigger analysis: ${analysisError.message}`);
-          onDocumentUpdated({
-            ...doc,
-            processing_status: 'failed',
-            processing_error: analysisError.message
-          });
-        })
-        .finally(() => {
-          // Remove document from the set of actively processing documents once the trigger call finishes
-          setProcessingDocuments(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(doc.id);
-            return newSet;
-          });
+      if (!response.ok) {
+        const errorBody = await response.json();
+        const errorMessage = `Analysis trigger failed: ${errorBody.error || 'Unknown server error'}`;
+        console.error('Edge function response:', errorBody);
+        toast.error(errorMessage);
+        onDocumentUpdated({
+          ...doc,
+          processing_status: 'failed',
+          processing_error: errorMessage
         });
+        return;
+      }
+
+      toast.info('Analysis request sent successfully. Awaiting processing...');
 
     } catch (analysisError: any) {
-      // Catch errors that occur before the fetch call is even made (e.g., no user, no token)
-      console.error('Error setting up analysis request:', analysisError);
+      console.error('Error triggering analysis:', analysisError);
       toast.error(`Failed to initiate analysis: ${analysisError.message}`);
-
-      // Update local state with error
       onDocumentUpdated({
         ...doc,
         processing_status: 'failed',
         processing_error: analysisError.message
       });
-      // Remove from processing set
+    } finally {
       setProcessingDocuments(prev => {
         const newSet = new Set(prev);
         newSet.delete(doc.id);
@@ -219,38 +222,36 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       return;
     }
 
-    // Prevent multiple simultaneous uploads
     if (isUploading) {
       toast.warning('Upload already in progress. Please wait...');
       return;
     }
 
     setIsUploading(true);
-    setUploadProgress(0); // Reset progress
+    setUploadProgress(0);
 
     const isImage = selectedFile.type.startsWith('image/');
     const fileExtension = selectedFile.name.split('.').pop();
-    const fileName = `${generateId()}.${fileExtension}`; // Use generateId for unique file names
+    const fileName = `${generateId()}.${fileExtension}`;
     const filePath = `user_uploads/${user.id}/${fileName}`;
 
     let newDocumentId: string | null = null;
     let uploadedFilePath: string | null = null;
 
     try {
-      // 1. Upload file to Supabase Storage
       toast.info(`Uploading ${isImage ? 'image' : 'document'}...`);
       const { data: storageData, error: storageError } = await supabase.storage
         .from('documents')
         .upload(filePath, selectedFile, {
           cacheControl: '3600',
-          upsert: false, // Do not upsert, ensure new file
+          upsert: false,
         });
 
       if (storageError) {
         throw new Error(`Storage upload failed: ${storageError.message}`);
       }
 
-      uploadedFilePath = filePath; // Store for cleanup if needed
+      uploadedFilePath = filePath;
 
       const { data: publicUrlData } = supabase.storage
         .from('documents')
@@ -258,43 +259,35 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
 
       const fileUrl = publicUrlData.publicUrl;
 
-      // 2. Create a pending document entry in the 'documents' table
       toast.info(`Registering ${isImage ? 'image' : 'document'}...`);
-      const tempDocId = generateId(); // Generate a client-side ID for the new document
+      const tempDocId = generateId();
       const { data: docData, error: dbError } = await supabase
         .from('documents')
         .insert({
-          id: tempDocId, // Use the generated ID for the database entry
+          id: tempDocId,
           title: selectedFile.name,
           file_url: fileUrl,
           type: isImage ? 'image' : 'text',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          content_extracted: null, // Start as null, will be populated by Edge Function
-          processing_error: null, // Start as null
+          content_extracted: null,
+          processing_error: null,
           user_id: user.id,
           file_name: selectedFile.name,
           file_type: selectedFile.type,
           file_size: selectedFile.size,
-          processing_status: 'pending', // Initial status
+          processing_status: 'pending',
         })
-        .select() // Select the inserted row to get its actual data (especially ID if not using client-generated)
+        .select()
         .single();
 
       if (dbError) {
         throw new Error(`Database insertion failed: ${dbError.message}`);
       }
 
-      newDocumentId = docData.id; // Store the actual ID from DB (should match tempDocId)
-
-      // *** IMPORTANT CHANGE: Removed direct call to onDocumentUploaded here. ***
-      // The useAppData real-time listener will now handle adding this document to the state
-      // once it's inserted into the database. This prevents UI duplicates.
+      newDocumentId = docData.id;
       toast.success(`${isImage ? 'Image' : 'Document'} uploaded and registered! Processing content...`);
 
-      // 3. Trigger content analysis (DO NOT AWAIT THIS CALL).
-      // This will send a request to the Edge Function, which will then update the DB.
-      // The UI will be updated via the real-time listener.
       triggerAnalysis({
         id: docData.id,
         title: docData.title,
@@ -305,8 +298,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
         file_size: docData.file_size,
         content_extracted: docData.content_extracted,
         type: docData.type as Document['type'],
-        processing_status: docData.processing_status as string, // Ensure string primitive
-        processing_error: docData.processing_error as string | null, // Ensure string primitive or null
+        processing_status: docData.processing_status as string,
+        processing_error: docData.processing_error as string | null,
         created_at: docData.created_at,
         updated_at: docData.updated_at,
       });
@@ -315,18 +308,15 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       console.error('Upload or document registration error:', error);
       toast.error(`Upload failed: ${error.message}`);
 
-      // Clean up on failure: if the initial document insert succeeded but something else failed,
-      // attempt to remove the document from the database and local state.
       if (newDocumentId) {
         try {
           await supabase.from('documents').delete().eq('id', newDocumentId);
-          onDocumentDeleted(newDocumentId); // Remove from local state via prop
+          onDocumentDeleted(newDocumentId);
         } catch (cleanupError) {
           console.error('Failed to clean up document from database:', cleanupError);
         }
       }
 
-      // Clean up storage file if it was uploaded
       if (uploadedFilePath) {
         try {
           const { error: removeError } = await supabase.storage
@@ -340,32 +330,42 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
         }
       }
     } finally {
-      setIsUploading(false); // Reset uploading state
-      setSelectedFile(null); // Clear selected file
+      setIsUploading(false);
+      setSelectedFile(null);
       if (fileInputRef.current) {
-        fileInputRef.current.value = ''; // Clear file input
+        fileInputRef.current.value = '';
       }
     }
   };
 
   const handleDeleteDocument = async (documentId: string, fileUrl: string) => {
-    // Prevent deletion if document is currently being processed (e.g., retried)
     if (processingDocuments.has(documentId)) {
       toast.error('Cannot delete document while analysis is in progress.');
       return;
     }
 
-    // Show a confirmation toast before proceeding with deletion
     toast.info('Deleting document...', {
       action: {
         label: 'Confirm Delete',
         onClick: async () => {
           try {
-            // Attempt to derive storage path from public URL for deletion from Supabase Storage
-            const urlParts = fileUrl.split('public/documents/');
+            // Extract storage path from fileUrl
             let storagePath: string | null = null;
-            if (urlParts.length > 1) {
-              storagePath = urlParts[1];
+            try {
+              const url = new URL(fileUrl);
+              // Extract path after the bucket name 'documents'
+              const pathSegments = url.pathname.split('/documents/');
+              if (pathSegments.length > 1) {
+                storagePath = pathSegments[1];
+              } else {
+                // Fallback: assume path follows user_uploads/{user.id}/{fileName}
+                const match = fileUrl.match(/\/user_uploads\/[^/]+\/[^/]+$/);
+                if (match) {
+                  storagePath = `user_uploads${match[0].split('/user_uploads')[1]}`;
+                }
+              }
+            } catch (urlError) {
+              console.warn('Invalid file URL format:', fileUrl, urlError);
             }
 
             if (storagePath) {
@@ -375,37 +375,37 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
 
               if (storageError) {
                 console.warn('Failed to delete file from storage:', storageError.message);
-                toast.warning('File might not have been removed from storage. Error: ' + storageError.message);
+                toast.warning(`File might not have been removed from storage. Error: ${storageError.message}`);
+              } else {
+                console.log(`Successfully deleted file from storage: ${storagePath}`);
               }
             } else {
-              console.warn('Could not derive storage path from file URL. File will not be deleted from storage.');
+              console.warn('Could not derive storage path from file URL:', fileUrl);
+              toast.warning('Could not derive storage path from file URL. File will not be deleted from storage.');
             }
 
-            // Delete the document from the 'documents' table in Supabase
             const { error: dbError } = await supabase
               .from('documents')
               .delete()
-              .eq('id', documentId); // Delete by document ID
+              .eq('id', documentId);
 
             if (dbError) {
               throw new Error(`Database deletion failed: ${dbError.message}`);
             }
 
-            // The real-time listener in useAppData will automatically handle removing the document from the local state
             toast.success('Document deleted successfully!');
+            onDocumentDeleted(documentId);
           } catch (error: any) {
             console.error('Error deleting document:', error);
             toast.error(`Failed to delete document: ${error.message}`);
           }
         }
       },
-      duration: 5000, // Duration for the confirmation toast
+      duration: 5000,
     });
   };
 
-  // Helper function to determine status badge color
-  const getStatusColor = (status: string | null) => { // Allow null status
-    // Ensure status is a primitive string
+  const getStatusColor = (status: string | null) => {
     const s = status as string;
     switch (s) {
       case 'completed':
@@ -419,9 +419,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     }
   };
 
-  // Helper function to determine status icon
-  const getStatusIcon = (status: string | null) => { // Allow null status
-    // Ensure status is a primitive string
+  const getStatusIcon = (status: string | null) => {
     const s = status as string;
     switch (s) {
       case 'completed':
@@ -431,22 +429,18 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       case 'failed':
         return <AlertTriangle className="h-4 w-4" />;
       default:
-        return null; // No icon for unknown/null status
+        return null;
     }
   };
 
-  // Determines if a document is currently undergoing processing (either initial or retry)
   const isDocumentProcessing = (docId: string) => {
-    // Check if it's explicitly in the processingDocuments set (e.g., for active retry clicks)
-    // OR if its status from the database (via 'documents' prop) is 'pending'.
     const doc = documents.find(d => d.id === docId);
-    return processingDocuments.has(docId) || (doc?.processing_status as string) === 'pending'; // Ensure string primitive
+    return processingDocuments.has(docId) || (doc?.processing_status as string) === 'pending';
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header Section */}
         <div className="text-center mb-8 md:mb-12">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent mb-4">
             Document & Image Upload
@@ -456,7 +450,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
           </p>
         </div>
 
-        {/* Upload Area Section */}
         <div className="mb-8 md:mb-12">
           <Card className="overflow-hidden border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
             <CardContent className="p-0">
@@ -471,15 +464,15 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
-                onClick={() => !isUploading && fileInputRef.current?.click()} // Trigger file input click
+                onClick={() => !isUploading && fileInputRef.current?.click()}
               >
                 <input
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
-                  accept=".txt,.pdf,image/*" // Allowed file types
-                  disabled={isUploading} // Disable input during upload
+                  accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp"
+                  disabled={isUploading}
                 />
 
                 <div className="text-center">
@@ -488,14 +481,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                     : 'bg-blue-100 dark:bg-blue-500/20'
                     } mb-4 transition-all duration-300`}>
                     {selectedFile ? (
-                      <Check className="h-8 w-8 md:h-10 md:w-10 text-green-600 dark:text-green-400" />
+                      <Check className="h-8 w-8 md:h-10 md:h-10 text-green-600 dark:text-green-400" />
                     ) : (
-                      <UploadCloud className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400" />
+                      <UploadCloud className="h-8 w-8 md:h-10 md:h-10 text-blue-600 dark:text-blue-400" />
                     )}
                   </div>
 
                   {selectedFile ? (
-                    // Display selected file information
                     <div className="space-y-4">
                       <div className="flex items-center justify-center gap-3 text-green-700 dark:text-green-300">
                         {selectedFile.type.startsWith('image/') ? (
@@ -519,9 +511,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                         variant="outline"
                         size="sm"
                         onClick={(e) => {
-                          e.stopPropagation(); // Prevent triggering file input click again
-                          setSelectedFile(null); // Clear selected file
-                          if (fileInputRef.current) fileInputRef.current.value = ''; // Clear file input value
+                          e.stopPropagation();
+                          setSelectedFile(null);
+                          if (fileInputRef.current) fileInputRef.current.value = '';
                         }}
                         disabled={isUploading}
                         className="mt-4 text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
@@ -531,20 +523,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                       </Button>
                     </div>
                   ) : (
-                    // Display upload instructions
                     <div className="space-y-4">
                       <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200">
                         Drop your files here, or <span className="text-blue-600 dark:text-blue-400">browse</span>
                       </h3>
                       <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-                        Supports text files, PDFs, and all image formats up to 10MB
+                        Supports text files, PDFs, and images (JPG, PNG, GIF, WEBP) up to 10MB
                       </p>
                       <div className="flex flex-wrap justify-center gap-4 text-sm text-slate-500 dark:text-slate-500">
                         <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.TXT</span>
                         <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.PDF</span>
                         <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.JPG</span>
                         <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.PNG</span>
-                        <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">& more</span>
+                        <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.GIF</span>
+                        <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.WEBP</span>
                       </div>
                     </div>
                   )}
@@ -576,7 +568,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
           </Card>
         </div>
 
-        {/* Documents Grid Section */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-200">
@@ -585,7 +576,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
           </div>
 
           {documents.length === 0 ? (
-            // Display message when no documents are uploaded
             <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
               <CardContent className="p-12 text-center">
                 <div className="w-24 h-24 mx-auto mb-6 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
@@ -600,12 +590,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
               </CardContent>
             </Card>
           ) : (
-            // Display grid of uploaded documents
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {documents.map((doc) => (
                 <Card key={doc.id} className="group border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden">
                   <CardContent className="p-0">
-                    {/* Document Preview Area */}
                     <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800">
                       {doc.type === 'image' && doc.file_url ? (
                         <img
@@ -613,7 +601,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                           alt={doc.title}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error'; // Fallback image on error
+                            e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error';
                             e.currentTarget.alt = 'Image failed to load';
                           }}
                         />
@@ -623,13 +611,11 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                         </div>
                       )}
 
-                      {/* Status Badge */}
                       <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
                         {getStatusIcon(doc.processing_status as string)}
                         <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
                       </div>
 
-                      {/* Processing Overlay */}
                       {isDocumentProcessing(doc.id) && (
                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                           <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
@@ -642,7 +628,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                       )}
                     </div>
 
-                    {/* Document Information and Actions */}
                     <div className="p-6 space-y-4">
                       <div>
                         <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2 line-clamp-2">
@@ -660,14 +645,12 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                         </div>
                       </div>
 
-                      {/* Extracted Content Preview */}
                       <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 min-h-[80px]">
                         <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
                           {doc.content_extracted || 'No content extracted yet...'}
                         </p>
                       </div>
 
-                      {/* Error Message Display */}
                       {doc.processing_status === 'failed' && doc.processing_error && (
                         <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-3">
                           <p className="text-sm text-red-600 dark:text-red-400">
@@ -676,14 +659,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                         </div>
                       )}
 
-                      {/* Action Buttons */}
                       <div className="flex gap-2 pt-2">
                         {doc.processing_status === 'failed' && (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => triggerAnalysis(doc)} // Retry analysis
-                            disabled={isUploading || isDocumentProcessing(doc.id)} // Disable if uploading or already processing
+                            onClick={() => triggerAnalysis(doc)}
+                            disabled={isUploading || isDocumentProcessing(doc.id)}
                             className="flex-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10 border-blue-200 dark:border-blue-500/20"
                           >
                             {isDocumentProcessing(doc.id) ? (
@@ -703,7 +685,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.open(doc.file_url, '_blank')} // Open actual document in new tab
+                          onClick={() => window.open(doc.file_url, '_blank')}
                           className="flex-1 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
                         >
                           <Eye className="h-4 w-4 mr-2" />
@@ -713,8 +695,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDeleteDocument(doc.id, doc.file_url)} // Delete document
-                          disabled={isUploading || isDocumentProcessing(doc.id)} // Disable if uploading or processing
+                          onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                          disabled={isUploading || isDocumentProcessing(doc.id)}
                           className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
                         >
                           <XCircle className="h-4 w-4" />

@@ -53,7 +53,7 @@ try {
   lowlight.registerLanguage('typescript', typescript as LanguageFn);
   lowlight.registerLanguage('ts', typescript as LanguageFn);
 } catch (error) {
-  console.warn('Error registering syntax highlighting languages in MarkdownRenderer:', error);
+  //console.warn('Error registering syntax highlighting languages in MarkdownRenderer:', error);
 }
 
 // Ensure Chart.js components are registered once
@@ -74,7 +74,7 @@ export class CodeBlockErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('CodeBlock error:', error, errorInfo);
+    //console.error('CodeBlock error:', error, errorInfo);
   }
 
   render() {
@@ -380,7 +380,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
               <table className="w-full border-collapse" {...props} />
             </div>
           ),
-          thead: (props) => <thead className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 font-sans" {...props} />,
+          thead: (props) => <thead className=" dark:bg-blue-600  font-sans" {...props} />,
           th: (props) => (
             <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-700 text-base md:text-lg font-sans" {...props} />
           ),
@@ -411,3 +411,4 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
     </CodeBlockErrorBoundary>
   );
 });
+

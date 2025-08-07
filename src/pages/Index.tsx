@@ -1,4 +1,4 @@
-// Index.tsx - Updated to work with optimized useAppData
+// Index.tsx - Optimized for reliable file processing and error handling
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
@@ -8,14 +8,14 @@ import { useAuth } from '../hooks/useAuth';
 import { useAppData } from '../hooks/useAppData';
 import { useAppOperations } from '../hooks/useAppOperations';
 import { Button } from '../components/ui/button';
-import { LogOut, Sparkles } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, Quiz, ClassRecording } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { User } from '@supabase/supabase-js';
-import { estimateContentSize, generateId, truncateContent } from '@/utils/helpers';
+import { generateId } from '@/utils/helpers';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
 
 interface ChatSession {
@@ -27,13 +27,225 @@ interface ChatSession {
   document_ids: string[];
   message_count?: number;
 }
-// Constants for content limits
-const MAX_TOTAL_CHARACTERS = 400000; // ~100,000 tokens
-const MAX_DOCUMENT_CONTENT_CHARS = 10000; // Per document
-const MAX_NOTE_CONTENT_CHARS = 5000; // Per note
-const MAX_HISTORY_MESSAGES = 50; // Limit chat history to the last 50 messages
-const CHAT_SESSIONS_PER_PAGE = 10;
-const CHAT_MESSAGES_PER_PAGE = 20;
+interface MessagePart {
+  text?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
+}
+// In Index.tsx, near the top
+interface FileData {
+  name: string;
+  mimeType: string;
+  data: string | null;
+  type: 'image' | 'document' | 'other';
+  size: number;
+  content: string | null;
+  processing_status: string;
+  processing_error: string | null;
+}
+// Optimized constants for better performance and reliability
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB max per file
+const MAX_FILES_PER_MESSAGE = 10; // Reasonable limit for concurrent processing
+const MAX_TOTAL_CONTEXT_SIZE = 2 * 1024 * 1024; // 2MB total context
+const MAX_SINGLE_FILE_CONTEXT = 500 * 1024; // 500KB per file in context
+const MAX_HISTORY_MESSAGES = 30; // Reduced for better performance
+const CHAT_SESSIONS_PER_PAGE = 15;
+const CHAT_MESSAGES_PER_PAGE = 25;
+
+// File type validation and processing configuration
+const SUPPORTED_FILE_TYPES = {
+  // Images
+  'image/jpeg': { type: 'image', maxSize: 20 * 1024 * 1024, priority: 'high' },
+  'image/png': { type: 'image', maxSize: 20 * 1024 * 1024, priority: 'high' },
+  'image/gif': { type: 'image', maxSize: 10 * 1024 * 1024, priority: 'medium' },
+  'image/webp': { type: 'image', maxSize: 15 * 1024 * 1024, priority: 'high' },
+  'image/svg+xml': { type: 'image', maxSize: 5 * 1024 * 1024, priority: 'medium' },
+
+  // Documents
+  'application/pdf': { type: 'document', maxSize: 50 * 1024 * 1024, priority: 'high' },
+  'application/msword': { type: 'document', maxSize: 25 * 1024 * 1024, priority: 'medium' },
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { type: 'document', maxSize: 25 * 1024 * 1024, priority: 'high' },
+  'application/vnd.ms-excel': { type: 'spreadsheet', maxSize: 20 * 1024 * 1024, priority: 'medium' },
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { type: 'spreadsheet', maxSize: 20 * 1024 * 1024, priority: 'high' },
+
+  // Text files (fast processing)
+  'text/plain': { type: 'text', maxSize: 10 * 1024 * 1024, priority: 'high', fastProcess: true },
+  'text/csv': { type: 'csv', maxSize: 15 * 1024 * 1024, priority: 'high', fastProcess: true },
+  'text/markdown': { type: 'text', maxSize: 5 * 1024 * 1024, priority: 'high', fastProcess: true },
+  'application/json': { type: 'json', maxSize: 5 * 1024 * 1024, priority: 'medium', fastProcess: true },
+
+  // Code files
+  'text/javascript': { type: 'code', maxSize: 2 * 1024 * 1024, priority: 'medium', fastProcess: true },
+  'text/typescript': { type: 'code', maxSize: 2 * 1024 * 1024, priority: 'medium', fastProcess: true },
+  'text/css': { type: 'code', maxSize: 2 * 1024 * 1024, priority: 'low', fastProcess: true },
+  'text/html': { type: 'code', maxSize: 5 * 1024 * 1024, priority: 'medium', fastProcess: true }
+};
+
+/**
+ * Optimized file validation with detailed error reporting
+ */
+const validateFileForProcessing = (file: File): {
+  valid: boolean;
+  error?: string;
+  warnings?: string[];
+  config?: any;
+} => {
+  const config = SUPPORTED_FILE_TYPES[file.type as keyof typeof SUPPORTED_FILE_TYPES];
+
+  if (!config) {
+    return {
+      valid: false,
+      error: `Unsupported file type: ${file.type}. Please use supported formats like PDF, Word, Excel, images, or text files.`
+    };
+  }
+
+  if (file.size > config.maxSize) {
+    return {
+      valid: false,
+      error: `File "${file.name}" is too large (${Math.round(file.size / 1024 / 1024)}MB). Maximum size for ${config.type} files is ${Math.round(config.maxSize / 1024 / 1024)}MB.`
+    };
+  }
+
+  const warnings: string[] = [];
+
+  // Add warnings for large files
+  if (file.size > config.maxSize * 0.7) {
+    warnings.push('Large file may take longer to process');
+  }
+
+  // Add warnings for complex file types
+  if (['spreadsheet', 'document'].includes(config.type) && file.size > 10 * 1024 * 1024) {
+    warnings.push('Complex document structure may require additional processing time');
+  }
+
+  return { valid: true, warnings, config };
+};
+
+/**
+ * Optimized file processing with progress tracking
+ */
+const processFileForUpload = async (file: File): Promise<{
+  name: string;
+  mimeType: string;
+  data: string;
+  type: string;
+  size: number;
+  content: string | null;
+  processing_status: string;
+  processing_error: string | null;
+}> => {
+  const validation = validateFileForProcessing(file);
+
+  if (!validation.valid) {
+    return {
+      name: file.name,
+      mimeType: file.type,
+      data: '',
+      type: 'unknown',
+      size: file.size,
+      content: null,
+      processing_status: 'failed',
+      processing_error: validation.error!
+    };
+  }
+
+  try {
+    // For text files, process directly for better performance
+    if (validation.config?.fastProcess) {
+      const textContent = await file.text();
+      return {
+        name: file.name,
+        mimeType: file.type,
+        data: btoa(textContent),
+        type: validation.config.type,
+        size: file.size,
+        content: textContent.length > MAX_SINGLE_FILE_CONTEXT
+          ? textContent.substring(0, MAX_SINGLE_FILE_CONTEXT - 100) + '\n[Content truncated for processing efficiency]'
+          : textContent,
+        processing_status: 'completed',
+        processing_error: null
+      };
+    }
+
+    // For binary files, convert to base64
+    const arrayBuffer = await file.arrayBuffer();
+    const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+    return {
+      name: file.name,
+      mimeType: file.type,
+      data: base64Data,
+      type: validation.config.type,
+      size: file.size,
+      content: null, // Will be processed by edge function
+      processing_status: 'pending',
+      processing_error: null
+    };
+  } catch (error) {
+    console.error(`Error processing file ${file.name}:`, error);
+    return {
+      name: file.name,
+      mimeType: file.type,
+      data: '',
+      type: validation.config?.type || 'unknown',
+      size: file.size,
+      content: null,
+      processing_status: 'failed',
+      processing_error: `Failed to process file: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+};
+
+/**
+ * Smart content size estimation and management
+ */
+const estimateContextSize = (content: any[]): number => {
+  return JSON.stringify(content).length;
+};
+
+// Update the optimizeContextForProcessing function signature
+const optimizeContextForProcessing = (
+  chatHistory: Array<{ role: string; parts: MessagePart[] }>,
+  currentContext: string,
+  files: any[]
+): Array<{ role: string; parts: MessagePart[] }> => {
+  let totalSize = 0;
+  const optimizedHistory: Array<{ role: string; parts: MessagePart[] }> = [];
+
+  // Add current context and files first (highest priority)
+  const currentContent: Array<{ role: string; parts: MessagePart[] }> = [
+    { role: 'user', parts: [{ text: currentContext }] }
+  ];
+
+  // Add file content
+  files.forEach(file => {
+    if (file.content) {
+      currentContent[0].parts.push({ text: `[File: ${file.name}]\n${file.content}` });
+    } else if (file.data && file.type === 'image') {
+      currentContent[0].parts.push({
+        inlineData: { mimeType: file.mimeType, data: file.data }
+      });
+    }
+  });
+
+  totalSize = estimateContextSize(currentContent);
+
+  // Add history messages from most recent, staying within limits
+  for (let i = chatHistory.length - 1; i >= 0 && totalSize < MAX_TOTAL_CONTEXT_SIZE; i--) {
+    const messageSize = estimateContextSize([chatHistory[i]]);
+
+    if (totalSize + messageSize <= MAX_TOTAL_CONTEXT_SIZE) {
+      optimizedHistory.unshift(chatHistory[i]);
+      totalSize += messageSize;
+    } else {
+      break;
+    }
+  }
+
+  return [...optimizedHistory, ...currentContent];
+};
 
 const Index = () => {
   const { user, loading, signOut } = useAuth();
@@ -104,9 +316,9 @@ const Index = () => {
   const {
     handleGenerateNoteFromAudio,
     triggerAudioProcessing,
-  } = useAudioProcessing({ 
-    onAddRecording: (rec) => setRecordings(prev => [...prev, rec]), 
-    onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r)) 
+  } = useAudioProcessing({
+    onAddRecording: (rec) => setRecordings(prev => [...prev, rec]),
+    onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r))
   });
 
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -115,6 +327,12 @@ const Index = () => {
   const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
   const [isSubmittingUserMessage, setIsSubmittingUserMessage] = useState(false);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
+  const [fileProcessingProgress, setFileProcessingProgress] = useState<{
+    processing: boolean;
+    completed: number;
+    total: number;
+    currentFile?: string;
+  }>({ processing: false, completed: 0, total: 0 });
 
   const [chatSessionsLoadedCount, setChatSessionsLoadedCount] = useState(CHAT_SESSIONS_PER_PAGE);
   const [hasMoreChatSessions, setHasMoreChatSessions] = useState(true);
@@ -151,10 +369,7 @@ const Index = () => {
         loadDataIfNeeded('documents');
         break;
       case 'settings':
-          loadDataIfNeeded('quizzes');
-        break;
-      case 'chat':
-        loadDataIfNeeded('documents');
+        loadDataIfNeeded('quizzes');
         break;
       default:
         loadDataIfNeeded('notes');
@@ -197,32 +412,13 @@ const Index = () => {
   }, []);
 
   const filteredChatMessages = useMemo(() => {
-    //console.log('Filtering messages - Active session:', activeChatSessionId);
-    //console.log('Total messages to filter:', allChatMessages.length);
-
     if (!activeChatSessionId) {
-      //console.log('No active session, returning empty array');
       return [];
     }
 
     const filtered = allChatMessages
-      .filter(msg => {
-        const matches = msg.session_id === activeChatSessionId;
-        if (!matches) {
-          //console.log(`Message ${msg.id} session ${msg.session_id} doesn't match active session ${activeChatSessionId}`);
-        }
-        return matches;
-      })
+      .filter(msg => msg.session_id === activeChatSessionId)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-    //console.log('Filtered messages count:', filtered.length);
-    //console.log('Filtered messages:', filtered.map(m => ({
-    //  id: m.id.substring(0, 8),
-      //role: m.role,
-      //timestamp: new Date(m.timestamp).toLocaleTimeString(),
-      //session_id: m.session_id
-   // })
-    //));
 
     return filtered;
   }, [allChatMessages, activeChatSessionId]);
@@ -460,93 +656,62 @@ const Index = () => {
   ) => {
     const selectedDocs = (allDocuments ?? []).filter(doc => (documentIdsToInclude ?? []).includes(doc.id));
     const selectedNotes = (allNotes ?? []).filter(note => (noteIdsToInclude ?? []).includes(note.id));
-  
+
     let context = '';
-  
+    let totalSize = 0;
+
+    // In buildRichContext function
     if (selectedDocs.length > 0) {
-      context += 'DOCUMENTS:\n';
-      selectedDocs.forEach(doc => {
-        context += `Title: ${doc.title}\n`;
-        context += `File: ${doc.file_name}\n`;
-        if (doc.type === 'image') {
-          context += `Type: Image\n`;
-        } else if (doc.type === 'text') {
-          context += `Type: Text Document\n`;
-        }
+      context += 'ATTACHED DOCUMENTS:\n';
+      for (const doc of selectedDocs) {
+        const docInfo = `Title: ${doc.title}\nFile: ${doc.file_name}\nType: ${doc.type}\n`;
+
         if (doc.content_extracted) {
-          const content = doc.content_extracted.length > MAX_DOCUMENT_CONTENT_CHARS
-            ? doc.content_extracted.substring(0, MAX_DOCUMENT_CONTENT_CHARS - 3) + '...'
-            : doc.content_extracted;
-          context += `Content: ${content}\n`;
-        } else {
-          if (doc.type === 'image' && doc.processing_status !== 'completed') {
-            context += `Content: Image processing ${doc.processing_status || 'pending'}. No extracted text yet.\n`;
-          } else if (doc.type === 'image' && doc.processing_status === 'completed' && !doc.content_extracted) {
-            context += `Content: Image analysis completed, but no text or detailed description was extracted.\n`;
-          } else {
-            context += `Content: No content extracted or available.\n`;
+          const availableSpace = MAX_SINGLE_FILE_CONTEXT - docInfo.length;
+          let content = doc.content_extracted;
+
+          if (content.length > availableSpace) {
+            content = content.substring(0, availableSpace - 50) + '\n[Content truncated for processing efficiency]';
           }
+
+          context += docInfo + `Content: ${content}\n\n`;
+        } else {
+          context += docInfo + `Content: ${doc.processing_status === 'completed' ? 'No extractable content found' : `Processing status: ${doc.processing_status || 'pending'}`}\n\n`;
         }
-        context += '\n';
-      });
+
+        totalSize = context.length;
+        if (totalSize > MAX_TOTAL_CONTEXT_SIZE / 2) break; // Reserve space for notes and messages
+      }
     }
-  
-    if (selectedNotes.length > 0) {
-      context += 'NOTES:\n';
+
+    if (selectedNotes.length > 0 && totalSize < MAX_TOTAL_CONTEXT_SIZE / 2) {
+      context += 'ATTACHED NOTES:\n';
       selectedNotes.forEach(note => {
-        context += `Title: ${note.title}\n`;
-        context += `Category: ${note.category}\n`;
+        if (totalSize > MAX_TOTAL_CONTEXT_SIZE / 2) return;
+
+        const noteInfo = `Title: ${note.title}\nCategory: ${note.category}\n`;
+        const availableSpace = Math.min(MAX_SINGLE_FILE_CONTEXT, MAX_TOTAL_CONTEXT_SIZE / 2 - totalSize) - noteInfo.length;
+
+        let noteContent = '';
         if (note.content) {
-          const content = note.content.length > MAX_NOTE_CONTENT_CHARS
-            ? note.content.substring(0, MAX_NOTE_CONTENT_CHARS - 3) + '...'
-            : note.content;
-          context += `Content: ${content}\n`;
+          noteContent = note.content.length > availableSpace ?
+            note.content.substring(0, availableSpace - 50) + '\n[Content truncated]' :
+            note.content;
         }
-        if (note.aiSummary) {
-          const summary = note.aiSummary.length > MAX_NOTE_CONTENT_CHARS
-            ? note.aiSummary.substring(0, MAX_NOTE_CONTENT_CHARS - 3) + '...'
-            : note.aiSummary;
-          context += `AI Summary: ${summary}\n`;
-        }
-        if ((note.tags ?? []).length > 0) {
-          context += `Tags: ${(note.tags ?? []).join(', ')}\n`;
-        }
-        context += '\n';
+
+        const noteBlock = noteInfo + (noteContent ? `Content: ${noteContent}\n` : '') +
+          (note.aiSummary ? `Summary: ${note.aiSummary.substring(0, 200)}...\n` : '') +
+          (note.tags?.length ? `Tags: ${note.tags.join(', ')}\n` : '') + '\n';
+
+        context += noteBlock;
+        totalSize += noteBlock.length;
       });
     }
-  
+
     return context;
   }, []);
 
-  const refreshUploadedDocument = async (docId: string) => {
-    const { data, error } = await supabase
-      .from('documents')
-      .select('*')
-      .eq('id', docId)
-      .single();
-
-    if (error) {
-      console.error('Failed to refresh uploaded document:', error.message);
-      return null;
-    }
-
-    const refreshedDocData: AppDocument = {
-      ...(data as AppDocument),
-      processing_error: typeof (data as any).processing_error === 'string'
-        ? (data as any).processing_error
-        : (data as any).processing_error?.toString() || undefined,
-      processing_status: typeof (data as any).processing_status === 'string'
-        ? (data as any).processing_status
-        : (data as any).processing_status?.toString() || 'unknown',
-    };
-
-    setDocuments((prev) =>
-      prev.map((doc) => (doc.id === docId ? refreshedDocData : doc))
-    );
-
-    return refreshedDocData;
-  };
-
+  // Optimized handleSubmit with better file processing and error handling
   const handleSubmit = useCallback(async (
     messageContent: string,
     attachedDocumentIds?: string[],
@@ -555,18 +720,46 @@ const Index = () => {
     imageMimeType?: string,
     imageDataBase64?: string,
     aiMessageIdToUpdate: string | null = null,
+    attachedFiles?: FileData[] // Changed from File[]
   ) => {
-    if (!messageContent && (!attachedDocumentIds || attachedDocumentIds.length === 0) && (!attachedNoteIds || attachedNoteIds.length === 0) && !imageUrl || isAILoading || isSubmittingUserMessage) {
+    // Enhanced validation
+    const hasTextContent = messageContent?.trim();
+    const hasAttachments = (attachedDocumentIds && attachedDocumentIds.length > 0) ||
+                          (attachedNoteIds && attachedNoteIds.length > 0) ||
+                          imageUrl ||
+                          (attachedFiles && attachedFiles.length > 0);
+  
+    if (!hasTextContent && !hasAttachments) {
+      toast.warning('Please enter a message or attach files to send.');
       return;
     }
   
-    const trimmedMessage = messageContent;
+    if (isAILoading || isSubmittingUserMessage) {
+      toast.info('Please wait for the current message to complete.');
+      return;
+    }
+  
+    // Remove file validation since files are already validated in AIChat.tsx
+    /*
+    if (attachedFiles && attachedFiles.length > 0) {
+      if (attachedFiles.length > MAX_FILES_PER_MESSAGE) {
+        toast.error(`Too many files. Maximum ${MAX_FILES_PER_MESSAGE} files per message.`);
+        return;
+      }
+  
+      for (const file of attachedFiles) {
+        const validation = validateFileForProcessing(file);
+        if (!validation.valid) {
+          toast.error(validation.error);
+          return;
+        }
+      }
+    }
+    */
+  
     setIsSubmittingUserMessage(true);
     setIsAILoading(true);
-  
-    let attachedImageDocumentId: string | undefined = undefined;
-    let uploadedFilePath: string | undefined = undefined;
-    let imageDescriptionForAI: string | undefined;
+    let processedFiles: FileData[] = attachedFiles || []; // Use attachedFiles directly
   
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -589,80 +782,101 @@ const Index = () => {
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
   
-      if (imageUrl && finalAttachedDocumentIds.length > 0) {
-        const imageDoc = documents.find(d => d.type === 'image' && d.file_url === imageUrl);
-        if (imageDoc) {
-          attachedImageDocumentId = imageDoc.id;
-          uploadedFilePath = imageDoc.file_url;
-        }
+      // Remove file processing logic since it's handled in AIChat.tsx
+      /*
+      if (attachedFiles && attachedFiles.length > 0) {
+        setFileProcessingProgress({
+          processing: true,
+          completed: 0,
+          total: attachedFiles.length
+        });
   
-        if (attachedImageDocumentId) {
-          const refreshedDoc = await refreshUploadedDocument(attachedImageDocumentId);
-          if (refreshedDoc) {
-            imageDescriptionForAI = refreshedDoc.content_extracted;
+        toast.info(`Processing ${attachedFiles.length} file${attachedFiles.length > 1 ? 's' : ''}...`);
+  
+        for (let i = 0; i < attachedFiles.length; i++) {
+          const file = attachedFiles[i];
+          setFileProcessingProgress(prev => ({
+            ...prev,
+            currentFile: file.name
+          }));
+  
+          try {
+            const processedFile = await processFileForUpload(file);
+            processedFiles.push(processedFile);
+            
+            setFileProcessingProgress(prev => ({
+              ...prev,
+              completed: prev.completed + 1
+            }));
+          } catch (error) {
+            console.error(`Error processing file ${file.name}:`, error);
+            toast.error(`Failed to process file: ${file.name}`);
           }
         }
+  
+        setFileProcessingProgress({ processing: false, completed: 0, total: 0 });
       }
+      */
   
-      setSelectedDocumentIds(finalAttachedDocumentIds);
-  
+      // Build context with size optimization
       const historicalMessagesForAI = allChatMessages
         .filter(msg => msg.session_id === currentSessionId)
         .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate))
-        .slice(-MAX_HISTORY_MESSAGES); // Limit to last 50 messages
+        .slice(-MAX_HISTORY_MESSAGES);
   
-      const chatHistoryForAI: Array<{ role: string; parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> }> = [];
+      const chatHistoryForAI: Array<{ role: string; parts: MessagePart[] }> = [];
   
       historicalMessagesForAI.forEach(msg => {
         if (msg.role === 'user') {
-          const userParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: msg.content }];
+          const userParts: MessagePart[] = [{ text: msg.content }];
+          
           if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 || msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
-            const historicalContext = buildRichContext(msg.attachedDocumentIds || [], msg.attachedNoteIds || [], documents, notes);
-            if (historicalContext) {
-              userParts.push({ text: `\n\nContext from previous attachments:\n${historicalContext}` });
+            const historicalContext = buildRichContext(
+              msg.attachedDocumentIds || [], 
+              msg.attachedNoteIds || [], 
+              documents, 
+              notes
+            );
+            if (historicalContext && historicalContext.length < 50000) {
+              userParts.push({ text: `\n\nPrevious Context:\n${historicalContext}` });
             }
           }
+          
           chatHistoryForAI.push({ role: 'user', parts: userParts });
         } else if (msg.role === 'assistant') {
-          chatHistoryForAI.push({ role: 'model', parts: [{ text: msg.content }] });
+          const content = msg.content.length > 10000 ? 
+            msg.content.substring(0, 10000) + '\n[Previous response truncated for context efficiency]' : 
+            msg.content;
+          chatHistoryForAI.push({ role: 'model', parts: [{ text: content }] });
         }
       });
   
-      let finalUserMessageContent = trimmedMessage;
+      let finalUserMessageContent = messageContent || "";
+      
       const currentAttachedContext = buildRichContext(finalAttachedDocumentIds, finalAttachedNoteIds, documents, notes);
       if (currentAttachedContext) {
-        finalUserMessageContent += `\n\nContext for current query:\n${currentAttachedContext}`;
-      }
-      if (!aiMessageIdToUpdate && imageDescriptionForAI) {
-        finalUserMessageContent += `\n\nAttached Image Description: ${imageDescriptionForAI}`;
+        finalUserMessageContent += `\n\nAttached Context:\n${currentAttachedContext}`;
       }
   
-      // Estimate total content size
-      const totalContent = [
-        ...chatHistoryForAI,
-        { role: 'user', parts: [{ text: finalUserMessageContent }] },
-      ];
-      const totalSize = estimateContentSize(totalContent);
-  
-      if (totalSize > MAX_TOTAL_CHARACTERS) {
-        toast.warning('Content size exceeds limit. Truncating older messages and context.');
-        const truncatedHistory = truncateContent(chatHistoryForAI, MAX_TOTAL_CHARACTERS - estimateContentSize(finalUserMessageContent));
-        totalContent.splice(0, chatHistoryForAI.length, ...(truncatedHistory as Array<{ role: string; parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> }>));
+      if (processedFiles.length > 0) {
+        const fileDescriptions = processedFiles.map(f => 
+          `${f.name} (${f.type}, ${f.processing_status})`
+        ).join(', ');
+        
+        if (!finalUserMessageContent.trim()) {
+          finalUserMessageContent = `I'm sharing ${processedFiles.length} file${processedFiles.length > 1 ? 's' : ''} with you: ${fileDescriptions}`;
+        } else {
+          finalUserMessageContent += `\n\nAttached Files: ${fileDescriptions}`;
+        }
       }
   
-      const filesForEdgeFunction = [];
-      if (imageDataBase64 && imageMimeType) {
-        filesForEdgeFunction.push({
-          name: 'uploaded_image',
-          mimeType: imageMimeType,
-          data: imageDataBase64.split(',')[1],
-          type: 'image',
-          size: 0,
-          content: imageDescriptionForAI || null,
-          processing_status: imageDescriptionForAI ? 'completed' : 'pending',
-          processing_error: null,
-        });
-      }
+      const optimizedContent = optimizeContextForProcessing(
+        chatHistoryForAI,
+        finalUserMessageContent,
+        processedFiles
+      );
+  
+      console.log(`Sending optimized content: ${JSON.stringify(optimizedContent).length} characters`);
   
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
@@ -670,13 +884,13 @@ const Index = () => {
           sessionId: currentSessionId,
           learningStyle: userProfile?.learning_style || 'visual',
           learningPreferences: userProfile?.learning_preferences || {
-            explanation_style: userProfile?.learning_preferences?.explanation_style || 'detailed',
-            examples: userProfile?.learning_preferences?.examples || false,
-            difficulty: userProfile?.learning_preferences?.difficulty || 'intermediate',
+            explanation_style: 'detailed',
+            examples: false,
+            difficulty: 'intermediate',
           },
-          chatHistory: totalContent.slice(0, -1), // Exclude the final user message from history
+          chatHistory: optimizedContent.slice(0, -1),
           message: finalUserMessageContent,
-          files: filesForEdgeFunction,
+          files: processedFiles,
           attachedDocumentIds: finalAttachedDocumentIds,
           attachedNoteIds: finalAttachedNoteIds,
           imageUrl: imageUrl,
@@ -685,48 +899,89 @@ const Index = () => {
         },
       });
   
-      if (error) throw new Error(`AI service error: ${error.message}`);
-      if (!data || !data.response) throw new Error('Empty response from AI service');
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
+      }
+      
+      if (!data || !data.response) {
+        throw new Error('Empty response from AI service');
+      }
   
       setChatSessions(prev => {
         const updated = prev.map(session =>
           session.id === currentSessionId
-            ? { ...session, last_message_at: new Date().toISOString(), document_ids: finalAttachedDocumentIds }
+            ? { 
+                ...session, 
+                last_message_at: new Date().toISOString(), 
+                document_ids: [...new Set([...session.document_ids, ...finalAttachedDocumentIds])]
+              }
             : session
         );
         return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
       });
   
-    } catch (error: any) {
-      toast.error(`Failed to send message: ${error.message || 'Unknown error'}`);
-      if (attachedImageDocumentId) {
-        await supabase.from('documents').delete().eq('id', attachedImageDocumentId);
-        setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== attachedImageDocumentId));
+      if (processedFiles.length > 0) {
+        const successful = processedFiles.filter(f => f.processing_status === 'completed').length;
+        const failed = processedFiles.filter(f => f.processing_status === 'failed').length;
+        
+        if (successful > 0 && failed === 0) {
+          toast.success(`Successfully processed ${successful} file${successful > 1 ? 's' : ''}`);
+        } else if (successful > 0 && failed > 0) {
+          toast.warning(`Processed ${successful} file${successful > 1 ? 's' : ''}, ${failed} failed`);
+        } else if (failed > 0) {
+          toast.error(`Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
+        }
       }
-      if (uploadedFilePath) {
-        await supabase.storage.from('documents').remove([uploadedFilePath]);
+  
+      console.log('Message sent successfully:', {
+        response: data.response.substring(0, 100) + '...',
+        filesProcessed: data.filesProcessed || 0,
+        processingResults: data.processingResults || []
+      });
+  
+    } catch (error: any) {
+      console.error('Error in handleSubmit:', error);
+      
+      let errorMessage = 'Failed to send message';
+      
+      if (error.message?.includes('content size exceeds')) {
+        errorMessage = 'Message too large. Please reduce file sizes or message length.';
+      } else if (error.message?.includes('rate limit')) {
+        errorMessage = 'Service is busy. Please try again in a moment.';
+      } else if (error.message?.includes('network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.message) {
+        errorMessage += `: ${error.message}`;
+      }
+      
+      toast.error(errorMessage);
+      
+      if (processedFiles.length > 0) {
+        console.log('Cleaning up processed files due to error...');
+        // Additional cleanup logic could go here
       }
     } finally {
       setIsSubmittingUserMessage(false);
       setIsAILoading(false);
+      setFileProcessingProgress({ processing: false, completed: 0, total: 0 });
     }
   }, [
     isAILoading,
+    isSubmittingUserMessage,
     activeChatSessionId,
     createNewChatSession,
-    isSubmittingUserMessage,
-    documents,
-    setSelectedDocumentIds,
-    notes,
-    refreshUploadedDocument,
-    setDocuments,
     allChatMessages,
+    documents,
+    notes,
+    buildRichContext,
     userProfile,
     setChatSessions,
     setIsAILoading,
   ]);
+
   const handleNewMessage = useCallback((message: Message) => {
-    // This function is no longer directly used for new messages, as useAppData's listener handles it.
+    // This function is handled by useAppData's listener
   }, []);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
@@ -749,14 +1004,20 @@ const Index = () => {
       if (error) {
         console.error('Error deleting message from DB:', error);
         toast.error('Failed to delete message from database.');
+        // Revert optimistic update
+        loadSessionMessages(activeChatSessionId);
       } else {
         toast.success('Message deleted successfully.');
       }
     } catch (error: any) {
       console.error('Error in handleDeleteMessage:', error);
       toast.error(`Error deleting message: ${error.message || 'Unknown error'}`);
+      // Revert optimistic update
+      if (activeChatSessionId) {
+        loadSessionMessages(activeChatSessionId);
+      }
     }
-  }, [user, activeChatSessionId, setChatMessages]);
+  }, [user, activeChatSessionId, setChatMessages, loadSessionMessages]);
 
   const handleRegenerateResponse = useCallback(async (lastUserMessageContent: string) => {
     if (!user || !activeChatSessionId) {
@@ -777,24 +1038,36 @@ const Index = () => {
       return;
     }
 
+    // Mark message as updating
     setChatMessages(prevAllMessages =>
       (prevAllMessages || []).map(msg =>
-        msg.id === lastAssistantMessage.id
-          ? { ...msg, content: 'AI is thinking...', timestamp: new Date().toISOString(), isError: false }
-          : msg
+        msg.id === lastAssistantMessage.id ? { ...msg, isUpdating: true, isError: false } : msg
       )
     );
 
     toast.info('Regenerating response...');
-    await handleSubmit(
-      lastUserMessageContent,
-      lastUserMessage.attachedDocumentIds,
-      lastUserMessage.attachedNoteIds,
-      lastUserMessage.imageUrl,
-      lastUserMessage.imageMimeType,
-      undefined,
-      lastAssistantMessage.id
-    );
+
+    try {
+      await handleSubmit(
+        lastUserMessageContent,
+        lastUserMessage.attachedDocumentIds,
+        lastUserMessage.attachedNoteIds,
+        lastUserMessage.imageUrl,
+        lastUserMessage.imageMimeType,
+        undefined,
+        lastAssistantMessage.id
+      );
+    } catch (error) {
+      console.error('Error regenerating response:', error);
+      toast.error('Failed to regenerate response');
+
+      // Revert updating state
+      setChatMessages(prevAllMessages =>
+        (prevAllMessages || []).map(msg =>
+          msg.id === lastAssistantMessage.id ? { ...msg, isUpdating: false, isError: true } : msg
+        )
+      );
+    }
   }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmit]);
 
   const handleRetryFailedMessage = useCallback(async (originalUserMessageContent: string, failedAiMessageId: string) => {
@@ -803,30 +1076,45 @@ const Index = () => {
       return;
     }
 
-    const lastUserMessage = filteredChatMessages.slice().reverse().find(msg => msg.role === 'user' && msg.content === originalUserMessageContent);
+    const lastUserMessage = filteredChatMessages.slice().reverse().find(msg =>
+      msg.role === 'user' && msg.content === originalUserMessageContent
+    );
+
     if (!lastUserMessage) {
       toast.error('Could not find original user message to retry.');
       return;
     }
 
+    // Mark message as retrying
     setChatMessages(prevAllMessages =>
       (prevAllMessages || []).map(msg =>
-        msg.id === failedAiMessageId
-          ? { ...msg, content: 'AI is thinking...', timestamp: new Date().toISOString(), isError: false }
-          : msg
+        msg.id === failedAiMessageId ? { ...msg, isUpdating: true, isError: false } : msg
       )
     );
 
     toast.info('Retrying message...');
-    await handleSubmit(
-      originalUserMessageContent,
-      lastUserMessage.attachedDocumentIds,
-      lastUserMessage.attachedNoteIds,
-      lastUserMessage.imageUrl,
-      lastUserMessage.imageMimeType,
-      undefined,
-      failedAiMessageId
-    );
+
+    try {
+      await handleSubmit(
+        originalUserMessageContent,
+        lastUserMessage.attachedDocumentIds,
+        lastUserMessage.attachedNoteIds,
+        lastUserMessage.imageUrl,
+        lastUserMessage.imageMimeType,
+        undefined,
+        failedAiMessageId
+      );
+    } catch (error) {
+      console.error('Error retrying message:', error);
+      toast.error('Failed to retry message');
+
+      // Revert updating state
+      setChatMessages(prevAllMessages =>
+        (prevAllMessages || []).map(msg =>
+          msg.id === failedAiMessageId ? { ...msg, isUpdating: false, isError: true } : msg
+        )
+      );
+    }
   }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmit]);
 
   const {
@@ -880,7 +1168,7 @@ const Index = () => {
     activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings',
     fullName: userProfile?.full_name || '',
     avatarUrl: userProfile?.avatar_url || '',
-  }), [searchQuery, setSearchQuery, createNewNote, isSidebarOpen, memoizedOnToggleSidebar, currentActiveTab]);
+  }), [searchQuery, setSearchQuery, createNewNote, isSidebarOpen, memoizedOnToggleSidebar, currentActiveTab, userProfile]);
 
   const sidebarProps = useMemo(() => ({
     isOpen: isSidebarOpen,
@@ -967,7 +1255,11 @@ const Index = () => {
     onReprocessAudio: triggerAudioProcessing,
     onDeleteRecording: deleteRecording,
     onGenerateNote: handleGenerateNoteFromAudio,
-    // New pagination props
+    // Enhanced props for file processing
+    fileProcessingProgress: fileProcessingProgress,
+    supportedFileTypes: Object.keys(SUPPORTED_FILE_TYPES),
+    validateFileForProcessing: validateFileForProcessing,
+    // Pagination props
     dataLoading: specificDataLoading,
     dataPagination: dataPagination,
     onLoadMoreNotes: loadMoreNotes,
@@ -1021,6 +1313,7 @@ const Index = () => {
     triggerAudioProcessing,
     deleteRecording,
     handleGenerateNoteFromAudio,
+    fileProcessingProgress,
     specificDataLoading,
     dataPagination,
     loadMoreNotes,
@@ -1046,12 +1339,25 @@ const Index = () => {
     }
   }, [signOut, navigate]);
 
+  // Enhanced loading state with file processing progress
   if (loading || dataLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
         <div className="text-center">
           <img src='/siteimage.png' className="h-16 w-16 text-blue-600 mx-auto mb-4 animate-spin" />
           <p className="text-slate-600 dark:text-gray-300">Loading your data...</p>
+          {fileProcessingProgress.processing && (
+            <div className="mt-4">
+              <p className="text-sm text-slate-500 dark:text-gray-400">
+                Processing files: {fileProcessingProgress.completed}/{fileProcessingProgress.total}
+              </p>
+              {fileProcessingProgress.currentFile && (
+                <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">
+                  Current: {fileProcessingProgress.currentFile}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1082,7 +1388,6 @@ const Index = () => {
         <div className="flex items-center justify-between p-3 sm:p-2 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
           <Header {...headerProps} />
           <div className="hidden p-3 sm:flex items-center gap-3">
-            
             <Button
               variant="outline"
               size="sm"
@@ -1102,6 +1407,30 @@ const Index = () => {
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
+
+        {/* File processing progress indicator */}
+        {fileProcessingProgress.processing && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 p-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-blue-700 dark:text-blue-300">
+                Processing files: {fileProcessingProgress.completed}/{fileProcessingProgress.total}
+              </span>
+              <div className="w-32 bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${(fileProcessingProgress.completed / fileProcessingProgress.total) * 100}%`
+                  }}
+                />
+              </div>
+            </div>
+            {fileProcessingProgress.currentFile && (
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                Processing: {fileProcessingProgress.currentFile}
+              </p>
+            )}
+          </div>
+        )}
 
         <Routes>
           <Route path="/notes" element={<TabContent {...tabContentProps} activeTab="notes" />} />
