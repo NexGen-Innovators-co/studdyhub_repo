@@ -13,6 +13,8 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { themes, ThemeName, escapeHtml, highlightCode } from '../utils/codeHighlighting';
 import { Easing } from 'framer-motion';
 import DOMPurify from 'dompurify';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // Ensure Chart.js components are registered once
 Chart.register(...registerables);
@@ -24,6 +26,12 @@ declare global {
     html2canvas: any;
     Viz: any;
   }
+}
+
+// Extend MermaidProps interface to include onError
+interface MermaidProps {
+  chart: string;
+  onError?: (code: string, errorType: 'syntax' | 'rendering') => void;
 }
 
 // Enhanced Error Boundary for better error handling
@@ -112,8 +120,16 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         });
 
         const fullHtml = `
-
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
 ${sanitizedHtml}
+</body>
+</html>
 `;
 
         const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -122,7 +138,6 @@ ${sanitizedHtml}
           iframeDoc.write(fullHtml);
           iframeDoc.close();
 
-          // Listen for messages from iframe
           const handleMessage = (event: MessageEvent) => {
             if (event.source === iframe.contentWindow) {
               if (event.data.type === 'loaded') {
@@ -136,7 +151,6 @@ ${sanitizedHtml}
 
           window.addEventListener('message', handleMessage);
 
-          // Fallback timeout
           const timeoutId = setTimeout(() => {
             setIsLoading(false);
           }, 5000);
@@ -354,7 +368,7 @@ return createThreeJSScene;
         <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
           <div className="flex flex-col items-center">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600 mb-2" />
-            <p className="text-sm text-gray-600 dark:text-gray-400">Loading 3D scene...</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Rendering 3D scene...</p>
           </div>
         </div>
       )}
@@ -372,433 +386,134 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   isOpen,
   language,
   imageUrl,
-  initialWidthPercentage,
+  initialWidthPercentage
 }) => {
-  const [panelWidth, setPanelWidth] = useState<number>(initialWidthPercentage || 65);
-  const [panelHeight, setPanelHeight] = useState<number>(window.innerHeight * 0.8);
-  const [isResizing, setIsResizing] = useState<{ width: boolean; height: boolean }>({ width: false, height: false });
-  const initialPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const initialSize = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
-  const chartRef = useRef<HTMLCanvasElement>(null);
-  const diagramContainerRef = useRef<HTMLDivElement>(null);
-  const [currentTheme, setCurrentTheme] = useState<ThemeName>('github-light');
-  const [showThemeSelector, setShowThemeSelector] = useState(false);
-  const threeJsRef = useRef<HTMLCanvasElement>(null);
-  const [threeJsScene, setThreeJsScene] = useState<THREE.Scene | null>(null);
-  const [threeJsRenderer, setThreeJsRenderer] = useState<THREE.WebGLRenderer | null>(null);
-  const threeJsCleanupFunction = useRef<(() => void) | null>(null);
   const diagramPanelRef = useRef<HTMLDivElement>(null);
-  const [chartError, setChartError] = useState<string | null>(null);
-  const [threeJsError, setThreeJsError] = useState<string | null>(null);
+  const diagramContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<HTMLCanvasElement>(null);
+  const threeJsRef = useRef<HTMLCanvasElement>(null); // This is used for the 3D scene rendering
+  const [showSourceCode, setShowSourceCode] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<ThemeName>('github-dark');
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(initialWidthPercentage || 65);
   const [dotSvg, setDotSvg] = useState<string | null>(null);
   const [dotError, setDotError] = useState<string | null>(null);
   const [isDotLoading, setIsDotLoading] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [threeJsError, setThreeJsError] = useState<string | null>(null);
+  const [threeJsScene, setThreeJsScene] = useState<THREE.Scene | null>(null);
+  const [threeJsRenderer, setThreeJsRenderer] = useState<THREE.WebGLRenderer | null>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const isPanningRef = useRef(false);
-  const startPanPos = useRef({ x: 0, y: 0 });
-  const [showSourceCode, setShowSourceCode] = useState(false);
   const [networkError, setNetworkError] = useState(false);
 
-  // Auto-detect system theme preference
-  useEffect(() => {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setCurrentTheme(prefersDark ? 'github-dark' : 'github-light');
+  const isPhone = useCallback(() => {
+    const userAgent = navigator.userAgent.toLowerCase();
+    return /mobile|android|iphone|ipad|tablet/i.test(userAgent) && window.innerWidth <= 768;
   }, []);
 
-  // Enhanced responsive dimensions handling
-  useEffect(() => {
-    if (isOpen && diagramPanelRef.current) {
-      const updateDimensions = () => {
-        const isMobile = window.innerWidth < 768;
-        const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
+  const theme = themes[currentTheme];
 
-        if (isMobile) {
-          setPanelWidth(100);
-          setPanelHeight(window.innerHeight * 0.95);
-        } else if (isTablet) {
-          setPanelWidth(initialWidthPercentage || 75);
-          setPanelHeight(window.innerHeight * 0.9);
-        } else {
-          setPanelWidth(initialWidthPercentage || 65);
-          setPanelHeight(window.innerHeight * 0.85);
-        }
-      };
-
-      updateDimensions();
-      window.addEventListener('resize', updateDimensions);
-      return () => window.removeEventListener('resize', updateDimensions);
-    }
-  }, [isOpen, initialWidthPercentage]);
-
-  // Network status monitoring
-  useEffect(() => {
-    const handleOnline = () => setNetworkError(false);
-    const handleOffline = () => setNetworkError(true);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    setNetworkError(!navigator.onLine);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // Cleanup Three.js scene
-  useEffect(() => {
-    return () => {
-      if (threeJsCleanupFunction.current) {
-        threeJsCleanupFunction.current();
-        threeJsCleanupFunction.current = null;
-        setThreeJsScene(null);
-        setThreeJsRenderer(null);
-      }
-    };
-  }, [diagramContent, diagramType]);
-
-  // Handle Three.js scene ready
   const handleThreeJsSceneReady = useCallback((scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => {
     setThreeJsScene(scene);
     setThreeJsRenderer(renderer);
-    threeJsCleanupFunction.current = cleanup;
   }, []);
 
-  // Enhanced resize handlers with better mobile support
-  const handleResize = useCallback((e: MouseEvent | TouchEvent) => {
-    if (!isResizing.width && !isResizing.height) return;
-
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
-    if (isResizing.width) {
-      const deltaX = clientX - initialPos.current.x;
-      const newWidth = initialSize.current.width + deltaX;
-      const minWidth = window.innerWidth < 768 ? window.innerWidth * 0.9 : 300;
-      const maxWidth = window.innerWidth * 0.95;
-      const constrainedWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
-      setPanelWidth((constrainedWidth / window.innerWidth) * 100);
+  const handleDownloadContent = useCallback(() => {
+    if (diagramType === 'image' && imageUrl) {
+      const link = document.createElement('a');
+      link.href = imageUrl;
+      link.download = 'image.png';
+      link.click();
+      toast.success('Image download started.');
+    } else if (diagramContent) {
+      const blob = new Blob([diagramContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = diagramType === 'code' ? `code.${language || 'txt'}` : `${diagramType}.${language || 'txt'}`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success('Content download started.');
+    } else {
+      toast.error('No content available to download.');
     }
+  }, [diagramContent, diagramType, language, imageUrl]);
 
-    if (isResizing.height) {
-      const deltaY = clientY - initialPos.current.y;
-      const newHeight = initialSize.current.height + deltaY;
-      const minHeight = window.innerHeight < 600 ? window.innerHeight * 0.5 : 200;
-      const maxHeight = window.innerHeight * 0.95;
-      const constrainedHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
-      setPanelHeight(constrainedHeight);
-    }
-  }, [isResizing]);
-
-  const stopResize = useCallback(() => {
-    setIsResizing({ width: false, height: false });
-    document.body.style.cursor = 'default';
-  }, []);
-
-  useEffect(() => {
-    if (isResizing.width || isResizing.height) {
-      window.addEventListener('mousemove', handleResize);
-      window.addEventListener('mouseup', stopResize);
-      window.addEventListener('touchmove', handleResize, { passive: false });
-      window.addEventListener('touchend', stopResize);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleResize);
-      window.removeEventListener('mouseup', stopResize);
-      window.removeEventListener('touchmove', handleResize);
-      window.removeEventListener('touchend', stopResize);
-    };
-  }, [isResizing, handleResize, stopResize]);
-
-  // Enhanced pan handlers
-  const handlePanStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if (isFullScreen || window.innerWidth < 768) return;
-    isPanningRef.current = true;
-    startPanPos.current = {
-      x: 'touches' in e ? e.touches[0].clientX : e.clientX,
-      y: 'touches' in e ? e.touches[0].clientY : e.clientY
-    };
-  }, [isFullScreen]);
-
-  // Enhanced dynamic styles
-  const dynamicPanelStyle: React.CSSProperties = {
-    width: window.innerWidth >= 768 ? `${panelWidth}%` : '100%',
-    height: panelHeight,
-    overflow: 'hidden',
-    touchAction: isResizing.width || isResizing.height ? 'none' : 'auto',
-    maxWidth: '100vw',
-    maxHeight: '100vh'
-  };
-
-  const contentStyle: React.CSSProperties = {
-    transform: `scale(${zoomLevel}) translate(${panOffset.x}px, ${panOffset.y}px)`,
-    transformOrigin: 'center center',
-    transition: isResizing.width || isResizing.height ? 'none' : 'transform 0.2s ease-out'
-  };
-
-  let panelTitle = 'Viewer';
-  let downloadButtonText = 'Download Content';
-  let downloadFileName = 'content';
-
-  // Enhanced download content function with better error handling
-  const handleDownloadContent = useCallback(async () => {
-    if (!diagramContainerRef.current && !imageUrl && diagramType !== 'html') {
-      toast.error('Content not available for download');
-      return;
-    }
-
-    try {
-      let fileExtension = '';
-      let contentToDownload: string | Blob = '';
-      let mimeType = '';
-
-      if (diagramType === 'html') {
-        contentToDownload = diagramContent || '';
-        fileExtension = 'html';
-        mimeType = 'text/html;charset=utf-8';
-      } else if (diagramType === 'image' && imageUrl) {
-        try {
-          const response = await fetch(imageUrl);
-          if (!response.ok) throw new Error('Failed to fetch image');
-          const blob = await response.blob();
+  const handleDownloadGltf = useCallback(() => {
+    if (threeJsScene && threeJsRenderer) {
+      const exporter = new GLTFExporter();
+      exporter.parse(
+        threeJsScene,
+        (gltf) => {
+          const output = JSON.stringify(gltf, null, 2);
+          const blob = new Blob([output], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `image-${Date.now()}.png`;
-          document.body.appendChild(link);
+          link.download = '3d-scene.gltf';
           link.click();
-          document.body.removeChild(link);
           URL.revokeObjectURL(url);
-          toast.success('Image downloaded!');
-          return;
-        } catch (error) {
-          toast.error('Failed to download image');
-          return;
-        }
-      } else if (diagramType === 'mermaid' || diagramType === 'dot') {
-        const svgElement = diagramContainerRef.current?.querySelector('svg');
-        if (svgElement) {
-          contentToDownload = new XMLSerializer().serializeToString(svgElement);
-          fileExtension = 'svg';
-          mimeType = 'image/svg+xml;charset=utf-8';
-        } else {
-          toast.error('Diagram not found for download');
-          return;
-        }
-      } else if (diagramType === 'chartjs') {
-        if (chartRef.current) {
-          contentToDownload = chartRef.current.toDataURL('image/png');
-          fileExtension = 'png';
-          mimeType = 'image/png';
-        } else {
-          toast.error('Chart not found for download');
-          return;
-        }
-      } else if (diagramType === 'threejs') {
-        if (threeJsRef.current) {
-          contentToDownload = threeJsRef.current.toDataURL('image/png');
-          fileExtension = 'png';
-          mimeType = 'image/png';
-        } else {
-          toast.error('3D scene not found for download');
-          return;
-        }
-      } else if (diagramType === 'code' || diagramType === 'document-text') {
-        if (!diagramContent) {
-          toast.error('No content available for download');
-          return;
-        }
-        contentToDownload = diagramContent;
-        fileExtension = language || 'txt';
-        mimeType = 'text/plain;charset=utf-8';
-
-        // Enhanced MIME type detection
-        const mimeTypes: Record<string, string> = {
-          'js': 'application/javascript',
-          'javascript': 'application/javascript',
-          'ts': 'application/typescript',
-          'typescript': 'application/typescript',
-          'py': 'text/x-python',
-          'python': 'text/x-python',
-          'java': 'text/x-java-source',
-          'html': 'text/html',
-          'css': 'text/css',
-          'json': 'application/json',
-          'xml': 'application/xml',
-          'sql': 'application/sql',
-          'md': 'text/markdown',
-          'markdown': 'text/markdown'
-        };
-
-        if (language && mimeTypes[language]) {
-          mimeType = mimeTypes[language];
-        }
-      } else {
-        toast.error('Unsupported content type for download');
-        return;
-      }
-
-      const blob = new Blob([contentToDownload], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const downloadLink = document.createElement('a');
-      downloadLink.href = url;
-      downloadLink.download = `${downloadFileName}.${fileExtension}`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-      URL.revokeObjectURL(url);
-
-      const contentTypeNames: Record<string, string> = {
-        'code': 'Code',
-        'html': 'Web Page',
-        'mermaid': 'Diagram',
-        'dot': 'Graph',
-        'chartjs': 'Chart',
-        'threejs': '3D Scene',
-        'document-text': 'Document',
-        'image': 'Image'
-      };
-
-      toast.success(`${contentTypeNames[diagramType] || 'Content'} downloaded as ${fileExtension.toUpperCase()}!`);
-    } catch (error) {
-      console.error('Download error:', error);
-      toast.error('Failed to download content. Please try again.');
-    }
-  }, [diagramContent, diagramType, imageUrl, language, downloadFileName]);
-
-  // Enhanced GLTF download with better error handling
-  const handleDownloadGltf = useCallback(async () => {
-    if (!threeJsScene || !threeJsRenderer) {
-      toast.error('3D scene not ready for export');
-      return;
-    }
-
-    const loadingToast = toast.loading('Exporting 3D scene...');
-
-    try {
-      const exporter = new GLTFExporter();
-      await new Promise<void>((resolve, reject) => {
-        exporter.parse(
-          threeJsScene,
-          (gltf) => {
-            try {
-              const output = JSON.stringify(gltf, null, 2);
-              const blob = new Blob([output], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = 'scene.gltf';
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          },
-          (error) => reject(error),
-          { binary: false }
-        );
-      });
-
-      toast.dismiss(loadingToast);
-      toast.success('3D scene downloaded successfully!');
-    } catch (error) {
-      console.error('GLTF export error:', error);
-      toast.dismiss(loadingToast);
-      toast.error('Failed to export 3D scene. Please try again.');
+          toast.success('GLTF download started.');
+        },
+        (error) => {
+          console.error('GLTF export error:', error);
+          toast.error('Failed to export GLTF.');
+        },
+        { binary: false }
+      );
+    } else {
+      toast.error('No 3D scene available to download.');
     }
   }, [threeJsScene, threeJsRenderer]);
 
-  // Enhanced PDF download with better error handling
   const handleDownloadPdf = useCallback(async () => {
-    let targetRef;
-    if (diagramType === 'chartjs') {
-      targetRef = chartRef;
-    } else if (diagramType === 'threejs') {
-      targetRef = threeJsRef;
-    } else if (diagramType === 'html') {
-      targetRef = diagramContainerRef;
-    } else {
-      targetRef = diagramContainerRef;
-    }
-
-    if (!targetRef.current) {
-      toast.error('Content not available for PDF export');
+    if (!diagramContainerRef.current) {
+      toast.error('No content available to export as PDF.');
       return;
     }
-
-    if (typeof window.jspdf === 'undefined' || typeof window.html2canvas === 'undefined') {
-      toast.error('PDF generation libraries not available. Please refresh and try again.');
-      return;
-    }
-
-    const loadingToast = toast.loading('Generating PDF...');
 
     try {
-      const canvas = await window.html2canvas(targetRef.current, {
-        scale: Math.min(3 * zoomLevel, 5), // Cap the scale to prevent memory issues
-        useCORS: true,
-        backgroundColor: themes[currentTheme].background,
-        logging: false,
-        allowTaint: true,
-        foreignObjectRendering: true
-      });
-
-      const pdf = new window.jspdf.jsPDF({
-        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+      const pdf = new jsPDF({
+        orientation: 'portrait',
         unit: 'px',
-        format: [canvas.width, canvas.height],
+        format: 'a4',
       });
 
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save(`${downloadFileName}-${Date.now()}.pdf`);
+      const contentElement = diagramContainerRef.current;
+      const canvas = await html2canvas(contentElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        width: contentElement.offsetWidth,
+        height: contentElement.offsetHeight,
+        windowWidth: contentElement.offsetWidth,
+        windowHeight: contentElement.offsetHeight,
+      });
 
-      toast.dismiss(loadingToast);
-      toast.success('PDF downloaded successfully!');
+      const imgData = canvas.toDataURL('image/png');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${diagramType}-export.pdf`);
+      toast.success('PDF download started.');
     } catch (error) {
-      console.error('PDF generation error:', error);
-      toast.dismiss(loadingToast);
+      console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
     }
-  }, [diagramType, zoomLevel, currentTheme, downloadFileName]);
+  }, [diagramType]);
 
-  // Enhanced DOT rendering with better error handling
-  useEffect(() => {
-    const renderDot = async () => {
-      if (diagramType === 'dot' && diagramContent) {
-        setDotSvg(null);
-        setDotError(null);
-        setIsDotLoading(true);
+  const handlePanStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (!isFullScreen) return;
+    // Implement panning logic if needed
+  }, [isFullScreen]);
 
-        try {
-          const gv = await Graphviz.load();
-          const svg = await gv.layout(diagramContent, 'svg', 'dot');
-          setDotSvg(svg);
-        } catch (e: any) {
-          console.error('DOT rendering error:', e);
-          const errorMessage = `DOT syntax error: ${e.message || 'Invalid DOT format'}`;
-          setDotError(errorMessage);
-          onMermaidError(diagramContent, 'syntax');
-        } finally {
-          setIsDotLoading(false);
-        }
-      } else {
-        renderDot();
-      }
-    };
-  }, [diagramType, diagramContent, onMermaidError]);
-
-  // Enhanced DOT rendering with better error handling
-
-
-  // Enhanced theme selector component
-  const ThemeSelector = () => (
-    <div className="relative">
+  const ThemeSelector = useCallback(() => (
+    <div className="relative theme-selector-container">
       <Button
         variant="outline"
         size="sm"
@@ -808,179 +523,149 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         <Palette className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
         <span className="hidden sm:inline">Theme</span>
       </Button>
-      {showThemeSelector && (
-        <div className="absolute top-full right-0 mt-2 bg-white border rounded-lg shadow-lg z-50 min-w-[180px] sm:min-w-[200px] dark:bg-gray-800 dark:border-gray-600">
-          <div className="p-2 space-y-1 max-h-64 overflow-y-auto">
+      <AnimatePresence>
+        {showThemeSelector && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
+          >
             {Object.keys(themes).map((themeName) => (
               <button
                 key={themeName}
-                className={`w-full text-left px-3 py-2 rounded text-xs sm:text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${currentTheme === themeName ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''
-                  }`}
                 onClick={() => {
                   setCurrentTheme(themeName as ThemeName);
                   setShowThemeSelector(false);
                 }}
+                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${currentTheme === themeName ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
               >
-                <div className="flex items-center space-x-2">
-                  <div
-                    className="w-3 h-3 sm:w-4 sm:h-4 rounded border flex-shrink-0"
-                    style={{ backgroundColor: themes[themeName as ThemeName].background }}
-                  />
-                  <span className="capitalize truncate">{themeName.replace('-', ' ')}</span>
-                </div>
+                {themeName.charAt(0).toUpperCase() + themeName.slice(1)}
               </button>
             ))}
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
-  );
+  ), [showThemeSelector, currentTheme]);
+
+  useEffect(() => {
+    if (diagramType === 'dot' && diagramContent) {
+      setIsDotLoading(true);
+      Graphviz.load().then((graphviz) => {
+        try {
+          const svg = graphviz.dot(diagramContent);
+          setDotSvg(svg);
+          setDotError(null);
+        } catch (error: any) {
+          console.error('Error rendering DOT graph:', error);
+          setDotError(`Failed to render DOT graph: ${error.message}`);
+        } finally {
+          setIsDotLoading(false);
+        }
+      }).catch((error) => {
+        console.error('Error loading Graphviz:', error);
+        setDotError('Failed to load Graphviz library.');
+        setIsDotLoading(false);
+        setNetworkError(true);
+      });
+    }
+  }, [diagramContent, diagramType]);
+
+  const dynamicPanelStyle = useMemo(() => ({
+    width: isPhone() || isFullScreen ? '100%' : `${panelWidth}%`,
+    maxWidth: isPhone() || isFullScreen ? '100%' : '90%',
+    minWidth: isPhone() ? '100%' : '400px',
+  }), [panelWidth, isPhone, isFullScreen]);
+
+  const contentStyle = useMemo(() => ({
+    transform: `scale(${zoomLevel}) translate(${panOffset.x}px, ${panOffset.y}px)`,
+    transformOrigin: 'center',
+    overflow: 'auto',
+  }), [zoomLevel, panOffset]);
 
   const renderSourceCode = useMemo(() => {
-    const theme = themes[currentTheme];
+    if (!diagramContent) return null;
+    const highlightedCode = highlightCode(diagramContent, language || 'text', themes[currentTheme]);
     return (
-      <div
-        className="relative rounded-lg overflow-hidden h-full shadow-lg"
-        style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}
-      >
-        <div
-          className="px-3 sm:px-4 py-2 border-b text-xs sm:text-sm font-medium flex items-center justify-between"
-          style={{ backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }}
-        >
-          <span className="flex items-center space-x-2">
-            <Code className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="font-mono">{language?.toUpperCase() || 'PLAINTEXT'}</span>
-          </span>
-          <span className="text-xs opacity-75 hidden sm:inline" style={{ color: theme.lineNumbers }}>
-            {diagramContent?.split('\n').length || 0} lines
-          </span>
-        </div>
-        <div className="p-2 sm:p-4 overflow-auto h-full">
-          <div className="flex">
-            <div className="select-none pr-2 sm:pr-4 text-right font-mono text-xs sm:text-sm leading-relaxed hidden sm:block" style={{ color: theme.lineNumbers }}>
-              {diagramContent?.split('\n').map((_, index) => (
-                <div key={index + 1} className="min-h-[1.5rem]">{index + 1}</div>
-              ))}
-            </div>
-            <div className="flex-1 overflow-x-auto">
-              <pre className="font-mono text-xs sm:text-sm leading-relaxed">
-                <code
-                  dangerouslySetInnerHTML={{
-                    __html: diagramContent ? highlightCode(diagramContent, language || 'plaintext', theme) : ''
-                  }}
-                  style={{ color: theme.foreground }}
-                />
-              </pre>
-            </div>
-          </div>
+      <div className="relative rounded-lg overflow-hidden h-full shadow-lg" style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}>
+        <div className="p-4 sm:p-6 overflow-auto h-full modern-scrollbar">
+          <pre className="font-mono text-xs sm:text-sm leading-relaxed">
+            <code dangerouslySetInnerHTML={{ __html: highlightedCode }} style={{ color: theme.foreground }} />
+          </pre>
         </div>
       </div>
     );
-  }, [diagramContent, language, currentTheme]);
+  }, [diagramContent, language, currentTheme, theme]);
 
   const renderContent = useMemo(() => {
-    if (!diagramContent && !imageUrl) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 p-4">
-          <AlertTriangle className="h-12 w-12 mb-4" />
-          <p className="text-center">No content to display</p>
-        </div>
-      );
-    }
+    let panelTitle = '';
+    let downloadButtonText = '';
+    let downloadFileName = '';
 
-    const theme = themes[currentTheme];
-
-    if (showSourceCode && diagramContent && diagramType !== 'image' && diagramType !== 'unknown') {
+    if (showSourceCode && diagramContent) {
+      panelTitle = language ? `${language.toUpperCase()} Source` : 'Source Code';
+      downloadButtonText = 'Download Source';
+      downloadFileName = `source.${language || 'txt'}`;
       return renderSourceCode;
     }
 
-    if (diagramType === 'html') {
-      panelTitle = 'HTML Web Page';
-      downloadButtonText = 'Download HTML';
-      downloadFileName = 'webpage';
-      return (
-        <PanelErrorBoundary>
-          <IsolatedHtml html={diagramContent || ''} />
-        </PanelErrorBoundary>
-      );
-    } else if (diagramType === 'mermaid') {
+    if (diagramType === 'mermaid' && diagramContent) {
       panelTitle = 'Mermaid Diagram';
-      downloadButtonText = 'Download SVG';
+      downloadButtonText = 'Download PNG';
       downloadFileName = 'mermaid-diagram';
-      return (
-        <PanelErrorBoundary>
-          <Mermaid
-            chart={diagramContent || ''}
-            onMermaidError={onMermaidError}
-            onSuggestAiCorrection={onSuggestAiCorrection}
-            diagramRef={diagramContainerRef}
-            key={diagramContent}
-          />
-        </PanelErrorBoundary>
-      );
+      // Mermaid component already handles its own diagramRef internally.
+      // No need to pass a separate diagramRef here. The diagramRef is used internally by the Mermaid component.
+      return <PanelErrorBoundary><Mermaid chart={diagramContent} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} diagramRef={useRef(null)} /></PanelErrorBoundary>;
     } else if (diagramType === 'dot') {
       panelTitle = 'DOT Graph';
       downloadButtonText = 'Download SVG';
       downloadFileName = 'dot-graph';
+      if (isDotLoading) {
+        return (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          </div>
+        );
+      }
+      if (dotError) {
+        return (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-3 rounded mb-4 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
+            <div className="flex items-start">
+              <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm mb-2">{dotError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onSuggestAiCorrection(`Fix this DOT graph code: ${diagramContent}`)}
+                  className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Get AI Fix
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      }
       return (
         <PanelErrorBoundary>
-          {isDotLoading ? (
-            <div className="flex flex-col items-center justify-center h-full text-blue-600 dark:text-blue-400">
-              <Loader2 className="h-8 w-8 animate-spin mb-3" />
-              <p className="text-sm sm:text-base">Rendering DOT graph...</p>
-            </div>
-          ) : dotError ? (
-            <div className="text-red-700 p-4 dark:text-red-300 max-w-full">
-              <div className="flex items-center mb-3">
-                <AlertTriangle className="h-5 w-5 mr-2" />
-                <h3 className="font-semibold">Graph Rendering Error</h3>
-              </div>
-              <div className="bg-red-50 dark:bg-red-950/20 p-3 rounded-md mb-4 overflow-auto">
-                <p className="text-sm mb-2">{dotError}</p>
-                <details className="text-xs">
-                  <summary className="cursor-pointer hover:text-red-800 dark:hover:text-red-200">
-                    View Source Code
-                  </summary>
-                  <pre className="mt-2 p-2 bg-red-100 dark:bg-red-900/20 rounded text-xs overflow-auto max-h-32 whitespace-pre-wrap">
-                    {diagramContent}
-                  </pre>
-                </details>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onSuggestAiCorrection(`Fix this DOT graph syntax error: ${diagramContent}`)}
-                className="bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-700 dark:hover:bg-blue-800"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Get AI Fix
-              </Button>
-            </div>
-          ) : (
-            <div className="relative w-full h-full bg-white dark:bg-gray-900 rounded-lg overflow-hidden">
-              <div
-                className="w-full h-full flex items-center justify-center p-2 sm:p-4"
-                style={{ cursor: isResizing.height || isResizing.width ? 'default' : 'grab' }}
-              >
-                <div
-                  dangerouslySetInnerHTML={{ __html: dotSvg || '' }}
-                  className="max-w-full max-h-full [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:w-auto [&>svg]:h-auto"
-                />
-              </div>
-            </div>
-          )}
+          <div className="p-4 flex items-center justify-center h-full">
+            <div dangerouslySetInnerHTML={{ __html: dotSvg || '' }} style={{ maxWidth: '100%', maxHeight: '100%' }} />
+          </div>
         </PanelErrorBoundary>
       );
     } else if (diagramType === 'chartjs') {
       panelTitle = 'Chart.js Graph';
       downloadButtonText = 'Download PNG';
       downloadFileName = 'chart';
-      let chartConfigToRender: any = {};
+      let chartConfigToRender = {};
       try {
-        const cleanedContent = diagramContent ? diagramContent.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '') : '';
-        chartConfigToRender = cleanedContent ? JSON.parse(cleanedContent) : {};
-      } catch (e: any) {
-        setChartError(`Invalid Chart.js configuration: ${e.message}`);
+        chartConfigToRender = JSON.parse(diagramContent || '{}');
+      } catch (error) {
+        console.error('Invalid Chart.js configuration:', error);
+        setChartError('Invalid Chart.js configuration: JSON parse error');
         chartConfigToRender = {};
       }
 
@@ -1046,7 +731,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         </PanelErrorBoundary>
       );
     } else if (diagramType === 'code') {
-      panelTitle = language ? `${language.toUpperCase()} Code` : 'Code View';
+      panelTitle = 'Code View';
       downloadButtonText = 'Download Code';
       downloadFileName = `code.${language || 'txt'}`;
       return renderSourceCode;
@@ -1085,6 +770,15 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
           />
         </div>
       );
+    } else if (diagramType === 'html') {
+      panelTitle = 'Web Page';
+      downloadButtonText = 'Download HTML';
+      downloadFileName = 'webpage.html';
+      return (
+        <PanelErrorBoundary>
+          <IsolatedHtml html={diagramContent || ''} />
+        </PanelErrorBoundary>
+      );
     } else {
       panelTitle = 'Unsupported Content';
       downloadButtonText = 'Download Content';
@@ -1107,7 +801,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     }
   }, [diagramContent, diagramType, imageUrl, currentTheme, isResizing, onMermaidError, onSuggestAiCorrection, chartError, threeJsError, language, dotSvg, dotError, isDotLoading, handleThreeJsSceneReady, showSourceCode]);
 
-  // Enhanced click outside handler for theme selector
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (!showThemeSelector) return;
@@ -1145,7 +838,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     },
   };
 
-  // Determine available actions based on diagram type with better organization
   const availableActions = {
     html: ['download', 'pdf'],
     mermaid: ['download', 'pdf', 'toggle'],
@@ -1161,19 +853,17 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   return (
     <motion.div
       ref={diagramPanelRef}
-      className={`fixed inset-0 md:relative md:inset-y-0 md:right-0 bg-white shadow-2xl flex flex-col z-50 md:rounded-l-lg md:shadow-xl md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full h-full' : ''
-        }`}
+      className={`fixed inset-0 md:relative md:inset-y-0 md:right-0 bg-white shadow-2xl flex flex-col z-50 md:rounded-l-lg md:shadow-xl md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full h-full' : ''}`}
       variants={panelVariants}
       initial="initial"
       animate="animate"
       exit="exit"
       style={dynamicPanelStyle}
     >
-      {/* Enhanced Header */}
       <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center mb-2 sm:mb-0">
           <h3 className="text-base sm:text-lg font-semibold text-slate-800 dark:text-gray-100 truncate mr-2">
-            {panelTitle}
+            {renderContent.props?.children?.type === IsolatedHtml ? 'Web Page' : renderContent.props?.children?.props?.chart ? 'Mermaid Diagram' : renderContent.props?.children?.type === ChartRenderer ? 'Chart.js Graph' : renderContent.props?.children?.type === ThreeJSRenderer ? 'Three.js 3D Scene' : renderContent.props?.children?.type === 'img' ? 'Image Viewer' : renderContent.props?.children?.props?.dangerouslySetInnerHTML ? (language ? `${language.toUpperCase()} Document` : 'Document') : 'Content'}
           </h3>
           {networkError && (
             <div className="flex items-center text-amber-600 dark:text-amber-400" title="Network connection issues detected">
@@ -1216,11 +906,11 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               size="sm"
               onClick={handleDownloadContent}
               className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 dark:border-blue-700 text-xs sm:text-sm px-2 sm:px-3 py-1"
-              title={downloadButtonText}
+              title={renderContent.props?.children?.type === IsolatedHtml ? 'Download HTML' : renderContent.props?.children?.props?.chart ? 'Download PNG' : renderContent.props?.children?.type === ChartRenderer ? 'Download PNG' : renderContent.props?.children?.type === ThreeJSRenderer ? 'Download PNG' : renderContent.props?.children?.type === 'img' ? 'Download Image' : 'Download Content'}
               disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
             >
               <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-0 sm:mr-2" />
-              <span className="hidden sm:inline">{downloadButtonText}</span>
+              <span className="hidden sm:inline">{renderContent.props?.children?.type === IsolatedHtml ? 'Download HTML' : renderContent.props?.children?.props?.chart ? 'Download PNG' : renderContent.props?.children?.type === ChartRenderer ? 'Download PNG' : renderContent.props?.children?.type === ThreeJSRenderer ? 'Download PNG' : renderContent.props?.children?.type === 'img' ? 'Download Image' : 'Download Content'}</span>
             </Button>
           )}
 
@@ -1274,7 +964,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         </div>
       </div>
 
-      {/* Enhanced Content Area */}
       <div
         ref={diagramContainerRef}
         className="flex-1 overflow-auto modern-scrollbar dark:bg-gray-900 canvas-container"
