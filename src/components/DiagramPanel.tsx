@@ -113,8 +113,8 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 
         const fullHtml = `
 
-    ${sanitizedHtml}
-   `;
+${sanitizedHtml}
+`;
 
         const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
         if (iframeDoc) {
@@ -788,14 +788,13 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
           setIsDotLoading(false);
         }
       } else {
-        setDotSvg(null);
-        setDotError(null);
-        setIsDotLoading(false);
+        renderDot();
       }
     };
+  }, [diagramType, diagramContent, onMermaidError]);
 
-    renderDot();
-  }, [diagramContent, diagramType, onMermaidError]);
+  // Enhanced DOT rendering with better error handling
+
 
   // Enhanced theme selector component
   const ThemeSelector = () => (
