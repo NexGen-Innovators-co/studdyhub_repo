@@ -1,4 +1,4 @@
-// useAppData.tsx - Optimized version with lazy loading and pagination
+// useAppData.tsx - Optimized version with smooth loading and progressive data loading
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../types/Class';
@@ -6,23 +6,33 @@ import { Document, UserProfile } from '../types/Document';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// Pagination constants
+// Enhanced pagination constants for smoother loading
 const INITIAL_LOAD_LIMITS = {
-  notes: 10,
-  recordings: 5,
-  scheduleItems: 20,
-  documents: 10,
-  chatMessages: 0, // Don't load any by default - loaded per session
-  quizzes: 5
+  notes: 15, // Increased for better initial experience
+  recordings: 8,
+  scheduleItems: 25,
+  documents: 12,
+  chatMessages: 0, // Still loaded per session
+  quizzes: 8
 };
 
 const LOAD_MORE_LIMITS = {
-  notes: 20,
-  recordings: 10,
+  notes: 25,
+  recordings: 15,
   scheduleItems: 50,
   documents: 20,
   chatMessages: 50,
-  quizzes: 10
+  quizzes: 15
+};
+
+// Progressive loading priorities
+const LOADING_PRIORITIES = {
+  profile: 1,      // Highest - needed for all features
+  notes: 2,        // High - main content area
+  documents: 3,    // Medium-High - needed for chat
+  recordings: 4,   // Medium - tab-specific
+  scheduleItems: 5, // Medium - tab-specific  
+  quizzes: 6       // Lower - settings specific
 };
 
 interface DataLoadingState {
@@ -40,6 +50,11 @@ interface DataPaginationState {
   scheduleItems: { hasMore: boolean; offset: number; total: number };
   documents: { hasMore: boolean; offset: number; total: number };
   quizzes: { hasMore: boolean; offset: number; total: number };
+}
+
+interface LoadingPhase {
+  phase: 'initial' | 'core' | 'secondary' | 'complete';
+  progress: number;
 }
 
 export const useAppData = () => {
@@ -60,7 +75,7 @@ export const useAppData = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [lastUserId, setLastUserId] = useState<string | null>(null);
 
-  // New state for tracking what data has been loaded
+  // Enhanced loading state tracking
   const [dataLoaded, setDataLoaded] = useState<Set<keyof DataLoadingState>>(new Set());
   const [dataLoading, setDataLoading] = useState<DataLoadingState>({
     notes: false,
@@ -69,6 +84,12 @@ export const useAppData = () => {
     documents: false,
     quizzes: false,
     profile: false
+  });
+
+  // Progressive loading state
+  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>({
+    phase: 'initial',
+    progress: 0
   });
 
   // Pagination state
@@ -80,6 +101,7 @@ export const useAppData = () => {
     quizzes: { hasMore: true, offset: 0, total: 0 }
   });
 
+  // Real-time subscription refs
   const documentChannelRef = useRef<any>(null);
   const chatMessageChannelRef = useRef<any>(null);
   const notesChannelRef = useRef<any>(null);
@@ -87,6 +109,10 @@ export const useAppData = () => {
   const scheduleChannelRef = useRef<any>(null);
   const profileChannelRef = useRef<any>(null);
   const quizzesChannelRef = useRef<any>(null);
+
+  // Loading queue and batch processing
+  const loadingQueueRef = useRef<Set<keyof DataLoadingState>>(new Set());
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auth listener to set currentUser
   useEffect(() => {
@@ -104,14 +130,14 @@ export const useAppData = () => {
     };
   }, []);
 
-  // Load essential data when user changes
+  // Progressive data loading when user changes
   useEffect(() => {
     if (currentUser?.id && currentUser.id !== lastUserId) {
-      //console.log('User changed, loading essential data...');
+      console.log('User changed, starting progressive data loading...');
       setLastUserId(currentUser.id);
-      loadEssentialUserData(currentUser);
+      startProgressiveDataLoading(currentUser);
     } else if (!currentUser && lastUserId !== null) {
-      //console.log('User logged out, clearing data...');
+      console.log('User logged out, clearing data...');
       setLastUserId(null);
       clearAllData();
     }
@@ -142,34 +168,65 @@ export const useAppData = () => {
       documents: { hasMore: true, offset: 0, total: 0 },
       quizzes: { hasMore: true, offset: 0, total: 0 }
     });
+    setLoadingPhase({ phase: 'initial', progress: 0 });
     setLoading(false);
   };
 
-  // Load only essential data initially (profile + basic counts)
-  const loadEssentialUserData = useCallback(async (user: any) => {
+  // Progressive loading strategy
+  const startProgressiveDataLoading = useCallback(async (user: any) => {
     if (!user?.id) return;
 
-    //console.log('Loading essential user data for:', user.id);
     setLoading(true);
+    setLoadingPhase({ phase: 'initial', progress: 10 });
 
     try {
-      // Load user profile first (always needed)
-      await loadUserProfile(user);
-      
-      // Load initial notes (for sidebar preview)
-      await loadNotesPage(user.id, true);
-      
-      //console.log('Essential user data loaded successfully');
-    } catch (error) {
-      //console.error('Unexpected error loading essential user data:', error);
-      toast.error('An unexpected error occurred while loading data');
-      clearAllData();
-    } finally {
+      // Phase 1: Critical data (profile + basic UI needs)
+      await Promise.all([
+        loadUserProfile(user),
+        setupRealTimeListeners(user)
+      ]);
+
+      setLoadingPhase({ phase: 'core', progress: 30 });
+
+      // Phase 2: Core content (notes + documents - needed for most interactions)
+      await Promise.all([
+        loadNotesPage(user.id, true),
+        loadDocumentsPage(user.id, true)
+      ]);
+
+      setLoadingPhase({ phase: 'secondary', progress: 60 });
+
+      // Phase 3: Secondary data (loaded in background, non-blocking)
+      // Use setTimeout to make this truly non-blocking
+      setTimeout(async () => {
+        try {
+          await Promise.all([
+            loadRecordingsPage(user.id, true),
+            loadSchedulePage(user.id, true),
+            loadQuizzesPage(user.id, true)
+          ]);
+
+          setLoadingPhase({ phase: 'complete', progress: 100 });
+        } catch (error) {
+          console.error('Error loading secondary data:', error);
+          // Don't show error toast for secondary data - it will load when needed
+          setLoadingPhase({ phase: 'complete', progress: 100 });
+        }
+      }, 100); // Small delay to ensure UI is responsive
+
+      // UI is ready after core data
       setLoading(false);
+
+      console.log('Core user data loaded successfully, UI ready');
+    } catch (error) {
+      console.error('Error loading core user data:', error);
+      toast.error('Failed to load some data. Please refresh to try again.');
+      setLoading(false);
+      setLoadingPhase({ phase: 'complete', progress: 100 });
     }
   }, []);
 
-  // Load user profile
+  // Optimized user profile loading with better error handling
   const loadUserProfile = useCallback(async (user: any) => {
     if (dataLoaded.has('profile')) return;
 
@@ -182,10 +239,9 @@ export const useAppData = () => {
         .eq('id', user.id)
         .maybeSingle();
 
-      if (profileError) {
-        //console.error('Error loading user profile:', profileError);
-        toast.error('Failed to load user profile');
-        return;
+      if (profileError && profileError.code !== 'PGRST116') { // Ignore "not found" errors
+        console.error('Error loading user profile:', profileError);
+        // Don't throw - continue with default profile
       }
 
       if (profileData) {
@@ -204,7 +260,7 @@ export const useAppData = () => {
           updated_at: new Date(profileData.updated_at || Date.now())
         });
       } else {
-        // Create default profile
+        // Create default profile silently
         const defaultProfile = {
           id: user.id,
           email: user.email || '',
@@ -218,37 +274,48 @@ export const useAppData = () => {
           }
         };
 
-        try {
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert(defaultProfile);
-          
-          if (!insertError) {
-            setUserProfile({
-              ...defaultProfile,
-              created_at: new Date(),
-              updated_at: new Date()
-            });
+        // Set profile immediately for UI responsiveness
+        setUserProfile({
+          ...defaultProfile,
+          created_at: new Date(),
+          updated_at: new Date()
+        });
+
+        // Create in background
+        setTimeout(async () => {
+          try {
+            await supabase.from('profiles').insert(defaultProfile);
+          } catch (error) {
+            console.error('Error creating default profile (non-critical):', error);
           }
-        } catch (error) {
-          //console.error('Error creating default profile:', error);
-          setUserProfile({
-            ...defaultProfile,
-            created_at: new Date(),
-            updated_at: new Date()
-          });
-        }
+        }, 500);
       }
 
       setDataLoaded(prev => new Set([...prev, 'profile']));
     } catch (error) {
-      //console.error('Error loading profile:', error);
+      console.error('Error in loadUserProfile:', error);
+      // Create minimal profile to prevent UI blocking
+      setUserProfile({
+        id: user.id,
+        email: user.email || '',
+        full_name: '',
+        avatar_url: '',
+        learning_style: 'visual',
+        learning_preferences: {
+          explanation_style: 'detailed',
+          examples: true,
+          difficulty: 'intermediate'
+        },
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+      setDataLoaded(prev => new Set([...prev, 'profile']));
     } finally {
       setDataLoading(prev => ({ ...prev, profile: false }));
     }
   }, [dataLoaded]);
 
-  // Load notes with pagination
+  // Optimized notes loading with better performance
   const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.notes) return;
     if (!isInitial && !dataPagination.notes.hasMore) return;
@@ -259,12 +326,20 @@ export const useAppData = () => {
       const limit = isInitial ? INITIAL_LOAD_LIMITS.notes : LOAD_MORE_LIMITS.notes;
       const offset = isInitial ? 0 : dataPagination.notes.offset;
 
-      const { data, error, count } = await supabase
+      // Use more efficient query for better performance
+      const query = supabase
         .from('notes')
-        .select('*', { count: 'exact' })
+        .select('id, title, content, document_id, user_id, category, tags, created_at, updated_at, ai_summary', { count: 'exact' })
         .eq('user_id', userId)
-        .order('updated_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+        .order('updated_at', { ascending: false });
+
+      if (!isInitial) {
+        query.range(offset, offset + limit - 1);
+      } else {
+        query.limit(limit);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) throw error;
 
@@ -284,14 +359,19 @@ export const useAppData = () => {
 
         if (isInitial) {
           setNotes(formattedNotes);
+          // Set active note more intelligently
           if (formattedNotes.length > 0 && !activeNote) {
-            setActiveNote(formattedNotes[0]);
+            // Prefer the most recently updated note
+            const mostRecent = formattedNotes.sort((a, b) =>
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            )[0];
+            setActiveNote(mostRecent);
           }
         } else {
           setNotes(prev => [...prev, ...formattedNotes]);
         }
 
-        const newOffset = offset + formattedNotes.length;
+        const newOffset = isInitial ? formattedNotes.length : offset + formattedNotes.length;
         const hasMore = count ? newOffset < count : formattedNotes.length === limit;
 
         setDataPagination(prev => ({
@@ -302,73 +382,16 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'notes']));
     } catch (error) {
-      //console.error('Error loading notes:', error);
-      toast.error('Failed to load notes');
+      console.error('Error loading notes:', error);
+      if (isInitial) {
+        toast.error('Failed to load notes');
+      }
     } finally {
       setDataLoading(prev => ({ ...prev, notes: false }));
     }
   }, [dataLoading.notes, dataPagination.notes, activeNote]);
 
-  // Load recordings with pagination
-  const loadRecordingsPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.recordings) return;
-    if (!isInitial && !dataPagination.recordings.hasMore) return;
-
-    setDataLoading(prev => ({ ...prev, recordings: true }));
-
-    try {
-      const limit = isInitial ? INITIAL_LOAD_LIMITS.recordings : LOAD_MORE_LIMITS.recordings;
-      const offset = isInitial ? 0 : dataPagination.recordings.offset;
-
-      const { data, error, count } = await supabase
-        .from('class_recordings')
-        .select('*', { count: 'exact' })
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
-
-      if (error) throw error;
-
-      if (data) {
-        const formattedRecordings = data.map(recording => ({
-          id: recording.id,
-          title: recording.title || 'Untitled Recording',
-          subject: recording.subject || '',
-          date: recording.date || new Date().toISOString(),
-          duration: recording.duration || 0,
-          audioUrl: recording.audio_url || '',
-          transcript: recording.transcript || '',
-          summary: recording.summary || '',
-          createdAt: recording.created_at || new Date().toISOString(),
-          userId: recording.user_id,
-          document_id: recording.document_id
-        }));
-
-        if (isInitial) {
-          setRecordings(formattedRecordings);
-        } else {
-          setRecordings(prev => [...prev, ...formattedRecordings]);
-        }
-
-        const newOffset = offset + formattedRecordings.length;
-        const hasMore = count ? newOffset < count : formattedRecordings.length === limit;
-
-        setDataPagination(prev => ({
-          ...prev,
-          recordings: { hasMore, offset: newOffset, total: count || 0 }
-        }));
-      }
-
-      setDataLoaded(prev => new Set([...prev, 'recordings']));
-    } catch (error) {
-      //console.error('Error loading recordings:', error);
-      toast.error('Failed to load recordings');
-    } finally {
-      setDataLoading(prev => ({ ...prev, recordings: false }));
-    }
-  }, [dataLoading.recordings, dataPagination.recordings]);
-
-  // Load documents with pagination
+  // Enhanced documents loading for chat dependency
   const loadDocumentsPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.documents) return;
     if (!isInitial && !dataPagination.documents.hasMore) return;
@@ -429,7 +452,66 @@ export const useAppData = () => {
     }
   }, [dataLoading.documents, dataPagination.documents]);
 
-  // Load schedule items with pagination
+  // Optimized recordings loading
+  const loadRecordingsPage = useCallback(async (userId: string, isInitial = false) => {
+    if (dataLoading.recordings) return;
+    if (!isInitial && !dataPagination.recordings.hasMore) return;
+
+    setDataLoading(prev => ({ ...prev, recordings: true }));
+
+    try {
+      const limit = isInitial ? INITIAL_LOAD_LIMITS.recordings : LOAD_MORE_LIMITS.recordings;
+      const offset = isInitial ? 0 : dataPagination.recordings.offset;
+
+      const { data, error, count } = await supabase
+        .from('class_recordings')
+        .select('*', { count: 'exact' })
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) throw error;
+
+      if (data) {
+        const formattedRecordings = data.map(recording => ({
+          id: recording.id,
+          title: recording.title || 'Untitled Recording',
+          subject: recording.subject || '',
+          date: recording.date || new Date().toISOString(),
+          duration: recording.duration || 0,
+          audioUrl: recording.audio_url || '',
+          transcript: recording.transcript || '',
+          summary: recording.summary || '',
+          createdAt: recording.created_at || new Date().toISOString(),
+          userId: recording.user_id,
+          document_id: recording.document_id
+        }));
+
+        if (isInitial) {
+          setRecordings(formattedRecordings);
+        } else {
+          setRecordings(prev => [...prev, ...formattedRecordings]);
+        }
+
+        const newOffset = offset + formattedRecordings.length;
+        const hasMore = count ? newOffset < count : formattedRecordings.length === limit;
+
+        setDataPagination(prev => ({
+          ...prev,
+          recordings: { hasMore, offset: newOffset, total: count || 0 }
+        }));
+      }
+
+      setDataLoaded(prev => new Set([...prev, 'recordings']));
+    } catch (error) {
+      console.error('Error loading recordings:', error);
+      // Don't show error for background loading
+    } finally {
+      setDataLoading(prev => ({ ...prev, recordings: false }));
+    }
+  }, [dataLoading.recordings, dataPagination.recordings]);
+
+  // Optimized schedule loading
   const loadSchedulePage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.scheduleItems) return;
     if (!isInitial && !dataPagination.scheduleItems.hasMore) return;
@@ -481,14 +563,14 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
     } catch (error) {
-      //console.error('Error loading schedule items:', error);
-      toast.error('Failed to load schedule');
+      console.error('Error loading schedule items:', error);
+      // Don't show error for background loading
     } finally {
       setDataLoading(prev => ({ ...prev, scheduleItems: false }));
     }
   }, [dataLoading.scheduleItems, dataPagination.scheduleItems]);
 
-  // Load quizzes with pagination
+  // Optimized quizzes loading
   const loadQuizzesPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.quizzes) return;
     if (!isInitial && !dataPagination.quizzes.hasMore) return;
@@ -541,16 +623,44 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'quizzes']));
     } catch (error) {
-      //console.error('Error loading quizzes:', error);
-      toast.error('Failed to load quizzes');
+      console.error('Error loading quizzes:', error);
+      // Don't show error for background loading
     } finally {
       setDataLoading(prev => ({ ...prev, quizzes: false }));
     }
   }, [dataLoading.quizzes, dataPagination.quizzes]);
 
-  // Lazy loading functions for each data type
+  // Batch loading for better performance
+  const queueDataLoad = useCallback((dataType: keyof DataLoadingState) => {
+    loadingQueueRef.current.add(dataType);
+
+    // Clear existing timeout
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+    }
+
+    // Batch process after short delay
+    loadingTimeoutRef.current = setTimeout(() => {
+      const toLoad = Array.from(loadingQueueRef.current);
+      loadingQueueRef.current.clear();
+
+      // Process in priority order
+      const sorted = toLoad.sort((a, b) =>
+        LOADING_PRIORITIES[a] - LOADING_PRIORITIES[b]
+      );
+
+      sorted.forEach((dataType, index) => {
+        // Stagger loads to prevent overwhelming
+        setTimeout(() => {
+          loadDataIfNeeded(dataType);
+        }, index * 50);
+      });
+    }, 100);
+  }, []);
+
+  // Enhanced lazy loading
   const loadDataIfNeeded = useCallback((dataType: keyof DataLoadingState) => {
-    if (!currentUser?.id || dataLoaded.has(dataType)) return;
+    if (!currentUser?.id || dataLoaded.has(dataType) || dataLoading[dataType]) return;
 
     switch (dataType) {
       case 'recordings':
@@ -567,12 +677,14 @@ export const useAppData = () => {
         break;
       case 'notes':
         loadNotesPage(currentUser.id, true);
+        break;
       case 'profile':
         if (!dataLoading.profile) {
           loadUserProfile(currentUser);
-        }  
+        }
+        break;
     }
-  }, [currentUser, dataLoaded, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage]);
+  }, [currentUser, dataLoaded, dataLoading, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile]);
 
   // Load more functions for pagination
   const loadMoreNotes = useCallback(() => {
@@ -605,53 +717,68 @@ export const useAppData = () => {
     }
   }, [currentUser, loadQuizzesPage]);
 
-  // Auto-load data when tabs are activated
+  // Smart tab-based loading with batching
   useEffect(() => {
+    if (loadingPhase.phase === 'complete') return;
+
     switch (activeTab) {
       case 'recordings':
-        loadDataIfNeeded('recordings');
+        queueDataLoad('recordings');
+        queueDataLoad('quizzes');
         break;
       case 'schedule':
-        loadDataIfNeeded('scheduleItems');
+        queueDataLoad('scheduleItems');
         break;
       case 'documents':
-        loadDataIfNeeded('documents');
+        queueDataLoad('documents');
         break;
-      // Chat messages are loaded per session, not globally
-      // Notes are loaded initially
+      case 'settings':
+        queueDataLoad('quizzes');
+        break;
+      case 'chat':
+        // Chat needs documents for context
+        queueDataLoad('documents');
+        break;
+      default:
+        // Notes tab - data already loaded in core phase
+        break;
     }
-  }, [activeTab, loadDataIfNeeded]);
+  }, [activeTab, loadingPhase.phase, queueDataLoad]);
 
-  useEffect(() => {
-    return () => {
-      [documentChannelRef, chatMessageChannelRef, notesChannelRef,
-        recordingsChannelRef, scheduleChannelRef, profileChannelRef,
-        quizzesChannelRef].forEach(channelRef => {
-          if (channelRef.current) {
-            supabase.removeChannel(channelRef.current);
-            channelRef.current = null;
-          }
-        });
-    };
+  // Enhanced real-time listeners setup
+  const setupRealTimeListeners = useCallback(async (user: any) => {
+    // Clean up existing listeners
+    [documentChannelRef, chatMessageChannelRef, notesChannelRef,
+      recordingsChannelRef, scheduleChannelRef, profileChannelRef,
+      quizzesChannelRef].forEach(channelRef => {
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current);
+          channelRef.current = null;
+        }
+      });
+
+    if (!user?.id) return;
+
+    // Set up all listeners in parallel for better performance
+    await Promise.all([
+      setupDocumentListener(user),
+      setupChatMessageListener(user),
+      setupNotesListener(user),
+      setupRecordingsListener(user),
+      setupScheduleListener(user),
+      setupProfileListener(user),
+      setupQuizzesListener(user)
+    ]);
   }, []);
 
-  // Real-time listener for documents
-  useEffect(() => {
-    const setupDocumentListener = () => {
-      if (documentChannelRef.current) {
-        supabase.removeChannel(documentChannelRef.current);
-        documentChannelRef.current = null;
-      }
-
-      if (!currentUser) {
-        return;
-      }
-
+  // Optimized real-time listeners with better error handling
+  const setupDocumentListener = useCallback(async (user: any) => {
+    try {
       const channel = supabase
-        .channel('public:documents')
+        .channel(`documents_${user.id}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'documents', filter: `user_id=eq.${currentUser.id}` },
+          { event: '*', schema: 'public', table: 'documents', filter: `user_id=eq.${user.id}` },
           (payload) => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const newDoc = payload.new as any;
@@ -690,47 +817,28 @@ export const useAppData = () => {
             } else if (payload.eventType === 'DELETE') {
               const deletedId = payload.old.id;
               setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== deletedId));
-              toast.info('Document deleted from list.');
             }
           }
         )
         .subscribe();
 
       documentChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up document listener:', error);
+    }
+  }, []);
 
-      return () => {
-        if (documentChannelRef.current) {
-          supabase.removeChannel(documentChannelRef.current);
-          documentChannelRef.current = null;
-        }
-      };
-    };
-
-    setupDocumentListener();
-  }, [currentUser, setDocuments]);
-
-  // Real-time listener for chat messages
-  useEffect(() => {
-    const setupChatMessageListener = () => {
-      if (chatMessageChannelRef.current) {
-        supabase.removeChannel(chatMessageChannelRef.current);
-        chatMessageChannelRef.current = null;
-      }
-
-      if (!currentUser) {
-        setChatMessages([]);
-        return;
-      }
-
+  const setupChatMessageListener = useCallback(async (user: any) => {
+    try {
       const channel = supabase
-        .channel(`chat_messages_${currentUser.id}`)
+        .channel(`chat_messages_${user.id}`)
         .on(
           'postgres_changes',
           {
             event: '*',
             schema: 'public',
             table: 'chat_messages',
-            filter: `user_id=eq.${currentUser.id}`
+            filter: `user_id=eq.${user.id}`
           },
           (payload) => {
             if (payload.eventType === 'INSERT') {
@@ -745,15 +853,12 @@ export const useAppData = () => {
                 imageUrl: payload.new.image_url || undefined,
                 imageMimeType: payload.new.image_mime_type || undefined,
                 session_id: payload.new.session_id,
-                // originalUserMessageContent: payload.new.original_user_message_content || '',
                 has_been_displayed: payload.new.has_been_displayed || false
               };
 
               setChatMessages(prevMessages => {
                 const exists = prevMessages.some(msg => msg.id === newMessage.id);
-                if (exists) {
-                  return prevMessages;
-                }
+                if (exists) return prevMessages;
 
                 const updatedMessages = [...prevMessages, newMessage].sort(
                   (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
@@ -773,65 +878,37 @@ export const useAppData = () => {
                 imageUrl: payload.new.image_url || undefined,
                 imageMimeType: payload.new.image_mime_type || undefined,
                 session_id: payload.new.session_id,
-                // originalUserMessageContent: payload.new.original_user_message_content || '',
                 has_been_displayed: payload.new.has_been_displayed || false
               };
 
               setChatMessages(prevMessages => {
-                const updatedMessages = prevMessages.map(msg =>
+                return prevMessages.map(msg =>
                   msg.id === updatedMessage.id ? updatedMessage : msg
                 ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-                return updatedMessages;
               });
             }
             else if (payload.eventType === 'DELETE') {
               setChatMessages(prevMessages => {
-                const filteredMessages = prevMessages.filter(msg => msg.id !== payload.old.id);
-                return filteredMessages;
+                return prevMessages.filter(msg => msg.id !== payload.old.id);
               });
             }
           }
         )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            //console.log('Successfully subscribed to chat messages real-time updates');
-          } else if (status === 'CHANNEL_ERROR') {
-            //console.error('Failed to subscribe to chat messages real-time updates');
-            toast.error('Failed to connect to real-time chat updates');
-          }
-        });
+        .subscribe();
 
       chatMessageChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up chat message listener:', error);
+    }
+  }, []);
 
-      return () => {
-        if (chatMessageChannelRef.current) {
-          supabase.removeChannel(chatMessageChannelRef.current);
-          chatMessageChannelRef.current = null;
-        }
-      };
-    };
-
-    return setupChatMessageListener();
-  }, [currentUser, setChatMessages]);
-
-  // Real-time listener for Notes
-  useEffect(() => {
-    const setupNotesListener = () => {
-      if (notesChannelRef.current) {
-        supabase.removeChannel(notesChannelRef.current);
-        notesChannelRef.current = null;
-      }
-
-      if (!currentUser) {
-        return;
-      }
-
+  const setupNotesListener = useCallback(async (user: any) => {
+    try {
       const channel = supabase
-        .channel('public:notes')
+        .channel(`notes_${user.id}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'notes', filter: `user_id=eq.${currentUser.id}` },
+          { event: '*', schema: 'public', table: 'notes', filter: `user_id=eq.${user.id}` },
           (payload) => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const newNote = payload.new as any;
@@ -867,35 +944,18 @@ export const useAppData = () => {
         .subscribe();
 
       notesChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up notes listener:', error);
+    }
+  }, []);
 
-      return () => {
-        if (notesChannelRef.current) {
-          supabase.removeChannel(notesChannelRef.current);
-          notesChannelRef.current = null;
-        }
-      };
-    };
-
-    setupNotesListener();
-  }, [currentUser, setNotes]);
-
-  // Real-time listener for Recordings
-  useEffect(() => {
-    const setupRecordingsListener = () => {
-      if (recordingsChannelRef.current) {
-        supabase.removeChannel(recordingsChannelRef.current);
-        recordingsChannelRef.current = null;
-      }
-
-      if (!currentUser) {
-        return;
-      }
-
+  const setupRecordingsListener = useCallback(async (user: any) => {
+    try {
       const channel = supabase
-        .channel('public:class_recordings')
+        .channel(`recordings_${user.id}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'class_recordings', filter: `user_id=eq.${currentUser.id}` },
+          { event: '*', schema: 'public', table: 'class_recordings', filter: `user_id=eq.${user.id}` },
           (payload) => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const newRecording = payload.new as any;
@@ -932,35 +992,18 @@ export const useAppData = () => {
         .subscribe();
 
       recordingsChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up recordings listener:', error);
+    }
+  }, []);
 
-      return () => {
-        if (recordingsChannelRef.current) {
-          supabase.removeChannel(recordingsChannelRef.current);
-          recordingsChannelRef.current = null;
-        }
-      };
-    };
-
-    setupRecordingsListener();
-  }, [currentUser, setRecordings]);
-
-  // Real-time listener for Schedule Items
-  useEffect(() => {
-    const setupScheduleListener = () => {
-      if (scheduleChannelRef.current) {
-        supabase.removeChannel(scheduleChannelRef.current);
-        scheduleChannelRef.current = null;
-      }
-
-      if (!currentUser) {
-        return;
-      }
-
+  const setupScheduleListener = useCallback(async (user: any) => {
+    try {
       const channel = supabase
-        .channel('public:schedule_items')
+        .channel(`schedule_${user.id}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'schedule_items', filter: `user_id=eq.${currentUser.id}` },
+          { event: '*', schema: 'public', table: 'schedule_items', filter: `user_id=eq.${user.id}` },
           (payload) => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const newItem = payload.new as any;
@@ -997,41 +1040,24 @@ export const useAppData = () => {
         .subscribe();
 
       scheduleChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up schedule listener:', error);
+    }
+  }, []);
 
-      return () => {
-        if (scheduleChannelRef.current) {
-          supabase.removeChannel(scheduleChannelRef.current);
-          scheduleChannelRef.current = null;
-        }
-      };
-    };
-
-    setupScheduleListener();
-  }, [currentUser, setScheduleItems]);
-
-  // Real-time listener for User Profile
-  useEffect(() => {
-    const setupProfileListener = () => {
-      if (profileChannelRef.current) {
-        supabase.removeChannel(profileChannelRef.current);
-        profileChannelRef.current = null;
-      }
-
-      if (!currentUser) {
-        return;
-      }
-
+  const setupProfileListener = useCallback(async (user: any) => {
+    try {
       const channel = supabase
-        .channel('public:profiles')
+        .channel(`profile_${user.id}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${currentUser.id}` },
+          { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
           (payload) => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const newProfile = payload.new as any;
               setUserProfile({
                 id: newProfile.id,
-                email: newProfile.email || currentUser.email || '',
+                email: newProfile.email || user.email || '',
                 full_name: newProfile.full_name || '',
                 avatar_url: newProfile.avatar_url || '',
                 learning_style: (newProfile.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
@@ -1049,35 +1075,18 @@ export const useAppData = () => {
         .subscribe();
 
       profileChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up profile listener:', error);
+    }
+  }, []);
 
-      return () => {
-        if (profileChannelRef.current) {
-          supabase.removeChannel(profileChannelRef.current);
-          profileChannelRef.current = null;
-        }
-      };
-    };
-
-    setupProfileListener();
-  }, [currentUser, setUserProfile]);
-
-  // Real-time listener for Quizzes
-  useEffect(() => {
-    const setupQuizzesListener = () => {
-      if (quizzesChannelRef.current) {
-        supabase.removeChannel(quizzesChannelRef.current);
-        quizzesChannelRef.current = null;
-      }
-
-      if (!currentUser) {
-        return;
-      }
-
+  const setupQuizzesListener = useCallback(async (user: any) => {
+    try {
       const channel = supabase
-        .channel('public:quizzes')
+        .channel(`quizzes_${user.id}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'quizzes', filter: `user_id=eq.${currentUser.id}` },
+          { event: '*', schema: 'public', table: 'quizzes', filter: `user_id=eq.${user.id}` },
           (payload) => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const newQuiz = payload.new as any;
@@ -1115,24 +1124,48 @@ export const useAppData = () => {
         .subscribe();
 
       quizzesChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up quizzes listener:', error);
+    }
+  }, []);
 
-      return () => {
-        if (quizzesChannelRef.current) {
-          supabase.removeChannel(quizzesChannelRef.current);
-          quizzesChannelRef.current = null;
-        }
-      };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear timeouts
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+
+      // Clear channels
+      [documentChannelRef, chatMessageChannelRef, notesChannelRef,
+        recordingsChannelRef, scheduleChannelRef, profileChannelRef,
+        quizzesChannelRef].forEach(channelRef => {
+          if (channelRef.current) {
+            supabase.removeChannel(channelRef.current);
+            channelRef.current = null;
+          }
+        });
     };
+  }, []);
 
-    setupQuizzesListener();
-  }, [currentUser, setQuizzes]);
-
+  // Computed values
   const filteredNotes = notes.filter(note => {
     const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       note.content.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  // Enhanced loading state - show progress and what's loading
+  const enhancedLoading = loading || loadingPhase.phase !== 'complete';
+  const loadingProgress = loadingPhase.progress;
+  const loadingMessage = {
+    'initial': 'Connecting to your account...',
+    'core': 'Loading your notes and documents...',
+    'secondary': 'Loading additional content...',
+    'complete': 'Ready!'
+  }[loadingPhase.phase];
 
   return {
     // State
@@ -1149,13 +1182,16 @@ export const useAppData = () => {
     activeTab,
     isAILoading,
     filteredNotes,
-    loading,
+    loading: enhancedLoading,
     quizzes,
     currentUser,
 
-    // Loading states
+    // Enhanced loading states
     dataLoading,
     dataPagination,
+    loadingPhase,
+    loadingProgress,
+    loadingMessage,
 
     // Setters
     setNotes,
