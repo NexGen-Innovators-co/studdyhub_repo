@@ -331,7 +331,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
 
   // Fallback for inline code or unhandled languages
   return (
-    <code className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md font-mono text-base md:text-lg border border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700" {...props}>
+    <code className=" text-purple-500 text-lg px-2 py-1 rounded-md font-mono text-base md:text-lg border border-none  dark:text-purple-500 dark:border-none" {...props}>
       {children}
     </code>
   );
