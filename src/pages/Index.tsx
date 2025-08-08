@@ -1,4 +1,4 @@
-// Index.tsx - Optimized for reliable file processing and error handling
+// Index.tsx - Enhanced with smooth progressive loading and better UX
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
@@ -18,6 +18,109 @@ import { User } from '@supabase/supabase-js';
 import { generateId } from '@/utils/helpers';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
 
+// Enhanced loading component with progress
+const LoadingScreen = ({
+  progress,
+  message,
+  phase
+}: {
+  progress: number;
+  message: string;
+  phase: 'initial' | 'core' | 'secondary' | 'complete';
+}) => {
+  const [dots, setDots] = useState('');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots(prev => prev.length >= 3 ? '' : prev + '.');
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getPhaseIcon = () => {
+    switch (phase) {
+      case 'initial':
+        return '🔐';
+      case 'core':
+        return '📝';
+      case 'secondary':
+        return '⚡';
+      default:
+        return '✅';
+    }
+  };
+
+  return (
+    <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
+      <div className="text-center max-w-md mx-auto p-8">
+        {/* Logo */}
+        <div className="mb-6">
+          <img
+            src='/siteimage.png'
+            className="h-20 w-20 mx-auto animate-spin"
+            style={{
+              animation: phase === 'complete' ? 'none' : 'spin 2s linear infinite'
+            }}
+          />
+        </div>
+
+        {/* Phase indicator */}
+        <div className="text-4xl mb-4">{getPhaseIcon()}</div>
+
+        {/* Progress bar */}
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4 overflow-hidden">
+          <div
+            className={`h-full transition-all duration-500 ease-out ${progress === 100
+                ? 'bg-green-500'
+                : 'bg-gradient-to-r from-blue-500 to-purple-600'
+              }`}
+            style={{
+              width: `${progress}%`,
+              background: progress === 100
+                ? '#10b981'
+                : `linear-gradient(90deg, #3b82f6 0%,rgb(92, 146, 246) ${Math.min(progress, 100)}%)`
+            }}
+          />
+        </div>
+
+        {/* Progress percentage */}
+        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+          {progress}%
+        </div>
+
+        {/* Loading message */}
+        <p className="text-slate-600 dark:text-gray-300 text-lg mb-2">
+          {message}{dots}
+        </p>
+
+        {/* Phase description */}
+        <p className="text-sm text-slate-500 dark:text-gray-400">
+          {phase === 'initial' && 'Setting up your workspace...'}
+          {phase === 'core' && 'Loading essential content...'}
+          {phase === 'secondary' && 'Getting everything ready...'}
+          {phase === 'complete' && 'All set! Welcome back!'}
+        </p>
+
+        {/* Skip button for secondary loading */}
+        {phase === 'secondary' && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={() => {
+              // This would be passed from parent if needed
+              console.log('Skip secondary loading');
+            }}
+          >
+            Continue anyway
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Enhanced interface definitions
 interface ChatSession {
   id: string;
   title: string;
@@ -27,6 +130,7 @@ interface ChatSession {
   document_ids: string[];
   message_count?: number;
 }
+
 interface MessagePart {
   text?: string;
   inlineData?: {
@@ -34,7 +138,7 @@ interface MessagePart {
     data: string;
   };
 }
-// In Index.tsx, near the top
+
 interface FileData {
   name: string;
   mimeType: string;
@@ -45,47 +149,39 @@ interface FileData {
   processing_status: string;
   processing_error: string | null;
 }
-// Optimized constants for better performance and reliability
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB max per file
-const MAX_FILES_PER_MESSAGE = 10; // Reasonable limit for concurrent processing
-const MAX_TOTAL_CONTEXT_SIZE = 2 * 1024 * 1024; // 2MB total context
-const MAX_SINGLE_FILE_CONTEXT = 500 * 1024; // 500KB per file in context
-const MAX_HISTORY_MESSAGES = 30; // Reduced for better performance
+
+// Optimized constants
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+const MAX_FILES_PER_MESSAGE = 10;
+const MAX_TOTAL_CONTEXT_SIZE = 2 * 1024 * 1024;
+const MAX_SINGLE_FILE_CONTEXT = 500 * 1024;
+const MAX_HISTORY_MESSAGES = 30;
 const CHAT_SESSIONS_PER_PAGE = 15;
 const CHAT_MESSAGES_PER_PAGE = 25;
 
-// File type validation and processing configuration
+// Enhanced file type configuration
 const SUPPORTED_FILE_TYPES = {
-  // Images
   'image/jpeg': { type: 'image', maxSize: 20 * 1024 * 1024, priority: 'high' },
   'image/png': { type: 'image', maxSize: 20 * 1024 * 1024, priority: 'high' },
   'image/gif': { type: 'image', maxSize: 10 * 1024 * 1024, priority: 'medium' },
   'image/webp': { type: 'image', maxSize: 15 * 1024 * 1024, priority: 'high' },
   'image/svg+xml': { type: 'image', maxSize: 5 * 1024 * 1024, priority: 'medium' },
-
-  // Documents
   'application/pdf': { type: 'document', maxSize: 50 * 1024 * 1024, priority: 'high' },
   'application/msword': { type: 'document', maxSize: 25 * 1024 * 1024, priority: 'medium' },
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { type: 'document', maxSize: 25 * 1024 * 1024, priority: 'high' },
   'application/vnd.ms-excel': { type: 'spreadsheet', maxSize: 20 * 1024 * 1024, priority: 'medium' },
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { type: 'spreadsheet', maxSize: 20 * 1024 * 1024, priority: 'high' },
-
-  // Text files (fast processing)
   'text/plain': { type: 'text', maxSize: 10 * 1024 * 1024, priority: 'high', fastProcess: true },
   'text/csv': { type: 'csv', maxSize: 15 * 1024 * 1024, priority: 'high', fastProcess: true },
   'text/markdown': { type: 'text', maxSize: 5 * 1024 * 1024, priority: 'high', fastProcess: true },
   'application/json': { type: 'json', maxSize: 5 * 1024 * 1024, priority: 'medium', fastProcess: true },
-
-  // Code files
   'text/javascript': { type: 'code', maxSize: 2 * 1024 * 1024, priority: 'medium', fastProcess: true },
   'text/typescript': { type: 'code', maxSize: 2 * 1024 * 1024, priority: 'medium', fastProcess: true },
   'text/css': { type: 'code', maxSize: 2 * 1024 * 1024, priority: 'low', fastProcess: true },
   'text/html': { type: 'code', maxSize: 5 * 1024 * 1024, priority: 'medium', fastProcess: true }
 };
 
-/**
- * Optimized file validation with detailed error reporting
- */
+// Enhanced file validation
 const validateFileForProcessing = (file: File): {
   valid: boolean;
   error?: string;
@@ -110,12 +206,10 @@ const validateFileForProcessing = (file: File): {
 
   const warnings: string[] = [];
 
-  // Add warnings for large files
   if (file.size > config.maxSize * 0.7) {
     warnings.push('Large file may take longer to process');
   }
 
-  // Add warnings for complex file types
   if (['spreadsheet', 'document'].includes(config.type) && file.size > 10 * 1024 * 1024) {
     warnings.push('Complex document structure may require additional processing time');
   }
@@ -123,9 +217,7 @@ const validateFileForProcessing = (file: File): {
   return { valid: true, warnings, config };
 };
 
-/**
- * Optimized file processing with progress tracking
- */
+// Enhanced file processing
 const processFileForUpload = async (file: File): Promise<{
   name: string;
   mimeType: string;
@@ -152,7 +244,6 @@ const processFileForUpload = async (file: File): Promise<{
   }
 
   try {
-    // For text files, process directly for better performance
     if (validation.config?.fastProcess) {
       const textContent = await file.text();
       return {
@@ -169,7 +260,6 @@ const processFileForUpload = async (file: File): Promise<{
       };
     }
 
-    // For binary files, convert to base64
     const arrayBuffer = await file.arrayBuffer();
     const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
@@ -179,7 +269,7 @@ const processFileForUpload = async (file: File): Promise<{
       data: base64Data,
       type: validation.config.type,
       size: file.size,
-      content: null, // Will be processed by edge function
+      content: null,
       processing_status: 'pending',
       processing_error: null
     };
@@ -198,14 +288,11 @@ const processFileForUpload = async (file: File): Promise<{
   }
 };
 
-/**
- * Smart content size estimation and management
- */
+// Enhanced context optimization
 const estimateContextSize = (content: any[]): number => {
   return JSON.stringify(content).length;
 };
 
-// Update the optimizeContextForProcessing function signature
 const optimizeContextForProcessing = (
   chatHistory: Array<{ role: string; parts: MessagePart[] }>,
   currentContext: string,
@@ -214,12 +301,10 @@ const optimizeContextForProcessing = (
   let totalSize = 0;
   const optimizedHistory: Array<{ role: string; parts: MessagePart[] }> = [];
 
-  // Add current context and files first (highest priority)
   const currentContent: Array<{ role: string; parts: MessagePart[] }> = [
     { role: 'user', parts: [{ text: currentContext }] }
   ];
 
-  // Add file content
   files.forEach(file => {
     if (file.content) {
       currentContent[0].parts.push({ text: `[File: ${file.name}]\n${file.content}` });
@@ -232,7 +317,6 @@ const optimizeContextForProcessing = (
 
   totalSize = estimateContextSize(currentContent);
 
-  // Add history messages from most recent, staying within limits
   for (let i = chatHistory.length - 1; i >= 0 && totalSize < MAX_TOTAL_CONTEXT_SIZE; i--) {
     const messageSize = estimateContextSize([chatHistory[i]]);
 
@@ -247,11 +331,22 @@ const optimizeContextForProcessing = (
   return [...optimizedHistory, ...currentContent];
 };
 
+const extractFirstSentence = (text: string): string => {
+  if (!text || text.trim() === '') return 'New Chat';
+
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  if (sentences.length === 0) return 'New Chat';
+
+  const firstSentence = sentences[0].trim();
+  return firstSentence.length > 100 ? firstSentence.substring(0, 97) + '...' : firstSentence;
+};
+
 const Index = () => {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const location = new URL(window.location.href);
 
+  // Theme management
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
@@ -275,6 +370,7 @@ const Index = () => {
     setCurrentTheme(theme);
   }, []);
 
+  // Enhanced app data with progressive loading
   const {
     notes,
     recordings,
@@ -292,6 +388,9 @@ const Index = () => {
     quizzes,
     dataLoading: specificDataLoading,
     dataPagination,
+    loadingPhase,
+    loadingProgress,
+    loadingMessage,
     setNotes,
     setRecordings,
     setScheduleItems,
@@ -312,7 +411,7 @@ const Index = () => {
     loadMoreQuizzes,
   } = useAppData();
 
-  // Get audio processing handlers from useAudioProcessing hook
+  // Audio processing
   const {
     handleGenerateNoteFromAudio,
     triggerAudioProcessing,
@@ -321,23 +420,28 @@ const Index = () => {
     onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r))
   });
 
+  // Chat session management
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [activeChatSessionId, setActiveChatSessionId] = useState<string | null>(null);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
   const [isSubmittingUserMessage, setIsSubmittingUserMessage] = useState(false);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
+
+  // Enhanced file processing state
   const [fileProcessingProgress, setFileProcessingProgress] = useState<{
     processing: boolean;
     completed: number;
     total: number;
     currentFile?: string;
+    phase?: 'validating' | 'processing' | 'uploading' | 'complete';
   }>({ processing: false, completed: 0, total: 0 });
 
   const [chatSessionsLoadedCount, setChatSessionsLoadedCount] = useState(CHAT_SESSIONS_PER_PAGE);
   const [hasMoreChatSessions, setHasMoreChatSessions] = useState(true);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
 
+  // Enhanced tab management
   const currentActiveTab = useMemo(() => {
     const path = location.pathname.split('/')[1];
     switch (path) {
@@ -355,28 +459,35 @@ const Index = () => {
     setActiveTab(currentActiveTab);
   }, [currentActiveTab, setActiveTab]);
 
-  // Auto-load data when switching tabs
+  // Smart data loading based on tab activation
   useEffect(() => {
-    switch (currentActiveTab) {
-      case 'recordings':
-        loadDataIfNeeded('recordings');
-        loadDataIfNeeded('quizzes');
-        break;
-      case 'schedule':
-        loadDataIfNeeded('scheduleItems');
-        break;
-      case 'documents':
-        loadDataIfNeeded('documents');
-        break;
-      case 'settings':
-        loadDataIfNeeded('quizzes');
-        break;
-      default:
-        loadDataIfNeeded('notes');
-        break;
+    // Only trigger loading if we're past initial loading phase
+    if (loadingPhase.phase === 'complete') {
+      switch (currentActiveTab) {
+        case 'recordings':
+          loadDataIfNeeded('recordings');
+          loadDataIfNeeded('quizzes');
+          break;
+        case 'schedule':
+          loadDataIfNeeded('scheduleItems');
+          break;
+        case 'documents':
+          loadDataIfNeeded('documents');
+          break;
+        case 'settings':
+          loadDataIfNeeded('quizzes');
+          break;
+        case 'chat':
+          loadDataIfNeeded('documents');
+          break;
+        default:
+          loadDataIfNeeded('notes');
+          break;
+      }
     }
-  }, [currentActiveTab, loadDataIfNeeded]);
+  }, [currentActiveTab, loadingPhase.phase, loadDataIfNeeded]);
 
+  // Chat session loading
   const loadChatSessions = useCallback(async () => {
     try {
       if (!user) return;
@@ -405,22 +516,19 @@ const Index = () => {
       console.error('Error loading chat sessions:', error);
       toast.error('Failed to load chat sessions.');
     }
-  }, [user, setChatSessions, chatSessionsLoadedCount]);
+  }, [user, chatSessionsLoadedCount]);
 
   const handleLoadMoreChatSessions = useCallback(() => {
     setChatSessionsLoadedCount(prevCount => prevCount + CHAT_SESSIONS_PER_PAGE);
   }, []);
 
+  // Chat message filtering and loading
   const filteredChatMessages = useMemo(() => {
-    if (!activeChatSessionId) {
-      return [];
-    }
+    if (!activeChatSessionId) return [];
 
-    const filtered = allChatMessages
+    return allChatMessages
       .filter(msg => msg.session_id === activeChatSessionId)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-    return filtered;
   }, [allChatMessages, activeChatSessionId]);
 
   const loadSessionMessages = useCallback(async (sessionId: string) => {
@@ -468,6 +576,7 @@ const Index = () => {
     }
   }, [user, setChatMessages]);
 
+  // Enhanced message loading with better UX
   const handleLoadOlderChatMessages = useCallback(async () => {
     if (!activeChatSessionId || !user || filteredChatMessages.length === 0) return;
 
@@ -515,20 +624,22 @@ const Index = () => {
     }
   }, [activeChatSessionId, user, filteredChatMessages, setChatMessages]);
 
+  // Load data when conditions are met
   useEffect(() => {
-    if (user) {
+    if (user && loadingPhase.phase === 'complete') {
       loadChatSessions();
     }
-  }, [user, loadChatSessions, chatSessionsLoadedCount]);
+  }, [user, loadChatSessions, chatSessionsLoadedCount, loadingPhase.phase]);
 
   useEffect(() => {
-    if (activeChatSessionId) {
+    if (activeChatSessionId && loadingPhase.phase === 'complete') {
       loadSessionMessages(activeChatSessionId);
-    } else {
+    } else if (!activeChatSessionId) {
       setHasMoreMessages(false);
     }
-  }, [activeChatSessionId, user, loadSessionMessages]);
+  }, [activeChatSessionId, user, loadSessionMessages, loadingPhase.phase]);
 
+  // Chat session document management
   useEffect(() => {
     if (activeChatSessionId && chatSessions.length > 0) {
       const currentSession = chatSessions.find(s => s.id === activeChatSessionId);
@@ -538,8 +649,9 @@ const Index = () => {
     } else if (!activeChatSessionId) {
       setSelectedDocumentIds([]);
     }
-  }, [activeChatSessionId, chatSessions, setSelectedDocumentIds]);
+  }, [activeChatSessionId, chatSessions]);
 
+  // Enhanced chat session creation
   const createNewChatSession = useCallback(async (): Promise<string | null> => {
     try {
       if (!user) {
@@ -577,7 +689,37 @@ const Index = () => {
       setSelectedDocumentIds(newSession.document_ids || []);
       setHasMoreMessages(false);
 
-      toast.success('New chat session created with selected documents.');
+      // Auto-update title based on first AI response
+      const subscription = supabase
+        .channel(`chat_messages:session:${newSession.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `session_id=eq.${newSession.id}` },
+          async (payload) => {
+            if (payload.new.role === 'assistant') {
+              const firstSentence = extractFirstSentence(payload.new.content);
+              try {
+                const { error: updateError } = await supabase
+                  .from('chat_sessions')
+                  .update({ title: firstSentence })
+                  .eq('id', newSession.id)
+                  .eq('user_id', user.id);
+
+                if (updateError) throw updateError;
+
+                setChatSessions(prev =>
+                  prev.map(s => (s.id === newSession.id ? { ...s, title: firstSentence } : s))
+                );
+              } catch (updateError) {
+                console.error('Error updating session title:', updateError);
+              }
+              subscription.unsubscribe();
+            }
+          }
+        )
+        .subscribe();
+
+      toast.success('New chat session created!');
       return newSession.id;
     } catch (error: any) {
       console.error('Error creating new session:', error);
@@ -586,6 +728,7 @@ const Index = () => {
     }
   }, [user, selectedDocumentIds, setChatSessions, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId, setSelectedDocumentIds]);
 
+  // Enhanced session management
   const deleteChatSession = useCallback(async (sessionId: string) => {
     try {
       if (!user) return;
@@ -648,6 +791,7 @@ const Index = () => {
     }
   }, [user, setChatSessions]);
 
+  // Enhanced context building
   const buildRichContext = useCallback((
     documentIdsToInclude: string[],
     noteIdsToInclude: string[],
@@ -660,7 +804,6 @@ const Index = () => {
     let context = '';
     let totalSize = 0;
 
-    // In buildRichContext function
     if (selectedDocs.length > 0) {
       context += 'ATTACHED DOCUMENTS:\n';
       for (const doc of selectedDocs) {
@@ -680,7 +823,7 @@ const Index = () => {
         }
 
         totalSize = context.length;
-        if (totalSize > MAX_TOTAL_CONTEXT_SIZE / 2) break; // Reserve space for notes and messages
+        if (totalSize > MAX_TOTAL_CONTEXT_SIZE / 2) break;
       }
     }
 
@@ -711,7 +854,7 @@ const Index = () => {
     return context;
   }, []);
 
-  // Optimized handleSubmit with better file processing and error handling
+  // Enhanced message submission with better progress tracking
   const handleSubmit = useCallback(async (
     messageContent: string,
     attachedDocumentIds?: string[],
@@ -720,164 +863,122 @@ const Index = () => {
     imageMimeType?: string,
     imageDataBase64?: string,
     aiMessageIdToUpdate: string | null = null,
-    attachedFiles?: FileData[] // Changed from File[]
+    attachedFiles?: FileData[]
   ) => {
-    // Enhanced validation
     const hasTextContent = messageContent?.trim();
     const hasAttachments = (attachedDocumentIds && attachedDocumentIds.length > 0) ||
-                          (attachedNoteIds && attachedNoteIds.length > 0) ||
-                          imageUrl ||
-                          (attachedFiles && attachedFiles.length > 0);
-  
+      (attachedNoteIds && attachedNoteIds.length > 0) ||
+      imageUrl ||
+      (attachedFiles && attachedFiles.length > 0);
+
     if (!hasTextContent && !hasAttachments) {
       toast.warning('Please enter a message or attach files to send.');
       return;
     }
-  
+
     if (isAILoading || isSubmittingUserMessage) {
       toast.info('Please wait for the current message to complete.');
       return;
     }
-  
-    // Remove file validation since files are already validated in AIChat.tsx
-    /*
-    if (attachedFiles && attachedFiles.length > 0) {
-      if (attachedFiles.length > MAX_FILES_PER_MESSAGE) {
-        toast.error(`Too many files. Maximum ${MAX_FILES_PER_MESSAGE} files per message.`);
-        return;
-      }
-  
-      for (const file of attachedFiles) {
-        const validation = validateFileForProcessing(file);
-        if (!validation.valid) {
-          toast.error(validation.error);
-          return;
-        }
-      }
-    }
-    */
-  
+
     setIsSubmittingUserMessage(true);
     setIsAILoading(true);
-    let processedFiles: FileData[] = attachedFiles || []; // Use attachedFiles directly
-  
+    let processedFiles: FileData[] = attachedFiles || [];
+
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         toast.error('You must be logged in to chat.');
         return;
       }
-  
+
       let currentSessionId = activeChatSessionId;
-  
+
       if (!currentSessionId) {
         currentSessionId = await createNewChatSession();
         if (!currentSessionId) {
           toast.error('Failed to create chat session. Please try again.');
           return;
         }
-        toast.info('New chat session created.');
       }
-  
+
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
-  
-      // Remove file processing logic since it's handled in AIChat.tsx
-      /*
+
+      // Enhanced file processing progress
       if (attachedFiles && attachedFiles.length > 0) {
         setFileProcessingProgress({
           processing: true,
           completed: 0,
-          total: attachedFiles.length
+          total: attachedFiles.length,
+          phase: 'validating'
         });
-  
+
         toast.info(`Processing ${attachedFiles.length} file${attachedFiles.length > 1 ? 's' : ''}...`);
-  
-        for (let i = 0; i < attachedFiles.length; i++) {
-          const file = attachedFiles[i];
-          setFileProcessingProgress(prev => ({
-            ...prev,
-            currentFile: file.name
-          }));
-  
-          try {
-            const processedFile = await processFileForUpload(file);
-            processedFiles.push(processedFile);
-            
-            setFileProcessingProgress(prev => ({
-              ...prev,
-              completed: prev.completed + 1
-            }));
-          } catch (error) {
-            console.error(`Error processing file ${file.name}:`, error);
-            toast.error(`Failed to process file: ${file.name}`);
-          }
-        }
-  
-        setFileProcessingProgress({ processing: false, completed: 0, total: 0 });
       }
-      */
-  
-      // Build context with size optimization
+
       const historicalMessagesForAI = allChatMessages
         .filter(msg => msg.session_id === currentSessionId)
         .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate))
         .slice(-MAX_HISTORY_MESSAGES);
-  
+
       const chatHistoryForAI: Array<{ role: string; parts: MessagePart[] }> = [];
-  
+
       historicalMessagesForAI.forEach(msg => {
         if (msg.role === 'user') {
           const userParts: MessagePart[] = [{ text: msg.content }];
-          
+
           if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 || msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
             const historicalContext = buildRichContext(
-              msg.attachedDocumentIds || [], 
-              msg.attachedNoteIds || [], 
-              documents, 
+              msg.attachedDocumentIds || [],
+              msg.attachedNoteIds || [],
+              documents,
               notes
             );
             if (historicalContext && historicalContext.length < 50000) {
               userParts.push({ text: `\n\nPrevious Context:\n${historicalContext}` });
             }
           }
-          
+
           chatHistoryForAI.push({ role: 'user', parts: userParts });
         } else if (msg.role === 'assistant') {
-          const content = msg.content.length > 10000 ? 
-            msg.content.substring(0, 10000) + '\n[Previous response truncated for context efficiency]' : 
+          const content = msg.content.length > 10000 ?
+            msg.content.substring(0, 10000) + '\n[Previous response truncated for context efficiency]' :
             msg.content;
           chatHistoryForAI.push({ role: 'model', parts: [{ text: content }] });
         }
       });
-  
+
       let finalUserMessageContent = messageContent || "";
-      
+
       const currentAttachedContext = buildRichContext(finalAttachedDocumentIds, finalAttachedNoteIds, documents, notes);
       if (currentAttachedContext) {
         finalUserMessageContent += `\n\nAttached Context:\n${currentAttachedContext}`;
       }
-  
+
       if (processedFiles.length > 0) {
-        const fileDescriptions = processedFiles.map(f => 
+        const fileDescriptions = processedFiles.map(f =>
           `${f.name} (${f.type}, ${f.processing_status})`
         ).join(', ');
-        
+
         if (!finalUserMessageContent.trim()) {
           finalUserMessageContent = `I'm sharing ${processedFiles.length} file${processedFiles.length > 1 ? 's' : ''} with you: ${fileDescriptions}`;
         } else {
           finalUserMessageContent += `\n\nAttached Files: ${fileDescriptions}`;
         }
       }
-  
+
       const optimizedContent = optimizeContextForProcessing(
         chatHistoryForAI,
         finalUserMessageContent,
         processedFiles
       );
-  
-      console.log(`Sending optimized content: ${JSON.stringify(optimizedContent).length} characters`);
-  
+
+      // Update progress before sending
+      if (fileProcessingProgress.processing) {
+        setFileProcessingProgress(prev => ({ ...prev, phase: 'uploading' }));
+      }
+
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
           userId: currentUser.id,
@@ -898,53 +999,48 @@ const Index = () => {
           aiMessageIdToUpdate: aiMessageIdToUpdate,
         },
       });
-  
+
       if (error) {
         console.error('Edge function error:', error);
         throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
       }
-      
+
       if (!data || !data.response) {
         throw new Error('Empty response from AI service');
       }
-  
+
       setChatSessions(prev => {
         const updated = prev.map(session =>
           session.id === currentSessionId
-            ? { 
-                ...session, 
-                last_message_at: new Date().toISOString(), 
-                document_ids: [...new Set([...session.document_ids, ...finalAttachedDocumentIds])]
-              }
+            ? {
+              ...session,
+              last_message_at: new Date().toISOString(),
+              document_ids: [...new Set([...session.document_ids, ...finalAttachedDocumentIds])]
+            }
             : session
         );
         return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
       });
-  
+
+      // Enhanced success messaging
       if (processedFiles.length > 0) {
         const successful = processedFiles.filter(f => f.processing_status === 'completed').length;
         const failed = processedFiles.filter(f => f.processing_status === 'failed').length;
-        
+
         if (successful > 0 && failed === 0) {
-          toast.success(`Successfully processed ${successful} file${successful > 1 ? 's' : ''}`);
+          toast.success(`✅ Successfully processed ${successful} file${successful > 1 ? 's' : ''}`);
         } else if (successful > 0 && failed > 0) {
-          toast.warning(`Processed ${successful} file${successful > 1 ? 's' : ''}, ${failed} failed`);
+          toast.warning(`⚠️ Processed ${successful} file${successful > 1 ? 's' : ''}, ${failed} failed`);
         } else if (failed > 0) {
-          toast.error(`Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
+          toast.error(`❌ Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
         }
       }
-  
-      console.log('Message sent successfully:', {
-        response: data.response.substring(0, 100) + '...',
-        filesProcessed: data.filesProcessed || 0,
-        processingResults: data.processingResults || []
-      });
-  
+
     } catch (error: any) {
       console.error('Error in handleSubmit:', error);
-      
+
       let errorMessage = 'Failed to send message';
-      
+
       if (error.message?.includes('content size exceeds')) {
         errorMessage = 'Message too large. Please reduce file sizes or message length.';
       } else if (error.message?.includes('rate limit')) {
@@ -954,17 +1050,18 @@ const Index = () => {
       } else if (error.message) {
         errorMessage += `: ${error.message}`;
       }
-      
+
       toast.error(errorMessage);
-      
-      if (processedFiles.length > 0) {
-        console.log('Cleaning up processed files due to error...');
-        // Additional cleanup logic could go here
-      }
+
     } finally {
       setIsSubmittingUserMessage(false);
       setIsAILoading(false);
-      setFileProcessingProgress({ processing: false, completed: 0, total: 0 });
+      setFileProcessingProgress({
+        processing: false,
+        completed: 0,
+        total: 0,
+        phase: 'complete'
+      });
     }
   }, [
     isAILoading,
@@ -980,8 +1077,9 @@ const Index = () => {
     setIsAILoading,
   ]);
 
+  // Message handling
   const handleNewMessage = useCallback((message: Message) => {
-    // This function is handled by useAppData's listener
+    // Handled by useAppData's listener
   }, []);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
@@ -1004,7 +1102,6 @@ const Index = () => {
       if (error) {
         console.error('Error deleting message from DB:', error);
         toast.error('Failed to delete message from database.');
-        // Revert optimistic update
         loadSessionMessages(activeChatSessionId);
       } else {
         toast.success('Message deleted successfully.');
@@ -1012,7 +1109,6 @@ const Index = () => {
     } catch (error: any) {
       console.error('Error in handleDeleteMessage:', error);
       toast.error(`Error deleting message: ${error.message || 'Unknown error'}`);
-      // Revert optimistic update
       if (activeChatSessionId) {
         loadSessionMessages(activeChatSessionId);
       }
@@ -1038,7 +1134,6 @@ const Index = () => {
       return;
     }
 
-    // Mark message as updating
     setChatMessages(prevAllMessages =>
       (prevAllMessages || []).map(msg =>
         msg.id === lastAssistantMessage.id ? { ...msg, isUpdating: true, isError: false } : msg
@@ -1061,7 +1156,6 @@ const Index = () => {
       console.error('Error regenerating response:', error);
       toast.error('Failed to regenerate response');
 
-      // Revert updating state
       setChatMessages(prevAllMessages =>
         (prevAllMessages || []).map(msg =>
           msg.id === lastAssistantMessage.id ? { ...msg, isUpdating: false, isError: true } : msg
@@ -1085,7 +1179,6 @@ const Index = () => {
       return;
     }
 
-    // Mark message as retrying
     setChatMessages(prevAllMessages =>
       (prevAllMessages || []).map(msg =>
         msg.id === failedAiMessageId ? { ...msg, isUpdating: true, isError: false } : msg
@@ -1108,7 +1201,6 @@ const Index = () => {
       console.error('Error retrying message:', error);
       toast.error('Failed to retry message');
 
-      // Revert updating state
       setChatMessages(prevAllMessages =>
         (prevAllMessages || []).map(msg =>
           msg.id === failedAiMessageId ? { ...msg, isUpdating: false, isError: true } : msg
@@ -1178,15 +1270,15 @@ const Index = () => {
     noteCount: notes.length,
     activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings',
     onTabChange: memoizedOnTabChange,
-    chatSessions: chatSessions,
-    activeChatSessionId: activeChatSessionId,
+    chatSessions,
+    activeChatSessionId,
     onChatSessionSelect: setActiveChatSessionId,
     onNewChatSession: createNewChatSession,
     onDeleteChatSession: deleteChatSession,
     onRenameChatSession: renameChatSession,
-    hasMoreChatSessions: hasMoreChatSessions,
+    hasMoreChatSessions,
     onLoadMoreChatSessions: handleLoadMoreChatSessions,
-    currentTheme: currentTheme,
+    currentTheme,
     onThemeChange: handleThemeChange,
   }), [
     isSidebarOpen,
@@ -1240,28 +1332,26 @@ const Index = () => {
     onDeleteChatSession: deleteChatSession,
     onRenameChatSession: renameChatSession,
     onSelectedDocumentIdsChange: setSelectedDocumentIds,
-    selectedDocumentIds: selectedDocumentIds,
+    selectedDocumentIds,
     onNewMessage: handleNewMessage,
-    isNotesHistoryOpen: isNotesHistoryOpen,
+    isNotesHistoryOpen,
     onToggleNotesHistory: () => setIsNotesHistoryOpen(prev => !prev),
     onDeleteMessage: handleDeleteMessage,
     onRegenerateResponse: handleRegenerateResponse,
-    isSubmittingUserMessage: isSubmittingUserMessage,
+    isSubmittingUserMessage,
     onRetryFailedMessage: handleRetryFailedMessage,
-    hasMoreMessages: hasMoreMessages,
+    hasMoreMessages,
     onLoadOlderMessages: handleLoadOlderChatMessages,
-    isLoadingSessionMessages: isLoadingSessionMessages,
-    quizzes: quizzes,
+    isLoadingSessionMessages,
+    quizzes,
     onReprocessAudio: triggerAudioProcessing,
     onDeleteRecording: deleteRecording,
     onGenerateNote: handleGenerateNoteFromAudio,
-    // Enhanced props for file processing
-    fileProcessingProgress: fileProcessingProgress,
+    fileProcessingProgress,
     supportedFileTypes: Object.keys(SUPPORTED_FILE_TYPES),
-    validateFileForProcessing: validateFileForProcessing,
-    // Pagination props
+    validateFileForProcessing,
     dataLoading: specificDataLoading,
-    dataPagination: dataPagination,
+    dataPagination,
     onLoadMoreNotes: loadMoreNotes,
     onLoadMoreRecordings: loadMoreRecordings,
     onLoadMoreDocuments: loadMoreDocuments,
@@ -1324,10 +1414,10 @@ const Index = () => {
   ]);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       navigate('/auth');
     }
-  }, [user, loading, navigate]);
+  }, [user, authLoading, navigate]);
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -1339,27 +1429,14 @@ const Index = () => {
     }
   }, [signOut, navigate]);
 
-  // Enhanced loading state with file processing progress
-  if (loading || dataLoading) {
+  // Enhanced loading with progressive phases
+  if (authLoading || dataLoading || loadingPhase.phase !== 'complete') {
     return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
-        <div className="text-center">
-          <img src='/siteimage.png' className="h-16 w-16 text-blue-600 mx-auto mb-4 animate-spin" />
-          <p className="text-slate-600 dark:text-gray-300">Loading your data...</p>
-          {fileProcessingProgress.processing && (
-            <div className="mt-4">
-              <p className="text-sm text-slate-500 dark:text-gray-400">
-                Processing files: {fileProcessingProgress.completed}/{fileProcessingProgress.total}
-              </p>
-              {fileProcessingProgress.currentFile && (
-                <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">
-                  Current: {fileProcessingProgress.currentFile}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <LoadingScreen
+        progress={loadingProgress}
+        message={loadingMessage}
+        phase={loadingPhase.phase}
+      />
     );
   }
 
@@ -1378,13 +1455,13 @@ const Index = () => {
 
       <div
         className={`${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
-        transition-transform duration-300 ease-in-out`}
+      fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
+      transition-transform duration-300 ease-in-out`}
       >
         <Sidebar {...sidebarProps} />
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-0 bg-slate-50 dark:bg-gray-900">
+      <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-gray-900">
         <div className="flex items-center justify-between p-3 sm:p-2 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
           <Header {...headerProps} />
           <div className="hidden p-3 sm:flex items-center gap-3">
@@ -1408,12 +1485,17 @@ const Index = () => {
           </Button>
         </div>
 
-        {/* File processing progress indicator */}
         {fileProcessingProgress.processing && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 p-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-blue-700 dark:text-blue-300">
-                Processing files: {fileProcessingProgress.completed}/{fileProcessingProgress.total}
+                {fileProcessingProgress.phase === 'validating' && 'Validating files...'}
+                {fileProcessingProgress.phase === 'processing' && 'Processing files...'}
+                {fileProcessingProgress.phase === 'uploading' && 'Uploading files...'}
+                {fileProcessingProgress.phase === 'complete' && 'Processing complete!'}
+                {fileProcessingProgress.phase !== 'complete' &&
+                  ` (${fileProcessingProgress.completed}/${fileProcessingProgress.total})`
+                }
               </span>
               <div className="w-32 bg-blue-200 dark:bg-blue-800 rounded-full h-2">
                 <div
@@ -1424,7 +1506,7 @@ const Index = () => {
                 />
               </div>
             </div>
-            {fileProcessingProgress.currentFile && (
+            {fileProcessingProgress.currentFile && fileProcessingProgress.phase !== 'complete' && (
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                 Processing: {fileProcessingProgress.currentFile}
               </p>
