@@ -6,13 +6,12 @@ import { Schedule } from './Schedule';
 import AIChat from './AIChat';
 import { DocumentUpload } from './DocumentUpload';
 import { LearningStyleSettings } from './LearningStyleSettings';
+import Dashboard from './Dashboard'; // FIXED: Import the Dashboard component
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import ErrorBoundary from './ErrorBoundary';
-
 import { toast } from 'sonner';
-
 
 interface ChatSession {
   id: string;
@@ -24,10 +23,10 @@ interface ChatSession {
   message_count?: number;
 }
 
-// Updated TabContentProps interface to include attachedFiles parameter
-
+// FIXED: Updated TabContentProps to include dashboard and navigation handlers
 interface TabContentProps {
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
+  activeTab: 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'; // FIXED: Added 'dashboard'
+
   filteredNotes: Note[];
   activeNote: Note | null;
   recordings: ClassRecording[] | undefined;
@@ -48,6 +47,10 @@ interface TabContentProps {
   onAddScheduleItem: (item: ScheduleItem) => Promise<void>;
   onUpdateScheduleItem: (item: ScheduleItem) => Promise<void>;
   onDeleteScheduleItem: (id: string) => Promise<void>;
+
+  // FIXED: Dashboard navigation handlers
+  onNavigateToTab?: (tab: string) => void;
+  onCreateNew?: (type: 'note' | 'recording' | 'schedule' | 'document') => void;
 
   // FIXED: Updated onSendMessage to include attachedFiles parameter
   onSendMessage: (
@@ -99,16 +102,9 @@ interface TabContentProps {
 export const TabContent: React.FC<TabContentProps> = (props) => {
   const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory } = props;
 
-
-
-
-
-
   const handleSuggestAiCorrection = useCallback((prompt?: string) => {
     toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
   }, []);
-
-
 
   const notesProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -187,14 +183,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         processing_error: string | null;
       }>
     ) => {
-      // console.log('TabContent onSendMessageToBackend called with:', {
-      //   messageContent,
-      //   attachedDocumentIds,
-      //   attachedNoteIds,
-      //   attachedFilesCount: attachedFiles?.length || 0,
-      //   attachedFileNames: attachedFiles?.map(f => f.name) || []
-      // });
-
       // Handle backward compatibility for single image
       let imageUrl: string | undefined;
       let imageMimeType: string | undefined;
@@ -268,7 +256,37 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onClose: onToggleNotesHistory,
   }), [props.filteredNotes, props.activeNote, props.onNoteSelect, props.onNoteDelete, isNotesHistoryOpen, onToggleNotesHistory]);
 
+  // FIXED: Dashboard props
+  const dashboardProps = useMemo(() => ({
+    notes: props.filteredNotes,
+    recordings: props.recordings ?? [],
+    documents: props.documents,
+    scheduleItems: props.scheduleItems,
+    chatMessages: props.chatMessages,
+    userProfile: props.userProfile,
+    onNavigateToTab: props.onNavigateToTab || (() => {}),
+    onCreateNew: props.onCreateNew || (() => {}),
+  }), [
+    props.filteredNotes,
+    props.recordings,
+    props.documents,
+    props.scheduleItems,
+    props.chatMessages,
+    props.userProfile,
+    props.onNavigateToTab,
+    props.onCreateNew,
+  ]);
+
   switch (activeTab) {
+    case 'dashboard': // FIXED: Add dashboard case
+      return (
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+          <ErrorBoundary>
+            <Dashboard {...dashboardProps} />
+          </ErrorBoundary>
+        </div>
+      );
+
     case 'notes':
       return (
         <div className="flex flex-1 min-h-0 relative">

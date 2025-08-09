@@ -1,4 +1,4 @@
-// Index.tsx - Enhanced with smooth progressive loading and better UX
+// Index.tsx - Fixed Dashboard Integration
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
@@ -17,6 +17,7 @@ import { Note } from '../types/Note';
 import { User } from '@supabase/supabase-js';
 import { generateId } from '@/utils/helpers';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
+import Dashboard from '../components/Dashboard';
 
 // Enhanced loading component with progress
 const LoadingScreen = ({
@@ -71,8 +72,8 @@ const LoadingScreen = ({
         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4 overflow-hidden">
           <div
             className={`h-full transition-all duration-500 ease-out ${progress === 100
-                ? 'bg-green-500'
-                : 'bg-gradient-to-r from-blue-500 to-purple-600'
+              ? 'bg-green-500'
+              : 'bg-gradient-to-r from-blue-500 to-purple-600'
               }`}
             style={{
               width: `${progress}%`,
@@ -217,77 +218,6 @@ const validateFileForProcessing = (file: File): {
   return { valid: true, warnings, config };
 };
 
-// Enhanced file processing
-const processFileForUpload = async (file: File): Promise<{
-  name: string;
-  mimeType: string;
-  data: string;
-  type: string;
-  size: number;
-  content: string | null;
-  processing_status: string;
-  processing_error: string | null;
-}> => {
-  const validation = validateFileForProcessing(file);
-
-  if (!validation.valid) {
-    return {
-      name: file.name,
-      mimeType: file.type,
-      data: '',
-      type: 'unknown',
-      size: file.size,
-      content: null,
-      processing_status: 'failed',
-      processing_error: validation.error!
-    };
-  }
-
-  try {
-    if (validation.config?.fastProcess) {
-      const textContent = await file.text();
-      return {
-        name: file.name,
-        mimeType: file.type,
-        data: btoa(textContent),
-        type: validation.config.type,
-        size: file.size,
-        content: textContent.length > MAX_SINGLE_FILE_CONTEXT
-          ? textContent.substring(0, MAX_SINGLE_FILE_CONTEXT - 100) + '\n[Content truncated for processing efficiency]'
-          : textContent,
-        processing_status: 'completed',
-        processing_error: null
-      };
-    }
-
-    const arrayBuffer = await file.arrayBuffer();
-    const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-
-    return {
-      name: file.name,
-      mimeType: file.type,
-      data: base64Data,
-      type: validation.config.type,
-      size: file.size,
-      content: null,
-      processing_status: 'pending',
-      processing_error: null
-    };
-  } catch (error) {
-    console.error(`Error processing file ${file.name}:`, error);
-    return {
-      name: file.name,
-      mimeType: file.type,
-      data: '',
-      type: validation.config?.type || 'unknown',
-      size: file.size,
-      content: null,
-      processing_status: 'failed',
-      processing_error: `Failed to process file: ${error instanceof Error ? error.message : 'Unknown error'}`
-    };
-  }
-};
-
 // Enhanced context optimization
 const estimateContextSize = (content: any[]): number => {
   return JSON.stringify(content).length;
@@ -370,7 +300,7 @@ const Index = () => {
     setCurrentTheme(theme);
   }, []);
 
-  // Enhanced app data with progressive loading
+  // Enhanced app data with progressive loading - FIXED: Include 'dashboard' in the type
   const {
     notes,
     recordings,
@@ -441,7 +371,7 @@ const Index = () => {
   const [hasMoreChatSessions, setHasMoreChatSessions] = useState(true);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
 
-  // Enhanced tab management
+  // Enhanced tab management - FIXED: Include 'dashboard' type
   const currentActiveTab = useMemo(() => {
     const path = location.pathname.split('/')[1];
     switch (path) {
@@ -451,12 +381,13 @@ const Index = () => {
       case 'chat': return 'chat';
       case 'documents': return 'documents';
       case 'settings': return 'settings';
-      default: return 'notes';
+      default: return 'dashboard';
     }
-  }, [location.pathname]);
+  }, [location.pathname]) as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
 
   useEffect(() => {
-    setActiveTab(currentActiveTab);
+    // FIXED: Cast to the expected type
+    setActiveTab(currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings');
   }, [currentActiveTab, setActiveTab]);
 
   // Smart data loading based on tab activation
@@ -464,6 +395,12 @@ const Index = () => {
     // Only trigger loading if we're past initial loading phase
     if (loadingPhase.phase === 'complete') {
       switch (currentActiveTab) {
+        case 'dashboard':
+          // Dashboard needs overview of all data
+          loadDataIfNeeded('notes');
+          loadDataIfNeeded('recordings');
+          loadDataIfNeeded('documents');
+          break;
         case 'recordings':
           loadDataIfNeeded('recordings');
           loadDataIfNeeded('quizzes');
@@ -1243,6 +1180,29 @@ const Index = () => {
     setIsAILoading,
   });
 
+  // FIXED: Add missing dashboard navigation handlers
+  const handleNavigateToTab = useCallback((tab: string) => {
+    navigate(`/${tab}`);
+    setIsSidebarOpen(false);
+  }, [navigate, setIsSidebarOpen]);
+
+  const handleCreateNew = useCallback((type: 'note' | 'recording' | 'schedule' | 'document') => {
+    switch (type) {
+      case 'note':
+        createNewNote();
+        break;
+      case 'recording':
+        handleNavigateToTab('recordings');
+        break;
+      case 'schedule':
+        handleNavigateToTab('schedule');
+        break;
+      case 'document':
+        handleNavigateToTab('documents');
+        break;
+    }
+  }, [createNewNote, handleNavigateToTab]);
+
   const memoizedOnToggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), [setIsSidebarOpen]);
   const memoizedOnCategoryChange = useCallback((category: string) => setSelectedCategory(category), [setSelectedCategory]);
 
@@ -1301,7 +1261,7 @@ const Index = () => {
   ]);
 
   const tabContentProps = useMemo(() => ({
-    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings',
+    activeTab: currentActiveTab,
     filteredNotes,
     activeNote,
     recordings: recordings ?? [],
@@ -1347,16 +1307,9 @@ const Index = () => {
     onReprocessAudio: triggerAudioProcessing,
     onDeleteRecording: deleteRecording,
     onGenerateNote: handleGenerateNoteFromAudio,
-    fileProcessingProgress,
-    supportedFileTypes: Object.keys(SUPPORTED_FILE_TYPES),
-    validateFileForProcessing,
-    dataLoading: specificDataLoading,
-    dataPagination,
-    onLoadMoreNotes: loadMoreNotes,
-    onLoadMoreRecordings: loadMoreRecordings,
-    onLoadMoreDocuments: loadMoreDocuments,
-    onLoadMoreSchedule: loadMoreSchedule,
-    onLoadMoreQuizzes: loadMoreQuizzes,
+    // Dashboard specific props
+    onNavigateToTab: handleNavigateToTab,
+    onCreateNew: handleCreateNew,
   }), [
     currentActiveTab,
     filteredNotes,
@@ -1403,14 +1356,8 @@ const Index = () => {
     triggerAudioProcessing,
     deleteRecording,
     handleGenerateNoteFromAudio,
-    fileProcessingProgress,
-    specificDataLoading,
-    dataPagination,
-    loadMoreNotes,
-    loadMoreRecordings,
-    loadMoreDocuments,
-    loadMoreSchedule,
-    loadMoreQuizzes,
+    handleNavigateToTab,
+    handleCreateNew,
   ]);
 
   useEffect(() => {
@@ -1515,14 +1462,15 @@ const Index = () => {
         )}
 
         <Routes>
+          <Route path="/dashboard" element={<TabContent {...tabContentProps} activeTab="dashboard" />} />
           <Route path="/notes" element={<TabContent {...tabContentProps} activeTab="notes" />} />
           <Route path="/recordings" element={<TabContent {...tabContentProps} activeTab="recordings" />} />
           <Route path="/schedule" element={<TabContent {...tabContentProps} activeTab="schedule" />} />
           <Route path="/chat" element={<TabContent {...tabContentProps} activeTab="chat" />} />
           <Route path="/documents" element={<TabContent {...tabContentProps} activeTab="documents" />} />
           <Route path="/settings" element={<TabContent {...tabContentProps} activeTab="settings" />} />
-          <Route path="/" element={<TabContent {...tabContentProps} activeTab="notes" />} />
-          <Route path="*" element={<TabContent {...tabContentProps} activeTab="notes" />} />
+          <Route path="/" element={<TabContent {...tabContentProps} activeTab="dashboard" />} />
+          <Route path="*" element={<TabContent {...tabContentProps} activeTab="dashboard" />} />
         </Routes>
       </div>
     </div>

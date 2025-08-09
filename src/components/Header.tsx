@@ -9,7 +9,7 @@ interface HeaderProps {
   onNewNote: () => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' |'dashboard';
   // New props for user avatar
   fullName: string | null;
   avatarUrl: string | null;
@@ -22,6 +22,7 @@ const tabNames = {
   chat: 'AI Study Assistant',
   documents: 'Document Upload',
   settings: 'Learning Settings'
+  , dashboard: 'Dashboard'
 };
 
 export const Header: React.FC<HeaderProps> = ({
