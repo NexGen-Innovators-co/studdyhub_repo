@@ -98,14 +98,26 @@ const toHtml = (result: any) => {
   return result.children.map(nodeToHtml).join('');
 };
 
-// Enhanced syntax highlighting function
+// Enhanced syntax highlighting function with better formatting
 export const highlightCode = (code: string, language: string) => {
   try {
     const result = lowlight.highlight(language, code);
-    return toHtml(result);
+    const highlighted = toHtml(result);
+    
+    // Add line numbers and better formatting
+    const lines = highlighted.split('\n');
+    const numberedLines = lines.map((line, index) => {
+      const lineNumber = index + 1;
+      return `<span class="line-wrapper" data-line="${lineNumber}">
+        <span class="line-number" style="color: #6b7280; user-select: none; padding-right: 1rem; display: inline-block; width: 3rem; text-align: right;">${lineNumber}</span>
+        <span class="line-content">${line || ' '}</span>
+      </span>`;
+    }).join('\n');
+    
+    return `<div class="code-block-wrapper" style="font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace; font-size: 14px; line-height: 1.5; background: #1f2937; color: #e5e7eb; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; border: 1px solid #374151;">${numberedLines}</div>`;
   } catch (error) {
     console.warn('Syntax highlighting failed:', error);
-    return escapeHtml(code);
+    return `<pre style="background: #1f2937; color: #e5e7eb; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; border: 1px solid #374151;"><code>${escapeHtml(code)}</code></pre>`;
   }
 };
 

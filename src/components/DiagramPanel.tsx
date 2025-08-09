@@ -416,6 +416,34 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
   const theme = themes[currentTheme];
 
+  // Enhanced code formatting for better display
+  const formatCodeContent = useCallback((content: string, lang?: string) => {
+    if (!content) return '';
+    
+    // Add syntax highlighting if language is provided
+    if (lang && lang !== 'txt') {
+      try {
+        return highlightCode(content, lang, themes['github-dark']);
+      } catch (error) {
+        console.warn('Failed to highlight code:', error);
+      }
+    }
+    
+    // Fallback to basic formatting
+    return `<pre style="
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      color: #e2e8f0;
+      padding: 1.5rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid #475569;
+      font-family: 'JetBrains Mono', 'Fira Code', Monaco, Consolas, monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    "><code>${escapeHtml(content)}</code></pre>`;
+  }, []);
+
   const handleThreeJsSceneReady = useCallback((scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => {
     setThreeJsScene(scene);
     setThreeJsRenderer(renderer);
@@ -668,7 +696,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
   const renderSourceCode = useMemo(() => {
     if (!diagramContent) return null;
-    const highlightedCode = highlightCode(diagramContent, language || 'text', themes[currentTheme]);
+    const highlightedCode = highlightCode(diagramContent, language || 'text', theme);
     return (
       <div className="relative rounded-lg overflow-hidden h-full shadow-lg" style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}>
         <div className="p-4 sm:p-6 overflow-auto h-full modern-scrollbar">
