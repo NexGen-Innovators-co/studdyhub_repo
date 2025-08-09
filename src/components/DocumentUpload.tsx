@@ -1,4 +1,4 @@
-// src/components/DocumentUpload.tsx
+// Updated src/components/DocumentUpload.tsx
 import React, { useState, useRef, useCallback } from 'react';
 import { UploadCloud, FileText, Image, Loader2, Check, XCircle, AlertTriangle, RefreshCw, Eye, Download, Calendar, HardDrive } from 'lucide-react';
 import { Button } from './ui/button';
@@ -45,7 +45,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
   };
 
   const handleFileSelection = useCallback((file: File) => {
-    const MAX_FILE_SIZE_MB = 10;
+    const MAX_FILE_SIZE_MB = 200; // Adjust based on max video size
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
       toast.error(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`);
       setSelectedFile(null);
@@ -53,9 +53,73 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       return;
     }
 
-    const allowedTypes = ['application/pdf', 'text/plain', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    // Allowed types from SUPPORTED_FILE_TYPES
+    const allowedTypes = Object.keys({
+      'image/jpeg': 'image',
+      'image/jpg': 'image',
+      'image/png': 'image',
+      'image/gif': 'image',
+      'image/webp': 'image',
+      'image/bmp': 'image',
+      'image/svg+xml': 'image',
+      'image/tiff': 'image',
+      'image/tif': 'image',
+      'image/ico': 'image',
+      'image/heic': 'image',
+      'image/heif': 'image',
+      'application/pdf': 'pdf',
+      'application/msword': 'document',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'document',
+      'application/vnd.ms-excel': 'spreadsheet',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'spreadsheet',
+      'application/vnd.ms-powerpoint': 'presentation',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'presentation',
+      'application/rtf': 'document',
+      'application/vnd.oasis.opendocument.text': 'document',
+      'application/vnd.oasis.opendocument.spreadsheet': 'spreadsheet',
+      'application/vnd.oasis.opendocument.presentation': 'presentation',
+      'text/plain': 'text',
+      'text/csv': 'csv',
+      'text/markdown': 'markdown',
+      'text/html': 'html',
+      'text/xml': 'xml',
+      'application/json': 'json',
+      'application/xml': 'xml',
+      'text/javascript': 'code',
+      'application/javascript': 'code',
+      'text/typescript': 'code',
+      'application/typescript': 'code',
+      'text/css': 'code',
+      'text/x-python': 'code',
+      'text/x-java': 'code',
+      'text/x-c': 'code',
+      'text/x-cpp': 'code',
+      'text/x-csharp': 'code',
+      'text/x-php': 'code',
+      'text/x-ruby': 'code',
+      'text/x-go': 'code',
+      'text/x-rust': 'code',
+      'text/x-sql': 'code',
+      'application/zip': 'archive',
+      'application/x-rar-compressed': 'archive',
+      'application/x-7z-compressed': 'archive',
+      'application/x-tar': 'archive',
+      'application/gzip': 'archive',
+      'audio/mpeg': 'audio',
+      'audio/wav': 'audio',
+      'audio/ogg': 'audio',
+      'audio/m4a': 'audio',
+      'audio/webm': 'audio',
+      'audio/flac': 'audio',
+      'video/mp4': 'video',
+      'video/avi': 'video',
+      'video/mov': 'video',
+      'video/wmv': 'video',
+      'video/webm': 'video',
+      'video/mkv': 'video'
+    });
     if (!allowedTypes.includes(file.type)) {
-      toast.error('Unsupported file type. Please upload PDF, TXT, JPG, PNG, GIF, or WEBP files.');
+      toast.error('Unsupported file type.');
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
@@ -93,127 +157,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     }
   };
 
-  const triggerAnalysis = async (doc: Document): Promise<void> => {
-    if (!user?.id) {
-      toast.error('User not authenticated.');
-      return;
-    }
-
-    if (processingDocuments.has(doc.id)) {
-      toast.warning('Analysis is already in progress for this document.');
-      return;
-    }
-
-    setProcessingDocuments(prev => new Set(prev).add(doc.id));
-
-    try {
-      toast.info(`${doc.processing_status === 'failed' ? 'Retrying' : 'Starting'} analysis for "${doc.title}"...`);
-
-      if (doc.processing_status === 'failed') {
-        onDocumentUpdated({ ...doc, processing_status: 'pending', processing_error: null });
-      }
-
-      const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/gemini-chat';
-      const maxImageSize = 20 * 1024 * 1024; // 20MB limit from index.ts for images
-
-      // Validate file size and type
-      if (doc.file_size > maxImageSize) {
-        throw new Error(`File size (${formatFileSize(doc.file_size)}) exceeds maximum limit of ${formatFileSize(maxImageSize)} for analysis.`);
-      }
-
-      const supportedImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-      if (!supportedImageTypes.includes(doc.file_type) && doc.type === 'image') {
-        throw new Error(`Unsupported image type: ${doc.file_type}. Supported types: ${supportedImageTypes.join(', ')}`);
-      }
-
-      // Fetch and encode file to base64
-      let base64Data: string | null = null;
-      try {
-        const response = await fetch(doc.file_url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file from ${doc.file_url}: ${response.statusText}`);
-        }
-        const arrayBuffer = await response.arrayBuffer();
-        if (arrayBuffer.byteLength === 0) {
-          throw new Error('File is empty or corrupted.');
-        }
-        const binary = String.fromCharCode(...new Uint8Array(arrayBuffer));
-        base64Data = btoa(binary);
-        // Verify base64 validity
-        try {
-          atob(base64Data);
-        } catch (e) {
-          throw new Error('Invalid base64 encoding generated.');
-        }
-      } catch (fetchError: any) {
-        throw new Error(`Error preparing file for analysis: ${fetchError.message}`);
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('No valid authentication token found');
-      }
-
-      const bodyPayload = {
-        userId: user.id,
-        sessionId: generateId(),
-        message: '',
-        files: [{
-          name: doc.file_name,
-          mimeType: doc.file_type,
-          data: base64Data,
-          size: doc.file_size,
-          processing_status: 'pending',
-          type: doc.type
-        }],
-        attachedDocumentIds: [doc.id],
-        attachedNoteIds: [],
-        learningStyle: 'visual',
-        learningPreferences: {},
-        chatHistory: []
-      };
-
-      console.log(`Triggering analysis for document: ${doc.id}, type: ${doc.file_type}, size: ${formatFileSize(doc.file_size)}`);
-
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(bodyPayload),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json();
-        const errorMessage = `Analysis trigger failed: ${errorBody.error || 'Unknown server error'}`;
-        console.error('Edge function response:', errorBody);
-        toast.error(errorMessage);
-        onDocumentUpdated({
-          ...doc,
-          processing_status: 'failed',
-          processing_error: errorMessage
-        });
-        return;
-      }
-
-      toast.info('Analysis request sent successfully. Awaiting processing...');
-
-    } catch (analysisError: any) {
-      console.error('Error triggering analysis:', analysisError);
-      toast.error(`Failed to initiate analysis: ${analysisError.message}`);
-      onDocumentUpdated({
-        ...doc,
-        processing_status: 'failed',
-        processing_error: analysisError.message
-      });
-    } finally {
-      setProcessingDocuments(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(doc.id);
-        return newSet;
-      });
-    }
+  const getBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = (error) => reject(error);
+    });
   };
 
   const handleUpload = async () => {
@@ -230,113 +180,258 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     setIsUploading(true);
     setUploadProgress(0);
 
-    const isImage = selectedFile.type.startsWith('image/');
-    const fileExtension = selectedFile.name.split('.').pop();
-    const fileName = `${generateId()}.${fileExtension}`;
-    const filePath = `user_uploads/${user.id}/${fileName}`;
-
-    let newDocumentId: string | null = null;
-    let uploadedFilePath: string | null = null;
+    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
 
     try {
-      toast.info(`Uploading ${isImage ? 'image' : 'document'}...`);
-      const { data: storageData, error: storageError } = await supabase.storage
-        .from('documents')
-        .upload(filePath, selectedFile, {
-          cacheControl: '3600',
-          upsert: false,
-        });
+      toast.info(`Uploading and processing "${selectedFile.name}"...`);
 
-      if (storageError) {
-        throw new Error(`Storage upload failed: ${storageError.message}`);
+      const base64Data = await getBase64(selectedFile);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No valid authentication token found');
       }
 
-      uploadedFilePath = filePath;
+      const payload = {
+        userId: user.id,
+        files: [{
+          name: selectedFile.name,
+          mimeType: selectedFile.type,
+          data: base64Data,
+          size: selectedFile.size
+        }]
+      };
 
-      const { data: publicUrlData } = supabase.storage
-        .from('documents')
-        .getPublicUrl(filePath);
-
-      const fileUrl = publicUrlData.publicUrl;
-
-      toast.info(`Registering ${isImage ? 'image' : 'document'}...`);
-      const tempDocId = generateId();
-      const { data: docData, error: dbError } = await supabase
-        .from('documents')
-        .insert({
-          id: tempDocId,
-          title: selectedFile.name,
-          file_url: fileUrl,
-          type: isImage ? 'image' : 'text',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          content_extracted: null,
-          processing_error: null,
-          user_id: user.id,
-          file_name: selectedFile.name,
-          file_type: selectedFile.type,
-          file_size: selectedFile.size,
-          processing_status: 'pending',
-        })
-        .select()
-        .single();
-
-      if (dbError) {
-        throw new Error(`Database insertion failed: ${dbError.message}`);
-      }
-
-      newDocumentId = docData.id;
-      toast.success(`${isImage ? 'Image' : 'Document'} uploaded and registered! Processing content...`);
-
-      triggerAnalysis({
-        id: docData.id,
-        title: docData.title,
-        user_id: docData.user_id,
-        file_name: docData.file_name,
-        file_type: docData.file_type,
-        file_url: docData.file_url,
-        file_size: docData.file_size,
-        content_extracted: docData.content_extracted,
-        type: docData.type as Document['type'],
-        processing_status: docData.processing_status as string,
-        processing_error: docData.processing_error as string | null,
-        created_at: docData.created_at,
-        updated_at: docData.updated_at,
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify(payload),
       });
 
+      if (!response.ok) {
+        const errorBody = await response.json();
+        throw new Error(`Processing failed: ${errorBody.error || 'Unknown error'}`);
+      }
+
+      const result = await response.json();
+      toast.success('File processed successfully.');
+
+      // Reset
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
     } catch (error: any) {
-      console.error('Upload or document registration error:', error);
-      toast.error(`Upload failed: ${error.message}`);
-
-      if (newDocumentId) {
-        try {
-          await supabase.from('documents').delete().eq('id', newDocumentId);
-          onDocumentDeleted(newDocumentId);
-        } catch (cleanupError) {
-          console.error('Failed to clean up document from database:', cleanupError);
-        }
-      }
-
-      if (uploadedFilePath) {
-        try {
-          const { error: removeError } = await supabase.storage
-            .from('documents')
-            .remove([uploadedFilePath]);
-          if (removeError) {
-            console.error('Failed to clean up storage file:', removeError);
-          }
-        } catch (cleanupError) {
-          console.error('Failed to clean up storage file:', cleanupError);
-        }
-      }
+      console.error('Processing error:', error);
+      toast.error(`Failed to process file: ${error.message}`);
     } finally {
       setIsUploading(false);
-      setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     }
   };
+
+  const triggerAnalysis = async (doc: Document): Promise<void> => {
+    if (!user?.id) {
+      toast.error('User not authenticated.');
+      return;
+    }
+
+    if (processingDocuments.has(doc.id)) {
+      toast.warning('Analysis is already in progress for this document.');
+      return;
+    }
+
+    setProcessingDocuments(prev => new Set(prev).add(doc.id));
+
+    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
+
+    try {
+      toast.info(`${doc.processing_status === 'failed' ? 'Retrying' : 'Starting'} analysis for "${doc.file_name}"...`);
+
+      if (doc.processing_status === 'failed') {
+        onDocumentUpdated({ ...doc, processing_status: 'pending', processing_error: null });
+      }
+
+      // Fetch base64 from URL
+      let base64Data: string | null = null;
+      const response = await fetch(doc.file_url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const binary = String.fromCharCode(...new Uint8Array(arrayBuffer));
+      base64Data = btoa(binary);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No valid authentication token found');
+      }
+
+      const payload = {
+        userId: user.id,
+        files: [{
+          name: doc.file_name,
+          mimeType: doc.file_type,
+          data: base64Data,
+          size: doc.file_size
+        }]
+      };
+
+      const fetchResponse = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!fetchResponse.ok) {
+        const errorBody = await fetchResponse.json();
+        throw new Error(`Analysis failed: ${errorBody.error}`);
+      }
+
+      toast.info('Analysis request sent successfully.');
+
+    } catch (error: any) {
+      toast.error(`Failed to initiate analysis: ${error.message}`);
+      onDocumentUpdated({
+        ...doc,
+        processing_status: 'failed',
+        processing_error: error.message
+      });
+    } finally {
+      setProcessingDocuments(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(doc.id);
+        return newSet;
+      });
+    }
+  };
+
+
+  // const handleUpload = async () => {
+  //   if (!selectedFile || !user?.id) {
+  //     toast.error('Please select a file and ensure you are logged in.');
+  //     return;
+  //   }
+
+  //   if (isUploading) {
+  //     toast.warning('Upload already in progress. Please wait...');
+  //     return;
+  //   }
+
+  //   setIsUploading(true);
+  //   setUploadProgress(0);
+
+  //   const isImage = selectedFile.type.startsWith('image/');
+  //   const fileExtension = selectedFile.name.split('.').pop();
+  //   const fileName = `${generateId()}.${fileExtension}`;
+  //   const filePath = `user_uploads/${user.id}/${fileName}`;
+
+  //   let newDocumentId: string | null = null;
+  //   let uploadedFilePath: string | null = null;
+
+  //   try {
+  //     toast.info(`Uploading ${isImage ? 'image' : 'document'}...`);
+  //     const { data: storageData, error: storageError } = await supabase.storage
+  //       .from('documents')
+  //       .upload(filePath, selectedFile, {
+  //         cacheControl: '3600',
+  //         upsert: false,
+  //       });
+
+  //     if (storageError) {
+  //       throw new Error(`Storage upload failed: ${storageError.message}`);
+  //     }
+
+  //     uploadedFilePath = filePath;
+
+  //     const { data: publicUrlData } = supabase.storage
+  //       .from('documents')
+  //       .getPublicUrl(filePath);
+
+  //     const fileUrl = publicUrlData.publicUrl;
+
+  //     toast.info(`Registering ${isImage ? 'image' : 'document'}...`);
+  //     const tempDocId = generateId();
+  //     const { data: docData, error: dbError } = await supabase
+  //       .from('documents')
+  //       .insert({
+  //         id: tempDocId,
+  //         title: selectedFile.name,
+  //         file_url: fileUrl,
+  //         type: isImage ? 'image' : 'text',
+  //         created_at: new Date().toISOString(),
+  //         updated_at: new Date().toISOString(),
+  //         content_extracted: null,
+  //         processing_error: null,
+  //         user_id: user.id,
+  //         file_name: selectedFile.name,
+  //         file_type: selectedFile.type,
+  //         file_size: selectedFile.size,
+  //         processing_status: 'pending',
+  //       })
+  //       .select()
+  //       .single();
+
+  //     if (dbError) {
+  //       throw new Error(`Database insertion failed: ${dbError.message}`);
+  //     }
+
+  //     newDocumentId = docData.id;
+  //     toast.success(`${isImage ? 'Image' : 'Document'} uploaded and registered! Processing content...`);
+
+  //     triggerAnalysis({
+  //       id: docData.id,
+  //       title: docData.title,
+  //       user_id: docData.user_id,
+  //       file_name: docData.file_name,
+  //       file_type: docData.file_type,
+  //       file_url: docData.file_url,
+  //       file_size: docData.file_size,
+  //       content_extracted: docData.content_extracted,
+  //       type: docData.type as Document['type'],
+  //       processing_status: docData.processing_status as string,
+  //       processing_error: docData.processing_error as string | null,
+  //       created_at: docData.created_at,
+  //       updated_at: docData.updated_at,
+  //     });
+
+  //   } catch (error: any) {
+  //     console.error('Upload or document registration error:', error);
+  //     toast.error(`Upload failed: ${error.message}`);
+
+  //     if (newDocumentId) {
+  //       try {
+  //         await supabase.from('documents').delete().eq('id', newDocumentId);
+  //         onDocumentDeleted(newDocumentId);
+  //       } catch (cleanupError) {
+  //         console.error('Failed to clean up document from database:', cleanupError);
+  //       }
+  //     }
+
+  //     if (uploadedFilePath) {
+  //       try {
+  //         const { error: removeError } = await supabase.storage
+  //           .from('documents')
+  //           .remove([uploadedFilePath]);
+  //         if (removeError) {
+  //           console.error('Failed to clean up storage file:', removeError);
+  //         }
+  //       } catch (cleanupError) {
+  //         console.error('Failed to clean up storage file:', cleanupError);
+  //       }
+  //     }
+  //   } finally {
+  //     setIsUploading(false);
+  //     setSelectedFile(null);
+  //     if (fileInputRef.current) {
+  //       fileInputRef.current.value = '';
+  //     }
+  //   }
+  // };
 
   const handleDeleteDocument = async (documentId: string, fileUrl: string) => {
     if (processingDocuments.has(documentId)) {
