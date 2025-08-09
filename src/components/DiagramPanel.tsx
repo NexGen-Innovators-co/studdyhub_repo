@@ -476,31 +476,113 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     }
 
     try {
+      toast('Generating PDF...', { duration: 1000 });
+      
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'px',
         format: 'a4',
       });
 
-      const contentElement = diagramContainerRef.current;
-      const canvas = await html2canvas(contentElement, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        width: contentElement.offsetWidth,
-        height: contentElement.offsetHeight,
-        windowWidth: contentElement.offsetWidth,
-        windowHeight: contentElement.offsetHeight,
-      });
+      let canvas: HTMLCanvasElement;
+
+      // Special handling for HTML content (web pages in iframe)
+      if (diagramType === 'html') {
+        const iframe = diagramContainerRef.current.querySelector('iframe');
+        if (iframe && iframe.contentDocument) {
+          try {
+            // Create a temporary container with the iframe content
+            const tempContainer = document.createElement('div');
+            tempContainer.style.width = '800px'; // Fixed width for consistent PDF rendering
+            tempContainer.style.backgroundColor = '#ffffff';
+            tempContainer.style.padding = '20px';
+            tempContainer.innerHTML = iframe.contentDocument.body.innerHTML;
+            
+            // Add necessary styles for PDF rendering
+            const style = document.createElement('style');
+            style.textContent = `
+              * { box-sizing: border-box; }
+              body { margin: 0; font-family: Arial, sans-serif; line-height: 1.4; }
+              img { max-width: 100%; height: auto; }
+              table { width: 100%; border-collapse: collapse; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            `;
+            tempContainer.appendChild(style);
+            
+            // Temporarily add to document for rendering
+            document.body.appendChild(tempContainer);
+            
+            canvas = await html2canvas(tempContainer, {
+              scale: 2,
+              useCORS: true,
+              allowTaint: true,
+              backgroundColor: '#ffffff',
+              width: 800,
+              windowWidth: 800,
+              scrollX: 0,
+              scrollY: 0,
+            });
+            
+            // Remove temporary container
+            document.body.removeChild(tempContainer);
+          } catch (iframeError) {
+            console.warn('Could not access iframe content, falling back to container capture:', iframeError);
+            // Fall back to capturing the entire container
+            canvas = await html2canvas(diagramContainerRef.current, {
+              scale: 2,
+              useCORS: true,
+              backgroundColor: '#ffffff',
+              width: diagramContainerRef.current.offsetWidth,
+              height: diagramContainerRef.current.offsetHeight,
+            });
+          }
+        } else {
+          // Fall back to capturing the entire container if iframe is not accessible
+          canvas = await html2canvas(diagramContainerRef.current, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            width: diagramContainerRef.current.offsetWidth,
+            height: diagramContainerRef.current.offsetHeight,
+          });
+        }
+      } else {
+        // For non-HTML content, use the original method
+        const contentElement = diagramContainerRef.current;
+        canvas = await html2canvas(contentElement, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          width: contentElement.offsetWidth,
+          height: contentElement.offsetHeight,
+          windowWidth: contentElement.offsetWidth,
+          windowHeight: contentElement.offsetHeight,
+        });
+      }
 
       const imgData = canvas.toDataURL('image/png');
       const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${diagramType}-export.pdf`);
-      toast.success('PDF download started.');
+      // Handle multiple pages if content is too tall
+      if (pdfHeight > pdf.internal.pageSize.getHeight()) {
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const totalPages = Math.ceil(pdfHeight / pageHeight);
+        
+        for (let page = 0; page < totalPages; page++) {
+          if (page > 0) pdf.addPage();
+          
+          const yOffset = -(page * pageHeight);
+          pdf.addImage(imgData, 'PNG', 0, yOffset, pdfWidth, pdfHeight);
+        }
+      } else {
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      }
+
+      const fileName = diagramType === 'html' ? 'webpage.pdf' : `${diagramType}-export.pdf`;
+      pdf.save(fileName);
+      toast.success('PDF downloaded successfully!');
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
