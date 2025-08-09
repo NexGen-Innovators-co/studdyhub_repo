@@ -1,4 +1,5 @@
 import React, { memo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -8,7 +9,8 @@ import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Document } from '../types/Document';
 import { Message } from '../types/Class';
-import { cn } from '../lib/utils'; // Assuming a utility like `cn` exists for class name management
+import { cn } from '../lib/utils';
+import { TypingAnimation } from './TypingAnimation';
 
 interface MessageListProps {
   messages: Message[];
@@ -211,128 +213,172 @@ export const MessageList = memo(({
         );
 
         return (
-          <React.Fragment key={message.id}>
-            {showDateHeader && (
-              <div className="flex justify-center my-4">
-                <Badge variant="secondary" className="px-3 py-1 text-sm text-slate-500 bg-slate-100 rounded-full shadow-sm dark:bg-gray-700 dark:text-gray-300">
-                  {messageDate}
-                </Badge>
-              </div>
-            )}
-            <div className={cn('flex gap-3 group', isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto', isUserMessage ? 'justify-end' : 'justify-start')}>
-              {message.role === 'assistant' && (
-                <div className={cn('h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 hidden sm:flex', message.isError ? 'bg-red-500' : 'bg-transparent dark:bg-gray-700')}>
-                  {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
-                </div>
+          <AnimatePresence mode="wait" key={message.id}>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              {showDateHeader && (
+                <motion.div 
+                  className="flex justify-center my-4"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <Badge variant="secondary" className="px-3 py-1 text-sm text-slate-500 bg-slate-100 rounded-full shadow-sm dark:bg-gray-700 dark:text-gray-300">
+                    {messageDate}
+                  </Badge>
+                </motion.div>
               )}
-              <div className={cn('flex flex-col flex-1 min-w-0', isUserMessage ? 'items-end' : 'items-start')}>
-                <Card className={cardClasses}>
-                  <CardContent className="p-2 prose prose-lg !max-w-full leading-relaxed dark:prose-invert overflow-x-auto">
-                    {contentToRender}
-
-                  </CardContent>
-                  <div className={cn('flex gap-1 px-4 pb-2', isUserMessage ? 'justify-end' : 'justify-start')}>
-                    <span className={cn('text-xs text-slate-500', isUserMessage ? 'text-gray-600 dark:text-gray-300' : 'text-slate-500 dark:text-gray-400')}>
-                      {formatTime(message.timestamp)}
-                    </span>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {message.role === 'assistant' && (
-                        <>
-                          {isLastMessage && !isLoading && (
+              <div className={cn('flex gap-3 group', isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto', isUserMessage ? 'justify-end' : 'justify-start')}>
+                {message.role === 'assistant' && (
+                  <motion.div 
+                    className={cn('h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 hidden sm:flex', message.isError ? 'bg-red-500' : 'bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg')}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                  >
+                    {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
+                  </motion.div>
+                )}
+                <motion.div 
+                  className={cn('flex flex-col flex-1 min-w-0', isUserMessage ? 'items-end' : 'items-start')}
+                  initial={{ opacity: 0, x: isUserMessage ? 20 : -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <Card className={cardClasses}>
+                    <CardContent className="p-2 prose prose-lg !max-w-full leading-relaxed dark:prose-invert overflow-x-auto">
+                      {isLastMessage && !isUserMessage && isLoading ? (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="flex items-center gap-2 p-4"
+                        >
+                          <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                          <TypingAnimation 
+                            text="Thinking..."
+                            speed={100}
+                            className="text-slate-600 dark:text-gray-400"
+                          />
+                        </motion.div>
+                      ) : (
+                        contentToRender
+                      )}
+                    </CardContent>
+                    <motion.div 
+                      className={cn('flex gap-1 px-4 pb-2', isUserMessage ? 'justify-end' : 'justify-start')}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      <span className={cn('text-xs text-slate-500', isUserMessage ? 'text-gray-600 dark:text-gray-300' : 'text-slate-500 dark:text-gray-400')}>
+                        {formatTime(message.timestamp)}
+                      </span>
+                      <motion.div 
+                        className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        whileHover={{ scale: 1.05 }}
+                      >
+                        {message.role === 'assistant' && (
+                          <>
+                            {isLastMessage && !isLoading && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onRegenerateClick(messages[index - 1]?.content || '')}
+                                className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700 transition-all duration-200"
+                                title="Regenerate response"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => onRegenerateClick(messages[index - 1]?.content || '')}
-                              className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
-                              title="Regenerate response"
+                              onClick={() => copy(message.content)}
+                              className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700 transition-all duration-200"
+                              title="Copy message"
                             >
-                              <RefreshCw className="h-4 w-4" />
+                              <Copy className="h-4 w-4" />
                             </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => copy(message.content)}
-                            className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-                            title="Copy message"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => onDeleteClick(message.id)}
+                              className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700 transition-all duration-200"
+                              title="Delete message"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            {isSpeaking && speakingMessageId === message.id ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={isPaused ? resumeSpeech : pauseSpeech}
+                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-yellow-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-yellow-400 dark:hover:bg-gray-700 transition-all duration-200"
+                                  title={isPaused ? "Resume speech" : "Pause speech"}
+                                >
+                                  {isPaused ? <Volume2 className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={stopSpeech}
+                                  className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700 transition-all duration-200"
+                                  title="Stop speech"
+                                >
+                                  <Square className="h-4 w-4" />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => speakMessage(message.id, message.content)}
+                                className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700 transition-all duration-200"
+                                title="Read aloud"
+                                disabled={isLoading}
+                              >
+                                <Volume2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </>
+                        )}
+                        {isUserMessage && (
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => onDeleteClick(message.id)}
-                            className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                            className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700 transition-all duration-200"
                             title="Delete message"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <X className="h-4 w-4" />
                           </Button>
-                          {isSpeaking && speakingMessageId === message.id ? (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={isPaused ? resumeSpeech : pauseSpeech}
-                                className="h-6 w-6 rounded-full text-slate-400 hover:text-yellow-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-yellow-400 dark:hover:bg-gray-700"
-                                title={isPaused ? "Resume speech" : "Pause speech"}
-                              >
-                                {isPaused ? <Volume2 className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={stopSpeech}
-                                className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                                title="Stop speech"
-                              >
-                                <Square className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => speakMessage(message.id, message.content)}
-                              className="h-6 w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
-                              title="Read aloud"
-                              disabled={isLoading}
-                            >
-                              <Volume2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </>
-                      )}
-                      {isUserMessage && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onDeleteClick(message.id)}
-                          className="h-6 w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                          title="Delete message"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {message.role === 'assistant' && message.isError && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
-                            if (prevUserMessage) onRetryClick(prevUserMessage.content, message.id);
-                          }}
-                          className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-                          title="Retry failed message"
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </Card>
+                        )}
+                        {message.role === 'assistant' && message.isError && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
+                              if (prevUserMessage) onRetryClick(prevUserMessage.content, message.id);
+                            }}
+                            className="h-6 w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700 transition-all duration-200"
+                            title="Retry failed message"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </motion.div>
+                    </motion.div>
+                  </Card>
+                </motion.div>
               </div>
-            </div>
-          </React.Fragment>
+            </motion.div>
+          </AnimatePresence>
         );
       })}
     </div>
