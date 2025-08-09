@@ -19,8 +19,8 @@ interface SidebarProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   noteCount: number;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
-  onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'|'dashboard';
+  onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard') => void;
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
   onChatSessionSelect: (sessionId: string) => void;
@@ -44,6 +44,7 @@ const categories = [
 ];
 
 const tabs = [
+  { id: 'dashboard', name: 'Dashboard', icon: Book },
   { id: 'notes', name: 'Notes', icon: FileText },
   { id: 'recordings', name: 'Recordings', icon: Mic },
   { id: 'schedule', name: 'Schedule', icon: Calendar },

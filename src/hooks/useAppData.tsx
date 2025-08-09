@@ -841,6 +841,8 @@ export const useAppData = () => {
             filter: `user_id=eq.${user.id}`
           },
           (payload) => {
+            console.log('Chat message event:', payload.eventType, payload.new);
+
             if (payload.eventType === 'INSERT') {
               const newMessage: Message = {
                 id: payload.new.id,
@@ -857,13 +859,30 @@ export const useAppData = () => {
               };
 
               setChatMessages(prevMessages => {
-                const exists = prevMessages.some(msg => msg.id === newMessage.id);
-                if (exists) return prevMessages;
+                // Check if message already exists
+                const messageExists = prevMessages.some(msg => msg.id === newMessage.id);
+                if (messageExists) {
+                  console.log('Message already exists, skipping:', newMessage.id);
+                  return prevMessages;
+                }
 
-                const updatedMessages = [...prevMessages, newMessage].sort(
-                  (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-                );
-                return updatedMessages;
+                console.log('Adding new message:', newMessage.id, newMessage.role);
+                const updatedMessages = [...prevMessages, newMessage];
+
+                // Sort by timestamp but maintain insertion order for messages with same timestamp
+                return updatedMessages.sort((a, b) => {
+                  const timeA = new Date(a.timestamp).getTime();
+                  const timeB = new Date(b.timestamp).getTime();
+
+                  if (timeA === timeB) {
+                    // If timestamps are the same, user messages come before assistant messages
+                    if (a.role === 'user' && b.role === 'assistant') return -1;
+                    if (a.role === 'assistant' && b.role === 'user') return 1;
+                    return 0;
+                  }
+
+                  return timeA - timeB;
+                });
               });
             }
             else if (payload.eventType === 'UPDATE') {
@@ -881,13 +900,32 @@ export const useAppData = () => {
                 has_been_displayed: payload.new.has_been_displayed || false
               };
 
+              console.log('Updating message:', updatedMessage.id);
+
               setChatMessages(prevMessages => {
-                return prevMessages.map(msg =>
-                  msg.id === updatedMessage.id ? updatedMessage : msg
-                ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                const updatedMessages = prevMessages.map(msg => {
+                  if (msg.id === updatedMessage.id) {
+                    return { ...updatedMessage, isUpdating: false };
+                  }
+                  return msg;
+                });
+
+                return updatedMessages.sort((a, b) => {
+                  const timeA = new Date(a.timestamp).getTime();
+                  const timeB = new Date(b.timestamp).getTime();
+
+                  if (timeA === timeB) {
+                    if (a.role === 'user' && b.role === 'assistant') return -1;
+                    if (a.role === 'assistant' && b.role === 'user') return 1;
+                    return 0;
+                  }
+
+                  return timeA - timeB;
+                });
               });
             }
             else if (payload.eventType === 'DELETE') {
+              console.log('Deleting message:', payload.old.id);
               setChatMessages(prevMessages => {
                 return prevMessages.filter(msg => msg.id !== payload.old.id);
               });
@@ -901,6 +939,7 @@ export const useAppData = () => {
       console.error('Error setting up chat message listener:', error);
     }
   }, []);
+
 
   const setupNotesListener = useCallback(async (user: any) => {
     try {
