@@ -8,7 +8,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Document } from '../types/Document';
 import { useAuth } from '../hooks/useAuth';
-import { generateId } from '@/utils/helpers';
+// generateId is no longer strictly needed for new uploads as backend generates it
+// import { generateId } from '@/utils/helpers'; 
 
 interface DocumentUploadProps {
   documents: Document[];
@@ -21,7 +22,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
   const { user } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  // Upload progress will now be managed by the backend or a simpler client-side indicator
+  // const [uploadProgress, setUploadProgress] = useState(0); 
   const [dragActive, setDragActive] = useState(false);
   const [processingDocuments, setProcessingDocuments] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -45,7 +47,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
   };
 
   const handleFileSelection = useCallback((file: File) => {
-    const MAX_FILE_SIZE_MB = 200; // Adjust based on max video size
+    const MAX_FILE_SIZE_MB = 200; // Consistent with backend
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
       toast.error(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`);
       setSelectedFile(null);
@@ -53,73 +55,19 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       return;
     }
 
-    // Allowed types from SUPPORTED_FILE_TYPES
-    const allowedTypes = Object.keys({
-      'image/jpeg': 'image',
-      'image/jpg': 'image',
-      'image/png': 'image',
-      'image/gif': 'image',
-      'image/webp': 'image',
-      'image/bmp': 'image',
-      'image/svg+xml': 'image',
-      'image/tiff': 'image',
-      'image/tif': 'image',
-      'image/ico': 'image',
-      'image/heic': 'image',
-      'image/heif': 'image',
-      'application/pdf': 'pdf',
-      'application/msword': 'document',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'document',
-      'application/vnd.ms-excel': 'spreadsheet',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'spreadsheet',
-      'application/vnd.ms-powerpoint': 'presentation',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'presentation',
-      'application/rtf': 'document',
-      'application/vnd.oasis.opendocument.text': 'document',
-      'application/vnd.oasis.opendocument.spreadsheet': 'spreadsheet',
-      'application/vnd.oasis.opendocument.presentation': 'presentation',
-      'text/plain': 'text',
-      'text/csv': 'csv',
-      'text/markdown': 'markdown',
-      'text/html': 'html',
-      'text/xml': 'xml',
-      'application/json': 'json',
-      'application/xml': 'xml',
-      'text/javascript': 'code',
-      'application/javascript': 'code',
-      'text/typescript': 'code',
-      'application/typescript': 'code',
-      'text/css': 'code',
-      'text/x-python': 'code',
-      'text/x-java': 'code',
-      'text/x-c': 'code',
-      'text/x-cpp': 'code',
-      'text/x-csharp': 'code',
-      'text/x-php': 'code',
-      'text/x-ruby': 'code',
-      'text/x-go': 'code',
-      'text/x-rust': 'code',
-      'text/x-sql': 'code',
-      'application/zip': 'archive',
-      'application/x-rar-compressed': 'archive',
-      'application/x-7z-compressed': 'archive',
-      'application/x-tar': 'archive',
-      'application/gzip': 'archive',
-      'audio/mpeg': 'audio',
-      'audio/wav': 'audio',
-      'audio/ogg': 'audio',
-      'audio/m4a': 'audio',
-      'audio/webm': 'audio',
-      'audio/flac': 'audio',
-      'video/mp4': 'video',
-      'video/avi': 'video',
-      'video/mov': 'video',
-      'video/wmv': 'video',
-      'video/webm': 'video',
-      'video/mkv': 'video'
-    });
+    // Allowed types should match SUPPORTED_FILE_TYPES in the backend
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml', 'image/tiff', 'image/tif', 'image/ico', 'image/heic', 'image/heif',
+      'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/rtf', 'application/vnd.oasis.opendocument.text', 'application/vnd.oasis.opendocument.spreadsheet', 'application/vnd.oasis.opendocument.presentation',
+      'text/plain', 'text/csv', 'text/markdown', 'text/html', 'text/xml', 'application/json', 'application/xml',
+      'text/javascript', 'application/javascript', 'text/typescript', 'application/typescript', 'text/css', 'text/x-python', 'text/x-java', 'text/x-c', 'text/x-cpp', 'text/x-csharp', 'text/x-php', 'text/x-ruby', 'text/x-go', 'text/x-rust', 'text/x-sql',
+      'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed', 'application/x-tar', 'application/gzip',
+      'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/m4a', 'audio/webm', 'audio/flac',
+      'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/webm', 'video/mkv'
+    ];
+    
     if (!allowedTypes.includes(file.type)) {
-      toast.error('Unsupported file type.');
+      toast.error('Unsupported file type. Please check the allowed file types.');
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
@@ -178,9 +126,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     }
 
     setIsUploading(true);
-    setUploadProgress(0);
+    // setUploadProgress(0); // No longer needed with backend handling
 
-    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
+    // Replace with your actual document-processor edge function URL
+    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor'; 
 
     try {
       toast.info(`Uploading and processing "${selectedFile.name}"...`);
@@ -192,6 +141,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
         throw new Error('No valid authentication token found');
       }
 
+      // Payload structure matches the document-processor expected input
       const payload = {
         userId: user.id,
         files: [{
@@ -217,9 +167,18 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       }
 
       const result = await response.json();
-      toast.success('File processed successfully.');
+      
+      // Assuming the backend returns the full saved document object(s)
+      if (result.documents && result.documents.length > 0) {
+        result.documents.forEach((doc: Document) => {
+          onDocumentUploaded(doc); // Add new document to local state
+        });
+        toast.success('File processed and saved successfully.');
+      } else {
+        toast.warning('File processed but no documents were returned.');
+      }
 
-      // Reset
+      // Reset form
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
 
@@ -237,31 +196,32 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       return;
     }
 
-    if (processingDocuments.has(doc.id)) {
+    if (processingDocuments.has(doc.id) || (doc.processing_status as string) === 'pending') {
       toast.warning('Analysis is already in progress for this document.');
       return;
     }
 
     setProcessingDocuments(prev => new Set(prev).add(doc.id));
+    onDocumentUpdated({ ...doc, processing_status: 'pending', processing_error: null }); // Optimistic update
 
     const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
 
     try {
       toast.info(`${doc.processing_status === 'failed' ? 'Retrying' : 'Starting'} analysis for "${doc.file_name}"...`);
 
-      if (doc.processing_status === 'failed') {
-        onDocumentUpdated({ ...doc, processing_status: 'pending', processing_error: null });
-      }
-
-      // Fetch base64 from URL
+      // For re-analysis, fetch the file's content (base64) from its URL
       let base64Data: string | null = null;
-      const response = await fetch(doc.file_url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch file`);
+      try {
+        const response = await fetch(doc.file_url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch file from URL: ${doc.file_url}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const binary = String.fromCharCode(...new Uint8Array(arrayBuffer));
+        base64Data = btoa(binary);
+      } catch (fetchError: any) {
+        throw new Error(`Error fetching file for re-analysis: ${fetchError.message}`);
       }
-      const arrayBuffer = await response.arrayBuffer();
-      const binary = String.fromCharCode(...new Uint8Array(arrayBuffer));
-      base64Data = btoa(binary);
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
@@ -273,8 +233,14 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
         files: [{
           name: doc.file_name,
           mimeType: doc.file_type,
-          data: base64Data,
-          size: doc.file_size
+          data: base64Data, // Send base64 data for reprocessing
+          size: doc.file_size,
+          // If you want to instruct the backend to update an existing document
+          // rather than creating a new one, you might include the document ID.
+          // For now, the backend will process and save. You'll handle the update
+          // based on the response if the document is re-processed and a new entry
+          // is created, or if the backend explicitly updates the existing one.
+          idToUpdate: doc.id // Custom field to indicate update for backend
         }]
       };
 
@@ -289,10 +255,17 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
 
       if (!fetchResponse.ok) {
         const errorBody = await fetchResponse.json();
-        throw new Error(`Analysis failed: ${errorBody.error}`);
+        throw new Error(`Analysis failed: ${errorBody.error || fetchResponse.statusText}`);
       }
 
-      toast.info('Analysis request sent successfully.');
+      const result = await fetchResponse.json();
+      if (result.documents && result.documents.length > 0) {
+        const updatedDoc = result.documents.find((d: Document) => d.id === doc.id) || result.documents[0];
+        onDocumentUpdated(updatedDoc); // Update the local document state
+        toast.success('Document analysis completed successfully!');
+      } else {
+        toast.warning('Analysis request sent, but no updated document data received.');
+      }
 
     } catch (error: any) {
       toast.error(`Failed to initiate analysis: ${error.message}`);
@@ -310,129 +283,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     }
   };
 
-
-  // const handleUpload = async () => {
-  //   if (!selectedFile || !user?.id) {
-  //     toast.error('Please select a file and ensure you are logged in.');
-  //     return;
-  //   }
-
-  //   if (isUploading) {
-  //     toast.warning('Upload already in progress. Please wait...');
-  //     return;
-  //   }
-
-  //   setIsUploading(true);
-  //   setUploadProgress(0);
-
-  //   const isImage = selectedFile.type.startsWith('image/');
-  //   const fileExtension = selectedFile.name.split('.').pop();
-  //   const fileName = `${generateId()}.${fileExtension}`;
-  //   const filePath = `user_uploads/${user.id}/${fileName}`;
-
-  //   let newDocumentId: string | null = null;
-  //   let uploadedFilePath: string | null = null;
-
-  //   try {
-  //     toast.info(`Uploading ${isImage ? 'image' : 'document'}...`);
-  //     const { data: storageData, error: storageError } = await supabase.storage
-  //       .from('documents')
-  //       .upload(filePath, selectedFile, {
-  //         cacheControl: '3600',
-  //         upsert: false,
-  //       });
-
-  //     if (storageError) {
-  //       throw new Error(`Storage upload failed: ${storageError.message}`);
-  //     }
-
-  //     uploadedFilePath = filePath;
-
-  //     const { data: publicUrlData } = supabase.storage
-  //       .from('documents')
-  //       .getPublicUrl(filePath);
-
-  //     const fileUrl = publicUrlData.publicUrl;
-
-  //     toast.info(`Registering ${isImage ? 'image' : 'document'}...`);
-  //     const tempDocId = generateId();
-  //     const { data: docData, error: dbError } = await supabase
-  //       .from('documents')
-  //       .insert({
-  //         id: tempDocId,
-  //         title: selectedFile.name,
-  //         file_url: fileUrl,
-  //         type: isImage ? 'image' : 'text',
-  //         created_at: new Date().toISOString(),
-  //         updated_at: new Date().toISOString(),
-  //         content_extracted: null,
-  //         processing_error: null,
-  //         user_id: user.id,
-  //         file_name: selectedFile.name,
-  //         file_type: selectedFile.type,
-  //         file_size: selectedFile.size,
-  //         processing_status: 'pending',
-  //       })
-  //       .select()
-  //       .single();
-
-  //     if (dbError) {
-  //       throw new Error(`Database insertion failed: ${dbError.message}`);
-  //     }
-
-  //     newDocumentId = docData.id;
-  //     toast.success(`${isImage ? 'Image' : 'Document'} uploaded and registered! Processing content...`);
-
-  //     triggerAnalysis({
-  //       id: docData.id,
-  //       title: docData.title,
-  //       user_id: docData.user_id,
-  //       file_name: docData.file_name,
-  //       file_type: docData.file_type,
-  //       file_url: docData.file_url,
-  //       file_size: docData.file_size,
-  //       content_extracted: docData.content_extracted,
-  //       type: docData.type as Document['type'],
-  //       processing_status: docData.processing_status as string,
-  //       processing_error: docData.processing_error as string | null,
-  //       created_at: docData.created_at,
-  //       updated_at: docData.updated_at,
-  //     });
-
-  //   } catch (error: any) {
-  //     console.error('Upload or document registration error:', error);
-  //     toast.error(`Upload failed: ${error.message}`);
-
-  //     if (newDocumentId) {
-  //       try {
-  //         await supabase.from('documents').delete().eq('id', newDocumentId);
-  //         onDocumentDeleted(newDocumentId);
-  //       } catch (cleanupError) {
-  //         console.error('Failed to clean up document from database:', cleanupError);
-  //       }
-  //     }
-
-  //     if (uploadedFilePath) {
-  //       try {
-  //         const { error: removeError } = await supabase.storage
-  //           .from('documents')
-  //           .remove([uploadedFilePath]);
-  //         if (removeError) {
-  //           console.error('Failed to clean up storage file:', removeError);
-  //         }
-  //       } catch (cleanupError) {
-  //         console.error('Failed to clean up storage file:', cleanupError);
-  //       }
-  //     }
-  //   } finally {
-  //     setIsUploading(false);
-  //     setSelectedFile(null);
-  //     if (fileInputRef.current) {
-  //       fileInputRef.current.value = '';
-  //     }
-  //   }
-  // };
-
   const handleDeleteDocument = async (documentId: string, fileUrl: string) => {
     if (processingDocuments.has(documentId)) {
       toast.error('Cannot delete document while analysis is in progress.');
@@ -449,14 +299,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
             try {
               const url = new URL(fileUrl);
               // Extract path after the bucket name 'documents'
-              const pathSegments = url.pathname.split('/documents/');
+              const pathSegments = url.pathname.split('/chat-documents/'); // Note the bucket name change
               if (pathSegments.length > 1) {
                 storagePath = pathSegments[1];
               } else {
-                // Fallback: assume path follows user_uploads/{user.id}/{fileName}
-                const match = fileUrl.match(/\/user_uploads\/[^/]+\/[^/]+$/);
-                if (match) {
-                  storagePath = `user_uploads${match[0].split('/user_uploads')[1]}`;
+                // Fallback for older paths if 'documents' was the bucket name
+                const oldPathSegments = url.pathname.split('/documents/');
+                if (oldPathSegments.length > 1) {
+                  storagePath = oldPathSegments[1];
+                } else {
+                   // Fallback: assume path follows user_uploads/{user.id}/{fileName}
+                  const match = fileUrl.match(/\/user_uploads\/[^/]+\/[^/]+$/);
+                  if (match) {
+                    storagePath = `user_uploads${match[0].split('/user_uploads')[1]}`;
+                  }
                 }
               }
             } catch (urlError) {
@@ -465,7 +321,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
 
             if (storagePath) {
               const { error: storageError } = await supabase.storage
-                .from('documents')
+                .from('chat-documents') // Use the correct bucket name
                 .remove([storagePath]);
 
               if (storageError) {
@@ -566,7 +422,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
-                  accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp"
+                  accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.ico,.heic,.heif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.ods,.odp,.csv,.md,.html,.xml,.json,.js,.ts,.css,.py,.java,.c,.cpp,.cs,.php,.rb,.go,.rs,.sql,.zip,.rar,.7z,.tar,.gz,.mp3,.wav,.ogg,.m4a,.webm,.flac,.mp4,.avi,.mov,.wmv,.mkv"
                   disabled={isUploading}
                 />
 
@@ -623,20 +479,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                         Drop your files here, or <span className="text-blue-600 dark:text-blue-400">browse</span>
                       </h3>
                       <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-                        Supports text files, PDFs, and images (JPG, PNG, GIF, WEBP) up to 10MB
+                        Supports various document, image, audio, video, and code file types up to 200MB
                       </p>
                       <div className="flex flex-wrap justify-center gap-4 text-sm text-slate-500 dark:text-slate-500">
                         <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.TXT</span>
                         <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.PDF</span>
                         <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.JPG</span>
                         <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.PNG</span>
-                        <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.GIF</span>
-                        <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.WEBP</span>
+                        <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.DOCX</span>
+                        <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">.MP4</span>
                       </div>
                     </div>
                   )}
                 </div>
-              </div>
+                </div>
 
               {selectedFile && (
                 <div className="p-6 bg-slate-50 dark:bg-slate-700/50 border-t">
@@ -808,3 +664,4 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     </div>
   );
 };
+
