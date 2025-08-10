@@ -1552,7 +1552,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   return (
     <motion.div
       ref={diagramPanelRef}
-      className={`fixed inset-0 md:relative md:inset-y-0 md:right-0 bg-white shadow-2xl flex flex-col z-50 md:rounded-l-lg md:shadow-xl md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full h-full' : ''
+      className={`fixed inset-0 modern-scrollbar md:relative md:inset-y-0 md:right-0 bg-white shadow-2xl flex flex-col z-50 md:rounded-l-lg md:shadow-xl md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full h-full' : ''
         }`}
       variants={panelVariants}
       initial="initial"

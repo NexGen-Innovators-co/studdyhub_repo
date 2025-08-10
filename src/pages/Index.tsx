@@ -1014,10 +1014,10 @@ const Index = () => {
     setIsAILoading,
   ]);
 
-  // Message handling
-  const handleNewMessage = useCallback((message: Message) => {
-    // Handled by useAppData's listener
-  }, []);
+  // // Message handling
+  // const handleNewMessage = useCallback((message: Message) => {
+  //   // Handled by useAppData's listener
+  // }, []);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     try {
@@ -1293,7 +1293,7 @@ const Index = () => {
     onRenameChatSession: renameChatSession,
     onSelectedDocumentIdsChange: setSelectedDocumentIds,
     selectedDocumentIds,
-    onNewMessage: handleNewMessage,
+    // onNewMessage: handleNewMessage,
     isNotesHistoryOpen,
     onToggleNotesHistory: () => setIsNotesHistoryOpen(prev => !prev),
     onDeleteMessage: handleDeleteMessage,
@@ -1343,7 +1343,7 @@ const Index = () => {
     renameChatSession,
     setSelectedDocumentIds,
     selectedDocumentIds,
-    handleNewMessage,
+    // handleNewMessage,
     isNotesHistoryOpen,
     handleDeleteMessage,
     handleRegenerateResponse,
