@@ -122,26 +122,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         });
 
         const fullHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    * { box-sizing: border-box; }
-  </style>
-</head>
-<body>
 ${sanitizedHtml}
-<script>
-  window.parent.postMessage({ type: 'loaded' }, '*');
-  window.addEventListener('error', () => {
-    window.parent.postMessage({ type: 'error' }, '*');
-  });
-</script>
-</body>
-</html>
 `;
 
         const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -226,10 +207,10 @@ ${sanitizedHtml}
         className="w-full h-full border-0 rounded-lg"
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
         title="AI Generated HTML Content"
-        style={{
-          backgroundColor: 'white',
-          minHeight: '100%'
-        }}
+        // style={{
+        //   backgroundColor: 'white',
+        //   minHeight: '100%'
+        // }}
       />
     </div>
   );
@@ -402,6 +383,7 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({
   const [isAnimating, setIsAnimating] = useState(true);
   const [showWireframe, setShowWireframe] = useState(false);
   const [resetCamera, setResetCamera] = useState(0);
+  const [canvasScale, setCanvasScale] = useState(1); // New state for canvas size scaling
 
   useEffect(() => {
     if (canvasRef.current && codeContent) {
@@ -505,6 +487,18 @@ return ${functionName};
     setResetCamera(prev => prev + 1);
   }, []);
 
+  const handleZoomIn = useCallback(() => {
+    setCanvasScale(prev => Math.min(3, prev + 0.25)); // Increase canvas size, max 3x
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setCanvasScale(prev => Math.max(0.25, prev - 0.25)); // Decrease canvas size, min 0.25x
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setCanvasScale(1); // Reset to original size
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       {showControls && (
@@ -539,8 +533,35 @@ return ${functionName};
             <RotateCcw className="h-3 w-3 mr-1" />
             Reset Camera
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleZoomIn}
+            className="text-xs"
+          >
+            <ZoomIn className="h-3 w-3 mr-1" />
+            Zoom In
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleZoomOut}
+            className="text-xs"
+          >
+            <ZoomOut className="h-3 w-3 mr-1" />
+            Zoom Out
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleResetZoom}
+            className="text-xs"
+          >
+            <RotateCcw className="h-3 w-3 mr-1" />
+            Reset Zoom
+          </Button>
           <div className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
-            Mouse: Orbit | Scroll: Zoom
+            Mouse: Orbit | Scroll: Zoom | Scale: {Math.round(canvasScale * 100)}%
           </div>
         </div>
       )}
@@ -554,11 +575,20 @@ return ${functionName};
             </div>
           </div>
         )}
-        <canvas ref={canvasRef} className="max-w-full max-h-full"></canvas>
+        <canvas
+          ref={canvasRef}
+          className="max-w-full max-h-full"
+          style={{
+            transform: `scale(${canvasScale})`,
+            transformOrigin: 'center',
+            transition: 'transform 0.2s ease'
+          }}
+        ></canvas>
       </div>
     </div>
   );
 });
+
 // Enhanced Code Display Component
 const CodeDisplay: React.FC<{
   content: string;
