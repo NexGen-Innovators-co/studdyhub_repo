@@ -2,6 +2,8 @@
 
 import { lowlight } from 'lowlight';
 import { LanguageFn } from 'highlight.js';
+
+// Import more language definitions
 import javascript from 'highlight.js/lib/languages/javascript';
 import python from 'highlight.js/lib/languages/python';
 import java from 'highlight.js/lib/languages/java';
@@ -12,31 +14,66 @@ import bash from 'highlight.js/lib/languages/bash';
 import json from 'highlight.js/lib/languages/json';
 import css from 'highlight.js/lib/languages/css';
 import typescript from 'highlight.js/lib/languages/typescript';
+import yaml from 'highlight.js/lib/languages/yaml';
+import markdown from 'highlight.js/lib/languages/markdown';
+import php from 'highlight.js/lib/languages/php';
+import ruby from 'highlight.js/lib/languages/ruby';
+import go from 'highlight.js/lib/languages/go';
+import rust from 'highlight.js/lib/languages/rust';
+import swift from 'highlight.js/lib/languages/swift';
+import kotlin from 'highlight.js/lib/languages/kotlin';
+import scala from 'highlight.js/lib/languages/scala';
+import perl from 'highlight.js/lib/languages/perl';
+import r from 'highlight.js/lib/languages/r';
+import matlab from 'highlight.js/lib/languages/matlab';
+import lua from 'highlight.js/lib/languages/lua';
+import powershell from 'highlight.js/lib/languages/powershell';
+import dockerfile from 'highlight.js/lib/languages/dockerfile';
 
-// Register languages for lowlight
-// Ensure languages are registered only once to prevent errors
-try {
-  lowlight.registerLanguage('javascript', javascript as LanguageFn);
-  lowlight.registerLanguage('js', javascript as LanguageFn);
-  lowlight.registerLanguage('python', python as LanguageFn);
-  lowlight.registerLanguage('py', python as LanguageFn);
-  lowlight.registerLanguage('java', java as LanguageFn);
-  lowlight.registerLanguage('cpp', cpp as LanguageFn);
-  lowlight.registerLanguage('c++', cpp as LanguageFn);
-  lowlight.registerLanguage('sql', sql as LanguageFn);
-  lowlight.registerLanguage('xml', xml as LanguageFn);
-  lowlight.registerLanguage('html', xml as LanguageFn); // HTML is often highlighted as XML
-  lowlight.registerLanguage('bash', bash as LanguageFn);
-  lowlight.registerLanguage('shell', bash as LanguageFn);
-  lowlight.registerLanguage('json', json as LanguageFn);
-  lowlight.registerLanguage('css', css as LanguageFn);
-  lowlight.registerLanguage('typescript', typescript as LanguageFn);
-  lowlight.registerLanguage('ts', typescript as LanguageFn);
-} catch (error) {
-  console.warn('Error registering syntax highlighting languages:', error);
-}
+// Language registry with error handling
+const registerLanguage = (name: string, language: LanguageFn, aliases: string[] = []) => {
+  try {
+    lowlight.registerLanguage(name, language);
+    aliases.forEach(alias => {
+      try {
+        lowlight.registerLanguage(alias, language);
+      } catch (error) {
+        console.warn(`Failed to register language alias "${alias}":`, error);
+      }
+    });
+  } catch (error) {
+    console.warn(`Failed to register language "${name}":`, error);
+  }
+};
 
-// Define themes for syntax highlighting
+// Register languages with aliases
+registerLanguage('javascript', javascript, ['js', 'jsx', 'mjs']);
+registerLanguage('typescript', typescript, ['ts', 'tsx']);
+registerLanguage('python', python, ['py', 'py3', 'python3']);
+registerLanguage('java', java, ['class']);
+registerLanguage('cpp', cpp, ['c++', 'cc', 'cxx', 'c']);
+registerLanguage('sql', sql, ['mysql', 'postgresql', 'sqlite']);
+registerLanguage('xml', xml, ['html', 'xhtml', 'svg']);
+registerLanguage('bash', bash, ['sh', 'shell', 'zsh', 'fish']);
+registerLanguage('json', json, ['jsonc']);
+registerLanguage('css', css, ['scss', 'sass', 'less']);
+registerLanguage('yaml', yaml, ['yml']);
+registerLanguage('markdown', markdown, ['md', 'mkd']);
+registerLanguage('php', php, ['php3', 'php4', 'php5', 'php7', 'php8']);
+registerLanguage('ruby', ruby, ['rb', 'rbw']);
+registerLanguage('go', go, ['golang']);
+registerLanguage('rust', rust, ['rs']);
+registerLanguage('swift', swift, []);
+registerLanguage('kotlin', kotlin, ['kt', 'kts']);
+registerLanguage('scala', scala, []);
+registerLanguage('perl', perl, ['pl', 'pm']);
+registerLanguage('r', r, []);
+registerLanguage('matlab', matlab, ['m']);
+registerLanguage('lua', lua, []);
+registerLanguage('powershell', powershell, ['ps1', 'psd1', 'psm1']);
+registerLanguage('dockerfile', dockerfile, ['docker']);
+
+// Enhanced themes with better color schemes and accessibility
 export const themes = {
   'github-light': {
     background: '#ffffff',
@@ -44,6 +81,8 @@ export const themes = {
     lineNumbers: '#656d76',
     selection: '#0969da1a',
     border: '#d1d9e0',
+    scrollbar: '#d1d9e0',
+    searchHighlight: '#fff3cd',
     colors: {
       'hljs-comment': '#6e7781',
       'hljs-quote': '#6e7781',
@@ -88,6 +127,8 @@ export const themes = {
     lineNumbers: '#7d8590',
     selection: '#388bfd26',
     border: '#30363d',
+    scrollbar: '#30363d',
+    searchHighlight: '#bb800966',
     colors: {
       'hljs-comment': '#8b949e',
       'hljs-quote': '#8b949e',
@@ -126,12 +167,60 @@ export const themes = {
       'hljs-deletion': '#ffdcd7',
     }
   },
+  'vs-code-dark': {
+    background: '#1e1e1e',
+    foreground: '#d4d4d4',
+    lineNumbers: '#858585',
+    selection: '#264f78',
+    border: '#3c3c3c',
+    scrollbar: '#3c3c3c',
+    searchHighlight: '#bb800966',
+    colors: {
+      'hljs-comment': '#6a9955',
+      'hljs-quote': '#6a9955',
+      'hljs-keyword': '#569cd6',
+      'hljs-selector-tag': '#4ec9b0',
+      'hljs-subst': '#d4d4d4',
+      'hljs-built_in': '#4ec9b0',
+      'hljs-type': '#4ec9b0',
+      'hljs-class': '#4ec9b0',
+      'hljs-string': '#ce9178',
+      'hljs-title': '#dcdcaa',
+      'hljs-section': '#569cd6',
+      'hljs-number': '#b5cea8',
+      'hljs-literal': '#569cd6',
+      'hljs-boolean': '#569cd6',
+      'hljs-variable': '#9cdcfe',
+      'hljs-template-variable': '#9cdcfe',
+      'hljs-function': '#dcdcaa',
+      'hljs-name': '#dcdcaa',
+      'hljs-params': '#d4d4d4',
+      'hljs-attr': '#92c5f8',
+      'hljs-attribute': '#92c5f8',
+      'hljs-tag': '#569cd6',
+      'hljs-selector-id': '#d7ba7d',
+      'hljs-selector-class': '#d7ba7d',
+      'hljs-selector-attr': '#ce9178',
+      'hljs-selector-pseudo': '#ce9178',
+      'hljs-operator': '#d4d4d4',
+      'hljs-symbol': '#569cd6',
+      'hljs-bullet': '#569cd6',
+      'hljs-regexp': '#d16969',
+      'hljs-meta': '#569cd6',
+      'hljs-meta-keyword': '#569cd6',
+      'hljs-meta-string': '#ce9178',
+      'hljs-addition': '#b5cea8',
+      'hljs-deletion': '#d16969',
+    }
+  },
   'monokai': {
     background: '#272822',
     foreground: '#f8f8f2',
     lineNumbers: '#75715e',
     selection: '#49483e',
     border: '#3e3d32',
+    scrollbar: '#3e3d32',
+    searchHighlight: '#bb800966',
     colors: {
       'hljs-comment': '#75715e',
       'hljs-quote': '#75715e',
@@ -176,6 +265,8 @@ export const themes = {
     lineNumbers: '#6272a4',
     selection: '#44475a',
     border: '#44475a',
+    scrollbar: '#44475a',
+    searchHighlight: '#bb800966',
     colors: {
       'hljs-comment': '#6272a4',
       'hljs-quote': '#6272a4',
@@ -220,6 +311,8 @@ export const themes = {
     lineNumbers: '#616e88',
     selection: '#434c5e',
     border: '#3b4252',
+    scrollbar: '#3b4252',
+    searchHighlight: '#bb800966',
     colors: {
       'hljs-comment': '#616e88',
       'hljs-quote': '#616e88',
@@ -264,6 +357,8 @@ export const themes = {
     lineNumbers: '#636d83',
     selection: '#2c323d',
     border: '#2c323d',
+    scrollbar: '#2c323d',
+    searchHighlight: '#bb800966',
     colors: {
       'hljs-comment': '#5c6370',
       'hljs-quote': '#5c6370',
@@ -308,6 +403,8 @@ export const themes = {
     lineNumbers: '#93a1a1',
     selection: '#eee8d5',
     border: '#eee8d5',
+    scrollbar: '#eee8d5',
+    searchHighlight: '#bb800966',
     colors: {
       'hljs-comment': '#93a1a1',
       'hljs-quote': '#93a1a1',
@@ -352,6 +449,8 @@ export const themes = {
     lineNumbers: '#565f89',
     selection: '#364a82',
     border: '#24283b',
+    scrollbar: '#24283b',
+    searchHighlight: '#bb800966',
     colors: {
       'hljs-comment': '#565f89',
       'hljs-quote': '#565f89',
@@ -389,25 +488,150 @@ export const themes = {
       'hljs-addition': '#9ece6a',
       'hljs-deletion': '#f7768e',
     }
+  },
+  'high-contrast': {
+    background: '#000000',
+    foreground: '#ffffff',
+    lineNumbers: '#808080',
+    selection: '#4d4d4d',
+    border: '#333333',
+    scrollbar: '#333333',
+    searchHighlight: '#ffff00',
+    colors: {
+      'hljs-comment': '#808080',
+      'hljs-quote': '#808080',
+      'hljs-keyword': '#00ffff',
+      'hljs-selector-tag': '#00ff00',
+      'hljs-subst': '#ffffff',
+      'hljs-built_in': '#ffff00',
+      'hljs-type': '#ffff00',
+      'hljs-class': '#00ff00',
+      'hljs-string': '#ff00ff',
+      'hljs-title': '#00ffff',
+      'hljs-section': '#00ffff',
+      'hljs-number': '#ff8000',
+      'hljs-literal': '#ff8000',
+      'hljs-boolean': '#ff8000',
+      'hljs-variable': '#ffffff',
+      'hljs-template-variable': '#ffffff',
+      'hljs-function': '#00ffff',
+      'hljs-name': '#00ffff',
+      'hljs-params': '#ffffff',
+      'hljs-attr': '#00ff00',
+      'hljs-attribute': '#00ff00',
+      'hljs-tag': '#00ff00',
+      'hljs-selector-id': '#00ffff',
+      'hljs-selector-class': '#00ff00',
+      'hljs-selector-attr': '#ffff00',
+      'hljs-selector-pseudo': '#ffff00',
+      'hljs-operator': '#00ffff',
+      'hljs-symbol': '#00ffff',
+      'hljs-bullet': '#00ffff',
+      'hljs-regexp': '#ff00ff',
+      'hljs-meta': '#00ffff',
+      'hljs-meta-keyword': '#00ffff',
+      'hljs-meta-string': '#ff00ff',
+      'hljs-addition': '#00ff00',
+      'hljs-deletion': '#ff0000',
+    }
   }
 };
 
 export type ThemeName = keyof typeof themes;
 
-// Helper to escape HTML for plain text display
-export const escapeHtml = (text: string) => {
+// Enhanced HTML escaping with additional security
+export const escapeHtml = (text: string): string => {
   const map: { [key: string]: string } = {
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
-    "'": '&#039;'
+    "'": '&#039;',
+    '/': '&#x2F;',
+    '`': '&#x60;',
+    '=': '&#x3D;'
   };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
+  return text.replace(/[&<>"'`=\/]/g, (m) => map[m]);
 };
 
-// Helper to convert Lowlight result to HTML with theme support
-export const toHtml = (result: any, theme: typeof themes[ThemeName]) => {
+// Enhanced code indentation detection and formatting
+export const detectIndentation = (code: string): { type: 'spaces' | 'tabs'; size: number } => {
+  const lines = code.split('\n').filter(line => line.trim().length > 0);
+  let spaceIndents = 0;
+  let tabIndents = 0;
+  const spaceSizes: { [key: number]: number } = {};
+
+  for (const line of lines) {
+    const match = line.match(/^(\s+)/);
+    if (match) {
+      const indent = match[1];
+      if (indent.includes('\t')) {
+        tabIndents++;
+      } else {
+        spaceIndents++;
+        const size = indent.length;
+        spaceSizes[size] = (spaceSizes[size] || 0) + 1;
+      }
+    }
+  }
+
+  if (tabIndents > spaceIndents) {
+    return { type: 'tabs', size: 1 };
+  } else {
+    // Find most common space indentation
+    const sizes = Object.keys(spaceSizes).map(Number).sort((a, b) => spaceSizes[b] - spaceSizes[a]);
+    const mostCommon = sizes[0] || 2;
+    return { type: 'spaces', size: mostCommon };
+  }
+};
+
+// Format code with proper indentation
+export const formatCode = (code: string, language?: string): string => {
+  if (!code) return code;
+
+  const { type, size } = detectIndentation(code);
+  const lines = code.split('\n');
+  
+  // Basic formatting for common languages
+  if (language === 'json') {
+    try {
+      const parsed = JSON.parse(code);
+      return JSON.stringify(parsed, null, type === 'tabs' ? '\t' : ' '.repeat(size));
+    } catch {
+      return code; // Return original if parsing fails
+    }
+  }
+
+  // For other languages, just ensure consistent indentation
+  let indentLevel = 0;
+  const formatted = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return '';
+
+    // Simple indentation logic for bracket-based languages
+    if (['javascript', 'typescript', 'java', 'cpp', 'css'].includes(language || '')) {
+      if (trimmed.includes('}') && !trimmed.includes('{')) {
+        indentLevel = Math.max(0, indentLevel - 1);
+      }
+      
+      const indent = type === 'tabs' ? '\t'.repeat(indentLevel) : ' '.repeat(indentLevel * size);
+      const result = indent + trimmed;
+      
+      if (trimmed.includes('{') && !trimmed.includes('}')) {
+        indentLevel++;
+      }
+      
+      return result;
+    }
+
+    return line; // Return original line for other languages
+  });
+
+  return formatted.join('\n');
+};
+
+// Helper to convert Lowlight result to HTML with enhanced theme support
+export const toHtml = (result: any, theme: typeof themes[ThemeName]): string => {
   const nodeToHtml = (node: any): string => {
     if (node.type === 'text') {
       return escapeHtml(node.value);
@@ -417,27 +641,188 @@ export const toHtml = (result: any, theme: typeof themes[ThemeName]) => {
       const classNames = (properties?.className || []).join(' ');
 
       let style = '';
-      classNames.split(' ').forEach(cls => {
+      const classList = classNames.split(' ');
+      
+      // Apply theme colors
+      classList.forEach(cls => {
         if (theme.colors[cls as keyof typeof theme.colors]) {
-          style += `color: ${theme.colors[cls as keyof typeof theme.colors]}; `;
+          const color = theme.colors[cls as keyof typeof theme.colors];
+          style += `color: ${color}; `;
         }
       });
+
+      // Add font weight for certain elements
+      if (classList.includes('hljs-keyword') || classList.includes('hljs-built_in')) {
+        style += 'font-weight: 600; ';
+      }
       
+      // Add text decoration for links and meta
+      if (classList.includes('hljs-link') || classList.includes('hljs-meta')) {
+        style += 'text-decoration: underline; ';
+      }
+
       const childrenHtml = children?.map(nodeToHtml).join('') || '';
-      return `<${tagName}${style ? ` style="${style.trim()}"` : ''}>${childrenHtml}</${tagName}>`;
+      const styleAttr = style ? ` style="${style.trim()}"` : '';
+      
+      return `<${tagName}${styleAttr}>${childrenHtml}</${tagName}>`;
     }
     return '';
   };
+  
   return result.children.map(nodeToHtml).join('');
 };
 
-// Enhanced syntax highlighting function with theme support
-export const highlightCode = (code: string, language: string, theme: typeof themes[ThemeName]) => {
+// Enhanced syntax highlighting function with better error handling and formatting
+export const highlightCode = (
+  code: string, 
+  language: string, 
+  theme: typeof themes[ThemeName],
+  options: {
+    format?: boolean;
+    showErrors?: boolean;
+    maxLength?: number;
+  } = {}
+): string => {
+  const { format = false, showErrors = false, maxLength = 100000 } = options;
+
+  if (!code || code.length === 0) {
+    return '';
+  }
+
+  // Truncate very long code
+  let processedCode = code.length > maxLength ? code.substring(0, maxLength) + '\n... (truncated)' : code;
+  
+  // Format code if requested
+  if (format) {
+    try {
+      processedCode = formatCode(processedCode, language);
+    } catch (error) {
+      console.warn('Code formatting failed:', error);
+    }
+  }
+
   try {
-    const result = lowlight.highlight(language, code);
+    // Normalize language name
+    const normalizedLang = language.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // Try to highlight with the specified language
+    let result;
+    try {
+      result = lowlight.highlight(normalizedLang, processedCode);
+    } catch (langError) {
+      // Fallback to auto-detection
+      result = lowlight.highlightAuto(processedCode);
+    }
+    
     return toHtml(result, theme);
   } catch (error) {
     console.warn('Syntax highlighting failed:', error);
-    return escapeHtml(code);
+    
+    if (showErrors) {
+      return `<span style="color: ${theme.colors['hljs-comment'] || '#888'};">/* Syntax highlighting failed: ${error} */</span>\n${escapeHtml(processedCode)}`;
+    }
+    
+    return escapeHtml(processedCode);
   }
+};
+
+// Language detection helper
+export const detectLanguage = (code: string, filename?: string): string => {
+  if (filename) {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    const extensionMap: { [key: string]: string } = {
+      'js': 'javascript',
+      'jsx': 'javascript', 
+      'ts': 'typescript',
+      'tsx': 'typescript',
+      'py': 'python',
+      'java': 'java',
+      'cpp': 'cpp',
+      'cc': 'cpp',
+      'cxx': 'cpp',
+      'c': 'cpp',
+      'sql': 'sql',
+      'html': 'xml',
+      'xml': 'xml',
+      'sh': 'bash',
+      'bash': 'bash',
+      'json': 'json',
+      'css': 'css',
+      'scss': 'css',
+      'sass': 'css',
+      'yaml': 'yaml',
+      'yml': 'yaml',
+      'md': 'markdown',
+      'php': 'php',
+      'rb': 'ruby',
+      'go': 'go',
+      'rs': 'rust',
+      'swift': 'swift',
+      'kt': 'kotlin',
+      'scala': 'scala',
+      'pl': 'perl',
+      'r': 'r',
+      'm': 'matlab',
+      'lua': 'lua',
+      'ps1': 'powershell',
+      'dockerfile': 'dockerfile'
+    };
+    
+    if (ext && extensionMap[ext]) {
+      return extensionMap[ext];
+    }
+  }
+
+  // Basic language detection based on content patterns
+  if (code.includes('function') && code.includes('{')) {
+    if (code.includes('const ') || code.includes('let ') || code.includes('=>')) {
+      return 'javascript';
+    }
+  }
+  
+  if (code.includes('def ') && code.includes(':')) {
+    return 'python';
+  }
+  
+  if (code.includes('public class') || code.includes('import java.')) {
+    return 'java';
+  }
+  
+  if (code.includes('#include') || code.includes('std::')) {
+    return 'cpp';
+  }
+  
+  if (code.includes('SELECT') || code.includes('FROM') || code.includes('WHERE')) {
+    return 'sql';
+  }
+  
+  if (code.includes('<?php') || code.includes('<?=')) {
+    return 'php';
+  }
+  
+  if (code.startsWith('{') && code.endsWith('}')) {
+    try {
+      JSON.parse(code);
+      return 'json';
+    } catch {
+      // Not valid JSON
+    }
+  }
+
+  return 'text';
+};
+
+// Get available languages
+export const getAvailableLanguages = (): string[] => {
+  return [
+    'javascript', 'typescript', 'python', 'java', 'cpp', 'sql', 'xml', 'html',
+    'bash', 'json', 'css', 'yaml', 'markdown', 'php', 'ruby', 'go', 'rust',
+    'swift', 'kotlin', 'scala', 'perl', 'r', 'matlab', 'lua', 'powershell',
+    'dockerfile'
+  ];
+};
+
+// Get theme names
+export const getAvailableThemes = (): ThemeName[] => {
+  return Object.keys(themes) as ThemeName[];
 };

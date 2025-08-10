@@ -7,10 +7,10 @@ import { Badge } from './ui/badge';
 
 // Import Chart.js for rendering
 import { Chart, registerables } from 'chart.js';
-// NEW: Import THREE and OrbitControls from npm packages
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+// // NEW: Import THREE and OrbitControls from npm packages
+// import * as THREE from 'three';
+// import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+// import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Import lowlight and language types for syntax highlighting
 import { lowlight } from 'lowlight';
