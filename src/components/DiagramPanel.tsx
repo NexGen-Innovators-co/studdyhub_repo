@@ -1,10 +1,17 @@
 import React, { useRef, useEffect, useState, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
-import { X, RefreshCw, AlertTriangle, Code, Download, GripVertical, Loader2, Palette, Maximize2, Minimize2, ZoomIn, ZoomOut, Eye, FileCode, Wifi, WifiOff } from 'lucide-react';
+import {
+  X, RefreshCw, AlertTriangle, Code, Download, GripVertical, Loader2,
+  Palette, Maximize2, Minimize2, ZoomIn, ZoomOut, Eye, FileCode,
+  Wifi, WifiOff, Copy, Search, Settings, RotateCcw, Play, Pause,
+  Move, Square, Circle, Triangle, Type, Image as ImageIcon,
+  Grid, Layers, Sun, Moon, Monitor, ChevronDown, ChevronUp,
+  PanelTop, PanelBottom, MousePointer, Hand
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Chart, registerables } from 'chart.js';
-import Mermaid from './Mermaid';
+import mermaid from 'mermaid';
 import { Graphviz } from '@hpcc-js/wasm';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -26,12 +33,6 @@ declare global {
     html2canvas: any;
     Viz: any;
   }
-}
-
-// Extend MermaidProps interface to include onError
-interface MermaidProps {
-  chart: string;
-  onError?: (code: string, errorType: 'syntax' | 'rendering') => void;
 }
 
 // Enhanced Error Boundary for better error handling
@@ -93,6 +94,7 @@ class PanelErrorBoundary extends React.Component<
   }
 }
 
+// Enhanced HTML Renderer with better isolation
 const IsolatedHtml = ({ html }: { html: string }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,9 +127,19 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    * { box-sizing: border-box; }
+  </style>
 </head>
 <body>
 ${sanitizedHtml}
+<script>
+  window.parent.postMessage({ type: 'loaded' }, '*');
+  window.addEventListener('error', () => {
+    window.parent.postMessage({ type: 'error' }, '*');
+  });
+</script>
 </body>
 </html>
 `;
@@ -204,7 +216,7 @@ ${sanitizedHtml}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
           <div className="flex flex-col items-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-3" />
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
             <p className="text-sm text-gray-600 dark:text-gray-400">Rendering HTML content...</p>
           </div>
         </div>
@@ -239,11 +251,15 @@ interface ChartRendererProps {
   chartConfig: any;
   onInvalidConfig: (error: string | null) => void;
   chartRef: React.RefObject<HTMLCanvasElement>;
+  showControls?: boolean;
 }
 
-const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, onInvalidConfig, chartRef }) => {
+const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, onInvalidConfig, chartRef, showControls = true }) => {
   const chartInstance = useRef<Chart | null>(null);
   const [isRendering, setIsRendering] = useState(false);
+  const [showLegend, setShowLegend] = useState(true);
+  const [showGridLines, setShowGridLines] = useState(true);
+  const [chartType, setChartType] = useState<string>('');
 
   useEffect(() => {
     if (chartRef.current) {
@@ -256,7 +272,34 @@ const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, onInval
       try {
         const ctx = chartRef.current.getContext('2d');
         if (ctx) {
-          chartInstance.current = new Chart(ctx, chartConfig);
+          // Apply control settings to config
+          const enhancedConfig = {
+            ...chartConfig,
+            options: {
+              ...chartConfig.options,
+              plugins: {
+                ...chartConfig.options?.plugins,
+                legend: {
+                  ...chartConfig.options?.plugins?.legend,
+                  display: showLegend,
+                },
+              },
+              scales: showGridLines ? chartConfig.options?.scales : {
+                ...chartConfig.options?.scales,
+                x: {
+                  ...chartConfig.options?.scales?.x,
+                  grid: { display: false },
+                },
+                y: {
+                  ...chartConfig.options?.scales?.y,
+                  grid: { display: false },
+                },
+              },
+            },
+          };
+
+          chartInstance.current = new Chart(ctx, enhancedConfig);
+          setChartType(chartConfig.type || 'unknown');
           onInvalidConfig(null);
           setIsRendering(false);
         }
@@ -285,19 +328,56 @@ const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, onInval
         chartInstance.current = null;
       }
     };
-  }, [chartConfig, chartRef, onInvalidConfig]);
+  }, [chartConfig, chartRef, onInvalidConfig, showLegend, showGridLines]);
+
+  const updateChart = useCallback(() => {
+    if (chartInstance.current) {
+      chartInstance.current.update();
+    }
+  }, []);
 
   return (
-    <div className="p-4 flex items-center justify-center h-full relative">
-      {isRendering && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
-          <div className="flex flex-col items-center">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-600 mb-2" />
-            <p className="text-sm text-gray-600 dark:text-gray-400">Rendering chart...</p>
+    <div className="flex flex-col h-full">
+      {showControls && (
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Chart Controls:
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setShowLegend(!showLegend); }}
+            className={`text-xs ${showLegend ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+          >
+            <Layers className="h-3 w-3 mr-1" />
+            Legend
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setShowGridLines(!showGridLines); }}
+            className={`text-xs ${showGridLines ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+          >
+            <Grid className="h-3 w-3 mr-1" />
+            Grid
+          </Button>
+          <div className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
+            Type: {chartType}
           </div>
         </div>
       )}
-      <canvas ref={chartRef} className="max-w-full h-full"></canvas>
+
+      <div className="flex-1 p-4 flex items-center justify-center relative">
+        {isRendering && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
+            <div className="flex flex-col items-center">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-600 mb-2" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">Rendering chart...</p>
+            </div>
+          </div>
+        )}
+        <canvas ref={chartRef} className="max-w-full max-h-full"></canvas>
+      </div>
     </div>
   );
 });
@@ -307,34 +387,89 @@ interface ThreeJSRendererProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   onInvalidCode: (error: string | null) => void;
   onSceneReady: (scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => void;
+  showControls?: boolean;
 }
 
-const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({ codeContent, canvasRef, onInvalidCode, onSceneReady }) => {
+const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({
+  codeContent,
+  canvasRef,
+  onInvalidCode,
+  onSceneReady,
+  showControls = true
+}) => {
   const threeJsCleanupRef = useRef<(() => void) | null>(null);
   const [isRendering, setIsRendering] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(true);
+  const [showWireframe, setShowWireframe] = useState(false);
+  const [resetCamera, setResetCamera] = useState(0);
 
   useEffect(() => {
     if (canvasRef.current && codeContent) {
       setIsRendering(true);
 
       if (threeJsCleanupRef.current) {
-        threeJsCleanupRef.current();
+        try {
+          threeJsCleanupRef.current();
+        } catch (error) {
+          console.warn('Cleanup failed:', error);
+        }
         threeJsCleanupRef.current = null;
       }
 
       try {
+        // Dynamically detect the scene creation function name
+        const functionNameMatch = codeContent.match(/function\s+([a-zA-Z0-9_]+)\s*\(\s*canvas\s*,/);
+        if (!functionNameMatch) {
+          throw new Error('No valid scene creation function found. Expected: function <name>(canvas, THREE, ...)');
+        }
+        const functionName = functionNameMatch[1];
+
+        // Create wrapper to execute the code
         const createSceneWrapper = new Function('THREE', 'OrbitControls', 'GLTFLoader', `
 ${codeContent}
-return createThreeJSScene;
+return ${functionName};
 `);
 
         const createScene = createSceneWrapper(THREE, OrbitControls, GLTFLoader);
-        const { scene, renderer, cleanup } = createScene(canvasRef.current, THREE, OrbitControls, GLTFLoader);
+        const result = createScene(canvasRef.current, THREE, OrbitControls, GLTFLoader);
 
-        threeJsCleanupRef.current = cleanup;
-        onInvalidCode(null);
-        onSceneReady(scene, renderer, cleanup);
-        setIsRendering(false);
+        if (result && result.scene && result.renderer && result.cleanup) {
+          const { scene, renderer, cleanup } = result;
+
+          // Ensure basic lighting if none exists
+          if (!scene.children.some(child => child.isLight)) {
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 5, 5);
+            scene.add(ambientLight, directionalLight);
+          }
+
+          // Apply fallback material to meshes without valid materials
+          scene.traverse((object) => {
+            if (object.isMesh && (!object.material || !object.material.isMaterial)) {
+              object.material = new THREE.MeshStandardMaterial({
+                color: 0xaaaaaa,
+                roughness: 0.5,
+                metalness: 0.2
+              });
+            }
+          });
+
+          threeJsCleanupRef.current = () => {
+            try {
+              cleanup();
+            } catch (error) {
+              console.warn('Scene cleanup failed:', error);
+            }
+            // Clean up lights added by renderer
+            scene.children.filter(child => child.isLight).forEach(light => scene.remove(light));
+          };
+          onInvalidCode(null);
+          onSceneReady(scene, renderer, threeJsCleanupRef.current);
+          setIsRendering(false);
+        } else {
+          throw new Error('Invalid Three.js scene structure: missing scene, renderer, or cleanup');
+        }
       } catch (error: any) {
         console.error("Error rendering Three.js scene:", error);
         onInvalidCode(`3D scene error: ${error.message}`);
@@ -348,7 +483,7 @@ return createThreeJSScene;
             ctx.font = '16px Arial';
             ctx.textAlign = 'center';
             ctx.fillText('3D Scene Error', canvasRef.current.width / 2, canvasRef.current.height / 2);
-            ctx.fillText('Check code syntax', canvasRef.current.width / 2, canvasRef.current.height / 2 + 25);
+            ctx.fillText(error.message, canvasRef.current.width / 2, canvasRef.current.height / 2 + 25);
           }
         }
       }
@@ -356,23 +491,245 @@ return createThreeJSScene;
 
     return () => {
       if (threeJsCleanupRef.current) {
-        threeJsCleanupRef.current();
+        try {
+          threeJsCleanupRef.current();
+        } catch (error) {
+          console.warn('Cleanup failed during unmount:', error);
+        }
         threeJsCleanupRef.current = null;
       }
     };
-  }, [codeContent, canvasRef, onInvalidCode, onSceneReady]);
+  }, [codeContent, canvasRef, onInvalidCode, onSceneReady, resetCamera]);
+
+  const handleResetCamera = useCallback(() => {
+    setResetCamera(prev => prev + 1);
+  }, []);
 
   return (
-    <div className="p-4 flex items-center justify-center h-full relative">
-      {isRendering && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
-          <div className="flex flex-col items-center">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-600 mb-2" />
-            <p className="text-sm text-gray-600 dark:text-gray-400">Rendering 3D scene...</p>
+    <div className="flex flex-col h-full">
+      {showControls && (
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            3D Controls:
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAnimating(!isAnimating)}
+            className={`text-xs ${isAnimating ? 'bg-green-100 dark:bg-green-900' : ''}`}
+          >
+            {isAnimating ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
+            {isAnimating ? 'Pause' : 'Play'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowWireframe(!showWireframe)}
+            className={`text-xs ${showWireframe ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+          >
+            <Square className="h-3 w-3 mr-1" />
+            Wireframe
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleResetCamera}
+            className="text-xs"
+          >
+            <RotateCcw className="h-3 w-3 mr-1" />
+            Reset Camera
+          </Button>
+          <div className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
+            Mouse: Orbit | Scroll: Zoom
           </div>
         </div>
       )}
-      <canvas ref={canvasRef} className="max-w-full h-full"></canvas>
+
+      <div className="flex-1 p-4 flex items-center justify-center relative">
+        {isRendering && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
+            <div className="flex flex-col items-center">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-600 mb-2" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">Rendering 3D scene...</p>
+            </div>
+          </div>
+        )}
+        <canvas ref={canvasRef} className="max-w-full max-h-full"></canvas>
+      </div>
+    </div>
+  );
+});
+// Enhanced Code Display Component
+const CodeDisplay: React.FC<{
+  content: string;
+  language?: string;
+  theme: typeof themes[ThemeName];
+  showControls?: boolean;
+}> = memo(({ content, language, theme, showControls = true }) => {
+  const [fontSize, setFontSize] = useState(14);
+  const [showLineNumbers, setShowLineNumbers] = useState(true);
+  const [wordWrap, setWordWrap] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [highlightedContent, setHighlightedContent] = useState('');
+
+  useEffect(() => {
+    if (content) {
+      let processed = content;
+
+      // Search highlighting
+      if (searchTerm) {
+        const searchRegex = new RegExp(`(${escapeHtml(searchTerm)})`, 'gi');
+        processed = processed.replace(searchRegex, '<mark class="bg-yellow-200 dark:bg-yellow-800">$1</mark>');
+      }
+
+      // Apply syntax highlighting
+      if (language && language !== 'txt') {
+        try {
+          const highlighted = highlightCode(processed, language, theme);
+          setHighlightedContent(highlighted);
+        } catch (error) {
+          console.warn('Failed to highlight code:', error);
+          setHighlightedContent(escapeHtml(processed));
+        }
+      } else {
+        setHighlightedContent(escapeHtml(processed));
+      }
+    }
+  }, [content, language, theme, searchTerm]);
+
+  const lines = content ? content.split('\n') : [];
+  const maxLineLength = Math.max(...lines.map(line => line.length));
+
+  const handleCopyCode = useCallback(() => {
+    navigator.clipboard.writeText(content).then(() => {
+      toast.success('Code copied to clipboard');
+    }).catch(() => {
+      toast.error('Failed to copy code');
+    });
+  }, [content]);
+
+  return (
+    <div className="flex flex-col h-full">
+      {showControls && (
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b">
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Code Controls:
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLineNumbers(!showLineNumbers)}
+              className={`text-xs ${showLineNumbers ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+            >
+              <Type className="h-3 w-3 mr-1" />
+              Lines
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setWordWrap(!wordWrap)}
+              className={`text-xs ${wordWrap ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+            >
+              <PanelTop className="h-3 w-3 mr-1" />
+              Wrap
+            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFontSize(Math.max(10, fontSize - 1))}
+                className="text-xs px-2"
+              >
+                <ZoomOut className="h-3 w-3" />
+              </Button>
+              <span className="text-xs text-gray-500 px-2">{fontSize}px</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+                className="text-xs px-2"
+              >
+                <ZoomIn className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 pr-3 py-1 text-xs border rounded bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyCode}
+              className="text-xs"
+            >
+              <Copy className="h-3 w-3 mr-1" />
+              Copy
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div
+        className="flex-1 overflow-auto"
+        style={{
+          backgroundColor: theme.background,
+          color: theme.foreground,
+          fontFamily: 'JetBrains Mono, Fira Code, Monaco, Consolas, monospace'
+        }}
+      >
+        <div className="flex">
+          {showLineNumbers && (
+            <div
+              className="flex-shrink-0 px-3 py-4 text-right select-none border-r"
+              style={{
+                color: theme.lineNumbers,
+                borderColor: theme.border,
+                fontSize: `${fontSize}px`,
+                lineHeight: '1.6'
+              }}
+            >
+              {lines.map((_, index) => (
+                <div key={index} className="leading-6">
+                  {index + 1}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex-1 p-4">
+            <pre
+              className={`leading-6 ${wordWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'}`}
+              style={{
+                fontSize: `${fontSize}px`,
+                color: theme.foreground
+              }}
+            >
+              <code
+                dangerouslySetInnerHTML={{ __html: highlightedContent }}
+              />
+            </pre>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border-t text-xs text-gray-500 dark:text-gray-400 flex justify-between">
+        <span>
+          Lines: {lines.length} | Max Length: {maxLineLength} | Language: {language || 'text'}
+        </span>
+        <span>
+          {searchTerm && `Found: ${(content.match(new RegExp(searchTerm, 'gi')) || []).length} matches`}
+        </span>
+      </div>
     </div>
   );
 });
@@ -391,7 +748,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   const diagramPanelRef = useRef<HTMLDivElement>(null);
   const diagramContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<HTMLCanvasElement>(null);
-  const threeJsRef = useRef<HTMLCanvasElement>(null); // This is used for the 3D scene rendering
+  const threeJsRef = useRef<HTMLCanvasElement>(null);
   const [showSourceCode, setShowSourceCode] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeName>('github-dark');
   const [showThemeSelector, setShowThemeSelector] = useState(false);
@@ -408,6 +765,10 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [networkError, setNetworkError] = useState(false);
+  const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
+  const [mermaidError, setMermaidError] = useState<string | null>(null);
+  const [isMermaidLoading, setIsMermaidLoading] = useState(false);
+  const [showAdvancedControls, setShowAdvancedControls] = useState(false);
 
   const isPhone = useCallback(() => {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -416,33 +777,152 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
   const theme = themes[currentTheme];
 
-  // Enhanced code formatting for better display
-  const formatCodeContent = useCallback((content: string, lang?: string) => {
-    if (!content) return '';
-    
-    // Add syntax highlighting if language is provided
-    if (lang && lang !== 'txt') {
-      try {
-        return highlightCode(content, lang, themes['github-dark']);
-      } catch (error) {
-        console.warn('Failed to highlight code:', error);
-      }
-    }
-    
-    // Fallback to basic formatting
-    return `<pre style="
-      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-      color: #e2e8f0;
-      padding: 1.5rem;
-      border-radius: 0.75rem;
-      overflow-x: auto;
-      border: 1px solid #475569;
-      font-family: 'JetBrains Mono', 'Fira Code', Monaco, Consolas, monospace;
-      font-size: 14px;
-      line-height: 1.6;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    "><code>${escapeHtml(content)}</code></pre>`;
-  }, []);
+  // Enhanced diagram-specific controls
+  const DiagramControls: React.FC<{ type: string }> = useCallback(({ type }) => {
+    return (
+      <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {type === 'mermaid' && 'Mermaid Controls:'}
+            {type === 'dot' && 'Graphviz Controls:'}
+            {type === 'html' && 'Web Controls:'}
+            {type === 'image' && 'Image Controls:'}
+          </span>
+
+          {(type === 'mermaid' || type === 'dot') && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.25))}
+                className="text-xs"
+              >
+                <ZoomIn className="h-3 w-3 mr-1" />
+                Zoom In
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setZoomLevel(prev => Math.max(0.25, prev - 0.25))}
+                className="text-xs"
+              >
+                <ZoomOut className="h-3 w-3 mr-1" />
+                Zoom Out
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setZoomLevel(1);
+                  setPanOffset({ x: 0, y: 0 });
+                }}
+                className="text-xs"
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reset
+              </Button>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Zoom: {Math.round(zoomLevel * 100)}%
+              </div>
+            </>
+          )}
+
+          {type === 'image' && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setZoomLevel(prev => Math.min(5, prev + 0.5))}
+                className="text-xs"
+              >
+                <ZoomIn className="h-3 w-3 mr-1" />
+                Zoom In
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setZoomLevel(prev => Math.max(0.1, prev - 0.5))}
+                className="text-xs"
+              >
+                <ZoomOut className="h-3 w-3 mr-1" />
+                Zoom Out
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setZoomLevel(1)}
+                className="text-xs"
+              >
+                <ImageIcon className="h-3 w-3 mr-1" />
+                Fit
+              </Button>
+            </>
+          )}
+
+          {type === 'html' && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const iframe = diagramContainerRef.current?.querySelector('iframe');
+                  if (iframe) iframe.contentWindow?.location.reload();
+                }}
+                className="text-xs"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Reload
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAdvancedControls(!showAdvancedControls)}
+                className="text-xs"
+              >
+                <Settings className="h-3 w-3 mr-1" />
+                {showAdvancedControls ? 'Less' : 'More'}
+              </Button>
+            </>
+          )}
+        </div>
+
+        {/* Advanced controls panel */}
+        {showAdvancedControls && type === 'html' && (
+          <div className="w-full mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-gray-600 dark:text-gray-400">Advanced:</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const iframe = diagramContainerRef.current?.querySelector('iframe');
+                  if (iframe?.contentWindow) {
+                    iframe.contentWindow.print();
+                  }
+                }}
+                className="text-xs"
+              >
+                Print Page
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const iframe = diagramContainerRef.current?.querySelector('iframe');
+                  if (iframe?.contentWindow) {
+                    iframe.contentWindow.open('', '_blank');
+                  }
+                }}
+                className="text-xs"
+              >
+                Open in New Tab
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }, [zoomLevel, showAdvancedControls]);
 
   const handleThreeJsSceneReady = useCallback((scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => {
     setThreeJsScene(scene);
@@ -505,7 +985,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
     try {
       toast('Generating PDF...', { duration: 1000 });
-      
+
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'px',
@@ -514,19 +994,16 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
       let canvas: HTMLCanvasElement;
 
-      // Special handling for HTML content (web pages in iframe)
       if (diagramType === 'html') {
         const iframe = diagramContainerRef.current.querySelector('iframe');
         if (iframe && iframe.contentDocument) {
           try {
-            // Create a temporary container with the iframe content
             const tempContainer = document.createElement('div');
-            tempContainer.style.width = '800px'; // Fixed width for consistent PDF rendering
+            tempContainer.style.width = '800px';
             tempContainer.style.backgroundColor = '#ffffff';
             tempContainer.style.padding = '20px';
             tempContainer.innerHTML = iframe.contentDocument.body.innerHTML;
-            
-            // Add necessary styles for PDF rendering
+
             const style = document.createElement('style');
             style.textContent = `
               * { box-sizing: border-box; }
@@ -536,10 +1013,9 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
             `;
             tempContainer.appendChild(style);
-            
-            // Temporarily add to document for rendering
+
             document.body.appendChild(tempContainer);
-            
+
             canvas = await html2canvas(tempContainer, {
               scale: 2,
               useCORS: true,
@@ -550,12 +1026,10 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               scrollX: 0,
               scrollY: 0,
             });
-            
-            // Remove temporary container
+
             document.body.removeChild(tempContainer);
           } catch (iframeError) {
             console.warn('Could not access iframe content, falling back to container capture:', iframeError);
-            // Fall back to capturing the entire container
             canvas = await html2canvas(diagramContainerRef.current, {
               scale: 2,
               useCORS: true,
@@ -565,7 +1039,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             });
           }
         } else {
-          // Fall back to capturing the entire container if iframe is not accessible
           canvas = await html2canvas(diagramContainerRef.current, {
             scale: 2,
             useCORS: true,
@@ -575,7 +1048,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
           });
         }
       } else {
-        // For non-HTML content, use the original method
         const contentElement = diagramContainerRef.current;
         canvas = await html2canvas(contentElement, {
           scale: 2,
@@ -593,14 +1065,13 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-      // Handle multiple pages if content is too tall
       if (pdfHeight > pdf.internal.pageSize.getHeight()) {
         const pageHeight = pdf.internal.pageSize.getHeight();
         const totalPages = Math.ceil(pdfHeight / pageHeight);
-        
+
         for (let page = 0; page < totalPages; page++) {
           if (page > 0) pdf.addPage();
-          
+
           const yOffset = -(page * pageHeight);
           pdf.addImage(imgData, 'PNG', 0, yOffset, pdfWidth, pdfHeight);
         }
@@ -616,11 +1087,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       toast.error('Failed to generate PDF. Please try again.');
     }
   }, [diagramType]);
-
-  const handlePanStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if (!isFullScreen) return;
-    // Implement panning logic if needed
-  }, [isFullScreen]);
 
   const ThemeSelector = useCallback(() => (
     <div className="relative theme-selector-container">
@@ -639,7 +1105,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
+            className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-60 overflow-auto"
           >
             {Object.keys(themes).map((themeName) => (
               <button
@@ -648,9 +1114,16 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                   setCurrentTheme(themeName as ThemeName);
                   setShowThemeSelector(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${currentTheme === themeName ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${currentTheme === themeName ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : ''
+                  }`}
               >
-                {themeName.charAt(0).toUpperCase() + themeName.slice(1)}
+                <div className="flex items-center justify-between">
+                  <span className="capitalize">{themeName.replace('-', ' ')}</span>
+                  <div
+                    className="w-4 h-4 rounded border"
+                    style={{ backgroundColor: themes[themeName as ThemeName].background }}
+                  />
+                </div>
               </button>
             ))}
           </motion.div>
@@ -659,6 +1132,34 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     </div>
   ), [showThemeSelector, currentTheme]);
 
+  // Enhanced Mermaid rendering with better error handling
+  useEffect(() => {
+    if (diagramType === 'mermaid' && diagramContent) {
+      setIsMermaidLoading(true);
+      (async () => {
+        try {
+          await mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            fontFamily: 'arial',
+            fontSize: 16,
+          });
+          const { svg } = await mermaid.render('mermaid-graph', diagramContent);
+          setMermaidSvg(svg);
+          setMermaidError(null);
+        } catch (error: any) {
+          console.error('Error rendering Mermaid diagram:', error);
+          setMermaidError(`Failed to render Mermaid diagram: ${error.message}`);
+          onMermaidError(diagramContent, 'syntax');
+        } finally {
+          setIsMermaidLoading(false);
+        }
+      })();
+    }
+  }, [diagramContent, diagramType, onMermaidError]);
+
+  // Enhanced DOT rendering
   useEffect(() => {
     if (diagramType === 'dot' && diagramContent) {
       setIsDotLoading(true);
@@ -691,69 +1192,51 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   const contentStyle = useMemo(() => ({
     transform: `scale(${zoomLevel}) translate(${panOffset.x}px, ${panOffset.y}px)`,
     transformOrigin: 'center',
-    overflow: 'auto',
+    transition: 'transform 0.2s ease',
   }), [zoomLevel, panOffset]);
 
-  const renderSourceCode = useMemo(() => {
-    if (!diagramContent) return null;
-    const highlightedCode = highlightCode(diagramContent, language || 'text', theme);
-    return (
-      <div className="relative rounded-lg overflow-hidden h-full shadow-lg" style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}>
-        <div className="p-4 sm:p-6 overflow-auto h-full modern-scrollbar">
-          <pre className="font-mono text-xs sm:text-sm leading-relaxed">
-            <code dangerouslySetInnerHTML={{ __html: highlightedCode }} style={{ color: theme.foreground }} />
-          </pre>
-        </div>
-      </div>
-    );
-  }, [diagramContent, language, currentTheme, theme]);
-
   const renderContent = useMemo(() => {
-    let panelTitle = '';
-    let downloadButtonText = '';
-    let downloadFileName = '';
-
     if (showSourceCode && diagramContent) {
-      panelTitle = language ? `${language.toUpperCase()} Source` : 'Source Code';
-      downloadButtonText = 'Download Source';
-      downloadFileName = `source.${language || 'txt'}`;
-      return renderSourceCode;
+      return (
+        <CodeDisplay
+          content={diagramContent}
+          language={language}
+          theme={theme}
+          showControls={true}
+        />
+      );
     }
 
     if (diagramType === 'mermaid' && diagramContent) {
-      panelTitle = 'Mermaid Diagram';
-      downloadButtonText = 'Download PNG';
-      downloadFileName = 'mermaid-diagram';
-      // Mermaid component already handles its own diagramRef internally.
-      // No need to pass a separate diagramRef here. The diagramRef is used internally by the Mermaid component.
-      return <PanelErrorBoundary><Mermaid chart={diagramContent} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} diagramRef={useRef(null)} /></PanelErrorBoundary>;
-    } else if (diagramType === 'dot') {
-      panelTitle = 'DOT Graph';
-      downloadButtonText = 'Download SVG';
-      downloadFileName = 'dot-graph';
-      if (isDotLoading) {
+      if (isMermaidLoading) {
         return (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+            <div className="flex flex-col items-center">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">Rendering Mermaid diagram...</p>
+            </div>
           </div>
         );
       }
-      if (dotError) {
+      if (mermaidError) {
         return (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-3 rounded mb-4 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
-            <div className="flex items-start">
-              <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm mb-2">{dotError}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onSuggestAiCorrection(`Fix this DOT graph code: ${diagramContent}`)}
-                  className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Get AI Fix
-                </Button>
+          <div className="p-4">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
+              <div className="flex items-start">
+                <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold mb-1">Mermaid Syntax Error</h4>
+                  <p className="text-sm mb-3">{mermaidError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onSuggestAiCorrection(`Fix this Mermaid diagram code: ${diagramContent}`)}
+                    className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Get AI Fix
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -761,15 +1244,68 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       }
       return (
         <PanelErrorBoundary>
-          <div className="p-4 flex items-center justify-center h-full">
-            <div dangerouslySetInnerHTML={{ __html: dotSvg || '' }} style={{ maxWidth: '100%', maxHeight: '100%' }} />
+          <div className="flex flex-col h-full">
+            <DiagramControls type="mermaid" />
+            <div className="flex-1 p-4 flex items-center justify-center overflow-auto">
+              <div
+                className="max-w-full max-h-full"
+                style={contentStyle}
+                dangerouslySetInnerHTML={{ __html: mermaidSvg || '' }}
+              />
+            </div>
+          </div>
+        </PanelErrorBoundary>
+      );
+    } else if (diagramType === 'dot') {
+      if (isDotLoading) {
+        return (
+          <div className="flex items-center justify-center h-full">
+            <div className="flex flex-col items-center">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">Rendering DOT graph...</p>
+            </div>
+          </div>
+        );
+      }
+      if (dotError) {
+        return (
+          <div className="p-4">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
+              <div className="flex items-start">
+                <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold mb-1">DOT Syntax Error</h4>
+                  <p className="text-sm mb-3">{dotError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onSuggestAiCorrection(`Fix this DOT graph code: ${diagramContent}`)}
+                    className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Get AI Fix
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      return (
+        <PanelErrorBoundary>
+          <div className="flex flex-col h-full">
+            <DiagramControls type="dot" />
+            <div className="flex-1 p-4 flex items-center justify-center overflow-auto">
+              <div
+                className="max-w-full max-h-full"
+                style={contentStyle}
+                dangerouslySetInnerHTML={{ __html: dotSvg || '' }}
+              />
+            </div>
           </div>
         </PanelErrorBoundary>
       );
     } else if (diagramType === 'chartjs') {
-      panelTitle = 'Chart.js Graph';
-      downloadButtonText = 'Download PNG';
-      downloadFileName = 'chart';
       let chartConfigToRender = {};
       try {
         chartConfigToRender = JSON.parse(diagramContent || '{}');
@@ -781,135 +1317,141 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
       return (
         <PanelErrorBoundary>
-          {chartError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-3 rounded mb-4 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
-              <div className="flex items-start">
-                <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm mb-2">{chartError}</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onSuggestAiCorrection(`Fix this Chart.js configuration: ${diagramContent}`)}
-                    className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Get AI Fix
-                  </Button>
+          <div className="flex flex-col h-full">
+            {chartError && (
+              <div className="p-4 bg-red-50 border-b border-red-200 text-red-700 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
+                <div className="flex items-start">
+                  <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold mb-1">Chart Configuration Error</h4>
+                    <p className="text-sm mb-3">{chartError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onSuggestAiCorrection(`Fix this Chart.js configuration: ${diagramContent}`)}
+                      className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Get AI Fix
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          <ChartRenderer
-            chartConfig={chartConfigToRender}
-            onInvalidConfig={setChartError}
-            chartRef={chartRef}
-          />
+            )}
+            <ChartRenderer
+              chartConfig={chartConfigToRender}
+              onInvalidConfig={setChartError}
+              chartRef={chartRef}
+              showControls={true}
+            />
+          </div>
         </PanelErrorBoundary>
       );
     } else if (diagramType === 'threejs') {
-      panelTitle = 'Three.js 3D Scene';
-      downloadButtonText = 'Download PNG';
-      downloadFileName = '3d-scene';
       return (
         <PanelErrorBoundary>
-          {threeJsError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-3 rounded mb-4 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
-              <div className="flex items-start">
-                <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm mb-2">{threeJsError}</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onSuggestAiCorrection(`Fix this Three.js code: ${diagramContent}`)}
-                    className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Get AI Fix
-                  </Button>
+          <div className="flex flex-col h-full">
+            {threeJsError && (
+              <div className="p-4 bg-red-50 border-b border-red-200 text-red-700 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
+                <div className="flex items-start">
+                  <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold mb-1">Three.js Scene Error</h4>
+                    <p className="text-sm mb-3">{threeJsError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onSuggestAiCorrection(`Fix this Three.js code: ${diagramContent}`)}
+                      className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Get AI Fix
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          <ThreeJSRenderer
-            codeContent={diagramContent || ''}
-            canvasRef={threeJsRef}
-            onInvalidCode={setThreeJsError}
-            onSceneReady={handleThreeJsSceneReady}
-          />
+            )}
+            <ThreeJSRenderer
+              codeContent={diagramContent || ''}
+              canvasRef={threeJsRef}
+              onInvalidCode={setThreeJsError}
+              onSceneReady={handleThreeJsSceneReady}
+              showControls={true}
+            />
+          </div>
         </PanelErrorBoundary>
       );
-    } else if (diagramType === 'code') {
-      panelTitle = 'Code View';
-      downloadButtonText = 'Download Code';
-      downloadFileName = `code.${language || 'txt'}`;
-      return renderSourceCode;
-    } else if (diagramType === 'document-text') {
-      panelTitle = language ? `${language.toUpperCase()} Document` : 'Document';
-      downloadButtonText = 'Download Document';
-      downloadFileName = `document.${language || 'txt'}`;
+    } else if (diagramType === 'code' || diagramType === 'document-text') {
       return (
-        <div
-          className="relative rounded-lg overflow-hidden h-full shadow-lg"
-          style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}
-        >
-          <div className="p-4 sm:p-6 overflow-auto h-full">
-            <pre className="font-mono text-xs sm:text-sm leading-relaxed h-full whitespace-pre-wrap break-words" style={{ color: theme.foreground }}>
-              <code dangerouslySetInnerHTML={{ __html: escapeHtml(diagramContent || '') }} style={{ color: theme.foreground }} />
-            </pre>
+        <CodeDisplay
+          content={diagramContent || ''}
+          language={language}
+          theme={theme}
+          showControls={true}
+        />
+      );
+    } else if (diagramType === 'image' && imageUrl) {
+      return (
+        <div className="flex flex-col h-full">
+          <DiagramControls type="image" />
+          <div className="flex-1 flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-950 overflow-auto">
+            <img
+              src={imageUrl}
+              alt="Viewed image"
+              className="max-w-none max-h-none object-contain rounded-lg shadow-md"
+              style={{
+                transform: `scale(${zoomLevel})`,
+                transition: 'transform 0.2s ease',
+                imageRendering: zoomLevel > 2 ? 'pixelated' : 'auto'
+              }}
+              onError={(e) => {
+                e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Load+Error';
+                e.currentTarget.alt = 'Image failed to load';
+              }}
+              loading="lazy"
+            />
           </div>
         </div>
       );
-    } else if (diagramType === 'image' && imageUrl) {
-      panelTitle = 'Image Viewer';
-      downloadButtonText = 'Download Image';
-      downloadFileName = 'image';
-      return (
-        <div className="flex items-center justify-center h-full w-full p-2 sm:p-4 bg-gray-50 dark:bg-gray-950">
-          <img
-            src={imageUrl}
-            alt="Viewed image"
-            className="max-w-full max-h-full object-contain rounded-lg shadow-md"
-            style={{ imageRendering: 'pixelated' }}
-            onError={(e) => {
-              e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Load+Error';
-              e.currentTarget.alt = 'Image failed to load';
-            }}
-            loading="lazy"
-          />
-        </div>
-      );
     } else if (diagramType === 'html') {
-      panelTitle = 'Web Page';
-      downloadButtonText = 'Download HTML';
-      downloadFileName = 'webpage.html';
       return (
         <PanelErrorBoundary>
-          <IsolatedHtml html={diagramContent || ''} />
+          <div className="flex flex-col h-full">
+            <DiagramControls type="html" />
+            <div className="flex-1">
+              <IsolatedHtml html={diagramContent || ''} />
+            </div>
+          </div>
         </PanelErrorBoundary>
       );
     } else {
-      panelTitle = 'Unsupported Content';
-      downloadButtonText = 'Download Content';
-      downloadFileName = 'content';
       return (
         <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-gray-400 p-4">
-          <AlertTriangle className="h-8 w-8 mb-3" />
-          <h3 className="text-lg font-medium mb-2">Unsupported Content Type</h3>
-          <p className="text-sm text-center mb-4">This content type is not supported for viewing.</p>
-          <details className="w-full max-w-md">
-            <summary className="cursor-pointer text-sm hover:text-slate-700 dark:hover:text-gray-300">
+          <AlertTriangle className="h-12 w-12 mb-4 text-amber-500" />
+          <h3 className="text-xl font-semibold mb-2">Unsupported Content Type</h3>
+          <p className="text-sm text-center mb-4 max-w-md">
+            This content type ({diagramType}) is not supported for viewing in the diagram panel.
+          </p>
+          <details className="w-full max-w-2xl">
+            <summary className="cursor-pointer text-sm hover:text-slate-700 dark:hover:text-gray-300 font-medium mb-2">
               View Raw Content
             </summary>
-            <pre className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-auto max-h-40 whitespace-pre-wrap">
-              {diagramContent || 'No content available'}
-            </pre>
+            <CodeDisplay
+              content={diagramContent || 'No content available'}
+              language="text"
+              theme={theme}
+              showControls={false}
+            />
           </details>
         </div>
       );
     }
-  }, [diagramContent, diagramType, imageUrl, currentTheme, isResizing, onMermaidError, onSuggestAiCorrection, chartError, threeJsError, language, dotSvg, dotError, isDotLoading, handleThreeJsSceneReady, showSourceCode]);
+  }, [
+    diagramContent, diagramType, imageUrl, currentTheme, theme, showSourceCode, language,
+    chartError, threeJsError, dotSvg, dotError, isDotLoading, mermaidSvg, mermaidError,
+    isMermaidLoading, handleThreeJsSceneReady, onSuggestAiCorrection, onMermaidError,
+    contentStyle, zoomLevel, DiagramControls
+  ]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -960,41 +1502,72 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     unknown: []
   };
 
+  // Get panel title based on content type
+  const getPanelTitle = () => {
+    if (showSourceCode) return `${language?.toUpperCase() || 'TEXT'} Source`;
+
+    switch (diagramType) {
+      case 'mermaid': return 'Mermaid Diagram';
+      case 'dot': return 'Graphviz DOT Graph';
+      case 'chartjs': return 'Chart.js Visualization';
+      case 'threejs': return 'Three.js 3D Scene';
+      case 'html': return 'Web Page';
+      case 'code': return `${language?.toUpperCase() || 'CODE'} File`;
+      case 'document-text': return `${language?.toUpperCase() || 'TEXT'} Document`;
+      case 'image': return 'Image Viewer';
+      default: return 'Content Viewer';
+    }
+  };
+
   return (
     <motion.div
       ref={diagramPanelRef}
-      className={`fixed inset-0 md:relative md:inset-y-0 md:right-0 bg-white shadow-2xl flex flex-col z-50 md:rounded-l-lg md:shadow-xl md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full h-full' : ''}`}
+      className={`fixed inset-0 md:relative md:inset-y-0 md:right-0 bg-white shadow-2xl flex flex-col z-50 md:rounded-l-lg md:shadow-xl md:border-l md:border-slate-200 dark:bg-gray-900 dark:border-gray-700 ${isFullScreen ? 'w-full h-full' : ''
+        }`}
       variants={panelVariants}
       initial="initial"
       animate="animate"
       exit="exit"
       style={dynamicPanelStyle}
     >
+      {/* Enhanced Header */}
       <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center mb-2 sm:mb-0">
-          <h3 className="text-base sm:text-lg font-semibold text-slate-800 dark:text-gray-100 truncate mr-2">
-            {renderContent.props?.children?.type === IsolatedHtml ? 'Web Page' : renderContent.props?.children?.props?.chart ? 'Mermaid Diagram' : renderContent.props?.children?.type === ChartRenderer ? 'Chart.js Graph' : renderContent.props?.children?.type === ThreeJSRenderer ? 'Three.js 3D Scene' : renderContent.props?.children?.type === 'img' ? 'Image Viewer' : renderContent.props?.children?.props?.dangerouslySetInnerHTML ? (language ? `${language.toUpperCase()} Document` : 'Document') : 'Content'}
+          <h3 className="text-base sm:text-lg font-semibold text-slate-800 dark:text-gray-100 truncate mr-3">
+            {getPanelTitle()}
           </h3>
-          {networkError && (
-            <div className="flex items-center text-amber-600 dark:text-amber-400" title="Network connection issues detected">
-              <WifiOff className="h-4 w-4" />
-            </div>
-          )}
+
+          {/* Status indicators */}
+          <div className="flex items-center gap-2">
+            {networkError && (
+              <div className="flex items-center text-amber-600 dark:text-amber-400" title="Network connection issues detected">
+                <WifiOff className="h-4 w-4" />
+              </div>
+            )}
+            {(isMermaidLoading || isDotLoading) && (
+              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+            )}
+            {(mermaidError || dotError || chartError || threeJsError) && (
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+            )}
+          </div>
         </div>
 
+        {/* Action buttons */}
         <div className="flex flex-wrap items-center gap-1 sm:gap-2 justify-end">
+          {/* Theme selector for code content */}
           {availableActions[diagramType].includes('theme') && (
-            <div className="theme-selector-container">
-              <ThemeSelector />
-            </div>
+            <ThemeSelector />
           )}
 
+          {/* Toggle between source and preview */}
           {availableActions[diagramType].includes('toggle') && diagramContent && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => setShowSourceCode(!showSourceCode)}
               className="text-xs sm:text-sm px-2 sm:px-3 py-1"
+              title={showSourceCode ? 'Show preview' : 'Show source code'}
             >
               {showSourceCode ? (
                 <>
@@ -1010,20 +1583,22 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             </Button>
           )}
 
+          {/* Download content */}
           {availableActions[diagramType].includes('download') && (
             <Button
               variant="outline"
               size="sm"
               onClick={handleDownloadContent}
               className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 dark:border-blue-700 text-xs sm:text-sm px-2 sm:px-3 py-1"
-              title={renderContent.props?.children?.type === IsolatedHtml ? 'Download HTML' : renderContent.props?.children?.props?.chart ? 'Download PNG' : renderContent.props?.children?.type === ChartRenderer ? 'Download PNG' : renderContent.props?.children?.type === ThreeJSRenderer ? 'Download PNG' : renderContent.props?.children?.type === 'img' ? 'Download Image' : 'Download Content'}
+              title="Download content"
               disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
             >
               <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-0 sm:mr-2" />
-              <span className="hidden sm:inline">{renderContent.props?.children?.type === IsolatedHtml ? 'Download HTML' : renderContent.props?.children?.props?.chart ? 'Download PNG' : renderContent.props?.children?.type === ChartRenderer ? 'Download PNG' : renderContent.props?.children?.type === ThreeJSRenderer ? 'Download PNG' : renderContent.props?.children?.type === 'img' ? 'Download Image' : 'Download Content'}</span>
+              <span className="hidden sm:inline">Download</span>
             </Button>
           )}
 
+          {/* Download GLTF for 3D scenes */}
           {availableActions[diagramType].includes('gltf') && (
             <Button
               variant="outline"
@@ -1038,6 +1613,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             </Button>
           )}
 
+          {/* Download PDF */}
           {availableActions[diagramType].includes('pdf') && (
             <Button
               variant="outline"
@@ -1045,13 +1621,14 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               onClick={handleDownloadPdf}
               className="text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900 dark:border-purple-700 text-xs sm:text-sm px-2 sm:px-3 py-1"
               title="Download as PDF"
-              disabled={!diagramContent || diagramType === 'unknown'}
+              disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
             >
               <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-0 sm:mr-2" />
               <span className="hidden sm:inline">PDF</span>
             </Button>
           )}
 
+          {/* Fullscreen toggle */}
           <Button
             variant="ghost"
             size="icon"
@@ -1062,6 +1639,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             {isFullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
 
+          {/* Close panel */}
           <Button
             variant="ghost"
             size="icon"
@@ -1074,16 +1652,42 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         </div>
       </div>
 
+      {/* Content area with error boundary */}
       <div
         ref={diagramContainerRef}
-        className="flex-1 overflow-auto modern-scrollbar dark:bg-gray-900 canvas-container"
-        style={contentStyle}
-        onMouseDown={handlePanStart}
-        onTouchStart={handlePanStart}
+        className="flex-1 overflow-hidden bg-white dark:bg-gray-900"
       >
-        <PanelErrorBoundary>
+        <PanelErrorBoundary
+          onError={(error) => {
+            console.error('Panel content error:', error);
+            toast.error(`Content rendering error: ${error.message}`);
+          }}
+        >
           {renderContent}
         </PanelErrorBoundary>
+      </div>
+
+      {/* Footer with additional info */}
+      <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <span>Type: {diagramType}</span>
+          {language && <span>Lang: {language}</span>}
+          {diagramContent && (
+            <span>
+              Size: {(new Blob([diagramContent]).size / 1024).toFixed(1)}KB
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {zoomLevel !== 1 && (
+            <span>Zoom: {Math.round(zoomLevel * 100)}%</span>
+          )}
+          <div className="flex items-center">
+            <MousePointer className="h-3 w-3 mr-1" />
+            <span className="hidden sm:inline">Interactive</span>
+          </div>
+        </div>
       </div>
     </motion.div>
   );
