@@ -92,7 +92,7 @@ interface AIChatProps {
   onRenameChatSession: (sessionId: string, newTitle: string) => void;
   onChatSessionSelect: (sessionId: string) => void;
   chatSessions: ChatSession[];
-  onNewMessage: (message: Message) => void;
+  // onNewMessage: (message: Message) => void;
   onDeleteMessage: (messageId: string) => void;
   onRegenerateResponse: (lastUserMessageContent: string) => Promise<void>;
   onRetryFailedMessage: (originalUserMessageContent: string, failedAiMessageId: string) => Promise<void>;
@@ -219,7 +219,7 @@ const AIChat: React.FC<AIChatProps> = ({
   onSelectionChange,
   activeChatSessionId,
   onNewChatSession,
-  onNewMessage,
+  // onNewMessage,
   onDeleteMessage,
   onRegenerateResponse,
   onRetryFailedMessage,
@@ -718,53 +718,53 @@ const AIChat: React.FC<AIChatProps> = ({
     activeChatSessionId,
     onSendMessageToBackend
   ]);
-  const handleGenerateImageFromText = useCallback(async () => {
-    if (!imagePrompt.trim()) {
-      toast.error('Please enter a prompt for image generation.');
-      return;
-    }
+  // const handleGenerateImageFromText = useCallback(async () => {
+  //   if (!imagePrompt.trim()) {
+  //     toast.error('Please enter a prompt for image generation.');
+  //     return;
+  //   }
 
-    setIsGeneratingImage(true);
-    setGeneratedImageUrl(null);
-    toast.info('Generating image...', { id: 'image-gen' });
+  //   setIsGeneratingImage(true);
+  //   setGeneratedImageUrl(null);
+  //   toast.info('Generating image...', { id: 'image-gen' });
 
-    try {
-      const payload = { instances: { prompt: imagePrompt }, parameters: { "sampleCount": 1 } };
-      const apiKey = "";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+  // //   try {
+  //     const payload = { instances: { prompt: imagePrompt }, parameters: { "sampleCount": 1 } };
+  //     const apiKey = "";
+  //     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const result = await response.json();
+  //     const response = await fetch(apiUrl, {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify(payload)
+  //     });
+  //     const result = await response.json();
 
-      if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
-        const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
-        setGeneratedImageUrl(imageUrl);
-        toast.success('Image generated successfully!', { id: 'image-gen' });
-        onNewMessage({
-          id: generateId(),
-          content: `Here is an image generated from your prompt: "${imagePrompt}"`,
-          role: 'assistant',
-          timestamp: new Date().toISOString(),
-          imageUrl: imageUrl,
-          imageMimeType: 'image/png',
-          has_been_displayed: false,
-          isError: false,
-        });
-        setImagePrompt('');
-      } else {
-        throw new Error('No image data received from API.');
-      }
-    } catch (error: Error | any) {
-      console.error('Error generating image:', error);
-      toast.error(`Failed to generate image: ${error.message}`, { id: 'image-gen' });
-    } finally {
-      setIsGeneratingImage(false);
-    }
-  }, [imagePrompt, onNewMessage]);
+  //     if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+  //       const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+  //       setGeneratedImageUrl(imageUrl);
+  //       toast.success('Image generated successfully!', { id: 'image-gen' });
+  //       onNewMessage({
+  //         id: generateId(),
+  //         content: `Here is an image generated from your prompt: "${imagePrompt}"`,
+  //         role: 'assistant',
+  //         timestamp: new Date().toISOString(),
+  //         imageUrl: imageUrl,
+  //         imageMimeType: 'image/png',
+  //         has_been_displayed: false,
+  //         isError: false,
+  //       });
+  //       setImagePrompt('');
+  //     } else {
+  //       throw new Error('No image data received from API.');
+  //     }
+  //   } catch (error: Error | any) {
+  //     console.error('Error generating image:', error);
+  //     toast.error(`Failed to generate image: ${error.message}`, { id: 'image-gen' });
+  //   } finally {
+  //     setIsGeneratingImage(false);
+  //   }
+  // }, [imagePrompt]);
 
   const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
     setMergedDocuments(prevDocs => {

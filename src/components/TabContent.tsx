@@ -85,7 +85,7 @@ interface TabContentProps {
   onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
   onSelectedDocumentIdsChange: React.Dispatch<React.SetStateAction<string[]>>;
   selectedDocumentIds: string[];
-  onNewMessage: (message: Message) => void;
+  // onNewMessage: (message: Message) => void;
   isNotesHistoryOpen: boolean;
   onRegenerateResponse: (lastUserMessageContent: string) => Promise<void>;
   onDeleteMessage: (messageId: string) => Promise<void>;
@@ -155,7 +155,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     chatSessions: props.chatSessions,
     isLoading: isAILoading,
     setIsLoading: props.setIsAILoading,
-    onNewMessage: props.onNewMessage,
+    // onNewMessage: props.onNewMessage,
     onDeleteMessage: props.onDeleteMessage,
     onRegenerateResponse: props.onRegenerateResponse,
     onRetryFailedMessage: props.onRetryFailedMessage,
@@ -225,7 +225,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       props.chatSessions,
       isAILoading,
       props.setIsAILoading,
-      props.onNewMessage,
+      // props.onNewMessage,
       props.onDeleteMessage,
       props.onRegenerateResponse,
       props.onRetryFailedMessage,
