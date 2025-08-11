@@ -1409,7 +1409,7 @@ const Index = () => {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-gray-900">
-        <div className="flex items-center justify-between p-3 sm:p-2 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-0 sm:p-0 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
           <Header {...headerProps} />
           <div className="hidden p-3 sm:flex items-center gap-3">
             <Button

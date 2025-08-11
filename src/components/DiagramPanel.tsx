@@ -207,26 +207,120 @@ ${sanitizedHtml}
         className="w-full h-full border-0 rounded-lg"
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
         title="AI Generated HTML Content"
-        // style={{
-        //   backgroundColor: 'white',
-        //   minHeight: '100%'
-        // }}
       />
     </div>
   );
 };
 
-interface DiagramPanelProps {
-  diagramContent?: string;
-  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html';
-  onClose: () => void;
-  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
-  onSuggestAiCorrection: (prompt: string) => void;
-  isOpen: boolean;
-  language?: string;
-  imageUrl?: string;
-  initialWidthPercentage?: number;
-}
+// New Mermaid Renderer with iframe isolation
+const IsolatedMermaid = ({ content, onError }: { content: string; onError: (error: string | null, errorType: 'syntax' | 'rendering') => void }) => {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const handleRetry = useCallback(() => {
+    setRetryCount(prev => prev + 1);
+    setHasError(null);
+    setIsLoading(true);
+  }, []);
+
+  useEffect(() => {
+    if (iframeRef.current && content) {
+      setIsLoading(true);
+      setHasError(null);
+
+      (async () => {
+        try {
+          await mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            fontFamily: 'arial',
+            fontSize: 16,
+          });
+          const { svg } = await mermaid.render('mermaid-graph', content);
+
+          const fullHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: transparent; }
+    svg { max-width: 100%; max-height: 100%; }
+  </style>
+</head>
+<body>
+  ${svg}
+</body>
+</html>`;
+
+          const iframeDoc = iframeRef.current!.contentDocument || iframeRef.current!.contentWindow?.document;
+          if (iframeDoc) {
+            iframeDoc.open();
+            iframeDoc.write(fullHtml);
+            iframeDoc.close();
+            setIsLoading(false);
+            onError(null, 'rendering');
+          }
+        } catch (error: any) {
+          console.error('Error rendering Mermaid diagram:', error);
+          setHasError(`Failed to render Mermaid diagram: ${error.message}`);
+          onError(`Failed to render Mermaid diagram: ${error.message}`, 'syntax');
+          setIsLoading(false);
+        }
+      })();
+    }
+  }, [content, retryCount, onError]);
+
+  if (hasError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-red-600 bg-red-50 p-4 dark:bg-red-950/20 dark:text-red-300">
+        <AlertTriangle className="h-8 w-8 mb-3" />
+        <h3 className="text-lg font-semibold mb-2">Mermaid Rendering Error</h3>
+        <p className="text-center text-sm mb-4">{hasError}</p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            onClick={handleRetry}
+            variant="outline"
+            size="sm"
+            className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+          <details className="mt-2">
+            <summary className="cursor-pointer text-sm hover:text-red-700 dark:hover:text-red-200">
+              View Mermaid Source
+            </summary>
+            <pre className="mt-2 p-3 bg-white dark:bg-gray-900 border rounded text-xs overflow-auto max-h-40 w-full max-w-md">
+              {content}
+            </pre>
+          </details>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
+          <div className="flex flex-col items-center">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
+            <p className="text-sm text-gray-600 dark:text-gray-400">Rendering Mermaid diagram...</p>
+          </div>
+        </div>
+      )}
+      <iframe
+        ref={iframeRef}
+        className="w-full h-full border-0 rounded-lg"
+        sandbox="allow-same-origin"
+        title="Mermaid Diagram"
+      />
+    </div>
+  );
+};
 
 interface ChartRendererProps {
   chartConfig: any;
@@ -795,9 +889,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [networkError, setNetworkError] = useState(false);
-  const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
-  const [mermaidError, setMermaidError] = useState<string | null>(null);
-  const [isMermaidLoading, setIsMermaidLoading] = useState(false);
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
 
   const isPhone = useCallback(() => {
@@ -920,7 +1011,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         {showAdvancedControls && type === 'html' && (
           <div className="w-full mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-gray-600 dark:text-gray-400">Advanced:</span>
+              <span className="text-gray-600 dark:text-gray-400">Advanced:</ span>
               <Button
                 variant="outline"
                 size="sm"
@@ -1024,7 +1115,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
       let canvas: HTMLCanvasElement;
 
-      if (diagramType === 'html') {
+      if (diagramType === 'html' || diagramType === 'mermaid') {
         const iframe = diagramContainerRef.current.querySelector('iframe');
         if (iframe && iframe.contentDocument) {
           try {
@@ -1041,6 +1132,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               img { max-width: 100%; height: auto; }
               table { width: 100%; border-collapse: collapse; }
               th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              svg { max-width: 100%; max-height: 100%; }
             `;
             tempContainer.appendChild(style);
 
@@ -1162,33 +1254,6 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     </div>
   ), [showThemeSelector, currentTheme]);
 
-  // Enhanced Mermaid rendering with better error handling
-  useEffect(() => {
-    if (diagramType === 'mermaid' && diagramContent) {
-      setIsMermaidLoading(true);
-      (async () => {
-        try {
-          await mermaid.initialize({
-            startOnLoad: false,
-            theme: 'default',
-            securityLevel: 'loose',
-            fontFamily: 'arial',
-            fontSize: 16,
-          });
-          const { svg } = await mermaid.render('mermaid-graph', diagramContent);
-          setMermaidSvg(svg);
-          setMermaidError(null);
-        } catch (error: any) {
-          console.error('Error rendering Mermaid diagram:', error);
-          setMermaidError(`Failed to render Mermaid diagram: ${error.message}`);
-          onMermaidError(diagramContent, 'syntax');
-        } finally {
-          setIsMermaidLoading(false);
-        }
-      })();
-    }
-  }, [diagramContent, diagramType, onMermaidError]);
-
   // Enhanced DOT rendering
   useEffect(() => {
     if (diagramType === 'dot' && diagramContent) {
@@ -1238,49 +1303,14 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     }
 
     if (diagramType === 'mermaid' && diagramContent) {
-      if (isMermaidLoading) {
-        return (
-          <div className="flex items-center justify-center h-full">
-            <div className="flex flex-col items-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
-              <p className="text-sm text-gray-600 dark:text-gray-400">Rendering Mermaid diagram...</p>
-            </div>
-          </div>
-        );
-      }
-      if (mermaidError) {
-        return (
-          <div className="p-4">
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
-              <div className="flex items-start">
-                <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold mb-1">Mermaid Syntax Error</h4>
-                  <p className="text-sm mb-3">{mermaidError}</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onSuggestAiCorrection(`Fix this Mermaid diagram code: ${diagramContent}`)}
-                    className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Get AI Fix
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      }
       return (
         <PanelErrorBoundary>
           <div className="flex flex-col h-full">
             <DiagramControls type="mermaid" />
             <div className="flex-1 p-4 flex items-center justify-center overflow-auto">
-              <div
-                className="max-w-full max-h-full"
-                style={contentStyle}
-                dangerouslySetInnerHTML={{ __html: mermaidSvg || '' }}
+              <IsolatedMermaid
+                content={diagramContent}
+                onError={onMermaidError}
               />
             </div>
           </div>
@@ -1478,8 +1508,8 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     }
   }, [
     diagramContent, diagramType, imageUrl, currentTheme, theme, showSourceCode, language,
-    chartError, threeJsError, dotSvg, dotError, isDotLoading, mermaidSvg, mermaidError,
-    isMermaidLoading, handleThreeJsSceneReady, onSuggestAiCorrection, onMermaidError,
+    chartError, threeJsError, dotSvg, dotError, isDotLoading,
+    handleThreeJsSceneReady, onSuggestAiCorrection, onMermaidError,
     contentStyle, zoomLevel, DiagramControls
   ]);
 
@@ -1561,7 +1591,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       style={dynamicPanelStyle}
     >
       {/* Enhanced Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 dark:border-gray-700 flex-shrink-0">
+      <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm: justify-between bg-white dark:bg-gray-900 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center mb-2 sm:mb-0">
           <h3 className="text-base sm:text-lg font-semibold text-slate-800 dark:text-gray-100 truncate mr-3">
             {getPanelTitle()}
@@ -1574,10 +1604,10 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                 <WifiOff className="h-4 w-4" />
               </div>
             )}
-            {(isMermaidLoading || isDotLoading) && (
+            {(isDotLoading) && (
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
             )}
-            {(mermaidError || dotError || chartError || threeJsError) && (
+            {(dotError || chartError || threeJsError) && (
               <AlertTriangle className="h-4 w-4 text-red-500" />
             )}
           </div>
@@ -1722,3 +1752,15 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     </motion.div>
   );
 });
+
+interface DiagramPanelProps {
+  diagramContent?: string;
+  diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html';
+  onClose: () => void;
+  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
+  onSuggestAiCorrection: (prompt: string) => void;
+  isOpen: boolean;
+  language?: string;
+  imageUrl?: string;
+  initialWidthPercentage?: number;
+}
