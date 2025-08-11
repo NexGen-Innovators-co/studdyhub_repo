@@ -907,7 +907,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
   return (
     <>
-      <style>
+      {/* <style>
         {`
           @keyframes typewriter {
             from { width: 0; }
@@ -1045,7 +1045,7 @@ const AIChat: React.FC<AIChatProps> = ({
             background-color: #1e3a8a;
           }
         `}
-      </style>
+      </style> */}
       <div className="flex flex-col h-full border-none relative justify-center overflow-hidden md:flex-row md:gap-0 font-sans">
         <motion.div
           className={`relative flex flex-col h-full rounded-lg panel-transition

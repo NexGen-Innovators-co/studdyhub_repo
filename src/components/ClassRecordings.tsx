@@ -135,7 +135,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
           className={`
             flex-1 p-4 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900
             transition-all duration-300 ease-in-out
-            ${selectedRecording ? 'lg:w-2/3' : 'lg:w-full lg:max-w-4xl mx-auto'}
+            ${selectedRecording ? 'lg:w-3xl' : 'lg:w-full lg:max-w-4xl mx-auto'}
           `}
         >
           <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-100 mb-4 sm:mb-6 flex items-center gap-3">
