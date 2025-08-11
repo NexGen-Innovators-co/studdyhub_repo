@@ -225,27 +225,13 @@ const estimateContextSize = (content: any[]): number => {
 
 const optimizeContextForProcessing = (
   chatHistory: Array<{ role: string; parts: MessagePart[] }>,
-  currentContext: string,
-  files: any[]
+  currentContextParts: MessagePart[] // Changed to accept MessagePart[]
 ): Array<{ role: string; parts: MessagePart[] }> => {
-  let totalSize = 0;
+  let totalSize = estimateContextSize([{ role: 'user', parts: currentContextParts }]);
   const optimizedHistory: Array<{ role: string; parts: MessagePart[] }> = [];
 
-  const currentContent: Array<{ role: string; parts: MessagePart[] }> = [
-    { role: 'user', parts: [{ text: currentContext }] }
-  ];
-
-  files.forEach(file => {
-    if (file.content) {
-      currentContent[0].parts.push({ text: `[File: ${file.name}]\n${file.content}` });
-    } else if (file.data && file.type === 'image') {
-      currentContent[0].parts.push({
-        inlineData: { mimeType: file.mimeType, data: file.data }
-      });
-    }
-  });
-
-  totalSize = estimateContextSize(currentContent);
+  // Start with the current user message and its immediate context/files
+  const currentUserMessage = { role: 'user', parts: currentContextParts };
 
   for (let i = chatHistory.length - 1; i >= 0 && totalSize < MAX_TOTAL_CONTEXT_SIZE; i--) {
     const messageSize = estimateContextSize([chatHistory[i]]);
@@ -258,7 +244,7 @@ const optimizeContextForProcessing = (
     }
   }
 
-  return [...optimizedHistory, ...currentContent];
+  return [...optimizedHistory, currentUserMessage];
 };
 
 const extractFirstSentence = (text: string): string => {
@@ -728,7 +714,7 @@ const Index = () => {
     }
   }, [user, setChatSessions]);
 
-  // Enhanced context building
+  // Enhanced context building - REMOVED TRUNCATION LOGIC HERE
   const buildRichContext = useCallback((
     documentIdsToInclude: string[],
     noteIdsToInclude: string[],
@@ -739,52 +725,33 @@ const Index = () => {
     const selectedNotes = (allNotes ?? []).filter(note => (noteIdsToInclude ?? []).includes(note.id));
 
     let context = '';
-    let totalSize = 0;
-
+    
     if (selectedDocs.length > 0) {
       context += 'ATTACHED DOCUMENTS:\n';
       for (const doc of selectedDocs) {
         const docInfo = `Title: ${doc.title}\nFile: ${doc.file_name}\nType: ${doc.type}\n`;
-
         if (doc.content_extracted) {
-          const availableSpace = MAX_SINGLE_FILE_CONTEXT - docInfo.length;
-          let content = doc.content_extracted;
-
-          if (content.length > availableSpace) {
-            content = content.substring(0, availableSpace - 50) + '\n[Content truncated for processing efficiency]';
-          }
-
-          context += docInfo + `Content: ${content}\n\n`;
+          context += docInfo + `Content: ${doc.content_extracted}\n\n`; // No truncation
         } else {
           context += docInfo + `Content: ${doc.processing_status === 'completed' ? 'No extractable content found' : `Processing status: ${doc.processing_status || 'pending'}`}\n\n`;
         }
-
-        totalSize = context.length;
-        if (totalSize > MAX_TOTAL_CONTEXT_SIZE / 2) break;
       }
     }
 
-    if (selectedNotes.length > 0 && totalSize < MAX_TOTAL_CONTEXT_SIZE / 2) {
+    if (selectedNotes.length > 0) { // No size check here, as it's handled by overall context size
       context += 'ATTACHED NOTES:\n';
       selectedNotes.forEach(note => {
-        if (totalSize > MAX_TOTAL_CONTEXT_SIZE / 2) return;
-
         const noteInfo = `Title: ${note.title}\nCategory: ${note.category}\n`;
-        const availableSpace = Math.min(MAX_SINGLE_FILE_CONTEXT, MAX_TOTAL_CONTEXT_SIZE / 2 - totalSize) - noteInfo.length;
-
         let noteContent = '';
         if (note.content) {
-          noteContent = note.content.length > availableSpace ?
-            note.content.substring(0, availableSpace - 50) + '\n[Content truncated]' :
-            note.content;
+          noteContent = note.content; // No truncation
         }
 
         const noteBlock = noteInfo + (noteContent ? `Content: ${noteContent}\n` : '') +
-          (note.aiSummary ? `Summary: ${note.aiSummary.substring(0, 200)}...\n` : '') +
+          (note.aiSummary ? `Summary: ${note.aiSummary}\n` : '') + // No truncation for summary
           (note.tags?.length ? `Tags: ${note.tags.join(', ')}\n` : '') + '\n';
 
         context += noteBlock;
-        totalSize += noteBlock.length;
       });
     }
 
@@ -798,7 +765,7 @@ const Index = () => {
     attachedNoteIds?: string[],
     imageUrl?: string,
     imageMimeType?: string,
-    imageDataBase64?: string,
+    imageDataBase64?: string, // This parameter is not used, remove if not needed
     aiMessageIdToUpdate: string | null = null,
     attachedFiles?: FileData[]
   ) => {
@@ -854,6 +821,43 @@ const Index = () => {
         toast.info(`Processing ${attachedFiles.length} file${attachedFiles.length > 1 ? 's' : ''}...`);
       }
 
+      // Build the parts for the *current* user message (text, documents, notes, files)
+      const currentMessageParts: MessagePart[] = [];
+      if (messageContent) {
+        currentMessageParts.push({ text: messageContent }); // Ensure full message content
+      }
+
+      const currentAttachedContext = buildRichContext(finalAttachedDocumentIds, finalAttachedNoteIds, documents, notes);
+      if (currentAttachedContext) {
+        currentMessageParts.push({ text: `\n\nAttached Context:\n${currentAttachedContext}` });
+      }
+
+      if (imageUrl && imageMimeType) {
+        // This handles cases where an image URL is directly provided (e.g., for regeneration)
+        // If image data base64 is also present, prefer it for sending
+        if (imageDataBase64) {
+          currentMessageParts.push({
+            inlineData: { mimeType: imageMimeType, data: imageDataBase64 }
+          });
+        } else {
+          // If only URL is present, you might need a way to fetch its data or send the URL
+          // For now, if no base64, we rely on the backend to handle the URL if it can.
+          // Or, this part of the code needs to be smart enough to fetch the image data.
+          // Given the prompt, we are removing truncation, not adding image fetching.
+          // So for regeneration, if imageDataBase64 is not passed, the image won't be sent as inlineData.
+        }
+      }
+
+      processedFiles.forEach(file => {
+        if (file.content) {
+          currentMessageParts.push({ text: `[File: ${file.name}]\n${file.content}` });
+        } else if (file.data && file.type === 'image') {
+          currentMessageParts.push({
+            inlineData: { mimeType: file.mimeType, data: file.data }
+          });
+        }
+      });
+      
       const historicalMessagesForAI = allChatMessages
         .filter(msg => msg.session_id === currentSessionId)
         .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate))
@@ -861,54 +865,35 @@ const Index = () => {
 
       const chatHistoryForAI: Array<{ role: string; parts: MessagePart[] }> = [];
 
+      // Reconstruct chat history for AI, ensuring full content of past messages
       historicalMessagesForAI.forEach(msg => {
-        if (msg.role === 'user') {
-          const userParts: MessagePart[] = [{ text: msg.content }];
-
-          if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 || msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
-            const historicalContext = buildRichContext(
-              msg.attachedDocumentIds || [],
-              msg.attachedNoteIds || [],
-              documents,
-              notes
-            );
-            if (historicalContext && historicalContext.length < 50000) {
-              userParts.push({ text: `\n\nPrevious Context:\n${historicalContext}` });
-            }
+        const msgParts: MessagePart[] = [{ text: msg.content }];
+        // Add attached document/note context for historical messages if available and not too large
+        if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 || msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
+          const historicalContext = buildRichContext(
+            msg.attachedDocumentIds || [],
+            msg.attachedNoteIds || [],
+            documents,
+            notes
+          );
+          if (historicalContext && historicalContext.length < 50000) { // Still apply a limit to historical context additions
+            msgParts.push({ text: `\n\nPrevious Context:\n${historicalContext}` });
           }
-
-          chatHistoryForAI.push({ role: 'user', parts: userParts });
-        } else if (msg.role === 'assistant') {
-          const content = msg.content.length > 10000 ?
-            msg.content.substring(0, 10000) + '\n[Previous response truncated for context efficiency]' :
-            msg.content;
-          chatHistoryForAI.push({ role: 'model', parts: [{ text: content }] });
         }
+        // If an old message had an image, include its reference if possible (or actual data if stored)
+        if (msg.imageUrl && msg.imageMimeType) {
+          // If you stored base64 data for past images, you'd use it here.
+          // Otherwise, only the URL would be implied context unless the backend fetches it.
+          // For now, assuming image data is handled by `processedFiles` for current input,
+          // or that the backend is aware of past image URLs.
+        }
+        chatHistoryForAI.push({ role: msg.role, parts: msgParts });
       });
 
-      let finalUserMessageContent = messageContent || "";
-
-      const currentAttachedContext = buildRichContext(finalAttachedDocumentIds, finalAttachedNoteIds, documents, notes);
-      if (currentAttachedContext) {
-        finalUserMessageContent += `\n\nAttached Context:\n${currentAttachedContext}`;
-      }
-
-      if (processedFiles.length > 0) {
-        const fileDescriptions = processedFiles.map(f =>
-          `${f.name} (${f.type}, ${f.processing_status})`
-        ).join(', ');
-
-        if (!finalUserMessageContent.trim()) {
-          finalUserMessageContent = `I'm sharing ${processedFiles.length} file${processedFiles.length > 1 ? 's' : ''} with you: ${fileDescriptions}`;
-        } else {
-          finalUserMessageContent += `\n\nAttached Files: ${fileDescriptions}`;
-        }
-      }
 
       const optimizedContent = optimizeContextForProcessing(
         chatHistoryForAI,
-        finalUserMessageContent,
-        processedFiles
+        currentMessageParts // Pass the built current message parts
       );
 
       // Update progress before sending
@@ -926,13 +911,19 @@ const Index = () => {
             examples: false,
             difficulty: 'intermediate',
           },
-          chatHistory: optimizedContent.slice(0, -1),
-          message: finalUserMessageContent,
-          files: processedFiles,
+          chatHistory: optimizedContent.slice(0, -1), // All messages EXCEPT the last one (current user input)
+          message: optimizedContent[optimizedContent.length - 1].parts[0].text, // The primary text of the current user message
+          // Any inlineData (images/files) attached to the current user message
+          files: optimizedContent[optimizedContent.length - 1].parts
+                      .filter(part => part.inlineData)
+                      .map(part => ({
+                          mimeType: part.inlineData?.mimeType,
+                          data: part.inlineData?.data
+                      })),
           attachedDocumentIds: finalAttachedDocumentIds,
           attachedNoteIds: finalAttachedNoteIds,
-          imageUrl: imageUrl,
-          imageMimeType: imageMimeType,
+          imageUrl: imageUrl, // Pass imageUrl if it's still relevant (e.g., for regeneration)
+          imageMimeType: imageMimeType, // Pass imageMimeType if it's still relevant
           aiMessageIdToUpdate: aiMessageIdToUpdate,
         },
       });
@@ -1086,7 +1077,7 @@ const Index = () => {
         lastUserMessage.attachedNoteIds,
         lastUserMessage.imageUrl,
         lastUserMessage.imageMimeType,
-        undefined,
+        undefined, // imageDataBase64 is not passed for regeneration
         lastAssistantMessage.id
       );
     } catch (error) {
@@ -1131,7 +1122,7 @@ const Index = () => {
         lastUserMessage.attachedNoteIds,
         lastUserMessage.imageUrl,
         lastUserMessage.imageMimeType,
-        undefined,
+        undefined, // imageDataBase64 is not passed for retry
         failedAiMessageId
       );
     } catch (error) {
