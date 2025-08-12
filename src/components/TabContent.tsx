@@ -97,6 +97,14 @@ interface TabContentProps {
   isLoadingSessionMessages: boolean;
   onReprocessAudio: (audioUrl: string, documentId: string) => Promise<void>;
   onDeleteRecording: (recordingId: string, documentId: string | null, audioUrl: string | null) => Promise<void>;
+
+  // Infinite scroll controls
+  hasMoreDocuments: boolean;
+  isLoadingDocuments: boolean;
+  onLoadMoreDocuments: () => void;
+  hasMoreRecordings: boolean;
+  isLoadingRecordings: boolean;
+  onLoadMoreRecordings: () => void;
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -105,6 +113,24 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   const handleSuggestAiCorrection = useCallback((prompt?: string) => {
     toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
   }, []);
+
+  const handleDocumentsScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (!props.isLoadingDocuments && props.hasMoreDocuments) {
+      const el = e.currentTarget;
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
+        props.onLoadMoreDocuments();
+      }
+    }
+  }, [props.isLoadingDocuments, props.hasMoreDocuments, props.onLoadMoreDocuments]);
+
+  const handleRecordingsScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (!props.isLoadingRecordings && props.hasMoreRecordings) {
+      const el = e.currentTarget;
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
+        props.onLoadMoreRecordings();
+      }
+    }
+  }, [props.isLoadingRecordings, props.hasMoreRecordings, props.onLoadMoreRecordings]);
 
   const notesProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -329,7 +355,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'recordings':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900" onScroll={handleRecordingsScroll}>
           <ErrorBoundary>
             <ClassRecordings {...recordingsProps} />
           </ErrorBoundary>
@@ -354,7 +380,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'documents':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900" onScroll={handleDocumentsScroll}>
           <DocumentUpload {...documentsProps} />
         </div>
       );
