@@ -711,6 +711,25 @@ const Index = () => {
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
 
+      // Optimistically show the user's message in the chat UI (no DB write here)
+      if (!aiMessageIdToUpdate && hasTextContent) {
+        const optimisticUserId = 'optimistic-' + generateId();
+        const optimisticUserMessage: Message = {
+          id: optimisticUserId,
+          content: messageContent,
+          role: 'user',
+          timestamp: new Date().toISOString(),
+          isError: false,
+          attachedDocumentIds: finalAttachedDocumentIds,
+          attachedNoteIds: finalAttachedNoteIds,
+          imageUrl,
+          imageMimeType,
+          session_id: currentSessionId || undefined,
+          has_been_displayed: false,
+        };
+        setChatMessages(prev => [...prev, optimisticUserMessage]);
+      }
+
       // Enhanced file processing progress
       if (attachedFiles && attachedFiles.length > 0) {
         setFileProcessingProgress({
@@ -719,7 +738,6 @@ const Index = () => {
           total: attachedFiles.length,
           phase: 'validating'
         });
-
         toast.info(`Processing ${attachedFiles.length} file${attachedFiles.length > 1 ? 's' : ''}...`);
       }
 
@@ -837,6 +855,27 @@ const Index = () => {
 
       if (!data || !data.response) {
         throw new Error('Empty response from AI service');
+      }
+
+      // Immediately reflect AI response in UI to avoid waiting for realtime
+      if (aiMessageIdToUpdate) {
+        setChatMessages(prev => (prev || []).map(m =>
+          m.id === aiMessageIdToUpdate
+            ? { ...m, content: data.response, isUpdating: false, isError: false }
+            : m
+        ));
+      } else {
+        const optimisticAssistantId = 'optimistic-' + generateId();
+        const optimisticAssistantMessage: Message = {
+          id: optimisticAssistantId,
+          content: data.response,
+          role: 'assistant',
+          timestamp: new Date().toISOString(),
+          isError: false,
+          session_id: currentSessionId || undefined,
+          has_been_displayed: false,
+        };
+        setChatMessages(prev => [...(prev || []), optimisticAssistantMessage]);
       }
 
       setChatSessions(prev => {

@@ -859,30 +859,39 @@ export const useAppData = () => {
               };
 
               setChatMessages(prevMessages => {
-                // Check if message already exists
+                // Check if message already exists by id
                 const messageExists = prevMessages.some(msg => msg.id === newMessage.id);
                 if (messageExists) {
-                  // console.log('Message already exists, skipping:', newMessage.id);
                   return prevMessages;
                 }
 
-                // console.log('Adding new message:', newMessage.id, newMessage.role);
-                const updatedMessages = [...prevMessages, newMessage];
+                // If we previously added an optimistic placeholder, replace it
+                const optimisticIndex = prevMessages.findIndex(msg =>
+                  msg.session_id === newMessage.session_id &&
+                  msg.role === newMessage.role &&
+                  msg.content === newMessage.content &&
+                  (typeof msg.id === 'string' && msg.id.startsWith('optimistic-'))
+                );
 
-                // Sort by timestamp but maintain insertion order for messages with same timestamp
-                return updatedMessages.sort((a, b) => {
+                const sortMessages = (arr: Message[]) => arr.sort((a, b) => {
                   const timeA = new Date(a.timestamp).getTime();
                   const timeB = new Date(b.timestamp).getTime();
-
                   if (timeA === timeB) {
-                    // If timestamps are the same, user messages come before assistant messages
                     if (a.role === 'user' && b.role === 'assistant') return -1;
                     if (a.role === 'assistant' && b.role === 'user') return 1;
                     return 0;
                   }
-
                   return timeA - timeB;
                 });
+
+                if (optimisticIndex > -1) {
+                  const updated = [...prevMessages];
+                  updated[optimisticIndex] = newMessage;
+                  return sortMessages(updated);
+                }
+
+                const updatedMessages = [...prevMessages, newMessage];
+                return sortMessages(updatedMessages);
               });
             }
             else if (payload.eventType === 'UPDATE') {
