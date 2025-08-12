@@ -833,13 +833,8 @@ const Index = () => {
           },
           chatHistory: optimizedContent.slice(0, -1), // All messages EXCEPT the last one (current user input)
           message: optimizedContent[optimizedContent.length - 1].parts[0].text, // The primary text of the current user message
-          // Any inlineData (images/files) attached to the current user message
-          files: optimizedContent[optimizedContent.length - 1].parts
-                      .filter(part => part.inlineData)
-                      .map(part => ({
-                          mimeType: part.inlineData?.mimeType,
-                          data: part.inlineData?.data
-                      })),
+          // Send full files payload so backend can store and attach them (images, pdfs, docs, etc.)
+          files: processedFiles,
           attachedDocumentIds: finalAttachedDocumentIds,
           attachedNoteIds: finalAttachedNoteIds,
           imageUrl: imageUrl, // Pass imageUrl if it's still relevant (e.g., for regeneration)
