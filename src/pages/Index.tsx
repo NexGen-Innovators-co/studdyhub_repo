@@ -907,10 +907,10 @@ const Index = () => {
     setIsAILoading,
   ]);
 
-  // Message handling
-  const handleNewMessage = useCallback((message: Message) => {
-    // Handled by useAppData's listener
-  }, []);
+  // // Message handling
+  // const handleNewMessage = useCallback((message: Message) => {
+  //   // Handled by useAppData's listener
+  // }, []);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     try {
