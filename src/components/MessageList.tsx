@@ -231,9 +231,9 @@ export const MessageList = memo(({
                 </Badge>
               </div>
             )}
-            <div className={cn('flex gap-3 group', isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto', isUserMessage ? 'justify-end' : 'justify-start')}>
+            <div className={cn('flex gap-1 group', isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto', isUserMessage ? 'justify-end' : 'justify-start')}>
               {message.role === 'assistant' && (
-                  <AIBot size="lg" isError={message.isError} />
+                  <AIBot size="lg" isError={message.isError} className='hidden sm:block' />
               )}
               <div className={cn('flex flex-col flex-1 min-w-0', isUserMessage ? 'items-end' : 'items-start')}>
                 <Card className={cardClasses}>
