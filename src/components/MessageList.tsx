@@ -2,13 +2,19 @@ import React, { memo, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
-import { AlertTriangle, Bot, Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2 } from 'lucide-react';
+import { AlertTriangle, Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Document } from '../types/Document';
 import { Message } from '../types/Class';
-import { cn } from '../lib/utils'; // Assuming a utility like `cn` exists for class name management
+import { cn } from '../lib/utils';
+import BookPagesAnimation from './bookloader';
+import AIBot from './aibot';
+
+// AI Bot Component
+
+
 
 interface MessageListProps {
   messages: Message[];
@@ -103,25 +109,33 @@ export const MessageList = memo(({
     <div className="flex flex-col gap-4 mb-8 bg-transparent" style={{ position: 'relative', zIndex: 1 }}>
       {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && (
         <div className="text-center py-8 flex-grow flex flex-col justify-center items-center text-slate-400 dark:text-gray-500">
-          <Bot className="h-12 w-12 mx-auto mb-4 text-slate-300 dark:text-gray-600" />
+          <BookPagesAnimation size="xl" showText={false} className="mb-6" />
           <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200">Welcome to your AI Study Assistant!</h3>
           <p className="text-base md:text-lg text-slate-500 max-w-md mx-auto dark:text-gray-400">
             I can help with questions about your notes, create study guides, explain concepts, and assist with academic work. Select documents and start chatting or use the microphone!
           </p>
         </div>
       )}
+      
       {messages.length === 0 && isLoadingSessionMessages && (
-        <div className="flex gap-3 justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-          <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Loading messages...</span>
+        <div className="flex flex-col items-center justify-center py-8">
+          <BookPagesAnimation size="lg" text="Loading messages..." />
         </div>
       )}
+      
       {isLoadingOlderMessages && (
-        <div className="flex justify-center py-2">
-          <Loader2 className="h-5 w-5 animate-spin text-blue-500 mr-2" />
-          <span className="text-base text-slate-500 dark:text-gray-400">Loading older messages...</span>
+        <div className="flex justify-center py-4">
+          <BookPagesAnimation size="sm" text="Loading older messages..." />
         </div>
       )}
+      
+      {/* Show loading animation when AI is responding
+      {isLoading && (
+        <div className="flex justify-center py-4">
+          <BookPagesAnimation size="md" text="AI is thinking..." />
+        </div>
+      )} */}
+
       {messages.map((message, index) => {
         const messageDate = formatDate(message.timestamp);
         const showDateHeader = messageDate !== lastDate;
@@ -191,13 +205,11 @@ export const MessageList = memo(({
                     </Badge>
                   )}
                 </div>
-
               )}
             </div>
           </>
         ) : (
           <>
-
             <MemoizedMarkdownRenderer
               content={message.content}
               isUserMessage={false}
@@ -221,15 +233,12 @@ export const MessageList = memo(({
             )}
             <div className={cn('flex gap-3 group', isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto', isUserMessage ? 'justify-end' : 'justify-start')}>
               {message.role === 'assistant' && (
-                <div className={cn('h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 hidden sm:flex', message.isError ? 'bg-red-500' : 'bg-transparent dark:bg-gray-700')}>
-                  {message.isError ? <AlertTriangle className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-white" />}
-                </div>
+                  <AIBot size="lg" isError={message.isError} />
               )}
               <div className={cn('flex flex-col flex-1 min-w-0', isUserMessage ? 'items-end' : 'items-start')}>
                 <Card className={cardClasses}>
                   <CardContent className="p-2 prose prose-lg !max-w-full leading-relaxed dark:prose-invert overflow-x-auto">
                     {contentToRender}
-
                   </CardContent>
                   <div className={cn('flex gap-1 px-4 pb-2', isUserMessage ? 'justify-end' : 'justify-start')}>
                     <span className={cn('text-xs text-slate-500', isUserMessage ? 'text-gray-600 dark:text-gray-300' : 'text-slate-500 dark:text-gray-400')}>

@@ -117,8 +117,9 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         const sanitizedHtml = DOMPurify.sanitize(html, {
           WHOLE_DOCUMENT: true,
           RETURN_DOM: false,
-          ADD_TAGS: ['style', 'script', 'iframe', 'link', 'meta'],
-          ADD_ATTR: ['target', 'sandbox']
+          ADD_TAGS: ['style', 'script','link', 'iframe', 'meta'],
+          ADD_ATTR: ['target', 'sandbox'],
+          // FORBID_TAGS: [ 'link'],
         });
 
         const fullHtml = `
@@ -264,11 +265,11 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
     try {
       // Force iframe recreation by setting src to about:blank first
       iframe.src = 'about:blank';
-      
+
       // Wait for iframe to be ready
       const setupIframe = () => {
         const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-        
+
         if (!iframeDoc) {
           throw new Error('Cannot access iframe document');
         }
@@ -541,9 +542,9 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
       // Set up message listener first
       const handleMessage = (event: MessageEvent) => {
         if (event.source !== iframe.contentWindow) return;
-        
+
         const { type, error, errorType, uniqueId: messageUniqueId } = event.data;
-        
+
         // Verify the message is from our current iframe instance
         if (messageUniqueId !== uniqueIdRef.current) return;
 
@@ -564,18 +565,18 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
       window.addEventListener('message', handleMessage);
 
       // Set up timeout
-      timeoutRef.current = setTimeout(() => {
-        if (isLoading && uniqueIdRef.current === uniqueId) {
-          const timeoutError = "Mermaid rendering timed out after 15 seconds";
-          setHasError(timeoutError);
-          setErrorType('timeout');
-          setIsLoading(false);
-          if (onError) onError(timeoutError, 'timeout');
-        }
-      }, 15000);
+      // timeoutRef.current = setTimeout(() => {
+      //   if (isLoading && uniqueIdRef.current === uniqueId) {
+      //     const timeoutError = "Mermaid rendering timed out after 15 seconds";
+      //     setHasError(timeoutError);
+      //     setErrorType('timeout');
+      //     setIsLoading(false);
+      //     if (onError) onError(timeoutError, 'timeout');
+      //   }
+      // }, 15000);
 
       // Setup iframe after a brief delay to ensure it's ready
-      if (iframe ) {
+      if (iframe) {
         setTimeout(setupIframe, 50);
       } else {
         iframe.onload = () => setTimeout(setupIframe, 50);
@@ -1071,11 +1072,8 @@ const CodeDisplay: React.FC<{
   const maxLineLength = Math.max(...lines.map(line => line.length));
 
   const handleCopyCode = useCallback(() => {
-    navigator.clipboard.writeText(content).then(() => {
-      toast.success('Code copied to clipboard');
-    }).catch(() => {
-      toast.error('Failed to copy code');
-    });
+    document.execCommand('copy'); // Fallback for clipboard.writeText
+    toast.success('Code copied to clipboard');
   }, [content]);
 
   return (
@@ -1686,7 +1684,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                     variant="outline"
                     size="sm"
                     onClick={() => onSuggestAiCorrection(`Fix this DOT graph code: ${diagramContent}`)}
-                    className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+                    className="mt-2 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100" // Added mt-2 for spacing
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Get AI Fix
@@ -1735,7 +1733,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                       variant="outline"
                       size="sm"
                       onClick={() => onSuggestAiCorrection(`Fix this Chart.js configuration: ${diagramContent}`)}
-                      className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+                      className="mt-2 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100" // Added mt-2 for spacing
                     >
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Get AI Fix
@@ -1768,7 +1766,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                       variant="outline"
                       size="sm"
                       onClick={() => onSuggestAiCorrection(`Fix this Three.js code: ${diagramContent}`)}
-                      className="text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+                      className="mt-2 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100" // Added mt-2 for spacing
                     >
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Get AI Fix

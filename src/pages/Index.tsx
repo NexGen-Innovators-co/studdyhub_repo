@@ -18,108 +18,10 @@ import { User } from '@supabase/supabase-js';
 import { generateId } from '@/utils/helpers';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
 import Dashboard from '../components/Dashboard';
+import BookPagesAnimation, { LoadingScreen } from '@/components/bookloader';
 
 // Enhanced loading component with progress
-const LoadingScreen = ({
-  progress,
-  message,
-  phase
-}: {
-  progress: number;
-  message: string;
-  phase: 'initial' | 'core' | 'secondary' | 'complete';
-}) => {
-  const [dots, setDots] = useState('');
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDots(prev => prev.length >= 3 ? '' : prev + '.');
-    }, 500);
-    return () => clearInterval(interval);
-  }, []);
-
-  const getPhaseIcon = () => {
-    switch (phase) {
-      case 'initial':
-        return '🔐';
-      case 'core':
-        return '📝';
-      case 'secondary':
-        return '⚡';
-      default:
-        return '✅';
-    }
-  };
-
-  return (
-    <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
-      <div className="text-center max-w-md mx-auto p-8">
-        {/* Logo */}
-        <div className="mb-6">
-          <img
-            src='/siteimage.png'
-            className="h-20 w-20 mx-auto animate-spin"
-            style={{
-              animation: phase === 'complete' ? 'none' : 'spin 2s linear infinite'
-            }}
-          />
-        </div>
-
-        {/* Phase indicator */}
-        <div className="text-4xl mb-4">{getPhaseIcon()}</div>
-
-        {/* Progress bar */}
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4 overflow-hidden">
-          <div
-            className={`h-full transition-all duration-500 ease-out ${progress === 100
-              ? 'bg-green-500'
-              : 'bg-gradient-to-r from-blue-500 to-purple-600'
-              }`}
-            style={{
-              width: `${progress}%`,
-              background: progress === 100
-                ? '#10b981'
-                : `linear-gradient(90deg, #3b82f6 0%,rgb(92, 146, 246) ${Math.min(progress, 100)}%)`
-            }}
-          />
-        </div>
-
-        {/* Progress percentage */}
-        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-          {progress}%
-        </div>
-
-        {/* Loading message */}
-        <p className="text-slate-600 dark:text-gray-300 text-lg mb-2">
-          {message}{dots}
-        </p>
-
-        {/* Phase description */}
-        <p className="text-sm text-slate-500 dark:text-gray-400">
-          {phase === 'initial' && 'Setting up your workspace...'}
-          {phase === 'core' && 'Loading essential content...'}
-          {phase === 'secondary' && 'Getting everything ready...'}
-          {phase === 'complete' && 'All set! Welcome back!'}
-        </p>
-
-        {/* Skip button for secondary loading */}
-        {phase === 'secondary' && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            onClick={() => {
-              // This would be passed from parent if needed
-              console.log('Skip secondary loading');
-            }}
-          >
-            Continue anyway
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // Enhanced interface definitions
 interface ChatSession {
@@ -1005,10 +907,10 @@ const Index = () => {
     setIsAILoading,
   ]);
 
-  // // Message handling
-  // const handleNewMessage = useCallback((message: Message) => {
-  //   // Handled by useAppData's listener
-  // }, []);
+  // Message handling
+  const handleNewMessage = useCallback((message: Message) => {
+    // Handled by useAppData's listener
+  }, []);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     try {

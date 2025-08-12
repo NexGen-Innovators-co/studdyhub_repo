@@ -15,6 +15,7 @@ import { MessageList } from './MessageList';
 import { ConfirmationModal } from './ConfirmationModal';
 import { Message } from '../types/Class';
 import { TypingAnimation } from './TypingAnimation';
+import BookPagesAnimation from './bookloader';
 
 // Declare Web Speech API types for TypeScript
 interface SpeechRecognition extends EventTarget {
@@ -1081,21 +1082,13 @@ const AIChat: React.FC<AIChatProps> = ({
               stopSpeech={stopSpeech}
               isDiagramPanelOpen={isDiagramPanelOpen}
             />
-            {isLoading && isSubmittingUserMessage && (
+            {isLoading && isSubmittingUserMessage &&(
               <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center animate-pulse">
-                    <Bot className="h-4 w-4 text-white" />
+                  <div className=" rounded-full  flex items-center justify-center ">
+                      <BookPagesAnimation size="md" text=" Thinking..." />
                   </div>
-                  <div className="w-fit p-3 rounded-lg bg-white shadow-sm border border-slate-200 dark:bg-gray-800 dark:border-gray-700">
-                    <div className="flex gap-1">
-                      <TypingAnimation
-                        text="Thinking..."
-                        speed={150}
-                        className="text-slate-400 dark:text-gray-500"
-                      />
-                    </div>
-                  </div>
+                  
                 </div>
               </div>
             )}
