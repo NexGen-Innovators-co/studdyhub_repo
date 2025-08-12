@@ -1237,6 +1237,13 @@ const Index = () => {
     // Dashboard specific props
     onNavigateToTab: handleNavigateToTab,
     onCreateNew: handleCreateNew,
+    // Infinite scroll controls
+    hasMoreDocuments: dataPagination.documents.hasMore,
+    isLoadingDocuments: specificDataLoading.documents,
+    onLoadMoreDocuments: loadMoreDocuments,
+    hasMoreRecordings: dataPagination.recordings.hasMore,
+    isLoadingRecordings: specificDataLoading.recordings,
+    onLoadMoreRecordings: loadMoreRecordings,
   }), [
     currentActiveTab,
     filteredNotes,
