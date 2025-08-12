@@ -168,6 +168,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [sessionToRenameId, setSessionToRenameId] = React.useState<string | null>(null);
   const [sessionToRenameTitle, setSessionToRenameTitle] = React.useState<string>('');
 
+  // Ref for the scrollable chat sessions container
+  const chatSessionsRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const currentChatSessionsRef = chatSessionsRef.current;
+
+    const handleScroll = () => {
+      if (currentChatSessionsRef && hasMoreChatSessions) {
+        // Check if the user has scrolled to the bottom
+        const { scrollTop, scrollHeight, clientHeight } = currentChatSessionsRef;
+        if (scrollTop + clientHeight >= scrollHeight - 5) { // -5 for a small buffer
+          onLoadMoreChatSessions();
+        }
+      }
+    };
+
+    if (currentChatSessionsRef) {
+      currentChatSessionsRef.addEventListener('scroll', handleScroll);
+    }
+
+    // Clean up the event listener
+    return () => {
+      if (currentChatSessionsRef) {
+        currentChatSessionsRef.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, [hasMoreChatSessions, onLoadMoreChatSessions, activeTab]); // Re-run effect if these dependencies change
+
   const handleNewChat = async () => {
     setIsNewChatLoading(true);
     try {
@@ -276,10 +304,10 @@ dark:text-gray-200">
 
         {/* Chat Sessions Section - Conditionally rendered based on activeTab */}
         {activeTab === 'chat' && (
-          <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700"> {/* Added dark mode border */}
+          <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
             <div className="flex items-center justify-between mb-2">
               {(isOpen) && (
-                <h2 className="font-semibold text-slate-800 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-200"> {/* Added dark mode text */}
+                <h2 className="font-semibold text-slate-800 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-200">
                   Chat Sessions
                 </h2>
               )}
@@ -301,17 +329,19 @@ dark:text-gray-200">
                 </span>
               </Button>
             </div>
-            {/* Dynamic max-height and overflow for scrollability and hiding when collapsed */}
-            <nav className={`space-y-1 transition-all duration-300 ease-in-out
-${isOpen // If sidebar is open (mobile or desktop explicitly opened)
-                ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
-                : 'max-h-0 overflow-hidden' // If sidebar is closed (mobile) or collapsed (desktop)
-              }
-lg:group-hover:max-h-[50vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar
-lg:max-h-0 lg:overflow-hidden // Default for desktop when not hovered
-`}>
+            {/* Scrollable container for chat sessions */}
+            <div
+              ref={chatSessionsRef}
+              className={`space-y-1 transition-all duration-300 ease-in-out
+                ${isOpen
+                  ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
+                  : 'max-h-0 overflow-hidden'
+                }
+                lg:group-hover:max-h-[50vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar
+                lg:max-h-0 lg:overflow-hidden`}
+            >
               {chatSessions.length === 0 && (isOpen) ? (
-                <p className="text-sm text-slate-500 py-2 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-400"> {/* Added dark mode text */}
+                <p className="text-sm text-slate-500 py-2 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-400">
                   No chat sessions yet.
                 </p>
               ) : (
@@ -322,16 +352,16 @@ lg:max-h-0 lg:overflow-hidden // Default for desktop when not hovered
                     <div
                       key={session.id}
                       className={`flex items-center justify-between group cursor-pointer rounded-lg transition-colors duration-200 ${isActive
-                        ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white' // Added dark mode
-                        : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300' // Added dark mode
+                        ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white'
+                        : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
                         }`}
-                      onClick={() => { onChatSessionSelect(session.id); onTabChange('chat'); }} // Select and switch to chat tab
+                      onClick={() => { onChatSessionSelect(session.id); onTabChange('chat'); }}
                     >
                       <Button
                         variant="ghost"
                         className={`flex-1 justify-start h-10 text-sm truncate ${!isOpen && 'px-2'}`}
                         title={session.title}
-                        style={{ maxWidth: '160px' }} // Added max-width style
+                        style={{ maxWidth: '160px' }}
                       >
                         <MessageCircle className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'}`} />
                         <span className={`truncate ${isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
@@ -344,8 +374,8 @@ lg:max-h-0 lg:overflow-hidden // Default for desktop when not hovered
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => handleRenameChatClick(session.id, session.title, e)} // Changed to handleRenameChatClick
-                            className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-slate-200 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700" // Added dark mode
+                            onClick={(e) => handleRenameChatClick(session.id, session.title, e)}
+                            className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-slate-200 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
                             title="Rename"
                           >
                             <Edit className="h-4 w-4" />
@@ -353,8 +383,8 @@ lg:max-h-0 lg:overflow-hidden // Default for desktop when not hovered
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => handleDeleteChatClick(session.id, e)} // Changed to handleDeleteChatClick
-                            className="h-7 w-7 p-0 text-slate-500 hover:text-red-600 hover:bg-slate-200 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700" // Added dark mode
+                            onClick={(e) => handleDeleteChatClick(session.id, e)}
+                            className="h-7 w-7 p-0 text-slate-500 hover:text-red-600 hover:bg-slate-200 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
                             title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -365,16 +395,11 @@ lg:max-h-0 lg:overflow-hidden // Default for desktop when not hovered
                   );
                 })
               )}
-              {hasMoreChatSessions && (isOpen) && (
-                <Button
-                  variant="ghost"
-                  className="w-full justify-center h-10 text-sm text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800" // Added dark mode
-                  onClick={onLoadMoreChatSessions}
-                >
-                  load more
-                </Button>
-              )}
-            </nav>
+              {/* The "Load More" button itself is removed, as loading is now triggered by scroll.
+                  You can keep it if you want it as a fallback or for visual indication,
+                  but its click handler won't be the primary trigger anymore.
+              */}
+            </div>
           </div>
         )}
 

@@ -1250,295 +1250,335 @@ digraph LearningFlow {
 - Neutral (Text Gray): #374151
 - Background variations: rgba() with appropriate opacity`;
   const threeJsExcellence = `
-**🌟 THREE.JS PROFESSIONAL 3D EXCELLENCE**
+**🌌 THREE.JS VISUALIZATION EXCELLENCE**
 
-**MANDATORY PROFESSIONAL STANDARDS:**
-- Comprehensive error handling with graceful fallbacks
-- Professional lighting setup (ambient + directional + fill)
-- Shadow mapping for visual depth and realism
-- Smooth, educational-friendly camera controls
-- Proper cleanup and memory management
-- Performance optimization for multiple scenes per session
+**MANDATORY THREE.JS STANDARDS:**
+Every Three.js visualization must adhere to these non-negotiable requirements:
+
+1. **Function Structure**:
+   - Use a named function like 'createSolarSystem' or 'createMoleculeModel' with signature: function <name>(canvas, THREE, OrbitControls, GLTFLoader)
+   - Return object with { scene, renderer, cleanup }
+   - Include proper cleanup function to dispose resources
+
+2. **Scene Requirements**:
+   - Always include at least one ambient light (0x404040, intensity 0.5-0.6) and one directional/point light (0xffffff, intensity 1.5-2.0)
+   - Use MeshStandardMaterial for all meshes with defined color, roughness (0.5-0.8), and metalness (0.0-0.5)
+   - Include OrbitControls with damping enabled
+   - Implement responsive resizing with window.addEventListener('resize')
+   - Use PerspectiveCamera with FOV 50-75
+
+3. **Texture Handling**:
+   - Use reliable CDN textures from 'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/' (e.g., earth_atmos_2048.jpg, mars_1k_color.jpg)
+   - Always implement error handling for texture loading with THREE.TextureLoader
+   - Provide fallback MeshStandardMaterial with color, roughness, and metalness if textures fail
+   - Store textures in an array and dispose of them in cleanup
+   - Example texture loading:
+     \`\`\`threejs
+     const textureLoader = new THREE.TextureLoader();
+     const texture = textureLoader.load(
+       'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/earth_atmos_2048.jpg',
+       () => console.log('Texture loaded'),
+       undefined,
+       (error) => {
+         console.warn('Texture load failed:', error);
+         material.map = null;
+         material.color.setHex(0x1e90ff);
+         material.needsUpdate = true;
+       }
+     );
+     textures.push(texture);
+     material.map = texture;
+     \`\`\`
+
+4. **Material Standards**:
+   - Use MeshStandardMaterial with:
+     - color: Vibrant hex value (e.g., 0x1e90ff for Earth)
+     - roughness: 0.5-0.8
+     - metalness: 0.0-0.5
+   - Never use MeshBasicMaterial unless required for emissive objects (e.g., Sun)
+   - Include fallback color if texture fails
+
+5. **Cleanup Standards**:
+   - Never call scene.dispose() as THREE.Scene has no dispose method
+   - Dispose geometries, materials, textures, renderer, and controls
+   - Use renderer.forceContextLoss() for WebGL context cleanup
+   - Dispose textures stored in an array: textures.forEach(texture => texture?.dispose())
+
+6. **Performance Optimization**:
+   - Use reasonable geometry segmentation (32x32 max for spheres)
+   - Limit particle systems to 1000 particles
+   - Implement frustum culling where appropriate
+   - Use requestAnimationFrame for animation loops
+   - Avoid heavy computations in render loop
+   
+**EXAMPLE THREE.JS CODE**:
 \`\`\`threejs
-function createThreeJSScene(canvas, THREE, OrbitControls) {
-    // CRITICAL: Robust parameter validation
-    if (!canvas || !THREE || !OrbitControls) {
-        console.error('StuddyHub: Missing Three.js dependencies for educational visualization');
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'flex items-center justify-center h-full bg-red-50 text-red-600 text-center p-4 rounded-lg';
-        errorDiv.innerHTML = \`
-            <div>
-                <div class="text-4xl mb-2">⚠️</div>
-                <p class="font-semibold">3D Scene Loading Error</p>
-                <p class="text-sm">Three.js dependencies not available</p>
-                <p class="text-xs mt-2">Please ensure Three.js is properly loaded</p>
-            </div>
-        \`;
-        if (canvas.parentElement) {
-            canvas.parentElement.appendChild(errorDiv);
+function createSolarSystemScene(canvas, THREE, OrbitControls) {
+  // Validate dependencies
+  if (!canvas || !THREE || !OrbitControls) {
+    console.error('Missing Three.js dependencies for solar system visualization');
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'flex items-center justify-center h-full bg-red-50 text-red-600 text-center p-4 rounded-lg';
+    errorDiv.innerHTML = \`
+      <div>
+        <p class="font-semibold">3D Scene Loading Error</p>
+        <p class="text-sm">Three.js dependencies not available</p>
+        <p class="text-xs mt-2">Please ensure Three.js is properly loaded</p>
+      </div>
+    \`;
+    if (canvas.parentElement) {
+      canvas.parentElement.appendChild(errorDiv);
+    }
+    return { scene: null, renderer: null, cleanup: () => {} };
+  }
+
+  // Scene setup
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000); // Deep space background
+
+  // Camera setup
+  const camera = new THREE.PerspectiveCamera(
+    60, // Wider FOV for better visibility
+    canvas.clientWidth / canvas.clientHeight,
+    0.1,
+    2000
+  );
+  camera.position.set(0, 100, 200); // Adjusted to fill panel
+
+  // Renderer setup
+  const renderer = new THREE.WebGLRenderer({
+    canvas: canvas,
+    antialias: true,
+    alpha: true,
+    powerPreference: "high-performance"
+  });
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+
+  // Orbit controls
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.minDistance = 50;
+  controls.maxDistance = 500;
+  controls.enablePan = true;
+  controls.enableZoom = true;
+  controls.autoRotate = false;
+  controls.target.set(0, 0, 0);
+
+  // Lighting setup
+  const sunLight = new THREE.PointLight(0xffffff, 2.0, 1000); // Brighter light
+  sunLight.position.set(0, 0, 0);
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.set(2048, 2048);
+  scene.add(sunLight);
+
+  const ambientLight = new THREE.AmbientLight(0x404040, 0.6); // Stronger ambient
+  scene.add(ambientLight);
+
+  // Planet data with texture URLs and fallback colors
+  const planetsData = [
+    { radius: 8, distance: 60, texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/mercury_8k.jpg', color: 0xd3d3d3, rotationSpeed: 0.004, orbitSpeed: 0.012, name: "Mercury" },
+    { radius: 10, distance: 90, texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/venus_surface.jpg', color: 0xffd700, rotationSpeed: 0.002, orbitSpeed: 0.01, name: "Venus" },
+    { radius: 12, distance: 120, texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/earth_atmos_2048.jpg', color: 0x1e90ff, rotationSpeed: 0.006, orbitSpeed: 0.008, name: "Earth" },
+    { radius: 9, distance: 150, texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/mars_1k_color.jpg', color: 0xff4500, rotationSpeed: 0.005, orbitSpeed: 0.007, name: "Mars" },
+    { radius: 25, distance: 240, texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/jupiter2_1k.jpg', color: 0xffa500, rotationSpeed: 0.003, orbitSpeed: 0.005, name: "Jupiter" },
+    { radius: 20, distance: 320, texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/saturn.jpg', color: 0xdeb887, rotationSpeed: 0.004, orbitSpeed: 0.003, name: "Saturn" },
+    { radius: 15, distance: 400, texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/uranus.jpg', color: 0x00b7eb, rotationSpeed: 0.006, orbitSpeed: 0.002, name: "Uranus" },
+    { radius: 14, distance: 480, texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/planets/neptune.jpg', color: 0x00008b, rotationSpeed: 0.003, orbitSpeed: 0.001, name: "Neptune" }
+  ];
+
+  // Sun
+  const sunGeometry = new THREE.SphereGeometry(40, 32, 32);
+  const sunMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0xffff00, 
+    emissive: 0xffaa00, 
+    emissiveIntensity: 0.5, 
+    roughness: 0.7 
+  });
+  const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+  sun.castShadow = false;
+  sun.receiveShadow = false;
+  scene.add(sun);
+
+  // Planets with texture loading and fallback
+  const textureLoader = new THREE.TextureLoader();
+  const planets = [];
+  const textures = [];
+
+  planetsData.forEach(planetData => {
+    const geometry = new THREE.SphereGeometry(planetData.radius, 32, 32);
+    const material = new THREE.MeshStandardMaterial({
+      color: planetData.color,
+      roughness: 0.8,
+      metalness: 0.2
+    });
+
+    // Attempt to load texture
+    if (planetData.texture) {
+      const texture = textureLoader.load(
+        planetData.texture,
+        // Success callback
+        () => {
+          console.log(\`Texture loaded for \${planetData.name}: \${planetData.texture}\`);
+        },
+        // Progress callback (optional)
+        undefined,
+        // Error callback
+        (error) => {
+          console.warn(\`Failed to load texture for \${planetData.name}: \${planetData.texture}\`, error);
+          material.map = null; // Ensure no broken texture is applied
+          material.color.setHex(planetData.color); // Apply fallback color
+          material.needsUpdate = true;
         }
-        return { scene: null, renderer: null, cleanup: () => {} };
+      );
+      textures.push(texture);
+      material.map = texture;
     }
 
-    // Professional scene setup with educational environment
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf8fafc); // Clean StuddyHub background
-    scene.fog = new THREE.Fog(0xf8fafc, 50, 200); // Subtle depth cue for better visualization
-    
-    // Camera optimized for educational content viewing
-    const camera = new THREE.PerspectiveCamera(
-        50, // Comfortable field of view for educational content
-        canvas.clientWidth / canvas.clientHeight, 
-        0.1, 
-        1000
-    );
-    camera.position.set(12, 8, 12); // Optimal viewing angle for most educational models
-    
-    // Professional renderer with enhanced settings
-    const renderer = new THREE.WebGLRenderer({ 
-        canvas: canvas, 
-        antialias: true,
-        alpha: true,
-        powerPreference: "high-performance"
+    const planet = new THREE.Mesh(geometry, material);
+    planet.castShadow = true;
+    planet.receiveShadow = true;
+    planet.position.x = planetData.distance;
+    planets.push({ mesh: planet, data: planetData, orbitAngle: 0 });
+    scene.add(planet);
+  });
+
+  // Animation loop
+  let animationId = null;
+  let isRunning = true;
+
+  function animate() {
+    if (!isRunning) return;
+
+    animationId = requestAnimationFrame(animate);
+
+    // Planet rotation and orbit
+    planets.forEach(planet => {
+      planet.mesh.rotation.y += planet.data.rotationSpeed;
+      planet.orbitAngle += planet.data.orbitSpeed;
+      planet.mesh.position.x = Math.cos(planet.orbitAngle) * planet.data.distance;
+      planet.mesh.position.z = Math.sin(planet.orbitAngle) * planet.data.distance;
     });
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    
-    // Enhanced educational-friendly controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 2;
-    controls.maxDistance = 50;
-    controls.maxPolarAngle = Math.PI * 0.8; // Prevent camera from going too low
-    controls.enablePan = true;
-    controls.enableZoom = true;
-    controls.autoRotate = false; // Let users control exploration
-    controls.target.set(0, 2, 0); // Focus on center of educational content
-    
-    // Professional lighting setup for educational content
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
-    scene.add(ambientLight);
-    
-    // Main directional light with enhanced shadows
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(20, 20, 20);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.setScalar(4096); // High-quality shadows
-    directionalLight.shadow.camera.near = 0.1;
-    directionalLight.shadow.camera.far = 100;
-    directionalLight.shadow.camera.left = -20;
-    directionalLight.shadow.camera.right = 20;
-    directionalLight.shadow.camera.top = 20;
-    directionalLight.shadow.camera.bottom = -20;
-    directionalLight.shadow.bias = -0.0005;
-    scene.add(directionalLight);
-    
-    // Fill lights for better educational visibility
-    const fillLight1 = new THREE.DirectionalLight(0x4f94cd, 0.2);
-    fillLight1.position.set(-15, 10, -15);
-    scene.add(fillLight1);
-    
-    const fillLight2 = new THREE.DirectionalLight(0xffd700, 0.1);
-    fillLight2.position.set(10, 5, -10);
-    scene.add(fillLight2);
-    
-    // Educational content group for better organization
-    const educationalGroup = new THREE.Group();
-    
-    // Main educational object with StuddyHub branding colors
-    const geometry = new THREE.BoxGeometry(3, 3, 3);
-    const material = new THREE.MeshPhongMaterial({ 
-        color: 0x3B82F6, // StuddyHub primary blue
-        shininess: 80,
-        transparent: false,
-        side: THREE.DoubleSide
-    });
-    const mainObject = new THREE.Mesh(geometry, material);
-    mainObject.castShadow = true;
-    mainObject.receiveShadow = true;
-    mainObject.position.set(0, 3, 0);
-    educationalGroup.add(mainObject);
-    
-    // Supporting educational elements
-    const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
-    const sphereMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0x10B981, // StuddyHub success green
-        shininess: 100,
-        transparent: true,
-        opacity: 0.8
-    });
-    const supportingSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    supportingSphere.position.set(5, 2, 0);
-    supportingSphere.castShadow = true;
-    supportingSphere.receiveShadow = true;
-    educationalGroup.add(supportingSphere);
-    
-    scene.add(educationalGroup);
-    
-    // Professional educational platform
-    const platformGeometry = new THREE.PlaneGeometry(40, 40);
-    const platformMaterial = new THREE.MeshLambertMaterial({ 
-        color: 0xe2e8f0,
-        transparent: true,
-        opacity: 0.9
-    });
-    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
-    platform.rotation.x = -Math.PI / 2;
-    platform.position.y = 0;
-    platform.receiveShadow = true;
-    scene.add(platform);
-    
-    // Subtle grid for educational reference
-    const gridHelper = new THREE.GridHelper(40, 40, 0xcccccc, 0xcccccc);
-    gridHelper.material.transparent = true;
-    gridHelper.material.opacity = 0.2;
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
-    
-    // Enhanced animation system for educational engagement
-    let animationId = null;
-    let isRunning = true;
-    let time = 0;
-    
-    function animate() {
-        if (!isRunning) return;
-        
-        animationId = requestAnimationFrame(animate);
-        time += 0.008; // Gentle, professional animation speed
-        
-        // Educational animations that enhance understanding
-        if (mainObject && supportingSphere) {
-            // Gentle rotation for better viewing angles
-            mainObject.rotation.y = Math.sin(time) * 0.05;
-            mainObject.position.y = 3 + Math.sin(time * 1.5) * 0.1;
-            
-            // Orbital motion demonstrating relationships
-            supportingSphere.position.x = Math.cos(time * 0.8) * 6;
-            supportingSphere.position.z = Math.sin(time * 0.8) * 6;
-            supportingSphere.position.y = 2 + Math.sin(time * 2) * 0.5;
-            supportingSphere.rotation.x = time * 0.5;
-            supportingSphere.rotation.y = time * 0.3;
-        }
-        
-        controls.update();
-        renderer.render(scene, camera);
+
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Responsive resizing
+  const onResize = () => {
+    if (!canvas || !camera || !renderer) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+
+    // Adjust camera for smaller screens
+    if (width < 600) {
+      camera.position.set(0, 150, 300);
+      sunLight.intensity = 1.8;
+    } else {
+      camera.position.set(0, 100, 200);
+      sunLight.intensity = 2.0;
     }
-    animate();
-    
-    // Enhanced responsive handling for all devices
-    const onResize = () => {
-        if (!canvas || !camera || !renderer) return;
-        
-        const rect = canvas.getBoundingClientRect();
-        const width = rect.width;
-        const height = rect.height;
-        
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-        renderer.setSize(width, height);
-        
-        // Adjust lighting intensity based on canvas size
-        if (width < 600) {
-            directionalLight.intensity = 0.6;
-            ambientLight.intensity = 0.4;
+  };
+
+  window.addEventListener('resize', onResize);
+
+  // Comprehensive cleanup
+  const cleanup = () => {
+    isRunning = false;
+
+    if (animationId) {
+      cancelAnimationFrame(animationId);
+      animationId = null;
+    }
+
+    window.removeEventListener('resize', onResize);
+
+    // Dispose geometries and materials
+    sunGeometry?.dispose();
+    sunMaterial?.dispose();
+
+    planets.forEach(planet => {
+      planet.mesh.geometry?.dispose();
+      planet.mesh.material?.dispose();
+    });
+
+    // Dispose textures
+    textures.forEach(texture => {
+      if (texture) texture.dispose();
+    });
+
+    // Dispose controls and renderer
+    if (controls) {
+      controls.dispose();
+    }
+    if (renderer) {
+      renderer.dispose();
+      renderer.forceContextLoss();
+    }
+
+    // Clear scene children
+    while (scene.children.length > 0) {
+      const child = scene.children[0];
+      scene.remove(child);
+
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(m => m.dispose());
         } else {
-            directionalLight.intensity = 0.8;
-            ambientLight.intensity = 0.3;
+          child.material.dispose();
         }
-    };
-    
-    window.addEventListener('resize', onResize);
-    
-    // Comprehensive cleanup for optimal memory management
-    const cleanup = () => {
-        isRunning = false;
-        
-        if (animationId) {
-            cancelAnimationFrame(animationId);
-            animationId = null;
-        }
-        
-        window.removeEventListener('resize', onResize);
-        
-        // Dispose all geometries
-        geometry?.dispose();
-        sphereGeometry?.dispose();
-        platformGeometry?.dispose();
-        
-        // Dispose all materials
-        material?.dispose();
-        sphereMaterial?.dispose();
-        platformMaterial?.dispose();
-        
-        // Dispose controls
-        controls?.dispose();
-        
-        // Dispose renderer
-        renderer?.dispose();
-        
-        // Clear scene recursively
-        while (scene.children.length > 0) {
-            const child = scene.children[0];
-            scene.remove(child);
-            
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) {
-                if (Array.isArray(child.material)) {
-                    child.material.forEach(m => m.dispose());
-                } else {
-                    child.material.dispose();
-                }
-            }
-        }
-        
-        console.log('StuddyHub: 3D scene cleanup completed successfully');
-    };
-    
-    // Return comprehensive interface for external management
-    return {
-        scene,
-        renderer,
-        camera,
-        controls,
-        cleanup,
-        onResize,
-        // Educational utilities
-        addObject: (object) => {
-            scene.add(object);
-            if (object.castShadow !== undefined) object.castShadow = true;
-            if (object.receiveShadow !== undefined) object.receiveShadow = true;
-        },
-        removeObject: (object) => scene.remove(object),
-        updateCamera: (position, target = { x: 0, y: 2, z: 0 }) => {
-            camera.position.set(position.x, position.y, position.z);
-            controls.target.set(target.x, target.y, target.z);
-            controls.update();
-        },
-        setAutoRotate: (enable, speed = 1.0) => {
-            controls.autoRotate = enable;
-            controls.autoRotateSpeed = speed;
-        },
-        pauseAnimation: () => { isRunning = false; },
-        resumeAnimation: () => { 
-            isRunning = true; 
-            animate();
-        }
-    };
+      }
+    }
+
+    console.log('Solar system scene cleanup completed');
+  };
+
+  return {
+    scene,
+    renderer,
+    camera,
+    controls,
+    cleanup,
+    onResize,
+    addObject: (object) => {
+      scene.add(object);
+      if (object.castShadow !== undefined) object.castShadow = true;
+      if (object.receiveShadow !== undefined) object.receiveShadow = true;
+    },
+    removeObject: (object) => scene.remove(object),
+    updateCamera: (position, target = { x: 0, y: 0, z: 0 }) => {
+      camera.position.set(position.x, position.y, position.z);
+      controls.target.set(target.x, target.y, target.z);
+      controls.update();
+    },
+    setAutoRotate: (enable, speed = 1.0) => {
+      controls.autoRotate = enable;
+      controls.autoRotateSpeed = speed;
+    },
+    pauseAnimation: () => { isRunning = false; },
+    resumeAnimation: () => {
+      isRunning = true;
+      animate();
+    }
+  };
 }
 \`\`\`
-**EDUCATIONAL USE CASES:**
-- Molecular structures and chemical bonding
-- Mathematical surfaces and geometric concepts
-- Architectural models and spatial relationships
-- Physics simulations (pendulums, waves, orbits)
-- Biological structures (cells, organs, systems)
-- Engineering models and mechanical systems`;
+
+   `;
   const htmlExcellence = `
 **🎨 HTML PROFESSIONAL INTERFACE EXCELLENCE**
 

@@ -862,11 +862,11 @@ export const useAppData = () => {
                 // Check if message already exists
                 const messageExists = prevMessages.some(msg => msg.id === newMessage.id);
                 if (messageExists) {
-                  console.log('Message already exists, skipping:', newMessage.id);
+                  // console.log('Message already exists, skipping:', newMessage.id);
                   return prevMessages;
                 }
 
-                console.log('Adding new message:', newMessage.id, newMessage.role);
+                // console.log('Adding new message:', newMessage.id, newMessage.role);
                 const updatedMessages = [...prevMessages, newMessage];
 
                 // Sort by timestamp but maintain insertion order for messages with same timestamp
@@ -900,7 +900,7 @@ export const useAppData = () => {
                 has_been_displayed: payload.new.has_been_displayed || false
               };
 
-              console.log('Updating message:', updatedMessage.id);
+              // console.log('Updating message:', updatedMessage.id);
 
               setChatMessages(prevMessages => {
                 const updatedMessages = prevMessages.map(msg => {
@@ -925,7 +925,7 @@ export const useAppData = () => {
               });
             }
             else if (payload.eventType === 'DELETE') {
-              console.log('Deleting message:', payload.old.id);
+              // console.log('Deleting message:', payload.old.id);
               setChatMessages(prevMessages => {
                 return prevMessages.filter(msg => msg.id !== payload.old.id);
               });
