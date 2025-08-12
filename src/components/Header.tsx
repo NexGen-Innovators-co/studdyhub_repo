@@ -2,6 +2,8 @@ import React from 'react';
 import { Search, Plus, Menu, Sparkles, Bell } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import AIBot from './aibot';
+import BookPagesAnimation from './bookloader';
 
 interface HeaderProps {
   searchQuery: string;
@@ -9,7 +11,7 @@ interface HeaderProps {
   onNewNote: () => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' |'dashboard';
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard';
   // New props for user avatar
   fullName: string | null;
   avatarUrl: string | null;
@@ -61,8 +63,8 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Menu className="h-4 w-4 text-slate-600 dark:text-white" />
         </Button>
-
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <BookPagesAnimation size='sm' showText={false} className='flex-shrink-0 p-0 ml-4' />
           {/* Main App Logo/Title */}
           <div className="flex-shrink-0">
             <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-800 dark:text-white truncate">studdyhub</h1>
@@ -70,6 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
             <p className="text-xs text-slate-500 hidden sm:block truncate">{tabNames[activeTab]}</p>
           </div>
         </div>
+
       </div>
 
       {activeTab === 'notes' && (
@@ -100,11 +103,11 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden sm:inline">New Note</span>
           </Button>
         )}
-        
+
         {/* User Avatar, Name, and optional actions */}
         <div className="flex items-center gap-2">
-           {/* Notification Bell */}
-           <Button
+          {/* Notification Bell */}
+          <Button
             variant="ghost"
             size="sm"
             className="p-1.5 sm:p-2 flex-shrink-0 relative dark:hover:bg-slate-700"

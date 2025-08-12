@@ -205,7 +205,7 @@ const BookPagesAnimation = ({
               textAnchor="middle"
               filter="url(#glow)"
             >
-              SHUB AI
+              S-HUB AI
             </text>
             <g opacity="0.3" fill="white">
               <circle cx={pageX + 18} cy={bookY + 15} r="2.5" />
