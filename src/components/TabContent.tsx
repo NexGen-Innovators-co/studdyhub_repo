@@ -97,6 +97,7 @@ interface TabContentProps {
   isLoadingSessionMessages: boolean;
   onReprocessAudio: (audioUrl: string, documentId: string) => Promise<void>;
   onDeleteRecording: (recordingId: string, documentId: string | null, audioUrl: string | null) => Promise<void>;
+  onMessageUpdate: (message: Message) => void; // New prop for message updates
 
   // Infinite scroll controls
   hasMoreDocuments: boolean;
@@ -235,6 +236,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         attachedFiles // FIXED: Pass attachedFiles as the 8th parameter
       );
     },
+    onMessageUpdate: props.onMessageUpdate, // Pass new prop here
   }),
     [
       props.activeChatSessionId,
@@ -264,6 +266,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       props.isLoadingSessionMessages,
       userProfile?.learning_style,
       userProfile?.learning_preferences,
+      props.onMessageUpdate, // Add to dependencies
     ]);
 
   const documentsProps = useMemo(() => ({

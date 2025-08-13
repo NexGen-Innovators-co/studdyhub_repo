@@ -212,7 +212,7 @@ const Index = () => {
     setNotes,
     setRecordings,
     setScheduleItems,
-    setChatMessages,
+    setChatMessages, // This setter will be used to update messages
     setDocuments,
     setUserProfile,
     setActiveNote,
@@ -660,6 +660,15 @@ const Index = () => {
     return context;
   }, []);
 
+  // Define handleMessageUpdate to update the state
+  const handleMessageUpdate = useCallback((updatedMessage: Message) => {
+    setChatMessages(prevMessages =>
+      prevMessages.map(msg =>
+        msg.id === updatedMessage.id ? updatedMessage : msg
+      )
+    );
+  }, [setChatMessages]);
+
   // Enhanced message submission with better progress tracking
   const handleSubmit = useCallback(async (
     messageContent: string,
@@ -711,24 +720,8 @@ const Index = () => {
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
 
-      // Optimistically show the user's message in the chat UI (no DB write here)
-      if (!aiMessageIdToUpdate && hasTextContent) {
-        const optimisticUserId = 'optimistic-' + generateId();
-        const optimisticUserMessage: Message = {
-          id: optimisticUserId,
-          content: messageContent,
-          role: 'user',
-          timestamp: new Date().toISOString(),
-          isError: false,
-          attachedDocumentIds: finalAttachedDocumentIds,
-          attachedNoteIds: finalAttachedNoteIds,
-          imageUrl,
-          imageMimeType,
-          session_id: currentSessionId || undefined,
-          has_been_displayed: false,
-        };
-        setChatMessages(prev => [...prev, optimisticUserMessage]);
-      }
+      // REMOVED: Optimistic user message addition.
+      // Messages will now be added to state only after being persisted to DB.
 
       // Enhanced file processing progress
       if (attachedFiles && attachedFiles.length > 0) {
@@ -852,26 +845,10 @@ const Index = () => {
         throw new Error('Empty response from AI service');
       }
 
-      // Immediately reflect AI response in UI to avoid waiting for realtime
-      if (aiMessageIdToUpdate) {
-        setChatMessages(prev => (prev || []).map(m =>
-          m.id === aiMessageIdToUpdate
-            ? { ...m, content: data.response, isUpdating: false, isError: false }
-            : m
-        ));
-      } else {
-        const optimisticAssistantId = 'optimistic-' + generateId();
-        const optimisticAssistantMessage: Message = {
-          id: optimisticAssistantId,
-          content: data.response,
-          role: 'assistant',
-          timestamp: new Date().toISOString(),
-          isError: false,
-          session_id: currentSessionId || undefined,
-          has_been_displayed: false,
-        };
-        setChatMessages(prev => [...(prev || []), optimisticAssistantMessage]);
-      }
+      // NO LONGER OPTIMISTICALLY UPDATING AI RESPONSE HERE.
+      // The real-time listener (if configured) or subsequent data fetch
+      // should populate the chat messages.
+      // If no real-time listener, you would explicitly re-fetch chat messages here.
 
       setChatSessions(prev => {
         const updated = prev.map(session =>
@@ -937,7 +914,7 @@ const Index = () => {
     notes,
     buildRichContext,
     userProfile,
-    setChatSessions,
+    // setChatMessages, // No longer directly updating chatMessages here for AI response
     setIsAILoading,
   ]);
 
@@ -1244,6 +1221,7 @@ const Index = () => {
     hasMoreRecordings: dataPagination.recordings.hasMore,
     isLoadingRecordings: specificDataLoading.recordings,
     onLoadMoreRecordings: loadMoreRecordings,
+    onMessageUpdate: handleMessageUpdate,
   }), [
     currentActiveTab,
     filteredNotes,
@@ -1292,6 +1270,7 @@ const Index = () => {
     handleGenerateNoteFromAudio,
     handleNavigateToTab,
     handleCreateNew,
+    handleMessageUpdate,
   ]);
 
   useEffect(() => {

@@ -7,7 +7,8 @@ import { Badge } from './ui/badge';
 import { UserProfile, Document } from '../types/Document';
 import { Note } from '../types/Note';
 import { supabase } from '@/integrations/supabase/client';
-import { DocumentSelector } from './DocumentSelector';
+import { DocumentSelector }
+from './DocumentSelector';
 import { toast } from 'sonner';
 import { DiagramPanel } from './DiagramPanel';
 import { generateId } from '@/utils/helpers';
@@ -119,6 +120,7 @@ interface AIChatProps {
       processing_error: string | null;
     }>
   ) => Promise<void>;
+  onMessageUpdate: (message: Message) => void; // New prop for updating messages
 }
 
 // File type detection and validation
@@ -232,6 +234,7 @@ const AIChat: React.FC<AIChatProps> = ({
   learningStyle,
   learningPreferences,
   onSendMessageToBackend,
+  onMessageUpdate, // Destructure new prop
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -275,6 +278,49 @@ const AIChat: React.FC<AIChatProps> = ({
     const userAgent = navigator.userAgent.toLowerCase();
     return /mobile|android|iphone|ipad|tablet/i.test(userAgent) && window.innerWidth <= 768;
   }, []);
+
+  // Function to mark a message as displayed in the database
+  const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
+    // Prevent database update for optimistic messages
+    if (messageId.startsWith('optimistic-')) {
+      console.log(`Optimistic message with ID ${messageId} finished typing. No DB update needed.`);
+      // Update local state for optimistic messages to prevent re-animation
+      const messageToUpdate = messages.find(msg => msg.id === messageId);
+      if (messageToUpdate) {
+        onMessageUpdate({ ...messageToUpdate, has_been_displayed: true });
+      }
+      return;
+    }
+
+    if (!userProfile?.id || !activeChatSessionId) {
+      console.warn("User or session ID missing, cannot mark message as displayed.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('chat_messages')
+        .update({ has_been_displayed: true })
+        .eq('id', messageId)
+        .eq('session_id', activeChatSessionId)
+        .eq('user_id', userProfile.id);
+
+      if (error) {
+        console.error('Error marking message as displayed:', error);
+        toast.error(`Failed to mark message as displayed: ${error.message}`);
+      } else {
+        console.log(`Message with ID ${messageId} marked as displayed.`);
+        // Update local state for real messages
+        const messageToUpdate = messages.find(msg => msg.id === messageId);
+        if (messageToUpdate) {
+          onMessageUpdate({ ...messageToUpdate, has_been_displayed: true });
+        }
+      }
+    } catch (error) {
+      console.error('Unexpected error marking message as displayed:', error);
+      toast.error('An unexpected error occurred while marking message as displayed.');
+    }
+  }, [userProfile?.id, activeChatSessionId, messages, onMessageUpdate]);
 
   useEffect(() => {
     const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1081,14 +1127,17 @@ const AIChat: React.FC<AIChatProps> = ({
               resumeSpeech={resumeSpeech}
               stopSpeech={stopSpeech}
               isDiagramPanelOpen={isDiagramPanelOpen}
+              enableTypingAnimation={messages.some((msg) => msg.role === 'assistant' && !msg.has_been_displayed && !msg.isError) &&
+                !isLoading && !isGeneratingImage}
+              onMarkMessageDisplayed={handleMarkMessageDisplayed}
             />
-            {isLoading && isSubmittingUserMessage &&(
+            {isLoading && isSubmittingUserMessage && (
               <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
                   <div className=" rounded-full  flex items-center justify-center ">
-                      <BookPagesAnimation size="md" text=" Thinking..." />
+                    <BookPagesAnimation size="md" text=" Thinking..." />
                   </div>
-                  
+
                 </div>
               </div>
             )}
@@ -1110,7 +1159,7 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 bg-slate-50 md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg dark:bg-gray-950 md:dark:bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8  md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
             {(selectedDocumentIds.length > 0 || attachedFiles.length > 0) && (
               <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700
                 ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'}
@@ -1153,135 +1202,94 @@ const AIChat: React.FC<AIChatProps> = ({
               </div>
             )}
 
-            <div className="max-w-4xl w-full mx-auto flex flex-col gap-2 p-3 rounded-lg border border-gray-700 dark:bg-gray-800 bg-white transition-colors duration-300">
-              {/* Show attached file previews */}
-              {attachedFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {attachedFiles.map((attachedFile) => (
-                    <div key={attachedFile.id} className="relative flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg file-preview">
-                      {attachedFile.type === 'image' && attachedFile.preview ? (
-                        <img
-                          src={attachedFile.preview}
-                          alt={attachedFile.file.name}
-                          className="w-12 h-12 object-cover rounded"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded flex items-center justify-center">
-                          {getFileIcon(attachedFile.file)}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                          {attachedFile.file.name}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatFileSize(attachedFile.file.size)}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveFile(attachedFile.id)}
-                        className="h-6 w-6 rounded-full bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800 p-0"
-                        title="Remove file"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <textarea
-                ref={textareaRef}
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="What do you want to know?"
-                className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300"
-                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                rows={1}
-              />
-              <div className="flex items-center gap-2 mt-2 justify-between">
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={isRecognizing ? stopRecognition : startRecognition}
-                    className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'bg-red-900 text-red-300 dark:bg-red-900 dark:text-red-300 bg-red-200 text-red-600' : 'text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300'}`}
-                    title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
-                  >
-                    <Mic className="h-5 w-5" />
-                  </Button>
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    ref={cameraInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => cameraInputRef.current?.click()}
-                    className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                    title="Take Picture"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                  >
-                    <Camera className="h-5 w-5" />
-                  </Button>
-
-                  <input
-                    type="file"
-                    accept="*/*"
-                    multiple
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                    title="Upload Files"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                  >
-                    <Paperclip className="h-5 w-5" />
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowDocumentSelector(true)}
-                    className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
-                    title="Select Documents/Notes for Context"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                  >
-                    {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
-                  </Button>
-                </div>
+            <textarea
+              ref={textareaRef}
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              placeholder="What do you want to know?"
+              className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300"
+              disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+              rows={1}
+            />
+            <div className="flex items-center gap-2 mt-2 justify-between">
+              <div className="flex items-center gap-2">
                 <Button
-                  type="submit"
-                  onClick={handleSendMessage}
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                  title="Send Message"
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={isRecognizing ? stopRecognition : startRecognition}
+                  className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'bg-red-900 text-red-300 dark:bg-red-900 dark:text-red-300 bg-red-200 text-red-600' : 'text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300'}`}
+                  title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
                 >
-                  {isSubmittingUserMessage ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
+                  <Mic className="h-5 w-5" />
+                </Button>
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  ref={cameraInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                  title="Take Picture"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                >
+                  <Camera className="h-5 w-5" />
+                </Button>
+
+                <input
+                  type="file"
+                  accept="*/*"
+                  multiple
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                  title="Upload Files"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                >
+                  <Paperclip className="h-5 w-5" />
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowDocumentSelector(true)}
+                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
+                  title="Select Documents/Notes for Context"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                >
+                  {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
                 </Button>
               </div>
+              <Button
+                type="submit"
+                onClick={handleSendMessage}
+                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0)}
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                title="Send Message"
+              >
+                {isSubmittingUserMessage ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
             </div>
           </div>
           {showDocumentSelector && (
