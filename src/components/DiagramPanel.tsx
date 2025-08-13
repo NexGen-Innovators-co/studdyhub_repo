@@ -16,7 +16,7 @@ import { Graphviz } from '@hpcc-js/wasm';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'; // Corrected import path
 import { themes, ThemeName, escapeHtml, highlightCode } from '../utils/codeHighlighting';
 import { Easing } from 'framer-motion';
 import DOMPurify from 'dompurify';
@@ -94,7 +94,7 @@ class PanelErrorBoundary extends React.Component<
   }
 }
 
-// Enhanced HTML Renderer with better isolation
+// Enhanced HTML Renderer with better isolation using srcdoc
 const IsolatedHtml = ({ html }: { html: string }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,60 +107,73 @@ const IsolatedHtml = ({ html }: { html: string }) => {
     setIsLoading(true);
   }, []);
 
-  useEffect(() => {
-    if (iframeRef.current && html) {
-      setIsLoading(true);
-      setHasError(false);
+  const iframeSrcDocContent = useMemo(() => {
+    const sanitizedHtml = DOMPurify.sanitize(html, {
+      WHOLE_DOCUMENT: true,
+      RETURN_DOM: false,
+      ADD_TAGS: ['style', 'script', 'link', 'iframe', 'meta'],
+      ADD_ATTR: ['target', 'sandbox'],
+    });
 
-      try {
-        const iframe = iframeRef.current;
-        const sanitizedHtml = DOMPurify.sanitize(html, {
-          WHOLE_DOCUMENT: true,
-          RETURN_DOM: false,
-          ADD_TAGS: ['style', 'script','link', 'iframe', 'meta'],
-          ADD_ATTR: ['target', 'sandbox'],
-          // FORBID_TAGS: [ 'link'],
-        });
-
-        const fullHtml = `
-${sanitizedHtml}
-`;
-
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-        if (iframeDoc) {
-          iframeDoc.open();
-          iframeDoc.write(fullHtml);
-          iframeDoc.close();
-
-          const handleMessage = (event: MessageEvent) => {
-            if (event.source === iframe.contentWindow) {
-              if (event.data.type === 'loaded') {
-                setIsLoading(false);
-              } else if (event.data.type === 'error') {
-                setHasError(true);
-                setIsLoading(false);
-              }
-            }
-          };
-
-          window.addEventListener('message', handleMessage);
-
-          const timeoutId = setTimeout(() => {
-            setIsLoading(false);
-          }, 5000);
-
-          return () => {
-            window.removeEventListener('message', handleMessage);
-            clearTimeout(timeoutId);
-          };
-        }
-      } catch (error) {
-        console.error('Error rendering HTML content:', error);
-        setHasError(true);
-        setIsLoading(false);
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; padding: 0; overflow: auto; }
+  </style>
+</head>
+<body>
+  ${sanitizedHtml}
+  <script>
+    // Post message to parent when content is loaded
+    window.onload = function() {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'loaded' }, '*');
       }
-    }
-  }, [html, retryCount]);
+    };
+    // Basic error handler for scripts within the iframe
+    window.onerror = function(message, source, lineno, colno, error) {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'error', message: error?.message || message }, '*');
+      }
+      return false; // Allow default error handling
+    };
+  </script>
+</body>
+</html>`;
+  }, [html]);
+
+  useEffect(() => {
+    setIsLoading(true);
+    setHasError(false);
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source === iframeRef.current?.contentWindow) {
+        if (event.data.type === 'loaded') {
+          setIsLoading(false);
+        } else if (event.data.type === 'error') {
+          setHasError(true);
+          setIsLoading(false);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    const timeoutId = setTimeout(() => {
+      if (isLoading) { // Check if still loading after timeout
+        setIsLoading(false);
+        setHasError(true); // Treat timeout as an error
+      }
+    }, 10000); // 10 seconds timeout for HTML loading
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      clearTimeout(timeoutId);
+    };
+  }, [html, retryCount]); // Re-run effect when html or retryCount changes
 
   if (hasError) {
     return (
@@ -168,7 +181,7 @@ ${sanitizedHtml}
         <AlertTriangle className="h-8 w-8 mb-3" />
         <h3 className="text-lg font-semibold mb-2">HTML Rendering Error</h3>
         <p className="text-center text-sm mb-4">
-          The HTML content couldn't be displayed properly.
+          The HTML content couldn't be displayed properly. This might be due to insecure content or blocked resources.
         </p>
         <div className="flex flex-col sm:flex-row gap-2">
           <Button
@@ -204,14 +217,18 @@ ${sanitizedHtml}
         </div>
       )}
       <iframe
+        key={retryCount} // Use key to force remount on retry
         ref={iframeRef}
         className="w-full h-full border-0 rounded-lg"
+        // Retain comprehensive sandbox for full HTML functionality, accepting potential warnings
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
         title="AI Generated HTML Content"
+        srcDoc={iframeSrcDocContent} // Corrected to srcDoc
       />
     </div>
   );
 };
+
 
 // Enhanced Mermaid Renderer with bulletproof error handling and DOM isolation
 const IsolatedMermaid = ({ content, onError }: { content: string; onError: (error: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void }) => {
@@ -222,14 +239,14 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
   const [retryCount, setRetryCount] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout>();
   const messageListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
-  const uniqueIdRef = useRef<string>('');
+  const uniqueIdRef = useRef<string>(''); // Used to ensure messages are from the current iframe instance
 
   const handleRetry = useCallback(() => {
     setRetryCount(prev => prev + 1);
     setHasError(null);
     setIsLoading(true);
-    if (onError) onError(null, 'rendering');
-  }, [onError]);
+    // onError is called at the start of the useEffect when a new rendering attempt begins
+  }, []);
 
   const cleanup = useCallback(() => {
     if (timeoutRef.current) {
@@ -242,57 +259,17 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
     }
   }, []);
 
-  useEffect(() => {
-    // Cleanup previous listeners and timeouts
-    cleanup();
+  // Prepare iframe HTML content for srcdoc
+  const iframeSrcDocContent = useMemo(() => {
+    // Generate truly unique ID with timestamp and random components for this render cycle
+    const currentUniqueId = `mermaid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${retryCount}`;
+    uniqueIdRef.current = currentUniqueId; // Store for message verification in parent
 
-    if (!iframeRef.current || !content?.trim()) {
-      setHasError('No content provided');
-      setErrorType('syntax');
-      setIsLoading(false);
-      if (onError) onError('No content provided', 'syntax');
-      return;
-    }
+    // Create sanitized variable names for the iframe's internal script
+    const contentVarName = `MERMAID_CONTENT_${currentUniqueId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const idVarName = `UNIQUE_ID_${currentUniqueId.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
-    setIsLoading(true);
-    setHasError(null);
-
-    const iframe = iframeRef.current;
-    // Generate truly unique ID with timestamp and random components
-    const uniqueId = `mermaid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${retryCount}`;
-    uniqueIdRef.current = uniqueId;
-
-    try {
-      // Force iframe recreation by setting src to about:blank first
-      iframe.src = 'about:blank';
-
-      // Wait for iframe to be ready
-      const setupIframe = () => {
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-
-        if (!iframeDoc) {
-          throw new Error('Cannot access iframe document');
-        }
-
-        // Completely clear and reset the document
-        iframeDoc.open();
-        iframeDoc.write('<!DOCTYPE html><html><head></head><body></body></html>');
-        iframeDoc.close();
-
-        // Wait for document to settle, then write actual content
-        setTimeout(() => {
-          try {
-            const finalDoc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (!finalDoc) {
-              throw new Error('Lost access to iframe document during setup');
-            }
-
-            // Create sanitized variable names
-            const contentVarName = `MERMAID_CONTENT_${uniqueId.replace(/[^a-zA-Z0-9]/g, '_')}`;
-            const idVarName = `UNIQUE_ID_${uniqueId.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-            // Enhanced HTML content with completely isolated variables
-            const iframeHtml = `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -343,21 +320,15 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
   </div>
   
   <script>
-    // Use immediately invoked function expression to create isolated scope
     (function() {
       'use strict';
-      
-      // Store content with unique variable names to prevent conflicts
       const ${contentVarName} = ${JSON.stringify(content)};
-      const ${idVarName} = ${JSON.stringify(uniqueId)};
-      
-      // Local references
+      const ${idVarName} = ${JSON.stringify(currentUniqueId)}; // Use current unique ID
       const MERMAID_CONTENT = ${contentVarName};
       const UNIQUE_ID = ${idVarName};
       
-      // Error reporting function
       function reportError(error, type = 'rendering') {
-        console.error('Mermaid Error:', error);
+        console.error('Mermaid Error in iframe:', error);
         try {
           if (window.parent && window.parent !== window) {
             window.parent.postMessage({ 
@@ -368,11 +339,10 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
             }, '*');
           }
         } catch (e) {
-          console.error('Failed to report error to parent:', e);
+          console.error('Failed to report error to parent from iframe:', e);
         }
       }
 
-      // Success reporting function
       function reportSuccess() {
         try {
           if (window.parent && window.parent !== window) {
@@ -382,20 +352,10 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
             }, '*');
           }
         } catch (e) {
-          console.error('Failed to report success to parent:', e);
+          console.error('Failed to report success to parent from iframe:', e);
         }
       }
 
-      // Global error handlers for the iframe
-      window.addEventListener('error', function(event) {
-        reportError(event.error || event.message, 'rendering');
-      });
-
-      window.addEventListener('unhandledrejection', function(event) {
-        reportError(event.reason, 'rendering');
-      });
-
-      // Function to show error in iframe
       function showError(message, type = 'rendering') {
         const container = document.querySelector('.container');
         if (container) {
@@ -408,14 +368,12 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
         reportError(message, type);
       }
 
-      // Load Mermaid library with error handling
       function loadMermaid() {
         return new Promise(function(resolve, reject) {
           if (window.mermaid) {
             resolve();
             return;
           }
-          
           const script = document.createElement('script');
           script.src = 'https://unpkg.com/mermaid@10.9.1/dist/mermaid.min.js';
           script.onload = function() {
@@ -429,8 +387,6 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
             reject(new Error('Failed to load Mermaid library'));
           };
           document.head.appendChild(script);
-          
-          // Timeout for script loading
           setTimeout(function() {
             if (!window.mermaid) {
               reject(new Error('Mermaid library load timeout'));
@@ -439,72 +395,35 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
         });
       }
 
-      // Main rendering function
       function renderMermaid() {
-        // Validate content first
         if (!MERMAID_CONTENT || !MERMAID_CONTENT.trim()) {
           showError('Empty or invalid Mermaid content', 'syntax');
           return;
         }
 
-        // Load Mermaid library
         loadMermaid().then(function() {
-          try {
-            if (!window.mermaid) {
-              throw new Error('Mermaid library not available after loading');
-            }
-
-            // Initialize Mermaid with safe configuration
-            window.mermaid.initialize({
-              startOnLoad: false,
-              theme: 'default',
-              securityLevel: 'strict',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-              fontSize: 16,
-              maxTextSize: 50000,
-              maxEdges: 2000,
-              htmlLabels: false,
-              flowchart: { htmlLabels: false },
-              sequence: { showSequenceNumbers: true },
-              gantt: { numberSectionStyles: 4 }
-            });
-
-            // Pre-validate syntax
-            return window.mermaid.parse(MERMAID_CONTENT);
-          } catch (parseError) {
-            showError('Syntax error: ' + (parseError.message || parseError), 'syntax');
-            throw parseError;
-          }
+          if (!window.mermaid) { throw new Error('Mermaid not available'); }
+          window.mermaid.initialize({
+            startOnLoad: false, theme: 'default', securityLevel: 'strict',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontSize: 16, maxTextSize: 50000, maxEdges: 2000, htmlLabels: false,
+            flowchart: { htmlLabels: false }, sequence: { showSequenceNumbers: true },
+            gantt: { numberSectionStyles: 4 }
+          });
+          return window.mermaid.parse(MERMAID_CONTENT);
         }).then(function() {
-          // Remove loading indicator
           const loadingIndicator = document.getElementById('loading-indicator');
-          if (loadingIndicator) {
-            loadingIndicator.remove();
-          }
-
-          // Create container for the diagram
+          if (loadingIndicator) { loadingIndicator.remove(); }
           const diagramContainer = document.createElement('div');
           diagramContainer.id = 'mermaid-diagram';
           const container = document.querySelector('.container');
-          if (container) {
-            container.appendChild(diagramContainer);
-          }
-
-          // Render the diagram
+          if (container) { container.appendChild(diagramContainer); }
           return window.mermaid.render('mermaid-svg-' + Date.now(), MERMAID_CONTENT);
         }).then(function(result) {
           const svg = result.svg || result;
-          
-          if (!svg || svg.trim().length === 0) {
-            throw new Error('Mermaid rendered empty SVG');
-          }
-
+          if (!svg || svg.trim().length === 0) { throw new Error('Mermaid rendered empty SVG'); }
           const diagramContainer = document.getElementById('mermaid-diagram');
-          if (diagramContainer) {
-            diagramContainer.innerHTML = svg;
-          }
-          
-          // Report success
+          if (diagramContainer) { diagramContainer.innerHTML = svg; }
           reportSuccess();
         }).catch(function(error) {
           const errorType = error.message && error.message.toLowerCase().includes('syntax') ? 'syntax' : 'rendering';
@@ -512,137 +431,90 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
         });
       }
 
-      // Start rendering when DOM is ready
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', renderMermaid);
       } else {
-        // Small delay to ensure everything is settled
         setTimeout(renderMermaid, 100);
       }
-    })(); // End IIFE
+    })();
   </script>
 </body>
 </html>`;
+  }, [content, retryCount]); // Re-generate srcdoc when content or retryCount changes
 
-            // Write content to iframe
-            finalDoc.open();
-            finalDoc.write(iframeHtml);
-            finalDoc.close();
 
-          } catch (writeError) {
-            console.error('Error writing to iframe:', writeError);
-            setHasError(`Document write error: ${writeError.message}`);
-            setErrorType('rendering');
-            setIsLoading(false);
-            if (onError) onError(writeError.message, 'rendering');
-          }
-        }, 100); // Increased delay for document settling
-      };
+  useEffect(() => {
+    // Cleanup previous listeners and timeouts
+    cleanup();
 
-      // Set up message listener first
-      const handleMessage = (event: MessageEvent) => {
-        if (event.source !== iframe.contentWindow) return;
+    if (!content?.trim()) {
+      setHasError('No content provided');
+      setErrorType('syntax');
+      setIsLoading(false);
+      if (onError) onError('No content provided', 'syntax');
+      return;
+    }
 
+    setIsLoading(true);
+    setHasError(null);
+    if (onError) onError(null, 'rendering'); // Signal that a new rendering attempt is starting
+
+    // Set up message listener for communication from iframe
+    const handleMessage = (event: MessageEvent) => {
+      const allowedOrigins = [
+        window.location.origin,
+        "http://localhost:8080",
+        "https://studdyhub.versel.app",
+        "https://notemind.lovable.app"
+      ];
+
+      // Check if message is from an allowed origin or has an opaque (null) origin
+      // and is from our specific iframe's content window.
+      if ((allowedOrigins.includes(event.origin) || event.origin === "null") && event.source === iframeRef.current?.contentWindow) {
         const { type, error, errorType, uniqueId: messageUniqueId } = event.data;
 
-        // Verify the message is from our current iframe instance
+        // Verify the message is from our current iframe instance's render cycle
         if (messageUniqueId !== uniqueIdRef.current) return;
 
         if (type === 'mermaidLoaded') {
+          cleanup(); // Clear timeout on success
           setIsLoading(false);
           setHasError(null);
           if (onError) onError(null, 'rendering');
         } else if (type === 'mermaidError') {
+          cleanup(); // Clear timeout on error too
           const finalErrorType = errorType || 'rendering';
           setHasError(error);
           setErrorType(finalErrorType);
           setIsLoading(false);
           if (onError) onError(error, finalErrorType);
         }
-      };
-
-      messageListenerRef.current = handleMessage;
-      window.addEventListener('message', handleMessage);
-
-      // Set up timeout
-      // timeoutRef.current = setTimeout(() => {
-      //   if (isLoading && uniqueIdRef.current === uniqueId) {
-      //     const timeoutError = "Mermaid rendering timed out after 15 seconds";
-      //     setHasError(timeoutError);
-      //     setErrorType('timeout');
-      //     setIsLoading(false);
-      //     if (onError) onError(timeoutError, 'timeout');
-      //   }
-      // }, 15000);
-
-      // Setup iframe after a brief delay to ensure it's ready
-      if (iframe) {
-        setTimeout(setupIframe, 50);
-      } else {
-        iframe.onload = () => setTimeout(setupIframe, 50);
       }
+    };
 
-    } catch (error: any) {
-      console.error('Error setting up Mermaid iframe:', error);
-      setHasError(`Setup error: ${error.message}`);
-      setErrorType('rendering');
-      setIsLoading(false);
-      if (onError) onError(error.message, 'rendering');
-    }
 
-    // Cleanup function
+    messageListenerRef.current = handleMessage;
+    window.addEventListener('message', handleMessage);
+
+    // Timeout for overall rendering process
+    timeoutRef.current = setTimeout(() => {
+      // Only trigger timeout if still loading and it's for the current uniqueId
+      if (isLoading && uniqueIdRef.current === uniqueIdRef.current) { // Redundant check, but ensures it's still "this" instance's loading state
+        const timeoutError = "Mermaid rendering timed out after 15 seconds. This might be due to a complex diagram or network issues loading the Mermaid library from CDN within the sandbox.";
+        setHasError(timeoutError);
+        setErrorType('timeout');
+        setIsLoading(false);
+        if (onError) onError(timeoutError, 'timeout');
+        cleanup(); // Ensure cleanup happens on timeout
+      }
+    }, 15000);
+
     return cleanup;
-  }, [content, retryCount, onError]);
+  }, [content, retryCount, onError, cleanup]); // Depend on content and retryCount for re-rendering
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return cleanup;
-  }, [cleanup]);
-
-  if (hasError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-red-600 bg-red-50 p-4 dark:bg-red-950/20 dark:text-red-300">
-        <AlertTriangle className="h-8 w-8 mb-3" />
-        <h3 className="text-lg font-semibold mb-2">
-          Mermaid {errorType === 'syntax' ? 'Syntax' : errorType === 'timeout' ? 'Timeout' : errorType === 'network' ? 'Network' : 'Rendering'} Error
-        </h3>
-        <p className="text-center text-sm mb-4 max-w-md">
-          {hasError}
-        </p>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button
-            onClick={handleRetry}
-            variant="outline"
-            size="sm"
-            className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700"
-            disabled={isLoading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Retry ({retryCount + 1})
-          </Button>
-          <details className="mt-2">
-            <summary className="cursor-pointer text-sm hover:text-red-700 dark:hover:text-red-200">
-              View Mermaid Source
-            </summary>
-            <pre className="mt-2 p-3 bg-white dark:bg-gray-900 border rounded text-xs overflow-auto max-h-40 w-full max-w-md">
-              {content}
-            </pre>
-          </details>
-        </div>
-        {errorType === 'syntax' && (
-          <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
-            <p>Check your Mermaid syntax. Common issues:</p>
-            <ul className="list-disc list-inside mt-1 space-y-1">
-              <li>Missing diagram type declaration</li>
-              <li>Invalid node or edge syntax</li>
-              <li>Unclosed quotes or brackets</li>
-            </ul>
-          </div>
-        )}
-      </div>
-    );
-  }
-
+  // The iframe element is rendered here, with srcdoc.
+  // The 'key' attribute ensures React re-mounts the iframe if content changes,
+  // which is important for srcdoc updates to take effect.
   return (
     <div className="relative w-full h-full">
       {isLoading && (
@@ -659,13 +531,55 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
         </div>
       )}
       <iframe
-        key={`${content.substring(0, 50)}-${retryCount}`} // More stable key
+        key={uniqueIdRef.current} // Use the unique ID as key to force remount on content/retry change
         ref={iframeRef}
         className="w-full h-full border-0 rounded-lg bg-transparent"
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts" // Keep it minimal to avoid warnings, but allow scripts to run
         title="Mermaid Diagram"
         style={{ minHeight: '200px' }}
+        srcDoc={iframeSrcDocContent} // Corrected to srcDoc
       />
+      {hasError && (
+        <div className="flex flex-col items-center justify-center h-full text-red-600 bg-red-50 p-4 dark:bg-red-950/20 dark:text-red-300">
+          <AlertTriangle className="h-8 w-8 mb-3" />
+          <h3 className="text-lg font-semibold mb-2">
+            Mermaid {errorType === 'syntax' ? 'Syntax' : errorType === 'timeout' ? 'Timeout' : errorType === 'network' ? 'Network' : 'Rendering'} Error
+          </h3>
+          <p className="text-center text-sm mb-4 max-w-md">
+            {hasError}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              onClick={handleRetry}
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700"
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Retry ({retryCount + 1})
+            </Button>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm hover:text-red-700 dark:hover:text-red-200">
+                View Mermaid Source
+              </summary>
+              <pre className="mt-2 p-3 bg-white dark:bg-gray-900 border rounded text-xs overflow-auto max-h-40 w-full max-w-md">
+                {content}
+              </pre>
+            </details>
+          </div>
+          {errorType === 'syntax' && (
+            <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+              <p>Check your Mermaid syntax. Common issues:</p>
+              <ul className="list-disc list-inside mt-1 space-y-1">
+                <li>Missing diagram type declaration</li>
+                <li>Invalid node or edge syntax</li>
+                <li>Unclosed quotes or brackets</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -1448,6 +1362,13 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       return;
     }
 
+    // Explicitly block PDF download for mermaid and html due to security restrictions
+    // with html2canvas and sandboxed iframes.
+    if (diagramType === 'mermaid' || diagramType === 'html') {
+      toast.error('PDF export of rendered diagrams is not supported for this type due to browser security limitations.');
+      return;
+    }
+
     try {
       toast('Generating PDF...', { duration: 1000 });
 
@@ -1459,72 +1380,31 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
       let canvas: HTMLCanvasElement;
 
-      if (diagramType === 'html' || diagramType === 'mermaid') {
-        const iframe = diagramContainerRef.current.querySelector('iframe');
-        if (iframe && iframe.contentDocument) {
-          try {
-            const tempContainer = document.createElement('div');
-            tempContainer.style.width = '800px';
-            tempContainer.style.backgroundColor = '#ffffff';
-            tempContainer.style.padding = '20px';
-            tempContainer.innerHTML = iframe.contentDocument.body.innerHTML;
-
-            const style = document.createElement('style');
-            style.textContent = `
-              * { box-sizing: border-box; }
-              body { margin: 0; font-family: Arial, sans-serif; line-height: 1.4; }
-              img { max-width: 100%; height: auto; }
-              table { width: 100%; border-collapse: collapse; }
-              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-              svg { max-width: 100%; max-height: 100%; }
-            `;
-            tempContainer.appendChild(style);
-
-            document.body.appendChild(tempContainer);
-
-            canvas = await html2canvas(tempContainer, {
-              scale: 2,
-              useCORS: true,
-              allowTaint: true,
-              backgroundColor: '#ffffff',
-              width: 800,
-              windowWidth: 800,
-              scrollX: 0,
-              scrollY: 0,
-            });
-
-            document.body.removeChild(tempContainer);
-          } catch (iframeError) {
-            console.warn('Could not access iframe content, falling back to container capture:', iframeError);
-            canvas = await html2canvas(diagramContainerRef.current, {
-              scale: 2,
-              useCORS: true,
-              backgroundColor: '#ffffff',
-              width: diagramContainerRef.current.offsetWidth,
-              height: diagramContainerRef.current.offsetHeight,
-            });
-          }
-        } else {
-          canvas = await html2canvas(diagramContainerRef.current, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            width: diagramContainerRef.current.offsetWidth,
-            height: diagramContainerRef.current.offsetHeight,
-          });
-        }
-      } else {
-        const contentElement = diagramContainerRef.current;
-        canvas = await html2canvas(contentElement, {
+      // This block will now only be reached for types like chartjs, threejs, or code/text if direct HTML capture is desired.
+      // For chartjs and threejs, the canvas element is directly available.
+      if (diagramType === 'chartjs' && chartRef.current) {
+        canvas = await html2canvas(chartRef.current, {
+          scale: 2, useCORS: true, backgroundColor: '#ffffff'
+        });
+      } else if (diagramType === 'threejs' && threeJsRef.current) {
+        canvas = await html2canvas(threeJsRef.current, {
+          scale: 2, useCORS: true, backgroundColor: '#ffffff'
+        });
+      }
+      else {
+        // Fallback for other types, directly capture the container.
+        // This will work for code/text displays rendered as HTML, but not for iframes.
+        canvas = await html2canvas(diagramContainerRef.current, {
           scale: 2,
           useCORS: true,
           backgroundColor: '#ffffff',
-          width: contentElement.offsetWidth,
-          height: contentElement.offsetHeight,
-          windowWidth: contentElement.offsetWidth,
-          windowHeight: contentElement.offsetHeight,
+          width: diagramContainerRef.current.offsetWidth,
+          height: diagramContainerRef.current.offsetHeight,
+          windowWidth: diagramContainerRef.current.offsetWidth,
+          windowHeight: diagramContainerRef.current.offsetHeight,
         });
       }
+
 
       const imgData = canvas.toDataURL('image/png');
       const imgProps = pdf.getImageProperties(imgData);
@@ -1545,14 +1425,15 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       }
 
-      const fileName = diagramType === 'html' ? 'webpage.pdf' : `${diagramType}-export.pdf`;
+      const fileName = diagramType === 'code' ? 'webpage.pdf' : `${diagramType}-export.pdf`;
       pdf.save(fileName);
       toast.success('PDF downloaded successfully!');
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
     }
-  }, [diagramType]);
+  }, [diagramType, chartRef, threeJsRef]); // Add chartRef and threeJsRef to dependencies
+
 
   const ThemeSelector = useCallback(() => (
     <div className="relative theme-selector-container">

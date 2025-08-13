@@ -15,7 +15,6 @@ import { generateId } from '@/utils/helpers';
 import { MessageList } from './MessageList';
 import { ConfirmationModal } from './ConfirmationModal';
 import { Message } from '../types/Class';
-import { TypingAnimation } from './TypingAnimation';
 import BookPagesAnimation from './bookloader';
 
 // Declare Web Speech API types for TypeScript
@@ -1159,138 +1158,138 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8  md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
-            {(selectedDocumentIds.length > 0 || attachedFiles.length > 0) && (
-              <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700
-                ${isDiagramPanelOpen ? 'w-full mx-auto' : 'max-w-4xl w-full mx-auto'}
-              `}>
-                <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200">Context:</span>
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8  md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent  font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
+            <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2"> {/* NEW WRAPPER DIV */}
+              {(selectedDocumentIds.length > 0 || attachedFiles.length > 0) && (
+                <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700`}>
+                  <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200">Context:</span>
 
-                {/* Show attached files */}
-                {attachedFiles.length > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className="bg-orange-500/20 text-orange-800 border-orange-400 flex items-center gap-1 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700 text-sm md:text-base font-sans"
+                  {/* Show attached files */}
+                  {attachedFiles.length > 0 && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-orange-500/20 text-orange-800 border-orange-400 flex items-center gap-1 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700 text-sm md:text-base font-sans"
+                    >
+                      <Paperclip className="h-3 w-3" />
+                      {attachedFiles.length} File{attachedFiles.length > 1 ? 's' : ''}
+                      <XCircle
+                        className="h-3 w-3 ml-1 cursor-pointer text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-200"
+                        onClick={handleRemoveAllFiles}
+                      />
+                    </Badge>
+                  )}
+
+                  {selectedImageDocuments.length > 0 && (
+                    <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
+                      <Image className="h-3 w-3" /> {selectedImageDocuments.length} Image Doc{selectedImageDocuments.length > 1 ? 's' : ''}
+                      <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !selectedImageDocuments.map(imgDoc => imgDoc.id).includes(id)))} />
+                    </Badge>
+                  )}
+                  {selectedDocumentTitles.length > 0 && (
+                    <Badge variant="secondary" className="bg-purple-500/20 text-purple-800 border-purple-400 flex items-center gap-1 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700 text-sm md:text-base font-sans">
+                      <BookOpen className="h-3 w-3 mr-1" /> {selectedDocumentTitles.length} Text Doc{selectedDocumentTitles.length > 1 ? 's' : ''}
+                      <XCircle className="h-3 w-3 ml-1 cursor-pointer text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !documents.filter(doc => doc.type === 'text').map(d => d.id).includes(id)))} />
+                    </Badge>
+                  )}
+                  {selectedNoteTitles.length > 0 && (
+                    <Badge variant="secondary" className="bg-green-500/20 text-green-800 border-green-400 flex items-center gap-1 dark:bg-green-950 dark:text-green-300 dark:border-green-700 text-sm md:text-base font-sans">
+                      <StickyNote className="h-3 w-3 mr-1" /> {selectedNoteTitles.length} Note{selectedNoteTitles.length > 1 ? 's' : ''}
+                      <XCircle className="h-3 w-3 ml-1 cursor-pointer text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !notes.map(n => n.id).includes(id)))} />
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              <textarea
+                ref={textareaRef}
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="What do you want to know?"
+                className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300"
+                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                rows={1}
+              />
+              <div className="flex items-center gap-2 mt-2 justify-between">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={isRecognizing ? stopRecognition : startRecognition}
+                    className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'bg-red-900 text-red-300 dark:bg-red-900 dark:text-red-300 bg-red-200 text-red-600' : 'text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300'}`}
+                    title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
                   >
-                    <Paperclip className="h-3 w-3" />
-                    {attachedFiles.length} File{attachedFiles.length > 1 ? 's' : ''}
-                    <XCircle
-                      className="h-3 w-3 ml-1 cursor-pointer text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-200"
-                      onClick={handleRemoveAllFiles}
-                    />
-                  </Badge>
-                )}
+                    <Mic className="h-5 w-5" />
+                  </Button>
 
-                {selectedImageDocuments.length > 0 && (
-                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
-                    <Image className="h-3 w-3" /> {selectedImageDocuments.length} Image Doc{selectedImageDocuments.length > 1 ? 's' : ''}
-                    <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !selectedImageDocuments.map(imgDoc => imgDoc.id).includes(id)))} />
-                  </Badge>
-                )}
-                {selectedDocumentTitles.length > 0 && (
-                  <Badge variant="secondary" className="bg-purple-500/20 text-purple-800 border-purple-400 flex items-center gap-1 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700 text-sm md:text-base font-sans">
-                    <BookOpen className="h-3 w-3 mr-1" /> {selectedDocumentTitles.length} Text Doc{selectedDocumentTitles.length > 1 ? 's' : ''}
-                    <XCircle className="h-3 w-3 ml-1 cursor-pointer text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !documents.filter(doc => doc.type === 'text').map(d => d.id).includes(id)))} />
-                  </Badge>
-                )}
-                {selectedNoteTitles.length > 0 && (
-                  <Badge variant="secondary" className="bg-green-500/20 text-green-800 border-green-400 flex items-center gap-1 dark:bg-green-950 dark:text-green-300 dark:border-green-700 text-sm md:text-base font-sans">
-                    <StickyNote className="h-3 w-3 mr-1" /> {selectedNoteTitles.length} Note{selectedNoteTitles.length > 1 ? 's' : ''}
-                    <XCircle className="h-3 w-3 ml-1 cursor-pointer text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !notes.map(n => n.id).includes(id)))} />
-                  </Badge>
-                )}
-              </div>
-            )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    ref={cameraInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                    title="Take Picture"
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                  >
+                    <Camera className="h-5 w-5" />
+                  </Button>
 
-            <textarea
-              ref={textareaRef}
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="What do you want to know?"
-              className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300"
-              disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-              rows={1}
-            />
-            <div className="flex items-center gap-2 mt-2 justify-between">
-              <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="*/*"
+                    multiple
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                    title="Upload Files"
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowDocumentSelector(true)}
+                    className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
+                    title="Select Documents/Notes for Context"
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                  >
+                    {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
+                  </Button>
+                </div>
                 <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={isRecognizing ? stopRecognition : startRecognition}
-                  className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'bg-red-900 text-red-300 dark:bg-red-900 dark:text-red-300 bg-red-200 text-red-600' : 'text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300'}`}
-                  title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
+                  type="submit"
+                  onClick={handleSendMessage}
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                  title="Send Message"
                 >
-                  <Mic className="h-5 w-5" />
-                </Button>
-
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  ref={cameraInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                  title="Take Picture"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                >
-                  <Camera className="h-5 w-5" />
-                </Button>
-
-                <input
-                  type="file"
-                  accept="*/*"
-                  multiple
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                  title="Upload Files"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                >
-                  <Paperclip className="h-5 w-5" />
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowDocumentSelector(true)}
-                  className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
-                  title="Select Documents/Notes for Context"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
-                >
-                  {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
+                  {isSubmittingUserMessage ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
-              <Button
-                type="submit"
-                onClick={handleSendMessage}
-                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0)}
-                className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                title="Send Message"
-              >
-                {isSubmittingUserMessage ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
+            </div> {/* END NEW WRAPPER DIV */}
           </div>
           {showDocumentSelector && (
             <DocumentSelector

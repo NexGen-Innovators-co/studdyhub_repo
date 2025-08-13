@@ -37,7 +37,7 @@ import { AISuggestion, AI_SUGGESTIONS } from '../constants/aiSuggestions';
 // Utility imports
 import { getTextareaCaretCoordinates } from '../utils/textareaUtils';
 import { generateInlineContent } from '../services/aiServices';
-import { useTypingAnimation } from '../hooks/useTypingAnimation';
+import { useTypingAnimation } from './TypingAnimation';
 
 Chart.register(...registerables);
 
