@@ -1,4 +1,4 @@
-// Index.tsx - Fixed Dashboard Integration and Tab Computation Bug
+// Index.tsx - Fixed Dashboard Integration
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
@@ -162,7 +162,7 @@ const extractFirstSentence = (text: string): string => {
 const Index = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation(); // Use React Router's useLocation hook instead
+  const location = new URL(window.location.href);
 
   // Theme management
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>(() => {
@@ -259,26 +259,19 @@ const Index = () => {
   const [hasMoreChatSessions, setHasMoreChatSessions] = useState(true);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
 
-  // FIXED: Enhanced tab management with proper null checking
+  // Enhanced tab management - FIXED: Include 'dashboard' type
   const currentActiveTab = useMemo(() => {
-    // Safely get pathname with fallback
-    const pathname = location?.pathname || '/';
-    
-    // Safely split pathname and get the first segment
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const firstSegment = pathSegments[0] || '';
-    
-    switch (firstSegment) {
+    const path = location.pathname.split('/')[1];
+    switch (path) {
       case 'notes': return 'notes';
       case 'recordings': return 'recordings';
       case 'schedule': return 'schedule';
       case 'chat': return 'chat';
       case 'documents': return 'documents';
       case 'settings': return 'settings';
-      case 'dashboard': return 'dashboard';
-      default: return 'dashboard'; // Default to dashboard for empty or unknown paths
+      default: return 'dashboard';
     }
-  }, [location?.pathname]) as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
+  }, [location.pathname]) as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
 
   useEffect(() => {
     // FIXED: Cast to the expected type
