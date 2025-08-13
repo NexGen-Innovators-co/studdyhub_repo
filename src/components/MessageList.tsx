@@ -12,10 +12,6 @@ import { cn } from '../lib/utils';
 import BookPagesAnimation from './bookloader';
 import AIBot from './aibot';
 
-// AI Bot Component
-
-
-
 interface MessageListProps {
   messages: Message[];
   isLoading: boolean;
@@ -39,6 +35,8 @@ interface MessageListProps {
   resumeSpeech: () => void;
   stopSpeech: () => void;
   isDiagramPanelOpen: boolean;
+  enableTypingAnimation?: boolean;
+  onMarkMessageDisplayed: (messageId: string) => void;
 }
 
 export const MessageList = memo(({
@@ -64,6 +62,8 @@ export const MessageList = memo(({
   resumeSpeech,
   stopSpeech,
   isDiagramPanelOpen,
+  enableTypingAnimation = true,
+  onMarkMessageDisplayed,
 }: MessageListProps) => {
   let lastDate: string | null = null;
 
@@ -128,13 +128,6 @@ export const MessageList = memo(({
           <BookPagesAnimation size="sm" text="Loading older messages..." />
         </div>
       )}
-      
-      {/* Show loading animation when AI is responding
-      {isLoading && (
-        <div className="flex justify-center py-4">
-          <BookPagesAnimation size="md" text="AI is thinking..." />
-        </div>
-      )} */}
 
       {messages.map((message, index) => {
         const messageDate = formatDate(message.timestamp);
@@ -212,12 +205,17 @@ export const MessageList = memo(({
           <>
             <MemoizedMarkdownRenderer
               content={message.content}
+              messageId={message.id}
               isUserMessage={false}
               onMermaidError={onMermaidError}
               onSuggestAiCorrection={onSuggestAiCorrection}
               onViewDiagram={onViewContent}
               onToggleUserMessageExpansion={onToggleUserMessageExpansion}
               expandedMessages={expandedMessages}
+              enableTyping={enableTypingAnimation && !isLoading}
+              isLastMessage={isLastMessage}
+              onTypingComplete={onMarkMessageDisplayed}
+              isAlreadyTyped={message.has_been_displayed}
             />
           </>
         );

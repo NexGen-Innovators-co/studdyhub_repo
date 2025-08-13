@@ -7,10 +7,6 @@ import { Badge } from './ui/badge';
 
 // Import Chart.js for rendering
 import { Chart, registerables } from 'chart.js';
-// // NEW: Import THREE and OrbitControls from npm packages
-// import * as THREE from 'three';
-// import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-// import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Import lowlight and language types for syntax highlighting
 import { lowlight } from 'lowlight';
@@ -31,8 +27,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 
-// Import utility for copying to clipboard
+// Import utility for copying to clipboard and typing animation
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+import { useTypingAnimation } from '../hooks/useTypingAnimation';
 
 // Register languages for lowlight
 try {
@@ -45,7 +42,7 @@ try {
   lowlight.registerLanguage('c++', cpp as LanguageFn);
   lowlight.registerLanguage('sql', sql as LanguageFn);
   lowlight.registerLanguage('xml', xml as LanguageFn);
-  lowlight.registerLanguage('html', xml as LanguageFn); // HTML is often highlighted as XML
+  lowlight.registerLanguage('html', xml as LanguageFn);
   lowlight.registerLanguage('bash', bash as LanguageFn);
   lowlight.registerLanguage('shell', bash as LanguageFn);
   lowlight.registerLanguage('json', json as LanguageFn);
@@ -80,12 +77,12 @@ export class CodeBlockErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return this.props.fallback || (
-        <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950 dark:border-red-800 font-sans">
+        <div className="my-6 p-4 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950 dark:border-red-800">
           <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
             <AlertTriangle className="h-4 w-4" />
-            <span className="text-base font-medium">Rendering Error</span>
+            <span className="font-medium">Rendering Error</span>
           </div>
-          <p className="text-sm md:text-base text-red-600 mt-1 dark:text-red-400">
+          <p className="text-sm text-red-600 mt-1 dark:text-red-400">
             Failed to render this content. Please try refreshing or contact support if the issue persists.
           </p>
         </div>
@@ -97,7 +94,7 @@ export class CodeBlockErrorBoundary extends React.Component<
 }
 
 interface CodeBlockProps {
-  node?: any; // Make node optional
+  node?: any;
   inline: boolean;
   className: string;
   children: React.ReactNode;
@@ -116,17 +113,17 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
   // Handle HTML code blocks
   if (!inline && lang === 'html') {
     return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700 font-sans">
-        <div className="flex items-center gap-2 text-base md:text-lg text-slate-700 dark:text-gray-200">
-          <FileText className="h-4 w-4" />
-          <span className="text-base md:text-lg font-medium">Web Page</span>
+      <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
+          <FileText className="h-5 w-5" />
+          <span className="font-medium">Web Page</span>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => onViewDiagram && onViewDiagram('html', codeContent, lang)}
-            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
           >
             <Maximize2 className="h-4 w-4 mr-2" />
             View Web Page
@@ -135,7 +132,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
             variant="ghost"
             size="sm"
             onClick={() => setShowRawCode(!showRawCode)}
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
             title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
           >
             {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
@@ -148,23 +145,23 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
   // Show raw code if toggled
   if (showRawCode) {
     return (
-      <div className="relative my-4 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 font-sans">
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-          <span className="text-sm md:text-base font-medium text-gray-600 uppercase tracking-wide dark:text-gray-300">
+      <div className="relative my-6 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+          <span className="text-sm font-medium text-gray-600 uppercase tracking-wide dark:text-gray-300">
             Raw Code ({lang})
           </span>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowRawCode(false)}
-            className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
+            className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
             title="Hide raw code"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
         <div className="p-4 bg-white overflow-x-auto dark:bg-gray-900">
-          <pre className="font-mono text-sm md:text-base leading-relaxed">
+          <pre className="font-mono text-sm leading-relaxed">
             <code className="text-gray-800 dark:text-gray-200">{codeContent}</code>
           </pre>
         </div>
@@ -172,145 +169,66 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
     );
   }
 
-  // Handle other diagram types
-  if (!inline && lang === 'mermaid') {
-    return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700 font-sans">
-        <div className="flex items-center gap-2 text-base md:text-lg text-slate-700 dark:text-gray-200">
-          <FileText className="h-4 w-4" />
-          <span className="text-base md:text-lg font-medium">Mermaid Diagram</span>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewDiagram && onViewDiagram('mermaid', codeContent)}
-            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
-          >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            View Diagram
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowRawCode(!showRawCode)}
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
-            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
-          >
-            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-          </Button>
-        </div>
+  // Handle diagram types with consistent styling
+  const createDiagramBlock = (title: string, type: any) => (
+    <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+      <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
+        <FileText className="h-5 w-5" />
+        <span className="font-medium">{title}</span>
       </div>
-    );
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onViewDiagram && onViewDiagram(type, codeContent)}
+          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
+        >
+          <Maximize2 className="h-4 w-4 mr-2" />
+          View Diagram
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowRawCode(!showRawCode)}
+          className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+          title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+        >
+          {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+        </Button>
+      </div>
+    </div>
+  );
+
+  if (!inline && lang === 'mermaid') {
+    return createDiagramBlock('Mermaid Diagram', 'mermaid');
   }
 
   if (!inline && lang === 'chartjs') {
-    return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700 font-sans">
-        <div className="flex items-center gap-2 text-base md:text-lg text-slate-700 dark:text-gray-200">
-          <FileText className="h-4 w-4" />
-          <span className="text-base md:text-lg font-medium">Chart.js Graph</span>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewDiagram && onViewDiagram('chartjs', codeContent)}
-            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
-          >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            View Diagram
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowRawCode(!showRawCode)}
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
-            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
-          >
-            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-          </Button>
-        </div>
-      </div>
-    );
+    return createDiagramBlock('Chart.js Graph', 'chartjs');
   }
 
   if (!inline && lang === 'threejs') {
-    return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700 font-sans">
-        <div className="flex items-center gap-2 text-base md:text-lg text-slate-700 dark:text-gray-200">
-          <FileText className="h-4 w-4" />
-          <span className="text-base md:text-lg font-medium">Three.js 3D Scene</span>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewDiagram && onViewDiagram('threejs', codeContent)}
-            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
-          >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            View Diagram
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowRawCode(!showRawCode)}
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
-            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
-          >
-            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-          </Button>
-        </div>
-      </div>
-    );
+    return createDiagramBlock('Three.js 3D Scene', 'threejs');
   }
 
   if (!inline && lang === 'dot') {
-    return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700 font-sans">
-        <div className="flex items-center gap-2 text-base md:text-lg text-slate-700 dark:text-gray-200">
-          <FileText className="h-4 w-4" />
-          <span className="text-base md:text-lg font-medium">DOT Graph</span>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewDiagram && onViewDiagram('dot', codeContent)}
-            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
-          >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            View Diagram
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowRawCode(!showRawCode)}
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
-            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
-          >
-            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-          </Button>
-        </div>
-      </div>
-    );
+    return createDiagramBlock('DOT Graph', 'dot');
   }
 
-  // Handle other code blocks (e.g., js, py, java)
+  // Handle other code blocks
   if (!inline && lang) {
     return (
-      <div className="my-4 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700 font-sans">
-        <div className="flex items-center gap-2 text-base md:text-lg text-slate-700 dark:text-gray-200">
-          <FileText className="h-4 w-4" />
-          <span className="text-base md:text-lg font-medium">{lang.toUpperCase()} Code</span>
+      <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
+          <FileText className="h-5 w-5" />
+          <span className="font-medium">{lang.toUpperCase()} Code</span>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
-            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 font-sans"
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
           >
             <Maximize2 className="h-4 w-4 mr-2" />
             View Code
@@ -319,7 +237,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
             variant="ghost"
             size="sm"
             onClick={() => setShowRawCode(!showRawCode)}
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 font-sans"
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
             title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
           >
             {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
@@ -329,9 +247,12 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
     );
   }
 
-  // Fallback for inline code or unhandled languages
+  // Fallback for inline code - Claude-style inline code
   return (
-    <code className=" text-purple-500 text-lg px-2 py-1 rounded-md font-mono text-base md:text-lg border border-none  dark:text-purple-500 dark:border-none" {...props}>
+    <code 
+      className="bg-gray-100 text-gray-900 px-1.5 py-0.5 rounded font-mono text-sm dark:bg-gray-800 dark:text-gray-100" 
+      {...props}
+    >
       {children}
     </code>
   );
@@ -339,76 +260,203 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
 
 interface MemoizedMarkdownRendererProps {
   content: string;
+  messageId: string;
   isUserMessage?: boolean;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
   onSuggestAiCorrection: (prompt: string) => void;
   onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
   onToggleUserMessageExpansion: (messageId: string) => void;
   expandedMessages: Set<string>;
+  enableTyping?: boolean;
+  isLastMessage?: boolean;
+  onTypingComplete?: (messageId: string) => void;
+  isAlreadyTyped?: boolean;
 }
 
-export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> = memo(({ content, isUserMessage, onMermaidError, onSuggestAiCorrection, onViewDiagram, onToggleUserMessageExpansion, expandedMessages }) => {
-  const textColorClass = isUserMessage ? 'text-white dark:text-gray-100' : 'text-slate-700 dark:text-gray-300';
-  const linkColorClass = isUserMessage ? 'text-blue-200 hover:underline dark:text-blue-400' : 'text-blue-600 hover:underline dark:text-blue-400';
-  const listTextColorClass = isUserMessage ? 'text-white dark:text-gray-100' : 'text-slate-700 dark:text-gray-300';
-  const blockquoteTextColorClass = isUserMessage ? 'text-blue-100 dark:text-blue-300' : 'text-slate-600 dark:text-gray-300';
-  const blockquoteBgClass = isUserMessage ? 'bg-blue-700 border-blue-400 dark:bg-blue-900 dark:border-blue-600' : 'bg-blue-50 border-blue-500 dark:bg-blue-950 dark:border-blue-700';
-  const MAX_USER_MESSAGE_LENGTH = 200; // Define a threshold for collapsing
-  const isExpanded = expandedMessages.has(content); // Use content as key for now, ideally message.id
+export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> = memo(({ 
+  content, 
+  messageId,
+  isUserMessage, 
+  onMermaidError, 
+  onSuggestAiCorrection, 
+  onViewDiagram, 
+  onToggleUserMessageExpansion, 
+  expandedMessages,
+  enableTyping = false,
+  isLastMessage = false,
+  onTypingComplete,
+  isAlreadyTyped = false
+}) => {
+  // Typing animation hook
+  const { displayedText, isTyping, skipAnimation } = useTypingAnimation({
+    text: content,
+    messageId,
+    wordsPerSecond: 12, // 12 words per second - fast but natural
+    enabled: enableTyping && !isUserMessage && isLastMessage,
+    onComplete: onTypingComplete,
+    isAlreadyComplete: isAlreadyTyped
+  });
+
+  // Use typing animation content if enabled, otherwise use original content
+  const contentToRender = (enableTyping && !isUserMessage && isLastMessage && !isAlreadyTyped) ? displayedText : content;
+
+  // Claude-style color scheme
+  const textColorClass = isUserMessage 
+    ? 'text-white dark:text-gray-100' 
+    : 'text-gray-900 dark:text-gray-100';
+  
+  const linkColorClass = isUserMessage 
+    ? 'text-blue-200 hover:text-blue-100 hover:underline dark:text-blue-300' 
+    : 'text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300';
+  
+  const headingColorClass = isUserMessage 
+    ? 'text-white dark:text-gray-100' 
+    : 'text-gray-900 dark:text-gray-100';
+  
+  const blockquoteTextColorClass = isUserMessage 
+    ? 'text-blue-100 dark:text-blue-200' 
+    : 'text-gray-700 dark:text-gray-300';
+  
+  const blockquoteBgClass = isUserMessage 
+    ? 'bg-blue-700/20 border-blue-400 dark:bg-blue-900/30 dark:border-blue-500' 
+    : 'bg-gray-50 border-gray-300 dark:bg-gray-800 dark:border-gray-600';
+
+  const MAX_USER_MESSAGE_LENGTH = 200;
+  const isExpanded = expandedMessages.has(content);
   const needsExpansion = isUserMessage && content.length > MAX_USER_MESSAGE_LENGTH;
-  const displayedContent = needsExpansion && !isExpanded ? content.substring(0, MAX_USER_MESSAGE_LENGTH) + '...' : content;
 
   return (
     <CodeBlockErrorBoundary>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw]}
-        components={{
-          code: (props: any) => <CodeBlock {...props} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} onViewDiagram={onViewDiagram} />,
-          h1: (props) => <h1 className={`text-2xl md:text-4xl font-extrabold ${isUserMessage ? 'text-white dark:text-gray-100' : 'text-blue-700 dark:text-blue-400'} mt-4 mb-2 font-sans`} {...props} />,
-          h2: (props) => <h2 className={`text-xl md:text-3xl font-bold ${isUserMessage ? 'text-white dark:text-gray-100' : 'text-purple-700 dark:text-purple-400'} mt-3 mb-2 font-sans`} {...props} />,
-          h3: (props) => <h3 className={`text-lg md:text-2xl font-semibold ${isUserMessage ? 'text-white dark:text-gray-100' : 'text-green-700 dark:text-green-400'} mt-2 mb-1 font-sans`} {...props} />,
-          h4: (props) => <h4 className={`text-base md:text-xl font-semibold ${isUserMessage ? 'text-white dark:text-gray-100' : 'text-orange-700 dark:text-orange-400'} mt-1 mb-1 font-sans`} {...props} />,
-          p: (props) => <p className={`mb-2 ${textColorClass} leading-relaxed prose-base md:prose-lg lg:prose-xl font-sans`} {...props} />,
-          a: (props) => <a className={`${linkColorClass} font-medium font-sans`} {...props} />,
-          ul: (props) => <ul className={`list-disc list-inside space-y-1 ${listTextColorClass} mb-2 text-base md:text-lg font-sans`} {...props} />,
-          ol: (props) => <ol className={`list-decimal list-inside space-y-1 ${listTextColorClass} mb-2 text-base md:text-lg font-sans`} {...props} />,
-          li: (props) => <li className="mb-1 text-base md:text-lg font-sans" {...props} />,
-          blockquote: (props) => <blockquote className={`border-l-4 ${blockquoteBgClass} pl-4 py-2 italic ${blockquoteTextColorClass} rounded-r-md my-3 font-sans`} {...props} />,
-          table: (props) => (
-            <div className="overflow-x-auto my-4 rounded-lg shadow-md border border-slate-200 w-full dark:border-gray-700 font-sans">
-              <table className="w-full border-collapse" {...props} />
-            </div>
-          ),
-          thead: (props) => <thead className=" dark:bg-blue-600  font-sans" {...props} />,
-          th: (props) => (
-            <th className="p-3 text-left border-b border-slate-300 font-semibold text-slate-800 dark:border-gray-700 text-base md:text-lg font-sans" {...props} />
-          ),
-          td: (props) => (
-            <td className="p-3 border-b border-slate-200 group-last:border-b-0 even:bg-slate-50 hover:bg-blue-50 transition-colors dark:border-gray-700 dark:even:bg-gray-800 dark:hover:bg-blue-950 dark:text-gray-300 text-base md:text-lg font-sans" {...props} />
-          ),
-        }}
-      >
-        {displayedContent}
-      </ReactMarkdown>
-      {needsExpansion && (
-        <Button variant="link" size="sm" onClick={() => onToggleUserMessageExpansion(content)}
-          className="text-white text-base md:text-base p-0 h-auto mt-1 flex items-center justify-end font-sans"
+      <div className="relative">
+        {/* Skip animation button (only show during typing) */}
+        {isTyping && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={skipAnimation}
+            className="absolute -top-8 right-0 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 z-10"
+          >
+            Skip typing
+          </Button>
+        )}
+        
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeRaw]}
+          components={{
+            code: (props: any) => <CodeBlock {...props} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} onViewDiagram={onViewDiagram} />,
+            
+            // Claude-style headings with proper hierarchy
+            h1: (props) => (
+              <h1 className={`text-2xl font-semibold ${headingColorClass} mt-8 mb-4 leading-tight`} {...props} />
+            ),
+            h2: (props) => (
+              <h2 className={`text-xl font-semibold ${headingColorClass} mt-6 mb-3 leading-tight`} {...props} />
+            ),
+            h3: (props) => (
+              <h3 className={`text-lg font-semibold ${headingColorClass} mt-5 mb-2 leading-tight`} {...props} />
+            ),
+            h4: (props) => (
+              <h4 className={`text-base font-semibold ${headingColorClass} mt-4 mb-2 leading-tight`} {...props} />
+            ),
+            h5: (props) => (
+              <h5 className={`text-sm font-semibold ${headingColorClass} mt-3 mb-1 leading-tight`} {...props} />
+            ),
+            h6: (props) => (
+              <h6 className={`text-sm font-medium ${headingColorClass} mt-2 mb-1 leading-tight`} {...props} />
+            ),
+
+            // Claude-style paragraph spacing and line height
+            p: (props) => (
+              <p className={`${textColorClass} leading-relaxed mb-4 last:mb-0`} {...props} />
+            ),
+
+            // Clean link styling
+            a: (props) => (
+              <a className={`${linkColorClass} transition-colors`} {...props} />
+            ),
+
+            // Improved list styling
+            ul: (props) => (
+              <ul className={`list-disc ml-6 mb-4 space-y-1 ${textColorClass}`} {...props} />
+            ),
+            ol: (props) => (
+              <ol className={`list-decimal ml-6 mb-4 space-y-1 ${textColorClass}`} {...props} />
+            ),
+            li: (props) => (
+              <li className="leading-relaxed" {...props} />
+            ),
+
+            // Claude-style blockquotes
+            blockquote: (props) => (
+              <blockquote className={`border-l-4 ${blockquoteBgClass} pl-4 py-2 my-4 ${blockquoteTextColorClass} rounded-r`} {...props} />
+            ),
+
+            // Improved table styling
+            table: (props) => (
+              <div className="overflow-x-auto my-6 rounded-lg border border-gray-200 dark:border-gray-700">
+                <table className="w-full border-collapse bg-white dark:bg-gray-900" {...props} />
+              </div>
+            ),
+            thead: (props) => (
+              <thead className="bg-gray-50 dark:bg-gray-800" {...props} />
+            ),
+            th: (props) => (
+              <th className="px-4 py-3 text-left border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-gray-100" {...props} />
+            ),
+            tbody: (props) => (
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700" {...props} />
+            ),
+            tr: (props) => (
+              <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50" {...props} />
+            ),
+            td: (props) => (
+              <td className="px-4 py-3 text-gray-900 dark:text-gray-100" {...props} />
+            ),
+
+            // Horizontal rule
+            hr: (props) => (
+              <hr className="my-8 border-t border-gray-200 dark:border-gray-700" {...props} />
+            ),
+
+            // Strong and emphasis
+            strong: (props) => (
+              <strong className={`font-semibold ${textColorClass}`} {...props} />
+            ),
+            em: (props) => (
+              <em className={`italic ${textColorClass}`} {...props} />
+            ),
+          }}
         >
-          {isExpanded ? (
-            <>
-              Show Less
-              <ChevronUp className="h-3 w-3 ml-1" />
-            </>
-          ) : (
-            <>
-              Show More
-              <ChevronDown className="h-3 w-3 ml-1" />
-            </>
-          )}
-        </Button>
-      )}
+          {contentToRender}
+        </ReactMarkdown>
+        
+        {/* Typing cursor animation */}
+        {isTyping && (
+          <span className="inline-block w-0.5 h-5 bg-gray-600 dark:bg-gray-400 ml-0.5 animate-pulse" />
+        )}
+        
+        {needsExpansion && (
+          <Button 
+            variant="link" 
+            size="sm" 
+            onClick={() => onToggleUserMessageExpansion(content)}
+            className="text-white/80 hover:text-white p-0 h-auto mt-2 flex items-center gap-1 text-sm"
+          >
+            {isExpanded ? (
+              <>
+                Show Less
+                <ChevronUp className="h-3 w-3" />
+              </>
+            ) : (
+              <>
+                Show More
+                <ChevronDown className="h-3 w-3" />
+              </>
+            )}
+          </Button>
+        )}
+      </div>
     </CodeBlockErrorBoundary>
   );
 });
-
