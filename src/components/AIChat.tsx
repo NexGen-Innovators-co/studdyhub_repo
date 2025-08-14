@@ -1168,7 +1168,7 @@ const AIChat: React.FC<AIChatProps> = ({
           </div>
 
           <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8  md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent  font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
-            <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2"> {/* NEW WRAPPER DIV */}
+            <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2"> {/* NEW WRAPPER DIV */}
               {(selectedDocumentIds.length > 0 || attachedFiles.length > 0) && (
                 <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700`}>
                   <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200 font-claude">Context:</span>

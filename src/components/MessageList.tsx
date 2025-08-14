@@ -103,7 +103,7 @@ export const MessageList = memo(({
 
   return (
     <div className="flex flex-col gap-4 mb-8 bg-transparent" style={{ position: 'relative', zIndex: 1 }}>
-      {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && (
+      {/* {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && (
         <div className="text-center py-8 flex-grow flex flex-col justify-center items-center text-slate-400 dark:text-gray-500">
           <BookPagesAnimation size="xl" showText={false} className="mb-6" />
           <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200 font-claude">Welcome to your AI Study Assistant!</h3>
@@ -111,7 +111,7 @@ export const MessageList = memo(({
             I can help with questions about your notes, create study guides, explain concepts, and assist with academic work. Select documents and start chatting or use the microphone!
           </p>
         </div>
-      )}
+      )} */}
 
       {messages.length === 0 && isLoadingSessionMessages && (
         <div className="flex flex-col items-center justify-center py-8">
