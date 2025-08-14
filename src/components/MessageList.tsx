@@ -163,7 +163,7 @@ export const MessageList = memo(({
                     variant="link"
                     size="sm"
                     onClick={() => onToggleUserMessageExpansion(message.content)}
-                    className="text-blue-600 p-0 h-auto mt-1 flex justify-end dark:text-blue-400 font-claude"
+                    className="text-blue-600 p-0 h-auto mt-1 flex justify-end dark:text-blue-400 font-claude underline"
                   >
                     View More
                   </Button>
@@ -171,8 +171,8 @@ export const MessageList = memo(({
               ) : (
                 message.content
               )}
-              {/* Show loading indicator for optimistic messages */}
-              {message.id.startsWith('optimistic-') && (
+              {/* Show loading indicator for optimistic messages only if they don't have content */}
+              {message.id.startsWith('optimistic-') && !message.content && (
                 <div className="flex items-center gap-2 mt-2 text-xs text-blue-600 dark:text-blue-400 font-claude">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   <span>Sending...</span>
@@ -196,8 +196,8 @@ export const MessageList = memo(({
               onTypingComplete={onMarkMessageDisplayed}
               isAlreadyTyped={message.has_been_displayed}
             />
-            {/* Show loading indicator for optimistic AI messages */}
-            {message.id.startsWith('optimistic-ai-') && (
+            {/* Show loading indicator for optimistic AI messages only if they have minimal content */}
+            {message.id.startsWith('optimistic-ai-') && message.content.length < 10 && (
               <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 font-claude">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span>Processing response...</span>
@@ -216,14 +216,14 @@ export const MessageList = memo(({
               </div>
             )}
             <div className={cn('flex gap-1 group', isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto', isUserMessage ? 'justify-end' : 'justify-start')}>
-              {message.role === 'assistant' && (
-                <AIBot size="lg" isError={message.isError} className='hidden sm:block' />
-              )}
-              {message.role === 'user' && (
-                <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
-                  <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                </div>
-              )}
+      {message.role === 'assistant' && (
+        <AIBot size="lg" isError={message.isError} className='hidden sm:block' />
+      )}
+      {message.role === 'user' && (
+        <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 order-2">
+          <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        </div>
+      )}
               <div className={cn('flex flex-col flex-1 min-w-0', isUserMessage ? 'items-end' : 'items-start')}>
                 {isUserMessage ? (
                   <div className="max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl">

@@ -276,12 +276,14 @@ export const CodeRenderer: React.FC<CodeRendererProps> = memo(({ inline, classNa
           </div>
         }
       >
-        <Mermaid
-          chart={codeContent}
-          onMermaidError={() => {}} // Placeholder for error handling
-          diagramRef={mermaidDiagramRef}
-          onSuggestAiCorrection={() => {}} // Placeholder for AI correction
-        />
+        <div ref={mermaidDiagramRef}>
+          <Mermaid
+            chart={codeContent}
+            onMermaidError={() => {}} // Placeholder for error handling
+            diagramRef={mermaidDiagramRef}
+            onSuggestAiCorrection={() => {}} // Placeholder for AI correction
+          />
+        </div>
       </CodeBlockErrorBoundary>
     );
   }

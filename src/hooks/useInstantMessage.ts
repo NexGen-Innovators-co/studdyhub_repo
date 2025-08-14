@@ -85,16 +85,31 @@ export const useInstantMessage = (actualMessages: Message[]): UseInstantMessageR
   
   // Add optimistic messages that don't have actual counterparts
   optimisticMessages.forEach(optimistic => {
-    if (!allMessages.find(actual => actual.id === optimistic.id)) {
+    // Don't add optimistic messages that have been replaced by actual ones
+    if (!allMessages.find(actual => actual.id === optimistic.id || 
+        (actual.content === optimistic.content && Math.abs(new Date(actual.timestamp).getTime() - new Date(optimistic.timestamp).getTime()) < 5000)
+    )) {
       allMessages.push(optimistic);
     }
   });
 
-  // Sort by timestamp
+  // Sort by timestamp and ensure no duplicate welcome messages
   allMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  
+  // Remove duplicate welcome messages (keep only the first one)
+  const seenWelcomeMessage = new Set();
+  const filteredMessages = allMessages.filter(message => {
+    if (message.role === 'assistant' && message.content.includes('Welcome to your AI Study Assistant')) {
+      if (seenWelcomeMessage.has('welcome')) {
+        return false;
+      }
+      seenWelcomeMessage.add('welcome');
+    }
+    return true;
+  });
 
   return {
-    optimisticMessages: allMessages,
+    optimisticMessages: filteredMessages,
     addOptimisticUserMessage,
     addOptimisticAIMessage,
     updateOptimisticMessage,
