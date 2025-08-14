@@ -627,7 +627,7 @@ const Index = () => {
     const selectedNotes = (allNotes ?? []).filter(note => (noteIdsToInclude ?? []).includes(note.id));
 
     let context = '';
-    
+
     if (selectedDocs.length > 0) {
       context += 'ATTACHED DOCUMENTS:\n';
       for (const doc of selectedDocs) {
@@ -699,8 +699,19 @@ const Index = () => {
     setIsSubmittingUserMessage(true);
     setIsAILoading(true);
     let processedFiles: FileData[] = attachedFiles || [];
+    let cleanupTimeout: NodeJS.Timeout | null = null;
 
     try {
+      // Set up cleanup timeout for optimistic messages (fallback if real-time updates fail)
+      cleanupTimeout = setTimeout(() => {
+        setChatMessages(prevMessages =>
+          prevMessages.filter(msg =>
+            !msg.id.startsWith('optimistic-')
+          )
+        );
+        console.warn('Optimistic messages cleaned up due to timeout - real-time updates may have failed');
+      }, 30000); // 30 second timeout
+
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         toast.error('You must be logged in to chat.');
@@ -720,8 +731,45 @@ const Index = () => {
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
 
-      // REMOVED: Optimistic user message addition.
-      // Messages will now be added to state only after being persisted to DB.
+      // ADD BACK: Optimistic user message addition for immediate UI feedback
+      const optimisticUserMessage: Message = {
+        id: `optimistic-user-${Date.now()}`,
+        content: messageContent,
+        role: 'user',
+        timestamp: new Date().toISOString(),
+        isError: false,
+        attachedDocumentIds: finalAttachedDocumentIds,
+        attachedNoteIds: finalAttachedNoteIds,
+        imageUrl: imageUrl,
+        imageMimeType: imageMimeType,
+        session_id: currentSessionId,
+        has_been_displayed: false
+      };
+
+      // Add optimistic user message immediately
+      setChatMessages(prevMessages => {
+        const newMessages = [...prevMessages, optimisticUserMessage];
+        return newMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      });
+
+      // ADD BACK: Optimistic AI response placeholder
+      const optimisticAIResponse: Message = {
+        id: `optimistic-ai-${Date.now()}`,
+        content: '🤔 Analyzing your message and preparing a response...',
+        role: 'assistant',
+        timestamp: new Date().toISOString(),
+        isError: false,
+        attachedDocumentIds: [],
+        attachedNoteIds: [],
+        session_id: currentSessionId,
+        has_been_displayed: false
+      };
+
+      // Add optimistic AI response immediately
+      setChatMessages(prevMessages => {
+        const newMessages = [...prevMessages, optimisticAIResponse];
+        return newMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      });
 
       // Enhanced file processing progress
       if (attachedFiles && attachedFiles.length > 0) {
@@ -770,7 +818,7 @@ const Index = () => {
           });
         }
       });
-      
+
       const historicalMessagesForAI = allChatMessages
         .filter(msg => msg.session_id === currentSessionId)
         .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate))
@@ -845,10 +893,14 @@ const Index = () => {
         throw new Error('Empty response from AI service');
       }
 
-      // NO LONGER OPTIMISTICALLY UPDATING AI RESPONSE HERE.
-      // The real-time listener (if configured) or subsequent data fetch
-      // should populate the chat messages.
-      // If no real-time listener, you would explicitly re-fetch chat messages here.
+      // The real-time listener will handle updating the messages with the actual response
+      // The optimistic messages will be replaced by real messages from the database
+
+      // Clear the cleanup timeout since real-time updates should handle message replacement
+      if (cleanupTimeout) {
+        clearTimeout(cleanupTimeout);
+        cleanupTimeout = null;
+      }
 
       setChatSessions(prev => {
         const updated = prev.map(session =>
@@ -880,6 +932,19 @@ const Index = () => {
     } catch (error: any) {
       console.error('Error in handleSubmit:', error);
 
+      // Clear the cleanup timeout
+      if (cleanupTimeout) {
+        clearTimeout(cleanupTimeout);
+        cleanupTimeout = null;
+      }
+
+      // Remove optimistic messages on error
+      setChatMessages(prevMessages =>
+        prevMessages.filter(msg =>
+          !msg.id.startsWith('optimistic-')
+        )
+      );
+
       let errorMessage = 'Failed to send message';
 
       if (error.message?.includes('content size exceeds')) {
@@ -895,6 +960,12 @@ const Index = () => {
       toast.error(errorMessage);
 
     } finally {
+      // Ensure cleanup timeout is cleared in finally block
+      if (cleanupTimeout) {
+        clearTimeout(cleanupTimeout);
+        cleanupTimeout = null;
+      }
+
       setIsSubmittingUserMessage(false);
       setIsAILoading(false);
       setFileProcessingProgress({
@@ -914,7 +985,7 @@ const Index = () => {
     notes,
     buildRichContext,
     userProfile,
-    // setChatMessages, // No longer directly updating chatMessages here for AI response
+    setChatMessages, // Re-add setChatMessages for optimistic updates
     setIsAILoading,
   ]);
 
