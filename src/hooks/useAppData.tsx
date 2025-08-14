@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 
 // Enhanced pagination constants for smoother loading
@@ -12,7 +12,7 @@ const INITIAL_LOAD_LIMITS = {
   recordings: 8,
   scheduleItems: 25,
   documents: 12,
-  chatMessages: 0, 
+  chatMessages: 0,
   quizzes: 8
 };
 
@@ -846,7 +846,7 @@ export const useAppData = () => {
             if (payload.eventType === 'INSERT') {
               const newMessage: Message = {
                 id: payload.new.id,
-                content: payload.new.content ,
+                content: payload.new.content,
                 role: payload.new.role as 'user' | 'assistant',
                 timestamp: payload.new.timestamp,
                 isError: payload.new.is_error || false,

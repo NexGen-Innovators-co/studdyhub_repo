@@ -1,7 +1,7 @@
 // hooks/useQuizManagement.ts
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { generateId } from '../utils/helpers';
 import { ClassRecording, Quiz, QuizQuestion } from '../types/Class';
 import { FunctionsHttpError } from '@supabase/supabase-js';

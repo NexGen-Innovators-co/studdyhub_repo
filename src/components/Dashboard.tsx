@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Progress } from '../components/ui/progress';
+import { Badge } from '../components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     LineChart, Line, PieChart, Pie, Cell, AreaChart, Area
@@ -213,10 +213,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     const StatCard = ({ title, value, icon: Icon, trend, color = 'blue', onClick }: any) => (
         <Card
             className={`hover:shadow-md transition-all duration-200 cursor-pointer border-l-4 ${color === 'blue' ? 'border-l-blue-500 hover:bg-blue-50' :
-                    color === 'green' ? 'border-l-green-500 hover:bg-green-50' :
-                        color === 'yellow' ? 'border-l-yellow-500 hover:bg-yellow-50' :
-                            color === 'purple' ? 'border-l-purple-500 hover:bg-purple-50' :
-                                'border-l-gray-500 hover:bg-gray-50'
+                color === 'green' ? 'border-l-green-500 hover:bg-green-50' :
+                    color === 'yellow' ? 'border-l-yellow-500 hover:bg-yellow-50' :
+                        color === 'purple' ? 'border-l-purple-500 hover:bg-purple-50' :
+                            'border-l-gray-500 hover:bg-gray-50'
                 }`}
             onClick={onClick}
         >
@@ -234,10 +234,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                         )}
                     </div>
                     <div className={`p-3 rounded-full ${color === 'blue' ? 'bg-blue-100 text-blue-600' :
-                            color === 'green' ? 'bg-green-100 text-green-600' :
-                                color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
-                                    color === 'purple' ? 'bg-purple-100 text-purple-600' :
-                                        'bg-gray-100 text-gray-600'
+                        color === 'green' ? 'bg-green-100 text-green-600' :
+                            color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
+                                color === 'purple' ? 'bg-purple-100 text-purple-600' :
+                                    'bg-gray-100 text-gray-600'
                         }`}>
                         <Icon className="h-6 w-6" />
                     </div>
@@ -251,10 +251,10 @@ const Dashboard: React.FC<DashboardProps> = ({
             <CardContent className="p-4">
                 <div className="flex items-center space-x-3">
                     <div className={`p-2 rounded-lg ${color === 'blue' ? 'bg-blue-100 text-blue-600' :
-                            color === 'green' ? 'bg-green-100 text-green-600' :
-                                color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
-                                    color === 'purple' ? 'bg-purple-100 text-purple-600' :
-                                        'bg-gray-100 text-gray-600'
+                        color === 'green' ? 'bg-green-100 text-green-600' :
+                            color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
+                                color === 'purple' ? 'bg-purple-100 text-purple-600' :
+                                    'bg-gray-100 text-gray-600'
                         }`}>
                         <Icon className="h-5 w-5" />
                     </div>

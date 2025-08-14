@@ -4,7 +4,7 @@ import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import { generateId } from '../utils/helpers';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 
 interface UseAppOperationsProps {
   notes: Note[];
@@ -42,7 +42,7 @@ export const useAppOperations = ({
   setActiveTab,
   setIsAILoading,
   isRealtimeConnected = false,
-  refreshData = () => {},
+  refreshData = () => { },
 }: UseAppOperationsProps) => {
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 1000;

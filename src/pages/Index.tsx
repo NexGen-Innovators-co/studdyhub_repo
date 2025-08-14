@@ -10,16 +10,15 @@ import { useAppOperations } from '../hooks/useAppOperations';
 import { Button } from '../components/ui/button';
 import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { Message, Quiz, ClassRecording } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { User } from '@supabase/supabase-js';
-import { generateId } from '@/utils/helpers';
+// import { generateId } from '@/utils/helpers';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
-import Dashboard from '../components/Dashboard';
-import BookPagesAnimation, { LoadingScreen } from '@/components/bookloader';
-import { insertUserMessage, requestAIResponse } from '@/services/messageServices';
+import BookPagesAnimation, { LoadingScreen } from '../components/bookloader';
+import { insertUserMessage, requestAIResponse } from '../services/messageServices';
 import { useInstantMessage } from '../hooks/useInstantMessage';
 
 // Enhanced loading component with progress
@@ -29,7 +28,7 @@ import { useInstantMessage } from '../hooks/useInstantMessage';
 interface ChatSession {
   id: string;
   title: string;
-  created_at: string;
+  created_at: string; // Keep as string, as it's directly from DB
   updated_at: string;
   last_message_at: string;
   document_ids: string[];
@@ -333,8 +332,10 @@ const Index = () => {
         title: session.title,
         created_at: session.created_at,
         updated_at: session.updated_at,
-        last_message_at: session.last_message_at,
+        last_message_at: session.last_message_at || new Date().toISOString(),
         document_ids: session.document_ids || [],
+        user_id: session.user_id,
+
       }));
 
       setChatSessions(formattedSessions);
@@ -505,7 +506,7 @@ const Index = () => {
         title: data.title,
         created_at: data.created_at,
         updated_at: data.updated_at,
-        last_message_at: data.last_message_at,
+        last_message_at: data.last_message_at || new Date().toISOString(),
         document_ids: data.document_ids || [],
       };
 
@@ -648,11 +649,11 @@ const Index = () => {
         const noteInfo = `Title: ${note.title}\nCategory: ${note.category}\n`;
         let noteContent = '';
         if (note.content) {
-          noteContent = note.content; 
+          noteContent = note.content;
         }
 
         const noteBlock = noteInfo + (noteContent ? `Content: ${noteContent}\n` : '') +
-          (note.aiSummary ? `Summary: ${note.aiSummary}\n` : '') + 
+          (note.aiSummary ? `Summary: ${note.aiSummary}\n` : '') +
           (note.tags?.length ? `Tags: ${note.tags.join(', ')}\n` : '') + '\n';
 
         context += noteBlock;
@@ -756,7 +757,7 @@ const Index = () => {
             inlineData: { mimeType: imageMimeType, data: imageDataBase64 }
           });
         } else {
-          
+
         }
       }
 

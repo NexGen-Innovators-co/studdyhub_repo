@@ -8,7 +8,7 @@ import { FileText, StickyNote, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Document } from '../types/Document';
 import { Note } from '../types/Note';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 
 interface DocumentSelectorProps {
   documents: Document[];

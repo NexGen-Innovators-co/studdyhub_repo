@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { Document } from '../types/Document';
 import { useAuth } from '../hooks/useAuth';
 // generateId is no longer strictly needed for new uploads as backend generates it
@@ -65,7 +65,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/m4a', 'audio/webm', 'audio/flac',
       'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/webm', 'video/mkv'
     ];
-    
+
     if (!allowedTypes.includes(file.type)) {
       toast.error('Unsupported file type. Please check the allowed file types.');
       setSelectedFile(null);
@@ -129,7 +129,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
     // setUploadProgress(0); // No longer needed with backend handling
 
     // Replace with your actual document-processor edge function URL
-    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor'; 
+    const functionUrl = 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/document-processor';
 
     try {
       toast.info(`Uploading and processing "${selectedFile.name}"...`);
@@ -167,7 +167,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
       }
 
       const result = await response.json();
-      
+
       // Assuming the backend returns the full saved document object(s)
       if (result.documents && result.documents.length > 0) {
         result.documents.forEach((doc: Document) => {
@@ -308,7 +308,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                 if (oldPathSegments.length > 1) {
                   storagePath = oldPathSegments[1];
                 } else {
-                   // Fallback: assume path follows user_uploads/{user.id}/{fileName}
+                  // Fallback: assume path follows user_uploads/{user.id}/{fileName}
                   const match = fileUrl.match(/\/user_uploads\/[^/]+\/[^/]+$/);
                   if (match) {
                     storagePath = `user_uploads${match[0].split('/user_uploads')[1]}`;
@@ -492,7 +492,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                     </div>
                   )}
                 </div>
-                </div>
+              </div>
 
               {selectedFile && (
                 <div className="p-6 bg-slate-50 dark:bg-slate-700/50 border-t">

@@ -1,5 +1,5 @@
 // services/messageServices.ts
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { Message } from '../types/Class';
 import { generateId } from '../utils/helpers';
 
@@ -48,8 +48,8 @@ export const insertUserMessage = async (
       id: data.id,
       content: data.content,
       role: data.role,
-      timestamp: data.timestamp,
-      session_id: data.session_id,
+      timestamp: data.timestamp || new Date().toISOString(),
+      session_id: data.session_id || sessionId,
       has_been_displayed: data.has_been_displayed,
       attachedDocumentIds: data.attached_document_ids || [],
       attachedNoteIds: data.attached_note_ids || [],
