@@ -72,38 +72,39 @@ export const useInstantMessage = (actualMessages: Message[]): UseInstantMessageR
   }, []);
 
   const replaceWithActualMessage = useCallback((optimisticId: string, actualMessage: Message) => {
-    setOptimisticMessages(prev => 
-      prev.map(msg => 
-        msg.id === optimisticId ? actualMessage : msg
-      )
-    );
+    // Remove the optimistic message and let the actual message be handled by the parent
+    setOptimisticMessages(prev => prev.filter(msg => msg.id !== optimisticId));
     pendingMessageIds.current.delete(optimisticId);
   }, []);
 
-  // Merge actual messages with optimistic ones, avoiding duplicates
+  // Only add optimistic messages that don't exist in actual messages
   const allMessages = [...actualMessages];
   
-  // Add optimistic messages that don't have actual counterparts
   optimisticMessages.forEach(optimistic => {
-    // Don't add optimistic messages that have been replaced by actual ones
-    if (!allMessages.find(actual => actual.id === optimistic.id || 
-        (actual.content === optimistic.content && Math.abs(new Date(actual.timestamp).getTime() - new Date(optimistic.timestamp).getTime()) < 5000)
-    )) {
+    // Check if this optimistic message is not already in actual messages
+    const exists = allMessages.some(actual => 
+      actual.id === optimistic.id || 
+      (actual.content.trim() === optimistic.content.trim() && 
+       actual.role === optimistic.role &&
+       Math.abs(new Date(actual.timestamp).getTime() - new Date(optimistic.timestamp).getTime()) < 5000)
+    );
+    
+    if (!exists) {
       allMessages.push(optimistic);
     }
   });
 
-  // Sort by timestamp and ensure no duplicate welcome messages
+  // Sort by timestamp
   allMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   
-  // Remove duplicate welcome messages (keep only the first one)
-  const seenWelcomeMessage = new Set();
+  // Filter out duplicate welcome messages
+  const seenWelcomeMessages = new Set();
   const filteredMessages = allMessages.filter(message => {
-    if (message.role === 'assistant' && message.content.includes('Welcome to your AI Study Assistant')) {
-      if (seenWelcomeMessage.has('welcome')) {
+    if (message.role === 'assistant' && message.content.toLowerCase().includes('welcome to your ai study assistant')) {
+      if (seenWelcomeMessages.has('welcome')) {
         return false;
       }
-      seenWelcomeMessage.add('welcome');
+      seenWelcomeMessages.add('welcome');
     }
     return true;
   });
