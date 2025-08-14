@@ -154,8 +154,20 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         if (event.data.type === 'loaded') {
           setIsLoading(false);
         } else if (event.data.type === 'error') {
-          setHasError(true);
-          setIsLoading(false);
+          // Only treat as error if it's not a security warning
+          const errorMessage = event.data.message || '';
+          const isSecurityWarning = errorMessage.includes('security') || 
+                                  errorMessage.includes('mixed content') ||
+                                  errorMessage.includes('Content Security Policy');
+          
+          if (!isSecurityWarning) {
+            setHasError(true);
+            setIsLoading(false);
+          } else {
+            // For security warnings, just log and continue loading
+            console.warn('HTML Security Warning (non-blocking):', errorMessage);
+            setIsLoading(false);
+          }
         }
       }
     };
