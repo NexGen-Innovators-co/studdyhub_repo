@@ -390,7 +390,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
           
           // Try to load from the same origin first (using the installed package)
           const script = document.createElement('script');
-          script.src = window.location.origin + '/node_modules/mermaid/dist/mermaid.min.js';
+          script.src ='/node_modules/mermaid/dist/mermaid.min.js';
           script.onload = function() {
             if (window.mermaid) {
               resolve();
