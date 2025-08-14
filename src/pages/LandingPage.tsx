@@ -1,11 +1,11 @@
 // src/pages/LandingPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { Button } from '../components/ui/button';
 import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, Menu, X, ChevronLeft, ChevronRight, Sun, Moon, Loader2 } from 'lucide-react';
 
 // Supabase Import (for stats)
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 
 const LandingPage: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
@@ -263,8 +263,8 @@ const LandingPage: React.FC = () => {
 
       {/* Header */}
       <header className={`fixed w-full px-6 py-4 flex justify-between items-center z-50 transition-all duration-300 ${scrollY > 50
-          ? 'bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md'
-          : 'bg-transparent'
+        ? 'bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md'
+        : 'bg-transparent'
         }`}>
         {/* Site Icon and Name - Linked to home */}
         <Link to="/" className="flex items-center gap-3 group">

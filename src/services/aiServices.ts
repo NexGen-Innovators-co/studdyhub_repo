@@ -1,5 +1,5 @@
 // services/aiServices.ts
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { UserProfile } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
@@ -13,7 +13,7 @@ export const generateInlineContent = async (
   if (!userProfile) {
     throw new Error('User profile not found. Cannot generate content.');
   }
-  
+
   if (!selectedText.trim()) {
     throw new Error('Please select some text to use AI actions.');
   }

@@ -1,5 +1,5 @@
 // utils/messageUtils.ts
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 
 export const markMessageAsDisplayed = async (messageId: string) => {
   try {

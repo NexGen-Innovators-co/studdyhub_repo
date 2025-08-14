@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 
 // List of common disposable email domains
@@ -91,7 +91,7 @@ const LoadingButton = React.memo(({ isLoading, children, className, ...props }: 
 const PasswordStrength = React.memo(({ password }: { password: string }) => {
   const strength = useMemo(() => {
     if (!password) return { score: 0, label: '', color: '' };
-    
+
     let score = 0;
     if (password.length >= 8) score += 1;
     if (/[A-Z]/.test(password)) score += 1;
@@ -101,7 +101,7 @@ const PasswordStrength = React.memo(({ password }: { password: string }) => {
 
     const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
     const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
-    
+
     return {
       score,
       label: labels[Math.min(score, 4)],
@@ -117,9 +117,8 @@ const PasswordStrength = React.memo(({ password }: { password: string }) => {
         {[1, 2, 3, 4, 5].map((level) => (
           <div
             key={level}
-            className={`h-1 flex-1 rounded-full transition-colors duration-200 ${
-              level <= strength.score ? strength.color : 'bg-gray-700'
-            }`}
+            className={`h-1 flex-1 rounded-full transition-colors duration-200 ${level <= strength.score ? strength.color : 'bg-gray-700'
+              }`}
           />
         ))}
       </div>
@@ -160,7 +159,7 @@ const Auth = () => {
       { wrong: 'hotnail.com', correct: 'hotmail.com' },
       { wrong: 'yaho.com', correct: 'yahoo.com' },
     ];
-    
+
     const domain = email.split('@')[1].toLowerCase();
     const typo = commonTypos.find(t => t.wrong === domain);
     if (typo) {
@@ -187,7 +186,7 @@ const Auth = () => {
   // Debounced name checking
   const checkFullNameExists = useCallback(async (name: string) => {
     if (!name.trim() || currentTab !== 'signup') return false;
-    
+
     setIsCheckingName(true);
     try {
       const { data, error } = await supabase
@@ -199,7 +198,7 @@ const Auth = () => {
       if (error && error.code !== 'PGRST116') {
         throw error;
       }
-      
+
       const exists = data !== null;
       setNameError(exists ? 'This name is already taken' : '');
       return exists;
@@ -237,8 +236,8 @@ const Auth = () => {
   }, [navigate]);
 
   // Clear form when switching tabs
-  const handleTabChange = useCallback((tab: 'signin' | 'signup' | 'forgot') => {
-    setCurrentTab(tab);
+  const handleTabChange = useCallback((tab: string) => {
+    setCurrentTab(tab as 'signin' | 'signup' | 'forgot');
     setEmail('');
     setPassword('');
     setFullName('');
@@ -285,7 +284,7 @@ const Auth = () => {
           toast.error('This email is already registered. Please sign in instead.');
           handleTabChange('signin');
           setEmail(email);
-        } else {
+        } else { 
           toast.error(error.message);
         }
       } else {
@@ -369,10 +368,10 @@ const Auth = () => {
     <div className="min-h-screen flex flex-col font-inter relative overflow-hidden
       bg-gray-950 bg-[url('/herobackgroundimg.png')] bg-cover bg-center bg-fixed
       before:content-[''] before:absolute before:inset-0 before:bg-gradient-to-br before:from-transparent before:via-gray-950/70 before:to-gray-950/90 before:z-0 text-white">
-      
+
       {/* Main Content Area */}
       <div className="flex flex-grow flex-col lg:flex-row items-center justify-center p-4 sm:p-6 lg:p-8 relative z-10">
-        
+
         {/* Left Column - Auth Form */}
         <div className="flex-1 flex items-center justify-center w-full lg:w-1/2 p-4">
           <Card className="w-full max-w-md mx-auto bg-gray-900/95 backdrop-blur-sm shadow-2xl rounded-xl overflow-hidden border border-gray-700/50 transition-all duration-300 hover:shadow-3xl">
@@ -393,16 +392,16 @@ const Auth = () => {
                   {currentTab === 'signin' ? 'Welcome Back!' : currentTab === 'signup' ? 'Join studdyhub AI' : 'Reset Password'}
                 </CardTitle>
                 <CardDescription className="text-sm sm:text-base text-gray-400 mt-2">
-                  {currentTab === 'signin' 
-                    ? 'Sign in to continue your learning journey.' 
-                    : currentTab === 'signup' 
-                    ? 'Create an account to start your learning journey.'
-                    : 'Reset your password to regain access.'
+                  {currentTab === 'signin'
+                    ? 'Sign in to continue your learning journey.'
+                    : currentTab === 'signup'
+                      ? 'Create an account to start your learning journey.'
+                      : 'Reset your password to regain access.'
                   }
                 </CardDescription>
               </div>
             </CardHeader>
-            
+
             <CardContent className="p-6 sm:p-8">
               <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
                 <TabsList className="grid w-full grid-cols-3 bg-gray-800/50">
@@ -412,7 +411,7 @@ const Auth = () => {
                 </TabsList>
 
                 <TabsContent value="signin" className="space-y-6 mt-6">
-                  <div className="space-y-4">
+                  <div className="space-y-4"> 
                     <Button
                       variant="outline"
                       onClick={handleGoogleSignIn}
@@ -449,9 +448,8 @@ const Auth = () => {
                           placeholder="you@example.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className={`pl-10 pr-10 h-12 rounded-lg border transition-all duration-200 bg-gray-800/50 backdrop-blur-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 ${
-                            emailError ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
-                          }`}
+                          className={`pl-10 pr-10 h-12 rounded-lg border transition-all duration-200 bg-gray-800/50 backdrop-blur-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 ${emailError ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
+                            }`}
                           required
                         />
                         {email && (
@@ -466,7 +464,7 @@ const Auth = () => {
                       </div>
                       {emailError && <p className="text-xs text-red-400">{emailError}</p>}
                     </div>
-                    
+
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
                         <Label htmlFor="signin-password" className="text-sm font-medium text-gray-300">Password</Label>
@@ -498,7 +496,7 @@ const Auth = () => {
                         </button>
                       </div>
                     </div>
-                    
+
                     <LoadingButton
                       type="submit"
                       isLoading={isLoading}
@@ -507,7 +505,7 @@ const Auth = () => {
                       Sign In
                     </LoadingButton>
                   </form>
-                  
+
                   <div className="text-center text-sm text-gray-400 mt-4">
                     Don't have an account?{' '}
                     <button
@@ -532,9 +530,8 @@ const Auth = () => {
                           placeholder="Enter your full name"
                           value={fullName}
                           onChange={(e) => setFullName(e.target.value)}
-                          className={`pl-10 pr-10 h-12 rounded-lg border transition-all duration-200 bg-gray-800/50 backdrop-blur-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 ${
-                            nameError ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
-                          }`}
+                          className={`pl-10 pr-10 h-12 rounded-lg border transition-all duration-200 bg-gray-800/50 backdrop-blur-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 ${nameError ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
+                            }`}
                           required
                         />
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -549,7 +546,7 @@ const Auth = () => {
                       </div>
                       {nameError && <p className="text-xs text-red-400">{nameError}</p>}
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="signup-email" className="text-sm font-medium text-gray-300">Email</Label>
                       <div className="relative">
@@ -560,9 +557,8 @@ const Auth = () => {
                           placeholder="Enter your email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className={`pl-10 pr-10 h-12 rounded-lg border transition-all duration-200 bg-gray-800/50 backdrop-blur-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 ${
-                            emailError ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
-                          }`}
+                          className={`pl-10 pr-10 h-12 rounded-lg border transition-all duration-200 bg-gray-800/50 backdrop-blur-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 ${emailError ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
+                            }`}
                           required
                         />
                         {email && (
@@ -577,7 +573,7 @@ const Auth = () => {
                       </div>
                       {emailError && <p className="text-xs text-red-400">{emailError}</p>}
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="signup-password" className="text-sm font-medium text-gray-300">Password</Label>
                       <div className="relative">
@@ -602,7 +598,7 @@ const Auth = () => {
                       </div>
                       <PasswordStrength password={password} />
                     </div>
-                    
+
                     <LoadingButton
                       type="submit"
                       isLoading={isLoading}
@@ -611,7 +607,7 @@ const Auth = () => {
                       Create Account
                     </LoadingButton>
                   </form>
-                  
+
                   <div className="text-center text-sm text-gray-400 mt-4">
                     Already have an account?{' '}
                     <button
@@ -636,9 +632,8 @@ const Auth = () => {
                           placeholder="Enter your email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className={`pl-10 pr-10 h-12 rounded-lg border transition-all duration-200 bg-gray-800/50 backdrop-blur-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 ${
-                            emailError ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
-                          }`}
+                          className={`pl-10 pr-10 h-12 rounded-lg border transition-all duration-200 bg-gray-800/50 backdrop-blur-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 ${emailError ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
+                            }`}
                           required
                         />
                         {email && (
@@ -653,7 +648,7 @@ const Auth = () => {
                       </div>
                       {emailError && <p className="text-xs text-red-400">{emailError}</p>}
                     </div>
-                    
+
                     <LoadingButton
                       type="submit"
                       isLoading={isLoading}
@@ -662,7 +657,7 @@ const Auth = () => {
                       Send Reset Link
                     </LoadingButton>
                   </form>
-                  
+
                   <div className="text-center text-sm text-gray-400 mt-4">
                     Back to{' '}
                     <button
@@ -675,7 +670,7 @@ const Auth = () => {
                   </div>
                 </TabsContent>
               </Tabs>
-              
+
               <div className="text-xs text-gray-500 text-center mt-6 space-y-2">
                 <p>
                   By continuing, you agree to Supabase's{' '}

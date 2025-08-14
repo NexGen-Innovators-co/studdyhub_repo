@@ -6,7 +6,7 @@ import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { UserProfile, Document } from '../types/Document';
 import { Note } from '../types/Note';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { DocumentSelector }
   from './DocumentSelector';
 import { toast } from 'sonner';
@@ -119,7 +119,7 @@ interface AIChatProps {
       processing_error: string | null;
     }>
   ) => Promise<void>;
-  onMessageUpdate: (message: Message) => void; 
+  onMessageUpdate: (message: Message) => void;
 }
 
 // File type detection and validation
@@ -280,7 +280,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
   // Function to mark a message as displayed in the database
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
-    
+
 
     if (!userProfile?.id || !activeChatSessionId) {
       console.warn("User or session ID missing, cannot mark message as displayed.");

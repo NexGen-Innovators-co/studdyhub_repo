@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { generateId } from '../utils/helpers';
 import { ClassRecording } from '../types/Class';
 import { FunctionsHttpError } from '@supabase/supabase-js';

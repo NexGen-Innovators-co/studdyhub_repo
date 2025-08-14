@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { Note, NoteCategory, UserProfile } from '../types';
 import { Database } from '../integrations/supabase/types';
 
@@ -1079,7 +1079,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           setContent={setDraftContent}
           isEditing={isEditing}
           userProfile={userProfile}
-          
+
         />
 
         {note.aiSummary && (

@@ -1,6 +1,6 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "./components/ui/toaster";
+import { Toaster as Sonner } from "./components/ui/sonner";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
@@ -18,7 +18,7 @@ import Careers from "./pages/Careers";
 import APIPage from "./pages/APIs";
 import DocumentationPage from "./pages/DocumentationPage";
 import UserGuidePage from "./pages/UserGuide";
-
+import React from "react";
 const queryClient = new QueryClient();
 
 const App = () => (

@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 import { UserProfile } from '../types/Document';
 
@@ -245,8 +245,8 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
                 key={id}
                 onClick={() => setActiveSection(id as any)}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg transition-all ${activeSection === id
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : `${themeClasses.text} hover:bg-gray-100 dark:hover:bg-gray-700`
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : `${themeClasses.text} hover:bg-gray-100 dark:hover:bg-gray-700`
                   }`}
               >
                 <Icon className="h-4 w-4" />
@@ -357,8 +357,8 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
                         key={value}
                         onClick={() => setLearningStyle(value as any)}
                         className={`p-4 rounded-xl border-2 transition-all text-left ${learningStyle === value
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                            : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
                           }`}
                       >
                         <div className="flex items-center gap-3 mb-2">
@@ -387,8 +387,8 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
                         key={value}
                         onClick={() => setExplanationStyle(value as any)}
                         className={`p-4 rounded-xl border-2 transition-all ${explanationStyle === value
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                            : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
                           }`}
                       >
                         <div className="font-medium mb-1">{label}</div>
@@ -413,8 +413,8 @@ export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
                         key={value}
                         onClick={() => setDifficulty(value as any)}
                         className={`p-4 rounded-xl border-2 transition-all ${difficulty === value
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                            : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
                           }`}
                       >
                         <div className="font-medium mb-1">{label}</div>

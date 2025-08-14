@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { Button } from '../components/ui/button';
 import { Sparkles, Sun, Moon, Plug, LayoutDashboard, FileText, Mic, Calendar, Globe } from 'lucide-react';
 
 const Integrations: React.FC = () => {

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Import Card components
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'; // Import Card components
 import { Sparkles, Sun, Moon, Book, Lightbulb, Zap, FileText, Mic, LayoutDashboard, Calendar, Code, Users, TrendingUp, ChevronRight, ChevronDown, List, ScrollText, Settings, HelpCircle, MessageSquare, Plug } from 'lucide-react';
 
 const UserGuidePage: React.FC = () => {
