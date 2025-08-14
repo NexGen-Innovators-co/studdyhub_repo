@@ -13,7 +13,7 @@ interface UseTypingAnimationProps {
 export const useTypingAnimation = ({ 
   text, 
   messageId,
-  wordsPerSecond = 8, // Default: 8 words per second (quite fast but readable)
+  wordsPerSecond = 21,
   enabled = true, 
   onComplete,
   isAlreadyComplete = false
@@ -74,19 +74,9 @@ export const useTypingAnimation = ({
     };
   }, [text, messageId, wordsPerSecond, enabled, onComplete, isAlreadyComplete]);
 
-  // Function to skip animation and show full text
-  const skipAnimation = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    setDisplayedText(text);
-    setIsTyping(false);
-    onComplete?.(messageId);
-  };
 
   return {
     displayedText,
     isTyping,
-    skipAnimation
   };
 };
