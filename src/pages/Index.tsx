@@ -19,6 +19,8 @@ import { generateId } from '@/utils/helpers';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
 import Dashboard from '../components/Dashboard';
 import BookPagesAnimation, { LoadingScreen } from '@/components/bookloader';
+import { insertUserMessage, requestAIResponse } from '@/services/messageServices';
+import { useInstantMessage } from '../hooks/useInstantMessage';
 
 // Enhanced loading component with progress
 
@@ -355,6 +357,9 @@ const Index = () => {
       .filter(msg => msg.session_id === activeChatSessionId)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [allChatMessages, activeChatSessionId]);
+
+  // Optimistic message handling
+  const { optimisticMessages, addOptimisticAIMessage } = useInstantMessage(filteredChatMessages);
 
   const loadSessionMessages = useCallback(async (sessionId: string) => {
     if (!user) return;
@@ -1120,6 +1125,60 @@ const Index = () => {
       );
     }
   }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmit]);
+
+  // New restructured message handling
+  const handleSendMessage = useCallback(async (
+    messageContent: string,
+    attachedDocumentIds?: string[],
+    attachedNoteIds?: string[],
+    processedFiles?: Array<{
+      name: string;
+      mimeType: string;
+      data: string | null;
+      type: 'image' | 'document' | 'other';
+      size: number;
+      content: string | null;
+      processing_status: string;
+      processing_error: string | null;
+    }>
+  ) => {
+    if (!userProfile || !activeChatSessionId) {
+      toast.error('Please login and start a chat session');
+      return;
+    }
+
+    setIsSubmittingUserMessage(true);
+
+    try {
+      // Step 1: Insert user message to database first
+      const userMessage = await insertUserMessage(
+        messageContent,
+        userProfile.id,
+        activeChatSessionId,
+        attachedDocumentIds,
+        attachedNoteIds,
+        processedFiles
+      );
+
+      // Step 2: Add optimistic AI response
+      const aiOptimisticId = addOptimisticAIMessage('');
+
+      // Step 3: Request AI response
+      await requestAIResponse(
+        userMessage,
+        userProfile,
+        userProfile.learning_style,
+        userProfile.learning_preferences
+      );
+
+      console.log('Message flow completed successfully');
+    } catch (error) {
+      console.error('Error in message flow:', error);
+      toast.error('Failed to send message. Please try again.');
+    } finally {
+      setIsSubmittingUserMessage(false);
+    }
+  }, [userProfile, activeChatSessionId, addOptimisticAIMessage]);
 
   const {
     createNewNote,
