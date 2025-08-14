@@ -8,7 +8,7 @@ import { UserProfile, Document } from '../types/Document';
 import { Note } from '../types/Note';
 import { supabase } from '@/integrations/supabase/client';
 import { DocumentSelector }
-from './DocumentSelector';
+  from './DocumentSelector';
 import { toast } from 'sonner';
 import { DiagramPanel } from './DiagramPanel';
 import { generateId } from '@/utils/helpers';
@@ -1103,6 +1103,15 @@ const AIChat: React.FC<AIChatProps> = ({
           transition={{ duration: 0.3, ease: 'easeInOut' }}
         >
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col modern-scrollbar pb-36 md:pb-6">
+            {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && (
+              <div className="text-center py-8 flex-grow flex flex-col justify-center items-center text-slate-400 dark:text-gray-500">
+                <BookPagesAnimation size="xl" showText={false} className="mb-6" />
+                <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200 font-claude">Welcome to your AI Study Assistant!</h3>
+                <p className="text-base md:text-lg text-slate-500 max-w-md mx-auto dark:text-gray-400 font-claude leading-relaxed">
+                  I can help with questions about your notes, create study guides, explain concepts, and assist with academic work. Select documents and start chatting or use the microphone!
+                </p>
+              </div>
+            )}
             <MessageList
               messages={displayMessages}
               isLoading={isLoading}
@@ -1130,7 +1139,7 @@ const AIChat: React.FC<AIChatProps> = ({
                 !isLoading && !isGeneratingImage}
               onMarkMessageDisplayed={handleMarkMessageDisplayed}
             />
-            {isLoading && isSubmittingUserMessage && (
+            {isLoading && isSubmittingUserMessage && !messages.some(msg => msg.id.startsWith('optimistic-')) && (
               <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
                   <div className=" rounded-full  flex items-center justify-center ">
@@ -1162,7 +1171,7 @@ const AIChat: React.FC<AIChatProps> = ({
             <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2"> {/* NEW WRAPPER DIV */}
               {(selectedDocumentIds.length > 0 || attachedFiles.length > 0) && (
                 <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700`}>
-                  <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200">Context:</span>
+                  <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200 font-claude">Context:</span>
 
                   {/* Show attached files */}
                   {attachedFiles.length > 0 && (
@@ -1205,7 +1214,7 @@ const AIChat: React.FC<AIChatProps> = ({
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 placeholder="What do you want to know?"
-                className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300"
+                className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300 font-claude"
                 disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
                 rows={1}
               />

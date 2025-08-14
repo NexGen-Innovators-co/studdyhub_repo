@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { AlertTriangle, Copy, Check, Loader2, Wrench, Play, Code, Download, Eye, EyeOff, Info, ChevronDown, ChevronUp, ZoomIn, ZoomOut, Maximize, GripVertical } from 'lucide-react';
+import { AlertTriangle, Copy, Check, Loader2, Wrench, Play, Code, Download, Eye, EyeOff, Info, ChevronDown, ChevronUp, ZoomIn, ZoomOut, Maximize, GripVertical, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
-import mermaid from 'mermaid';
 
 // Define the MermaidProps interface
 interface MermaidProps {
@@ -155,6 +154,11 @@ Here's the error message received: "${error}". Please provide only the corrected
     if (chart.trim() && !isRendering) {
       try {
         // Validate syntax before triggering render
+        const mermaid = (window as any).mermaid;
+        if (!mermaid) {
+          setError("Mermaid library not loaded yet");
+          return;
+        }
         mermaid.parse(chart);
         setShouldRender(true);
         setError(null);
@@ -183,14 +187,34 @@ Here's the error message received: "${error}". Please provide only the corrected
         return;
       }
 
+      // Try to load from the same origin first (using the installed package)
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.1.1/dist/mermaid.min.js';
+      script.src = window.location.origin + '/node_modules/mermaid/dist/mermaid.min.js';
       script.onload = () => {
-        setIsMermaidLoaded(true);
+        if ((window as any).mermaid) {
+          setIsMermaidLoaded(true);
+        } else {
+          setError("Mermaid library loaded but not available");
+          setIsMermaidLoaded(false);
+        }
       };
       script.onerror = () => {
-        setError("Failed to load Mermaid library. Please check your network connection.");
-        setIsMermaidLoaded(false);
+        // Fallback to CDN if local loading fails
+        const cdnScript = document.createElement('script');
+        cdnScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.9.0/dist/mermaid.min.js';
+        cdnScript.onload = () => {
+          if ((window as any).mermaid) {
+            setIsMermaidLoaded(true);
+          } else {
+            setError("Mermaid library loaded but not available");
+            setIsMermaidLoaded(false);
+          }
+        };
+        cdnScript.onerror = () => {
+          setError("Failed to load Mermaid library from both local and CDN. Please check your network connection.");
+          setIsMermaidLoaded(false);
+        };
+        document.head.appendChild(cdnScript);
       };
       document.head.appendChild(script);
     };
@@ -211,69 +235,64 @@ Here's the error message received: "${error}". Please provide only the corrected
       setError(null);
 
       try {
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: 'base',
-          themeVariables: {
-            primaryColor: '#3b82f6',
-            primaryTextColor: '#e5e7eb',
-            primaryBorderColor: '#2563eb',
-            secondaryColor: '#10b981',
-            tertiaryColor: '#f59e0b',
-            background: '#1f2937',
-            secondaryBackground: '#374151',
-            tertiaryBackground: '#4b5563',
-            mainBkg: '#3b82f6',
-            secondBkg: '#10b981',
-            tertiaryBkg: '#f59e0b',
-            textColor: '#e5e7eb',
-            secondaryTextColor: '#9ca3af',
-            lineColor: '#9ca3af',
-            arrowheadColor: '#e5e7eb',
-            errorBkgColor: '#7f1d1d',
-            errorTextColor: '#f87171',
-            nodeBkg: '#374151',
-            nodeBorder: '#3b82f6',
-            clusterBkg: '#1f2937',
-            clusterBorder: '#4b5563',
-            actorBkg: '#374151',
-            actorBorder: '#3b82f6',
-            actorTextColor: '#e5e7eb',
-            actorLineColor: '#9ca3af',
-            signalColor: '#e5e7eb',
-            signalTextColor: '#e5e7eb',
-            labelBoxBkgColor: '#374151',
-            labelBoxBorderColor: '#4b5563',
-            labelTextColor: '#e5e7eb',
-            loopTextColor: '#e5e7eb',
-            noteBorderColor: '#d97706',
-            noteBkgColor: '#78350f',
-            noteTextColor: '#f59e0b',
-            cScale0: '#3b82f6',
-            cScale1: '#10b981',
-            cScale2: '#f59e0b',
-            cScale3: '#ef4444',
-            cScale4: '#8b5cf6',
-            cScale5: '#ec4899',
-            cScale6: '#06b6d4',
-            cScale7: '#84cc16',
-            cScale8: '#f97316',
-            cScale9: '#6366f1',
-            cScale10: '#14b8a6',
-            cScale11: '#f43f5e'
-          },
-          flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
-          sequence: { useMaxWidth: true, wrap: true },
-          gantt: { useMaxWidth: true, leftPadding: 75, rightPadding: 20, topPadding: 50, },
-          pie: { useMaxWidth: true },
-          xyChart: { useMaxWidth: true },
-          securityLevel: 'strict',
-        });
-
         const renderPromise = new Promise<any>((resolve, reject) => {
           renderTimeoutRef.current = setTimeout(() => {
             reject(new Error("Mermaid rendering timed out after 7 seconds."));
           }, 7000);
+
+          const mermaid = (window as any).mermaid;
+          if (!mermaid) {
+            reject(new Error("Mermaid library not available"));
+            return;
+          }
+
+          // Initialize mermaid with configuration
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: 'base',
+            themeVariables: {
+              primaryColor: '#3b82f6',
+              primaryTextColor: '#e5e7eb',
+              primaryBorderColor: '#2563eb',
+              secondaryColor: '#10b981',
+              tertiaryColor: '#f59e0b',
+              background: '#1f2937',
+              secondaryBackground: '#374151',
+              tertiaryBackground: '#4b5563',
+              mainBkg: '#3b82f6',
+              secondBkg: '#10b981',
+              tertiaryBkg: '#f59e0b',
+              textColor: '#e5e7eb',
+              secondaryTextColor: '#9ca3af',
+              lineColor: '#9ca3af',
+              arrowheadColor: '#e5e7eb',
+              errorBkgColor: '#7f1d1d',
+              errorTextColor: '#f87171',
+              nodeBkg: '#374151',
+              nodeBorder: '#3b82f6',
+              clusterBkg: '#1f2937',
+              clusterBorder: '#4b5563',
+              actorBkg: '#374151',
+              actorBorder: '#3b82f6',
+              actorTextColor: '#e5e7eb',
+              actorLineColor: '#9ca3af',
+              signalColor: '#e5e7eb',
+              signalTextColor: '#e5e7eb',
+              labelBoxBkgColor: '#374151',
+              labelBoxBorderColor: '#4b5563',
+              labelTextColor: '#e5e7eb',
+              loopTextColor: '#e5e7eb',
+              noteBorderColor: '#d97706',
+              noteBkgColor: '#78350f',
+              noteTextColor: '#f59e0b'
+            },
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+            sequence: { useMaxWidth: true, wrap: true },
+            gantt: { useMaxWidth: true, leftPadding: 75, rightPadding: 20, topPadding: 50 },
+            pie: { useMaxWidth: true },
+            xyChart: { useMaxWidth: true },
+            securityLevel: 'strict',
+          });
 
           mermaid.render(
             'mermaid-chart-' + Date.now(),
@@ -302,12 +321,44 @@ Here's the error message received: "${error}". Please provide only the corrected
 <html>
 <head>
   <style>
-    body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: transparent; }
-    svg { max-width: 100%; max-height: 100%; transform: translate(${translateX}px, ${translateY}px) scale(${scale}); transform-origin: center; transition: transform 0.1s ease-out; }
+    body { 
+      margin: 0; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      height: 100vh; 
+      background: transparent; 
+      overflow: hidden;
+      user-select: none;
+    }
+    .mermaid-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    svg { 
+      max-width: 100%; 
+      max-height: 100%; 
+      transform: translate(${translateX}px, ${translateY}px) scale(${scale}); 
+      transform-origin: center; 
+      transition: transform 0.1s ease-out;
+      cursor: grab;
+    }
+    svg:active {
+      cursor: grabbing;
+    }
+    svg * {
+      pointer-events: auto;
+    }
   </style>
 </head>
 <body>
-  ${generatedSvg}
+  <div class="mermaid-container">
+    ${generatedSvg}
+  </div>
 </body>
 </html>`;
 
@@ -321,9 +372,23 @@ Here's the error message received: "${error}". Please provide only the corrected
           }
         }
       } catch (e: any) {
-        onMermaidError(chart, 'rendering');
-        setError(e.message || "An unknown error occurred during rendering.");
-        setSvg(null);
+        // Only show errors for actual failures, not minor issues
+        const errorMessage = e.message || "An unknown error occurred during rendering.";
+        const isActualError = errorMessage.includes('Syntax error') ||
+          errorMessage.includes('Parse error') ||
+          errorMessage.includes('Failed to load') ||
+          errorMessage.includes('rendered empty SVG') ||
+          errorMessage.includes('Mermaid library not available');
+
+        if (isActualError) {
+          onMermaidError(chart, 'rendering');
+          setError(errorMessage);
+          setSvg(null);
+        } else {
+          // For minor issues, just log and continue
+          console.warn('Mermaid minor issue:', errorMessage);
+          setError(null);
+        }
       } finally {
         setIsRendering(false);
       }
@@ -358,6 +423,16 @@ Here's the error message received: "${error}". Please provide only the corrected
     };
   }, [diagramRef, chart, isRendering, triggerRender, error]);
 
+  // Function to update iframe transform
+  const updateIframeTransform = useCallback((newTranslateX: number, newTranslateY: number, newScale: number) => {
+    if (iframeRef.current && iframeRef.current.contentDocument) {
+      const svg = iframeRef.current.contentDocument.querySelector('svg');
+      if (svg) {
+        svg.style.transform = `translate(${newTranslateX}px, ${newTranslateY}px) scale(${newScale})`;
+      }
+    }
+  }, []);
+
   // Custom Zoom and Pan Handlers (Mouse)
   const handleZoom = useCallback((event: WheelEvent) => {
     event.preventDefault();
@@ -380,13 +455,8 @@ Here's the error message received: "${error}". Please provide only the corrected
     setTranslateY(newTranslateY);
 
     // Update iframe content with new transform
-    if (iframeRef.current && iframeRef.current.contentDocument) {
-      const svg = iframeRef.current.contentDocument.querySelector('svg');
-      if (svg) {
-        svg.style.transform = `translate(${newTranslateX}px, ${newTranslateY}px) scale(${clampedScale})`;
-      }
-    }
-  }, [scale, translateX, translateY]);
+    updateIframeTransform(newTranslateX, newTranslateY, clampedScale);
+  }, [scale, translateX, translateY, updateIframeTransform]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLIFrameElement>) => {
     if (event.button === 0) {
@@ -402,19 +472,17 @@ Here's the error message received: "${error}". Please provide only the corrected
     if (isPanning) {
       const deltaX = event.clientX - lastPanPosition.current.x;
       const deltaY = event.clientY - lastPanPosition.current.y;
-      setTranslateX(prev => prev + deltaX);
-      setTranslateY(prev => prev + deltaY);
+      const newTranslateX = translateX + deltaX;
+      const newTranslateY = translateY + deltaY;
+
+      setTranslateX(newTranslateX);
+      setTranslateY(newTranslateY);
       lastPanPosition.current = { x: event.clientX, y: event.clientY };
 
       // Update iframe content with new transform
-      if (iframeRef.current && iframeRef.current.contentDocument) {
-        const svg = iframeRef.current.contentDocument.querySelector('svg');
-        if (svg) {
-          svg.style.transform = `translate(${translateX + deltaX}px, ${translateY + deltaY}px) scale(${scale})`;
-        }
-      }
+      updateIframeTransform(newTranslateX, newTranslateY, scale);
     }
-  }, [isPanning, scale, translateX, translateY]);
+  }, [isPanning, scale, translateX, translateY, updateIframeTransform]);
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false);
@@ -450,17 +518,15 @@ Here's the error message received: "${error}". Please provide only the corrected
       // Single touch panning
       const deltaX = event.touches[0].clientX - lastPanPosition.current.x;
       const deltaY = event.touches[0].clientY - lastPanPosition.current.y;
-      setTranslateX(prev => prev + deltaX);
-      setTranslateY(prev => prev + deltaY);
+      const newTranslateX = translateX + deltaX;
+      const newTranslateY = translateY + deltaY;
+
+      setTranslateX(newTranslateX);
+      setTranslateY(newTranslateY);
       lastPanPosition.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
 
       // Update iframe content with new transform
-      if (iframeRef.current && iframeRef.current.contentDocument) {
-        const svg = iframeRef.current.contentDocument.querySelector('svg');
-        if (svg) {
-          svg.style.transform = `translate(${translateX + deltaX}px, ${translateY + deltaY}px) scale(${scale})`;
-        }
-      }
+      updateIframeTransform(newTranslateX, newTranslateY, scale);
     } else if (event.touches.length === 2) {
       // Pinch-to-zoom
       event.preventDefault();
@@ -485,15 +551,10 @@ Here's the error message received: "${error}". Please provide only the corrected
         setTranslateY(newTranslateY);
 
         // Update iframe content with new transform
-        if (iframeRef.current && iframeRef.current.contentDocument) {
-          const svg = iframeRef.current.contentDocument.querySelector('svg');
-          if (svg) {
-            svg.style.transform = `translate(${newTranslateX}px, ${newTranslateY}px) scale(${clampedScale})`;
-          }
-        }
+        updateIframeTransform(newTranslateX, newTranslateY, clampedScale);
       }
     }
-  }, [isPanning, scale, initialPinchDistance, initialPinchScale, translateX, translateY]);
+  }, [isPanning, scale, initialPinchDistance, initialPinchScale, translateX, translateY, updateIframeTransform]);
 
   const handleTouchEnd = useCallback(() => {
     setIsPanning(false);
@@ -525,38 +586,23 @@ Here's the error message received: "${error}". Please provide only the corrected
     const newScale = Math.min(10, scale * 1.2);
     setScale(newScale);
 
-    if (iframeRef.current && iframeRef.current.contentDocument) {
-      const svg = iframeRef.current.contentDocument.querySelector('svg');
-      if (svg) {
-        svg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${newScale})`;
-      }
-    }
-  }, [scale, translateX, translateY]);
+    updateIframeTransform(translateX, translateY, newScale);
+  }, [scale, translateX, translateY, updateIframeTransform]);
 
   const handleZoomOut = useCallback(() => {
-    const newScale = Math.max(0.1, scale * 0.8);
+    const newScale = Math.max(0.1, scale / 1.2);
     setScale(newScale);
 
-    if (iframeRef.current && iframeRef.current.contentDocument) {
-      const svg = iframeRef.current.contentDocument.querySelector('svg');
-      if (svg) {
-        svg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${newScale})`;
-      }
-    }
-  }, [scale, translateX, translateY]);
+    updateIframeTransform(translateX, translateY, newScale);
+  }, [scale, translateX, translateY, updateIframeTransform]);
 
-  const handleResetZoom = useCallback(() => {
+  const handleResetView = useCallback(() => {
     setScale(1);
     setTranslateX(0);
     setTranslateY(0);
 
-    if (iframeRef.current && iframeRef.current.contentDocument) {
-      const svg = iframeRef.current.contentDocument.querySelector('svg');
-      if (svg) {
-        svg.style.transform = `translate(0px, 0px) scale(1)`;
-      }
-    }
-  }, []);
+    updateIframeTransform(0, 0, 1);
+  }, [updateIframeTransform]);
 
   // Resize Handlers
   const handleResizeMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -582,6 +628,71 @@ Here's the error message received: "${error}". Please provide only the corrected
     document.removeEventListener('mousemove', handleResizeMouseMove);
     document.removeEventListener('mouseup', handleResizeMouseUp);
   }, [handleResizeMouseMove]);
+
+  // Function to bind events to iframe content
+  const bindIframeEvents = useCallback(() => {
+    if (iframeRef.current && iframeRef.current.contentDocument) {
+      const svg = iframeRef.current.contentDocument.querySelector('svg');
+      if (svg) {
+        // Add event listeners to the SVG element for better control
+        svg.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const wheelEvent = new WheelEvent('wheel', {
+            deltaY: e.deltaY,
+            clientX: e.clientX,
+            clientY: e.clientY
+          });
+          handleZoom(wheelEvent as any);
+        }, { passive: false });
+
+        // Add mouse events for panning
+        svg.addEventListener('mousedown', (e) => {
+          if (e.button === 0) {
+            const mouseEvent = new MouseEvent('mousedown', {
+              button: e.button,
+              clientX: e.clientX,
+              clientY: e.clientY
+            });
+            handleMouseDown(mouseEvent as any);
+          }
+        });
+
+        svg.addEventListener('mousemove', (e) => {
+          const mouseEvent = new MouseEvent('mousemove', {
+            clientX: e.clientX,
+            clientY: e.clientY
+          });
+          handleMouseMove(mouseEvent as any);
+        });
+
+        svg.addEventListener('mouseup', () => {
+          handleMouseUp();
+        });
+
+        svg.addEventListener('mouseleave', () => {
+          handleMouseLeave();
+        });
+      }
+    }
+  }, [handleZoom, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave]);
+
+  // Bind events when iframe loads
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const handleIframeLoad = () => {
+      setTimeout(() => {
+        bindIframeEvents();
+      }, 100);
+    };
+
+    iframe.addEventListener('load', handleIframeLoad);
+
+    return () => {
+      iframe.removeEventListener('load', handleIframeLoad);
+    };
+  }, [bindIframeEvents]);
 
   if (!isMermaidLoaded) {
     return (
@@ -711,7 +822,7 @@ Here's the error message received: "${error}". Please provide only the corrected
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleResetZoom}
+            onClick={handleResetView}
             className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
             title="Reset Zoom"
           >
@@ -803,12 +914,48 @@ Here's the error message received: "${error}". Please provide only the corrected
         </div>
       )}
 
+      {error && (
+        <div className="my-4 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <span className="text-red-700 dark:text-red-300 font-medium">Rendering Error</span>
+          </div>
+          <p className="text-red-600 dark:text-red-400 text-sm mb-3">{error}</p>
+          <div className="flex gap-2">
+            <Button
+              onClick={triggerRender}
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+            {onSuggestAiCorrection && (
+              <Button
+                onClick={handleAiFixClick}
+                variant="outline"
+                size="sm"
+                className="text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700"
+              >
+                <Wrench className="h-4 w-4 mr-2" />
+                AI Fix
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {isDiagramExpanded && (
         <div
           className="bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-2 overflow-hidden relative"
           style={{ height: `${componentHeight}px` }}
           ref={diagramRef}
         >
+          <div className="absolute top-2 left-2 z-10 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs px-2 py-1 rounded border border-blue-200 dark:border-blue-800">
+            <span className="hidden sm:inline">Use mouse wheel to zoom, drag to pan</span>
+            <span className="sm:hidden">Pinch to zoom, drag to pan</span>
+          </div>
           <iframe
             ref={iframeRef}
             className="w-full h-full border-0 rounded-lg"

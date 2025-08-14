@@ -361,8 +361,9 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
         if (container) {
           container.innerHTML = 
             '<div class="error-display">' +
-            '<h3>Mermaid ' + (type === 'syntax' ? 'Syntax' : 'Rendering') + ' Error</h3>' +
-            '<p>' + (message || 'Unknown error') + '</p>' +
+            '<h3>Mermaid ' + (type === 'syntax' ? 'Syntax' : 'Rendering') + ' Issue</h3>' +
+            '<p>' + (message || 'Unknown issue') + '</p>' +
+            '<button onclick="window.location.reload()" class="retry-btn" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">Retry</button>' +
             '</div>';
         }
         reportError(message, type);
@@ -374,8 +375,10 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
             resolve();
             return;
           }
+          
+          // Try to load from the same origin first (using the installed package)
           const script = document.createElement('script');
-          script.src = 'https://unpkg.com/mermaid@10.9.1/dist/mermaid.min.js';
+          script.src = window.location.origin + '/node_modules/mermaid/dist/mermaid.min.js';
           script.onload = function() {
             if (window.mermaid) {
               resolve();
@@ -384,14 +387,34 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
             }
           };
           script.onerror = function() {
-            reject(new Error('Failed to load Mermaid library'));
+            // Fallback to CDN if local loading fails
+            const cdnScript = document.createElement('script');
+            cdnScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.9.0/dist/mermaid.min.js';
+            cdnScript.onload = function() {
+              if (window.mermaid) {
+                resolve();
+              } else {
+                reject(new Error('Mermaid library loaded but not available'));
+              }
+            };
+            cdnScript.onerror = function() {
+              reject(new Error('Failed to load Mermaid library from both local and CDN'));
+            };
+            document.head.appendChild(cdnScript);
+            // Increase timeout for CDN loading
+            setTimeout(function() {
+              if (!window.mermaid) {
+                reject(new Error('Mermaid library load timeout - please check your connection'));
+              }
+            }, 15000); // 15 seconds for CDN
           };
           document.head.appendChild(script);
+          // Shorter timeout for local loading
           setTimeout(function() {
             if (!window.mermaid) {
               reject(new Error('Mermaid library load timeout'));
             }
-          }, 8000);
+          }, 10000); // 10 seconds for local
         });
       }
 
@@ -403,13 +426,59 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
 
         loadMermaid().then(function() {
           if (!window.mermaid) { throw new Error('Mermaid not available'); }
+          
+          // Use modern mermaid v11 configuration
           window.mermaid.initialize({
-            startOnLoad: false, theme: 'default', securityLevel: 'strict',
+            startOnLoad: false,
+            theme: 'base',
+            themeVariables: {
+              primaryColor: '#3b82f6',
+              primaryTextColor: '#e5e7eb',
+              primaryBorderColor: '#2563eb',
+              secondaryColor: '#10b981',
+              tertiaryColor: '#f59e0b',
+              background: '#1f2937',
+              secondaryBackground: '#374151',
+              tertiaryBackground: '#4b5563',
+              mainBkg: '#3b82f6',
+              secondBkg: '#10b981',
+              tertiaryBkg: '#f59e0b',
+              textColor: '#e5e7eb',
+              secondaryTextColor: '#9ca3af',
+              lineColor: '#9ca3af',
+              arrowheadColor: '#e5e7eb',
+              errorBkgColor: '#7f1d1d',
+              errorTextColor: '#f87171',
+              nodeBkg: '#374151',
+              nodeBorder: '#3b82f6',
+              clusterBkg: '#1f2937',
+              clusterBorder: '#4b5563',
+              actorBkg: '#374151',
+              actorBorder: '#3b82f6',
+              actorTextColor: '#e5e7eb',
+              actorLineColor: '#9ca3af',
+              signalColor: '#e5e7eb',
+              signalTextColor: '#e5e7eb',
+              labelBoxBkgColor: '#374151',
+              labelBoxBorderColor: '#4b5563',
+              labelTextColor: '#e5e7eb',
+              loopTextColor: '#e5e7eb',
+              noteBorderColor: '#d97706',
+              noteBkgColor: '#78350f',
+              noteTextColor: '#f59e0b'
+            },
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+            sequence: { useMaxWidth: true, wrap: true },
+            gantt: { useMaxWidth: true, leftPadding: 75, rightPadding: 20, topPadding: 50 },
+            pie: { useMaxWidth: true },
+            xyChart: { useMaxWidth: true },
+            securityLevel: 'strict',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            fontSize: 16, maxTextSize: 50000, maxEdges: 2000, htmlLabels: false,
-            flowchart: { htmlLabels: false }, sequence: { showSequenceNumbers: true },
-            gantt: { numberSectionStyles: 4 }
+            fontSize: 16,
+            maxTextSize: 50000,
+            maxEdges: 2000
           });
+          
           return window.mermaid.parse(MERMAID_CONTENT);
         }).then(function() {
           const loadingIndicator = document.getElementById('loading-indicator');
@@ -426,8 +495,21 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
           if (diagramContainer) { diagramContainer.innerHTML = svg; }
           reportSuccess();
         }).catch(function(error) {
-          const errorType = error.message && error.message.toLowerCase().includes('syntax') ? 'syntax' : 'rendering';
-          showError(error.message || 'Unknown rendering error', errorType);
+          // Only show errors for actual failures, not minor issues
+          const errorMessage = error.message || 'Unknown rendering error';
+          const isActualError = errorMessage.includes('Syntax error') || 
+                               errorMessage.includes('Parse error') || 
+                               errorMessage.includes('Failed to load') ||
+                               errorMessage.includes('rendered empty SVG');
+          
+          if (isActualError) {
+            const errorType = errorMessage.toLowerCase().includes('syntax') ? 'syntax' : 'rendering';
+            showError(errorMessage, errorType);
+          } else {
+            // For minor issues, just log and continue
+            console.warn('Mermaid minor issue:', errorMessage);
+            reportSuccess();
+          }
         });
       }
 

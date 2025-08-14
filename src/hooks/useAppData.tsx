@@ -865,15 +865,45 @@ export const useAppData = () => {
                   return prevMessages;
                 }
 
-                // If we previously added an optimistic placeholder, replace it
-                const optimisticIndex = prevMessages.findIndex(msg =>
-                  msg.session_id === newMessage.session_id &&
-                  msg.role === newMessage.role &&
-                  msg.content === newMessage.content &&
-                  (typeof msg.id === 'string' && msg.id.startsWith('optimistic-'))
-                );
+                // Enhanced optimistic message replacement logic
+                let updatedMessages = [...prevMessages];
 
-                const sortMessages = (arr: Message[]) => arr.sort((a, b) => {
+                // First, try to replace optimistic user message if this is a user message
+                if (newMessage.role === 'user') {
+                  const optimisticUserIndex = prevMessages.findIndex(msg =>
+                    msg.session_id === newMessage.session_id &&
+                    msg.role === 'user' &&
+                    msg.content === newMessage.content &&
+                    msg.id.startsWith('optimistic-user-')
+                  );
+
+                  if (optimisticUserIndex > -1) {
+                    updatedMessages[optimisticUserIndex] = newMessage;
+                  } else {
+                    updatedMessages.push(newMessage);
+                  }
+                }
+                // Then, try to replace optimistic AI message if this is an AI message
+                else if (newMessage.role === 'assistant') {
+                  const optimisticAIIndex = prevMessages.findIndex(msg =>
+                    msg.session_id === newMessage.session_id &&
+                    msg.role === 'assistant' &&
+                    msg.id.startsWith('optimistic-ai-')
+                  );
+
+                  if (optimisticAIIndex > -1) {
+                    updatedMessages[optimisticAIIndex] = newMessage;
+                  } else {
+                    updatedMessages.push(newMessage);
+                  }
+                }
+                // Fallback: add new message if no optimistic match found
+                else {
+                  updatedMessages.push(newMessage);
+                }
+
+                // Sort messages by timestamp and role
+                return updatedMessages.sort((a, b) => {
                   const timeA = new Date(a.timestamp).getTime();
                   const timeB = new Date(b.timestamp).getTime();
                   if (timeA === timeB) {
@@ -883,15 +913,6 @@ export const useAppData = () => {
                   }
                   return timeA - timeB;
                 });
-
-                if (optimisticIndex > -1) {
-                  const updated = [...prevMessages];
-                  updated[optimisticIndex] = newMessage;
-                  return sortMessages(updated);
-                }
-
-                const updatedMessages = [...prevMessages, newMessage];
-                return sortMessages(updatedMessages);
               });
             }
             else if (payload.eventType === 'UPDATE') {
