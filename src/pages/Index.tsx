@@ -358,8 +358,6 @@ const Index = () => {
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [allChatMessages, activeChatSessionId]);
 
-  // Optimistic message handling
-  const { optimisticMessages, addOptimisticAIMessage } = useInstantMessage(filteredChatMessages);
 
   const loadSessionMessages = useCallback(async (sessionId: string) => {
     if (!user) return;
@@ -621,7 +619,6 @@ const Index = () => {
     }
   }, [user, setChatSessions]);
 
-  // Enhanced context building - REMOVED TRUNCATION LOGIC HERE
   const buildRichContext = useCallback((
     documentIdsToInclude: string[],
     noteIdsToInclude: string[],
@@ -638,7 +635,7 @@ const Index = () => {
       for (const doc of selectedDocs) {
         const docInfo = `Title: ${doc.title}\nFile: ${doc.file_name}\nType: ${doc.type}\n`;
         if (doc.content_extracted) {
-          context += docInfo + `Content: ${doc.content_extracted}\n\n`; // No truncation
+          context += docInfo + `Content: ${doc.content_extracted}\n\n`;
         } else {
           context += docInfo + `Content: ${doc.processing_status === 'completed' ? 'No extractable content found' : `Processing status: ${doc.processing_status || 'pending'}`}\n\n`;
         }
@@ -651,11 +648,11 @@ const Index = () => {
         const noteInfo = `Title: ${note.title}\nCategory: ${note.category}\n`;
         let noteContent = '';
         if (note.content) {
-          noteContent = note.content; // No truncation
+          noteContent = note.content; 
         }
 
         const noteBlock = noteInfo + (noteContent ? `Content: ${noteContent}\n` : '') +
-          (note.aiSummary ? `Summary: ${note.aiSummary}\n` : '') + // No truncation for summary
+          (note.aiSummary ? `Summary: ${note.aiSummary}\n` : '') + 
           (note.tags?.length ? `Tags: ${note.tags.join(', ')}\n` : '') + '\n';
 
         context += noteBlock;
@@ -707,15 +704,7 @@ const Index = () => {
     let cleanupTimeout: NodeJS.Timeout | null = null;
 
     try {
-      // Set up cleanup timeout for optimistic messages (fallback if real-time updates fail)
-      cleanupTimeout = setTimeout(() => {
-        setChatMessages(prevMessages =>
-          prevMessages.filter(msg =>
-            !msg.id.startsWith('optimistic-')
-          )
-        );
-        console.warn('Optimistic messages cleaned up due to timeout - real-time updates may have failed');
-      }, 30000); // 30 second timeout
+
 
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
@@ -736,45 +725,6 @@ const Index = () => {
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
 
-      // ADD BACK: Optimistic user message addition for immediate UI feedback
-      const optimisticUserMessage: Message = {
-        id: `optimistic-user-${Date.now()}`,
-        content: messageContent,
-        role: 'user',
-        timestamp: new Date().toISOString(),
-        isError: false,
-        attachedDocumentIds: finalAttachedDocumentIds,
-        attachedNoteIds: finalAttachedNoteIds,
-        imageUrl: imageUrl,
-        imageMimeType: imageMimeType,
-        session_id: currentSessionId,
-        has_been_displayed: false
-      };
-
-      // Add optimistic user message immediately
-      setChatMessages(prevMessages => {
-        const newMessages = [...prevMessages, optimisticUserMessage];
-        return newMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      });
-
-      // ADD BACK: Optimistic AI response placeholder
-      const optimisticAIResponse: Message = {
-        id: `optimistic-ai-${Date.now()}`,
-        content: '🤔 Analyzing your message and preparing a response...',
-        role: 'assistant',
-        timestamp: new Date().toISOString(),
-        isError: false,
-        attachedDocumentIds: [],
-        attachedNoteIds: [],
-        session_id: currentSessionId,
-        has_been_displayed: false
-      };
-
-      // Add optimistic AI response immediately
-      setChatMessages(prevMessages => {
-        const newMessages = [...prevMessages, optimisticAIResponse];
-        return newMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      });
 
       // Enhanced file processing progress
       if (attachedFiles && attachedFiles.length > 0) {
@@ -806,11 +756,7 @@ const Index = () => {
             inlineData: { mimeType: imageMimeType, data: imageDataBase64 }
           });
         } else {
-          // If only URL is present, you might need a way to fetch its data or send the URL
-          // For now, if no base64, we rely on the backend to handle the URL if it can.
-          // Or, this part of the code needs to be smart enough to fetch the image data.
-          // Given the prompt, we are removing truncation, not adding image fetching.
-          // So for regeneration, if imageDataBase64 is not passed, the image won't be sent as inlineData.
+          
         }
       }
 
@@ -898,8 +844,6 @@ const Index = () => {
         throw new Error('Empty response from AI service');
       }
 
-      // The real-time listener will handle updating the messages with the actual response
-      // The optimistic messages will be replaced by real messages from the database
 
       // Clear the cleanup timeout since real-time updates should handle message replacement
       if (cleanupTimeout) {
@@ -943,12 +887,6 @@ const Index = () => {
         cleanupTimeout = null;
       }
 
-      // Remove optimistic messages on error
-      setChatMessages(prevMessages =>
-        prevMessages.filter(msg =>
-          !msg.id.startsWith('optimistic-')
-        )
-      );
 
       let errorMessage = 'Failed to send message';
 
@@ -990,14 +928,9 @@ const Index = () => {
     notes,
     buildRichContext,
     userProfile,
-    setChatMessages, // Re-add setChatMessages for optimistic updates
     setIsAILoading,
   ]);
 
-  // // Message handling
-  // const handleNewMessage = useCallback((message: Message) => {
-  //   // Handled by useAppData's listener
-  // }, []);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     try {
@@ -1160,10 +1093,7 @@ const Index = () => {
         processedFiles
       );
 
-      // Step 2: Add optimistic AI response
-      const aiOptimisticId = addOptimisticAIMessage('');
-
-      // Step 3: Request AI response
+      // Step 2: Request AI response
       await requestAIResponse(
         userMessage,
         userProfile,
@@ -1178,7 +1108,7 @@ const Index = () => {
     } finally {
       setIsSubmittingUserMessage(false);
     }
-  }, [userProfile, activeChatSessionId, addOptimisticAIMessage]);
+  }, [userProfile, activeChatSessionId]);
 
   const {
     createNewNote,

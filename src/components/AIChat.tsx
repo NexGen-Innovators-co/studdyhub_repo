@@ -119,7 +119,7 @@ interface AIChatProps {
       processing_error: string | null;
     }>
   ) => Promise<void>;
-  onMessageUpdate: (message: Message) => void; // New prop for updating messages
+  onMessageUpdate: (message: Message) => void; 
 }
 
 // File type detection and validation
@@ -280,16 +280,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
   // Function to mark a message as displayed in the database
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
-    // Prevent database update for optimistic messages
-    if (messageId.startsWith('optimistic-')) {
-      console.log(`Optimistic message with ID ${messageId} finished typing. No DB update needed.`);
-      // Update local state for optimistic messages to prevent re-animation
-      const messageToUpdate = messages.find(msg => msg.id === messageId);
-      if (messageToUpdate) {
-        onMessageUpdate({ ...messageToUpdate, has_been_displayed: true });
-      }
-      return;
-    }
+    
 
     if (!userProfile?.id || !activeChatSessionId) {
       console.warn("User or session ID missing, cannot mark message as displayed.");
@@ -953,145 +944,6 @@ const AIChat: React.FC<AIChatProps> = ({
 
   return (
     <>
-      {/* <style>
-        {`
-          @keyframes typewriter {
-            from { width: 0; }
-            to { width: 100%; }
-          }
-
-          @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-          }
-
-          .typing-cursor {
-            animation: blink 1s infinite;
-          }
-
-          .message-appear {
-            animation: slideInUp 0.3s ease-out;
-          }
-
-          @keyframes slideInUp {
-            from {
-              opacity: 0;
-              transform: translateY(20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-
-          .bot-thinking {
-            animation: pulse 2s ease-in-out infinite;
-          }
-
-          @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-          }
-
-          .message-typing {
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
-            transition: box-shadow 0.3s ease;
-          }
-          .mic-active {
-            background-color: #fef2f2;
-            animation: pulse 1.5s infinite;
-          }
-
-          .dark .mic-active {
-            background-color: #7f1d1d;
-          }
-
-          @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-          }
-
-          .resize-handle {
-            width: 8px;
-            background: #e2e8f0;
-            cursor: col-resize;
-            transition: background 0.2s;
-          }
-
-          .resize-handle:hover {
-            background: #94a3b8;
-          }
-
-          .dark .resize-handle {
-            background: #4b5563;
-          }
-
-          .dark .resize-handle:hover {
-            background: #6b7280;
-          }
-
-          .panel-transition {
-            transition: all 0.3s ease-in-out;
-          }
-
-          .fullscreen-panel {
-            width: 100% !important;
-            right: 0;
-            transform: translateX(0);
-          }
-
-          .chat-input {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 1rem;
-            font-weight: 400;
-            line-height: 1.5;
-            color: #1f2937;
-            background-color: transparent;
-          }
-
-          .dark .chat-input {
-            color: #d1d5db;
-          }
-
-          .input-container {
-            max-height: 300px;
-            overflow-y: auto;
-          }
-
-          .file-preview {
-            border-radius: 8px;
-            border: 1px solid #e5e7eb;
-            transition: border-color 0.2s;
-          }
-
-          .file-preview:hover {
-            border-color: #d1d5db;
-          }
-
-          .dark .file-preview {
-            border-color: #4b5563;
-          }
-
-          .dark .file-preview:hover {
-            border-color: #6b7280;
-          }
-
-          .file-drop-zone {
-            transition: all 0.2s ease;
-          }
-
-          .file-drop-zone.drag-over {
-            border-color: #3b82f6;
-            background-color: #eff6ff;
-          }
-
-          .dark .file-drop-zone.drag-over {
-            background-color: #1e3a8a;
-          }
-        `}
-      </style> */}
       <div className="flex flex-col h-full border-none relative justify-center overflow-hidden md:flex-row md:gap-0 font-sans">
         <motion.div
           className={`relative flex flex-col h-full rounded-lg panel-transition
@@ -1139,16 +991,6 @@ const AIChat: React.FC<AIChatProps> = ({
                 !isLoading && !isGeneratingImage}
               onMarkMessageDisplayed={handleMarkMessageDisplayed}
             />
-            {isLoading && isSubmittingUserMessage && !messages.some(msg => msg.id.startsWith('optimistic-')) && (
-              <div className="flex justify-center font-sans">
-                <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
-                  <div className=" rounded-full  flex items-center justify-center ">
-                    <BookPagesAnimation size="md" text=" Thinking..." />
-                  </div>
-
-                </div>
-              </div>
-            )}
             {isGeneratingImage && (
               <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">

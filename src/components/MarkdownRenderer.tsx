@@ -288,7 +288,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   isAlreadyTyped = false
 }) => {
   // Typing animation hook
-  const { displayedText, isTyping, skipAnimation } = useTypingAnimation({
+  const { displayedText, isTyping } = useTypingAnimation({
     text: content,
     messageId,
     wordsPerSecond: 12, // 12 words per second - fast but natural
@@ -328,18 +328,6 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   return (
     <CodeBlockErrorBoundary>
       <div className="relative">
-        {/* Skip animation button (only show during typing) */}
-        {isTyping && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={skipAnimation}
-            className="absolute -top-8 right-0 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 z-10"
-          >
-            Skip typing
-          </Button>
-        )}
-
         <div className="font-claude">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
