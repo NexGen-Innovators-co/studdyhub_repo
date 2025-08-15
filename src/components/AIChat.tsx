@@ -1006,10 +1006,10 @@ const AIChat: React.FC<AIChatProps> = ({
               isSpeaking={isSpeaking}
               speakingMessageId={speakingMessageId}
               isPaused={isPaused}
-              speakMessage={(id, content) => { }} // Implement as needed
-              pauseSpeech={() => { }} // Implement as needed
-              resumeSpeech={() => { }} // Implement as needed
-              stopSpeech={() => { }} // Implement as needed
+              speakMessage={speakMessage}
+              pauseSpeech={ pauseSpeech} 
+              resumeSpeech={resumeSpeech}
+              stopSpeech={stopSpeech}
               isDiagramPanelOpen={isDiagramPanelOpen}
               enableTypingAnimation={true}
               onMarkMessageDisplayed={handleMarkMessageDisplayed}
@@ -1017,7 +1017,7 @@ const AIChat: React.FC<AIChatProps> = ({
               onBlockDetected={handleBlockDetected}
               onBlockUpdate={handleBlockUpdate}
               onBlockEnd={handleBlockEnd}
-            />
+              />
 
             {isGeneratingImage && (
               <div className="flex justify-center font-sans">
