@@ -369,12 +369,13 @@ const Index = () => {
         .from('chat_messages')
         .select('*')
         .eq('session_id', sessionId)
-        .order('timestamp', { ascending: true })
+        .order('timestamp', { ascending: false }) // Fetch newest messages first
         .limit(CHAT_MESSAGES_PER_PAGE);
 
       if (error) throw error;
-
-      const fetchedMessages: Message[] = data.map((msg: any) => ({
+      
+      // Reverse the array to get chronological order for display
+      const fetchedMessages: Message[] = data.reverse().map((msg: any) => ({
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
@@ -389,10 +390,12 @@ const Index = () => {
       }));
 
       setChatMessages(prevAllMessages => {
-        const newMessagesToAdd = fetchedMessages.filter(
-          fm => !prevAllMessages.some(pm => pm.id === fm.id)
+        // Filter out messages for the current session to prevent duplicates on re-load
+        const otherSessionMessages = prevAllMessages.filter(m => m.session_id !== sessionId);
+        const newMessagesForSession = fetchedMessages.filter(
+          fm => !otherSessionMessages.some(pm => pm.id === fm.id)
         );
-        return [...prevAllMessages, ...newMessagesToAdd].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        return [...otherSessionMessages, ...newMessagesForSession].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       });
 
       setHasMoreMessages(data.length === CHAT_MESSAGES_PER_PAGE);
@@ -441,7 +444,8 @@ const Index = () => {
         const newMessagesToAdd = olderMessages.filter(
           om => !prevAllMessages.some(pm => pm.id === om.id)
         );
-        return [...prevAllMessages, ...newMessagesToAdd].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        // Prepend older messages
+        return [...newMessagesToAdd, ...prevAllMessages].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       });
 
       setHasMoreMessages(data.length === CHAT_MESSAGES_PER_PAGE);
@@ -461,12 +465,14 @@ const Index = () => {
   }, [user, loadChatSessions, chatSessionsLoadedCount, loadingPhase.phase]);
 
   useEffect(() => {
-    if (activeChatSessionId && loadingPhase.phase === 'complete') {
-      loadSessionMessages(activeChatSessionId);
+    if (activeChatSessionId && user) {
+        // Clear previous session messages before loading new ones
+        setChatMessages(prev => prev.filter(m => m.session_id !== activeChatSessionId));
+        loadSessionMessages(activeChatSessionId);
     } else if (!activeChatSessionId) {
-      setHasMoreMessages(false);
+        setHasMoreMessages(false);
     }
-  }, [activeChatSessionId, user, loadSessionMessages, loadingPhase.phase]);
+  }, [activeChatSessionId, user]);
 
   // Chat session document management
   useEffect(() => {

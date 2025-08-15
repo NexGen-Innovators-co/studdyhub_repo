@@ -830,150 +830,75 @@ export const useAppData = () => {
 
   const setupChatMessageListener = useCallback(async (user: any) => {
     try {
-      const channel = supabase
-        .channel(`chat_messages_${user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'chat_messages',
-            filter: `user_id=eq.${user.id}`
-          },
-           (payload) => {
-            console.log('Chat message realtime event:', payload.eventType, 'Message ID:', (payload.new && 'id' in payload.new) ? payload.new.id : 'N/A');
+        const channel = supabase
+            .channel(`chat_messages_${user.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'chat_messages',
+                    filter: `user_id=eq.${user.id}`
+                },
+                (payload) => {
+                    const formatMessage = (msg: any): Partial<Message> => ({
+                        id: msg.id,
+                        content: msg.content,
+                        role: msg.role as 'user' | 'assistant',
+                        timestamp: msg.timestamp,
+                        isError: msg.is_error,
+                        attachedDocumentIds: msg.attached_document_ids,
+                        attachedNoteIds: msg.attached_note_ids,
+                        imageUrl: msg.image_url,
+                        imageMimeType: msg.image_mime_type,
+                        session_id: msg.session_id,
+                        has_been_displayed: msg.has_been_displayed
+                    });
 
-            if (payload.eventType === 'INSERT') {
-              const newMessage: Message = {
-                id: payload.new.id,
-                content: payload.new.content,
-                role: payload.new.role as 'user' | 'assistant',
-                timestamp: payload.new.timestamp,
-                isError: payload.new.is_error || false,
-                attachedDocumentIds: payload.new.attached_document_ids || [],
-                attachedNoteIds: payload.new.attached_note_ids || [],
-                imageUrl: payload.new.image_url || undefined,
-                imageMimeType: payload.new.image_mime_type || undefined,
-                session_id: payload.new.session_id,
-                has_been_displayed: payload.new.has_been_displayed || false
-              };
-
-              setChatMessages(prevMessages => {
-                console.log('Processing realtime message insert:', newMessage.id, 'Current messages count:', prevMessages.length);
-                
-                // Check if message already exists by id - force update to ensure we see it
-                const existingIndex = prevMessages.findIndex(msg => msg.id === newMessage.id);
-                if (existingIndex > -1) {
-                  console.log('Message already exists, updating it');
-                  const updated = [...prevMessages];
-                  updated[existingIndex] = newMessage;
-                  return updated;
+                    if (payload.eventType === 'INSERT') {
+                        const newMessage = formatMessage(payload.new) as Message;
+                        setChatMessages(prevMessages => {
+                            if (prevMessages.some(msg => msg.id === newMessage.id)) {
+                                return prevMessages;
+                            }
+                            return [...prevMessages, newMessage].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                        });
+                    } else if (payload.eventType === 'UPDATE') {
+                        const updatedFields = payload.new;
+                        setChatMessages(prevMessages =>
+                            prevMessages.map(msg => {
+                                if (msg.id === updatedFields.id) {
+                                    // Merge existing message with new fields to prevent data loss
+                                    return {
+                                        ...msg,
+                                        content: updatedFields.content ?? msg.content,
+                                        role: (updatedFields.role ?? msg.role) as 'user' | 'assistant',
+                                        timestamp: updatedFields.timestamp ?? msg.timestamp,
+                                        isError: updatedFields.is_error ?? msg.isError,
+                                        attachedDocumentIds: updatedFields.attached_document_ids ?? msg.attachedDocumentIds,
+                                        attachedNoteIds: updatedFields.attached_note_ids ?? msg.attachedNoteIds,
+                                        imageUrl: updatedFields.image_url ?? msg.imageUrl,
+                                        imageMimeType: updatedFields.image_mime_type ?? msg.imageMimeType,
+                                        has_been_displayed: updatedFields.has_been_displayed ?? msg.has_been_displayed,
+                                    };
+                                }
+                                return msg;
+                            })
+                        );
+                    } else if (payload.eventType === 'DELETE') {
+                        setChatMessages(prevMessages =>
+                            prevMessages.filter(msg => msg.id !== payload.old.id)
+                        );
+                    }
                 }
+            )
+            .subscribe();
 
-                // Enhanced optimistic message replacement logic with better matching
-                let updatedMessages = [...prevMessages];
-
-                // For user messages: replace optimistic user message if found
-                if (newMessage.role === 'user') {
-                  const optimisticUserIndex = prevMessages.findIndex(msg =>
-                    msg.session_id === newMessage.session_id &&
-                    msg.role === 'user' &&
-                    msg.content === newMessage.content &&
-                    msg.id.startsWith('optimistic-user-')
-                  );
-
-                  if (optimisticUserIndex > -1) {
-                    console.log('Replacing optimistic user message');
-                    updatedMessages[optimisticUserIndex] = newMessage;
-                  } else {
-                    console.log('Adding new user message');
-                    updatedMessages.push(newMessage);
-                  }
-                }
-                // For AI messages: replace optimistic AI message, but also clear any leftover optimistic messages
-                else if (newMessage.role === 'assistant') {
-                  // First, remove any optimistic AI messages for this session to prevent duplicates
-                  updatedMessages = updatedMessages.filter(msg => 
-                    !(msg.role === 'assistant' && 
-                      msg.session_id === newMessage.session_id && 
-                      msg.id.startsWith('optimistic-ai-'))
-                  );
-
-                  console.log('Adding new AI message and cleaned optimistic');
-                  updatedMessages.push(newMessage);
-                }
-                // Fallback: add new message if no optimistic match found
-                else {
-                  updatedMessages.push(newMessage);
-                }
-
-                // Sort messages by timestamp and role
-                return updatedMessages.sort((a, b) => {
-                  const timeA = new Date(a.timestamp).getTime();
-                  const timeB = new Date(b.timestamp).getTime();
-                  if (timeA === timeB) {
-                    if (a.role === 'user' && b.role === 'assistant') return -1;
-                    if (a.role === 'assistant' && b.role === 'user') return 1;
-                    return 0;
-                  }
-                  return timeA - timeB;
-                });
-              });
-            }
-            else if (payload.eventType === 'UPDATE') {
-              const updatedMessage: Message = {
-                id: payload.new.id,
-                content: payload.new.content || '',
-                role: payload.new.role as 'user' | 'assistant',
-                timestamp: payload.new.timestamp,
-                isError: payload.new.is_error || false,
-                attachedDocumentIds: payload.new.attached_document_ids || [],
-                attachedNoteIds: payload.new.attached_note_ids || [],
-                imageUrl: payload.new.image_url || undefined,
-                imageMimeType: payload.new.image_mime_type || undefined,
-                session_id: payload.new.session_id,
-                has_been_displayed: payload.new.has_been_displayed || false
-              };
-
-              // console.log('Updating message:', updatedMessage.id);
-
-              setChatMessages(prevMessages => {
-                const updatedMessages = prevMessages.map(msg => {
-                  if (msg.id === updatedMessage.id) {
-                    return { ...updatedMessage, isUpdating: false };
-                  }
-                  return msg;
-                });
-
-                return updatedMessages.sort((a, b) => {
-                  const timeA = new Date(a.timestamp).getTime();
-                  const timeB = new Date(b.timestamp).getTime();
-
-                  if (timeA === timeB) {
-                    if (a.role === 'user' && b.role === 'assistant') return -1;
-                    if (a.role === 'assistant' && b.role === 'user') return 1;
-                    return 0;
-                  }
-
-                  return timeA - timeB;
-                });
-              });
-            }
-            else if (payload.eventType === 'DELETE') {
-              // console.log('Deleting message:', payload.old.id);
-              setChatMessages(prevMessages => {
-                return prevMessages.filter(msg => msg.id !== payload.old.id);
-              });
-            }
-          }
-        )
-        .subscribe();
-
-      chatMessageChannelRef.current = channel;
+        chatMessageChannelRef.current = channel;
     } catch (error) {
-      console.error('Error setting up chat message listener:', error);
+        console.error('Error setting up chat message listener:', error);
     }
-  }, []);
+}, []);
 
 
   const setupNotesListener = useCallback(async (user: any) => {

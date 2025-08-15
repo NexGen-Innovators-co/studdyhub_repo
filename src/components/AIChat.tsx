@@ -272,6 +272,7 @@ const AIChat: React.FC<AIChatProps> = ({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isUpdatingDocuments, setIsUpdatingDocuments] = useState(false);
+  const prevSessionIdRef = useRef<string | null>(null);
 
   const isPhone = useCallback(() => {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -386,22 +387,24 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [isRecognizing]);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
-
+  
   const handleScroll = useCallback(async () => {
     const chatContainer = chatContainerRef.current;
     if (chatContainer) {
       const { scrollTop, scrollHeight, clientHeight } = chatContainer;
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 100;
       setShowScrollToBottomButton(!isAtBottom && scrollHeight > clientHeight);
-
+  
       const scrollThreshold = 100;
-      if (scrollTop < scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading) {
+      // FIX: Also check isLoadingSessionMessages to prevent firing on session load
+      if (scrollTop < scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
         setIsLoadingOlderMessages(true);
         const oldScrollHeight = scrollHeight;
         await onLoadOlderMessages();
+        // Use a timeout to allow the DOM to update before calculating new scroll position
         setTimeout(() => {
           if (chatContainerRef.current) {
             const newScrollHeight = chatContainerRef.current.scrollHeight;
@@ -411,33 +414,46 @@ const AIChat: React.FC<AIChatProps> = ({
         setIsLoadingOlderMessages(false);
       }
     }
-  }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages]);
-
+  }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages]); // Add isLoadingSessionMessages
+  
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
     if (chatContainer) {
       chatContainer.addEventListener('scroll', handleScroll);
-      handleScroll();
-    }
-    return () => {
-      if (chatContainer) {
+      return () => {
         chatContainer.removeEventListener('scroll', handleScroll);
-      }
-    };
+      };
+    }
   }, [handleScroll]);
-
+  
+  // Smart scrolling effect
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
-    if (chatContainer) {
+    if (!chatContainer) return;
+
+    const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
+
+    if (isSessionChange) {
+      // On session change, scroll instantly to the bottom after messages are loaded.
+      // The timeout ensures this runs after the new messages are in the DOM.
+      if (!isLoadingSessionMessages && messages.length > 0) {
+        setTimeout(() => {
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+          }
+          prevSessionIdRef.current = activeChatSessionId;
+        }, 0);
+      }
+    } else {
+      // For new messages in an existing session, scroll smoothly if the user is near the bottom.
       const { scrollTop, scrollHeight, clientHeight } = chatContainer;
       const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200;
-      const lastMessage = messages[messages.length - 1];
-      const isNewAIMessageFinished = lastMessage?.role === 'assistant' && !isLoading;
-      if (isNewAIMessageFinished || isNearBottom) {
-        scrollToBottom();
+      if (isNearBottom) {
+        scrollToBottom('smooth');
       }
     }
-  }, [messages, isLoading, scrollToBottom]);
+  }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom]);
+
 
   const stripCodeBlocks = useCallback((content: string): string => {
     let cleanedContent = content;
@@ -1189,7 +1205,7 @@ const AIChat: React.FC<AIChatProps> = ({
           <Button
             variant="outline"
             size="icon"
-            onClick={scrollToBottom}
+            onClick={() => scrollToBottom('smooth')}
             className={`fixed bottom-28 right-6 md:bottom-8 bg-white rounded-full shadow-lg p-2 z-20 transition-all duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 font-sans
               ${isDiagramPanelOpen ? 'md:right-[calc(' + panelWidth + '%+1.5rem)]' : 'md:right-8'}
             `}
