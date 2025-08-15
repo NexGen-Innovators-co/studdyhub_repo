@@ -16,7 +16,7 @@ import { Graphviz } from '@hpcc-js/wasm';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'; // Corrected import path
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { themes, ThemeName, escapeHtml, highlightCode } from '../utils/codeHighlighting';
 import { Easing } from 'framer-motion';
 import DOMPurify from 'dompurify';
@@ -26,10 +26,27 @@ import html2canvas from 'html2canvas';
 // Ensure Chart.js components are registered once
 Chart.register(...registerables);
 
+// Initialize Mermaid globally once
+if (typeof window !== 'undefined') {
+  mermaid.initialize({
+    startOnLoad: false, // This is important for manual rendering
+    theme: 'base',
+    securityLevel: 'strict',
+  });
+  (window as any).mermaid = mermaid;
+  
+  // Pre-load Graphviz for faster DOT rendering
+  Graphviz.load().then(() => {
+    //console.log('Graphviz pre-loaded successfully');
+  }).catch((error) => {
+    //console.warn('Graphviz pre-load failed:', error);
+  });
+}
+
 // Declare global types for libraries
 declare global {
   interface Window {
-    jspdf: any;
+    mermaid: any; // Add mermaid to Window interface
     html2canvas: any;
     Viz: any;
   }
@@ -50,7 +67,7 @@ class PanelErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Panel Error:', error, errorInfo);
+    //console.error('Panel Error:', error, errorInfo);
     this.setState({ errorInfo: errorInfo.componentStack });
     this.props.onError?.(error);
   }
@@ -112,6 +129,9 @@ const IsolatedHtml = ({ html }: { html: string }) => {
       WHOLE_DOCUMENT: true,
       RETURN_DOM: false,
       ADD_TAGS: ['style', 'script', 'link', 'iframe', 'meta'],
+      ALLOW_ARIA_ATTR: true,
+      ALLOW_DATA_ATTR: true,
+      ALLOW_UNKNOWN_PROTOCOLS: true,
       ADD_ATTR: ['target', 'sandbox'],
     });
 
@@ -127,46 +147,134 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 <body>
   ${sanitizedHtml}
   <script>
+    // Try to inherit libraries from parent window if available
+    function inheritParentLibraries() {
+      if (window.parent && window.parent !== window) {
+        try {
+          // Copy common libraries if they exist in parent
+          const libsToInherit = ['THREE', 'Chart', 'mermaid', 'd3', 'Plotly', 'math'];
+          libsToInherit.forEach(function(lib) {
+            if (window.parent[lib] && !window[lib]) {
+              window[lib] = window.parent[lib];
+            }
+          });
+        } catch (e) {
+          // Cross-origin restrictions, ignore
+          //console.log('Cannot inherit parent libraries due to cross-origin restrictions');
+        }
+      }
+    }
+    
+    // Inherit libraries before content loads
+    inheritParentLibraries();
+    
     // Post message to parent when content is loaded
-    window.onload = function() {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'loaded' }, '*');
+    function notifyParent() {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'loaded' }, '*');
+          //console.log('Posted loaded message to parent');
+        }
+      } catch (e) {
+        //console.error('Failed to notify parent:', e);
       }
-    };
+    }
+    
+    // Multiple ways to detect when page is ready
+    if (document.readyState === 'complete') {
+      setTimeout(notifyParent, 50);
+    } else {
+      window.addEventListener('load', function() {
+        setTimeout(notifyParent, 50);
+      });
+      
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(notifyParent, 25);
+      });
+    }
+    
     // Basic error handler for scripts within the iframe
-    window.onerror = function(message, source, lineno, colno, error) {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'error', message: error?.message || message }, '*');
+    window.addEventListener('error', function(event) {
+      const errorMessage = event.error?.message || event.message || 'Unknown error';
+      
+      // Only report actual JavaScript errors, not resource loading issues
+      if (event.error && !errorMessage.includes('Script error')) {
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ 
+              type: 'error', 
+              message: errorMessage,
+              filename: event.filename,
+              lineno: event.lineno
+            }, '*');
+          }
+        } catch (e) {
+          //console.error('Failed to report error to parent:', e);
+        }
       }
-      return false; // Allow default error handling
-    };
+    });
+    
+    // Handle unhandled promise rejections
+    window.addEventListener('unhandledrejection', function(event) {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ 
+            type: 'error', 
+            message: event.reason?.message || 'Unhandled promise rejection'
+          }, '*');
+        }
+      } catch (e) {
+        //console.error('Failed to report promise rejection to parent:', e);
+      }
+    });
   </script>
 </body>
 </html>`;
   }, [html]);
 
   useEffect(() => {
+    let isMounted = true;
+    let loadingTimeoutId: NodeJS.Timeout;
+    
+    //console.log('Starting HTML load, retry count:', retryCount);
     setIsLoading(true);
     setHasError(false);
 
     const handleMessage = (event: MessageEvent) => {
+      if (!isMounted) return;
+      
+      // Check if message is from our iframe
       if (event.source === iframeRef.current?.contentWindow) {
+        //console.log('Received message from iframe:', event.data);
+        
         if (event.data.type === 'loaded') {
+          //console.log('HTML loaded successfully');
           setIsLoading(false);
+          if (loadingTimeoutId) {
+            clearTimeout(loadingTimeoutId);
+          }
         } else if (event.data.type === 'error') {
-          // Only treat as error if it's not a security warning
           const errorMessage = event.data.message || '';
-          const isSecurityWarning = errorMessage.includes('security') || 
-                                  errorMessage.includes('mixed content') ||
-                                  errorMessage.includes('Content Security Policy');
           
-          if (!isSecurityWarning) {
+          // Be more lenient with what we consider "real" errors
+          const isIgnorableError = 
+            errorMessage.includes('security') || 
+            errorMessage.includes('mixed content') ||
+            errorMessage.includes('Content Security Policy') ||
+            errorMessage.includes('Script error') ||
+            errorMessage.includes('ResizeObserver') ||
+            errorMessage.includes('Non-Error promise rejection captured');
+          
+          if (!isIgnorableError) {
+            //console.error('HTML Error:', errorMessage);
             setHasError(true);
             setIsLoading(false);
+            if (loadingTimeoutId) {
+              clearTimeout(loadingTimeoutId);
+            }
           } else {
-            // For security warnings, just log and continue loading
-            console.warn('HTML Security Warning (non-blocking):', errorMessage);
-            setIsLoading(false);
+            // For ignorable errors, just log and continue
+            //console.warn('HTML Warning (ignored):', errorMessage);
           }
         }
       }
@@ -174,18 +282,34 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 
     window.addEventListener('message', handleMessage);
 
-    const timeoutId = setTimeout(() => {
-      if (isLoading) { // Check if still loading after timeout
+    // Shorter timeout - 2 seconds should be plenty for static HTML since we're not loading external libraries
+    loadingTimeoutId = setTimeout(() => {
+      if (isMounted) {
+        //console.log('HTML loading timeout reached, stopping loading indicator');
         setIsLoading(false);
-        setHasError(true); // Treat timeout as an error
       }
-    }, 10000); // 10 seconds timeout for HTML loading
+    }, 2000);
 
+    // Cleanup function
     return () => {
+      isMounted = false;
+      //console.log('Cleaning up HTML component');
       window.removeEventListener('message', handleMessage);
-      clearTimeout(timeoutId);
+      if (loadingTimeoutId) {
+        clearTimeout(loadingTimeoutId);
+      }
     };
-  }, [html, retryCount]); // Re-run effect when html or retryCount changes
+  }, [html, retryCount]);
+
+  // Handle iframe load event as additional fallback (faster timeout)
+  const handleIframeLoad = useCallback(() => {
+    //console.log('Iframe onLoad event fired');
+    // Much shorter delay since libraries should be readily available
+    setTimeout(() => {
+      //console.log('Stopping loading via iframe onLoad fallback');
+      setIsLoading(false);
+    }, 50);
+  }, []);
 
   if (hasError) {
     return (
@@ -193,7 +317,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         <AlertTriangle className="h-8 w-8 mb-3" />
         <h3 className="text-lg font-semibold mb-2">HTML Rendering Error</h3>
         <p className="text-center text-sm mb-4">
-          The HTML content couldn't be displayed properly. This might be due to insecure content or blocked resources.
+          The HTML content encountered a JavaScript error. The content may still be partially functional.
         </p>
         <div className="flex flex-col sm:flex-row gap-2">
           <Button
@@ -210,7 +334,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
               View HTML Source
             </summary>
             <pre className="mt-2 p-3 bg-white dark:bg-gray-900 border rounded text-xs overflow-auto max-h-40 w-full max-w-md">
-              {html}
+              {html.substring(0, 1000)}{html.length > 1000 ? '...' : ''}
             </pre>
           </details>
         </div>
@@ -222,27 +346,29 @@ const IsolatedHtml = ({ html }: { html: string }) => {
     <div className="relative w-full h-full">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
             <p className="text-sm text-gray-600 dark:text-gray-400">Rendering HTML content...</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+              Attempt {retryCount + 1}
+            </p>
           </div>
         </div>
       )}
       <iframe
-        key={retryCount} // Use key to force remount on retry
+        key={retryCount}
         ref={iframeRef}
         className="w-full h-full border-0 rounded-lg"
-        // Retain comprehensive sandbox for full HTML functionality, accepting potential warnings
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
         title="AI Generated HTML Content"
-        srcDoc={iframeSrcDocContent} // Corrected to srcDoc
+        srcDoc={iframeSrcDocContent}
+        onLoad={handleIframeLoad}
       />
     </div>
   );
 };
 
-
-// Enhanced Mermaid Renderer with bulletproof error handling and DOM isolation
+// Enhanced Mermaid Renderer with bulletproof error handling, DOM isolation, and interactive controls
 const IsolatedMermaid = ({ content, onError }: { content: string; onError: (error: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -251,13 +377,12 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
   const [retryCount, setRetryCount] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout>();
   const messageListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
-  const uniqueIdRef = useRef<string>(''); // Used to ensure messages are from the current iframe instance
+  const uniqueIdRef = useRef<string>('');
 
   const handleRetry = useCallback(() => {
     setRetryCount(prev => prev + 1);
     setHasError(null);
     setIsLoading(true);
-    // onError is called at the start of the useEffect when a new rendering attempt begins
   }, []);
 
   const cleanup = useCallback(() => {
@@ -271,13 +396,22 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
     }
   }, []);
 
-  // Prepare iframe HTML content for srcdoc
-  const iframeSrcDocContent = useMemo(() => {
-    // Generate truly unique ID with timestamp and random components for this render cycle
-    const currentUniqueId = `mermaid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${retryCount}`;
-    uniqueIdRef.current = currentUniqueId; // Store for message verification in parent
+  // Make Mermaid available globally for iframe access
+  useEffect(() => {
+    // Ensure mermaid is available on window for iframe to access
+    if (typeof window !== 'undefined' && window.mermaid) {
+      // Already available
+    } else if (typeof mermaid !== 'undefined') {
+      (window as any).mermaid = mermaid;
+    }
+  }, []);
 
-    // Create sanitized variable names for the iframe's internal script
+  // Prepare iframe HTML content for srcdoc with interactive controls
+  const iframeSrcDocContent = useMemo(() => {
+    // Generate unique ID for this render cycle
+    const currentUniqueId = `mermaid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${retryCount}`;
+    uniqueIdRef.current = currentUniqueId;
+
     const contentVarName = `MERMAID_CONTENT_${currentUniqueId.replace(/[^a-zA-Z0-9]/g, '_')}`;
     const idVarName = `UNIQUE_ID_${currentUniqueId.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
@@ -290,57 +424,157 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 20px;
+      padding: 0;
       display: flex;
-      justify-content: center;
-      align-items: center;
+      flex-direction: column;
       min-height: 100vh;
       background: transparent;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      overflow: auto;
+      overflow: hidden;
+      user-select: none;
     }
-    .container {
-      width: 100%;
-      max-width: 100%;
+    
+    .controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
       display: flex;
-      justify-content: center;
-      align-items: center;
+      gap: 5px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 5px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-    svg {
-      max-width: 100%;
-      height: auto;
+    
+    .control-btn {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.2s;
+    }
+    
+    .control-btn:hover {
+      background: #2563eb;
+    }
+    
+    .control-btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    
+    .container {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      cursor: grab;
+    }
+    
+    .container.dragging {
+      cursor: grabbing;
+    }
+    
+    .diagram-wrapper {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transform-origin: center center;
+      transition: transform 0.2s ease;
+      max-width: none;
+      max-height: none;
+    }
+    
+    .diagram-wrapper svg {
       display: block;
+      max-width: none;
+      max-height: none;
     }
+    
     .error-display {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       color: #dc2626;
       background: #fef2f2;
       border: 1px solid #fecaca;
       border-radius: 8px;
-      padding: 16px;
+      padding: 20px;
       text-align: center;
-      max-width: 500px;
+      max-width: 400px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
+    
     .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       color: #6b7280;
       text-align: center;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .zoom-info {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 1000;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="loading" id="loading-indicator">Loading Mermaid...</div>
+  <div class="controls">
+    <button class="control-btn" onclick="zoomIn()">+</button>
+    <button class="control-btn" onclick="zoomOut()">−</button>
+    <button class="control-btn" onclick="resetView()">Reset</button>
+    <button class="control-btn" onclick="fitToScreen()">Fit</button>
   </div>
+  
+  <div class="container" id="container">
+    <div class="loading" id="loading-indicator">
+      <div>Loading Mermaid diagram...</div>
+      <div style="margin-top: 10px; font-size: 11px; color: #9ca3af;">Please wait...</div>
+    </div>
+    <div class="diagram-wrapper" id="diagram-wrapper"></div>
+  </div>
+  
+  <div class="zoom-info" id="zoom-info">100%</div>
   
   <script>
     (function() {
       'use strict';
       const ${contentVarName} = ${JSON.stringify(content)};
-      const ${idVarName} = ${JSON.stringify(currentUniqueId)}; // Use current unique ID
+      const ${idVarName} = ${JSON.stringify(currentUniqueId)};
       const MERMAID_CONTENT = ${contentVarName};
       const UNIQUE_ID = ${idVarName};
       
+      // Interactive controls state
+      let currentZoom = 1;
+      let panX = 0;
+      let panY = 0;
+      let isDragging = false;
+      let lastMouseX = 0;
+      let lastMouseY = 0;
+      let diagramWrapper = null;
+      let containerEl = null;
+      
       function reportError(error, type = 'rendering') {
-        console.error('Mermaid Error in iframe:', error);
+        //console.error('Mermaid Error in iframe:', error);
         try {
           if (window.parent && window.parent !== window) {
             window.parent.postMessage({ 
@@ -356,6 +590,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
       }
 
       function reportSuccess() {
+        console.log('Mermaid loaded successfully');
         try {
           if (window.parent && window.parent !== window) {
             window.parent.postMessage({ 
@@ -369,16 +604,175 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
       }
 
       function showError(message, type = 'rendering') {
-        const container = document.querySelector('.container');
+        const container = document.getElementById('container');
         if (container) {
           container.innerHTML = 
             '<div class="error-display">' +
-            '<h3>Mermaid ' + (type === 'syntax' ? 'Syntax' : 'Rendering') + ' Issue</h3>' +
-            '<p>' + (message || 'Unknown issue') + '</p>' +
-            '<button onclick="window.location.reload()" class="retry-btn" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">Retry</button>' +
+            '<h3>Mermaid ' + (type === 'syntax' ? 'Syntax' : 'Rendering') + ' Error</h3>' +
+            '<p style="margin: 10px 0;">' + (message || 'Unknown error') + '</p>' +
+            '<button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">Retry</button>' +
             '</div>';
         }
         reportError(message, type);
+      }
+      
+      function updateTransform() {
+        if (diagramWrapper) {
+          diagramWrapper.style.transform = \`translate(\${-50 + panX}%, \${-50 + panY}%) scale(\${currentZoom})\`;
+          const zoomInfo = document.getElementById('zoom-info');
+          if (zoomInfo) {
+            zoomInfo.textContent = Math.round(currentZoom * 100) + '%';
+          }
+        }
+      }
+      
+      function zoomIn() {
+        currentZoom = Math.min(currentZoom * 1.2, 5);
+        updateTransform();
+      }
+      
+      function zoomOut() {
+        currentZoom = Math.max(currentZoom / 1.2, 0.1);
+        updateTransform();
+      }
+      
+      function resetView() {
+        currentZoom = 1;
+        panX = 0;
+        panY = 0;
+        updateTransform();
+      }
+      
+      function fitToScreen() {
+        if (!diagramWrapper || !containerEl) return;
+        
+        const svg = diagramWrapper.querySelector('svg');
+        if (!svg) return;
+        
+        const svgBox = svg.getBBox();
+        const containerRect = containerEl.getBoundingClientRect();
+        
+        const scaleX = (containerRect.width * 0.9) / svgBox.width;
+        const scaleY = (containerRect.height * 0.9) / svgBox.height;
+        currentZoom = Math.min(scaleX, scaleY, 2); // Cap at 2x for readability
+        
+        panX = 0;
+        panY = 0;
+        updateTransform();
+      }
+      
+      function setupInteractions() {
+        containerEl = document.getElementById('container');
+        diagramWrapper = document.getElementById('diagram-wrapper');
+        
+        if (!containerEl || !diagramWrapper) return;
+        
+        // Mouse events
+        containerEl.addEventListener('mousedown', function(e) {
+          if (e.target.closest('.controls')) return;
+          isDragging = true;
+          lastMouseX = e.clientX;
+          lastMouseY = e.clientY;
+          containerEl.classList.add('dragging');
+          e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+          if (!isDragging) return;
+          
+          const deltaX = (e.clientX - lastMouseX) / currentZoom;
+          const deltaY = (e.clientY - lastMouseY) / currentZoom;
+          
+          panX += deltaX * 0.5;
+          panY += deltaY * 0.5;
+          
+          lastMouseX = e.clientX;
+          lastMouseY = e.clientY;
+          
+          updateTransform();
+        });
+        
+        document.addEventListener('mouseup', function() {
+          isDragging = false;
+          containerEl.classList.remove('dragging');
+        });
+        
+        // Touch events for mobile
+        let lastTouchDistance = 0;
+        
+        containerEl.addEventListener('touchstart', function(e) {
+          if (e.target.closest('.controls')) return;
+          
+          if (e.touches.length === 1) {
+            isDragging = true;
+            lastMouseX = e.touches[0].clientX;
+            lastMouseY = e.touches[0].clientY;
+          } else if (e.touches.length === 2) {
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            lastTouchDistance = Math.sqrt(
+              Math.pow(touch2.clientX - touch1.clientX, 2) + 
+              Math.pow(touch2.clientY - touch1.clientY, 2)
+            );
+          }
+          e.preventDefault();
+        });
+        
+        containerEl.addEventListener('touchmove', function(e) {
+          if (e.touches.length === 1 && isDragging) {
+            const deltaX = (e.touches[0].clientX - lastMouseX) / currentZoom;
+            const deltaY = (e.touches[0].clientY - lastMouseY) / currentZoom;
+            
+            panX += deltaX * 0.5;
+            panY += deltaY * 0.5;
+            
+            lastMouseX = e.touches[0].clientX;
+            lastMouseY = e.touches[0].clientY;
+            
+            updateTransform();
+          } else if (e.touches.length === 2) {
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            const currentDistance = Math.sqrt(
+              Math.pow(touch2.clientX - touch1.clientX, 2) + 
+              Math.pow(touch2.clientY - touch1.clientY, 2)
+            );
+            
+            const scale = currentDistance / lastTouchDistance;
+            currentZoom = Math.min(Math.max(currentZoom * scale, 0.1), 5);
+            lastTouchDistance = currentDistance;
+            
+            updateTransform();
+          }
+          e.preventDefault();
+        });
+        
+        containerEl.addEventListener('touchend', function(e) {
+          isDragging = false;
+          if (e.touches.length < 2) {
+            lastTouchDistance = 0;
+          }
+        });
+        
+        // Mouse wheel zoom
+        containerEl.addEventListener('wheel', function(e) {
+          e.preventDefault();
+          const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+          currentZoom = Math.min(Math.max(currentZoom * zoomFactor, 0.1), 5);
+          updateTransform();
+        });
+        
+        // Double-click to fit
+        containerEl.addEventListener('dblclick', function(e) {
+          if (e.target.closest('.controls')) return;
+          fitToScreen();
+        });
+        
+        // Make functions available globally for buttons
+        window.zoomIn = zoomIn;
+        window.zoomOut = zoomOut;
+        window.resetView = resetView;
+        window.fitToScreen = fitToScreen;
       }
 
       function loadMermaid() {
@@ -388,9 +782,20 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
             return;
           }
           
-          // Try to load from the same origin first (using the installed package)
+          // Try to get Mermaid from parent window first (much faster)
+          try {
+            if (window.parent && window.parent.mermaid) {
+              window.mermaid = window.parent.mermaid;
+              resolve();
+              return;
+            }
+          } catch (e) {
+            // Cross-origin restriction, fall back to CDN
+          }
+          
+          // Fallback to CDN with shorter timeout
           const script = document.createElement('script');
-          script.src ='/node_modules/mermaid/dist/mermaid.min.js';
+          script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js';
           script.onload = function() {
             if (window.mermaid) {
               resolve();
@@ -399,34 +804,16 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
             }
           };
           script.onerror = function() {
-            // Fallback to CDN if local loading fails
-            const cdnScript = document.createElement('script');
-            cdnScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.9.0/dist/mermaid.min.js';
-            cdnScript.onload = function() {
-              if (window.mermaid) {
-                resolve();
-              } else {
-                reject(new Error('Mermaid library loaded but not available'));
-              }
-            };
-            cdnScript.onerror = function() {
-              reject(new Error('Failed to load Mermaid library from both local and CDN'));
-            };
-            document.head.appendChild(cdnScript);
-            // Increase timeout for CDN loading
-            setTimeout(function() {
-              if (!window.mermaid) {
-                reject(new Error('Mermaid library load timeout - please check your connection'));
-              }
-            }, 15000); // 15 seconds for CDN
+            reject(new Error('Failed to load Mermaid library from CDN'));
           };
           document.head.appendChild(script);
-          // Shorter timeout for local loading
+          
+          // Reduced timeout since parent check failed
           setTimeout(function() {
             if (!window.mermaid) {
-              reject(new Error('Mermaid library load timeout'));
+              reject(new Error('Mermaid library load timeout - please check your connection'));
             }
-          }, 10000); // 10 seconds for local
+          }, 5000);
         });
       }
 
@@ -437,105 +824,100 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
         }
 
         loadMermaid().then(function() {
-          if (!window.mermaid) { throw new Error('Mermaid not available'); }
+          if (!window.mermaid) { 
+            throw new Error('Mermaid not available'); 
+          }
           
-          // Use modern mermaid v11 configuration
+          // Configure mermaid with better settings
           window.mermaid.initialize({
             startOnLoad: false,
             theme: 'base',
             themeVariables: {
               primaryColor: '#3b82f6',
-              primaryTextColor: '#e5e7eb',
+              primaryTextColor: '#1f2937',
               primaryBorderColor: '#2563eb',
               secondaryColor: '#10b981',
               tertiaryColor: '#f59e0b',
-              background: '#1f2937',
-              secondaryBackground: '#374151',
-              tertiaryBackground: '#4b5563',
-              mainBkg: '#3b82f6',
-              secondBkg: '#10b981',
-              tertiaryBkg: '#f59e0b',
-              textColor: '#e5e7eb',
-              secondaryTextColor: '#9ca3af',
-              lineColor: '#9ca3af',
-              arrowheadColor: '#e5e7eb',
-              errorBkgColor: '#7f1d1d',
-              errorTextColor: '#f87171',
-              nodeBkg: '#374151',
-              nodeBorder: '#3b82f6',
-              clusterBkg: '#1f2937',
-              clusterBorder: '#4b5563',
-              actorBkg: '#374151',
-              actorBorder: '#3b82f6',
-              actorTextColor: '#e5e7eb',
-              actorLineColor: '#9ca3af',
-              signalColor: '#e5e7eb',
-              signalTextColor: '#e5e7eb',
-              labelBoxBkgColor: '#374151',
-              labelBoxBorderColor: '#4b5563',
-              labelTextColor: '#e5e7eb',
-              loopTextColor: '#e5e7eb',
-              noteBorderColor: '#d97706',
-              noteBkgColor: '#78350f',
-              noteTextColor: '#f59e0b'
+              background: '#ffffff',
+              mainBkg: '#ffffff',
+              secondBkg: '#f3f4f6',
+              tertiaryBkg: '#e5e7eb'
             },
-            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
-            sequence: { useMaxWidth: true, wrap: true },
-            gantt: { useMaxWidth: true, leftPadding: 75, rightPadding: 20, topPadding: 50 },
-            pie: { useMaxWidth: true },
-            xyChart: { useMaxWidth: true },
+            flowchart: { 
+              useMaxWidth: false, 
+              htmlLabels: true, 
+              curve: 'basis' 
+            },
+            sequence: { 
+              useMaxWidth: false, 
+              wrap: true 
+            },
             securityLevel: 'strict',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            fontSize: 16,
-            maxTextSize: 50000,
-            maxEdges: 2000
+            fontSize: 14
           });
           
           return window.mermaid.parse(MERMAID_CONTENT);
         }).then(function() {
           const loadingIndicator = document.getElementById('loading-indicator');
-          if (loadingIndicator) { loadingIndicator.remove(); }
-          const diagramContainer = document.createElement('div');
-          diagramContainer.id = 'mermaid-diagram';
-          const container = document.querySelector('.container');
-          if (container) { container.appendChild(diagramContainer); }
-          return window.mermaid.render('mermaid-svg-' + Date.now(), MERMAID_CONTENT);
+          if (loadingIndicator) { 
+            loadingIndicator.remove(); 
+          }
+          
+          const diagramId = 'mermaid-svg-' + Date.now();
+          return window.mermaid.render(diagramId, MERMAID_CONTENT);
         }).then(function(result) {
           const svg = result.svg || result;
-          if (!svg || svg.trim().length === 0) { throw new Error('Mermaid rendered empty SVG'); }
-          const diagramContainer = document.getElementById('mermaid-diagram');
-          if (diagramContainer) { diagramContainer.innerHTML = svg; }
+          if (!svg || svg.trim().length === 0) { 
+            throw new Error('Mermaid rendered empty SVG'); 
+          }
+          
+          const diagramWrapper = document.getElementById('diagram-wrapper');
+          if (diagramWrapper) { 
+            diagramWrapper.innerHTML = svg; 
+            
+            // Setup interactive controls after rendering
+            setTimeout(function() {
+              setupInteractions();
+              updateTransform();
+              // Auto-fit diagram to screen on load
+              setTimeout(fitToScreen, 100);
+            }, 50);
+          }
+          
           reportSuccess();
         }).catch(function(error) {
-          // Only show errors for actual failures, not minor issues
           const errorMessage = error.message || 'Unknown rendering error';
           const isActualError = errorMessage.includes('Syntax error') || 
                                errorMessage.includes('Parse error') || 
                                errorMessage.includes('Failed to load') ||
-                               errorMessage.includes('rendered empty SVG');
+                               errorMessage.includes('rendered empty SVG') ||
+                               errorMessage.includes('timeout');
           
           if (isActualError) {
-            const errorType = errorMessage.toLowerCase().includes('syntax') ? 'syntax' : 'rendering';
+            const errorType = errorMessage.toLowerCase().includes('syntax') || 
+                             errorMessage.toLowerCase().includes('parse') ? 'syntax' : 'rendering';
             showError(errorMessage, errorType);
           } else {
-            // For minor issues, just log and continue
             console.warn('Mermaid minor issue:', errorMessage);
             reportSuccess();
           }
         });
       }
 
+      // Start rendering when DOM is ready
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', renderMermaid);
+        document.addEventListener('DOMContentLoaded', function() {
+          setTimeout(renderMermaid, 50);
+        });
       } else {
-        setTimeout(renderMermaid, 100);
+        setTimeout(renderMermaid, 50);
       }
     })();
   </script>
 </body>
 </html>`;
-  }, [content, retryCount]); // Re-generate srcdoc when content or retryCount changes
-
+  }, [content, retryCount]);
 
   useEffect(() => {
     // Cleanup previous listeners and timeouts
@@ -549,34 +931,29 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
       return;
     }
 
+    //console.log('Starting Mermaid render, retry count:', retryCount);
     setIsLoading(true);
     setHasError(null);
-    if (onError) onError(null, 'rendering'); // Signal that a new rendering attempt is starting
+    if (onError) onError(null, 'rendering');
 
     // Set up message listener for communication from iframe
     const handleMessage = (event: MessageEvent) => {
-      const allowedOrigins = [
-        window.location.origin,
-        "http://localhost:8080",
-        "https://studdyhub.versel.app",
-        "https://notemind.lovable.app"
-      ];
-
-      // Check if message is from an allowed origin or has an opaque (null) origin
-      // and is from our specific iframe's content window.
-      if ((allowedOrigins.includes(event.origin) || event.origin === "null") && event.source === iframeRef.current?.contentWindow) {
+      // Allow messages from iframe (null origin due to srcdoc)
+      if (event.source === iframeRef.current?.contentWindow) {
         const { type, error, errorType, uniqueId: messageUniqueId } = event.data;
 
-        // Verify the message is from our current iframe instance's render cycle
+        // Verify message is from current iframe instance
         if (messageUniqueId !== uniqueIdRef.current) return;
 
+        //console.log('Received Mermaid message:', { type, error, errorType });
+
         if (type === 'mermaidLoaded') {
-          cleanup(); // Clear timeout on success
+          cleanup();
           setIsLoading(false);
           setHasError(null);
           if (onError) onError(null, 'rendering');
         } else if (type === 'mermaidError') {
-          cleanup(); // Clear timeout on error too
+          cleanup();
           const finalErrorType = errorType || 'rendering';
           setHasError(error);
           setErrorType(finalErrorType);
@@ -586,63 +963,59 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
       }
     };
 
-
     messageListenerRef.current = handleMessage;
     window.addEventListener('message', handleMessage);
 
-    // Timeout for overall rendering process
+    // Timeout for overall rendering process (reduced since we're using parent's Mermaid)
     timeoutRef.current = setTimeout(() => {
-      // Only trigger timeout if still loading and it's for the current uniqueId
-      if (isLoading && uniqueIdRef.current === uniqueIdRef.current) { // Redundant check, but ensures it's still "this" instance's loading state
-        const timeoutError = "Mermaid rendering timed out after 15 seconds. This might be due to a complex diagram or network issues loading the Mermaid library from CDN within the sandbox.";
-        setHasError(timeoutError);
-        setErrorType('timeout');
-        setIsLoading(false);
-        if (onError) onError(timeoutError, 'timeout');
-        cleanup(); // Ensure cleanup happens on timeout
-      }
-    }, 15000);
+      //console.log('Mermaid rendering timeout');
+      const timeoutError = "Mermaid rendering timed out. This might be due to a complex diagram or network issues.";
+      setHasError(timeoutError);
+      setErrorType('timeout');
+      setIsLoading(false);
+      if (onError) onError(timeoutError, 'timeout');
+      cleanup();
+    }, 10000);
 
     return cleanup;
-  }, [content, retryCount, onError, cleanup]); // Depend on content and retryCount for re-rendering
+  }, [content, retryCount, onError, cleanup]);
 
-  // The iframe element is rendered here, with srcdoc.
-  // The 'key' attribute ensures React re-mounts the iframe if content changes,
-  // which is important for srcdoc updates to take effect.
   return (
     <div className="relative w-full h-full">
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
-          <div className="flex flex-col items-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+        <div className="absolute inset-0 flex items-center justify-center bg-white/95 dark:bg-gray-900/95 z-10">
+          <div className="flex flex-col items-center bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-3" />
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
               Rendering Mermaid diagram...
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-              Attempt {retryCount + 1}
+            <p className="text-xs text-gray-500 dark:text-gray-500">
+              Attempt {retryCount + 1} • Using optimized libraries • Interactive controls will be available
             </p>
           </div>
         </div>
       )}
+      
       <iframe
-        key={uniqueIdRef.current} // Use the unique ID as key to force remount on content/retry change
+        key={uniqueIdRef.current}
         ref={iframeRef}
         className="w-full h-full border-0 rounded-lg bg-transparent"
-        sandbox="allow-scripts" // Keep it minimal to avoid warnings, but allow scripts to run
-        title="Mermaid Diagram"
-        style={{ minHeight: '200px' }}
-        srcDoc={iframeSrcDocContent} // Corrected to srcDoc
+        sandbox="allow-scripts allow-same-origin"
+        title="Interactive Mermaid Diagram"
+        style={{ minHeight: '300px' }}
+        srcDoc={iframeSrcDocContent}
       />
+      
       {hasError && (
-        <div className="flex flex-col items-center justify-center h-full text-red-600 bg-red-50 p-4 dark:bg-red-950/20 dark:text-red-300">
-          <AlertTriangle className="h-8 w-8 mb-3" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50/95 dark:bg-red-950/95 text-red-600 dark:text-red-300 p-4 z-20">
+          <AlertTriangle className="h-12 w-12 mb-4 text-red-500" />
           <h3 className="text-lg font-semibold mb-2">
             Mermaid {errorType === 'syntax' ? 'Syntax' : errorType === 'timeout' ? 'Timeout' : errorType === 'network' ? 'Network' : 'Rendering'} Error
           </h3>
-          <p className="text-center text-sm mb-4 max-w-md">
+          <p className="text-center text-sm mb-6 max-w-md">
             {hasError}
           </p>
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button
               onClick={handleRetry}
               variant="outline"
@@ -658,17 +1031,18 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
                 View Mermaid Source
               </summary>
               <pre className="mt-2 p-3 bg-white dark:bg-gray-900 border rounded text-xs overflow-auto max-h-40 w-full max-w-md">
-                {content}
+                {content.substring(0, 500)}{content.length > 500 ? '...' : ''}
               </pre>
             </details>
           </div>
           {errorType === 'syntax' && (
-            <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
-              <p>Check your Mermaid syntax. Common issues:</p>
-              <ul className="list-disc list-inside mt-1 space-y-1">
-                <li>Missing diagram type declaration</li>
+            <div className="mt-4 text-xs text-gray-600 dark:text-gray-400 bg-white/50 dark:bg-gray-800/50 p-3 rounded max-w-md">
+              <p className="font-medium mb-2">Common Mermaid syntax issues:</p>
+              <ul className="list-disc list-inside space-y-1 text-left">
+                <li>Missing diagram type declaration (e.g., \`graph TD\`, \`sequenceDiagram\`)</li>
                 <li>Invalid node or edge syntax</li>
                 <li>Unclosed quotes or brackets</li>
+                <li>Reserved keywords used as node names</li>
               </ul>
             </div>
           )}
@@ -677,6 +1051,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError: (erro
     </div>
   );
 };
+
 interface ChartRendererProps {
   chartConfig: any;
   onInvalidConfig: (error: string | null) => void;
@@ -734,7 +1109,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = memo(({ chartConfig, onInval
           setIsRendering(false);
         }
       } catch (error: any) {
-        console.error("Error rendering Chart.js:", error);
+        //console.error("Error rendering Chart.js:", error);
         onInvalidConfig(`Chart rendering failed: ${error.message}`);
         setIsRendering(false);
 
@@ -832,7 +1207,7 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({
   const [isAnimating, setIsAnimating] = useState(true);
   const [showWireframe, setShowWireframe] = useState(false);
   const [resetCamera, setResetCamera] = useState(0);
-  const [canvasScale, setCanvasScale] = useState(1); // New state for canvas size scaling
+  const [canvasScale, setCanvasScale] = useState(1);
 
   useEffect(() => {
     if (canvasRef.current && codeContent) {
@@ -842,7 +1217,7 @@ const ThreeJSRenderer: React.FC<ThreeJSRendererProps> = memo(({
         try {
           threeJsCleanupRef.current();
         } catch (error) {
-          console.warn('Cleanup failed:', error);
+          //console.warn('Cleanup failed:', error);
         }
         threeJsCleanupRef.current = null;
       }
@@ -890,7 +1265,7 @@ return ${functionName};
             try {
               cleanup();
             } catch (error) {
-              console.warn('Scene cleanup failed:', error);
+              //console.warn('Scene cleanup failed:', error);
             }
             // Clean up lights added by renderer
             scene.children.filter(child => child.isLight).forEach(light => scene.remove(light));
@@ -902,7 +1277,7 @@ return ${functionName};
           throw new Error('Invalid Three.js scene structure: missing scene, renderer, or cleanup');
         }
       } catch (error: any) {
-        console.error("Error rendering Three.js scene:", error);
+        //console.error("Error rendering Three.js scene:", error);
         onInvalidCode(`3D scene error: ${error.message}`);
         setIsRendering(false);
 
@@ -925,7 +1300,7 @@ return ${functionName};
         try {
           threeJsCleanupRef.current();
         } catch (error) {
-          console.warn('Cleanup failed during unmount:', error);
+          //console.warn('Cleanup failed during unmount:', error);
         }
         threeJsCleanupRef.current = null;
       }
@@ -937,15 +1312,15 @@ return ${functionName};
   }, []);
 
   const handleZoomIn = useCallback(() => {
-    setCanvasScale(prev => Math.min(3, prev + 0.25)); // Increase canvas size, max 3x
+    setCanvasScale(prev => Math.min(3, prev + 0.25));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setCanvasScale(prev => Math.max(0.25, prev - 0.25)); // Decrease canvas size, min 0.25x
+    setCanvasScale(prev => Math.max(0.25, prev - 0.25));
   }, []);
 
   const handleResetZoom = useCallback(() => {
-    setCanvasScale(1); // Reset to original size
+    setCanvasScale(1);
   }, []);
 
   return (
@@ -1067,7 +1442,7 @@ const CodeDisplay: React.FC<{
           const highlighted = highlightCode(processed, language, theme);
           setHighlightedContent(highlighted);
         } catch (error) {
-          console.warn('Failed to highlight code:', error);
+          //console.warn('Failed to highlight code:', error);
           setHighlightedContent(escapeHtml(processed));
         }
       } else {
@@ -1080,13 +1455,13 @@ const CodeDisplay: React.FC<{
   const maxLineLength = Math.max(...lines.map(line => line.length));
 
   const handleCopyCode = useCallback(() => {
-    document.execCommand('copy'); // Fallback for clipboard.writeText
+    document.execCommand('copy');
     toast.success('Code copied to clipboard');
   }, [content]);
 
   return (
     <div className="flex flex-col h-full">
-      {showControls && (
+      {/* {showControls && (
         <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b">
           <div className="flex items-center gap-2 flex-1">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1153,7 +1528,7 @@ const CodeDisplay: React.FC<{
             </Button>
           </div>
         </div>
-      )}
+      )} */}
 
       <div
         className="flex-1 overflow-auto"
@@ -1256,13 +1631,12 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {type === 'mermaid' && 'Mermaid Controls:'}
             {type === 'dot' && 'Graphviz Controls:'}
-            {type === 'html' && 'Web Controls:'}
+            {/* {type === 'html' && 'Web Controls:'} */}
             {type === 'image' && 'Image Controls:'}
           </span>
 
-          {(type === 'mermaid' || type === 'dot') && (
+          {( type === 'dot') && (
             <>
               <Button
                 variant="outline"
@@ -1332,7 +1706,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             </>
           )}
 
-          {type === 'html' && (
+          {/* {type === 'html' && (
             <>
               <Button
                 variant="outline"
@@ -1356,14 +1730,14 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                 {showAdvancedControls ? 'Less' : 'More'}
               </Button>
             </>
-          )}
+          )} */}
         </div>
 
         {/* Advanced controls panel */}
-        {showAdvancedControls && type === 'html' && (
+        {/* {showAdvancedControls && type === 'html' && (
           <div className="w-full mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-gray-600 dark:text-gray-400">Advanced:</ span>
+              <span className="text-gray-600 dark:text-gray-400">Advanced:</span>
               <Button
                 variant="outline"
                 size="sm"
@@ -1392,7 +1766,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               </Button>
             </div>
           </div>
-        )}
+        )} */}
       </div>
     );
   }, [zoomLevel, showAdvancedControls]);
@@ -1440,7 +1814,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
           toast.success('GLTF download started.');
         },
         (error) => {
-          console.error('GLTF export error:', error);
+          //console.error('GLTF export error:', error);
           toast.error('Failed to export GLTF.');
         },
         { binary: false }
@@ -1523,10 +1897,10 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       pdf.save(fileName);
       toast.success('PDF downloaded successfully!');
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      //console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
     }
-  }, [diagramType, chartRef, threeJsRef]); // Add chartRef and threeJsRef to dependencies
+  }, [diagramType, chartRef, threeJsRef]);
 
 
   const ThemeSelector = useCallback(() => (
@@ -1577,23 +1951,31 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   useEffect(() => {
     if (diagramType === 'dot' && diagramContent) {
       setIsDotLoading(true);
-      Graphviz.load().then((graphviz) => {
-        try {
-          const svg = graphviz.dot(diagramContent);
-          setDotSvg(svg);
-          setDotError(null);
-        } catch (error: any) {
-          console.error('Error rendering DOT graph:', error);
-          setDotError(`Failed to render DOT graph: ${error.message}`);
-        } finally {
+      
+      // Try to use pre-loaded Graphviz first
+      const renderDot = () => {
+        return Graphviz.load().then((graphviz) => {
+          try {
+            const svg = graphviz.dot(diagramContent);
+            setDotSvg(svg);
+            setDotError(null);
+            setNetworkError(false);
+          } catch (error: any) {
+            //console.error('Error rendering DOT graph:', error);
+            setDotError(`Failed to render DOT graph: ${error.message}`);
+          } finally {
+            setIsDotLoading(false);
+          }
+        }).catch((error) => {
+          //console.error('Error loading Graphviz:', error);
+          setDotError('Failed to load Graphviz library.');
           setIsDotLoading(false);
-        }
-      }).catch((error) => {
-        console.error('Error loading Graphviz:', error);
-        setDotError('Failed to load Graphviz library.');
-        setIsDotLoading(false);
-        setNetworkError(true);
-      });
+          setNetworkError(true);
+        });
+      };
+
+      // If Graphviz is already loaded, render immediately, otherwise load first
+      renderDot();
     }
   }, [diagramContent, diagramType]);
 
@@ -1659,7 +2041,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                     variant="outline"
                     size="sm"
                     onClick={() => onSuggestAiCorrection(`Fix this DOT graph code: ${diagramContent}`)}
-                    className="mt-2 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100" // Added mt-2 for spacing
+                    className="mt-2 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Get AI Fix
@@ -1689,7 +2071,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       try {
         chartConfigToRender = JSON.parse(diagramContent || '{}');
       } catch (error) {
-        console.error('Invalid Chart.js configuration:', error);
+        //console.error('Invalid Chart.js configuration:', error);
         setChartError('Invalid Chart.js configuration: JSON parse error');
         chartConfigToRender = {};
       }
@@ -1708,7 +2090,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                       variant="outline"
                       size="sm"
                       onClick={() => onSuggestAiCorrection(`Fix this Chart.js configuration: ${diagramContent}`)}
-                      className="mt-2 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100" // Added mt-2 for spacing
+                      className="mt-2 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
                     >
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Get AI Fix
@@ -1741,7 +2123,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                       variant="outline"
                       size="sm"
                       onClick={() => onSuggestAiCorrection(`Fix this Three.js code: ${diagramContent}`)}
-                      className="mt-2 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100" // Added mt-2 for spacing
+                      className="mt-2 text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
                     >
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Get AI Fix
@@ -2038,7 +2420,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       >
         <PanelErrorBoundary
           onError={(error) => {
-            console.error('Panel content error:', error);
+            //console.error('Panel content error:', error);
             toast.error(`Content rendering error: ${error.message}`);
           }}
         >
