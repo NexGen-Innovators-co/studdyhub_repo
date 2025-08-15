@@ -840,8 +840,8 @@ export const useAppData = () => {
             table: 'chat_messages',
             filter: `user_id=eq.${user.id}`
           },
-          (payload) => {
-            console.log('Chat message event:', payload.eventType, payload.new);
+           (payload) => {
+            console.log('Chat message realtime event:', payload.eventType, 'Message ID:', (payload.new && 'id' in payload.new) ? payload.new.id : 'N/A');
 
             if (payload.eventType === 'INSERT') {
               const newMessage: Message = {
@@ -859,16 +859,21 @@ export const useAppData = () => {
               };
 
               setChatMessages(prevMessages => {
-                // Check if message already exists by id
-                const messageExists = prevMessages.some(msg => msg.id === newMessage.id);
-                if (messageExists) {
-                  return prevMessages;
+                console.log('Processing realtime message insert:', newMessage.id, 'Current messages count:', prevMessages.length);
+                
+                // Check if message already exists by id - force update to ensure we see it
+                const existingIndex = prevMessages.findIndex(msg => msg.id === newMessage.id);
+                if (existingIndex > -1) {
+                  console.log('Message already exists, updating it');
+                  const updated = [...prevMessages];
+                  updated[existingIndex] = newMessage;
+                  return updated;
                 }
 
-                // Enhanced optimistic message replacement logic
+                // Enhanced optimistic message replacement logic with better matching
                 let updatedMessages = [...prevMessages];
 
-                // First, try to replace optimistic user message if this is a user message
+                // For user messages: replace optimistic user message if found
                 if (newMessage.role === 'user') {
                   const optimisticUserIndex = prevMessages.findIndex(msg =>
                     msg.session_id === newMessage.session_id &&
@@ -878,24 +883,24 @@ export const useAppData = () => {
                   );
 
                   if (optimisticUserIndex > -1) {
+                    console.log('Replacing optimistic user message');
                     updatedMessages[optimisticUserIndex] = newMessage;
                   } else {
+                    console.log('Adding new user message');
                     updatedMessages.push(newMessage);
                   }
                 }
-                // Then, try to replace optimistic AI message if this is an AI message
+                // For AI messages: replace optimistic AI message, but also clear any leftover optimistic messages
                 else if (newMessage.role === 'assistant') {
-                  const optimisticAIIndex = prevMessages.findIndex(msg =>
-                    msg.session_id === newMessage.session_id &&
-                    msg.role === 'assistant' &&
-                    msg.id.startsWith('optimistic-ai-')
+                  // First, remove any optimistic AI messages for this session to prevent duplicates
+                  updatedMessages = updatedMessages.filter(msg => 
+                    !(msg.role === 'assistant' && 
+                      msg.session_id === newMessage.session_id && 
+                      msg.id.startsWith('optimistic-ai-'))
                   );
 
-                  if (optimisticAIIndex > -1) {
-                    updatedMessages[optimisticAIIndex] = newMessage;
-                  } else {
-                    updatedMessages.push(newMessage);
-                  }
+                  console.log('Adding new AI message and cleaned optimistic');
+                  updatedMessages.push(newMessage);
                 }
                 // Fallback: add new message if no optimistic match found
                 else {
