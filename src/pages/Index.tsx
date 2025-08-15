@@ -389,13 +389,21 @@ const Index = () => {
         has_been_displayed: msg.has_been_displayed || false,
       }));
 
+      // Merge new messages for the current session without removing existing ones from other sessions
       setChatMessages(prevAllMessages => {
-        // Filter out messages for the current session to prevent duplicates on re-load
         const otherSessionMessages = prevAllMessages.filter(m => m.session_id !== sessionId);
         const newMessagesForSession = fetchedMessages.filter(
           fm => !otherSessionMessages.some(pm => pm.id === fm.id)
         );
-        return [...otherSessionMessages, ...newMessagesForSession].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        // Combine messages from other sessions with new messages for the current session
+        // Then add messages from this session, ensuring no duplicates
+        const combinedMessages = [...otherSessionMessages];
+        newMessagesForSession.forEach(newMessage => {
+          if (!combinedMessages.some(m => m.id === newMessage.id)) {
+            combinedMessages.push(newMessage);
+          }
+        });
+        return combinedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       });
 
       setHasMoreMessages(data.length === CHAT_MESSAGES_PER_PAGE);
@@ -464,15 +472,19 @@ const Index = () => {
     }
   }, [user, loadChatSessions, chatSessionsLoadedCount, loadingPhase.phase]);
 
+  // Modified useEffect for activeChatSessionId: only load if messages for this session are not already present
   useEffect(() => {
     if (activeChatSessionId && user) {
-        // Clear previous session messages before loading new ones
-        setChatMessages(prev => prev.filter(m => m.session_id !== activeChatSessionId));
-        loadSessionMessages(activeChatSessionId);
+        // Check if messages for the active session are already loaded in `allChatMessages`
+        const messagesForActiveSession = allChatMessages.filter(m => m.session_id === activeChatSessionId);
+        if (messagesForActiveSession.length === 0) {
+            loadSessionMessages(activeChatSessionId);
+        }
     } else if (!activeChatSessionId) {
         setHasMoreMessages(false);
     }
-  }, [activeChatSessionId, user]);
+  }, [activeChatSessionId, user, allChatMessages, loadSessionMessages]);
+
 
   // Chat session document management
   useEffect(() => {
