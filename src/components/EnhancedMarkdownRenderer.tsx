@@ -92,9 +92,9 @@ export const EnhancedMarkdownRenderer = memo(({
           return (
             <div className="my-4 cursor-pointer" onClick={() => handleMermaidClick(codeString)}>
               <Mermaid 
-                code={codeString} 
-                onError={(error) => onMermaidError?.(codeString, 'syntax')}
-                onRenderError={(error) => onMermaidError?.(codeString, 'rendering')}
+                chart={codeString} 
+                onMermaidError={(code, errorType) => onMermaidError?.(code, errorType)}
+                diagramRef={React.createRef<HTMLDivElement>()}
               />
             </div>
           );
