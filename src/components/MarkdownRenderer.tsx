@@ -1,14 +1,9 @@
-// src/components/MarkdownRenderer.tsx
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { AlertTriangle, Copy, Check, Loader2, Maximize2, X, RefreshCw, ChevronDown, ChevronUp, Image, FileText, BookOpen, StickyNote, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
-
-// Import Chart.js for rendering
 import { Chart, registerables } from 'chart.js';
-
-// Import lowlight and language types for syntax highlighting
 import { lowlight } from 'lowlight';
 import { LanguageFn } from 'highlight.js';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -21,17 +16,12 @@ import bash from 'highlight.js/lib/languages/bash';
 import json from 'highlight.js/lib/languages/json';
 import css from 'highlight.js/lib/languages/css';
 import typescript from 'highlight.js/lib/languages/typescript';
-
-// Import ReactMarkdown and plugins
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-
-// Import utility for copying to clipboard and typing animation
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { useTypingAnimation } from '../hooks/useTypingAnimation';
 
-// Register languages for lowlight
 try {
   lowlight.registerLanguage('javascript', javascript as LanguageFn);
   lowlight.registerLanguage('js', javascript as LanguageFn);
@@ -50,13 +40,11 @@ try {
   lowlight.registerLanguage('typescript', typescript as LanguageFn);
   lowlight.registerLanguage('ts', typescript as LanguageFn);
 } catch (error) {
-  //console.warn('Error registering syntax highlighting languages in MarkdownRenderer:', error);
+  console.warn('Error registering syntax highlighting languages in MarkdownRenderer:', error);
 }
 
-// Ensure Chart.js components are registered once
 Chart.register(...registerables);
 
-// Error Boundary for Code Blocks
 export class CodeBlockErrorBoundary extends React.Component<
   { children: React.ReactNode; fallback?: React.ReactNode },
   { hasError: boolean; error?: Error }
@@ -71,7 +59,7 @@ export class CodeBlockErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    //console.error('CodeBlock error:', error, errorInfo);
+    console.error('CodeBlock error:', error, errorInfo);
   }
 
   render() {
@@ -101,16 +89,16 @@ interface CodeBlockProps {
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
   onSuggestAiCorrection: (prompt: string) => void;
   onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
+  isFirstBlock?: boolean; // New prop to indicate if this is the first block
 }
 
-const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, ...props }) => {
+const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, isFirstBlock, ...props }) => {
   const { copied, copy } = useCopyToClipboard();
   const match = /language-(\w+)/.exec(className || '');
   const lang = match && match[1];
   const codeContent = String(children).trim();
   const [showRawCode, setShowRawCode] = useState(false);
 
-  // Handle HTML code blocks
   if (!inline && lang === 'html') {
     return (
       <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
@@ -142,7 +130,6 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
     );
   }
 
-  // Show raw code if toggled
   if (showRawCode) {
     return (
       <div className="relative my-6 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700">
@@ -169,7 +156,6 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
     );
   }
 
-  // Handle diagram types with consistent styling
   const createDiagramBlock = (title: string, type: any) => (
     <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
@@ -180,7 +166,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onViewDiagram && onViewDiagram(type, codeContent)}
+          onClick={() => onViewDiagram && onViewDiagram(type, codeContent, lang)}
           className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
         >
           <Maximize2 className="h-4 w-4 mr-2" />
@@ -195,9 +181,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
         >
           {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
         </Button>
+        </div>
       </div>
-    </div>
-  );
+    );
 
   if (!inline && lang === 'mermaid') {
     return createDiagramBlock('Mermaid Diagram', 'mermaid');
@@ -215,8 +201,8 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
     return createDiagramBlock('DOT Graph', 'dot');
   }
 
-  // Handle other code blocks
-  if (!inline && lang) {
+  if (!inline && lang && !isFirstBlock) {
+    // Non-first code blocks render a button to view in panel
     return (
       <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
         <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
@@ -247,7 +233,38 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
     );
   }
 
-  // Fallback for inline code - Claude-style inline code
+  if (!inline && lang) {
+    // First code block renders normally (handled by DiagramPanel if autoTypeInPanel is true)
+    return (
+      <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
+          <FileText className="h-5 w-5" />
+          <span className="font-medium">{lang.toUpperCase()} Code</span>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
+          >
+            <Maximize2 className="h-4 w-4 mr-2" />
+            View Code
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowRawCode(!showRawCode)}
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+          >
+            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <code
       className="bg-gray-100 text-gray-900 px-1.5 py-0.5 rounded font-mono text-sm dark:bg-gray-800 dark:text-gray-100"
@@ -265,12 +282,16 @@ interface MemoizedMarkdownRendererProps {
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
   onSuggestAiCorrection: (prompt: string) => void;
   onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
-  onToggleUserMessageExpansion: (messageId: string) => void;
+  onToggleUserMessageExpansion: (messageContent: string) => void;
   expandedMessages: Set<string>;
   enableTyping?: boolean;
   isLastMessage?: boolean;
   onTypingComplete?: (messageId: string) => void;
   isAlreadyTyped?: boolean;
+  autoTypeInPanel?: boolean;
+  onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
 }
 
 export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> = memo(({
@@ -285,22 +306,27 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   enableTyping = false,
   isLastMessage = false,
   onTypingComplete,
-  isAlreadyTyped = false
+  isAlreadyTyped = false,
+  autoTypeInPanel,
+  onBlockDetected,
+  onBlockUpdate,
+  onBlockEnd,
 }) => {
-  // Typing animation hook
   const { displayedText, isTyping } = useTypingAnimation({
     text: content,
     messageId,
-    wordsPerSecond: 12, // 12 words per second - fast but natural
+    wordsPerSecond: 12,
     enabled: enableTyping && !isUserMessage && isLastMessage,
     onComplete: onTypingComplete,
-    isAlreadyComplete: isAlreadyTyped
+    isAlreadyComplete: isAlreadyTyped,
+    onBlockDetected,
+    onBlockUpdate,
+    onBlockEnd,
+    autoTypeInPanel,
   });
 
-  // Use typing animation content if enabled, otherwise use original content
   const contentToRender = (enableTyping && !isUserMessage && isLastMessage && !isAlreadyTyped) ? displayedText : content;
 
-  // Claude-style color scheme
   const textColorClass = isUserMessage
     ? 'text-white dark:text-gray-100'
     : 'text-gray-900 dark:text-gray-100';
@@ -325,6 +351,9 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   const isExpanded = expandedMessages.has(content);
   const needsExpansion = isUserMessage && content.length > MAX_USER_MESSAGE_LENGTH;
 
+  // Track block index to determine isFirstBlock
+  let blockIndex = 0;
+
   return (
     <CodeBlockErrorBoundary>
       <div className="relative">
@@ -333,9 +362,19 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeRaw]}
             components={{
-              code: (props: any) => <CodeBlock {...props} onMermaidError={onMermaidError} onSuggestAiCorrection={onSuggestAiCorrection} onViewDiagram={onViewDiagram} />,
-
-              // Claude-style headings with proper hierarchy
+              code: (props: any) => {
+                const isFirstBlock = blockIndex === 0;
+                blockIndex++;
+                return (
+                  <CodeBlock
+                    {...props}
+                    onMermaidError={onMermaidError}
+                    onSuggestAiCorrection={onSuggestAiCorrection}
+                    onViewDiagram={onViewDiagram}
+                    isFirstBlock={isFirstBlock}
+                  />
+                );
+              },
               h1: (props) => (
                 <h1 className={`text-2xl font-semibold ${headingColorClass} mt-8 mb-4 leading-tight font-claude`} {...props} />
               ),
@@ -354,18 +393,12 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
               h6: (props) => (
                 <h6 className={`text-sm font-medium ${headingColorClass} mt-2 mb-1 leading-tight font-claude`} {...props} />
               ),
-
-              // Claude-style paragraph spacing and line height
               p: (props) => (
                 <p className={`${textColorClass} leading-relaxed mb-4 last:mb-0 font-claude`} {...props} />
               ),
-
-              // Clean link styling
               a: (props) => (
                 <a className={`${linkColorClass} transition-colors font-claude`} {...props} />
               ),
-
-              // Improved list styling
               ul: (props) => (
                 <ul className={`list-disc ml-6 mb-4 space-y-1 ${textColorClass} font-claude`} {...props} />
               ),
@@ -375,13 +408,9 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
               li: (props) => (
                 <li className="leading-relaxed font-claude" {...props} />
               ),
-
-              // Claude-style blockquotes
               blockquote: (props) => (
                 <blockquote className={`border-l-4 ${blockquoteBgClass} pl-4 py-2 my-4 ${blockquoteTextColorClass} rounded-r font-claude`} {...props} />
               ),
-
-              // Improved table styling
               table: (props) => (
                 <div className="overflow-x-auto my-6 rounded-lg border border-gray-200 dark:border-gray-700">
                   <table className="w-full border-collapse bg-white dark:bg-gray-900 font-claude" {...props} />
@@ -402,13 +431,9 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
               td: (props) => (
                 <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-claude" {...props} />
               ),
-
-              // Horizontal rule
               hr: (props) => (
                 <hr className="my-8 border-t border-gray-200 dark:border-gray-700" {...props} />
               ),
-
-              // Strong and emphasis
               strong: (props) => (
                 <strong className={`font-semibold ${textColorClass} font-claude`} {...props} />
               ),
@@ -421,7 +446,6 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
           </ReactMarkdown>
         </div>
 
-        {/* Typing cursor animation */}
         {isTyping && (
           <span className="inline-block w-0.5 h-5 bg-gray-600 dark:bg-gray-400 ml-0.5 animate-pulse" />
         )}

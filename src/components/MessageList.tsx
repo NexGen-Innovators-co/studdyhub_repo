@@ -1,7 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import {  Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User } from 'lucide-react';
+import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
 import { EnhancedMarkdownRenderer } from './EnhancedMarkdownRenderer';
@@ -37,6 +37,10 @@ interface MessageListProps {
   isDiagramPanelOpen: boolean;
   enableTypingAnimation?: boolean;
   onMarkMessageDisplayed: (messageId: string) => void;
+  autoTypeInPanel?: boolean;
+  onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
 }
 
 export const MessageList = memo(({
@@ -64,6 +68,10 @@ export const MessageList = memo(({
   isDiagramPanelOpen,
   enableTypingAnimation = true,
   onMarkMessageDisplayed,
+  autoTypeInPanel,
+  onBlockDetected,
+  onBlockUpdate,
+  onBlockEnd,
 }: MessageListProps) => {
   let lastDate: string | null = null;
 
@@ -161,7 +169,6 @@ export const MessageList = memo(({
               ) : (
                 message.content
               )}
-              {/* Show loading indicator for optimistic messages only if they don't have content */}
               {message.id.startsWith('optimistic-') && !message.content && (
                 <div className="flex items-center gap-2 mt-2 text-xs text-blue-600 dark:text-blue-400 font-claude">
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -185,8 +192,11 @@ export const MessageList = memo(({
               isLastMessage={isLastMessage}
               onTypingComplete={onMarkMessageDisplayed}
               isAlreadyTyped={message.has_been_displayed}
+              autoTypeInPanel={autoTypeInPanel}
+              onBlockDetected={onBlockDetected}
+              onBlockUpdate={onBlockUpdate}
+              onBlockEnd={onBlockEnd}
             />
-            {/* Show loading indicator for optimistic AI messages only if they have minimal content */}
             {message.id.startsWith('optimistic-ai-') && message.content.length < 10 && (
               <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 font-claude">
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -206,14 +216,14 @@ export const MessageList = memo(({
               </div>
             )}
             <div className={cn('flex gap-1 group', isDiagramPanelOpen ? 'w-full' : 'max-w-4xl w-full mx-auto', isUserMessage ? 'justify-end' : 'justify-start')}>
-      {message.role === 'assistant' && (
-        <AIBot size="lg" isError={message.isError} className='hidden sm:block' />
-      )}
-      {message.role === 'user' && (
-        <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 order-2">
-          <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-        </div>
-      )}
+              {message.role === 'assistant' && (
+                <AIBot size="lg" isError={message.isError} className='hidden sm:block' />
+              )}
+              {message.role === 'user' && (
+                <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 order-2">
+                  <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+              )}
               <div className={cn('flex flex-col flex-1 min-w-0', isUserMessage ? 'items-end' : 'items-start')}>
                 {isUserMessage ? (
                   <div className="max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl">

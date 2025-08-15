@@ -1595,6 +1595,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   language,
   imageUrl,
   initialWidthPercentage
+  
 }) => {
   const diagramPanelRef = useRef<HTMLDivElement>(null);
   const diagramContainerRef = useRef<HTMLDivElement>(null);
@@ -2464,4 +2465,5 @@ interface DiagramPanelProps {
   language?: string;
   imageUrl?: string;
   initialWidthPercentage?: number;
+  liveContent?: string;
 }
