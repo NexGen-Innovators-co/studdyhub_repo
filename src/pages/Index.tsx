@@ -1330,8 +1330,13 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
     activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings',
     onTabChange: memoizedOnTabChange,
     chatSessions,
-    activeChatSessionId,
-    onChatSessionSelect: setActiveChatSessionId,
+    onChatSessionSelect: (sessionId: string) => {
+      setActiveChatSessionId(sessionId);
+      // Update URL when session is selected
+      if (location.pathname.includes('/chat')) {
+        navigate(`/chat/${sessionId}`, { replace: true });
+      }
+    },
     onNewChatSession: createNewChatSession,
     onDeleteChatSession: deleteChatSession,
     onRenameChatSession: renameChatSession,
