@@ -84,15 +84,25 @@ class PanelErrorBoundary extends React.Component<
             Something went wrong while displaying this content.
           </p>
           <div className="space-y-2">
-            <Button
-              onClick={() => this.setState({ hasError: false, error: undefined, errorInfo: undefined })}
-              variant="outline"
-              size="sm"
-              className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Try Again
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => this.setState({ hasError: false, error: undefined, errorInfo: undefined })}
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+              <Button
+                onClick={() => this.props.onError?.(this.state.error!)}
+                variant="outline"
+                size="sm"
+                className="text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700"
+              >
+                🤖 Fix with AI
+              </Button>
+            </div>
             <details className="text-xs text-red-500 dark:text-red-400">
               <summary className="cursor-pointer hover:text-red-700 dark:hover:text-red-300">
                 Technical Details
@@ -320,6 +330,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
           The HTML content encountered a JavaScript error. The content may still be partially functional.
         </p>
           <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col gap-2">
             <Button
               onClick={handleRetry}
               variant="outline"
@@ -329,6 +340,15 @@ const IsolatedHtml = ({ html }: { html: string }) => {
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
+            <Button
+              onClick={() => onError?.(new Error(hasError || 'Mermaid rendering error'))}
+              variant="outline"
+              size="sm"
+              className="text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700"
+            >
+              🤖 Fix with AI
+            </Button>
+          </div>
             <Button
               onClick={() => {
                 const errorMessage = hasError || 'HTML rendering error';
@@ -388,7 +408,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 };
 
 // Enhanced Mermaid Renderer with bulletproof error handling, DOM isolation, and interactive controls
-const IsolatedMermaid = ({ content, onError }: { content: string; onError: (error: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void }) => {
+const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (error: Error) => void }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState<string | null>(null);
@@ -2438,12 +2458,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         ref={diagramContainerRef}
         className="flex-1 overflow-hidden bg-white dark:bg-gray-900"
       >
-        <PanelErrorBoundary
-          onError={(error) => {
-            //console.error('Panel content error:', error);
-            toast.error(`Content rendering error: ${error.message}`);
-          }}
-        >
+        <PanelErrorBoundary onError={onError}>
           {renderContent}
         </PanelErrorBoundary>
       </div>
