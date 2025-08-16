@@ -1,6 +1,6 @@
 // Index.tsx - Fixed Dashboard Integration
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
+import { useNavigate, useLocation, Routes, Route, useParams } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { TabContent } from '../components/TabContent';
@@ -544,6 +544,11 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
 
     // Immediately set the active session and clean state
     setActiveChatSessionId(newSession.id);
+    
+    // Update URL to reflect session
+    if (location.pathname.includes('/chat')) {
+      navigate(`/chat/${newSession.id}`, { replace: true });
+    }
     setSelectedDocumentIds(newSession.document_ids || []);
     setHasMoreMessages(false); // No messages to load for new session
     setIsLoadingSessionMessages(false); // No loading needed
@@ -1570,6 +1575,7 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
           <Route path="/recordings" element={<TabContent {...tabContentProps} activeTab="recordings" />} />
           <Route path="/schedule" element={<TabContent {...tabContentProps} activeTab="schedule" />} />
           <Route path="/chat" element={<TabContent {...tabContentProps} activeTab="chat" />} />
+          <Route path="/chat/:sessionId" element={<TabContent {...tabContentProps} activeTab="chat" />} />
           <Route path="/documents" element={<TabContent {...tabContentProps} activeTab="documents" />} />
           <Route path="/settings" element={<TabContent {...tabContentProps} activeTab="settings" />} />
           <Route path="/" element={<TabContent {...tabContentProps} activeTab="dashboard" />} />

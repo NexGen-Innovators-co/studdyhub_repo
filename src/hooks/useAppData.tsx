@@ -855,14 +855,28 @@ export const useAppData = () => {
                         has_been_displayed: msg.has_been_displayed
                     });
 
-                    if (payload.eventType === 'INSERT') {
+                     if (payload.eventType === 'INSERT') {
                         const newMessage = formatMessage(payload.new) as Message;
+                        console.log('[useAppData] New message received via realtime:', newMessage);
+                        
                         setChatMessages(prevMessages => {
-                            if (prevMessages.some(msg => msg.id === newMessage.id)) {
-                                return prevMessages;
+                            const exists = prevMessages.some(msg => msg.id === newMessage.id);
+                            if (exists) {
+                                console.log('[useAppData] Message already exists, updating if needed');
+                                return prevMessages.map(msg => 
+                                    msg.id === newMessage.id 
+                                        ? { ...msg, ...newMessage }
+                                        : msg
+                                );
                             }
-                            return [...prevMessages, newMessage].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                            
+                            console.log('[useAppData] Adding new message to state');
+                            const updatedMessages = [...prevMessages, newMessage];
+                            updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                            return updatedMessages;
                         });
+                        
+                        // Note: replaceOptimisticMessage should be passed from parent component if needed
                     } else if (payload.eventType === 'UPDATE') {
                         const updatedFields = payload.new;
                         setChatMessages(prevMessages =>
