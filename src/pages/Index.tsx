@@ -423,17 +423,17 @@ const Index = () => {
   }, [location.pathname]);
   
   useEffect(() => {
-    console.log('Session restoration check:', { 
-      sessionIdFromUrl, 
-      activeChatSessionId,
-      pathname: location.pathname,
-      userExists: !!user,
-      chatSessionsLoaded: chatSessions.length > 0
-    });
+    // console.log('Session restoration check:', { 
+    //   sessionIdFromUrl, 
+    //   activeChatSessionId,
+    //   pathname: location.pathname,
+    //   userExists: !!user,
+    //   chatSessionsLoaded: chatSessions.length > 0
+    // });
     
     // If we have a sessionId in URL but no active session set, or if they're different
     if (sessionIdFromUrl && sessionIdFromUrl !== activeChatSessionId && user) {
-      console.log(`Restoring session from URL: ${sessionIdFromUrl}`);
+      // console.log(`Restoring session from URL: ${sessionIdFromUrl}`);
       setActiveChatSessionId(sessionIdFromUrl);
     }
   }, [sessionIdFromUrl, activeChatSessionId, user, location.pathname]);
@@ -843,7 +843,7 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
           imageMimeType: imageMimeType, // Pass imageMimeType if it's still relevant
           aiMessageIdToUpdate: aiMessageIdToUpdate,
         },
-        
+
       }
     
     );
@@ -1113,7 +1113,7 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
         userProfile.learning_preferences
       );
 
-      console.log('Message flow completed successfully');
+      // console.log('Message flow completed successfully');
     } catch (error) {
       console.error('Error in message flow:', error);
       toast.error('Failed to send message. Please try again.');
