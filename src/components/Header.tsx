@@ -1,9 +1,12 @@
-import React from 'react';
-import { Search, Plus, Menu, Sparkles, Bell } from 'lucide-react';
+import React, { useCallback } from 'react';
+import { Search, Plus, Menu, Sparkles, Bell, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
+import { useAuth } from '../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 import { Input } from './ui/input';
 import AIBot from './aibot';
 import BookPagesAnimation from './bookloader';
+import { toast } from 'sonner';
 
 interface HeaderProps {
   searchQuery: string;
@@ -37,6 +40,8 @@ export const Header: React.FC<HeaderProps> = ({
   fullName,
   avatarUrl,
 }) => {
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   // Function to get initials from full name
   const getInitials = (name: string | null) => {
     if (!name) return 'U';
@@ -47,13 +52,21 @@ export const Header: React.FC<HeaderProps> = ({
       .toUpperCase()
       .substring(0, 2); // Get first two initials
   };
-
+  const handleSignOut = useCallback(async () => {
+    try {
+      await signOut();
+      toast.success('Signed out successfully');
+      navigate('/auth');
+    } catch (error) {
+      toast.error('Error signing out');
+    }
+  }, [signOut, navigate]);
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     e.currentTarget.style.display = 'none'; // Hide the broken image
   };
 
   return (
-    <header className="flex items-center justify-between gap-2 sm:gap-4 flex-1 min-w-0  ">
+    <header className="flex items-center bg-transparent justify-between gap-2 sm:gap-4 flex-1 min-w-0  ">
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         <Button
           variant="ghost"
@@ -128,8 +141,26 @@ export const Header: React.FC<HeaderProps> = ({
                 onError={handleImageError}
               />
             )}
+            
           </div>
         </div>
+        <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSignOut}
+              className="flex items-center gap-2 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSignOut}
+            className="sm:hidden dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
       </div>
     </header>
   );
