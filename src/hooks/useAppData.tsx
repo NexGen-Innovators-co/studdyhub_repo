@@ -133,11 +133,11 @@ export const useAppData = () => {
   // Progressive data loading when user changes
   useEffect(() => {
     if (currentUser?.id && currentUser.id !== lastUserId) {
-      console.log('User changed, starting progressive data loading...');
+      // console.log('User changed, starting progressive data loading...');
       setLastUserId(currentUser.id);
       startProgressiveDataLoading(currentUser);
     } else if (!currentUser && lastUserId !== null) {
-      console.log('User logged out, clearing data...');
+      // console.log('User logged out, clearing data...');
       setLastUserId(null);
       clearAllData();
     }
@@ -217,7 +217,7 @@ export const useAppData = () => {
       // UI is ready after core data
       setLoading(false);
 
-      console.log('Core user data loaded successfully, UI ready');
+      // console.log('Core user data loaded successfully, UI ready');
     } catch (error) {
       console.error('Error loading core user data:', error);
       toast.error('Failed to load some data. Please refresh to try again.');
@@ -857,12 +857,12 @@ export const useAppData = () => {
 
                      if (payload.eventType === 'INSERT') {
                         const newMessage = formatMessage(payload.new) as Message;
-                        console.log('[useAppData] New message received via realtime:', newMessage);
+                        // console.log('[useAppData] New message received via realtime:', newMessage);
                         
                         setChatMessages(prevMessages => {
                             const exists = prevMessages.some(msg => msg.id === newMessage.id);
                             if (exists) {
-                                console.log('[useAppData] Message already exists, updating if needed');
+                                // console.log('[useAppData] Message already exists, updating if needed');
                                 return prevMessages.map(msg => 
                                     msg.id === newMessage.id 
                                         ? { ...msg, ...newMessage }
@@ -870,7 +870,7 @@ export const useAppData = () => {
                                 );
                             }
                             
-                            console.log('[useAppData] Adding new message to state');
+                            // console.log('[useAppData] Adding new message to state');
                             const updatedMessages = [...prevMessages, newMessage];
                             updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
                             return updatedMessages;

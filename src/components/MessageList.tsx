@@ -23,7 +23,7 @@ interface MessageListProps {
   onRegenerateClick: (lastUserMessageContent: string) => void;
   onRetryClick: (originalUserMessageContent: string, failedAiMessageId: string) => void;
   onViewContent: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text' | 'html', content?: string, language?: string, imageUrl?: string) => void;
-  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
+  onMermaidError: (code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void; // Updated errorType
   onSuggestAiCorrection: (prompt: string) => void;
   onToggleUserMessageExpansion: (messageContent: string) => void;
   expandedMessages: Set<string>;
@@ -130,6 +130,7 @@ export const MessageList = memo(({
 
         const isUserMessage = message.role === 'user';
         const isLastMessage = index === messages.length - 1;
+        const isMessageExpanded = expandedMessages.has(message.content); // Check if this specific message content is expanded
 
         const contentToRender = isUserMessage ? (
           <>
@@ -154,7 +155,7 @@ export const MessageList = memo(({
               )}
             </div>
             <div className="text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg border border-blue-200 dark:border-blue-800 max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl font-claude leading-relaxed">
-              {message.content.length > 200 ? (
+              {message.content.length > 200 && !isMessageExpanded ? ( // Only truncate if not expanded
                 <>
                   <span>{message.content.substring(0, 200)}...</span>
                   <Button
@@ -167,7 +168,19 @@ export const MessageList = memo(({
                   </Button>
                 </>
               ) : (
-                message.content
+                <>
+                  {message.content}
+                  {message.content.length > 200 && isMessageExpanded && ( // Show "View Less" if expanded and originally long
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => onToggleUserMessageExpansion(message.content)}
+                      className="text-blue-600 p-0 h-auto mt-1 flex justify-end dark:text-blue-400 font-claude underline"
+                    >
+                      View Less
+                    </Button>
+                  )}
+                </>
               )}
               {message.id.startsWith('optimistic-') && !message.content && (
                 <div className="flex items-center gap-2 mt-2 text-xs text-blue-600 dark:text-blue-400 font-claude">
@@ -183,6 +196,8 @@ export const MessageList = memo(({
               content={message.content}
               messageId={message.id}
               isUserMessage={false}
+              // Removed useCallback wrappers here as they are already memoized in the parent component (AIChat.tsx)
+              // and placing them inside the map loop violates Rules of Hooks.
               onMermaidError={onMermaidError}
               onSuggestAiCorrection={onSuggestAiCorrection}
               onViewDiagram={onViewContent}

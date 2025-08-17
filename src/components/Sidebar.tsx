@@ -20,7 +20,7 @@ interface SidebarProps {
   onCategoryChange: (category: string) => void;
   noteCount: number;
   activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'|'dashboard';
-  onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard') => void;
+  onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | string) => void; // Allow string for dynamic chat path
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
   onChatSessionSelect: (sessionId: string) => void;
@@ -199,8 +199,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleNewChat = async () => {
     setIsNewChatLoading(true);
     try {
-      await onNewChatSession();
-      onTabChange('chat');
+      const newSessionId = await onNewChatSession();
+      if (newSessionId) {
+        // After creating a new session, navigate directly to it
+        onTabChange(`chat/${newSessionId}`);
+      } else {
+        // Fallback to generic chat if new session creation failed
+        onTabChange('chat');
+      }
     } finally {
       setIsNewChatLoading(false);
     }
@@ -260,7 +266,11 @@ dark:text-gray-200">
           <nav className="space-y-1">
             {tabs.map((tab) => {
               const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
+              // For the chat tab, we need special handling for the active state and navigation
+              const isChatTab = tab.id === 'chat';
+              const isActive = isChatTab
+                ? activeTab === 'chat' // If on chat tab, check if activeTab is 'chat'
+                : activeTab === tab.id; // Otherwise, standard check
 
               return (
                 <Button
@@ -270,7 +280,14 @@ dark:text-gray-200">
                     ? 'bg-blue-600 text-white font-bold text-lg py-3 rounded-lg shadow-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-[1.005] disabled:opacity-50 disabled:cursor-not-allowed h-12'
                     : 'hover:bg-slate-100 text-slate-700 dark:text-gray-300 dark:hover:bg-gray-800'
                     } ${!isOpen && 'px-2'}`}
-                  onClick={() => onTabChange(tab.id as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings')}
+                  onClick={() => {
+                    if (isChatTab) {
+                      // If 'AI Chat' tab is clicked, navigate to the active session if one exists, else to '/chat'
+                      onTabChange(activeChatSessionId ? `chat/${activeChatSessionId}` : 'chat');
+                    } else {
+                      onTabChange(tab.id);
+                    }
+                  }}
                 >
                   <Icon className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'}`} />
                   <span className={`truncate ${isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
@@ -355,7 +372,8 @@ dark:text-gray-200">
                         ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white'
                         : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
                         }`}
-                      onClick={() => { onChatSessionSelect(session.id); onTabChange('chat'); }}
+                      // Only call onChatSessionSelect here, as it handles navigation
+                      onClick={() => onChatSessionSelect(session.id)}
                     >
                       <Button
                         variant="ghost"

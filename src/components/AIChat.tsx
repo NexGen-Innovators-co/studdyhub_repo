@@ -216,7 +216,7 @@ const AIChat: React.FC<AIChatProps> = ({
   onSelectionChange,
   activeChatSessionId,
   onNewChatSession,
-  onDeleteMessage,
+  onDeleteMessage, // This prop will now be called AFTER confirmation
   onRegenerateResponse,
   onRetryFailedMessage,
   isSubmittingUserMessage,
@@ -231,8 +231,8 @@ const AIChat: React.FC<AIChatProps> = ({
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // State to control modal visibility
+  const [messageToDelete, setMessageToDelete] = useState<string | null>(null); // State to store ID of message to delete
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -254,7 +254,6 @@ const AIChat: React.FC<AIChatProps> = ({
   const speechSynthesisRef = useRef<SpeechSynthesis>(window.speechSynthesis);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const lastSpokenChunkRef = useRef<string>('');
-  const lastProcessedMessageIdRef = useRef<string | null>(null);
   const blockAutoSpeakRef = useRef<boolean>(false);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -268,6 +267,9 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isUpdatingDocuments, setIsUpdatingDocuments] = useState(false);
   const prevSessionIdRef = useRef<string | null>(null);
   const [autoTypeInPanel, setAutoTypeInPanel] = useState(true);
+
+  // Corrected: Initialize lastProcessedMessageIdRef as a useRef
+  const lastProcessedMessageIdRef = useRef<string | null>(null);
 
   const isPhone = useCallback(() => {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -292,7 +294,7 @@ const AIChat: React.FC<AIChatProps> = ({
         console.error('Error marking message as displayed:', error);
         toast.error(`Failed to mark message as displayed: ${error.message}`);
       } else {
-        console.log(`Message with ID ${messageId} marked as displayed.`);
+        // console.log(`Message with ID ${messageId} marked as displayed.`);
         onMessageUpdate({ ...messages.find(msg => msg.id === messageId)!, has_been_displayed: true });
       }
     } catch (error) {
@@ -301,26 +303,42 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [userProfile, activeChatSessionId, messages, onMessageUpdate]);
 
+  // Only update activeDiagram if autoTypeInPanel is true for the first block
   const handleBlockDetected = useCallback((blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => {
-    if (isFirstBlock) {
-      setActiveDiagram({ type: blockType, content, language });
-    }
-  }, []);
+      if (autoTypeInPanel && isFirstBlock) {
+          setActiveDiagram(prev => {
+              if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
+                  return prev; // No change in relevant content, return previous object reference
+              }
+              return { type: blockType, content, language };
+          });
+      }
+  }, [autoTypeInPanel]); // Dependency on autoTypeInPanel
 
+  // Only update activeDiagram if autoTypeInPanel is true for the first block
   const handleBlockUpdate = useCallback((blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => {
-    if (isFirstBlock) {
-      setActiveDiagram(prev => prev ? { ...prev, content, language } : null);
-    }
-  }, []);
+      if (autoTypeInPanel && isFirstBlock) {
+          setActiveDiagram(prev => {
+              if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
+                  return prev; // No change in relevant content, return previous object reference
+              }
+              // For updates, we might need a new object even if content is "same" if typing animation is updating
+              // This is handled by useTypingAnimation's innerContent vs content.
+              return { type: blockType, content, language };
+          });
+      }
+  }, [autoTypeInPanel]); // Dependency on autoTypeInPanel
 
+  // Only act on block end if autoTypeInPanel is true for the first block
   const handleBlockEnd = useCallback((blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => {
-    if (!isFirstBlock) {
-      // Don't close panel for non-first blocks
-      return;
-    }
-    // Optionally keep panel open or close it after first block
-    // setActiveDiagram(null);
-  }, []);
+      if (autoTypeInPanel && isFirstBlock) {
+          // Decide if you want to close the panel or keep it open.
+          // For now, let's keep it open after the first block.
+          // If you want to close it, uncomment setActiveDiagram(null)
+          // setActiveDiagram(null);
+      }
+  }, [autoTypeInPanel]); // Dependency on autoTypeInPanel
+
 
   const handleViewContent = useCallback((
     type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text' | 'html',
@@ -330,6 +348,24 @@ const AIChat: React.FC<AIChatProps> = ({
   ) => {
     setActiveDiagram({ type, content, language, imageUrl });
   }, []);
+
+  // Memoized onMermaidError and onSuggestAiCorrection for DiagramPanel and MessageList
+  const memoizedOnMermaidError = useCallback((code: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => {
+    // Now includes the code and errorType in the toast message for more detail
+    console.error("Mermaid error in DiagramPanel:", code, errorType);
+    toast.error(`Mermaid rendering issue: ${errorType}${code ? ` - Code: ${code.substring(0, 50)}...` : ''}`);
+  }, []);
+
+  const memoizedOnSuggestAiCorrection = useCallback((prompt: string) => {
+    // Set the input message with the suggested prompt
+    setInputMessage(prompt);
+    // Focus the textarea for user to review and send
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+    toast.info("AI correction prepared in input. Review and send to apply.");
+  }, []);
+
 
   useEffect(() => {
     const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -500,7 +536,7 @@ const AIChat: React.FC<AIChatProps> = ({
     if (
       lastMessage?.role === 'assistant' &&
       !lastMessage.isError &&
-      lastMessage.id !== lastProcessedMessageIdRef.current &&
+      lastMessage.id !== lastProcessedMessageIdRef.current && // Corrected: Access .current
       !isSpeaking &&
       !isPaused
     ) {
@@ -518,7 +554,7 @@ const AIChat: React.FC<AIChatProps> = ({
           setIsPaused(false);
           currentUtteranceRef.current = null;
           lastSpokenChunkRef.current = '';
-          lastProcessedMessageIdRef.current = lastMessage.id;
+          lastProcessedMessageIdRef.current = lastMessage.id; // Corrected: Access .current
           blockAutoSpeakRef.current = true;
         };
 
@@ -531,7 +567,7 @@ const AIChat: React.FC<AIChatProps> = ({
           setIsPaused(false);
           currentUtteranceRef.current = null;
           lastSpokenChunkRef.current = '';
-          lastProcessedMessageIdRef.current = lastMessage.id;
+          lastProcessedMessageIdRef.current = lastMessage.id; // Corrected: Access .current
           blockAutoSpeakRef.current = true;
         };
 
@@ -541,7 +577,7 @@ const AIChat: React.FC<AIChatProps> = ({
         setIsSpeaking(true);
         setSpeakingMessageId(lastMessage.id);
         lastSpokenChunkRef.current = cleanedContent;
-        lastProcessedMessageIdRef.current = lastMessage.id;
+        lastProcessedMessageIdRef.current = lastMessage.id; // Corrected: Access .current
       }
     }
   }, [messages, isLoading, isLoadingSessionMessages, isPhone, isSpeaking, isPaused, stripCodeBlocks]);
@@ -553,20 +589,20 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [inputMessage, attachedFiles]);
 
-  const handleDeleteClick = useCallback((messageId: string) => {
+  // NEW: handleMessageDeleteClick function to set state for confirmation modal
+  const handleMessageDeleteClick = useCallback((messageId: string) => {
     setMessageToDelete(messageId);
     setShowDeleteConfirm(true);
   }, []);
 
   const handleConfirmDelete = useCallback(() => {
     if (messageToDelete) {
-      onDeleteMessage(messageToDelete);
+      onDeleteMessage(messageToDelete); // This calls the prop passed from Index.tsx
       toast.success('Message deleted.');
       setShowDeleteConfirm(false);
       setMessageToDelete(null);
     }
   }, [messageToDelete, onDeleteMessage]);
-
 
 
   const handleCloseDiagramPanel = useCallback(() => {
@@ -576,6 +612,7 @@ const AIChat: React.FC<AIChatProps> = ({
     setPanOffset({ x: 0, y: 0 });
   }, []);
 
+  // Corrected: Renamed parameter to messageContent and used it correctly
   const handleToggleUserMessageExpansion = useCallback((messageContent: string) => {
     setExpandedMessages(prev => {
       const newSet = new Set(prev);
@@ -883,7 +920,7 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsPaused(false);
       currentUtteranceRef.current = null;
       lastSpokenChunkRef.current = '';
-      lastProcessedMessageIdRef.current = messageId;
+      lastProcessedMessageIdRef.current = messageId; // Corrected: Access .current
       blockAutoSpeakRef.current = true;
     };
 
@@ -896,7 +933,7 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsPaused(false);
       currentUtteranceRef.current = null;
       lastSpokenChunkRef.current = '';
-      lastProcessedMessageIdRef.current = messageId;
+      lastProcessedMessageIdRef.current = messageId; // Corrected: Access .current
       blockAutoSpeakRef.current = true;
     };
 
@@ -907,7 +944,7 @@ const AIChat: React.FC<AIChatProps> = ({
     setSpeakingMessageId(messageId);
     setIsPaused(false);
     lastSpokenChunkRef.current = cleanedContent;
-    lastProcessedMessageIdRef.current = messageId;
+    lastProcessedMessageIdRef.current = messageId; // Corrected: Access .current
   }, [stopSpeech, stripCodeBlocks]);
 
   useEffect(() => {
@@ -985,29 +1022,19 @@ const AIChat: React.FC<AIChatProps> = ({
               isLoadingOlderMessages={isLoadingOlderMessages}
               hasMoreMessages={hasMoreMessages}
               mergedDocuments={mergedDocuments}
-              onDeleteClick={onDeleteMessage}
+              onDeleteClick={handleMessageDeleteClick}
               onRegenerateClick={onRegenerateResponse}
               onRetryClick={onRetryFailedMessage}
               onViewContent={handleViewContent}
-              onMermaidError={() => { }} // Implement as needed
-              onSuggestAiCorrection={() => { }} // Implement as needed
-              onToggleUserMessageExpansion={(content) => {
-                setExpandedMessages(prev => {
-                  const newSet = new Set(prev);
-                  if (newSet.has(content)) {
-                    newSet.delete(content);
-                  } else {
-                    newSet.add(content);
-                  }
-                  return newSet;
-                });
-              }}
+              onMermaidError={memoizedOnMermaidError}
+              onSuggestAiCorrection={memoizedOnSuggestAiCorrection}
+              onToggleUserMessageExpansion={handleToggleUserMessageExpansion}
               expandedMessages={expandedMessages}
               isSpeaking={isSpeaking}
               speakingMessageId={speakingMessageId}
               isPaused={isPaused}
               speakMessage={speakMessage}
-              pauseSpeech={ pauseSpeech} 
+              pauseSpeech={ pauseSpeech}
               resumeSpeech={resumeSpeech}
               stopSpeech={stopSpeech}
               isDiagramPanelOpen={isDiagramPanelOpen}
@@ -1037,7 +1064,7 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8  md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent  font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(1.5rem+' + panelWidth + '%*1px)]' : ''}`}>
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8  md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent  font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(' + panelWidth + '%+1.5rem)]' : ''}`}>
             <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2"> {/* NEW WRAPPER DIV */}
               {(selectedDocumentIds.length > 0 || attachedFiles.length > 0) && (
                 <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700`}>
@@ -1201,9 +1228,9 @@ const AIChat: React.FC<AIChatProps> = ({
             />
           )}
           <ConfirmationModal
-            isOpen={showDeleteConfirm}
+            isOpen={showDeleteConfirm} // Modal visibility controlled by this state
             onClose={() => setShowDeleteConfirm(false)}
-            onConfirm={handleConfirmDelete}
+            onConfirm={handleConfirmDelete} // This now triggers the actual deletion
             title="Delete Message"
             message="Are you sure you want to delete this message? This action cannot be undone."
           />
@@ -1211,12 +1238,12 @@ const AIChat: React.FC<AIChatProps> = ({
 
         {isDiagramPanelOpen && (
           <DiagramPanel
-            key={`${activeDiagram?.content || ''}-${activeDiagram?.type || ''}-${activeDiagram?.language || ''}-${activeDiagram?.imageUrl || ''}`}
+            key={activeDiagram ? `${activeDiagram.type}-${activeDiagram.content?.substring(0, 50) || ''}-${activeDiagram.language || ''}` : 'no-diagram'}
             diagramContent={activeDiagram?.content}
             diagramType={activeDiagram?.type || 'unknown'}
-            onClose={() => setActiveDiagram(null)}
-            onMermaidError={() => { }} // Implement as needed
-            onSuggestAiCorrection={() => { }} // Implement as needed
+            onClose={handleCloseDiagramPanel} // Use memoized handler
+            onMermaidError={memoizedOnMermaidError} // Use memoized handler
+            onSuggestAiCorrection={memoizedOnSuggestAiCorrection} // Use memoized handler
             isOpen={isDiagramPanelOpen}
             language={activeDiagram?.language}
             imageUrl={activeDiagram?.imageUrl}

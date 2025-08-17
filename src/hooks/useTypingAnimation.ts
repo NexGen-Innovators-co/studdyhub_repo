@@ -144,17 +144,19 @@ export const useTypingAnimation = ({
         !detectedBlocksRef.current.has(`${block.start}-${block.end}`)
       );
 
-      if (enteringBlock && onBlockDetected) {
+      if (enteringBlock) {
         detectedBlocksRef.current.add(`${enteringBlock.start}-${enteringBlock.end}`);
         setCurrentBlock(enteringBlock);
         
-        // Send block detection for first block or when autoTypeInPanel is true
-        if (enteringBlock.isFirstBlock && autoTypeInPanel) {
-          onBlockDetected(enteringBlock.type, enteringBlock.innerContent, enteringBlock.language, enteringBlock.isFirstBlock, enteringBlock.blockIndex);
+        // Only call onBlockDetected if autoTypeInPanel is true and it's the first block
+        if (enteringBlock.isFirstBlock && autoTypeInPanel && onBlockDetected) {
+            onBlockDetected(enteringBlock.type, enteringBlock.innerContent, enteringBlock.language, enteringBlock.isFirstBlock, enteringBlock.blockIndex);
         }
 
-        // Always display placeholder in main text area for all blocks
-        setDisplayedText(prev => prev + '\n[Code block displayed in panel...]\n');
+        // Always display placeholder in main text area for all blocks IF autoTypeInPanel is true
+        if (autoTypeInPanel) {
+          setDisplayedText(prev => prev + '\n[Code block displayed in panel...]\n');
+        }
         
         if (enteringBlock.isFirstBlock && autoTypeInPanel) {
           // Send entire block content to panel at once for first block
@@ -166,27 +168,28 @@ export const useTypingAnimation = ({
           }
           // Skip to the end of the block
           const blockEndPosition = enteringBlock.end;
-          const blockWords = words.slice(indexRef.current);
-          let charsSoFar = currentPosition;
+          let charsSoFar = words.slice(0, indexRef.current).join('').length; // Re-calculate current position
           let i = indexRef.current;
           while (i < words.length && charsSoFar < blockEndPosition) {
             charsSoFar += words[i].length;
             i++;
           }
           indexRef.current = i;
-          setCurrentBlock(null);
-          setBlockText('');
-          timeoutRef.current = setTimeout(typeNextWord, 50);
-          return;
+          setCurrentBlock(null); // Clear current block after processing
+          setBlockText(''); // Clear blockText
+          timeoutRef.current = setTimeout(typeNextWord, 50); // Move quickly past the block
+          return; // Skip remaining word processing for this iteration
         }
       }
 
       const nextWord = words[indexRef.current];
 
+      // Determine where the typing should happen
       if (currentBlock && !autoTypeInPanel) {
         // Type block content in main text area if not in panel
         setBlockText(prev => {
           const newText = prev + nextWord;
+          // Only call onBlockUpdate if autoTypeInPanel is false
           if (onBlockUpdate) {
             onBlockUpdate(currentBlock.type, newText, currentBlock.language, currentBlock.isFirstBlock, currentBlock.blockIndex);
           }
@@ -194,6 +197,7 @@ export const useTypingAnimation = ({
         });
         const newPosition = words.slice(0, indexRef.current + 1).join('').length;
         if (newPosition >= (currentBlock?.end || 0)) {
+          // Only call onBlockEnd if autoTypeInPanel is false
           if (onBlockEnd) {
             onBlockEnd(currentBlock.type, blockText + nextWord, currentBlock.language, currentBlock.isFirstBlock, currentBlock.blockIndex);
           }
@@ -201,7 +205,7 @@ export const useTypingAnimation = ({
           setBlockText('');
         }
       } else {
-        // Type non-block content in main text area
+        // Type non-block content in main text area, or if it's a block but autoTypeInPanel is true (handled by the if-block above)
         setDisplayedText(prev => prev + nextWord);
       }
 

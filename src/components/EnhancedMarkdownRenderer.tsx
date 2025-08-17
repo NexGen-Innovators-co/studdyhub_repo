@@ -47,7 +47,7 @@ export const EnhancedMarkdownRenderer = memo(({
   const hasProcessedTypingRef = useRef(false);
 
   const handleBlockEnter = useCallback((block: any) => {
-    console.log('Entering block:', block.type);
+    // console.log('Entering block:', block.type);
     if (onViewDiagram) {
       // Auto-toggle to panel when typing code/mermaid/html blocks
       onViewDiagram(block.type === 'code' ? 'code' : block.type, block.content, block.language);
@@ -55,7 +55,7 @@ export const EnhancedMarkdownRenderer = memo(({
   }, [onViewDiagram]);
 
   const handleBlockExit = useCallback((block: any) => {
-    console.log('Exiting block:', block.type);
+    // console.log('Exiting block:', block.type);
     // Could auto-switch back to main content here if needed
   }, []);
 

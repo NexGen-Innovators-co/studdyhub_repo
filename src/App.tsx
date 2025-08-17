@@ -19,20 +19,23 @@ import APIPage from "./pages/APIs";
 import DocumentationPage from "./pages/DocumentationPage";
 import UserGuidePage from "./pages/UserGuide";
 import React from "react";
+import { Analytics } from "@vercel/analytics/react"
 const queryClient = new QueryClient();
+
+// Make sure your App.tsx has exactly this structure:
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <Analytics />
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
         <Routes>
           {/* Public Landing Page Route */}
-          <Route path="/" element={<LandingPage />} /> {/* NEW: Landing page is now the root */}
+          <Route path="/" element={<LandingPage />} />
 
-          {/* Public Auth Route */}
-
+          {/* Public Routes */}
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/about-us" element={<AboutUs />} />
           <Route path="/contact" element={<Contact />} />
@@ -45,16 +48,23 @@ const App = () => (
           <Route path="/user-guide-page" element={<UserGuidePage />} />
           <Route path="/auth" element={<Auth />} />
 
-          {/* Authenticated Application Routes - wrapped within AuthProvider */}
-          {/* This route now handles all paths that are not '/' or '/auth' */}
-          <Route path="/*" element={<AuthProvider><Index /></AuthProvider>} />
+          {/* Authenticated Application Routes */}
+          <Route path="/dashboard" element={<AuthProvider><Index /></AuthProvider>} />
+          <Route path="/notes" element={<AuthProvider><Index /></AuthProvider>} />
+          <Route path="/recordings" element={<AuthProvider><Index /></AuthProvider>} />
+          <Route path="/schedule" element={<AuthProvider><Index /></AuthProvider>} />
+          <Route path="/chat" element={<AuthProvider><Index /></AuthProvider>} />
+          <Route path="/chat/:sessionId" element={<AuthProvider><Index /></AuthProvider>} />
+          <Route path="/documents" element={<AuthProvider><Index /></AuthProvider>} />
+          <Route path="/settings" element={<AuthProvider><Index /></AuthProvider>} />
 
-          {/* The catch-all for NotFound should come after all other specific routes */}
+          {/* Catch-all for NotFound */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
+
 
 export default App;

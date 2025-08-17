@@ -72,7 +72,7 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
     textareaRef,
     setContent,
     onTypingComplete: () => {
-      console.log('Typing animation completed');
+      // console.log('Typing animation completed');
       setTypingComplete(true);
       setIsTypingAI(false);
       isTypingInProgressRef.current = false;
@@ -334,11 +334,11 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
 
     // Don't start new generation if already in progress
     if (isGeneratingAIInline || isTypingInProgressRef.current) {
-      console.log('AI generation already in progress, skipping');
+      // console.log('AI generation already in progress, skipping');
       return;
     }
 
-    console.log('Starting AI generation');
+    // console.log('Starting AI generation');
     setIsEditorVisible(false);
     setIsGeneratingAIInline(true);
     isTypingInProgressRef.current = true;
@@ -365,7 +365,7 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
         throw new Error('Generated content is empty');
       }
 
-      console.log('AI content generated, length:', generatedContent.length);
+      // console.log('AI content generated, length:', generatedContent.length);
 
       // Store generated content in buffer
       generatedContentBufferRef.current = generatedContent;
@@ -385,7 +385,7 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
 
       // Start typing animation after a short delay
       setTimeout(() => {
-        console.log('Starting typing animation at position:', start);
+        // console.log('Starting typing animation at position:', start);
         startTypingAnimation(generatedContent, start);
       }, 200);
 

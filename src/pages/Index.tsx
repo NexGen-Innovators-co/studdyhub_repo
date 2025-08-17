@@ -63,64 +63,6 @@ const MAX_HISTORY_MESSAGES = 30;
 const CHAT_SESSIONS_PER_PAGE = 15;
 const CHAT_MESSAGES_PER_PAGE = 25;
 
-// Enhanced file type configuration
-const SUPPORTED_FILE_TYPES = {
-  'image/jpeg': { type: 'image', maxSize: 20 * 1024 * 1024, priority: 'high' },
-  'image/png': { type: 'image', maxSize: 20 * 1024 * 1024, priority: 'high' },
-  'image/gif': { type: 'image', maxSize: 10 * 1024 * 1024, priority: 'medium' },
-  'image/webp': { type: 'image', maxSize: 15 * 1024 * 1024, priority: 'high' },
-  'image/svg+xml': { type: 'image', maxSize: 5 * 1024 * 1024, priority: 'medium' },
-  'application/pdf': { type: 'document', maxSize: 50 * 1024 * 1024, priority: 'high' },
-  'application/msword': { type: 'document', maxSize: 25 * 1024 * 1024, priority: 'medium' },
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { type: 'document', maxSize: 25 * 1024 * 1024, priority: 'high' },
-  'application/vnd.ms-excel': { type: 'spreadsheet', maxSize: 20 * 1024 * 1024, priority: 'medium' },
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { type: 'spreadsheet', maxSize: 20 * 1024 * 1024, priority: 'high' },
-  'text/plain': { type: 'text', maxSize: 10 * 1024 * 1024, priority: 'high', fastProcess: true },
-  'text/csv': { type: 'csv', maxSize: 15 * 1024 * 1024, priority: 'high', fastProcess: true },
-  'text/markdown': { type: 'text', maxSize: 5 * 1024 * 1024, priority: 'high', fastProcess: true },
-  'application/json': { type: 'json', maxSize: 5 * 1024 * 1024, priority: 'medium', fastProcess: true },
-  'text/javascript': { type: 'code', maxSize: 2 * 1024 * 1024, priority: 'medium', fastProcess: true },
-  'text/typescript': { type: 'code', maxSize: 2 * 1024 * 1024, priority: 'medium', fastProcess: true },
-  'text/css': { type: 'code', maxSize: 2 * 1024 * 1024, priority: 'low', fastProcess: true },
-  'text/html': { type: 'code', maxSize: 5 * 1024 * 1024, priority: 'medium', fastProcess: true }
-};
-
-// Enhanced file validation
-const validateFileForProcessing = (file: File): {
-  valid: boolean;
-  error?: string;
-  warnings?: string[];
-  config?: any;
-} => {
-  const config = SUPPORTED_FILE_TYPES[file.type as keyof typeof SUPPORTED_FILE_TYPES];
-
-  if (!config) {
-    return {
-      valid: false,
-      error: `Unsupported file type: ${file.type}. Please use supported formats like PDF, Word, Excel, images, or text files.`
-    };
-  }
-
-  if (file.size > config.maxSize) {
-    return {
-      valid: false,
-      error: `File "${file.name}" is too large (${Math.round(file.size / 1024 / 1024)}MB). Maximum size for ${config.type} files is ${Math.round(config.maxSize / 1024 / 1024)}MB.`
-    };
-  }
-
-  const warnings: string[] = [];
-
-  if (file.size > config.maxSize * 0.7) {
-    warnings.push('Large file may take longer to process');
-  }
-
-  if (['spreadsheet', 'document'].includes(config.type) && file.size > 10 * 1024 * 1024) {
-    warnings.push('Complex document structure may require additional processing time');
-  }
-
-  return { valid: true, warnings, config };
-};
-
 // Enhanced context optimization
 const estimateContextSize = (content: any[]): number => {
   return JSON.stringify(content).length;
@@ -163,7 +105,8 @@ const extractFirstSentence = (text: string): string => {
 const Index = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
-  const location = new URL(window.location.href);
+  const location = useLocation(); // Use useLocation hook to get location object
+  const { sessionId: urlSessionId } = useParams(); // Get sessionId from URL parameters
 
   // Theme management
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>(() => {
@@ -471,8 +414,31 @@ const Index = () => {
       loadChatSessions();
     }
   }, [user, loadChatSessions, chatSessionsLoadedCount, loadingPhase.phase]);
-
-  // Modified useEffect for activeChatSessionId: only load if messages for this session are not already present
+  const sessionIdFromUrl = useMemo(() => {
+    const pathParts = location.pathname.split('/');
+    if (pathParts[1] === 'chat' && pathParts[2]) {
+      return pathParts[2];
+    }
+    return null;
+  }, [location.pathname]);
+  
+  useEffect(() => {
+    console.log('Session restoration check:', { 
+      sessionIdFromUrl, 
+      activeChatSessionId,
+      pathname: location.pathname,
+      userExists: !!user,
+      chatSessionsLoaded: chatSessions.length > 0
+    });
+    
+    // If we have a sessionId in URL but no active session set, or if they're different
+    if (sessionIdFromUrl && sessionIdFromUrl !== activeChatSessionId && user) {
+      console.log(`Restoring session from URL: ${sessionIdFromUrl}`);
+      setActiveChatSessionId(sessionIdFromUrl);
+    }
+  }, [sessionIdFromUrl, activeChatSessionId, user, location.pathname]);
+  
+// Modified useEffect for activeChatSessionId: only load if messages for this session are not already present
  
 useEffect(() => {
   if (activeChatSessionId && user) {
@@ -545,17 +511,13 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
     // Immediately set the active session and clean state
     setActiveChatSessionId(newSession.id);
     
-    // Update URL to reflect session
-    if (location.pathname.includes('/chat')) {
-      navigate(`/chat/${newSession.id}`, { replace: true });
-    }
+    // Update URL to reflect session (unconditionally navigate)
+    navigate(`/chat/${newSession.id}`, { replace: true });
+    
     setSelectedDocumentIds(newSession.document_ids || []);
     setHasMoreMessages(false); // No messages to load for new session
     setIsLoadingSessionMessages(false); // No loading needed
     
-    // Don't reload chat sessions unnecessarily
-    // setChatSessionsLoadedCount and loadChatSessions calls removed to prevent flickering
-
     // Auto-update title based on first AI response (keep this part)
     const subscription = supabase
       .channel(`chat_messages:session:${newSession.id}`)
@@ -593,7 +555,7 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
     toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
     return null;
   }
-}, [user, selectedDocumentIds]);
+}, [user, selectedDocumentIds, navigate, setChatSessions, setActiveChatSessionId, setSelectedDocumentIds, setHasMoreMessages, setIsLoadingSessionMessages]);
 
 
   // Chat session document management
@@ -607,89 +569,6 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
       setSelectedDocumentIds([]);
     }
   }, [activeChatSessionId, chatSessions]);
-
-  // Enhanced chat session creation
-  // const createNewChatSession = useCallback(async (): Promise<string | null> => {
-  //   try {
-  //     if (!user) {
-  //       toast.error('Please sign in to create a new chat session.');
-  //       return null;
-  //     }
-
-  //     const { data, error } = await supabase
-  //       .from('chat_sessions')
-  //       .insert({
-  //         user_id: user.id,
-  //         title: 'New Chat',
-  //         document_ids: selectedDocumentIds,
-  //         message_count: 0, // Initialize message_count to 0 for new sessions
-  //       })
-  //       .select()
-  //       .single();
-
-  //     if (error) throw error;
-  //     if (!data) throw new Error('No data returned from session creation');
-
-  //     const newSession: ChatSession = {
-  //       id: data.id,
-  //       title: data.title,
-  //       created_at: data.created_at,
-  //       updated_at: data.updated_at,
-  //       last_message_at: data.last_message_at || new Date().toISOString(),
-  //       document_ids: data.document_ids || [],
-  //       message_count: 0, // Ensure message_count is 0 for newly created sessions
-  //     };
-
-  //     setChatSessions(prev => [...prev, newSession].sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()));
-  //     setChatSessionsLoadedCount(CHAT_SESSIONS_PER_PAGE);
-  //     if (chatSessions.length > CHAT_SESSIONS_PER_PAGE && chatSessionsLoadedCount >1) {
-  //       setChatSessionsLoadedCount(CHAT_SESSIONS_PER_PAGE);
-  //     await loadChatSessions();
-  //     }
-
-  //     setActiveChatSessionId(newSession.id);
-  //     setSelectedDocumentIds(newSession.document_ids || []);
-  //     setHasMoreMessages(false); // No more messages to load for a new, empty session
-  //     setIsLoadingSessionMessages(false); // Explicitly set loading to false for new, empty sessions
-
-  //     // Auto-update title based on first AI response
-  //     const subscription = supabase
-  //       .channel(`chat_messages:session:${newSession.id}`)
-  //       .on(
-  //         'postgres_changes',
-  //         { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `session_id=eq.${newSession.id}` },
-  //         async (payload) => {
-  //           if (payload.new.role === 'assistant') {
-  //             const firstSentence = extractFirstSentence(payload.new.content);
-  //             try {
-  //               const { error: updateError } = await supabase
-  //                 .from('chat_sessions')
-  //                 .update({ title: firstSentence })
-  //                 .eq('id', newSession.id)
-  //                 .eq('user_id', user.id);
-
-  //               if (updateError) throw updateError;
-
-  //               setChatSessions(prev =>
-  //                 prev.map(s => (s.id === newSession.id ? { ...s, title: firstSentence } : s))
-  //               );
-  //             } catch (updateError) {
-  //               console.error('Error updating session title:', updateError);
-  //             }
-  //             subscription.unsubscribe();
-  //           }
-  //         }
-  //       )
-  //       .subscribe();
-
-  //     toast.success('New chat session created!');
-  //     return newSession.id;
-  //   } catch (error: any) {
-  //     console.error('Error creating new session:', error);
-  //     toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
-  //     return null;
-  //   }
-  // }, [user, selectedDocumentIds, setChatSessions, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId, setSelectedDocumentIds, setHasMoreMessages, setIsLoadingSessionMessages]);
 
   // Enhanced session management
   const deleteChatSession = useCallback(async (sessionId: string) => {
@@ -715,13 +594,16 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
               new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
             )[0];
             setActiveChatSessionId(mostRecent.id);
+            navigate(`/chat/${mostRecent.id}`, { replace: true }); // Navigate to the new active session
           } else {
             setActiveChatSessionId(null);
             setHasMoreMessages(false);
+            navigate('/chat', { replace: true }); // Navigate to generic chat if no sessions left
           }
         } else {
           setActiveChatSessionId(null);
           setHasMoreMessages(false);
+          navigate('/chat', { replace: true }); // Navigate to generic chat if no sessions left
         }
       }
 
@@ -730,7 +612,7 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
       console.error('Error deleting session:', error);
       toast.error(`Failed to delete chat session: ${error.message || 'Unknown error'}`);
     }
-  }, [user, chatSessions, activeChatSessionId, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId]);
+  }, [user, chatSessions, activeChatSessionId, setChatSessionsLoadedCount, loadChatSessions, setActiveChatSessionId, navigate]);
 
   const renameChatSession = useCallback(async (sessionId: string, newTitle: string) => {
     try {
@@ -740,8 +622,7 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
         .from('chat_sessions')
         .update({ title: newTitle })
         .eq('id', sessionId)
-        .eq('user_id', user.id);
-
+        .eq('user_id', user.id); // Fixed: Use user.id here
       if (error) throw error;
 
       setChatSessions(prev =>
@@ -937,12 +818,6 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
         chatHistoryForAI.push({ role: msg.role, parts: msgParts });
       });
 
-
-      const optimizedContent = optimizeContextForProcessing(
-        chatHistoryForAI,
-        currentMessageParts // Pass the built current message parts
-      );
-
       // Update progress before sending
       if (fileProcessingProgress.processing) {
         setFileProcessingProgress(prev => ({ ...prev, phase: 'uploading' }));
@@ -958,8 +833,8 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
             examples: false,
             difficulty: 'intermediate',
           },
-          chatHistory: optimizedContent.slice(0, -1), // All messages EXCEPT the last one (current user input)
-          message: optimizedContent[optimizedContent.length - 1].parts[0].text, // The primary text of the current user message
+          chatHistory: chatHistoryForAI, 
+          message: currentMessageParts.slice(-1)[0].text, // The primary text of the current user message
           // Send full files payload so backend can store and attach them (images, pdfs, docs, etc.)
           files: processedFiles,
           attachedDocumentIds: finalAttachedDocumentIds,
@@ -968,8 +843,10 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
           imageMimeType: imageMimeType, // Pass imageMimeType if it's still relevant
           aiMessageIdToUpdate: aiMessageIdToUpdate,
         },
-      });
-
+        
+      }
+    
+    );
       if (error) {
         console.error('Edge function error:', error);
         throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
@@ -1193,7 +1070,7 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
       );
     }
   }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmit]);
-
+  
   // New restructured message handling
   const handleSendMessage = useCallback(async (
     messageContent: string,
@@ -1306,9 +1183,16 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
   const memoizedOnCategoryChange = useCallback((category: string) => setSelectedCategory(category), [setSelectedCategory]);
 
   const memoizedOnTabChange = useCallback((tab: string) => {
-    navigate(`/${tab}`);
+    if (tab.startsWith('chat/') && activeChatSessionId) {
+      navigate(`/${tab}`);
+    } else if (tab === 'chat' && activeChatSessionId) {
+        navigate(`/chat/${activeChatSessionId}`);
+    } else {
+        navigate(`/${tab}`);
+    }
     setIsSidebarOpen(false);
-  }, [navigate, setIsSidebarOpen]);
+}, [navigate, setIsSidebarOpen, activeChatSessionId]);
+
 
   const headerProps = useMemo(() => ({
     searchQuery,
@@ -1330,13 +1214,11 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
     activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings',
     onTabChange: memoizedOnTabChange,
     chatSessions,
-    onChatSessionSelect: (sessionId: string) => {
-      setActiveChatSessionId(sessionId);
-      // Update URL when session is selected
-      if (location.pathname.includes('/chat')) {
-        navigate(`/chat/${sessionId}`, { replace: true });
-      }
-    },
+   
+  onChatSessionSelect: (sessionId: string) => {
+    setActiveChatSessionId(sessionId);
+    navigate(`/chat/${sessionId}`, { replace: true });
+  },
     onNewChatSession: createNewChatSession,
     onDeleteChatSession: deleteChatSession,
     onRenameChatSession: renameChatSession,
@@ -1344,6 +1226,7 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
     onLoadMoreChatSessions: handleLoadMoreChatSessions,
     currentTheme,
     onThemeChange: handleThemeChange,
+    activeChatSessionId: activeChatSessionId || sessionIdFromUrl, // Use URL session if active isn't set
   }), [
     isSidebarOpen,
     memoizedOnToggleSidebar,
@@ -1362,6 +1245,8 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
     handleLoadMoreChatSessions,
     currentTheme,
     handleThemeChange,
+    navigate, // Add navigate to dependencies
+    sessionIdFromUrl, // Add sessionIdFromUrl to 
   ]);
 
   const tabContentProps = useMemo(() => ({
@@ -1479,6 +1364,45 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
     }
   }, [user, authLoading, navigate]);
 
+  // Real-time listener for chat messages
+  useEffect(() => {
+      if (!user) return;
+
+      const messagesChannel = supabase
+          .channel(`chat_messages_user_${user.id}`)
+          .on(
+              'postgres_changes',
+              { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
+              (payload) => {
+                  const newMessage = payload.new as Message;
+                  setChatMessages(prevMessages => {
+                      if (!prevMessages.some(msg => msg.id === newMessage.id)) {
+                          return [...prevMessages, newMessage].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                      }
+                      return prevMessages;
+                  });
+              }
+          )
+          .on(
+              'postgres_changes',
+              { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
+              (payload) => {
+                  const updatedMessage = payload.new as Message;
+                  setChatMessages(prevMessages =>
+                      prevMessages.map(msg =>
+                          msg.id === updatedMessage.id ? updatedMessage : msg
+                      ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                  );
+              }
+          )
+          .subscribe();
+
+      return () => {
+          messagesChannel.unsubscribe();
+      };
+  }, [user, setChatMessages]);
+
+
   const handleSignOut = useCallback(async () => {
     try {
       await signOut();
@@ -1574,18 +1498,8 @@ const createNewChatSession = useCallback(async (): Promise<string | null> => {
           </div>
         )}
 
-        <Routes>
-          <Route path="/dashboard" element={<TabContent {...tabContentProps} activeTab="dashboard" />} />
-          <Route path="/notes" element={<TabContent {...tabContentProps} activeTab="notes" />} />
-          <Route path="/recordings" element={<TabContent {...tabContentProps} activeTab="recordings" />} />
-          <Route path="/schedule" element={<TabContent {...tabContentProps} activeTab="schedule" />} />
-          <Route path="/chat" element={<TabContent {...tabContentProps} activeTab="chat" />} />
-          <Route path="/chat/:sessionId" element={<TabContent {...tabContentProps} activeTab="chat" />} />
-          <Route path="/documents" element={<TabContent {...tabContentProps} activeTab="documents" />} />
-          <Route path="/settings" element={<TabContent {...tabContentProps} activeTab="settings" />} />
-          <Route path="/" element={<TabContent {...tabContentProps} activeTab="dashboard" />} />
-          <Route path="*" element={<TabContent {...tabContentProps} activeTab="dashboard" />} />
-        </Routes>
+  <TabContent {...tabContentProps} />
+
       </div>
     </div>
   );
