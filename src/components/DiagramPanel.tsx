@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
     securityLevel: 'strict',
   });
   (window as any).mermaid = mermaid;
-  
+
   // Pre-load Graphviz for faster DOT rendering
   Graphviz.load().then(() => {
     //console.log('Graphviz pre-loaded successfully');
@@ -122,15 +122,15 @@ class PanelErrorBoundary extends React.Component<
 }
 
 // Enhanced HTML Renderer with better isolation using srcdoc
-const IsolatedHtml = ({ html }: { html: string }) => {
+const IsolatedHtml = ({ html, onError }: { html: string; onError?: (error: string | null) => void }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
+  const [hasError, setHasError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
   const handleRetry = useCallback(() => {
     setRetryCount(prev => prev + 1);
-    setHasError(false);
+    setHasError(null);
     setIsLoading(true);
   }, []);
 
@@ -174,10 +174,10 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         }
       }
     }
-    
+
     // Inherit libraries before content loads
     inheritParentLibraries();
-    
+
     // Post message to parent when content is loaded
     function notifyParent() {
       try {
@@ -189,7 +189,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         //console.error('Failed to notify parent:', e);
       }
     }
-    
+
     // Multiple ways to detect when page is ready
     if (document.readyState === 'complete') {
       setTimeout(notifyParent, 50);
@@ -197,22 +197,22 @@ const IsolatedHtml = ({ html }: { html: string }) => {
       window.addEventListener('load', function() {
         setTimeout(notifyParent, 50);
       });
-      
+
       document.addEventListener('DOMContentLoaded', function() {
         setTimeout(notifyParent, 25);
       });
     }
-    
+
     // Basic error handler for scripts within the iframe
     window.addEventListener('error', function(event) {
       const errorMessage = event.error?.message || event.message || 'Unknown error';
-      
+
       // Only report actual JavaScript errors, not resource loading issues
       if (event.error && !errorMessage.includes('Script error')) {
         try {
           if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ 
-              type: 'error', 
+            window.parent.postMessage({
+              type: 'error',
               message: errorMessage,
               filename: event.filename,
               lineno: event.lineno
@@ -223,13 +223,13 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         }
       }
     });
-    
+
     // Handle unhandled promise rejections
     window.addEventListener('unhandledrejection', function(event) {
       try {
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ 
-            type: 'error', 
+          window.parent.postMessage({
+            type: 'error',
             message: event.reason?.message || 'Unhandled promise rejection'
           }, '*');
         }
@@ -245,43 +245,45 @@ const IsolatedHtml = ({ html }: { html: string }) => {
   useEffect(() => {
     let isMounted = true;
     let loadingTimeoutId: NodeJS.Timeout;
-    
+
     //console.log('Starting HTML load, retry count:', retryCount);
     setIsLoading(true);
-    setHasError(false);
+    setHasError(null);
 
     const handleMessage = (event: MessageEvent) => {
       if (!isMounted) return;
-      
+
       // Check if message is from our iframe
       if (event.source === iframeRef.current?.contentWindow) {
         //console.log('Received message from iframe:', event.data);
-        
+
         if (event.data.type === 'loaded') {
           //console.log('HTML loaded successfully');
           setIsLoading(false);
           if (loadingTimeoutId) {
             clearTimeout(loadingTimeoutId);
           }
+          if (onError) onError(null);
         } else if (event.data.type === 'error') {
           const errorMessage = event.data.message || '';
-          
+
           // Be more lenient with what we consider "real" errors
-          const isIgnorableError = 
-            errorMessage.includes('security') || 
+          const isIgnorableError =
+            errorMessage.includes('security') ||
             errorMessage.includes('mixed content') ||
             errorMessage.includes('Content Security Policy') ||
             errorMessage.includes('Script error') ||
             errorMessage.includes('ResizeObserver') ||
             errorMessage.includes('Non-Error promise rejection captured');
-          
+
           if (!isIgnorableError) {
             //console.error('HTML Error:', errorMessage);
-            setHasError(true);
+            setHasError(errorMessage);
             setIsLoading(false);
             if (loadingTimeoutId) {
               clearTimeout(loadingTimeoutId);
             }
+            if (onError) onError(errorMessage);
           } else {
             // For ignorable errors, just log and continue
             //console.warn('HTML Warning (ignored):', errorMessage);
@@ -294,9 +296,11 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 
     // Shorter timeout - 2 seconds should be plenty for static HTML since we're not loading external libraries
     loadingTimeoutId = setTimeout(() => {
-      if (isMounted) {
+      if (isMounted && isLoading) {
         //console.log('HTML loading timeout reached, stopping loading indicator');
+        // If content isn't loaded by timeout, assume it's still OK but stop loading indicator
         setIsLoading(false);
+        if (onError) onError(null); // No error, just timed out waiting for 'loaded' message
       }
     }, 2000);
 
@@ -309,7 +313,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
         clearTimeout(loadingTimeoutId);
       }
     };
-  }, [html, retryCount]);
+  }, [html, retryCount, onError, isLoading]);
 
   // Handle iframe load event as additional fallback (faster timeout)
   const handleIframeLoad = useCallback(() => {
@@ -318,8 +322,9 @@ const IsolatedHtml = ({ html }: { html: string }) => {
     setTimeout(() => {
       //console.log('Stopping loading via iframe onLoad fallback');
       setIsLoading(false);
+      if (onError) onError(null); // Consider it loaded without error if iframe itself loads
     }, 50);
-  }, []);
+  }, [onError]);
 
   if (hasError) {
     return (
@@ -340,22 +345,15 @@ const IsolatedHtml = ({ html }: { html: string }) => {
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
-            <Button
-              onClick={() => onError?.(new Error(hasError || 'Mermaid rendering error'))}
-              variant="outline"
-              size="sm"
-              className="text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700"
-            >
-              🤖 Fix with AI
-            </Button>
+            {/* Removed the direct AI fix button from here to consolidate to main panel's AI fix */}
           </div>
             <Button
               onClick={() => {
                 const errorMessage = hasError || 'HTML rendering error';
                 // Pass error to parent for AI fixing
                 if (typeof window !== 'undefined' && window.parent !== window) {
-                  window.parent.postMessage({ 
-                    type: 'fix-request', 
+                  window.parent.postMessage({
+                    type: 'fix-request',
                     diagramType: 'html',
                     content: html,
                     error: errorMessage
@@ -383,7 +381,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 
   return (
     <div className="relative w-full h-full">
-      {isLoading && (
+      {/* {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
           <div className="flex flex-col items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
@@ -393,7 +391,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
             </p>
           </div>
         </div>
-      )}
+      )} */}
       <iframe
         key={retryCount}
         ref={iframeRef}
@@ -408,7 +406,7 @@ const IsolatedHtml = ({ html }: { html: string }) => {
 };
 
 // Enhanced Mermaid Renderer with bulletproof error handling, DOM isolation, and interactive controls
-const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (error: Error) => void }) => {
+const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (error: string | null, type: 'syntax' | 'rendering' | 'timeout' | 'network') => void }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState<string | null>(null);
@@ -472,7 +470,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       overflow: hidden;
       user-select: none;
     }
-    
+
     .controls {
       position: absolute;
       top: 10px;
@@ -485,7 +483,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       border-radius: 6px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-    
+
     .control-btn {
       background: #3b82f6;
       color: white;
@@ -496,16 +494,16 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       font-size: 12px;
       transition: background 0.2s;
     }
-    
+
     .control-btn:hover {
       background: #2563eb;
     }
-    
+
     .control-btn:disabled {
       background: #9ca3af;
       cursor: not-allowed;
     }
-    
+
     .container {
       position: relative;
       width: 100%;
@@ -513,11 +511,11 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       overflow: hidden;
       cursor: grab;
     }
-    
+
     .container.dragging {
       cursor: grabbing;
     }
-    
+
     .diagram-wrapper {
       position: absolute;
       top: 50%;
@@ -528,13 +526,13 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       max-width: none;
       max-height: none;
     }
-    
+
     .diagram-wrapper svg {
       display: block;
       max-width: none;
       max-height: none;
     }
-    
+
     .error-display {
       position: absolute;
       top: 50%;
@@ -549,7 +547,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       max-width: 400px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    
+
     .loading {
       position: absolute;
       top: 50%;
@@ -562,7 +560,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    
+
     .zoom-info {
       position: absolute;
       bottom: 10px;
@@ -583,7 +581,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
     <button class="control-btn" onclick="resetView()">Reset</button>
     <button class="control-btn" onclick="fitToScreen()">Fit</button>
   </div>
-  
+
   <div class="container" id="container">
     <div class="loading" id="loading-indicator">
       <div>Loading Mermaid diagram...</div>
@@ -591,9 +589,9 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
     </div>
     <div class="diagram-wrapper" id="diagram-wrapper"></div>
   </div>
-  
+
   <div class="zoom-info" id="zoom-info">100%</div>
-  
+
   <script>
     (function() {
       'use strict';
@@ -601,7 +599,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       const ${idVarName} = ${JSON.stringify(currentUniqueId)};
       const MERMAID_CONTENT = ${contentVarName};
       const UNIQUE_ID = ${idVarName};
-      
+
       // Interactive controls state
       let currentZoom = 1;
       let panX = 0;
@@ -611,13 +609,13 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       let lastMouseY = 0;
       let diagramWrapper = null;
       let containerEl = null;
-      
+
       function reportError(error, type = 'rendering') {
         //console.error('Mermaid Error in iframe:', error);
         try {
           if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ 
-              type: 'mermaidError', 
+            window.parent.postMessage({
+              type: 'mermaidError',
               error: error?.message || error || 'Unknown error',
               errorType: type,
               uniqueId: UNIQUE_ID
@@ -632,7 +630,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
         console.log('Mermaid loaded successfully');
         try {
           if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ 
+            window.parent.postMessage({
               type: 'mermaidLoaded',
               uniqueId: UNIQUE_ID
             }, '*');
@@ -645,7 +643,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
       function showError(message, type = 'rendering') {
         const container = document.getElementById('container');
         if (container) {
-          container.innerHTML = 
+          container.innerHTML =
             '<div class="error-display">' +
             '<h3>Mermaid ' + (type === 'syntax' ? 'Syntax' : 'Rendering') + ' Error</h3>' +
             '<p style="margin: 10px 0;">' + (message || 'Unknown error') + '</p>' +
@@ -654,7 +652,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
         }
         reportError(message, type);
       }
-      
+
       function updateTransform() {
         if (diagramWrapper) {
           diagramWrapper.style.transform = \`translate(\${-50 + panX}%, \${-50 + panY}%) scale(\${currentZoom})\`;
@@ -664,48 +662,48 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
           }
         }
       }
-      
+
       function zoomIn() {
         currentZoom = Math.min(currentZoom * 1.2, 5);
         updateTransform();
       }
-      
+
       function zoomOut() {
         currentZoom = Math.max(currentZoom / 1.2, 0.1);
         updateTransform();
       }
-      
+
       function resetView() {
         currentZoom = 1;
         panX = 0;
         panY = 0;
         updateTransform();
       }
-      
+
       function fitToScreen() {
         if (!diagramWrapper || !containerEl) return;
-        
+
         const svg = diagramWrapper.querySelector('svg');
         if (!svg) return;
-        
+
         const svgBox = svg.getBBox();
         const containerRect = containerEl.getBoundingClientRect();
-        
+
         const scaleX = (containerRect.width * 0.9) / svgBox.width;
         const scaleY = (containerRect.height * 0.9) / svgBox.height;
         currentZoom = Math.min(scaleX, scaleY, 2); // Cap at 2x for readability
-        
+
         panX = 0;
         panY = 0;
         updateTransform();
       }
-      
+
       function setupInteractions() {
         containerEl = document.getElementById('container');
         diagramWrapper = document.getElementById('diagram-wrapper');
-        
+
         if (!containerEl || !diagramWrapper) return;
-        
+
         // Mouse events
         containerEl.addEventListener('mousedown', function(e) {
           if (e.target.closest('.controls')) return;
@@ -715,33 +713,33 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
           containerEl.classList.add('dragging');
           e.preventDefault();
         });
-        
+
         document.addEventListener('mousemove', function(e) {
           if (!isDragging) return;
-          
+
           const deltaX = (e.clientX - lastMouseX) / currentZoom;
           const deltaY = (e.clientY - lastMouseY) / currentZoom;
-          
+
           panX += deltaX * 0.5;
           panY += deltaY * 0.5;
-          
+
           lastMouseX = e.clientX;
           lastMouseY = e.clientY;
-          
+
           updateTransform();
         });
-        
+
         document.addEventListener('mouseup', function() {
           isDragging = false;
           containerEl.classList.remove('dragging');
         });
-        
+
         // Touch events for mobile
         let lastTouchDistance = 0;
-        
+
         containerEl.addEventListener('touchstart', function(e) {
           if (e.target.closest('.controls')) return;
-          
+
           if (e.touches.length === 1) {
             isDragging = true;
             lastMouseX = e.touches[0].clientX;
@@ -750,49 +748,49 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
             const touch1 = e.touches[0];
             const touch2 = e.touches[1];
             lastTouchDistance = Math.sqrt(
-              Math.pow(touch2.clientX - touch1.clientX, 2) + 
+              Math.pow(touch2.clientX - touch1.clientX, 2) +
               Math.pow(touch2.clientY - touch1.clientY, 2)
             );
           }
           e.preventDefault();
         });
-        
+
         containerEl.addEventListener('touchmove', function(e) {
           if (e.touches.length === 1 && isDragging) {
             const deltaX = (e.touches[0].clientX - lastMouseX) / currentZoom;
             const deltaY = (e.touches[0].clientY - lastMouseY) / currentZoom;
-            
+
             panX += deltaX * 0.5;
             panY += deltaY * 0.5;
-            
+
             lastMouseX = e.touches[0].clientX;
             lastMouseY = e.touches[0].clientY;
-            
+
             updateTransform();
           } else if (e.touches.length === 2) {
             const touch1 = e.touches[0];
             const touch2 = e.touches[1];
             const currentDistance = Math.sqrt(
-              Math.pow(touch2.clientX - touch1.clientX, 2) + 
+              Math.pow(touch2.clientX - touch1.clientX, 2) +
               Math.pow(touch2.clientY - touch1.clientY, 2)
             );
-            
+
             const scale = currentDistance / lastTouchDistance;
             currentZoom = Math.min(Math.max(currentZoom * scale, 0.1), 5);
             lastTouchDistance = currentDistance;
-            
+
             updateTransform();
           }
           e.preventDefault();
         });
-        
+
         containerEl.addEventListener('touchend', function(e) {
           isDragging = false;
           if (e.touches.length < 2) {
             lastTouchDistance = 0;
           }
         });
-        
+
         // Mouse wheel zoom
         containerEl.addEventListener('wheel', function(e) {
           e.preventDefault();
@@ -800,13 +798,13 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
           currentZoom = Math.min(Math.max(currentZoom * zoomFactor, 0.1), 5);
           updateTransform();
         });
-        
+
         // Double-click to fit
         containerEl.addEventListener('dblclick', function(e) {
           if (e.target.closest('.controls')) return;
           fitToScreen();
         });
-        
+
         // Make functions available globally for buttons
         window.zoomIn = zoomIn;
         window.zoomOut = zoomOut;
@@ -820,7 +818,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
             resolve();
             return;
           }
-          
+
           // Try to get Mermaid from parent window first (much faster)
           try {
             if (window.parent && window.parent.mermaid) {
@@ -831,7 +829,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
           } catch (e) {
             // Cross-origin restriction, fall back to CDN
           }
-          
+
           // Fallback to CDN with shorter timeout
           const script = document.createElement('script');
           script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js';
@@ -846,7 +844,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
             reject(new Error('Failed to load Mermaid library from CDN'));
           };
           document.head.appendChild(script);
-          
+
           // Reduced timeout since parent check failed
           setTimeout(function() {
             if (!window.mermaid) {
@@ -863,10 +861,10 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
         }
 
         loadMermaid().then(function() {
-          if (!window.mermaid) { 
-            throw new Error('Mermaid not available'); 
+          if (!window.mermaid) {
+            throw new Error('Mermaid not available');
           }
-          
+
           // Configure mermaid with better settings
           window.mermaid.initialize({
             startOnLoad: false,
@@ -882,39 +880,39 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
               secondBkg: '#f3f4f6',
               tertiaryBkg: '#e5e7eb'
             },
-            flowchart: { 
-              useMaxWidth: false, 
-              htmlLabels: true, 
-              curve: 'basis' 
+            flowchart: {
+              useMaxWidth: false,
+              htmlLabels: true,
+              curve: 'basis'
             },
-            sequence: { 
-              useMaxWidth: false, 
-              wrap: true 
+            sequence: {
+              useMaxWidth: false,
+              wrap: true
             },
             securityLevel: 'strict',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             fontSize: 14
           });
-          
+
           return window.mermaid.parse(MERMAID_CONTENT);
         }).then(function() {
           const loadingIndicator = document.getElementById('loading-indicator');
-          if (loadingIndicator) { 
-            loadingIndicator.remove(); 
+          if (loadingIndicator) {
+            loadingIndicator.remove();
           }
-          
+
           const diagramId = 'mermaid-svg-' + Date.now();
           return window.mermaid.render(diagramId, MERMAID_CONTENT);
         }).then(function(result) {
           const svg = result.svg || result;
-          if (!svg || svg.trim().length === 0) { 
-            throw new Error('Mermaid rendered empty SVG'); 
+          if (!svg || svg.trim().length === 0) {
+            throw new Error('Mermaid rendered empty SVG');
           }
-          
+
           const diagramWrapper = document.getElementById('diagram-wrapper');
-          if (diagramWrapper) { 
-            diagramWrapper.innerHTML = svg; 
-            
+          if (diagramWrapper) {
+            diagramWrapper.innerHTML = svg;
+
             // Setup interactive controls after rendering
             setTimeout(function() {
               setupInteractions();
@@ -923,18 +921,18 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
               setTimeout(fitToScreen, 100);
             }, 50);
           }
-          
+
           reportSuccess();
         }).catch(function(error) {
           const errorMessage = error.message || 'Unknown rendering error';
-          const isActualError = errorMessage.includes('Syntax error') || 
-                               errorMessage.includes('Parse error') || 
+          const isActualError = errorMessage.includes('Syntax error') ||
+                               errorMessage.includes('Parse error') ||
                                errorMessage.includes('Failed to load') ||
                                errorMessage.includes('rendered empty SVG') ||
                                errorMessage.includes('timeout');
-          
+
           if (isActualError) {
-            const errorType = errorMessage.toLowerCase().includes('syntax') || 
+            const errorType = errorMessage.toLowerCase().includes('syntax') ||
                              errorMessage.toLowerCase().includes('parse') ? 'syntax' : 'rendering';
             showError(errorMessage, errorType);
           } else {
@@ -1034,7 +1032,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
           </div>
         </div>
       )}
-      
+
       <iframe
         key={uniqueIdRef.current}
         ref={iframeRef}
@@ -1044,7 +1042,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
         style={{ minHeight: '300px' }}
         srcDoc={iframeSrcDocContent}
       />
-      
+
       {hasError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50/95 dark:bg-red-950/95 text-red-600 dark:text-red-300 p-4 z-20">
           <AlertTriangle className="h-12 w-12 mb-4 text-red-500" />
@@ -1078,7 +1076,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
             <div className="mt-4 text-xs text-gray-600 dark:text-gray-400 bg-white/50 dark:bg-gray-800/50 p-3 rounded max-w-md">
               <p className="font-medium mb-2">Common Mermaid syntax issues:</p>
               <ul className="list-disc list-inside space-y-1 text-left">
-                <li>Missing diagram type declaration (e.g., \`graph TD\`, \`sequenceDiagram\`)</li>
+                <li>Missing diagram type declaration (e.g., `graph TD`, `sequenceDiagram`)</li>
                 <li>Invalid node or edge syntax</li>
                 <li>Unclosed quotes or brackets</li>
                 <li>Reserved keywords used as node names</li>
@@ -1634,7 +1632,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   language,
   imageUrl,
   initialWidthPercentage
-  
+
 }) => {
   const diagramPanelRef = useRef<HTMLDivElement>(null);
   const diagramContainerRef = useRef<HTMLDivElement>(null);
@@ -1666,7 +1664,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   const theme = themes[currentTheme];
 
   // Enhanced diagram-specific controls
-  const DiagramControls: React.FC<{ type: string }> = useCallback(({ type }) => {
+  const DiagramControls: React.FC<{ type: DiagramPanelProps['diagramType']; onHtmlError?: (error: string | null) => void }> = useCallback(({ type, onHtmlError }) => {
     return (
       <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
@@ -1746,7 +1744,8 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
             </>
           )}
 
-          {/* {type === 'html' && (
+          {/* HTML specific controls */}
+          {type === 'html' && (
             <>
               <Button
                 variant="outline"
@@ -1770,11 +1769,11 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
                 {showAdvancedControls ? 'Less' : 'More'}
               </Button>
             </>
-          )} */}
+          )}
         </div>
 
-        {/* Advanced controls panel */}
-        {/* {showAdvancedControls && type === 'html' && (
+        {/* Advanced controls panel for HTML */}
+        {showAdvancedControls && type === 'html' && (
           <div className="w-full mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-gray-600 dark:text-gray-400">Advanced:</span>
@@ -1806,7 +1805,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               </Button>
             </div>
           </div>
-        )} */}
+        )}
       </div>
     );
   }, [zoomLevel, showAdvancedControls]);
@@ -1991,7 +1990,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
   useEffect(() => {
     if (diagramType === 'dot' && diagramContent) {
       setIsDotLoading(true);
-      
+
       // Try to use pre-loaded Graphviz first
       const renderDot = () => {
         return Graphviz.load().then((graphviz) => {
@@ -2045,7 +2044,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
 
     if (diagramType === 'mermaid' && diagramContent) {
       return (
-        <PanelErrorBoundary>
+        <PanelErrorBoundary onError={(err) => onMermaidError(err?.message || 'Unknown error', 'rendering')}>
           <div className="flex flex-col h-full">
             <DiagramControls type="mermaid" />
             <div className="flex-1 p-4 flex items-center justify-center overflow-auto">
@@ -2093,7 +2092,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         );
       }
       return (
-        <PanelErrorBoundary>
+        <PanelErrorBoundary onError={(err) => setDotError(err?.message || 'Unknown error')}>
           <div className="flex flex-col h-full">
             <DiagramControls type="dot" />
             <div className="flex-1 p-4 flex items-center justify-center overflow-auto">
@@ -2117,7 +2116,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       }
 
       return (
-        <PanelErrorBoundary>
+        <PanelErrorBoundary onError={(err) => setChartError(err?.message || 'Unknown error')}>
           <div className="flex flex-col h-full">
             {chartError && (
               <div className="p-4 bg-red-50 border-b border-red-200 text-red-700 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
@@ -2150,7 +2149,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       );
     } else if (diagramType === 'threejs') {
       return (
-        <PanelErrorBoundary>
+        <PanelErrorBoundary onError={(err) => setThreeJsError(err?.message || 'Unknown error')}>
           <div className="flex flex-col h-full">
             {threeJsError && (
               <div className="p-4 bg-red-50 border-b border-red-200 text-red-700 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
@@ -2216,11 +2215,14 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
       );
     } else if (diagramType === 'html') {
       return (
-        <PanelErrorBoundary>
+        <PanelErrorBoundary onError={(err) => {
+          // You might want a specific state for HTML errors too, or just log
+          //console.error('HTML panel boundary error:', err);
+        }}>
           <div className="flex flex-col h-full">
             <DiagramControls type="html" />
             <div className="flex-1">
-              <IsolatedHtml html={diagramContent || ''} />
+              <IsolatedHtml html={diagramContent || ''} onError={setChartError} /> {/* Re-using chartError for general HTML errors for now */}
             </div>
           </div>
         </PanelErrorBoundary>
@@ -2291,8 +2293,9 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
     },
   };
 
-  const availableActions = {
-    html: ['download', 'pdf'],
+  // Define available actions per diagram type
+  const availableActions: Record<DiagramPanelProps['diagramType'], string[]> = {
+    html: ['download', 'pdf'], // Note: PDF for HTML/Mermaid is currently blocked in handleDownloadPdf
     mermaid: ['download', 'pdf', 'toggle'],
     dot: ['download', 'pdf', 'toggle'],
     chartjs: ['download', 'pdf', 'toggle'],
@@ -2422,7 +2425,7 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
               onClick={handleDownloadPdf}
               className="text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900 dark:border-purple-700 text-xs sm:text-sm px-2 sm:px-3 py-1"
               title="Download as PDF"
-              disabled={!diagramContent && !imageUrl || diagramType === 'unknown'}
+              disabled={!diagramContent && !imageUrl || diagramType === 'unknown' || diagramType === 'mermaid' || diagramType === 'html'}
             >
               <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-0 sm:mr-2" />
               <span className="hidden sm:inline">PDF</span>
@@ -2458,7 +2461,12 @@ export const DiagramPanel: React.FC<DiagramPanelProps> = memo(({
         ref={diagramContainerRef}
         className="flex-1 overflow-hidden bg-white dark:bg-gray-900"
       >
-        <PanelErrorBoundary onError={onError}>
+        <PanelErrorBoundary onError={(err) => {
+          // This top-level error boundary catches errors from the renderContent components.
+          // You might want to refine how these errors are handled or propagated.
+          console.error("Top-level PanelErrorBoundary caught an error:", err);
+          // Optionally, set a generic error state here if needed
+        }}>
           {renderContent}
         </PanelErrorBoundary>
       </div>
@@ -2493,7 +2501,7 @@ interface DiagramPanelProps {
   diagramContent?: string;
   diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html';
   onClose: () => void;
-  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
+  onMermaidError: (code: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void;
   onSuggestAiCorrection: (prompt: string) => void;
   isOpen: boolean;
   language?: string;

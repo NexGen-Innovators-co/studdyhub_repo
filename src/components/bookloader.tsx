@@ -604,7 +604,7 @@ const LoadingScreen = ({
             className="mt-4"
             onClick={() => {
               // This would be passed from parent if needed
-              console.log('Skip secondary loading');
+              // console.log('Skip secondary loading');
             }}
           >
             Continue anyway

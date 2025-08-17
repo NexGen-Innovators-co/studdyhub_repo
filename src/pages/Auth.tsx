@@ -229,7 +229,7 @@ const Auth = () => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        navigate('/note', { replace: true });
+        navigate('/dashboard', { replace: true });
       }
     };
     checkAuth();
@@ -324,7 +324,7 @@ const Auth = () => {
         }
       } else {
         toast.success('Welcome back!');
-        navigate('/note', { replace: true });
+        navigate('/dashboard', { replace: true });
       }
     } catch (error) {
       toast.error('An unexpected error occurred during sign-in.');

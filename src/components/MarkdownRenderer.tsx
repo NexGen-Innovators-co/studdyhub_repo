@@ -86,7 +86,7 @@ interface CodeBlockProps {
   inline: boolean;
   className: string;
   children: React.ReactNode;
-  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
+  onMermaidError: (code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void; // Updated errorType
   onSuggestAiCorrection: (prompt: string) => void;
   onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
   isFirstBlock?: boolean; // New prop to indicate if this is the first block
@@ -279,7 +279,7 @@ interface MemoizedMarkdownRendererProps {
   content: string;
   messageId: string;
   isUserMessage?: boolean;
-  onMermaidError: (code: string, errorType: 'syntax' | 'rendering') => void;
+  onMermaidError: (code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void;
   onSuggestAiCorrection: (prompt: string) => void;
   onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
   onToggleUserMessageExpansion: (messageContent: string) => void;
@@ -363,15 +363,15 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
             rehypePlugins={[rehypeRaw]}
             components={{
               code: (props: any) => {
-                const isFirstBlock = blockIndex === 0;
-                blockIndex++;
+                const isFirstBlockLocal = blockIndex === 0; // Use a local variable to capture the state per block
+                blockIndex++; // Increment for the next block
                 return (
                   <CodeBlock
                     {...props}
                     onMermaidError={onMermaidError}
                     onSuggestAiCorrection={onSuggestAiCorrection}
                     onViewDiagram={onViewDiagram}
-                    isFirstBlock={isFirstBlock}
+                    isFirstBlock={isFirstBlockLocal} // Pass the local variable
                   />
                 );
               },
