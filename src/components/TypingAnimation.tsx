@@ -17,7 +17,7 @@ export const useTypingAnimation = ({ textareaRef, setContent, onTypingComplete }
 
   // Enhanced typing animation with smooth cursor positioning (now in word chunks)
   const startTypingAnimation = useCallback((generatedContent: string, startPosition: number) => {
-    console.log('Starting typing animation:', { contentLength: generatedContent.length, startPosition });
+    // console.log('Starting typing animation:', { contentLength: generatedContent.length, startPosition });
     
     // Validate inputs
     if (!generatedContent || generatedContent.length === 0) {
@@ -83,7 +83,7 @@ export const useTypingAnimation = ({ textareaRef, setContent, onTypingComplete }
         // console.log(`Typed ${chunkToType.length} chars, progress: ${wordIndex}/${words.length} words`);
       } else {
         // Typing complete
-        console.log('Typing animation completed');
+        // console.log('Typing animation completed');
         setIsTypingActive(false);
         
         if (typingIntervalRef.current) {
@@ -98,7 +98,7 @@ export const useTypingAnimation = ({ textareaRef, setContent, onTypingComplete }
   }, [setContent, textareaRef, onTypingComplete]);
 
   const stopTypingAnimation = useCallback(() => {
-    console.log('Stopping typing animation');
+    // console.log('Stopping typing animation');
     
     if (typingIntervalRef.current) {
       clearInterval(typingIntervalRef.current);

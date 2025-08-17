@@ -328,7 +328,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ documents, onDoc
                 console.warn('Failed to delete file from storage:', storageError.message);
                 toast.warning(`File might not have been removed from storage. Error: ${storageError.message}`);
               } else {
-                console.log(`Successfully deleted file from storage: ${storagePath}`);
+                // console.log(`Successfully deleted file from storage: ${storagePath}`);
               }
             } else {
               console.warn('Could not derive storage path from file URL:', fileUrl);
