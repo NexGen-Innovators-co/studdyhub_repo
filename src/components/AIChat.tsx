@@ -216,7 +216,7 @@ const AIChat: React.FC<AIChatProps> = ({
   onSelectionChange,
   activeChatSessionId,
   onNewChatSession,
-  onDeleteMessage, // This prop will now be called AFTER confirmation
+  onDeleteMessage,
   onRegenerateResponse,
   onRetryFailedMessage,
   isSubmittingUserMessage,
@@ -231,8 +231,8 @@ const AIChat: React.FC<AIChatProps> = ({
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // State to control modal visibility
-  const [messageToDelete, setMessageToDelete] = useState<string | null>(null); // State to store ID of message to delete
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -257,6 +257,7 @@ const AIChat: React.FC<AIChatProps> = ({
   const blockAutoSpeakRef = useRef<boolean>(false);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const lastInterimTranscriptRef = useRef<string>('');
   const [panelWidth, setPanelWidth] = useState<number>(() => {
     const saved = localStorage.getItem('diagramPanelWidth');
     return saved ? parseFloat(saved) : 65;
@@ -267,8 +268,6 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isUpdatingDocuments, setIsUpdatingDocuments] = useState(false);
   const prevSessionIdRef = useRef<string | null>(null);
   const [autoTypeInPanel, setAutoTypeInPanel] = useState(true);
-
-  // Corrected: Initialize lastProcessedMessageIdRef as a useRef
   const lastProcessedMessageIdRef = useRef<string | null>(null);
 
   const isPhone = useCallback(() => {
@@ -294,7 +293,6 @@ const AIChat: React.FC<AIChatProps> = ({
         console.error('Error marking message as displayed:', error);
         toast.error(`Failed to mark message as displayed: ${error.message}`);
       } else {
-        // console.log(`Message with ID ${messageId} marked as displayed.`);
         onMessageUpdate({ ...messages.find(msg => msg.id === messageId)!, has_been_displayed: true });
       }
     } catch (error) {
@@ -303,42 +301,33 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [userProfile, activeChatSessionId, messages, onMessageUpdate]);
 
-  // Only update activeDiagram if autoTypeInPanel is true for the first block
   const handleBlockDetected = useCallback((blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => {
-      if (autoTypeInPanel && isFirstBlock) {
-          setActiveDiagram(prev => {
-              if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
-                  return prev; // No change in relevant content, return previous object reference
-              }
-              return { type: blockType, content, language };
-          });
-      }
-  }, [autoTypeInPanel]); // Dependency on autoTypeInPanel
+    if (autoTypeInPanel && isFirstBlock) {
+      setActiveDiagram(prev => {
+        if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
+          return prev;
+        }
+        return { type: blockType, content, language };
+      });
+    }
+  }, [autoTypeInPanel]);
 
-  // Only update activeDiagram if autoTypeInPanel is true for the first block
   const handleBlockUpdate = useCallback((blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => {
-      if (autoTypeInPanel && isFirstBlock) {
-          setActiveDiagram(prev => {
-              if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
-                  return prev; // No change in relevant content, return previous object reference
-              }
-              // For updates, we might need a new object even if content is "same" if typing animation is updating
-              // This is handled by useTypingAnimation's innerContent vs content.
-              return { type: blockType, content, language };
-          });
-      }
-  }, [autoTypeInPanel]); // Dependency on autoTypeInPanel
+    if (autoTypeInPanel && isFirstBlock) {
+      setActiveDiagram(prev => {
+        if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
+          return prev;
+        }
+        return { type: blockType, content, language };
+      });
+    }
+  }, [autoTypeInPanel]);
 
-  // Only act on block end if autoTypeInPanel is true for the first block
   const handleBlockEnd = useCallback((blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => {
-      if (autoTypeInPanel && isFirstBlock) {
-          // Decide if you want to close the panel or keep it open.
-          // For now, let's keep it open after the first block.
-          // If you want to close it, uncomment setActiveDiagram(null)
-          // setActiveDiagram(null);
-      }
-  }, [autoTypeInPanel]); // Dependency on autoTypeInPanel
-
+    if (autoTypeInPanel && isFirstBlock) {
+      // Optionally keep panel open
+    }
+  }, [autoTypeInPanel]);
 
   const handleViewContent = useCallback((
     type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text' | 'html',
@@ -349,69 +338,70 @@ const AIChat: React.FC<AIChatProps> = ({
     setActiveDiagram({ type, content, language, imageUrl });
   }, []);
 
-  // Memoized onMermaidError and onSuggestAiCorrection for DiagramPanel and MessageList
   const memoizedOnMermaidError = useCallback((code: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => {
-    // Now includes the code and errorType in the toast message for more detail
     console.error("Mermaid error in DiagramPanel:", code, errorType);
     toast.error(`Mermaid rendering issue: ${errorType}${code ? ` - Code: ${code.substring(0, 50)}...` : ''}`);
   }, []);
 
   const memoizedOnSuggestAiCorrection = useCallback((prompt: string) => {
-    // Set the input message with the suggested prompt
     setInputMessage(prompt);
-    // Focus the textarea for user to review and send
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
     toast.info("AI correction prepared in input. Review and send to apply.");
   }, []);
 
-
   useEffect(() => {
     const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognitionConstructor) {
-      recognitionRef.current = new SpeechRecognitionConstructor() as SpeechRecognition;
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-US';
-
-      recognitionRef.current.onresult = (event: SpeechRecognitionResultEvent) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        setInputMessage((prev) => prev + finalTranscript);
-        if (interimTranscript) {
-          setInputMessage((prev) => prev + interimTranscript);
-        }
-      };
-
-      recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('Speech recognition error:', event.error);
-        setIsRecognizing(false);
-        if (event.error === 'no-speech') {
-          toast.info('No speech detected. Please try again.');
-        } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          toast.error('Microphone access denied. Please allow microphone permissions.');
-        } else {
-          toast.error(`Speech recognition failed: ${event.error}`);
-        }
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsRecognizing(false);
-      };
-    } else {
+    if (!SpeechRecognitionConstructor) {
       console.warn('SpeechRecognition API not supported in this browser.');
+      toast.error('Speech recognition is not supported in this browser.');
+      return;
     }
+
+    recognitionRef.current = new SpeechRecognitionConstructor() as SpeechRecognition;
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = 'en-US';
+
+    recognitionRef.current.onresult = (event: SpeechRecognitionResultEvent) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript = transcript;
+        }
+      }
+
+      setInputMessage((prev) => {
+        const baseMessage = prev.replace(lastInterimTranscriptRef.current, '').trim();
+        const newTranscript = finalTranscript || interimTranscript;
+        return baseMessage + (baseMessage && newTranscript ? ' ' : '') + newTranscript;
+      });
+
+      lastInterimTranscriptRef.current = interimTranscript;
+    };
+
+    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecognizing(false);
+      if (event.error === 'no-speech') {
+        toast.info('No speech detected. Please try again.');
+      } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        toast.error('Microphone access denied. Please allow microphone permissions in your browser settings.');
+      } else {
+        toast.error(`Speech recognition failed: ${event.error}`);
+      }
+    };
+
+    recognitionRef.current.onend = () => {
+      setIsRecognizing(false);
+      lastInterimTranscriptRef.current = '';
+    };
 
     return () => {
       if (recognitionRef.current) {
@@ -420,23 +410,65 @@ const AIChat: React.FC<AIChatProps> = ({
     };
   }, []);
 
-  const startRecognition = useCallback(() => {
-    if (recognitionRef.current && !isRecognizing) {
-      try {
-        recognitionRef.current.start();
-        setIsRecognizing(true);
-        toast.info('Speech recognition started. Speak now.');
-      } catch (error) {
-        console.error('Error starting speech recognition:', error);
-        toast.error('Failed to start speech recognition.');
+  const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        if (permissionStatus.state === 'granted') {
+          return true;
+        } else if (permissionStatus.state === 'prompt') {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+          return true;
+        } else {
+          toast.error('Microphone access is denied. Please enable it in your browser settings.');
+          return false;
+        }
+      } else {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        return true;
       }
+    } catch (error) {
+      console.error('Error requesting microphone permission:', error);
+      toast.error('Failed to access microphone. Please check your browser settings.');
+      return false;
     }
-  }, [isRecognizing]);
+  }, []);
+
+  const startRecognition = useCallback(async () => {
+    if (!recognitionRef.current) {
+      toast.error('Speech recognition is not supported in this browser.');
+      return;
+    }
+
+    if (isRecognizing) {
+      return;
+    }
+
+    const hasPermission = await requestMicrophonePermission();
+    if (!hasPermission) {
+      setIsRecognizing(false);
+      return;
+    }
+
+    try {
+      recognitionRef.current.start();
+      setIsRecognizing(true);
+      lastInterimTranscriptRef.current = '';
+      toast.info('Speech recognition started. Speak now.');
+    } catch (error) {
+      console.error('Error starting speech recognition:', error);
+      toast.error('Failed to start speech recognition.');
+      setIsRecognizing(false);
+    }
+  }, [isRecognizing, requestMicrophonePermission]);
 
   const stopRecognition = useCallback(() => {
     if (recognitionRef.current && isRecognizing) {
       recognitionRef.current.stop();
       setIsRecognizing(false);
+      lastInterimTranscriptRef.current = '';
       toast.info('Speech recognition stopped.');
     }
   }, [isRecognizing]);
@@ -447,19 +479,17 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleScroll = useCallback(async () => {
     const chatContainer = chatContainerRef.current;
-    if(chatContainer === null) return;
+    if (chatContainer === null) return;
     if (chatContainer) {
       const { scrollTop, scrollHeight, clientHeight } = chatContainer;
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 100;
       setShowScrollToBottomButton(!isAtBottom && scrollHeight > clientHeight);
 
       const scrollThreshold = 100;
-      // FIX: Also check isLoadingSessionMessages to prevent firing on session load
       if (scrollTop < scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
         setIsLoadingOlderMessages(true);
         const oldScrollHeight = scrollHeight;
         await onLoadOlderMessages();
-        // Use a timeout to allow the DOM to update before calculating new scroll position
         setTimeout(() => {
           if (chatContainerRef.current) {
             const newScrollHeight = chatContainerRef.current.scrollHeight;
@@ -469,7 +499,7 @@ const AIChat: React.FC<AIChatProps> = ({
         setIsLoadingOlderMessages(false);
       }
     }
-  }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages]); // Add isLoadingSessionMessages
+  }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages]);
 
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
@@ -481,7 +511,6 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [handleScroll]);
 
-  // Smart scrolling effect
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
     if (!chatContainer) return;
@@ -489,8 +518,6 @@ const AIChat: React.FC<AIChatProps> = ({
     const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
 
     if (isSessionChange) {
-      // On session change, scroll instantly to the bottom after messages are loaded.
-      // The timeout ensures this runs after the new messages are in the DOM.
       if (!isLoadingSessionMessages && messages.length > 0) {
         setTimeout(() => {
           if (messagesEndRef.current) {
@@ -500,7 +527,6 @@ const AIChat: React.FC<AIChatProps> = ({
         }, 0);
       }
     } else {
-      // For new messages in an existing session, scroll smoothly if the user is near the bottom.
       const { scrollTop, scrollHeight, clientHeight } = chatContainer;
       const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200;
       if (isNearBottom) {
@@ -508,7 +534,6 @@ const AIChat: React.FC<AIChatProps> = ({
       }
     }
   }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom]);
-
 
   const stripCodeBlocks = useCallback((content: string): string => {
     let cleanedContent = content;
@@ -536,7 +561,7 @@ const AIChat: React.FC<AIChatProps> = ({
     if (
       lastMessage?.role === 'assistant' &&
       !lastMessage.isError &&
-      lastMessage.id !== lastProcessedMessageIdRef.current && // Corrected: Access .current
+      lastMessage.id !== lastProcessedMessageIdRef.current &&
       !isSpeaking &&
       !isPaused
     ) {
@@ -554,7 +579,7 @@ const AIChat: React.FC<AIChatProps> = ({
           setIsPaused(false);
           currentUtteranceRef.current = null;
           lastSpokenChunkRef.current = '';
-          lastProcessedMessageIdRef.current = lastMessage.id; // Corrected: Access .current
+          lastProcessedMessageIdRef.current = lastMessage.id;
           blockAutoSpeakRef.current = true;
         };
 
@@ -567,7 +592,7 @@ const AIChat: React.FC<AIChatProps> = ({
           setIsPaused(false);
           currentUtteranceRef.current = null;
           lastSpokenChunkRef.current = '';
-          lastProcessedMessageIdRef.current = lastMessage.id; // Corrected: Access .current
+          lastProcessedMessageIdRef.current = lastMessage.id;
           blockAutoSpeakRef.current = true;
         };
 
@@ -577,7 +602,7 @@ const AIChat: React.FC<AIChatProps> = ({
         setIsSpeaking(true);
         setSpeakingMessageId(lastMessage.id);
         lastSpokenChunkRef.current = cleanedContent;
-        lastProcessedMessageIdRef.current = lastMessage.id; // Corrected: Access .current
+        lastProcessedMessageIdRef.current = lastMessage.id;
       }
     }
   }, [messages, isLoading, isLoadingSessionMessages, isPhone, isSpeaking, isPaused, stripCodeBlocks]);
@@ -589,7 +614,6 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [inputMessage, attachedFiles]);
 
-  // NEW: handleMessageDeleteClick function to set state for confirmation modal
   const handleMessageDeleteClick = useCallback((messageId: string) => {
     setMessageToDelete(messageId);
     setShowDeleteConfirm(true);
@@ -597,13 +621,12 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleConfirmDelete = useCallback(() => {
     if (messageToDelete) {
-      onDeleteMessage(messageToDelete); // This calls the prop passed from Index.tsx
+      onDeleteMessage(messageToDelete);
       toast.success('Message deleted.');
       setShowDeleteConfirm(false);
       setMessageToDelete(null);
     }
   }, [messageToDelete, onDeleteMessage]);
-
 
   const handleCloseDiagramPanel = useCallback(() => {
     setActiveDiagram(null);
@@ -612,7 +635,6 @@ const AIChat: React.FC<AIChatProps> = ({
     setPanOffset({ x: 0, y: 0 });
   }, []);
 
-  // Corrected: Renamed parameter to messageContent and used it correctly
   const handleToggleUserMessageExpansion = useCallback((messageContent: string) => {
     setExpandedMessages(prev => {
       const newSet = new Set(prev);
@@ -644,7 +666,6 @@ const AIChat: React.FC<AIChatProps> = ({
         id: fileId
       };
 
-      // Generate preview for images
       if (fileType === 'image') {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -657,7 +678,6 @@ const AIChat: React.FC<AIChatProps> = ({
       }
     });
 
-    // Clear the input
     event.target.value = '';
   }, []);
 
@@ -670,6 +690,7 @@ const AIChat: React.FC<AIChatProps> = ({
   }, []);
 
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
+    setIsLoading(true);
     e.preventDefault();
     if (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) {
       toast.error('Please enter a message, attach files, or select documents/notes.');
@@ -701,16 +722,13 @@ const AIChat: React.FC<AIChatProps> = ({
         notes.some(note => note.id === id)
       );
 
-      // Convert attached files to a format suitable for the backend
       const filesForBackend = await Promise.all(
         attachedFiles.map(async (attachedFile) => {
           const fileType = getFileType(attachedFile.file);
           let data: string | null = null;
           let content: string | null = null;
 
-          // FIXED: Process ALL file types, not just images and documents
           try {
-            // Always read file as base64 for ALL file types
             const reader = new FileReader();
             const base64Promise = new Promise<string>((resolve, reject) => {
               reader.onloadend = () => resolve(reader.result as string);
@@ -719,9 +737,8 @@ const AIChat: React.FC<AIChatProps> = ({
             });
 
             const base64Result = await base64Promise;
-            data = base64Result.split(',')[1]; // Remove data URL prefix
+            data = base64Result.split(',')[1];
 
-            // For text files, also try to extract content
             if (fileType === 'document' || attachedFile.file.type.startsWith('text/')) {
               try {
                 const textReader = new FileReader();
@@ -733,19 +750,18 @@ const AIChat: React.FC<AIChatProps> = ({
                 content = await textPromise;
               } catch (textError) {
                 console.warn('Could not extract text content from file:', textError);
-                // This is fine, we'll still send the file with base64 data
               }
             }
           } catch (error) {
             console.error('Error processing file:', attachedFile.file.name, error);
             toast.error(`Failed to process file: ${attachedFile.file.name}`);
-            throw error; // This will prevent the message from being sent with a broken file
+            throw error;
           }
 
           return {
             name: attachedFile.file.name,
             mimeType: attachedFile.file.type,
-            data, // Now this will have data for ALL file types
+            data,
             type: fileType,
             size: attachedFile.file.size,
             content,
@@ -762,7 +778,6 @@ const AIChat: React.FC<AIChatProps> = ({
         filesForBackend
       );
 
-      // Clear form
       setInputMessage('');
       setAttachedFiles([]);
       if (fileInputRef.current) {
@@ -806,53 +821,6 @@ const AIChat: React.FC<AIChatProps> = ({
     activeChatSessionId,
     onSendMessageToBackend
   ]);
-  // const handleGenerateImageFromText = useCallback(async () => {
-  //   if (!imagePrompt.trim()) {
-  //     toast.error('Please enter a prompt for image generation.');
-  //     return;
-  //   }
-
-  //   setIsGeneratingImage(true);
-  //   setGeneratedImageUrl(null);
-  //   toast.info('Generating image...', { id: 'image-gen' });
-
-  // //   try {
-  //     const payload = { instances: { prompt: imagePrompt }, parameters: { "sampleCount": 1 } };
-  //     const apiKey = "";
-  //     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
-
-  //     const response = await fetch(apiUrl, {
-  //       method: 'POST',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify(payload)
-  //     });
-  //     const result = await response.json();
-
-  //     if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
-  //       const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
-  //       setGeneratedImageUrl(imageUrl);
-  //       toast.success('Image generated successfully!', { id: 'image-gen' });
-  //       onNewMessage({
-  //         id: generateId(),
-  //         content: `Here is an image generated from your prompt: "${imagePrompt}"`,
-  //         role: 'assistant',
-  //         timestamp: new Date().toISOString(),
-  //         imageUrl: imageUrl,
-  //         imageMimeType: 'image/png',
-  //         has_been_displayed: false,
-  //         isError: false,
-  //       });
-  //       setImagePrompt('');
-  //     } else {
-  //       throw new Error('No image data received from API.');
-  //     }
-  //   } catch (error: Error | any) {
-  //     console.error('Error generating image:', error);
-  //     toast.error(`Failed to generate image: ${error.message}`, { id: 'image-gen' });
-  //   } finally {
-  //     setIsGeneratingImage(false);
-  //   }
-  // }, [imagePrompt]);
 
   const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
     setMergedDocuments(prevDocs => {
@@ -920,7 +888,7 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsPaused(false);
       currentUtteranceRef.current = null;
       lastSpokenChunkRef.current = '';
-      lastProcessedMessageIdRef.current = messageId; // Corrected: Access .current
+      lastProcessedMessageIdRef.current = messageId;
       blockAutoSpeakRef.current = true;
     };
 
@@ -933,7 +901,7 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsPaused(false);
       currentUtteranceRef.current = null;
       lastSpokenChunkRef.current = '';
-      lastProcessedMessageIdRef.current = messageId; // Corrected: Access .current
+      lastProcessedMessageIdRef.current = messageId;
       blockAutoSpeakRef.current = true;
     };
 
@@ -944,7 +912,7 @@ const AIChat: React.FC<AIChatProps> = ({
     setSpeakingMessageId(messageId);
     setIsPaused(false);
     lastSpokenChunkRef.current = cleanedContent;
-    lastProcessedMessageIdRef.current = messageId; // Corrected: Access .current
+    lastProcessedMessageIdRef.current = messageId;
   }, [stopSpeech, stripCodeBlocks]);
 
   useEffect(() => {
@@ -1034,7 +1002,7 @@ const AIChat: React.FC<AIChatProps> = ({
               speakingMessageId={speakingMessageId}
               isPaused={isPaused}
               speakMessage={speakMessage}
-              pauseSpeech={ pauseSpeech}
+              pauseSpeech={pauseSpeech}
               resumeSpeech={resumeSpeech}
               stopSpeech={stopSpeech}
               isDiagramPanelOpen={isDiagramPanelOpen}
@@ -1044,7 +1012,7 @@ const AIChat: React.FC<AIChatProps> = ({
               onBlockDetected={handleBlockDetected}
               onBlockUpdate={handleBlockUpdate}
               onBlockEnd={handleBlockEnd}
-              />
+            />
 
             {isGeneratingImage && (
               <div className="flex justify-center font-sans">
@@ -1064,13 +1032,12 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8  md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent  font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(' + panelWidth + '%+1.5rem)]' : ''}`}>
-            <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2"> {/* NEW WRAPPER DIV */}
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(' + panelWidth + '%+1.5rem)]' : ''}`}>
+            <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2">
               {(selectedDocumentIds.length > 0 || attachedFiles.length > 0) && (
                 <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700`}>
                   <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200 font-claude">Context:</span>
 
-                  {/* Show attached files */}
                   {attachedFiles.length > 0 && (
                     <Badge
                       variant="secondary"
@@ -1188,13 +1155,13 @@ const AIChat: React.FC<AIChatProps> = ({
                     {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
                   </Button>
                   <Button
-                      onClick={() => setAutoTypeInPanel(prev => !prev)}
-                      variant="outline"
-                      className="text-sm text-gray-400 dark:text-gray-400 bg-transparent text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 flex-shrink-0 "
-                      title="Toggle code typing in panel"
-                    >
-                      {autoTypeInPanel ? 'panel on' : 'Panel Off'}
-                    </Button>
+                    onClick={() => setAutoTypeInPanel(prev => !prev)}
+                    variant="outline"
+                    className="text-sm text-gray-400 dark:text-gray-400 bg-transparent text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 flex-shrink-0"
+                    title="Toggle code typing in panel"
+                  >
+                    {autoTypeInPanel ? 'Panel On' : 'Panel Off'}
+                  </Button>
                 </div>
                 <Button
                   type="submit"
@@ -1210,7 +1177,7 @@ const AIChat: React.FC<AIChatProps> = ({
                   )}
                 </Button>
               </div>
-            </div> {/* END NEW WRAPPER DIV */}
+            </div>
           </div>
           {showDocumentSelector && (
             <DocumentSelector
@@ -1228,9 +1195,9 @@ const AIChat: React.FC<AIChatProps> = ({
             />
           )}
           <ConfirmationModal
-            isOpen={showDeleteConfirm} // Modal visibility controlled by this state
+            isOpen={showDeleteConfirm}
             onClose={() => setShowDeleteConfirm(false)}
-            onConfirm={handleConfirmDelete} // This now triggers the actual deletion
+            onConfirm={handleConfirmDelete}
             title="Delete Message"
             message="Are you sure you want to delete this message? This action cannot be undone."
           />
@@ -1241,9 +1208,9 @@ const AIChat: React.FC<AIChatProps> = ({
             key={activeDiagram ? `${activeDiagram.type}-${activeDiagram.content?.substring(0, 50) || ''}-${activeDiagram.language || ''}` : 'no-diagram'}
             diagramContent={activeDiagram?.content}
             diagramType={activeDiagram?.type || 'unknown'}
-            onClose={handleCloseDiagramPanel} // Use memoized handler
-            onMermaidError={memoizedOnMermaidError} // Use memoized handler
-            onSuggestAiCorrection={memoizedOnSuggestAiCorrection} // Use memoized handler
+            onClose={handleCloseDiagramPanel}
+            onMermaidError={memoizedOnMermaidError}
+            onSuggestAiCorrection={memoizedOnSuggestAiCorrection}
             isOpen={isDiagramPanelOpen}
             language={activeDiagram?.language}
             imageUrl={activeDiagram?.imageUrl}

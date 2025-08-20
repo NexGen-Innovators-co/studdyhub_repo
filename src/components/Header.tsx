@@ -153,14 +153,14 @@ export const Header: React.FC<HeaderProps> = ({
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sign Out</span>
             </Button>
-          <Button
+          {/* <Button
             variant="outline"
             size="sm"
             onClick={handleSignOut}
             className="sm:hidden dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
           >
             <LogOut className="h-4 w-4" />
-          </Button>
+          </Button> */}
       </div>
     </header>
   );

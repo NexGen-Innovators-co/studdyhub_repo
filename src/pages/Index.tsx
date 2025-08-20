@@ -7,19 +7,20 @@ import { TabContent } from '../components/TabContent';
 import { useAuth } from '../hooks/useAuth';
 import { useAppData } from '../hooks/useAppData';
 import { useAppOperations } from '../hooks/useAppOperations';
-import { Button } from '../components/ui/button';
-import { LogOut } from 'lucide-react';
+// import { Button } from '../components/ui/button';
+// import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../integrations/supabase/client';
 import { Message, Quiz, ClassRecording } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
-import { User } from '@supabase/supabase-js';
+// import { User } from '@supabase/supabase-js';
 // import { generateId } from '@/utils/helpers';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
-import BookPagesAnimation, { LoadingScreen } from '../components/bookloader';
+// import BookPagesAnimation, { LoadingScreen } from '../components/bookloader';
 import { insertUserMessage, requestAIResponse } from '../services/messageServices';
-import { useInstantMessage } from '../hooks/useInstantMessage';
+import { LoadingScreen } from '@/components/bookloader';
+// import { useInstantMessage } from '../hooks/useInstantMessage';
 
 // Enhanced loading component with progress
 

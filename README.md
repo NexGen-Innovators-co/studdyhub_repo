@@ -142,7 +142,7 @@ NoteMind/
 │   │   ├── InlineAIDialog.tsx
 │   │   ├── InlineAIEditor.tsx
 │   │   ├── InlineAIToolbar.tsx
-│   │   ├── LearningStyleSettings.tsx
+│   │   ├── UserSettings.tsx
 │   │   ├── MarkdownComponent.tsx
 │   │   ├── MarkdownRenderer.tsx
 │   │   ├── Mermaid.tsx

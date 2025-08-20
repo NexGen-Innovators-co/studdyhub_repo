@@ -878,27 +878,17 @@ export const useAppData = () => {
                         
                         // Note: replaceOptimisticMessage should be passed from parent component if needed
                     } else if (payload.eventType === 'UPDATE') {
-                        const updatedFields = payload.new;
-                        setChatMessages(prevMessages =>
-                            prevMessages.map(msg => {
-                                if (msg.id === updatedFields.id) {
-                                    // Merge existing message with new fields to prevent data loss
-                                    return {
-                                        ...msg,
-                                        content: updatedFields.content ?? msg.content,
-                                        role: (updatedFields.role ?? msg.role) as 'user' | 'assistant',
-                                        timestamp: updatedFields.timestamp ?? msg.timestamp,
-                                        isError: updatedFields.is_error ?? msg.isError,
-                                        attachedDocumentIds: updatedFields.attached_document_ids ?? msg.attachedDocumentIds,
-                                        attachedNoteIds: updatedFields.attached_note_ids ?? msg.attachedNoteIds,
-                                        imageUrl: updatedFields.image_url ?? msg.imageUrl,
-                                        imageMimeType: updatedFields.image_mime_type ?? msg.imageMimeType,
-                                        has_been_displayed: updatedFields.has_been_displayed ?? msg.has_been_displayed,
-                                    };
-                                }
-                                return msg;
-                            })
-                        );
+                      const updated = payload.new as any;
+                      setChatMessages(prev => prev.map(m => {
+                        if (m.id !== updated.id) return m;
+                        // Preserve existing content if incoming payload has null/undefined content
+                        const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
+                        return {
+                          ...m,
+                          ...updated,
+                          content: preservedContent
+                        };
+                      }));
                     } else if (payload.eventType === 'DELETE') {
                         setChatMessages(prevMessages =>
                             prevMessages.filter(msg => msg.id !== payload.old.id)
