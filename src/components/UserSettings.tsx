@@ -24,12 +24,12 @@ import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 import { UserProfile } from '../types/Document';
 
-interface LearningStyleSettingsProps {
+interface UserSettingsProps {
   profile: UserProfile | null;
   onProfileUpdate: (profile: UserProfile) => void;
 }
 
-export const LearningStyleSettings: React.FC<LearningStyleSettingsProps> = ({
+export const UserSettings: React.FC<UserSettingsProps> = ({
   profile,
   onProfileUpdate
 }) => {

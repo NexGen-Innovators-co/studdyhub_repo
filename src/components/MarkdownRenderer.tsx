@@ -65,12 +65,12 @@ export class CodeBlockErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return this.props.fallback || (
-        <div className="my-6 p-4 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950 dark:border-red-800">
+        <div className="my-4 sm:my-6 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950 dark:border-red-800">
           <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="font-medium">Rendering Error</span>
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            <span className="font-medium text-sm sm:text-base">Rendering Error</span>
           </div>
-          <p className="text-sm text-red-600 mt-1 dark:text-red-400">
+          <p className="text-xs sm:text-sm text-red-600 mt-1 dark:text-red-400">
             Failed to render this content. Please try refreshing or contact support if the issue persists.
           </p>
         </div>
@@ -86,10 +86,10 @@ interface CodeBlockProps {
   inline: boolean;
   className: string;
   children: React.ReactNode;
-  onMermaidError: (code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void; // Updated errorType
+  onMermaidError: (code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void;
   onSuggestAiCorrection: (prompt: string) => void;
   onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
-  isFirstBlock?: boolean; // New prop to indicate if this is the first block
+  isFirstBlock?: boolean;
 }
 
 const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, isFirstBlock, ...props }) => {
@@ -98,23 +98,119 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
   const lang = match && match[1];
   const codeContent = String(children).trim();
   const [showRawCode, setShowRawCode] = useState(false);
+  
+  const handleCopyCode = async () => {
+    await copy(codeContent);
+  };
 
   if (!inline && lang === 'html') {
     return (
-      <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
-          <FileText className="h-5 w-5" />
-          <span className="font-medium">Web Page</span>
+      <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
+            <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+            <span className="font-medium text-sm sm:text-base">Web Page</span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewDiagram && onViewDiagram('html', codeContent, lang)}
+              className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm flex-1 sm:flex-initial"
+            >
+              <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden xs:inline">View Web Page</span>
+              <span className="xs:hidden">View</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyCode}
+              className="text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+              title="Copy code"
+            >
+              {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowRawCode(!showRawCode)}
+              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+              title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+            >
+              {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showRawCode) {
+    return (
+      <div className="relative my-4 sm:my-6 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+          <span className="text-xs sm:text-sm font-medium text-gray-600 uppercase tracking-wide dark:text-gray-300">
+            Raw Code ({lang})
+          </span>
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyCode}
+              className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+              title="Copy code"
+            >
+              {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowRawCode(false)}
+              className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+              title="Hide raw code"
+            >
+              <X className="h-3 w-3 sm:h-4 sm:w-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="relative bg-white dark:bg-gray-900">
+          <div className="overflow-x-auto">
+            <pre className="p-3 sm:p-4 font-mono text-xs sm:text-sm leading-relaxed min-w-0">
+              <code className="text-gray-800 dark:text-gray-200 block whitespace-pre">{codeContent}</code>
+            </pre>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const createDiagramBlock = (title: string, type: any) => (
+    <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
+          <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+          <span className="font-medium text-sm sm:text-base">{title}</span>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onViewDiagram && onViewDiagram('html', codeContent, lang)}
-            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
+            onClick={() => onViewDiagram && onViewDiagram(type, codeContent, lang)}
+            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm flex-1 sm:flex-initial"
           >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            View Web Page
+            <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden xs:inline">View Diagram</span>
+            <span className="xs:hidden">View</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCopyCode}
+            className="text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+            title="Copy code"
+          >
+            {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
           </Button>
           <Button
             variant="ghost"
@@ -123,67 +219,12 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
             className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
             title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
           >
-            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+            {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
           </Button>
         </div>
       </div>
-    );
-  }
-
-  if (showRawCode) {
-    return (
-      <div className="relative my-6 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-          <span className="text-sm font-medium text-gray-600 uppercase tracking-wide dark:text-gray-300">
-            Raw Code ({lang})
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowRawCode(false)}
-            className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
-            title="Hide raw code"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="p-4 bg-white overflow-x-auto dark:bg-gray-900">
-          <pre className="font-mono text-sm leading-relaxed">
-            <code className="text-gray-800 dark:text-gray-200">{codeContent}</code>
-          </pre>
-        </div>
-      </div>
-    );
-  }
-
-  const createDiagramBlock = (title: string, type: any) => (
-    <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
-        <FileText className="h-5 w-5" />
-        <span className="font-medium">{title}</span>
-      </div>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewDiagram && onViewDiagram(type, codeContent, lang)}
-          className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
-        >
-          <Maximize2 className="h-4 w-4 mr-2" />
-          View Diagram
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowRawCode(!showRawCode)}
-          className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
-          title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
-        >
-          {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-        </Button>
-        </div>
-      </div>
-    );
+    </div>
+  );
 
   if (!inline && lang === 'mermaid') {
     return createDiagramBlock('Mermaid Diagram', 'mermaid');
@@ -202,64 +243,86 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
   }
 
   if (!inline && lang && !isFirstBlock) {
-    // Non-first code blocks render a button to view in panel
     return (
-      <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
-          <FileText className="h-5 w-5" />
-          <span className="font-medium">{lang.toUpperCase()} Code</span>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
-            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
-          >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            View Code
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowRawCode(!showRawCode)}
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
-            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
-          >
-            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-          </Button>
+      <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
+            <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+            <span className="font-medium text-sm sm:text-base">{lang.toUpperCase()} Code</span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
+              className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm flex-1 sm:flex-initial"
+            >
+              <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden xs:inline">View Code</span>
+              <span className="xs:hidden">View</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyCode}
+              className="text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+              title="Copy code"
+            >
+              {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowRawCode(!showRawCode)}
+              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+              title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+            >
+              {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
   if (!inline && lang) {
-    // First code block renders normally (handled by DiagramPanel if autoTypeInPanel is true)
     return (
-      <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center gap-3 text-slate-700 dark:text-gray-200">
-          <FileText className="h-5 w-5" />
-          <span className="font-medium">{lang.toUpperCase()} Code</span>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
-            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800"
-          >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            View Code
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowRawCode(!showRawCode)}
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
-            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
-          >
-            {showRawCode ? <X className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-          </Button>
+      <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
+            <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+            <span className="font-medium text-sm sm:text-base">{lang.toUpperCase()} Code</span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
+              className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm flex-1 sm:flex-initial"
+            >
+              <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden xs:inline">View Code</span>
+              <span className="xs:hidden">View</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyCode}
+              className="text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+              title="Copy code"
+            >
+              {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowRawCode(!showRawCode)}
+              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+              title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+            >
+              {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -267,7 +330,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
 
   return (
     <code
-      className="bg-gray-100 text-gray-900 px-1.5 py-0.5 rounded font-mono text-sm dark:bg-gray-800 dark:text-gray-100"
+      className="bg-gray-100 text-gray-900 px-1 sm:px-1.5 py-0.5 rounded font-mono text-xs sm:text-sm dark:bg-gray-800 dark:text-gray-100"
       {...props}
     >
       {children}
@@ -351,41 +414,40 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   const isExpanded = expandedMessages.has(content);
   const needsExpansion = isUserMessage && content.length > MAX_USER_MESSAGE_LENGTH;
 
-  // Track block index to determine isFirstBlock
   let blockIndex = 0;
 
   return (
     <CodeBlockErrorBoundary>
-      <div className="relative">
+      <div className="relative max-w-none w-full">
         <div className="font-claude">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeRaw]}
             components={{
               code: (props: any) => {
-                const isFirstBlockLocal = blockIndex === 0; // Use a local variable to capture the state per block
-                blockIndex++; // Increment for the next block
+                const isFirstBlockLocal = blockIndex === 0;
+                blockIndex++;
                 return (
                   <CodeBlock
                     {...props}
                     onMermaidError={onMermaidError}
                     onSuggestAiCorrection={onSuggestAiCorrection}
                     onViewDiagram={onViewDiagram}
-                    isFirstBlock={isFirstBlockLocal} // Pass the local variable
+                    isFirstBlock={isFirstBlockLocal}
                   />
                 );
               },
               h1: (props) => (
-                <h1 className={`text-2xl font-semibold ${headingColorClass} mt-8 mb-4 leading-tight font-claude`} {...props} />
+                <h1 className={`text-xl sm:text-2xl font-semibold ${headingColorClass} mt-6 sm:mt-8 mb-3 sm:mb-4 leading-tight font-claude`} {...props} />
               ),
               h2: (props) => (
-                <h2 className={`text-xl font-semibold ${headingColorClass} mt-6 mb-3 leading-tight font-claude`} {...props} />
+                <h2 className={`text-lg sm:text-xl font-semibold ${headingColorClass} mt-5 sm:mt-6 mb-2 sm:mb-3 leading-tight font-claude`} {...props} />
               ),
               h3: (props) => (
-                <h3 className={`text-lg font-semibold ${headingColorClass} mt-5 mb-2 leading-tight font-claude`} {...props} />
+                <h3 className={`text-base sm:text-lg font-semibold ${headingColorClass} mt-4 sm:mt-5 mb-2 leading-tight font-claude`} {...props} />
               ),
               h4: (props) => (
-                <h4 className={`text-base font-semibold ${headingColorClass} mt-4 mb-2 leading-tight font-claude`} {...props} />
+                <h4 className={`text-sm sm:text-base font-semibold ${headingColorClass} mt-3 sm:mt-4 mb-1 sm:mb-2 leading-tight font-claude`} {...props} />
               ),
               h5: (props) => (
                 <h5 className={`text-sm font-semibold ${headingColorClass} mt-3 mb-1 leading-tight font-claude`} {...props} />
@@ -394,33 +456,35 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
                 <h6 className={`text-sm font-medium ${headingColorClass} mt-2 mb-1 leading-tight font-claude`} {...props} />
               ),
               p: (props) => (
-                <p className={`${textColorClass} leading-relaxed mb-4 last:mb-0 font-claude`} {...props} />
+                <p className={`${textColorClass} leading-relaxed mb-3 sm:mb-4 last:mb-0 font-claude text-sm sm:text-base`} {...props} />
               ),
               a: (props) => (
-                <a className={`${linkColorClass} transition-colors font-claude`} {...props} />
+                <a className={`${linkColorClass} transition-colors font-claude break-words`} {...props} />
               ),
               ul: (props) => (
-                <ul className={`list-disc ml-6 mb-4 space-y-1 ${textColorClass} font-claude`} {...props} />
+                <ul className={`list-disc ml-4 sm:ml-6 mb-3 sm:mb-4 space-y-1 ${textColorClass} font-claude text-sm sm:text-base`} {...props} />
               ),
               ol: (props) => (
-                <ol className={`list-decimal ml-6 mb-4 space-y-1 ${textColorClass} font-claude`} {...props} />
+                <ol className={`list-decimal ml-4 sm:ml-6 mb-3 sm:mb-4 space-y-1 ${textColorClass} font-claude text-sm sm:text-base`} {...props} />
               ),
               li: (props) => (
                 <li className="leading-relaxed font-claude" {...props} />
               ),
               blockquote: (props) => (
-                <blockquote className={`border-l-4 ${blockquoteBgClass} pl-4 py-2 my-4 ${blockquoteTextColorClass} rounded-r font-claude`} {...props} />
+                <blockquote className={`border-l-4 ${blockquoteBgClass} pl-3 sm:pl-4 py-2 my-3 sm:my-4 ${blockquoteTextColorClass} rounded-r font-claude text-sm sm:text-base`} {...props} />
               ),
               table: (props) => (
-                <div className="overflow-x-auto my-6 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <table className="w-full border-collapse bg-white dark:bg-gray-900 font-claude" {...props} />
+                <div className="my-4 sm:my-6 -mx-2 sm:-mx-0">
+                  <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                    <table className="w-full min-w-full border-collapse bg-white dark:bg-gray-900 font-claude text-sm sm:text-base" {...props} />
+                  </div>
                 </div>
               ),
               thead: (props) => (
                 <thead className="bg-gray-50 dark:bg-gray-800" {...props} />
               ),
               th: (props) => (
-                <th className="px-4 py-3 text-left border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-gray-100 font-claude" {...props} />
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-gray-100 font-claude text-xs sm:text-sm" {...props} />
               ),
               tbody: (props) => (
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700" {...props} />
@@ -429,10 +493,10 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
                 <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50" {...props} />
               ),
               td: (props) => (
-                <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-claude" {...props} />
+                <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900 dark:text-gray-100 font-claude text-xs sm:text-sm break-words" {...props} />
               ),
               hr: (props) => (
-                <hr className="my-8 border-t border-gray-200 dark:border-gray-700" {...props} />
+                <hr className="my-6 sm:my-8 border-t border-gray-200 dark:border-gray-700" {...props} />
               ),
               strong: (props) => (
                 <strong className={`font-semibold ${textColorClass} font-claude`} {...props} />
@@ -447,7 +511,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
         </div>
 
         {isTyping && (
-          <span className="inline-block w-0.5 h-5 bg-gray-600 dark:bg-gray-400 ml-0.5 animate-pulse" />
+          <span className="inline-block w-0.5 h-4 sm:h-5 bg-gray-600 dark:bg-gray-400 ml-0.5 animate-pulse" />
         )}
 
         {needsExpansion && (
@@ -455,7 +519,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
             variant="link"
             size="sm"
             onClick={() => onToggleUserMessageExpansion(content)}
-            className="text-white/80 hover:text-white p-0 h-auto mt-2 flex items-center gap-1 text-sm font-claude"
+            className="text-white/80 hover:text-white p-0 h-auto mt-2 flex items-center gap-1 text-xs sm:text-sm font-claude"
           >
             {isExpanded ? (
               <>

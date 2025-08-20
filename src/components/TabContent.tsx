@@ -5,7 +5,7 @@ import { ClassRecordings } from './ClassRecordings';
 import { Schedule } from './Schedule';
 import AIChat from './AIChat';
 import { DocumentUpload } from './DocumentUpload';
-import { LearningStyleSettings } from './LearningStyleSettings';
+import { UserSettings } from './UserSettings';
 import Dashboard from './Dashboard'; // FIXED: Import the Dashboard component
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
@@ -293,8 +293,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     scheduleItems: props.scheduleItems,
     chatMessages: props.chatMessages,
     userProfile: props.userProfile,
-    onNavigateToTab: props.onNavigateToTab || (() => {}),
-    onCreateNew: props.onCreateNew || (() => {}),
+    onNavigateToTab: props.onNavigateToTab || (() => { }),
+    onCreateNew: props.onCreateNew || (() => { }),
   }), [
     props.filteredNotes,
     props.recordings,
@@ -391,7 +391,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     case 'settings':
       return (
         <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-gray-900">
-          <LearningStyleSettings
+          <UserSettings
             profile={props.userProfile}
             onProfileUpdate={props.onProfileUpdate}
           />
