@@ -418,7 +418,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
 
   return (
     <CodeBlockErrorBoundary>
-      <div className="relative sm:max-w-[50%] max-w-2xl">
+      <div className={`relative ${isUserMessage ? 'sm:max-w-[50%] max-w-2xl' : 'max-w-[100vw] sm:max-w-full'}`}>
         <div className="font-claude">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
