@@ -351,6 +351,33 @@ const AIChat: React.FC<AIChatProps> = ({
     toast.info("AI correction prepared in input. Review and send to apply.");
   }, []);
 
+  // Request Notification Permission
+  const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
+    if (!("Notification" in window)) {
+      console.warn("Notification API not supported in this browser.");
+      toast.error("Notifications are not supported in this browser.");
+      return false;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      return permission === "granted";
+    } catch (error) {
+      console.error("Error requesting notification permission:", error);
+      toast.error("Failed to request notification permission.");
+      return false;
+    }
+  }, []);
+
+  // Show Browser Notification
+  const showNotification = useCallback((title: string, options: NotificationOptions) => {
+    if (Notification.permission === "granted") {
+      new Notification(title, options);
+    } else {
+      console.warn("Notification permission not granted.");
+    }
+  }, []);
+
   useEffect(() => {
     const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionConstructor) {
@@ -415,10 +442,20 @@ const AIChat: React.FC<AIChatProps> = ({
       if (navigator.permissions && navigator.permissions.query) {
         const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
         if (permissionStatus.state === 'granted') {
+          // Show notification when permission is already granted
+          showNotification("Microphone Access Granted", {
+            body: "You can now use speech recognition.",
+            icon: "/microphone-icon.png", // Optional: Add an icon path
+          });
           return true;
         } else if (permissionStatus.state === 'prompt') {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           stream.getTracks().forEach(track => track.stop());
+          // Show notification after permission is granted
+          showNotification("Microphone Access Granted", {
+            body: "You can now use speech recognition.",
+            icon: "/microphone-icon.png",
+          });
           return true;
         } else {
           toast.error('Microphone access is denied. Please enable it in your browser settings.');
@@ -427,6 +464,11 @@ const AIChat: React.FC<AIChatProps> = ({
       } else {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
+        // Show notification after permission is granted
+        showNotification("Microphone Access Granted", {
+          body: "You can now use speech recognition.",
+          icon: "/microphone-icon.png",
+        });
         return true;
       }
     } catch (error) {
@@ -434,7 +476,7 @@ const AIChat: React.FC<AIChatProps> = ({
       toast.error('Failed to access microphone. Please check your browser settings.');
       return false;
     }
-  }, []);
+  }, [showNotification]);
 
   const startRecognition = useCallback(async () => {
     if (!recognitionRef.current) {
@@ -446,8 +488,14 @@ const AIChat: React.FC<AIChatProps> = ({
       return;
     }
 
-    const hasPermission = await requestMicrophonePermission();
-    if (!hasPermission) {
+    // Request notification permission before microphone permission
+    const hasNotificationPermission = await requestNotificationPermission();
+    if (!hasNotificationPermission) {
+      console.warn("Notification permission not granted, proceeding without notification.");
+    }
+
+    const hasMicrophonePermission = await requestMicrophonePermission();
+    if (!hasMicrophonePermission) {
       setIsRecognizing(false);
       return;
     }
@@ -462,7 +510,7 @@ const AIChat: React.FC<AIChatProps> = ({
       toast.error('Failed to start speech recognition.');
       setIsRecognizing(false);
     }
-  }, [isRecognizing, requestMicrophonePermission]);
+  }, [isRecognizing, requestMicrophonePermission, requestNotificationPermission]);
 
   const stopRecognition = useCallback(() => {
     if (recognitionRef.current && isRecognizing) {

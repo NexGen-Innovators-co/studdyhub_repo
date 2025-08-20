@@ -118,7 +118,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
               onClick={() => onViewDiagram && onViewDiagram('html', codeContent, lang)}
               className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm flex-1 sm:flex-initial"
             >
-              <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <Maximize2 className="h-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               <span className="hidden xs:inline">View Web Page</span>
               <span className="xs:hidden">View</span>
             </Button>
@@ -148,12 +148,12 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
 
   if (showRawCode) {
     return (
-      <div className="relative my-4 sm:my-6 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="relative my-4 sm:my-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full">
         <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
           <span className="text-xs sm:text-sm font-medium text-gray-600 uppercase tracking-wide dark:text-gray-300">
             Raw Code ({lang})
           </span>
-          <div className="flex gap-1">
+          <div className="flex">
             <Button
               variant="ghost"
               size="sm"
@@ -174,10 +174,10 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
             </Button>
           </div>
         </div>
-        <div className="relative bg-white dark:bg-gray-900">
-          <div className="overflow-x-auto">
-            <pre className="p-3 sm:p-4 font-mono text-xs sm:text-sm leading-relaxed min-w-0">
-              <code className="text-gray-800 dark:text-gray-200 block whitespace-pre">{codeContent}</code>
+        <div className="relative bg-white dark:bg-gray-900 w-full box-border">
+          <div className="overflow-x-auto max-w-[100vw] sm:max-w-full">
+            <pre className="p-2 sm:p-3 font-mono text-xs sm:text-sm leading-relaxed max-w-full whitespace-pre-wrap break-words">
+              <code className="text-gray-800 dark:text-gray-200 block">{codeContent}</code>
             </pre>
           </div>
         </div>
@@ -418,7 +418,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
 
   return (
     <CodeBlockErrorBoundary>
-      <div className="relative max-w-none w-full">
+      <div className="relative sm:max-w-[50%] max-w-2xl">
         <div className="font-claude">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
