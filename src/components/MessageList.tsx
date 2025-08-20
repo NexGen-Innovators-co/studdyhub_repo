@@ -265,7 +265,7 @@ export const MessageList = memo(({
                     {contentToRender}
                   </div>
                 ) : (
-                  <div className="min-w-0 max-w-2xl break-words whitespace-pre-wrap overflow-auto">
+                  <div className="min-w-0 max-w-full break-words whitespace-pre-wrap overflow-auto">
                     {contentToRender}
                   </div>
                 )}
