@@ -355,7 +355,6 @@ const AIChat: React.FC<AIChatProps> = ({
   const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
     if (!("Notification" in window)) {
       console.warn("Notification API not supported in this browser.");
-      toast.error("Notifications are not supported in this browser.");
       return false;
     }
 
@@ -364,7 +363,6 @@ const AIChat: React.FC<AIChatProps> = ({
       return permission === "granted";
     } catch (error) {
       console.error("Error requesting notification permission:", error);
-      toast.error("Failed to request notification permission.");
       return false;
     }
   }, []);
@@ -373,16 +371,84 @@ const AIChat: React.FC<AIChatProps> = ({
   const showNotification = useCallback((title: string, options: NotificationOptions) => {
     if (Notification.permission === "granted") {
       new Notification(title, options);
-    } else {
-      console.warn("Notification permission not granted.");
     }
   }, []);
 
+  // Add permission status tracking
+  const [micPermissionStatus, setMicPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'checking'>('unknown');
+
+  // Check if microphone permission is already granted
+  const checkMicrophonePermission = useCallback(async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        return permissionStatus.state as 'granted' | 'denied' | 'prompt';
+      }
+      return 'unknown';
+    } catch (error) {
+      console.error('Error checking microphone permission:', error);
+      return 'unknown';
+    }
+  }, []);
+
+  // FIXED: Improved microphone permission request with status tracking
+  const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
+    // First check if permission is already granted
+    const currentStatus = await checkMicrophonePermission();
+    if (currentStatus === 'granted') {
+      setMicPermissionStatus('granted');
+      return true;
+    }
+
+    setMicPermissionStatus('checking');
+    
+    try {
+      // Request media stream - this will prompt for permission if needed
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // If successful, stop all tracks immediately (we just needed permission)
+      stream.getTracks().forEach(track => track.stop());
+      
+      setMicPermissionStatus('granted');
+      
+      // Show success notification only for first-time grants
+      if (currentStatus === 'prompt' || currentStatus === 'unknown') {
+        showNotification("Microphone Access Granted", {
+          body: "You can now use speech recognition.",
+          icon: "/microphone-icon.png",
+        });
+      }
+      
+      return true;
+      
+    } catch (error: any) {
+      console.error('Error requesting microphone permission:', error);
+      setMicPermissionStatus('denied');
+      
+      // Handle different types of permission errors
+      if (error.name === 'NotAllowedError') {
+        toast.error('Microphone access was denied. Please click the microphone icon in your browser address bar to allow access, then try again.');
+      } else if (error.name === 'NotFoundError') {
+        toast.error('No microphone found. Please check that a microphone is connected to your device.');
+      } else if (error.name === 'NotReadableError') {
+        toast.error('Microphone is already in use by another application. Please close other apps using the microphone and try again.');
+      } else if (error.name === 'OverconstrainedError') {
+        toast.error('Microphone constraints could not be satisfied. Please try again.');
+      } else if (error.name === 'SecurityError') {
+        toast.error('Microphone access blocked due to security restrictions. Please ensure you are using HTTPS.');
+      } else {
+        toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
+      }
+      
+      return false;
+    }
+  }, [showNotification, checkMicrophonePermission]);
+
+  // FIXED: Enhanced speech recognition setup with better duplicate prevention
   useEffect(() => {
     const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionConstructor) {
       console.warn('SpeechRecognition API not supported in this browser.');
-      toast.error('Speech recognition is not supported in this browser.');
       return;
     }
 
@@ -390,13 +456,17 @@ const AIChat: React.FC<AIChatProps> = ({
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
     recognitionRef.current.lang = 'en-US';
+    
+    // Add maxAlternatives for better recognition
+    (recognitionRef.current as any).maxAlternatives = 1;
 
     recognitionRef.current.onresult = (event: SpeechRecognitionResultEvent) => {
       let finalTranscript = '';
       let interimTranscript = '';
 
+      // Only process new results from the last result index
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
+        const transcript = event.results[i][0].transcript.trim();
         if (event.results[i].isFinal) {
           finalTranscript += transcript + ' ';
         } else {
@@ -405,23 +475,53 @@ const AIChat: React.FC<AIChatProps> = ({
       }
 
       setInputMessage((prev) => {
-        const baseMessage = prev.replace(lastInterimTranscriptRef.current, '').trim();
-        const newTranscript = finalTranscript || interimTranscript;
-        return baseMessage + (baseMessage && newTranscript ? ' ' : '') + newTranscript;
+        // Remove the previous interim transcript completely
+        let baseMessage = prev.replace(lastInterimTranscriptRef.current, '').trim();
+        
+        // Add final transcript if we have it
+        if (finalTranscript) {
+          const newMessage = baseMessage + (baseMessage ? ' ' : '') + finalTranscript.trim();
+          lastInterimTranscriptRef.current = ''; // Clear interim since we added final
+          return newMessage;
+        }
+        
+        // Otherwise, add interim transcript
+        if (interimTranscript) {
+          const newMessage = baseMessage + (baseMessage ? ' ' : '') + interimTranscript;
+          lastInterimTranscriptRef.current = interimTranscript;
+          return newMessage;
+        }
+        
+        return prev;
       });
-
-      lastInterimTranscriptRef.current = interimTranscript;
     };
 
     recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error:', event.error);
+      console.error('Speech recognition error:', event.error, event.message);
       setIsRecognizing(false);
-      if (event.error === 'no-speech') {
-        toast.info('No speech detected. Please try again.');
-      } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        toast.error('Microphone access denied. Please allow microphone permissions in your browser settings.');
-      } else {
-        toast.error(`Speech recognition failed: ${event.error}`);
+      
+      switch (event.error) {
+        case 'no-speech':
+          toast.info('No speech detected. Please try again.');
+          break;
+        case 'not-allowed':
+          setMicPermissionStatus('denied');
+          toast.error('Microphone access denied. Please allow microphone permissions and try again.');
+          break;
+        case 'service-not-allowed':
+          toast.error('Speech recognition service not allowed. Please check your browser settings.');
+          break;
+        case 'network':
+          toast.error('Network error occurred during speech recognition.');
+          break;
+        case 'audio-capture':
+          toast.error('Audio capture failed. Please check your microphone connection.');
+          break;
+        case 'aborted':
+          // Don't show error for user-initiated stops
+          break;
+        default:
+          toast.error(`Speech recognition failed: ${event.error}`);
       }
     };
 
@@ -437,47 +537,14 @@ const AIChat: React.FC<AIChatProps> = ({
     };
   }, []);
 
-  const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
-    try {
-      if (navigator.permissions && navigator.permissions.query) {
-        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        if (permissionStatus.state === 'granted') {
-          // Show notification when permission is already granted
-          showNotification("Microphone Access Granted", {
-            body: "You can now use speech recognition.",
-            icon: "/microphone-icon.png", // Optional: Add an icon path
-          });
-          return true;
-        } else if (permissionStatus.state === 'prompt') {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach(track => track.stop());
-          // Show notification after permission is granted
-          showNotification("Microphone Access Granted", {
-            body: "You can now use speech recognition.",
-            icon: "/microphone-icon.png",
-          });
-          return true;
-        } else {
-          toast.error('Microphone access is denied. Please enable it in your browser settings.');
-          return false;
-        }
-      } else {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-        // Show notification after permission is granted
-        showNotification("Microphone Access Granted", {
-          body: "You can now use speech recognition.",
-          icon: "/microphone-icon.png",
-        });
-        return true;
-      }
-    } catch (error) {
-      console.error('Error requesting microphone permission:', error);
-      toast.error('Failed to access microphone. Please check your browser settings.');
-      return false;
-    }
-  }, [showNotification]);
+  // Check microphone permission on component mount
+  useEffect(() => {
+    checkMicrophonePermission().then(status => {
+      setMicPermissionStatus(status === 'granted' ? 'granted' : status === 'denied' ? 'denied' : 'unknown');
+    });
+  }, [checkMicrophonePermission]);
 
+  // FIXED: Better speech recognition start function with permission caching
   const startRecognition = useCallback(async () => {
     if (!recognitionRef.current) {
       toast.error('Speech recognition is not supported in this browser.');
@@ -488,36 +555,55 @@ const AIChat: React.FC<AIChatProps> = ({
       return;
     }
 
-    // Request notification permission before microphone permission
-    const hasNotificationPermission = await requestNotificationPermission();
-    if (!hasNotificationPermission) {
-      console.warn("Notification permission not granted, proceeding without notification.");
-    }
+    // Only request permission if we don't already have it
+    if (micPermissionStatus !== 'granted') {
+      // Request notification permission first (optional)
+      const hasNotificationPermission = await requestNotificationPermission();
+      if (!hasNotificationPermission) {
+        console.warn("Notification permission not granted, proceeding without notifications.");
+      }
 
-    const hasMicrophonePermission = await requestMicrophonePermission();
-    if (!hasMicrophonePermission) {
-      setIsRecognizing(false);
-      return;
+      // Request microphone permission
+      const hasMicrophonePermission = await requestMicrophonePermission();
+      if (!hasMicrophonePermission) {
+        setIsRecognizing(false);
+        return;
+      }
     }
 
     try {
+      // Clear any previous interim results
+      lastInterimTranscriptRef.current = '';
+      
+      // Start speech recognition
       recognitionRef.current.start();
       setIsRecognizing(true);
-      lastInterimTranscriptRef.current = '';
-      toast.info('Speech recognition started. Speak now.');
-    } catch (error) {
+      toast.info('🎤 Listening... Click the mic button again to stop.');
+      
+    } catch (error: any) {
       console.error('Error starting speech recognition:', error);
-      toast.error('Failed to start speech recognition.');
+      
+      // Handle speech recognition specific errors
+      if (error.name === 'InvalidStateError') {
+        toast.error('Speech recognition is already running. Please wait a moment and try again.');
+      } else {
+        toast.error(`Failed to start speech recognition: ${error.message || 'Unknown error'}`);
+      }
+      
       setIsRecognizing(false);
     }
-  }, [isRecognizing, requestMicrophonePermission, requestNotificationPermission]);
+  }, [isRecognizing, micPermissionStatus, requestMicrophonePermission, requestNotificationPermission]);
 
-  const stopRecognition = useCallback(() => {
+  const stopRecognition = useCallback(async () => {
+    if (!recognitionRef.current) {
+      toast.error('Speech recognition is not supported in this browser.');
+      return;
+    };
     if (recognitionRef.current && isRecognizing) {
       recognitionRef.current.stop();
       setIsRecognizing(false);
       lastInterimTranscriptRef.current = '';
-      toast.info('Speech recognition stopped.');
+      toast.success('🎤 Speech recognition stopped.');
     }
   }, [isRecognizing]);
 
@@ -973,7 +1059,6 @@ const AIChat: React.FC<AIChatProps> = ({
   useEffect(() => {
     if (activeChatSessionId !== null) {
       stopSpeech();
-      stopRecognition();
       setInputMessage('');
       setAttachedFiles([]);
       setActiveDiagram(null);
@@ -988,7 +1073,7 @@ const AIChat: React.FC<AIChatProps> = ({
         cameraInputRef.current.value = '';
       }
     }
-  }, [activeChatSessionId, stopSpeech, stopRecognition]);
+  }, [activeChatSessionId, stopSpeech, ]);
 
   const selectedDocumentTitles = useMemo(() => {
     return mergedDocuments
@@ -1080,9 +1165,21 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent font-sans z-10 ${isDiagramPanelOpen ? 'md:pr-[calc(' + panelWidth + '%+1.5rem)]' : ''}`}>
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent font-sans z-10 ${isDiagramPanelOpen ? `md:pr-[calc(${panelWidth}%+1.5rem)]` : ''}`}>
             <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2">
-              {(selectedDocumentIds.length > 0 || attachedFiles.length > 0) && (
+              {/* FIXED: Speech recognition status indicator */}
+              {isRecognizing && (
+                <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 dark:bg-red-900/20 dark:border-red-800">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <Mic className="h-4 w-4 text-red-600 dark:text-red-400 animate-pulse" />
+                    <span className="text-sm text-red-700 dark:text-red-300 font-medium">
+                      Listening... Click mic button to stop
+                    </span>
+                  </div>
+                </div>
+              )}
+              {(attachedFiles.length > 0 || selectedDocumentIds.length > 0) && (
                 <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700`}>
                   <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200 font-claude">Context:</span>
 
@@ -1138,16 +1235,48 @@ const AIChat: React.FC<AIChatProps> = ({
               />
               <div className="flex items-center gap-2 mt-2 justify-between">
                 <div className="flex items-center gap-2">
+                  {/* FIXED: Enhanced microphone button with better visual feedback */}
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
                     onClick={isRecognizing ? stopRecognition : startRecognition}
-                    className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 ${isRecognizing ? 'bg-red-900 text-red-300 dark:bg-red-900 dark:text-red-300 bg-red-200 text-red-600' : 'text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300'}`}
-                    title={isRecognizing ? 'Stop Speaking' : 'Speak Message'}
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || !recognitionRef.current}
+                    className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 relative transition-all duration-200 ${
+                      isRecognizing 
+                        ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800 scale-105' 
+                        : micPermissionStatus === 'denied'
+                          ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                          : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
+                    }`}
+                    title={
+                      isRecognizing 
+                        ? 'Stop Speech Recognition' 
+                        : micPermissionStatus === 'denied'
+                          ? 'Microphone access denied - check browser settings'
+                          : micPermissionStatus === 'checking'
+                            ? 'Checking microphone permissions...'
+                            : 'Start Speech Recognition'
+                    }
+                    disabled={
+                      isLoading || 
+                      isSubmittingUserMessage || 
+                      isGeneratingImage || 
+                      isUpdatingDocuments || 
+                      !recognitionRef.current || 
+                      micPermissionStatus === 'checking'
+                    }
                   >
-                    <Mic className="h-5 w-5" />
+                    <Mic className={`h-5 w-5 ${isRecognizing ? 'animate-pulse' : ''}`} />
+                    {isRecognizing && (
+                      <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse">
+                        <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-75"></div>
+                      </div>
+                    )}
+                    {micPermissionStatus === 'checking' && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </div>
+                    )}
                   </Button>
 
                   <input
@@ -1272,7 +1401,7 @@ const AIChat: React.FC<AIChatProps> = ({
             size="icon"
             onClick={() => scrollToBottom('smooth')}
             className={`fixed bottom-28 right-6 md:bottom-8 bg-white rounded-full shadow-lg p-2 z-20 transition-all duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 font-sans
-              ${isDiagramPanelOpen ? 'md:right-[calc(' + panelWidth + '%+1.5rem)]' : 'md:right-8'}
+              ${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
             `}
             title="Scroll to bottom"
           >
