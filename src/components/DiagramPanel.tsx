@@ -434,14 +434,14 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
   }, []);
 
   // Make Mermaid available globally for iframe access
-  useEffect(() => {
-    // Ensure mermaid is available on window for iframe to access
-    if (typeof window !== 'undefined' && window.mermaid) {
-      // Already available
-    } else if (typeof mermaid !== 'undefined') {
-      (window as any).mermaid = mermaid;
-    }
-  }, []);
+  // useEffect(() => {
+  //   // Ensure mermaid is available on window for iframe to access
+  //   if (typeof window !== 'undefined' && window.mermaid) {
+  //     // Already available
+  //   } else if (typeof mermaid !== 'undefined') {
+  //     (window as any).mermaid = mermaid;
+  //   }
+  // }, []);
 
   // Prepare iframe HTML content for srcdoc with interactive controls
   const iframeSrcDocContent = useMemo(() => {
