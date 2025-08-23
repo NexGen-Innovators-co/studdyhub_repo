@@ -33,8 +33,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   profile,
   onProfileUpdate
 }) => {
-  // You can integrate this with your global theme context or pass isDarkMode as a prop
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  // Removed isDarkMode state - now controlled by Sidebar
 
   // Original form states
   const [learningStyle, setLearningStyle] = useState<UserProfile['learning_style']>('visual');
@@ -197,28 +196,8 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     { value: 'reading', label: 'Reading/Writing', description: 'Text-based learning', icon: FileText },
   ];
 
-  const themeClasses = {
-    container: isDarkMode
-      ? 'bg-gray-900 text-gray-100'
-      : 'bg-gray-50 text-gray-900',
-    card: isDarkMode
-      ? 'bg-gray-800 border-gray-700'
-      : 'bg-white border-gray-200',
-    input: isDarkMode
-      ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:border-blue-500'
-      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500',
-    button: isDarkMode
-      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-      : 'bg-blue-600 hover:bg-blue-700 text-white',
-    secondaryButton: isDarkMode
-      ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border-gray-600'
-      : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300',
-    text: isDarkMode ? 'text-gray-300' : 'text-gray-600',
-    accent: 'text-blue-500'
-  };
-
   return (
-    <div className={`min-h-screen p-6 transition-colors duration-300 ${themeClasses.container}`}>
+    <div className="min-h-screen p-6 transition-colors duration-300 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -228,13 +207,13 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
             </div>
             <div>
               <h1 className="text-3xl font-bold">Settings</h1>
-              <p className={themeClasses.text}>Customize your learning experience</p>
+              <p className="text-gray-600 dark:text-gray-300">Customize your learning experience</p>
             </div>
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <div className={`p-1 rounded-xl border mb-8 ${themeClasses.card}`}>
+        <div className="p-1 rounded-xl border mb-8 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
           <div className="flex">
             {[
               { id: 'profile', label: 'Profile', icon: User },
@@ -246,7 +225,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 onClick={() => setActiveSection(id as any)}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg transition-all ${activeSection === id
                   ? 'bg-blue-600 text-white shadow-lg'
-                  : `${themeClasses.text} hover:bg-gray-100 dark:hover:bg-gray-700`
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                   }`}
               >
                 <Icon className="h-4 w-4" />
@@ -257,7 +236,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         </div>
 
         {/* Content Sections */}
-        <Card className={`rounded-2xl border shadow-lg ${themeClasses.card}`}>
+        <Card className="rounded-2xl border shadow-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
 
           {/* Profile Section */}
           {activeSection === 'profile' && (
@@ -305,7 +284,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                   <Button
                     variant="outline"
                     onClick={() => document.getElementById('avatar')?.click()}
-                    className={`mt-4 ${themeClasses.secondaryButton}`}
+                    className="mt-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
                   >
                     <ImageIcon className="h-4 w-4 mr-2" />
                     Change Avatar
@@ -315,14 +294,14 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 {/* Profile Form */}
                 <div className="flex-1 space-y-6">
                   <div>
-                    <Label className={`text-sm font-medium ${themeClasses.text}`}>
+                    <Label className="text-sm font-medium text-gray-600 dark:text-gray-300">
                       Full Name *
                     </Label>
                     <input
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className={`w-full mt-2 px-4 py-3 rounded-xl border transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none ${themeClasses.input}`}
+                      className="w-full mt-2 px-4 py-3 rounded-xl border transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                       placeholder="Enter your full name"
                     />
                     {errors.fullName && (
@@ -348,7 +327,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
               <div className="space-y-8">
                 {/* Learning Style */}
                 <div>
-                  <Label className={`text-sm font-medium ${themeClasses.text}`}>
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     Primary Learning Style
                   </Label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -358,15 +337,15 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                         onClick={() => setLearningStyle(value as any)}
                         className={`p-4 rounded-xl border-2 transition-all text-left ${learningStyle === value
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
+                          : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 bg-white dark:bg-gray-800'
                           }`}
                       >
                         <div className="flex items-center gap-3 mb-2">
-                          <Icon className={`h-5 w-5 ${learningStyle === value ? 'text-blue-500' : themeClasses.text}`} />
+                          <Icon className={`h-5 w-5 ${learningStyle === value ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'}`} />
                           <span className="font-medium">{label}</span>
                           {learningStyle === value && <Check className="h-4 w-4 text-blue-500 ml-auto" />}
                         </div>
-                        <p className={`text-sm ${themeClasses.text}`}>{description}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">{description}</p>
                       </button>
                     ))}
                   </div>
@@ -374,7 +353,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
                 {/* Explanation Style */}
                 <div>
-                  <Label className={`text-sm font-medium ${themeClasses.text}`}>
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     Explanation Style
                   </Label>
                   <div className="grid grid-cols-3 gap-3 mt-3">
@@ -388,11 +367,11 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                         onClick={() => setExplanationStyle(value as any)}
                         className={`p-4 rounded-xl border-2 transition-all ${explanationStyle === value
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
+                          : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 bg-white dark:bg-gray-800'
                           }`}
                       >
                         <div className="font-medium mb-1">{label}</div>
-                        <div className={`text-xs ${themeClasses.text}`}>{desc}</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-300">{desc}</div>
                       </button>
                     ))}
                   </div>
@@ -400,7 +379,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
                 {/* Difficulty Level */}
                 <div>
-                  <Label className={`text-sm font-medium ${themeClasses.text}`}>
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     Difficulty Level
                   </Label>
                   <div className="grid grid-cols-3 gap-3 mt-3">
@@ -414,22 +393,22 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                         onClick={() => setDifficulty(value as any)}
                         className={`p-4 rounded-xl border-2 transition-all ${difficulty === value
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : `border-gray-200 dark:border-gray-600 hover:border-blue-300 ${themeClasses.card}`
+                          : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 bg-white dark:bg-gray-800'
                           }`}
                       >
                         <div className="font-medium mb-1">{label}</div>
-                        <div className={`text-xs ${themeClasses.text}`}>{desc}</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-300">{desc}</div>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {/* Examples Toggle */}
-                <div className={`p-4 rounded-xl border ${themeClasses.card}`}>
+                <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-medium mb-1">Include Examples</div>
-                      <div className={`text-sm ${themeClasses.text}`}>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
                         Add practical examples and analogies to explanations
                       </div>
                     </div>
@@ -454,7 +433,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
               <div className="space-y-6 max-w-md">
                 <div>
-                  <Label className={`text-sm font-medium ${themeClasses.text}`}>
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     Current Password
                   </Label>
                   <div className="relative mt-2">
@@ -462,13 +441,13 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                       type={showCurrentPassword ? 'text' : 'password'}
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
-                      className={`w-full px-4 py-3 rounded-xl border pr-12 transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none ${themeClasses.input}`}
+                      className="w-full px-4 py-3 rounded-xl border pr-12 transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                       placeholder="Enter current password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${themeClasses.text}`}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-300"
                     >
                       {showCurrentPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
@@ -476,7 +455,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 </div>
 
                 <div>
-                  <Label className={`text-sm font-medium ${themeClasses.text}`}>
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     New Password
                   </Label>
                   <div className="relative mt-2">
@@ -484,13 +463,13 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                       type={showNewPassword ? 'text' : 'password'}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className={`w-full px-4 py-3 rounded-xl border pr-12 transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none ${themeClasses.input}`}
+                      className="w-full px-4 py-3 rounded-xl border pr-12 transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                       placeholder="Enter new password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowNewPassword(!showNewPassword)}
-                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${themeClasses.text}`}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-300"
                     >
                       {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
@@ -504,7 +483,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 </div>
 
                 <div>
-                  <Label className={`text-sm font-medium ${themeClasses.text}`}>
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     Confirm New Password
                   </Label>
                   <div className="relative mt-2">
@@ -512,13 +491,13 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`w-full px-4 py-3 rounded-xl border pr-12 transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none ${themeClasses.input}`}
+                      className="w-full px-4 py-3 rounded-xl border pr-12 transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                       placeholder="Confirm new password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${themeClasses.text}`}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-300"
                     >
                       {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
@@ -540,7 +519,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
               <Button
                 onClick={handleSave}
                 disabled={isLoading}
-                className={`px-8 py-3 font-medium transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${themeClasses.button}`}
+                className="px-8 py-3 font-medium transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {isLoading ? (
                   <>
