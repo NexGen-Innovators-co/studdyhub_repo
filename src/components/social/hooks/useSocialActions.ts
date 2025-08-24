@@ -1,0 +1,241 @@
+import { useState } from 'react';
+import { supabase } from '../../../integrations/supabase/client';
+import { SocialPostWithDetails, SocialUserWithDetails } from '../../../integrations/supabase/socialTypes';
+import { toast } from 'sonner';
+import { extractHashtags, generateShareText } from '../utils/postUtils';
+import { Privacy } from '../types/social';
+
+export const useSocialActions = (
+  currentUser: SocialUserWithDetails | null,
+  posts: SocialPostWithDetails[],
+  setPosts: React.Dispatch<React.SetStateAction<SocialPostWithDetails[]>>,
+  setSuggestedUsers: React.Dispatch<React.SetStateAction<SocialUserWithDetails[]>>
+) => {
+  const [isUploading, setIsUploading] = useState(false);
+
+  const uploadFile = async (file: File): Promise<string | null> => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+      const { data, error } = await supabase.storage
+        .from('social-media')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('social-media')
+        .getPublicUrl(fileName);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      return null;
+    }
+  };
+
+  const createPost = async (content: string, privacy: Privacy, selectedFiles: File[]) => {
+    if (!content.trim()) return;
+
+    try {
+      setIsUploading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Create post
+      const { data: newPost, error: postError } = await supabase
+        .from('social_posts')
+        .insert({
+          author_id: user.id,
+          content: content,
+          privacy: privacy
+        })
+        .select(`*, author:social_users(*), group:social_groups(*), media:social_media(*)`)
+        .single();
+
+      if (postError) throw postError;
+
+      // Upload media files
+      const mediaPromises = selectedFiles.map(async (file) => {
+        const url = await uploadFile(file);
+        if (url) {
+          return supabase.from('social_media').insert({
+            post_id: newPost.id,
+            type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document',
+            url,
+            filename: file.name,
+            size_bytes: file.size,
+            mime_type: file.type
+          });
+        }
+      });
+
+      await Promise.all(mediaPromises.filter(Boolean));
+
+      // Handle hashtags
+      const hashtags = extractHashtags(content);
+      for (const tag of hashtags) {
+        // Insert or get hashtag
+        const { data: hashtag, error: hashtagError } = await supabase
+          .from('social_hashtags')
+          .upsert({ name: tag }, { onConflict: 'name' })
+          .select()
+          .single();
+
+        if (!hashtagError && hashtag) {
+          // Link hashtag to post
+          await supabase.from('social_post_hashtags').insert({
+            post_id: newPost.id,
+            hashtag_id: hashtag.id
+          });
+        }
+      }
+
+      const transformedPost = {
+        ...newPost,
+        media: [],
+        hashtags: [],
+        tags: [],
+        is_liked: false,
+        is_bookmarked: false
+      };
+
+      setPosts(prev => [transformedPost, ...prev]);
+      toast.success('Post created successfully!');
+      return true;
+    } catch (error) {
+      console.error('Error creating post:', error);
+      toast.error('Failed to create post');
+      return false;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const toggleLike = async (postId: string, isLiked: boolean) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      if (isLiked) {
+        await supabase.from('social_likes').delete().eq('post_id', postId).eq('user_id', user.id);
+      } else {
+        await supabase.from('social_likes').insert({ post_id: postId, user_id: user.id });
+
+        // Create notification for post author
+        const post = posts.find(p => p.id === postId);
+        if (post && post.author_id !== user.id) {
+          await supabase.from('social_notifications').insert({
+            user_id: post.author_id,
+            type: 'like',
+            title: 'New like on your post',
+            message: `${currentUser?.display_name} liked your post`,
+            data: { post_id: postId, user_id: user.id }
+          });
+        }
+      }
+
+      setPosts(prev => prev.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            likes_count: isLiked ? post.likes_count - 1 : post.likes_count + 1,
+            is_liked: !isLiked
+          };
+        }
+        return post;
+      }));
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      toast.error('Failed to update like');
+    }
+  };
+
+  const toggleBookmark = async (postId: string, isBookmarked: boolean) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      if (isBookmarked) {
+        await supabase.from('social_bookmarks').delete().eq('post_id', postId).eq('user_id', user.id);
+      } else {
+        await supabase.from('social_bookmarks').insert({ post_id: postId, user_id: user.id });
+      }
+
+      setPosts(prev => prev.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            bookmarks_count: isBookmarked ? post.bookmarks_count - 1 : post.bookmarks_count + 1,
+            is_bookmarked: !isBookmarked
+          };
+        }
+        return post;
+      }));
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+      toast.error('Failed to update bookmark');
+    }
+  };
+
+  const sharePost = async (post: SocialPostWithDetails) => {
+    try {
+      const shareText = generateShareText(post);
+      await navigator.clipboard.writeText(shareText);
+
+      // Update share count
+      await supabase
+        .from('social_posts')
+        .update({ shares_count: post.shares_count + 1 })
+        .eq('id', post.id);
+
+      setPosts(prev => prev.map(p =>
+        p.id === post.id ? { ...p, shares_count: p.shares_count + 1 } : p
+      ));
+
+      toast.success('Post link copied to clipboard!');
+    } catch (error) {
+      toast.error('Failed to share post');
+    }
+  };
+
+  const followUser = async (userId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      await supabase.from('social_follows').insert({
+        follower_id: user.id,
+        following_id: userId
+      });
+
+      // Create notification
+      await supabase.from('social_notifications').insert({
+        user_id: userId,
+        type: 'follow',
+        title: 'New follower',
+        message: `${currentUser?.display_name} started following you`,
+        data: { user_id: user.id }
+      });
+
+      setSuggestedUsers(prev => prev.filter(u => u.id !== userId));
+      toast.success('Now following user!');
+    } catch (error) {
+      console.error('Error following user:', error);
+      toast.error('Failed to follow user');
+    }
+  };
+
+  return {
+    createPost,
+    toggleLike,
+    toggleBookmark,
+    sharePost,
+    followUser,
+    isUploading,
+  };
+};
