@@ -1,5 +1,5 @@
 import React from 'react';
-import { Book, Calculator, FlaskConical, Clock, Globe, FileText, Hash, Mic, Calendar, MessageCircle, Upload, Settings, Plus, Trash2, Edit, Loader2, X, Sun, Moon } from 'lucide-react';
+import { Book, Calculator, FlaskConical, Clock, Globe, FileText, Hash, Mic, Calendar, MessageCircle, Upload, Settings, Plus, Trash2, Edit, Loader2, X, Sun, Moon, Users } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 
@@ -19,8 +19,8 @@ interface SidebarProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   noteCount: number;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'|'dashboard';
-  onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | string) => void; // Allow string for dynamic chat path
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'|'dashboard'|'social';
+  onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social' | string) => void; // Allow string for dynamic chat path
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
   onChatSessionSelect: (sessionId: string) => void;
@@ -50,6 +50,7 @@ const tabs = [
   { id: 'schedule', name: 'Schedule', icon: Calendar },
   { id: 'chat', name: 'AI Chat', icon: MessageCircle },
   { id: 'documents', name: 'Documents', icon: Upload },
+  { id: 'social', name: 'Social', icon: Users },
   { id: 'settings', name: 'Settings', icon: Settings },
 ];
 

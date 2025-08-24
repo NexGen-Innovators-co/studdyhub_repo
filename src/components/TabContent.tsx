@@ -12,6 +12,7 @@ import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import ErrorBoundary from './ErrorBoundary';
 import { toast } from 'sonner';
+import { SocialFeed } from './SocialFeed';
 
 interface ChatSession {
   id: string;
@@ -25,7 +26,7 @@ interface ChatSession {
 
 // FIXED: Updated TabContentProps to include dashboard and navigation handlers
 interface TabContentProps {
-  activeTab: 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'; // FIXED: Added 'dashboard'
+  activeTab: 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social'; // Added 'social'
 
   filteredNotes: Note[];
   activeNote: Note | null;
@@ -395,6 +396,15 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             profile={props.userProfile}
             onProfileUpdate={props.onProfileUpdate}
           />
+        </div>
+      );
+
+    case 'social':
+      return (
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+          <ErrorBoundary>
+            <SocialFeed userProfile={props.userProfile} />
+          </ErrorBoundary>
         </div>
       );
 
