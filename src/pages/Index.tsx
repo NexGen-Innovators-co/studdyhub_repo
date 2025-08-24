@@ -213,14 +213,14 @@ const Index = () => {
       case 'schedule': return 'schedule';
       case 'chat': return 'chat';
       case 'documents': return 'documents';
-      case 'settings': return 'settings';
+      case 'social': return 'social';
       default: return 'dashboard';
     }
-  }, [location.pathname]) as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings';
+  }, [location.pathname]) as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings';
 
   useEffect(() => {
     // FIXED: Cast to the expected type
-    setActiveTab(currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings');
+    setActiveTab(currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings');
   }, [currentActiveTab, setActiveTab]);
 
   // Smart data loading based on tab activation
