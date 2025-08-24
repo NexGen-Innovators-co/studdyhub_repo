@@ -105,9 +105,9 @@ export type Database = {
           user_id: string
           image_url?: string;
           image_mime_type?: string;
-            attached_document_ids?: string[] | null; // Array of document IDs attached to this message
-            attached_note_ids?: string[] | null; // Array of note IDs attached to this message
-            has_been_displayed: boolean // Indicates if the message has been displayed to the user
+          attached_document_ids?: string[] | null; // Array of document IDs attached to this message
+          attached_note_ids?: string[] | null; // Array of note IDs attached to this message
+          has_been_displayed: boolean // Indicates if the message has been displayed to the user
         }
         Insert: {
           content: string
@@ -119,9 +119,9 @@ export type Database = {
           user_id: string
           image_url?: string;
           image_mime_type?: string;
-            attached_document_ids?: string[] | null; // Array of document IDs attached to this message
-            attached_note_ids?: string[] | null; // Array of note IDs attached to this message
-            has_been_displayed:boolean
+          attached_document_ids?: string[] | null; // Array of document IDs attached to this message
+          attached_note_ids?: string[] | null; // Array of note IDs attached to this message
+          has_been_displayed: boolean
         }
         Update: {
           content?: string
@@ -133,9 +133,9 @@ export type Database = {
           user_id?: string
           image_url?: string;
           image_mime_type?: string;
-            attached_document_ids?: string[] | null; // Array of document IDs attached to this message
-            attached_note_ids?: string[] | null; // Array of note IDs attached to this message
-            has_been_displayed:boolean
+          attached_document_ids?: string[] | null; // Array of document IDs attached to this message
+          attached_note_ids?: string[] | null; // Array of note IDs attached to this message
+          has_been_displayed: boolean
         }
         Relationships: [
           {
@@ -463,6 +463,570 @@ export type Database = {
           },
         ]
       }
+      // Social Network Tables
+      social_users: {
+        Row: {
+          id: string
+          username: string
+          display_name: string
+          avatar_url: string | null
+          bio: string | null
+          interests: string[]
+          is_verified: boolean
+          is_contributor: boolean
+          followers_count: number
+          following_count: number
+          posts_count: number
+          last_active: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          username: string
+          display_name: string
+          avatar_url?: string | null
+          bio?: string | null
+          interests?: string[]
+          is_verified?: boolean
+          is_contributor?: boolean
+          followers_count?: number
+          following_count?: number
+          posts_count?: number
+          last_active?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          username?: string
+          display_name?: string
+          avatar_url?: string | null
+          bio?: string | null
+          interests?: string[]
+          is_verified?: boolean
+          is_contributor?: boolean
+          followers_count?: number
+          following_count?: number
+          posts_count?: number
+          last_active?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_users_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_posts: {
+        Row: {
+          id: string
+          author_id: string
+          content: string
+          privacy: "public" | "followers" | "private"
+          group_id: string | null
+          likes_count: number
+          comments_count: number
+          shares_count: number
+          bookmarks_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          author_id: string
+          content: string
+          privacy?: "public" | "followers" | "private"
+          group_id?: string | null
+          likes_count?: number
+          comments_count?: number
+          shares_count?: number
+          bookmarks_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          author_id?: string
+          content?: string
+          privacy?: "public" | "followers" | "private"
+          group_id?: string | null
+          likes_count?: number
+          comments_count?: number
+          shares_count?: number
+          bookmarks_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_posts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_posts_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "social_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_media: {
+        Row: {
+          id: string
+          post_id: string
+          type: "image" | "video" | "document"
+          url: string
+          thumbnail_url: string | null
+          filename: string
+          size_bytes: number
+          mime_type: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          post_id: string
+          type: "image" | "video" | "document"
+          url: string
+          thumbnail_url?: string | null
+          filename: string
+          size_bytes: number
+          mime_type: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          post_id?: string
+          type?: "image" | "video" | "document"
+          url?: string
+          thumbnail_url?: string | null
+          filename?: string
+          size_bytes?: number
+          mime_type?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_media_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_groups: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          avatar_url: string | null
+          cover_image_url: string | null
+          category: string
+          privacy: "public" | "private"
+          members_count: number
+          posts_count: number
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          avatar_url?: string | null
+          cover_image_url?: string | null
+          category: string
+          privacy?: "public" | "private"
+          members_count?: number
+          posts_count?: number
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          avatar_url?: string | null
+          cover_image_url?: string | null
+          category?: string
+          privacy?: "public" | "private"
+          members_count?: number
+          posts_count?: number
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_group_members: {
+        Row: {
+          id: string
+          group_id: string
+          user_id: string
+          role: "admin" | "moderator" | "member"
+          joined_at: string
+        }
+        Insert: {
+          id?: string
+          group_id: string
+          user_id: string
+          role?: "admin" | "moderator" | "member"
+          joined_at?: string
+        }
+        Update: {
+          id?: string
+          group_id?: string
+          user_id?: string
+          role?: "admin" | "moderator" | "member"
+          joined_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "social_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_likes: {
+        Row: {
+          id: string
+          user_id: string
+          post_id: string | null
+          comment_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          post_id?: string | null
+          comment_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          post_id?: string | null
+          comment_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_bookmarks: {
+        Row: {
+          id: string
+          user_id: string
+          post_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          post_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          post_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_bookmarks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_bookmarks_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_follows: {
+        Row: {
+          id: string
+          follower_id: string
+          following_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          follower_id: string
+          following_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          follower_id?: string
+          following_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_hashtags: {
+        Row: {
+          id: string
+          name: string
+          posts_count: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          posts_count?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          posts_count?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      social_post_hashtags: {
+        Row: {
+          id: string
+          post_id: string
+          hashtag_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          post_id: string
+          hashtag_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          post_id?: string
+          hashtag_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_post_hashtags_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_post_hashtags_hashtag_id_fkey"
+            columns: ["hashtag_id"]
+            isOneToOne: false
+            referencedRelation: "social_hashtags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_tags: {
+        Row: {
+          id: string
+          name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      social_post_tags: {
+        Row: {
+          id: string
+          post_id: string
+          tag_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          post_id: string
+          tag_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          post_id?: string
+          tag_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_post_tags_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_post_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "social_tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_comments: {
+        Row: {
+          id: string
+          post_id: string
+          author_id: string
+          content: string
+          parent_comment_id: string | null
+          likes_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          post_id: string
+          author_id: string
+          content: string
+          parent_comment_id?: string | null
+          likes_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          post_id?: string
+          author_id?: string
+          content?: string
+          parent_comment_id?: string | null
+          likes_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_notifications: {
+        Row: {
+          id: string
+          user_id: string
+          type: "like" | "comment" | "share" | "follow" | "group_invite" | "mention"
+          title: string
+          message: string
+          data: Json | null
+          is_read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: "like" | "comment" | "share" | "follow" | "group_invite" | "mention"
+          title: string
+          message: string
+          data?: Json | null
+          is_read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          type?: "like" | "comment" | "share" | "follow" | "group_invite" | "mention"
+          title?: string
+          message?: string
+          data?: Json | null
+          is_read?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -473,12 +1037,12 @@ export type Database = {
     Enums: {
       message_role: "user" | "assistant"
       note_category:
-        | "general"
-        | "math"
-        | "science"
-        | "history"
-        | "language"
-        | "other"
+      | "general"
+      | "math"
+      | "science"
+      | "history"
+      | "language"
+      | "other"
       schedule_item_type: "class" | "study" | "assignment" | "exam" | "other"
     }
     CompositeTypes: {
@@ -493,116 +1057,116 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+  ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-    ? R
-    : never
+  ? R
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
+    DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] &
+    DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+  ? R
+  : never
+  : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
+    Insert: infer I
+  }
+  ? I
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Insert: infer I
+  }
+  ? I
+  : never
+  : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
+    Update: infer U
+  }
+  ? U
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Update: infer U
+  }
+  ? U
+  : never
+  : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Enums"]
+  | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+  : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["CompositeTypes"]
+  | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+  : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
 
 export const Constants = {
   public: {
