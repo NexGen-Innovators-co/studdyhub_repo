@@ -214,6 +214,7 @@ const Index = () => {
       case 'chat': return 'chat';
       case 'documents': return 'documents';
       case 'social': return 'social';
+      case 'settings': return 'settings';
       default: return 'dashboard';
     }
   }, [location.pathname]) as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings';
