@@ -56,6 +56,7 @@ const App = () => (
           <Route path="/chat" element={<AuthProvider><Index /></AuthProvider>} />
           <Route path="/chat/:sessionId" element={<AuthProvider><Index /></AuthProvider>} />
           <Route path="/documents" element={<AuthProvider><Index /></AuthProvider>} />
+          <Route path="/social" element={<AuthProvider><Index /></AuthProvider>} />
           <Route path="/settings" element={<AuthProvider><Index /></AuthProvider>} />
 
           {/* Catch-all for NotFound */}
