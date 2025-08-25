@@ -1,8 +1,11 @@
 import React from 'react';
-import { Book, Calculator, FlaskConical, Clock, Globe, FileText, Hash, Mic, Calendar, MessageCircle, Upload, Settings, Plus, Trash2, Edit, Loader2, X, Sun, Moon, Users } from 'lucide-react';
+import { Book, Calculator, FlaskConical, Clock, Globe, FileText, Hash, Mic, Calendar, MessageCircle, Upload, Settings, Plus, Trash2, Edit, Loader2, X, Sun, Moon, Users, Bell, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
-
+import { useCallback, useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 interface ChatSession {
   id: string;
   title: string;
@@ -19,7 +22,7 @@ interface SidebarProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   noteCount: number;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings'|'dashboard'|'social';
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social';
   onTabChange: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social' | string) => void; // Allow string for dynamic chat path
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
@@ -31,6 +34,8 @@ interface SidebarProps {
   onLoadMoreChatSessions: () => void;
   currentTheme: 'light' | 'dark';
   onThemeChange: (theme: 'light' | 'dark') => void;
+  fullName: string | null;
+  avatarUrl: string | null;
 }
 
 const categories = [
@@ -76,7 +81,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
               Cancel
             </Button>
             <Button onClick={onConfirm} className="bg-red-600 text-white shadow-md hover:bg-red-700">
-              Delete
+              confirm
             </Button>
           </div>
         </CardContent>
@@ -160,6 +165,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLoadMoreChatSessions,
   currentTheme,
   onThemeChange,
+  fullName,
+  avatarUrl,
 }) => {
 
   const [isNewChatLoading, setIsNewChatLoading] = React.useState(false);
@@ -168,6 +175,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showRenameModal, setShowRenameModal] = React.useState(false);
   const [sessionToRenameId, setSessionToRenameId] = React.useState<string | null>(null);
   const [sessionToRenameTitle, setSessionToRenameTitle] = React.useState<string>('');
+
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
+
+  const getInitials = (name: string | null) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      await signOut();
+      toast.success('Signed out successfully');
+      navigate('/auth');
+    } catch (error) {
+      toast.error('Error signing out');
+    }
+  }, [signOut, navigate]);
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    e.currentTarget.style.display = 'none';
+  };
+
+  const handleAvatarClick = useCallback(() => {
+    setIsAvatarMenuOpen((prev) => !prev);
+  }, []);
+
+  const handleLogoutClick = useCallback(() => {
+    setIsAvatarMenuOpen(false);
+    setShowLogoutConfirm(true);
+  }, []);
+
+  const handleConfirmLogout = useCallback(() => {
+    handleSignOut();
+    setShowLogoutConfirm(false);
+  }, [handleSignOut]);
 
   // Ref for the scrollable chat sessions container
   const chatSessionsRef = React.useRef<HTMLDivElement>(null);
@@ -250,17 +300,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       className={`bg-white border-r h-full border-slate-200 transition-transform duration-300 ease-in-out
-${isOpen ? 'translate-x-0' : '-translate-x-full'}
-fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg lg:shadow-none
-lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden
-dark:bg-gray-900 dark:border-gray-600`}
+      ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+      fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg lg:shadow-none
+      lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden
+      dark:bg-gray-900 dark:border-gray-600`}
     >
       <div className="p-6 sm:p-4 flex-1 overflow-y-auto modern-scrollbar">
         <div className="mb-2">
           {(isOpen) && (
             <h2 className="font-semibold text-slate-800
-lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300
-dark:text-gray-200">
+            lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300
+            dark:text-gray-200">
               Navigation
             </h2>
           )}
@@ -459,7 +509,47 @@ lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
           </div>
         )}
       </div>
-
+      <div className={`flex-shrink-0 border-t border-slate-200 p-4
+        dark:border-gray-700 transition-all duration-300 ease-in-out`}>
+        <div className="flex items-center gap-2">
+          {isAvatarMenuOpen && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-1.5 sm:p-2 flex-shrink-0 relative dark:hover:bg-slate-700"
+              >
+                <Bell className="h-4 w-4 text-slate-600 dark:text-white" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogoutClick}
+                className="p-1.5 sm:p-2 flex-shrink-0 dark:hover:bg-slate-700 text-slate-600 dark:text-white"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline ml-2">Sign Out</span>
+              </Button>
+            </>
+          )}
+          <div
+            className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white font-bold text-sm cursor-pointer hover:opacity-80"
+            onClick={handleAvatarClick}
+            title={isAvatarMenuOpen ? "Close Menu" : "Open Menu"}
+          >
+            <span>{getInitials(fullName || '')}</span>
+            {avatarUrl && (
+              <img
+                src={avatarUrl}
+                alt="User Avatar"
+                className="w-full h-full object-cover absolute top-0 left-0"
+                onError={handleImageError}
+              />
+            )}
+          </div>
+        </div>
+      </div>
       <ConfirmationModal
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
@@ -475,6 +565,13 @@ lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
         title="Rename Chat Session"
         message="Enter a new title for your chat session:"
         initialValue={sessionToRenameTitle}
+      />
+      <ConfirmationModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleConfirmLogout}
+        title="Sign Out"
+        message="Are you sure you want to sign out? You will be redirected to the login page."
       />
     </div>
   );

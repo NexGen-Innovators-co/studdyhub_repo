@@ -1228,6 +1228,8 @@ const Index = () => {
     onLoadMoreChatSessions: handleLoadMoreChatSessions,
     currentTheme,
     onThemeChange: handleThemeChange,
+    fullName: userProfile?.full_name || '',
+    avatarUrl: userProfile?.avatar_url || '',
     activeChatSessionId: activeChatSessionId || sessionIdFromUrl, // Use URL session if active isn't set
   }), [
     isSidebarOpen,
@@ -1405,16 +1407,6 @@ const Index = () => {
   }, [user, setChatMessages]);
 
 
-  const handleSignOut = useCallback(async () => {
-    try {
-      await signOut();
-      toast.success('Signed out successfully');
-      navigate('/auth');
-    } catch (error) {
-      toast.error('Error signing out');
-    }
-  }, [signOut, navigate]);
-
   // Enhanced loading with progressive phases
   if (authLoading || dataLoading || loadingPhase.phase !== 'complete') {
     return (
@@ -1434,7 +1426,7 @@ const Index = () => {
     <div className="h-screen flex overflow-hidden">
       {isSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 "
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -1442,7 +1434,7 @@ const Index = () => {
       <div
         className={`${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
-      transition-transform duration-300 ease-in-out`}
+      transition-transform duration-500 ease-in-out`}
       >
         <Sidebar {...sidebarProps} />
       </div>
