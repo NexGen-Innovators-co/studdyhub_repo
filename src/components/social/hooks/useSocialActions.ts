@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
-import { SocialPostWithDetails, SocialUserWithDetails } from '../../../integrations/supabase/socialTypes';
+import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails } from '../../../integrations/supabase/socialTypes';
 import { toast } from 'sonner';
 import { extractHashtags, generateShareText } from '../utils/postUtils';
 import { Privacy } from '../types/social';
+import { v4 as uuidv4 } from 'uuid';
 
 export const useSocialActions = (
   currentUser: SocialUserWithDetails | null,
   posts: SocialPostWithDetails[],
   setPosts: React.Dispatch<React.SetStateAction<SocialPostWithDetails[]>>,
-  setSuggestedUsers: React.Dispatch<React.SetStateAction<SocialUserWithDetails[]>>
+  setSuggestedUsers: React.Dispatch<React.SetStateAction<SocialUserWithDetails[]>>,
+  setGroups: React.Dispatch<React.SetStateAction<SocialGroupWithDetails[]>>,
+  setCurrentUser: React.Dispatch<React.SetStateAction<SocialUserWithDetails | null>> // Added
 ) => {
   const [isUploading, setIsUploading] = useState(false);
 
@@ -38,7 +41,55 @@ export const useSocialActions = (
     }
   };
 
-  const createPost = async (content: string, privacy: Privacy, selectedFiles: File[]) => {
+  const updateProfile = async (
+    updates: {
+      display_name?: string;
+      username?: string;
+      bio?: string;
+      avatar_file?: File;
+      interests?: string[];
+    }
+  ) => {
+    try {
+      setIsUploading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      let avatar_url = currentUser?.avatar_url;
+      if (updates.avatar_file) {
+        avatar_url = await uploadFile(updates.avatar_file);
+        if (!avatar_url) throw new Error('Failed to upload avatar');
+      }
+
+      const { data: updatedUser, error } = await supabase
+        .from('social_users')
+        .update({
+          display_name: updates.display_name || currentUser?.display_name,
+          username: updates.username || currentUser?.username,
+          bio: updates.bio || currentUser?.bio,
+          avatar_url: avatar_url || currentUser?.avatar_url,
+          interests: updates.interests || currentUser?.interests,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setCurrentUser(updatedUser);
+      toast.success('Profile updated successfully!');
+      return true;
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
+      return false;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const createPost = async (content: string, privacy: Privacy, selectedFiles: File[], groupId?: string) => {
     if (!content.trim()) return;
 
     try {
@@ -46,20 +97,19 @@ export const useSocialActions = (
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Create post
       const { data: newPost, error: postError } = await supabase
         .from('social_posts')
         .insert({
           author_id: user.id,
           content: content,
-          privacy: privacy
+          privacy: privacy,
+          group_id: groupId
         })
         .select(`*, author:social_users(*), group:social_groups(*), media:social_media(*)`)
         .single();
 
       if (postError) throw postError;
 
-      // Upload media files
       const mediaPromises = selectedFiles.map(async (file) => {
         const url = await uploadFile(file);
         if (url) {
@@ -76,10 +126,8 @@ export const useSocialActions = (
 
       await Promise.all(mediaPromises.filter(Boolean));
 
-      // Handle hashtags
       const hashtags = extractHashtags(content);
       for (const tag of hashtags) {
-        // Insert or get hashtag
         const { data: hashtag, error: hashtagError } = await supabase
           .from('social_hashtags')
           .upsert({ name: tag }, { onConflict: 'name' })
@@ -87,7 +135,6 @@ export const useSocialActions = (
           .single();
 
         if (!hashtagError && hashtag) {
-          // Link hashtag to post
           await supabase.from('social_post_hashtags').insert({
             post_id: newPost.id,
             hashtag_id: hashtag.id
@@ -116,6 +163,48 @@ export const useSocialActions = (
     }
   };
 
+  const joinGroup = async (groupId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: newMember, error } = await supabase
+        .from('social_group_members')
+        .insert({
+          group_id: groupId,
+          user_id: user.id,
+          role: 'member'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setGroups(prev => prev.map(group => {
+        if (group.id === groupId) {
+          return {
+            ...group,
+            is_member: true,
+            members_count: group.members_count + 1,
+            members: [...group.members, {
+              id: newMember.id || uuidv4(),
+              group_id: groupId,
+              user_id: user.id,
+              role: 'member',
+              joined_at: new Date().toISOString()
+            }]
+          };
+        }
+        return group;
+      }));
+
+      toast.success('Successfully joined group!');
+    } catch (error) {
+      console.error('Error joining group:', error);
+      toast.error('Failed to join group');
+    }
+  };
+
   const toggleLike = async (postId: string, isLiked: boolean) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -126,7 +215,6 @@ export const useSocialActions = (
       } else {
         await supabase.from('social_likes').insert({ post_id: postId, user_id: user.id });
 
-        // Create notification for post author
         const post = posts.find(p => p.id === postId);
         if (post && post.author_id !== user.id) {
           await supabase.from('social_notifications').insert({
@@ -187,7 +275,6 @@ export const useSocialActions = (
       const shareText = generateShareText(post);
       await navigator.clipboard.writeText(shareText);
 
-      // Update share count
       await supabase
         .from('social_posts')
         .update({ shares_count: post.shares_count + 1 })
@@ -213,7 +300,6 @@ export const useSocialActions = (
         following_id: userId
       });
 
-      // Create notification
       await supabase.from('social_notifications').insert({
         user_id: userId,
         type: 'follow',
@@ -232,10 +318,12 @@ export const useSocialActions = (
 
   return {
     createPost,
+    updateProfile,
     toggleLike,
     toggleBookmark,
     sharePost,
     followUser,
+    joinGroup,
     isUploading,
   };
 };

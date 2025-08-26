@@ -1,18 +1,30 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../ui/dialog';
-import { Card, CardContent } from '../../ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/dialog';
 import { Button } from '../../ui/button';
+import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
-import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { Globe, Users, Lock, RefreshCw } from 'lucide-react';
-import { CreatePostDialogProps } from '../types/social';
-import { MediaUpload } from './MediaUpload';
-import { FILE_CONSTRAINTS } from '../utils/socialConstants';
+import { X, Loader2 } from 'lucide-react';
+import { SocialUserWithDetails } from '../../../integrations/supabase/socialTypes';
+import { Privacy } from '../types/social';
+
+interface CreatePostDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  content: string;
+  onContentChange: (content: string) => void;
+  privacy: Privacy;
+  onPrivacyChange: (privacy: Privacy) => void;
+  selectedFiles: File[];
+  onFilesChange: (files: File[]) => void;
+  onSubmit: () => void;
+  isUploading: boolean;
+  currentUser: SocialUserWithDetails | null;
+}
 
 export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
   isOpen,
-  onClose,
+  onOpenChange,
   content,
   onContentChange,
   privacy,
@@ -23,112 +35,78 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
   isUploading,
   currentUser,
 }) => {
-  const handleSubmit = () => {
-    if (content.trim()) {
-      onSubmit();
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      onFilesChange(Array.from(e.target.files));
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogTrigger asChild>
-        <Card className="cursor-pointer hover:shadow-md transition-shadow">
-          <CardContent className="pt-6">
-            <div className="flex gap-3">
-              <Avatar>
-                <AvatarImage src={currentUser?.avatar_url} />
-                <AvatarFallback>
-                  {currentUser?.display_name?.charAt(0).toUpperCase() || 'U'}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 flex items-center">
-                <div className="w-full bg-muted rounded-full px-4 py-2 text-muted-foreground">
-                  What's on your mind?
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </DialogTrigger>
-
-      <DialogContent className="sm:max-w-2xl">
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700">
         <DialogHeader>
-          <DialogTitle>Create Post</DialogTitle>
+          <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">Create Post</DialogTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            className="absolute right-4 top-4 text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-700"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Avatar>
-              <AvatarImage src={currentUser?.avatar_url} />
-              <AvatarFallback>
-                {currentUser?.display_name?.charAt(0).toUpperCase() || 'U'}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-medium">{currentUser?.display_name}</p>
-              <Select value={privacy} onValueChange={onPrivacyChange}>
-                <SelectTrigger className="w-32 h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="public">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-3 w-3" />
-                      Public
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="followers">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-3 w-3" />
-                      Followers
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="private">
-                    <div className="flex items-center gap-2">
-                      <Lock className="h-3 w-3" />
-                      Private
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
+        <div className="space-y-4 p-6">
           <Textarea
-            placeholder="What's happening? Use #hashtags to join conversations..."
             value={content}
             onChange={(e) => onContentChange(e.target.value)}
-            className="min-h-[120px] resize-none text-lg border-0 shadow-none focus:ring-0"
+            placeholder="What's on your mind?"
+            className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600"
+            rows={5}
           />
-
-          <MediaUpload
-            selectedFiles={selectedFiles}
-            onFilesChange={onFilesChange}
-            onFileSelect={() => {}}
+          <Select value={privacy} onValueChange={onPrivacyChange}>
+            <SelectTrigger className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-gray-800 border-slate-200 dark:border-gray-700">
+              <SelectItem value="public">Public</SelectItem>
+              <SelectItem value="followers">Followers</SelectItem>
+              <SelectItem value="private">Private</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            onChange={handleFileChange}
+            className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-300 border-slate-200 dark:border-gray-600"
           />
-
-          {/* Post Actions */}
-          <div className="flex items-center justify-between pt-4 border-t">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Max {FILE_CONSTRAINTS.MAX_FILES_PER_POST} files</span>
+          {selectedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {selectedFiles.map((file, index) => (
+                <span
+                  key={index}
+                  className="text-xs bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-gray-300 px-2 py-1 rounded-full"
+                >
+                  {file.name}
+                </span>
+              ))}
             </div>
-
-            <div className="flex items-center gap-2">
-              <span className={`text-sm ${content.length > FILE_CONSTRAINTS.MAX_POST_LENGTH ? 'text-red-500' : 'text-muted-foreground'}`}>
-                {content.length}/{FILE_CONSTRAINTS.MAX_POST_LENGTH}
-              </span>
-              <Button
-                onClick={handleSubmit}
-                disabled={!content.trim() || isUploading || content.length > FILE_CONSTRAINTS.MAX_POST_LENGTH}
-                className="bg-primary hover:bg-primary/90"
-              >
-                {isUploading ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Post'
-                )}
-              </Button>
-            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={onSubmit}
+              disabled={isUploading || !content.trim()}
+              className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+            >
+              {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Post'}
+            </Button>
           </div>
         </div>
       </DialogContent>

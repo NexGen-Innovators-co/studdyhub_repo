@@ -222,6 +222,7 @@ export interface SocialCommentWithDetails extends SocialComment {
     author: SocialUser;
     media?: SocialCommentMedia[];
     is_liked?: boolean;
+    post_id: string;
 }
 
 export interface SocialUserWithDetails extends SocialUser {

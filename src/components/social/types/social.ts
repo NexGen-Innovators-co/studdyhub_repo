@@ -22,7 +22,7 @@ export interface PostCardProps {
 
 export interface CreatePostDialogProps {
   isOpen: boolean;
-  onClose: () => void;
+  onOpenChange: () => boolean;
   content: string;
   onContentChange: (content: string) => void;
   privacy: 'public' | 'followers' | 'private';
