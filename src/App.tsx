@@ -51,6 +51,7 @@ const App = () => (
           {/* Authenticated Application Routes */}
           <Route path="/dashboard" element={<AuthProvider><Index /></AuthProvider>} />
           <Route path="/notes" element={<AuthProvider><Index /></AuthProvider>} />
+          <Route path="/note" element={<AuthProvider><Index /></AuthProvider>} />
           <Route path="/recordings" element={<AuthProvider><Index /></AuthProvider>} />
           <Route path="/schedule" element={<AuthProvider><Index /></AuthProvider>} />
           <Route path="/chat" element={<AuthProvider><Index /></AuthProvider>} />
