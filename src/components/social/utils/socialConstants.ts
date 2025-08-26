@@ -39,6 +39,7 @@ export const DEFAULT_LIMITS = {
   TRENDING_HASHTAGS: 10,
   SUGGESTED_USERS: 5,
   NOTIFICATIONS: 10,
+  GROUPS_PER_PAGE: 10, // Add this
 } as const;
 
 export const FILE_CONSTRAINTS = {
@@ -52,3 +53,5 @@ export const SUPPORTED_FILE_TYPES = {
   VIDEOS: ['video/mp4', 'video/webm', 'video/ogg'],
   DOCUMENTS: ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
 } as const;
+
+

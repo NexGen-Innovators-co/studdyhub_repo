@@ -3,10 +3,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { 
-  Search, Filter, SortAsc, SortDesc, RefreshCw, Bell, 
-  TrendingUp, Users, User 
+import {
+  Search, RefreshCw, Bell, TrendingUp, Users, User, SortDesc
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Import hooks
 import { useSocialData } from './hooks/useSocialData';
@@ -19,18 +19,22 @@ import { PostCard } from './components/PostCard';
 import { CreatePostDialog } from './components/CreatePostDialog';
 import { TrendingSidebar } from './components/TrendingSidebar';
 import { UserProfile } from './components/UserProfile';
+import { TrendingPosts } from './components/TrendingPosts';
+import { GroupsSection } from './components/GroupsSection';
+import { NotificationsSection } from './components/NotificationsSection';
 
 // Import types
 import { SocialFeedProps, SortBy, FilterBy, Privacy } from './types/social';
+import { SocialPostWithDetails, SocialUserWithDetails } from '../../integrations/supabase/socialTypes';
 
 export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
   // State management
-  const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications'>('feed');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('newest');
   const [filterBy, setFilterBy] = useState<FilterBy>('all');
   const [showPostDialog, setShowPostDialog] = useState(false);
-  
+
   // Post creation state
   const [newPostContent, setNewPostContent] = useState('');
   const [selectedPrivacy, setSelectedPrivacy] = useState<Privacy>('public');
@@ -40,22 +44,33 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
   const {
     posts,
     setPosts,
+    trendingPosts,
+    userPosts,
+    groups,
+    setGroups,
     currentUser,
+    setCurrentUser,
     trendingHashtags,
     suggestedUsers,
     setSuggestedUsers,
     isLoading,
+    isLoadingGroups,
+    isLoadingUserPosts,
     refetchPosts,
+    refetchGroups,
+    refetchUserPosts,
   } = useSocialData(userProfile, sortBy, filterBy);
 
   const {
     createPost,
+    updateProfile,
     toggleLike,
     toggleBookmark,
     sharePost,
     followUser,
+    joinGroup,
     isUploading,
-  } = useSocialActions(currentUser, posts, setPosts, setSuggestedUsers);
+  } = useSocialActions(currentUser, posts, setPosts, setSuggestedUsers, setGroups, setCurrentUser);
 
   const {
     fetchComments,
@@ -73,6 +88,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
     unreadCount,
     markNotificationAsRead,
     markAllNotificationsAsRead,
+    deleteNotification,
   } = useSocialNotifications();
 
   // Handler functions
@@ -82,6 +98,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
       setNewPostContent('');
       setSelectedFiles([]);
       setShowPostDialog(false);
+      refetchUserPosts(); // Refresh user posts after creating a new post
     }
   };
 
@@ -90,22 +107,47 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
   };
 
   const handleRefresh = () => {
-    refetchPosts();
+    if (activeTab === 'groups') {
+      refetchGroups();
+    } else if (activeTab === 'profile') {
+      refetchUserPosts();
+    } else {
+      refetchPosts();
+    }
   };
 
+  const handlePostDialogChange = () => {
+    setShowPostDialog(!showPostDialog);
+    return !showPostDialog;
+  };
+
+  // Filter posts based on search query
+  const filteredPosts = posts.filter(post => {
+    if (!searchQuery.trim()) return true;
+
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      post.content.toLowerCase().includes(searchLower) ||
+      post.author?.display_name?.toLowerCase().includes(searchLower) ||
+      post.author?.username?.toLowerCase().includes(searchLower) ||
+      post.hashtags?.some(hashtag => hashtag.name.toLowerCase().includes(searchLower))
+    );
+  });
+
   return (
-    <div className="min-h-screen bg-transparent bg-opacity-75 ">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
       <div className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-8">
             <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="w-full">
               <div className="flex items-center justify-between mb-6">
-                <TabsList className="grid w-full max-w-md grid-cols-4">
-                  <TabsTrigger value="feed" className="text-xs">Feed</TabsTrigger>
-                  <TabsTrigger value="trending" className="text-xs">Trending</TabsTrigger>
-                  <TabsTrigger value="groups" className="text-xs">Groups</TabsTrigger>
-                  <TabsTrigger value="profile" className="text-xs">Profile</TabsTrigger>
+                <TabsList className="grid w-full max-w-md grid-cols-5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+                  <TabsTrigger value="feed" className="text-xs text-slate-600 dark:text-gray-200">Feed</TabsTrigger>
+                  <TabsTrigger value="trending" className="text-xs text-slate-600 dark:text-gray-200">Trending</TabsTrigger>
+                  <TabsTrigger value="groups" className="text-xs text-slate-600 dark:text-gray-200">Groups</TabsTrigger>
+                  <TabsTrigger value="profile" className="text-xs text-slate-600 dark:text-gray-200">Profile</TabsTrigger>
+                  <TabsTrigger value="notifications" className="text-xs text-slate-600 dark:text-gray-200">Notifications</TabsTrigger>
                 </TabsList>
 
                 <div className="flex items-center gap-2">
@@ -113,11 +155,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
                     variant="outline"
                     size="sm"
                     onClick={handleRefresh}
-                    disabled={isLoading}
+                    disabled={isLoading || isLoadingGroups || isLoadingUserPosts}
+                    className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-600 dark:text-gray-300 border-slate-200 dark:border-gray-700"
                   >
-                    <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-4 w-4 ${isLoading || isLoadingGroups || isLoadingUserPosts ? 'animate-spin' : ''}`} />
                   </Button>
-                  <Button variant="outline" size="sm" className="relative">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-600 dark:text-gray-300 border-slate-200 dark:border-gray-700"
+                    onClick={() => setActiveTab('notifications')}
+                  >
                     <Bell className="h-4 w-4" />
                     {unreadCount > 0 && (
                       <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
@@ -131,44 +179,44 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
               {/* Search and Filters */}
               <div className="flex items-center gap-3 mb-6">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 dark:text-gray-400 h-4 w-4" />
                   <Input
                     placeholder="Search posts, users, hashtags..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-700"
                   />
                 </div>
                 <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
-                  <SelectTrigger className="w-32">
+                  <SelectTrigger className="w-32 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-700">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white dark:bg-gray-800 border-slate-200 dark:border-gray-700">
                     <SelectItem value="newest">
                       <div className="flex items-center gap-2">
-                        <SortDesc className="h-3 w-3" />
+                        <SortDesc className="h-3 w-3 text-slate-600 dark:text-gray-300" />
                         Newest
                       </div>
                     </SelectItem>
                     <SelectItem value="popular">
                       <div className="flex items-center gap-2">
-                        <TrendingUp className="h-3 w-3" />
+                        <TrendingUp className="h-3 w-3 text-slate-600 dark:text-gray-300" />
                         Popular
                       </div>
                     </SelectItem>
                     <SelectItem value="trending">
                       <div className="flex items-center gap-2">
-                        <TrendingUp className="h-3 w-3" />
+                        <TrendingUp className="h-3 w-3 text-slate-600 dark:text-gray-300" />
                         Trending
                       </div>
                     </SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
-                  <SelectTrigger className="w-32">
+                  <SelectTrigger className="w-32 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-700">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white dark:bg-gray-800 border-slate-200 dark:border-gray-700">
                     <SelectItem value="all">All Posts</SelectItem>
                     <SelectItem value="following">Following</SelectItem>
                     <SelectItem value="groups">Groups</SelectItem>
@@ -178,10 +226,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
 
               <TabsContent value="feed" className="mt-0">
                 <div className="space-y-6">
-                  {/* Create Post */}
                   <CreatePostDialog
                     isOpen={showPostDialog}
-                    onClose={() => setShowPostDialog(true)}
+                    onOpenChange={handlePostDialogChange}
                     content={newPostContent}
                     onContentChange={setNewPostContent}
                     privacy={selectedPrivacy}
@@ -192,15 +239,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
                     isUploading={isUploading}
                     currentUser={currentUser}
                   />
-
-                  {/* Posts Feed */}
                   {isLoading ? (
                     <div className="flex justify-center py-8">
-                      <RefreshCw className="h-8 w-8 animate-spin" />
+                      <RefreshCw className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      {posts.map((post) => (
+                      {filteredPosts.map((post) => (
                         <PostCard
                           key={post.id}
                           post={post}
@@ -217,9 +262,38 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
                           currentUser={currentUser}
                         />
                       ))}
-                      {posts.length === 0 && (
-                        <div className="text-center py-8">
-                          <p className="text-muted-foreground">No posts to show. Create the first post!</p>
+                      {filteredPosts.length === 0 && !isLoading && (
+                        <div className="text-center py-12 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg border border-slate-200 dark:border-gray-700">
+                          <div className="max-w-md mx-auto">
+                            {searchQuery ? (
+                              <>
+                                <Search className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
+                                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">No posts found</h3>
+                                <p className="text-slate-600 dark:text-gray-300">
+                                  Try adjusting your search terms or filters to find what you're looking for.
+                                </p>
+                              </>
+                            ) : posts.length === 0 ? (
+                              <>
+                                <User className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
+                                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">Welcome to the community!</h3>
+                                <p className="text-slate-600 dark:text-gray-300 mb-4">
+                                  Be the first to share something amazing with the community.
+                                </p>
+                                <Button onClick={() => setShowPostDialog(true)} className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800">
+                                  Create your first post
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <User className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
+                                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">No posts match your filters</h3>
+                                <p className="text-slate-600 dark:text-gray-300">
+                                  Try changing your filter settings to see more posts.
+                                </p>
+                              </>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -228,24 +302,61 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
               </TabsContent>
 
               <TabsContent value="trending" className="mt-0">
-                <div className="text-center py-8">
-                  <TrendingUp className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">Trending content coming soon!</p>
-                </div>
+                <TrendingPosts
+                  posts={trendingPosts}
+                  isLoading={isLoading}
+                  onLike={toggleLike}
+                  onBookmark={toggleBookmark}
+                  onShare={sharePost}
+                  onComment={togglePostExpanded}
+                  isPostExpanded={isPostExpanded}
+                  getPostComments={getPostComments}
+                  isLoadingPostComments={isLoadingPostComments}
+                  getNewCommentContent={getNewCommentContent}
+                  onCommentChange={updateNewComment}
+                  onSubmitComment={handleCommentSubmit}
+                  currentUser={currentUser}
+                />
               </TabsContent>
 
               <TabsContent value="groups" className="mt-0">
-                <div className="text-center py-8">
-                  <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">Groups feature coming soon!</p>
-                </div>
+                <GroupsSection
+                  groups={groups}
+                  isLoading={isLoadingGroups}
+                  onJoinGroup={joinGroup}
+                  currentUser={currentUser}
+                />
               </TabsContent>
 
               <TabsContent value="profile" className="mt-0">
                 <UserProfile
                   user={currentUser}
                   isOwnProfile={true}
-                  onEditProfile={() => {}}
+                  onEditProfile={updateProfile}
+                  posts={userPosts}
+                  isLoadingPosts={isLoadingUserPosts}
+                  onLike={toggleLike}
+                  onBookmark={toggleBookmark}
+                  onShare={sharePost}
+                  onComment={togglePostExpanded}
+                  isPostExpanded={isPostExpanded}
+                  getPostComments={getPostComments}
+                  isLoadingPostComments={isLoadingPostComments}
+                  getNewCommentContent={getNewCommentContent}
+                  onCommentChange={updateNewComment}
+                  onSubmitComment={handleCommentSubmit}
+                  currentUser={currentUser}
+                  refetchPosts={refetchUserPosts}
+                />
+              </TabsContent>
+
+              <TabsContent value="notifications" className="mt-0">
+                <NotificationsSection
+                  notifications={notifications}
+                  unreadCount={unreadCount}
+                  markNotificationAsRead={markNotificationAsRead}
+                  markAllNotificationsAsRead={markAllNotificationsAsRead}
+                  deleteNotification={deleteNotification}
                 />
               </TabsContent>
             </Tabs>
@@ -253,11 +364,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
 
           {/* Sidebar */}
           <div className="lg:col-span-4">
-            <TrendingSidebar
-              hashtags={trendingHashtags}
-              suggestedUsers={suggestedUsers}
-              onFollowUser={followUser}
-            />
+            <div className="sticky top-6">
+              <TrendingSidebar
+                hashtags={trendingHashtags}
+                suggestedUsers={suggestedUsers}
+                onFollowUser={followUser}
+              />
+            </div>
           </div>
         </div>
       </div>
