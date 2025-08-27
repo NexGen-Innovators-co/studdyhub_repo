@@ -83,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
   }, [handleSignOut]);
 
   return (
-    <header className="flex items-center bg-transparent justify-between gap-2 p-2 sm:gap-4 flex-1 min-w-0">
+    <header className="flex items-center bg-transparent justify-between border-0 shadow-none gap-2 p-2 sm:gap-4 flex-1 min-w-0">
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         <Button
           variant="ghost"

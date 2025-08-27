@@ -138,108 +138,16 @@ const IsolatedHtml = ({ html, onError }: { html: string; onError?: (error: strin
     const sanitizedHtml = DOMPurify.sanitize(html, {
       WHOLE_DOCUMENT: true,
       RETURN_DOM: false,
-      ADD_TAGS: ['style', 'script', 'link', 'iframe', 'meta'],
+      ADD_TAGS: ['style', 'script', 'iframe', 'meta'],
       ALLOW_ARIA_ATTR: true,
       ALLOW_DATA_ATTR: true,
       ALLOW_UNKNOWN_PROTOCOLS: true,
       ADD_ATTR: ['target', 'sandbox'],
     });
 
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { margin: 0; padding: 0; overflow: auto; }
-  </style>
-</head>
-<body>
+    return `
   ${sanitizedHtml}
-  <script>
-    // Try to inherit libraries from parent window if available
-    function inheritParentLibraries() {
-      if (window.parent && window.parent !== window) {
-        try {
-          // Copy common libraries if they exist in parent
-          const libsToInherit = ['THREE', 'Chart', 'mermaid', 'd3', 'Plotly', 'math'];
-          libsToInherit.forEach(function(lib) {
-            if (window.parent[lib] && !window[lib]) {
-              window[lib] = window.parent[lib];
-            }
-          });
-        } catch (e) {
-          // Cross-origin restrictions, ignore
-          //console.log('Cannot inherit parent libraries due to cross-origin restrictions');
-        }
-      }
-    }
-
-    // Inherit libraries before content loads
-    inheritParentLibraries();
-
-    // Post message to parent when content is loaded
-    function notifyParent() {
-      try {
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'loaded' }, '*');
-          //console.log('Posted loaded message to parent');
-        }
-      } catch (e) {
-        //console.error('Failed to notify parent:', e);
-      }
-    }
-
-    // Multiple ways to detect when page is ready
-    if (document.readyState === 'complete') {
-      setTimeout(notifyParent, 50);
-    } else {
-      window.addEventListener('load', function() {
-        setTimeout(notifyParent, 50);
-      });
-
-      document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(notifyParent, 25);
-      });
-    }
-
-    // Basic error handler for scripts within the iframe
-    window.addEventListener('error', function(event) {
-      const errorMessage = event.error?.message || event.message || 'Unknown error';
-
-      // Only report actual JavaScript errors, not resource loading issues
-      if (event.error && !errorMessage.includes('Script error')) {
-        try {
-          if (window.parent && window.parent !== window) {
-            window.parent.postMessage({
-              type: 'error',
-              message: errorMessage,
-              filename: event.filename,
-              lineno: event.lineno
-            }, '*');
-          }
-        } catch (e) {
-          //console.error('Failed to report error to parent:', e);
-        }
-      }
-    });
-
-    // Handle unhandled promise rejections
-    window.addEventListener('unhandledrejection', function(event) {
-      try {
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage({
-            type: 'error',
-            message: event.reason?.message || 'Unhandled promise rejection'
-          }, '*');
-        }
-      } catch (e) {
-        //console.error('Failed to report promise rejection to parent:', e);
-      }
-    });
-  </script>
-</body>
-</html>`;
+  `;
   }, [html]);
 
   useEffect(() => {
@@ -381,18 +289,7 @@ const IsolatedHtml = ({ html, onError }: { html: string; onError?: (error: strin
 
   return (
     <div className="relative w-full h-full">
-      {/* {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 z-10">
-          <div className="flex flex-col items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
-            <p className="text-sm text-gray-600 dark:text-gray-400">Rendering HTML content...</p>
-            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-              Attempt {retryCount + 1}
-            </p>
-          </div>
-        </div>
-      )} */}
-      <iframe
+            <iframe
         key={retryCount}
         ref={iframeRef}
         className="w-full h-full border-0 rounded-lg"
@@ -433,17 +330,7 @@ const IsolatedMermaid = ({ content, onError }: { content: string; onError?: (err
     }
   }, []);
 
-  // Make Mermaid available globally for iframe access
-  // useEffect(() => {
-  //   // Ensure mermaid is available on window for iframe to access
-  //   if (typeof window !== 'undefined' && window.mermaid) {
-  //     // Already available
-  //   } else if (typeof mermaid !== 'undefined') {
-  //     (window as any).mermaid = mermaid;
-  //   }
-  // }, []);
-
-  // Prepare iframe HTML content for srcdoc with interactive controls
+   // Prepare iframe HTML content for srcdoc with interactive controls
   const iframeSrcDocContent = useMemo(() => {
     // Generate unique ID for this render cycle
     const currentUniqueId = `mermaid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${retryCount}`;

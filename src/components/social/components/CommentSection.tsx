@@ -70,7 +70,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                 onClick={handleSubmit}
                 disabled={!newComment.trim()}
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-4 w-4 " />
               </Button>
             </div>
           </div>

@@ -310,7 +310,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   switch (activeTab) {
     case 'dashboard': // FIXED: Add dashboard case
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>
             <Dashboard {...dashboardProps} />
           </ErrorBoundary>
@@ -327,7 +327,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             />
           )}
 
-          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'} fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-80 bg-white border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-gray-900 dark:border-gray-800 dark:shadow-none`}>
+          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'} fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-80 bg-transparent border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none`}>
             <NotesList
               {...notesHistoryProps}
               isOpen={isNotesHistoryOpen}
@@ -335,7 +335,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             />
           </div>
 
-          <div className="flex-1 bg-white min-h-0 dark:bg-gray-900">
+          <div className="flex-1 bg-transparent min-h-0 dark:bg-transparent">
             {notesProps.activeNote ? (
               <NoteEditor
                 note={notesProps.activeNote}
@@ -359,7 +359,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'recordings':
       return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-gray-900" onScroll={handleRecordingsScroll}>
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleRecordingsScroll}>
           <ErrorBoundary>
             <ClassRecordings {...recordingsProps} />
           </ErrorBoundary>
@@ -368,7 +368,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'schedule':
       return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <Schedule {...scheduleProps} />
         </div>
       );
@@ -376,7 +376,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     case 'chat':
       return (
         <div className="flex flex-1 min-h-0 relative">
-          <div className={`flex-1 flex flex-col min-w-0 dark:bg-gray-900`}>
+          <div className={`flex-1 flex flex-col min-w-0 dark:bg-transparent`}>
             <AIChat {...chatProps} />
           </div>
         </div>
@@ -384,14 +384,14 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'documents':
       return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-gray-900" onScroll={handleDocumentsScroll}>
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleDocumentsScroll}>
           <DocumentUpload {...documentsProps} />
         </div>
       );
 
     case 'settings':
       return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <UserSettings
             profile={props.userProfile}
             onProfileUpdate={props.onProfileUpdate}
@@ -401,7 +401,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'social':
       return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-gray-900">
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>
             <SocialFeed userProfile={props.userProfile} />
           </ErrorBoundary>

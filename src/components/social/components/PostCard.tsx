@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
@@ -14,7 +14,11 @@ import { CommentSection } from './CommentSection';
 import { HashtagBadge } from './HashtagBadge';
 import { getTimeAgo, formatEngagementCount } from '../utils/postUtils';
 
-export const PostCard: React.FC<PostCardProps> = ({
+interface PostCardWithViewTrackingProps extends PostCardProps {
+  onPostView?: (postId: string) => void;
+}
+
+export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
   post,
   onLike,
   onBookmark,
@@ -27,9 +31,46 @@ export const PostCard: React.FC<PostCardProps> = ({
   onCommentChange,
   onSubmitComment,
   currentUser,
+  onPostView,
 }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const hasTriggeredView = useRef(false);
+
+  useEffect(() => {
+    if (!onPostView || hasTriggeredView.current || !cardRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.5 && !hasTriggeredView.current) {
+            // Post is more than 50% visible - schedule view tracking
+            hasTriggeredView.current = true;
+            setTimeout(() => {
+              if (onPostView && hasTriggeredView.current) {
+                onPostView(post.id);
+              }
+            }, 1000); // 1 second delay to ensure user is actually viewing
+          }
+        });
+      },
+      {
+        threshold: 0.5, // Trigger when 50% of the post is visible
+        rootMargin: '0px 0px -100px 0px' // Only trigger when post is well within viewport
+      }
+    );
+
+    observer.observe(cardRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [post.id, onPostView]);
+
   return (
-    <Card className="mb-6 hover:shadow-lg transition-shadow duration-200">
+    <Card 
+      ref={cardRef}
+      className="mb-6 hover:shadow-lg bg-white dark:bg-gray-900 transition-shadow duration-200"
+    >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -145,7 +186,7 @@ export const PostCard: React.FC<PostCardProps> = ({
           </div>
           <div className="flex items-center space-x-1 text-xs text-muted-foreground">
             <Eye className="h-3 w-3" />
-            <span>{Math.floor(Math.random() * 500) + 50}</span>
+            <span>{formatEngagementCount(post.views_count)} views</span>
           </div>
         </div>
 

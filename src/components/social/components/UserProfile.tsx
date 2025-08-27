@@ -8,7 +8,7 @@ import { SocialCommentWithDetails } from '../../../integrations/supabase/socialT
 import { PostCard } from './PostCard';
 import { RefreshCw } from 'lucide-react';
 
-interface UserProfileProps {
+export interface UserProfileProps {
   user: SocialUserWithDetails | null;
   isOwnProfile: boolean;
   onEditProfile: (updates: {
@@ -17,21 +17,22 @@ interface UserProfileProps {
     bio?: string;
     avatar_file?: File;
     interests?: string[];
-  }) => void;
-  posts: SocialPostWithDetails[]; // New prop for user posts
-  isLoadingPosts: boolean; // New prop for loading state
-  onLike: (postId: string, isLiked: boolean) => void;
-  onBookmark: (postId: string, isBookmarked: boolean) => void;
-  onShare: (post: SocialPostWithDetails) => void;
+  }) => Promise<boolean>;
+  posts: SocialPostWithDetails[];
+  isLoadingPosts: boolean;
+  onLike: (postId: string, isLiked: boolean) => Promise<void>;
+  onBookmark: (postId: string, isBookmarked: boolean) => Promise<void>;
+  onShare: (post: SocialPostWithDetails) => Promise<void>;
   onComment: (postId: string) => void;
-  isPostExpanded: (postId: string) => boolean; // Assuming this is a boolean check
-  getPostComments: (postId: string) => SocialCommentWithDetails[]; // Corrected type
+  isPostExpanded: (postId: string) => boolean;
+  getPostComments: (postId: string) => SocialCommentWithDetails[];
   isLoadingPostComments: (postId: string) => boolean;
   getNewCommentContent: (postId: string) => string;
   onCommentChange: (postId: string, content: string) => void;
   onSubmitComment: (postId: string) => void;
   currentUser: SocialUserWithDetails | null;
-  refetchPosts: () => void; // New prop for refreshing posts
+  refetchPosts: () => Promise<void>;
+  onPostView: (postId: string) => Promise<void>; // Add this line
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({
@@ -52,6 +53,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   onSubmitComment,
   currentUser,
   refetchPosts,
+  onPostView,
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -134,15 +136,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           <CardTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">
             {isOwnProfile ? 'My Posts' : `${user.display_name}'s Posts`}
           </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refetchPosts}
-            disabled={isLoadingPosts}
-            className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoadingPosts ? 'animate-spin' : ''}`} />
-          </Button>
         </CardHeader>
         <CardContent className="p-6">
           {isLoadingPosts ? (
@@ -168,6 +161,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   onCommentChange={(content) => onCommentChange(post.id, content)}
                   onSubmitComment={() => onSubmitComment(post.id)}
                   currentUser={currentUser}
+                  onPostView={onPostView} // Pass the prop to PostCard
                 />
               ))}
             </div>

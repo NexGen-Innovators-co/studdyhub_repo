@@ -197,7 +197,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   ];
 
   return (
-    <div className="min-h-screen p-6 transition-colors duration-300 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div className="min-h-screen p-6 transition-colors duration-300 dark: bg-transparent">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">

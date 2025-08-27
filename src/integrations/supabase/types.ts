@@ -536,6 +536,7 @@ export type Database = {
           bookmarks_count: number
           created_at: string
           updated_at: string
+          views_count: number
         }
         Insert: {
           id?: string
@@ -549,6 +550,7 @@ export type Database = {
           bookmarks_count?: number
           created_at?: string
           updated_at?: string
+          views_count?: number
         }
         Update: {
           id?: string
@@ -562,6 +564,7 @@ export type Database = {
           bookmarks_count?: number
           created_at?: string
           updated_at?: string
+          views_count?: number
         }
         Relationships: [
           {
@@ -984,6 +987,42 @@ export type Database = {
             referencedRelation: "social_users"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      social_post_views: {
+        Row: {
+          id: string
+          post_id: string
+          user_id: string
+          viewed_at: string
+        }
+        Insert: {
+          id?: string
+          post_id: string
+          user_id: string
+          viewed_at?: string
+        }
+        Update: {
+          id?: string
+          post_id?: string
+          user_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_post_views_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_post_views_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          }
         ]
       }
       social_notifications: {

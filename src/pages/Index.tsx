@@ -806,7 +806,7 @@ const Index = () => {
             documents,
             notes
           );
-          if (historicalContext && historicalContext.length < 50000) { // Still apply a limit to historical context additions
+          if (historicalContext && historicalContext.length < 1000000) { // Still apply a limit to historical context additions
             msgParts.push({ text: `\n\nPrevious Context:\n${historicalContext}` });
           }
         }
@@ -1423,7 +1423,7 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-screen flex overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 "
@@ -1439,8 +1439,8 @@ const Index = () => {
         <Sidebar {...sidebarProps} />
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-gray-900">
-        <div className="flex items-center justify-between w-full p-0 sm:p-0 border-b-0 shadow-none bg-transparent border-b-0 border-l-0 border-r-0 border-gray-200 dark:border-gray-700">
+      <div className="flex-1 flex flex-col min-w-0 bg-transparent border-none shadow-none">
+        <div className="flex items-center justify-between w-full p-0 sm:p-0  shadow-none bg-transparent border-none">
           <Header {...headerProps} />
 
         </div>
@@ -1473,7 +1473,7 @@ const Index = () => {
             )}
           </div>
         )}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
           <TabContent {...tabContentProps} />
         </div>
       </div>
