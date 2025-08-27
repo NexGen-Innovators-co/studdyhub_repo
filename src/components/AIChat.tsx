@@ -1099,8 +1099,8 @@ const AIChat: React.FC<AIChatProps> = ({
       <div className="flex flex-col h-full border-none relative justify-center overflow-hidden md:flex-row md:gap-0 font-sans">
         <motion.div
           className={`relative flex flex-col h-full rounded-lg panel-transition
-            ${isDiagramPanelOpen ? `md:w-[${100 - panelWidth}%] flex-shrink-0` : 'w-full flex-1'}
-            dark:bg-gray-900
+            ${isDiagramPanelOpen ? `md:w-[${100 - panelWidth}%] flex-shrink-0` : 'w-full flex-1'} bg-transparent dark:bg-transparent
+            
           `}
           initial={{ width: '100%' }}
           animate={{ width: isDiagramPanelOpen ? `${100 - panelWidth}%` : '100%' }}

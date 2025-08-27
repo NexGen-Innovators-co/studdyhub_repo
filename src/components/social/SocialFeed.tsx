@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -13,6 +13,7 @@ import { useSocialData } from './hooks/useSocialData';
 import { useSocialActions } from './hooks/useSocialActions';
 import { useSocialComments } from './hooks/useSocialComments';
 import { useSocialNotifications } from './hooks/useSocialNotifications';
+import { useSocialPostViews } from './hooks/useSocialPostViews';
 
 // Import components
 import { PostCard } from './components/PostCard';
@@ -45,7 +46,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
     posts,
     setPosts,
     trendingPosts,
+    setTrendingPosts,
     userPosts,
+    setUserPosts,
     groups,
     setGroups,
     currentUser,
@@ -91,6 +94,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
     deleteNotification,
   } = useSocialNotifications();
 
+  const { trackPostView, cleanup } = useSocialPostViews(setPosts, setTrendingPosts, setUserPosts);
+
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
+
   // Handler functions
   const handleCreatePost = async () => {
     const success = await createPost(newPostContent, selectedPrivacy, selectedFiles);
@@ -135,15 +146,15 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
+    <div className="min-h-screen bg-transparent">
       <div className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-8">
-            <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="w-full">
+            <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="w-full ">
               <div className="flex items-center justify-between mb-6">
-                <TabsList className="grid w-full max-w-md grid-cols-5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-                  <TabsTrigger value="feed" className="text-xs text-slate-600 dark:text-gray-200">Feed</TabsTrigger>
+                <TabsList className="grid w-full max-w-md grid-cols-5  dark:bg-gray-900 backdrop-blur-sm">
+                  <TabsTrigger value="feed" className="text-xs text-slate-600 dark:text-gray-200 ">Feed</TabsTrigger>
                   <TabsTrigger value="trending" className="text-xs text-slate-600 dark:text-gray-200">Trending</TabsTrigger>
                   <TabsTrigger value="groups" className="text-xs text-slate-600 dark:text-gray-200">Groups</TabsTrigger>
                   <TabsTrigger value="profile" className="text-xs text-slate-600 dark:text-gray-200">Profile</TabsTrigger>
@@ -198,12 +209,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
                         Newest
                       </div>
                     </SelectItem>
-                    <SelectItem value="popular">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="h-3 w-3 text-slate-600 dark:text-gray-300" />
-                        Popular
-                      </div>
-                    </SelectItem>
                     <SelectItem value="trending">
                       <div className="flex items-center gap-2">
                         <TrendingUp className="h-3 w-3 text-slate-600 dark:text-gray-300" />
@@ -245,6 +250,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
                     </div>
                   ) : (
                     <div className="space-y-6">
+                      <Button onClick={() => setShowPostDialog(true)} className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800">
+                        Create your first post
+                      </Button>
                       {filteredPosts.map((post) => (
                         <PostCard
                           key={post.id}
@@ -260,6 +268,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
                           onCommentChange={(content) => updateNewComment(post.id, content)}
                           onSubmitComment={() => handleCommentSubmit(post.id)}
                           currentUser={currentUser}
+                          onPostView={trackPostView}
                         />
                       ))}
                       {filteredPosts.length === 0 && !isLoading && (
@@ -316,6 +325,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
                   onCommentChange={updateNewComment}
                   onSubmitComment={handleCommentSubmit}
                   currentUser={currentUser}
+                  onPostView={trackPostView}
                 />
               </TabsContent>
 
@@ -347,6 +357,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile }) => {
                   onSubmitComment={handleCommentSubmit}
                   currentUser={currentUser}
                   refetchPosts={refetchUserPosts}
+                  onPostView={trackPostView}
                 />
               </TabsContent>
 

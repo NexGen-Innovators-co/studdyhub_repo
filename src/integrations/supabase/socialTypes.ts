@@ -209,6 +209,7 @@ export interface SocialPostWithDetails extends SocialPost {
     group?: SocialGroup;
     is_liked?: boolean;
     is_bookmarked?: boolean;
+    views_count?: number;
 }
 
 export interface SocialGroupWithDetails extends SocialGroup {

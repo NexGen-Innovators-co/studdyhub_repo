@@ -1,4 +1,8 @@
-// Utility functions for post operations
+import { SocialPostWithDetails } from '../../../integrations/supabase/socialTypes';
+
+// Base URL for the application, configurable via environment variable
+const BASE_URL =  import.meta.env.VITE_BASE_URL || 'https://yourapp.com';
+console.log('BASE_URL:', BASE_URL);
 
 export const extractHashtags = (content: string): string[] => {
   const hashtagRegex = /#(\w+)/g;
@@ -44,10 +48,11 @@ export const truncateText = (text: string, maxLength: number): string => {
   return text.substring(0, maxLength) + '...';
 };
 
-export const generateShareText = (post: any): string => {
+export const generateShareText = (post: SocialPostWithDetails): string => {
   const authorName = post.author?.display_name || 'Someone';
   const truncatedContent = truncateText(post.content, 100);
-  return `Check out this post by ${authorName}: "${truncatedContent}"`;
+  const postUrl = `${BASE_URL}/post/${post.id}`;
+  return `Check out this post by ${authorName}: "${truncatedContent}" ${postUrl}`;
 };
 
 export const formatEngagementCount = (count: number): string => {

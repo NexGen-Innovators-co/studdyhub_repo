@@ -4,12 +4,12 @@ import { PostCard } from './PostCard';
 import { SocialPostWithDetails, SocialUserWithDetails, SocialCommentWithDetails } from '../../../integrations/supabase/socialTypes';
 import { RefreshCw } from 'lucide-react';
 
-interface TrendingPostsProps {
+export interface TrendingPostsProps {
   posts: SocialPostWithDetails[];
   isLoading: boolean;
-  onLike: (postId: string, isLiked: boolean) => void;
-  onBookmark: (postId: string, isBookmarked: boolean) => void;
-  onShare: (post: SocialPostWithDetails) => void;
+  onLike: (postId: string, isLiked: boolean) => Promise<void>;
+  onBookmark: (postId: string, isBookmarked: boolean) => Promise<void>;
+  onShare: (post: SocialPostWithDetails) => Promise<void>;
   onComment: (postId: string) => void;
   isPostExpanded: (postId: string) => boolean;
   getPostComments: (postId: string) => SocialCommentWithDetails[];
@@ -18,6 +18,7 @@ interface TrendingPostsProps {
   onCommentChange: (postId: string, content: string) => void;
   onSubmitComment: (postId: string) => void;
   currentUser: SocialUserWithDetails | null;
+  onPostView: (postId: string) => Promise<void>; // Add this line
 }
 
 export const TrendingPosts: React.FC<TrendingPostsProps> = ({
@@ -34,19 +35,13 @@ export const TrendingPosts: React.FC<TrendingPostsProps> = ({
   onCommentChange,
   onSubmitComment,
   currentUser,
+  onPostView,
 }) => {
   return (
     <div className="space-y-6">
       {isLoading ? (
         <div className="flex justify-center py-8">
-          <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : posts.length === 0 ? (
-        <div className="text-center py-12 bg-white/60 backdrop-blur-sm rounded-lg border">
-          <h3 className="text-lg font-semibold mb-2">No trending posts</h3>
-          <p className="text-muted-foreground">
-            There are no trending posts at the moment. Check back later!
-          </p>
+          <RefreshCw className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
         </div>
       ) : (
         posts.map((post) => (
@@ -64,6 +59,7 @@ export const TrendingPosts: React.FC<TrendingPostsProps> = ({
             onCommentChange={(content) => onCommentChange(post.id, content)}
             onSubmitComment={() => onSubmitComment(post.id)}
             currentUser={currentUser}
+            onPostView={onPostView} // Pass the prop to PostCard
           />
         ))
       )}
