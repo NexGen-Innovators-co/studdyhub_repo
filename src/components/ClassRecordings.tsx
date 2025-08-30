@@ -133,7 +133,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         {/* Centered container for recordings list when side panel is closed */}
         <div
           className={`
-            flex-1 p-4 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-gray-900
+            flex-1 p-4 sm:p-6 overflow-y-auto modern-scrollbar 
             transition-all duration-300 ease-in-out
             ${selectedRecording ? 'lg:w-3xl' : 'lg:w-full lg:max-w-4xl mx-auto'}
           `}

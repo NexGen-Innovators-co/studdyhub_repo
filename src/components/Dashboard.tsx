@@ -220,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 }`}
             onClick={onClick}
         >
-            <CardContent className="p-4">
+            <CardContent className="p-4 dark:bg-slate-800/80">
                 <div className="flex items-center justify-between">
                     <div className="space-y-1">
                         <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
@@ -246,8 +246,8 @@ const Dashboard: React.FC<DashboardProps> = ({
         </Card>
     );
 
-    const QuickAction = ({ title, description, icon: Icon, onClick, color = 'blue' }: any) => (
-        <Card className="hover:shadow-md transition-all duration-200 cursor-pointer" onClick={onClick}>
+    const QuickAction = ({ title, description, icon: Icon, onClick, color = 'blue ' }: any) => (
+        <Card className="hover:shadow-md transition-all duration-200 cursor-pointer dark:bg-slate-800/80" onClick={onClick}>
             <CardContent className="p-4">
                 <div className="flex items-center space-x-3">
                     <div className={`p-2 rounded-lg ${color === 'blue' ? 'bg-blue-100 text-blue-600' :
@@ -268,7 +268,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     );
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6">
+        <div className="p-6 max-w-7xl mx-auto space-y-6 ">
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -331,7 +331,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             {/* Quick Actions */}
-            <Card>
+            <Card className='dark:bg-transparent border-0'>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Zap className="h-5 w-5" />

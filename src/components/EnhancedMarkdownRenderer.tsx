@@ -10,7 +10,7 @@ import { X, RefreshCw } from 'lucide-react';
 import { useEnhancedTyping } from '../hooks/useEnhancedTyping';
 import { toast } from 'sonner';
 import Mermaid from './Mermaid';
-import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
+import { MemoizedMarkdownRenderer } from './aiChat/MarkdownRenderer';
 import 'highlight.js/styles/github-dark.css';
 
 interface EnhancedMarkdownRendererProps {
@@ -85,21 +85,21 @@ export const EnhancedMarkdownRenderer = memo(({
       const match = /language-(\w+)/.exec(className || '');
       const language = match ? match[1] : '';
       const codeString = String(children).replace(/\n$/, '');
-      
+
       if (!inline && language) {
         // Handle mermaid diagrams
         if (language === 'mermaid' || language === 'mmd') {
           return (
             <div className="my-4 cursor-pointer" onClick={() => handleMermaidClick(codeString)}>
-              <Mermaid 
-                chart={codeString} 
+              <Mermaid
+                chart={codeString}
                 onMermaidError={(code, errorType) => onMermaidError?.(code, errorType)}
                 diagramRef={React.createRef<HTMLDivElement>()}
               />
             </div>
           );
         }
-        
+
         // Handle other code blocks - use standard markdown for now
         return (
           <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto">
@@ -109,14 +109,14 @@ export const EnhancedMarkdownRenderer = memo(({
           </pre>
         );
       }
-      
+
       return (
         <code className={className} {...props}>
           {children}
         </code>
       );
     },
-    
+
     // Enhanced HTML rendering with better error handling
     html({ node, ...props }: any) {
       try {
@@ -141,7 +141,7 @@ export const EnhancedMarkdownRenderer = memo(({
           Currently typing: {currentBlock.type} block
         </div>
       )}
-      
+
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[
@@ -161,7 +161,7 @@ export const EnhancedMarkdownRenderer = memo(({
       >
         {contentToRender}
       </ReactMarkdown>
-      
+
       {isTyping && (
         <div className="flex items-center gap-2 mt-2 text-sm text-slate-500 dark:text-slate-400">
           <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>

@@ -67,3 +67,30 @@ export interface Message {
     processing_error?: string | null;
   }>;
 }
+export interface ChatSession {
+  id: string;
+  title: string;
+  created_at: string; // Keep as string, as it's directly from DB
+  updated_at: string;
+  last_message_at: string;
+  document_ids: string[];
+  message_count?: number;
+}
+export interface MessagePart {
+  text?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
+}
+
+export interface FileData {
+  name: string;
+  mimeType: string;
+  data: string | null;
+  type: 'image' | 'document' | 'other';
+  size: number;
+  content: string | null;
+  processing_status: string;
+  processing_error: string | null;
+}

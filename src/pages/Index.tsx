@@ -11,7 +11,7 @@ import { useAppOperations } from '../hooks/useAppOperations';
 // import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../integrations/supabase/client';
-import { Message, Quiz, ClassRecording } from '../types/Class';
+import { Message, Quiz, ClassRecording,ChatSession,MessagePart,FileData } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 // import { User } from '@supabase/supabase-js';
@@ -20,78 +20,10 @@ import { useAudioProcessing } from '../hooks/useAudioProcessing';
 // import BookPagesAnimation, { LoadingScreen } from '../components/bookloader';
 import { insertUserMessage, requestAIResponse } from '../services/messageServices';
 import { LoadingScreen } from '@/components/bookloader';
-// import { useInstantMessage } from '../hooks/useInstantMessage';
-
-// Enhanced loading component with progress
-
-
-// Enhanced interface definitions
-interface ChatSession {
-  id: string;
-  title: string;
-  created_at: string; // Keep as string, as it's directly from DB
-  updated_at: string;
-  last_message_at: string;
-  document_ids: string[];
-  message_count?: number;
-}
-
-interface MessagePart {
-  text?: string;
-  inlineData?: {
-    mimeType: string;
-    data: string;
-  };
-}
-
-interface FileData {
-  name: string;
-  mimeType: string;
-  data: string | null;
-  type: 'image' | 'document' | 'other';
-  size: number;
-  content: string | null;
-  processing_status: string;
-  processing_error: string | null;
-}
-
 // Optimized constants
-const MAX_FILE_SIZE = 100 * 1024 * 1024;
-const MAX_FILES_PER_MESSAGE = 10;
-const MAX_TOTAL_CONTEXT_SIZE = 2 * 1024 * 1024;
-const MAX_SINGLE_FILE_CONTEXT = 500 * 1024;
 const MAX_HISTORY_MESSAGES = 30;
 const CHAT_SESSIONS_PER_PAGE = 15;
 const CHAT_MESSAGES_PER_PAGE = 25;
-
-// Enhanced context optimization
-const estimateContextSize = (content: any[]): number => {
-  return JSON.stringify(content).length;
-};
-
-const optimizeContextForProcessing = (
-  chatHistory: Array<{ role: string; parts: MessagePart[] }>,
-  currentContextParts: MessagePart[] // Changed to accept MessagePart[]
-): Array<{ role: string; parts: MessagePart[] }> => {
-  let totalSize = estimateContextSize([{ role: 'user', parts: currentContextParts }]);
-  const optimizedHistory: Array<{ role: string; parts: MessagePart[] }> = [];
-
-  // Start with the current user message and its immediate context/files
-  const currentUserMessage = { role: 'user', parts: currentContextParts };
-
-  for (let i = chatHistory.length - 1; i >= 0 && totalSize < MAX_TOTAL_CONTEXT_SIZE; i--) {
-    const messageSize = estimateContextSize([chatHistory[i]]);
-
-    if (totalSize + messageSize <= MAX_TOTAL_CONTEXT_SIZE) {
-      optimizedHistory.unshift(chatHistory[i]);
-      totalSize += messageSize;
-    } else {
-      break;
-    }
-  }
-
-  return [...optimizedHistory, currentUserMessage];
-};
 
 const extractFirstSentence = (text: string): string => {
   if (!text || text.trim() === '') return 'New Chat';
@@ -812,10 +744,7 @@ const Index = () => {
         }
         // If an old message had an image, include its reference if possible (or actual data if stored)
         if (msg.imageUrl && msg.imageMimeType) {
-          // If you stored base64 data for past images, you'd use it here.
-          // Otherwise, only the URL would be implied context unless the backend fetches it.
-          // For now, assuming image data is handled by `processedFiles` for current input,
-          // or that the backend is aware of past image URLs.
+         
         }
         chatHistoryForAI.push({ role: msg.role, parts: msgParts });
       });
@@ -1423,7 +1352,7 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
+    <div className="h-screen flex overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-700 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 "
@@ -1440,7 +1369,7 @@ const Index = () => {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 bg-transparent border-none shadow-none">
-        <div className="flex items-center justify-between w-full p-0 sm:p-0  shadow-none bg-transparent border-none">
+        <div className="flex items-center sm:hidden justify-between w-full p-0 sm:p-0  shadow-none bg-transparent border-none">
           <Header {...headerProps} />
 
         </div>
