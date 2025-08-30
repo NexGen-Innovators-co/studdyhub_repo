@@ -67,10 +67,10 @@ export const useAppData = () => {
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [lastUserId, setLastUserId] = useState<string | null>(null);
@@ -830,79 +830,79 @@ export const useAppData = () => {
 
   const setupChatMessageListener = useCallback(async (user: any) => {
     try {
-        const channel = supabase
-            .channel(`chat_messages_${user.id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'chat_messages',
-                    filter: `user_id=eq.${user.id}`
-                },
-                (payload) => {
-                    const formatMessage = (msg: any): Partial<Message> => ({
-                        id: msg.id,
-                        content: msg.content,
-                        role: msg.role as 'user' | 'assistant',
-                        timestamp: msg.timestamp,
-                        isError: msg.is_error,
-                        attachedDocumentIds: msg.attached_document_ids,
-                        attachedNoteIds: msg.attached_note_ids,
-                        imageUrl: msg.image_url,
-                        imageMimeType: msg.image_mime_type,
-                        session_id: msg.session_id,
-                        has_been_displayed: msg.has_been_displayed
-                    });
+      const channel = supabase
+        .channel(`chat_messages_${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'chat_messages',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            const formatMessage = (msg: any): Partial<Message> => ({
+              id: msg.id,
+              content: msg.content,
+              role: msg.role as 'user' | 'assistant',
+              timestamp: msg.timestamp,
+              isError: msg.is_error,
+              attachedDocumentIds: msg.attached_document_ids,
+              attachedNoteIds: msg.attached_note_ids,
+              imageUrl: msg.image_url,
+              imageMimeType: msg.image_mime_type,
+              session_id: msg.session_id,
+              has_been_displayed: msg.has_been_displayed
+            });
 
-                     if (payload.eventType === 'INSERT') {
-                        const newMessage = formatMessage(payload.new) as Message;
-                        // console.log('[useAppData] New message received via realtime:', newMessage);
-                        
-                        setChatMessages(prevMessages => {
-                            const exists = prevMessages.some(msg => msg.id === newMessage.id);
-                            if (exists) {
-                                // console.log('[useAppData] Message already exists, updating if needed');
-                                return prevMessages.map(msg => 
-                                    msg.id === newMessage.id 
-                                        ? { ...msg, ...newMessage }
-                                        : msg
-                                );
-                            }
-                            
-                            // console.log('[useAppData] Adding new message to state');
-                            const updatedMessages = [...prevMessages, newMessage];
-                            updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-                            return updatedMessages;
-                        });
-                        
-                        // Note: replaceOptimisticMessage should be passed from parent component if needed
-                    } else if (payload.eventType === 'UPDATE') {
-                      const updated = payload.new as any;
-                      setChatMessages(prev => prev.map(m => {
-                        if (m.id !== updated.id) return m;
-                        // Preserve existing content if incoming payload has null/undefined content
-                        const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
-                        return {
-                          ...m,
-                          ...updated,
-                          content: preservedContent
-                        };
-                      }));
-                    } else if (payload.eventType === 'DELETE') {
-                        setChatMessages(prevMessages =>
-                            prevMessages.filter(msg => msg.id !== payload.old.id)
-                        );
-                    }
+            if (payload.eventType === 'INSERT') {
+              const newMessage = formatMessage(payload.new) as Message;
+              // console.log('[useAppData] New message received via realtime:', newMessage);
+
+              setChatMessages(prevMessages => {
+                const exists = prevMessages.some(msg => msg.id === newMessage.id);
+                if (exists) {
+                  // console.log('[useAppData] Message already exists, updating if needed');
+                  return prevMessages.map(msg =>
+                    msg.id === newMessage.id
+                      ? { ...msg, ...newMessage }
+                      : msg
+                  );
                 }
-            )
-            .subscribe();
 
-        chatMessageChannelRef.current = channel;
+                // console.log('[useAppData] Adding new message to state');
+                const updatedMessages = [...prevMessages, newMessage];
+                updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                return updatedMessages;
+              });
+
+              // Note: replaceOptimisticMessage should be passed from parent component if needed
+            } else if (payload.eventType === 'UPDATE') {
+              const updated = payload.new as any;
+              setChatMessages(prev => prev.map(m => {
+                if (m.id !== updated.id) return m;
+                // Preserve existing content if incoming payload has null/undefined content
+                const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
+                return {
+                  ...m,
+                  ...updated,
+                  content: preservedContent
+                };
+              }));
+            } else if (payload.eventType === 'DELETE') {
+              setChatMessages(prevMessages =>
+                prevMessages.filter(msg => msg.id !== payload.old.id)
+              );
+            }
+          }
+        )
+        .subscribe();
+
+      chatMessageChannelRef.current = channel;
     } catch (error) {
-        console.error('Error setting up chat message listener:', error);
+      console.error('Error setting up chat message listener:', error);
     }
-}, []);
+  }, []);
 
 
   const setupNotesListener = useCallback(async (user: any) => {

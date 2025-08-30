@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { AlertTriangle, Copy, Check, Loader2, Maximize2, X, RefreshCw, ChevronDown, ChevronUp, Image, FileText, BookOpen, StickyNote, Sparkles } from 'lucide-react';
-import { Button } from './ui/button';
-import { Card, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
+import { Button } from '../ui/button';
+import { Card, CardContent } from '../ui/card';
+import { Badge } from '../ui/badge';
 import { Chart, registerables } from 'chart.js';
 import { lowlight } from 'lowlight';
 import { LanguageFn } from 'highlight.js';
@@ -19,8 +19,8 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
-import { useTypingAnimation } from '../hooks/useTypingAnimation';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { useTypingAnimation } from '../../hooks/useTypingAnimation';
 
 try {
   lowlight.registerLanguage('javascript', javascript as LanguageFn);
@@ -98,7 +98,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
   const lang = match && match[1];
   const codeContent = String(children).trim();
   const [showRawCode, setShowRawCode] = useState(false);
-  
+
   const handleCopyCode = async () => {
     await copy(codeContent);
   };
@@ -344,7 +344,7 @@ interface MemoizedMarkdownRendererProps {
   isUserMessage?: boolean;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void;
   onSuggestAiCorrection: (prompt: string) => void;
-  onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
+  onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html' | 'slides', content?: string, language?: string, imageUrl?: string) => void;
   onToggleUserMessageExpansion: (messageContent: string) => void;
   expandedMessages: Set<string>;
   enableTyping?: boolean;
@@ -352,9 +352,9 @@ interface MemoizedMarkdownRendererProps {
   onTypingComplete?: (messageId: string) => void;
   isAlreadyTyped?: boolean;
   autoTypeInPanel?: boolean;
-  onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
-  onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
-  onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
 }
 
 export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> = memo(({

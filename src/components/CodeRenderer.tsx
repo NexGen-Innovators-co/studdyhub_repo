@@ -31,7 +31,7 @@ import { Graphviz } from '@hpcc-js/wasm';
 
 // Direct import for Chart.js
 import { Chart, registerables } from 'chart.js';
-import { CodeBlockErrorBoundary } from './MarkdownRenderer';
+import { CodeBlockErrorBoundary } from './aiChat/MarkdownRenderer';
 import Mermaid from './Mermaid';
 Chart.register(...registerables); // Register Chart.js components globally
 
@@ -279,9 +279,9 @@ export const CodeRenderer: React.FC<CodeRendererProps> = memo(({ inline, classNa
         <div ref={mermaidDiagramRef}>
           <Mermaid
             chart={codeContent}
-            onMermaidError={() => {}} // Placeholder for error handling
+            onMermaidError={() => { }} // Placeholder for error handling
             diagramRef={mermaidDiagramRef}
-            onSuggestAiCorrection={() => {}} // Placeholder for AI correction
+            onSuggestAiCorrection={() => { }} // Placeholder for AI correction
           />
         </div>
       </CodeBlockErrorBoundary>

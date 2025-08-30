@@ -683,19 +683,18 @@ export const highlightCode = (
     maxLength?: number;
   } = {}
 ): string => {
-  const { format = false, showErrors = false, maxLength = 100000 } = options;
+  const { format = false, showErrors = false } = options;
 
   if (!code || code.length === 0) {
     return '';
   }
 
-  // Truncate very long code
-  let processedCode = code.length > maxLength ? code.substring(0, maxLength) + '\n... (truncated)' : code;
+  
   
   // Format code if requested
   if (format) {
     try {
-      processedCode = formatCode(processedCode, language);
+      code = formatCode(code, language);
     } catch (error) {
       console.warn('Code formatting failed:', error);
     }
@@ -708,10 +707,10 @@ export const highlightCode = (
     // Try to highlight with the specified language
     let result;
     try {
-      result = lowlight.highlight(normalizedLang, processedCode);
+      result = lowlight.highlight(normalizedLang, code);
     } catch (langError) {
       // Fallback to auto-detection
-      result = lowlight.highlightAuto(processedCode);
+      result = lowlight.highlightAuto(code);
     }
     
     return toHtml(result, theme);
@@ -719,10 +718,10 @@ export const highlightCode = (
     console.warn('Syntax highlighting failed:', error);
     
     if (showErrors) {
-      return `<span style="color: ${theme.colors['hljs-comment'] || '#888'};">/* Syntax highlighting failed: ${error} */</span>\n${escapeHtml(processedCode)}`;
+      return `<span style="color: ${theme.colors['hljs-comment'] || '#888'};">/* Syntax highlighting failed: ${error} */</span>\n${escapeHtml(code)}`;
     }
     
-    return escapeHtml(processedCode);
+    return escapeHtml(code);
   }
 };
 

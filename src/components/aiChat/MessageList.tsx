@@ -1,16 +1,16 @@
 import React, { memo, useCallback, useState } from 'react';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
-import { EnhancedMarkdownRenderer } from './EnhancedMarkdownRenderer';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
-import { Document } from '../types/Document';
-import { Message } from '../types/Class';
-import { cn } from '../lib/utils';
-import BookPagesAnimation from './bookloader';
-import AIBot from './aibot';
+import { EnhancedMarkdownRenderer } from '../EnhancedMarkdownRenderer';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { Document } from '../../types/Document';
+import { Message } from '../../types/Class';
+import { cn } from '../../lib/utils';
+import BookPagesAnimation from '../bookloader';
+import AIBot from '../ui/aibot';
 
 interface MessageListProps {
   messages: Message[];
@@ -22,7 +22,7 @@ interface MessageListProps {
   onDeleteClick: (messageId: string) => void;
   onRegenerateClick: (lastUserMessageContent: string) => void;
   onRetryClick: (originalUserMessageContent: string, failedAiMessageId: string) => void;
-  onViewContent: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text' | 'html', content?: string, language?: string, imageUrl?: string) => void;
+  onViewContent: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text' | 'html' | 'slides', content?: string, language?: string, imageUrl?: string) => void;
   onMermaidError: (code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => void;
   onSuggestAiCorrection: (prompt: string) => void;
   onToggleUserMessageExpansion: (messageContent: string) => void;
@@ -38,9 +38,9 @@ interface MessageListProps {
   enableTypingAnimation?: boolean;
   onMarkMessageDisplayed: (messageId: string) => void;
   autoTypeInPanel?: boolean;
-  onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
-  onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
-  onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
 }
 
 export const MessageList = memo(({
@@ -145,7 +145,7 @@ export const MessageList = memo(({
           <>
             <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2 justify-end">
               {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
-                <div 
+                <div
                   className="flex items-center gap-1 text-xs text-slate-500 font-claude hover:text-blue-500 cursor-pointer transition-colors"
                   onClick={() => handleViewAttachedFile('documents', message.attachedDocumentIds)}
                 >
@@ -154,7 +154,7 @@ export const MessageList = memo(({
                 </div>
               )}
               {message.attachedNoteIds && message.attachedNoteIds.length > 0 && (
-                <div 
+                <div
                   className="flex items-center gap-1 text-xs text-slate-500 font-claude hover:text-blue-500 cursor-pointer transition-colors"
                   onClick={() => handleViewAttachedFile('notes', message.attachedNoteIds)}
                 >
@@ -163,7 +163,7 @@ export const MessageList = memo(({
                 </div>
               )}
               {message.imageUrl && (
-                <div 
+                <div
                   className="flex items-center gap-1 text-xs text-slate-500 font-claude hover:text-blue-500 cursor-pointer transition-colors"
                   onClick={() => handleViewAttachedFile('image', message.imageUrl)}
                 >
@@ -247,8 +247,8 @@ export const MessageList = memo(({
               </div>
             )}
             <div className={cn(
-              'flex gap-1 sm:gap-2 group', 
-              isDiagramPanelOpen ? 'w-full' : 'max-w-full sm:max-w-4xl w-full mx-auto', 
+              'flex gap-1 sm:gap-2 group',
+              isDiagramPanelOpen ? 'w-full' : 'max-w-full sm:max-w-4xl w-full mx-auto',
               isUserMessage ? 'justify-end' : 'justify-start'
             )}>
               {message.role === 'assistant' && (
