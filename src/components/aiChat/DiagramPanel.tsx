@@ -36,6 +36,7 @@ interface DiagramPanelProps {
   imageUrl?: string;
   initialWidthPercentage?: number;
   liveContent?: string;
+  isPhone: () => boolean; // Make it required and ensure it's a memoized function
 }
 
 interface ThreeJSRendererProps {
@@ -70,9 +71,9 @@ const ThreeJSRenderer = memo(({ codeContent, canvasRef, onInvalidCode, onSceneRe
 
     try {
       const createSceneWrapper = new Function('THREE', 'OrbitControls', 'GLTFLoader', `
-  ${codeContent}
-  return createThreeJSScene;
-  `);
+${codeContent}
+return createThreeJSScene;
+`);
 
       const createScene = createSceneWrapper(THREE, OrbitControls, GLTFLoader);
       const { scene, renderer, camera, controls, cleanup } = createScene(canvasRef.current, THREE, OrbitControls, GLTFLoader);
@@ -159,6 +160,7 @@ export const DiagramPanel = memo(({
   imageUrl,
   initialWidthPercentage = 65,
   liveContent,
+  isPhone
 }: DiagramPanelProps) => {
   const [panelWidth, setPanelWidth] = useState(initialWidthPercentage);
   const [isResizing, setIsResizing] = useState(false);
@@ -507,7 +509,7 @@ box-sizing: border-box;
         renderCode();
         break;
       case 'image':
-        container.innerHTML = `<img src="${imageUrl}" alt="Generated Image" class="max-w-full h-auto object-contain rounded-lg shadow-md mx-auto" onerror="this.onerror=null;this.src='https://placehold.co/400x300/e0e0e0/555555?text=Image+Load+Error';" />`;
+        container.innerHTML = `<img src="${imageUrl}" alt="Generated Image" className="max-w-full h-auto object-contain rounded-lg shadow-md mx-auto" onerror="this.onerror=null;this.src='https://placehold.co/400x300/e0e0e0/555555?text=Image+Load+Error';" />`;
         break;
       case 'document-text':
       case 'unknown':
@@ -687,26 +689,29 @@ box-sizing: border-box;
     }
   }, [effectiveDiagramType, slides, currentSlideIndex]);
 
-  if (!isOpen) return null;
-
-  const currentSlide = slides[currentSlideIndex];
+  const mobileFullScreen = isPhone(); // Directly use the isPhone function
 
   return (
     <motion.div
       className={`relative flex flex-col h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700
-${isFullScreen ? 'fixed inset-0 z-50' : `md:w-[${panelWidth}%] flex-shrink-0`}
-${isResizing ? 'cursor-ew-resize' : ''} panel-transition
-`}
-      initial={{ opacity: 0, x: '100%' }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: '100%' }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
+        ${mobileFullScreen
+          ? 'fixed inset-0 z-[60] w-full h-full border-l-0'
+          : 'flex-shrink-0 w-full md:flex-shrink-0'
+        }
+        ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
+      initial={{ x: '50%', opacity: 0 }}  // Start partially off-screen with fade
+      animate={{ x: 0, opacity: 1 }}      // Slide in with fade in
+      exit={{ x: '50%', opacity: 0 }}     // Slide out with fade out
+      transition={{
+        duration: 0.2,
+        ease: [0.25, 0.46, 0.45, 0.94]    // Custom cubic-bezier for smooth motion
+      }}
       style={{
-        width: isFullScreen ? '100%' : `${panelWidth}%`,
-        zIndex: isFullScreen ? 100 : 20,
+        width: mobileFullScreen ? '100%' : `${panelWidth}%`,
+        zIndex: mobileFullScreen ? 60 : 20,
       }}
     >
-      {!isFullScreen && (
+      {!isFullScreen && !mobileFullScreen && (
         <div
           className="absolute left-0 top-0 h-full w-2 cursor-ew-resize -ml-1 z-30"
           onMouseDown={startResizing}
@@ -875,29 +880,33 @@ ${isInteractiveContent && isDragging ? 'cursor-grabbing' : ''}
                 style={{ minHeight: '300px' }}
                 sandbox="allow-scripts allow-same-origin"
               />
-            ) : effectiveDiagramType === 'slides' && currentSlide ? (
-              <div
-                id="current-slide-content"
-                className="w-full h-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-gray-700 dark:to-gray-800 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl overflow-auto"
-                style={{ minHeight: '300px' }}
-              >
-                <h2 className="text-3xl sm:text-4xl font-bold mb-6 text-blue-800 dark:text-blue-300 text-center font-claude">
-                  {currentSlide.title}
-                </h2>
-                {Array.isArray(currentSlide.content) ? (
-                  <ul className="list-disc list-inside text-lg sm:text-xl space-y-3 px-4 font-claude max-w-full overflow-auto">
-                    {currentSlide.content.map((item, i) => (
-                      <li key={i} className="mb-2">
-                        <ReactMarkdown>{item}</ReactMarkdown>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="prose dark:prose-invert text-lg sm:text-xl text-center font-claude max-w-full overflow-auto">
-                    <ReactMarkdown>{currentSlide.content}</ReactMarkdown>
-                  </div>
-                )}
-              </div>
+            ) : effectiveDiagramType === 'slides' ? (
+              slides.length > 0 && currentSlideIndex < slides.length ? ( // Check if slides exist and currentSlideIndex is valid
+                <div
+                  id="current-slide-content"
+                  className="w-full h-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-gray-700 dark:to-gray-800 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl overflow-auto"
+                  style={{ minHeight: '300px' }}
+                >
+                  <h2 className="text-3xl sm:text-4xl font-bold mb-6 text-blue-800 dark:text-blue-300 text-center font-claude">
+                    {slides[currentSlideIndex].title}
+                  </h2>
+                  {Array.isArray(slides[currentSlideIndex].content) ? (
+                    <ul className="list-disc list-inside text-lg sm:text-xl space-y-3 px-4 font-claude max-w-full overflow-auto">
+                      {slides[currentSlideIndex].content.map((item, i) => (
+                        <li key={i} className="mb-2">
+                          <ReactMarkdown>{item}</ReactMarkdown>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="prose dark:prose-invert text-lg sm:text-xl text-center font-claude max-w-full overflow-auto">
+                      <ReactMarkdown>{slides[currentSlideIndex].content}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>No slides available.</div>
+              )
             ) : effectiveDiagramType === 'threejs' ? (
               <div className="w-full h-full">
                 <canvas ref={threeJsCanvasRef} style={{ width: '100%', height: '100%', backgroundColor: '#282c34' }} />
