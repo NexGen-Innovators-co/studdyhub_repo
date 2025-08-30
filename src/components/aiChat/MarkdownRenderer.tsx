@@ -95,33 +95,68 @@ interface CodeBlockProps {
   isFirstBlock?: boolean;
   autoTypeInPanel?: boolean;
   isDiagramPanelOpen: boolean;
+  onDiagramCodeUpdate: (newCode: string) => void; // Add this line
+  isTyping: boolean;
 }
 const CodeBlock: React.FC<CodeBlockProps> = memo(({
-  node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, isFirstBlock, autoTypeInPanel = true, isDiagramPanelOpen, ...props
+  node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, isFirstBlock, autoTypeInPanel = true, isDiagramPanelOpen, onDiagramCodeUpdate, isTyping, ...props
 }) => {
   const { copied, copy } = useCopyToClipboard();
   const match = /language-(\w+)/.exec(className || '');
   const lang = match && match[1];
   const codeContent = String(children).trim();
-
-  // Determine if it's a code block (has a language specified)
-  const isCodeBlock = !!lang;
-
-  // Initial state: Show raw code only if it's a code block, autoTypeInPanel is true, and DiagramPanel is off
-  const [showRawCode, setShowRawCode] = useState(
-    (isCodeBlock && autoTypeInPanel && !isDiagramPanelOpen) ? true : !autoTypeInPanel
-  );
+  const [showRawCode, setShowRawCode] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); // Add this line
+  const [editedCode, setEditedCode] = useState(codeContent); // Add this line
 
   useEffect(() => {
-    // Update showRawCode based on the conditions
-    setShowRawCode((isCodeBlock && autoTypeInPanel && !isDiagramPanelOpen) ? true : false);
-  }, [autoTypeInPanel, isDiagramPanelOpen, isCodeBlock]);
+    setEditedCode(codeContent); // Initialize editedCode with codeContent
+  }, [codeContent]);
 
   const handleCopyCode = async () => {
-    await copy(codeContent);
+    await copy(editedCode); // Copy editedCode instead of codeContent
   };
+
+  const handleCodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditedCode(e.target.value);
+  };
+
+  const handleUpdateDiagram = () => {
+    onDiagramCodeUpdate(editedCode); // Call the callback with the edited code
+    onViewDiagram(lang as any, editedCode); // Refresh the diagram in the panel
+    setIsEditing(false); // Exit edit mode
+  };
+  useEffect(() => {
+    if (isEditing) {
+      setShowRawCode(true);
+    }
+  }, [isEditing]);
+  const handleToggleRawCode = () => {
+    setShowRawCode(!showRawCode);
+  };
+  const handleSaveCode = () => {
+    onViewDiagram(lang as any, editedCode);
+    setIsEditing(false);
+  };
+
+  // Updated effect to show raw code when typing and panel is not open
+  useEffect(() => {
+    if (autoTypeInPanel && !inline && lang && !isDiagramPanelOpen) {
+      setShowRawCode(true);
+    }
+  }, [autoTypeInPanel, inline, lang, isDiagramPanelOpen]);
+
+  // Check if this is a special diagram type
+  const isDiagramType = lang && ['mermaid', 'chartjs', 'threejs', 'dot', 'html'].includes(lang);
+
+  // For generic code blocks, show raw code when typing if panel is not open
+  const shouldShowRawCodeForGeneric = !isDiagramType && autoTypeInPanel && !isDiagramPanelOpen;
+
+  // Determine if raw code should be shown based on various conditions
+  const shouldShowRawCode = showRawCode || shouldShowRawCodeForGeneric || (isTyping && !inline && lang);
+
   // Render raw code with syntax highlighting using react-syntax-highlighter
-  if (!inline && (showRawCode || !autoTypeInPanel)) {
+  if (!inline && shouldShowRawCode) {
     return (
       <div className="relative my-4 sm:my-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 w-full">
         <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
@@ -139,7 +174,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
             >
               {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
             </Button>
-            {autoTypeInPanel && ( // Only show toggle button if autoTypeInPanel is true
+            {(autoTypeInPanel || showRawCode || isTyping) && ( // Show toggle button if manually shown, auto-typing, or is typing
               <Button
                 variant="ghost"
                 size="sm"
@@ -286,7 +321,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
     return createDiagramBlock('DOT Graph', 'dot');
   }
 
-  // Handle generic code blocks
+  // Handle generic code blocks - now they will show raw code when typing
   if (!inline && lang) {
     return (
       <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-600">
@@ -340,8 +375,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
       {children}
     </code>
   );
-}
-);
+
+});
+
 interface MemoizedMarkdownRendererProps {
   content: string;
   messageId: string;
@@ -359,9 +395,9 @@ interface MemoizedMarkdownRendererProps {
   onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
   onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
   onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
-  isDiagramPanelOpen: boolean
+  isDiagramPanelOpen: boolean;
+  onDiagramCodeUpdate: (messageId: string, newCode: string) => Promise<void>; // Add this line
 }
-
 export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> = memo(({
   content,
   messageId,
@@ -379,13 +415,14 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   onBlockDetected,
   onBlockUpdate,
   onBlockEnd,
-  isDiagramPanelOpen
+  isDiagramPanelOpen,
+  onDiagramCodeUpdate
 
 }) => {
   const { displayedText, isTyping } = useTypingAnimation({
     text: content,
     messageId,
-    wordsPerSecond: 12,
+    wordsPerSecond: 100,
     enabled: enableTyping && !isUserMessage && isLastMessage,
     onComplete: onTypingComplete,
     isAlreadyComplete: isAlreadyTyped,
@@ -441,8 +478,10 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
                     onSuggestAiCorrection={onSuggestAiCorrection}
                     onViewDiagram={onViewDiagram}
                     isFirstBlock={isFirstBlockLocal}
+                    autoTypeInPanel={autoTypeInPanel}
                     isDiagramPanelOpen={isDiagramPanelOpen}
-
+                    onDiagramCodeUpdate={(newCode) => onDiagramCodeUpdate(messageId, newCode)}
+                    isTyping={enableTyping && !isUserMessage && isLastMessage && !isAlreadyTyped}
                   />
                 );
               },

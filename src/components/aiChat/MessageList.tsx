@@ -4,7 +4,7 @@ import { Badge } from '../ui/badge';
 import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
-import { EnhancedMarkdownRenderer } from '../EnhancedMarkdownRenderer';
+// import { EnhancedMarkdownRenderer } from '../EnhancedMarkdownRenderer';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { Document } from '../../types/Document';
 import { Message } from '../../types/Class';
@@ -41,6 +41,7 @@ interface MessageListProps {
   onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
   onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
   onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
+  onDiagramCodeUpdate: (messageId: string, newCode: string) => Promise<void>; // Add this line
 }
 
 export const MessageList = memo(({
@@ -72,6 +73,7 @@ export const MessageList = memo(({
   onBlockDetected,
   onBlockUpdate,
   onBlockEnd,
+  onDiagramCodeUpdate,
 }: MessageListProps) => {
   let lastDate: string | null = null;
 
@@ -99,7 +101,7 @@ export const MessageList = memo(({
   const [isNoteViewerOpen, setIsNoteViewerOpen] = useState(false);
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
 
-  const handleViewAttachedFile = (type: 'documents' | 'notes' | 'image', ids: string[] | string) => {
+  const handleViewAttachedFile = useCallback((type: 'documents' | 'notes' | 'image', ids: string[] | string) => {
     switch (type) {
       case 'documents':
         setDocumentsToView(Array.isArray(ids) ? ids : [ids]);
@@ -116,10 +118,51 @@ export const MessageList = memo(({
       default:
         console.warn('Unknown attachment type', type);
     }
-  };
+  }, []);
+
+  const handleDiagramCodeUpdate = useCallback(async (messageId: string, newCode: string) => {
+    try {
+      await onDiagramCodeUpdate(messageId, newCode);
+      toast.success('Diagram code updated successfully!');
+    } catch (error: any) {
+      console.error('Error updating diagram code:', error);
+      toast.error(`Failed to update diagram code: ${error.message || 'Unknown error'}`);
+    }
+  }, [onDiagramCodeUpdate]);
+
+  const handleMermaidError = useCallback((code: string, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => {
+    let errorMessage = 'Failed to render Mermaid diagram. ';
+
+    switch (errorType) {
+      case 'syntax':
+        errorMessage += 'Syntax error in diagram code.';
+        break;
+      case 'rendering':
+        errorMessage += 'Error during diagram rendering.';
+        break;
+      case 'timeout':
+        errorMessage += 'Rendering timed out.';
+        break;
+      case 'network':
+        errorMessage += 'Network error occurred while rendering.';
+        break;
+      default:
+        errorMessage += 'Unknown error occurred.';
+        break;
+    }
+
+    console.error(errorMessage, 'Code:', code);
+    toast.error(errorMessage);
+    onMermaidError(code, errorType);
+  }, [onMermaidError]);
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8 bg-transparent px-2 sm:px-4 md:px-0" style={{ position: 'relative', zIndex: 1 }}>
+    <div
+      className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8 bg-transparent px-2 sm:px-4 md:px-0"
+      style={{ position: 'relative', zIndex: 1 }}
+      role="log"
+      aria-live="polite"
+    >
       {messages.length === 0 && isLoadingSessionMessages && (
         <div className="flex flex-col items-center justify-center py-6 sm:py-8">
           <BookPagesAnimation size="lg" text="Loading messages..." />
@@ -214,7 +257,7 @@ export const MessageList = memo(({
               content={message.content}
               messageId={message.id}
               isUserMessage={false}
-              onMermaidError={onMermaidError}
+              onMermaidError={handleMermaidError} // Use the useCallback-wrapped handler
               onSuggestAiCorrection={onSuggestAiCorrection}
               onViewDiagram={onViewContent}
               onToggleUserMessageExpansion={onToggleUserMessageExpansion}
@@ -228,7 +271,7 @@ export const MessageList = memo(({
               onBlockUpdate={onBlockUpdate}
               onBlockEnd={onBlockEnd}
               isDiagramPanelOpen={isDiagramPanelOpen}
-
+              onDiagramCodeUpdate={handleDiagramCodeUpdate} // Use the useCallback-wrapped handler
             />
             {message.id.startsWith('optimistic-ai-') && message.content.length < 10 && (
               <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 font-claude">
@@ -243,16 +286,23 @@ export const MessageList = memo(({
           <React.Fragment key={message.id}>
             {showDateHeader && (
               <div className="flex justify-center my-3 sm:my-4">
-                <Badge variant="secondary" className="px-2 sm:px-3 py-1 text-xs sm:text-sm text-slate-500 bg-slate-100 rounded-full shadow-sm dark:bg-gray-700 dark:text-gray-300 font-claude">
+                <Badge
+                  variant="secondary"
+                  className="px-2 sm:px-3 py-1 text-xs sm:text-sm text-slate-500 bg-slate-100 rounded-full shadow-sm dark:bg-gray-700 dark:text-gray-300 font-claude"
+                  aria-label={`Date: ${messageDate}`}
+                >
                   {messageDate}
                 </Badge>
               </div>
             )}
-            <div className={cn(
-              'flex gap-1 sm:gap-2 group',
-              isDiagramPanelOpen ? 'w-full' : 'max-w-full sm:max-w-4xl w-full mx-auto',
-              isUserMessage ? 'justify-end' : 'justify-start'
-            )}>
+            <div
+              className={cn(
+                'flex gap-1 sm:gap-2 group',
+                isDiagramPanelOpen ? 'w-full' : 'max-w-full sm:max-w-4xl w-full mx-auto',
+                isUserMessage ? 'justify-end' : 'justify-start'
+              )}
+              aria-label={isUserMessage ? `User message: ${message.content}` : `Assistant message: ${message.content}`}
+            >
               {message.role === 'assistant' && (
                 <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
               )}
@@ -353,20 +403,20 @@ export const MessageList = memo(({
                         <X className="h-3 w-3 sm:h-4 sm:w-4" />
                       </Button>
                     )}
-                    {message.role === 'assistant' && message.isError && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
-                          if (prevUserMessage) onRetryClick(prevUserMessage.content, message.id);
-                        }}
-                        className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-                        title="Retry failed message"
-                      >
-                        <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
-                      </Button>
-                    )}
+                    {/* {message.role === 'assistant' && message.isError && (
+<Button
+variant="ghost"
+size="icon"
+onClick={() => {
+const prevUserMessage = messages.slice(0, index).reverse().find(msg => msg.role === 'user');
+if (prevUserMessage) onRetryClick(prevUserMessage.content, message.id);
+}}
+className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+title="Retry failed message"
+>
+<RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
+</Button>
+)} */}
                   </div>
                 </div>
               </div>

@@ -117,8 +117,8 @@ interface AIChatProps {
     }>
   ) => Promise<void>;
   onMessageUpdate: (message: Message) => void;
+  onDiagramCodeUpdate: (messageId: string, newCode: string) => Promise<void>; // Add this line
 }
-
 const getFileType = (file: File): 'image' | 'document' | 'other' => {
   const imageTypes = [
     'image/jpg',
@@ -228,6 +228,7 @@ const AIChat: React.FC<AIChatProps> = ({
   learningPreferences,
   onSendMessageToBackend,
   onMessageUpdate,
+  onDiagramCodeUpdate
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -1112,7 +1113,7 @@ const AIChat: React.FC<AIChatProps> = ({
           }}
           transition={{ duration: 0.1, ease: 'easeInOut' }}
         >
-          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col modern-scrollbar pb-36 md:pb-6">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar pb-36 md:pb-6">
             {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && (
               <div className="text-center py-8 flex-grow flex flex-col justify-center items-center text-slate-400 dark:text-gray-500">
                 <BookPagesAnimation size="xl" showText={false} className="mb-6" />
@@ -1151,6 +1152,8 @@ const AIChat: React.FC<AIChatProps> = ({
               onBlockDetected={handleBlockDetected}
               onBlockUpdate={handleBlockUpdate}
               onBlockEnd={handleBlockEnd}
+              onDiagramCodeUpdate={onDiagramCodeUpdate}
+
             />
 
             {isGeneratingImage && (
@@ -1171,14 +1174,14 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent font-sans z-10 
+          <div className={`fixed bottom-0 left-0 right-0  sm:pb-8 md:shadow-none md:static rounded-t-lg md:rounded-lg bg-transparent  dark:bg-transparent dark:border-gray-700 font-sans z-10 
           ${isDiagramPanelOpen
               ? (isPhone()
                 ? 'hidden' // Hide input on mobile when panel is open
                 : `md:pr-[calc(${panelWidth}%+1.5rem)]`
               )
               : ''
-            }`}><div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2">
+            }`}><div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md  dark:border-gray-700 p-2">
               {/* FIXED: Speech recognition status indicator */}
               {isRecognizing && (
                 <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 dark:bg-red-900/20 dark:border-red-800">
