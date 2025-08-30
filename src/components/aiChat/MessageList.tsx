@@ -227,6 +227,8 @@ export const MessageList = memo(({
               onBlockDetected={onBlockDetected}
               onBlockUpdate={onBlockUpdate}
               onBlockEnd={onBlockEnd}
+              isDiagramPanelOpen={isDiagramPanelOpen}
+
             />
             {message.id.startsWith('optimistic-ai-') && message.content.length < 10 && (
               <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 font-claude">
