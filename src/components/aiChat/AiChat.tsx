@@ -330,13 +330,11 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [autoTypeInPanel]);
 
-  const handleViewContent = useCallback((
-    type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'threejs' | 'unknown' | 'document-text' | 'html',
-    content?: string,
-    language?: string,
-    imageUrl?: string
-  ) => {
-    setActiveDiagram({ type, content, language, imageUrl });
+  const handleViewContent = useCallback((type, content, language, imageUrl) => {
+    setActiveDiagram(null); // Clear first
+    setTimeout(() => {
+      setActiveDiagram({ type, content, language, imageUrl });
+    }, 0); // Set on next tick
   }, []);
 
   const memoizedOnMermaidError = useCallback((code: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => {
@@ -1099,12 +1097,20 @@ const AIChat: React.FC<AIChatProps> = ({
       <div className="flex flex-col h-full border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans">
         <motion.div
           className={`relative flex flex-col h-full rounded-lg panel-transition
-${isDiagramPanelOpen ? `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0` : 'w-full flex-1'} bg-transparent dark:bg-transparent
-
-`}
+          ${isDiagramPanelOpen
+              ? (isPhone()
+                ? 'hidden' // Hide chat completely on mobile when panel is open
+                : `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0`
+              )
+              : 'w-full flex-1'
+            } bg-transparent dark:bg-transparent`}
           initial={{ width: '100%' }}
-          animate={{ width: isDiagramPanelOpen ? `calc(100% - ${panelWidth}%)` : '100%' }}
-          transition={{ duration: 0.3, ease: 'easeInOut' }}
+          animate={{
+            width: isDiagramPanelOpen
+              ? (isPhone() ? '0%' : `calc(100% - ${panelWidth}%)`)
+              : '100%'
+          }}
+          transition={{ duration: 0.1, ease: 'easeInOut' }}
         >
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col modern-scrollbar pb-36 md:pb-6">
             {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && (
@@ -1165,8 +1171,14 @@ ${isDiagramPanelOpen ? `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0` : 'w-f
             <div ref={messagesEndRef} />
           </div>
 
-          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent font-sans z-10 ${isDiagramPanelOpen ? `md:pr-[calc(${panelWidth}%+1.5rem)]` : ''}`}>
-            <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2">
+          <div className={`fixed bottom-0 left-0 right-0 p-4 sm:p-6 pb-8 md:shadow-none md:static md:pb-4 rounded-t-lg md:rounded-lg bg-transparent font-sans z-10 
+          ${isDiagramPanelOpen
+              ? (isPhone()
+                ? 'hidden' // Hide input on mobile when panel is open
+                : `md:pr-[calc(${panelWidth}%+1.5rem)]`
+              )
+              : ''
+            }`}><div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700 p-2">
               {/* FIXED: Speech recognition status indicator */}
               {isRecognizing && (
                 <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 dark:bg-red-900/20 dark:border-red-800">
@@ -1392,6 +1404,7 @@ ${isDiagramPanelOpen ? `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0` : 'w-f
             imageUrl={activeDiagram?.imageUrl}
             initialWidthPercentage={panelWidth}
             liveContent={activeDiagram?.content}
+            isPhone={isPhone}
           />
         )}
         {showScrollToBottomButton && (
@@ -1400,8 +1413,8 @@ ${isDiagramPanelOpen ? `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0` : 'w-f
             size="icon"
             onClick={() => scrollToBottom('smooth')}
             className={`fixed bottom-28 right-6 md:bottom-8 bg-white rounded-full shadow-lg p-2 z-20 transition-all duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 font-sans
-                ${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
-            `}
+${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
+`}
             title="Scroll to bottom"
           >
             <ChevronDown className="h-5 w-5 text-slate-600 dark:text-gray-300" />
