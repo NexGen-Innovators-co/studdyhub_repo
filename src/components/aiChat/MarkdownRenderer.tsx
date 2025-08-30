@@ -22,6 +22,9 @@ import rehypeRaw from 'rehype-raw';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useTypingAnimation } from '../../hooks/useTypingAnimation';
 
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Use vscDarkPlus for dark mode
+
 try {
   lowlight.registerLanguage('javascript', javascript as LanguageFn);
   lowlight.registerLanguage('js', javascript as LanguageFn);
@@ -90,22 +93,97 @@ interface CodeBlockProps {
   onSuggestAiCorrection: (prompt: string) => void;
   onViewDiagram: (type: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html', content?: string, language?: string, imageUrl?: string) => void;
   isFirstBlock?: boolean;
+  autoTypeInPanel?: boolean;
+  isDiagramPanelOpen: boolean;
 }
-
-const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, isFirstBlock, ...props }) => {
+const CodeBlock: React.FC<CodeBlockProps> = memo(({
+  node, inline, className, children, onMermaidError, onSuggestAiCorrection, onViewDiagram, isFirstBlock, autoTypeInPanel = true, isDiagramPanelOpen, ...props
+}) => {
   const { copied, copy } = useCopyToClipboard();
   const match = /language-(\w+)/.exec(className || '');
   const lang = match && match[1];
   const codeContent = String(children).trim();
-  const [showRawCode, setShowRawCode] = useState(false);
+
+  // Determine if it's a code block (has a language specified)
+  const isCodeBlock = !!lang;
+
+  // Initial state: Show raw code only if it's a code block, autoTypeInPanel is true, and DiagramPanel is off
+  const [showRawCode, setShowRawCode] = useState(
+    (isCodeBlock && autoTypeInPanel && !isDiagramPanelOpen) ? true : !autoTypeInPanel
+  );
+
+  useEffect(() => {
+    // Update showRawCode based on the conditions
+    setShowRawCode((isCodeBlock && autoTypeInPanel && !isDiagramPanelOpen) ? true : false);
+  }, [autoTypeInPanel, isDiagramPanelOpen, isCodeBlock]);
 
   const handleCopyCode = async () => {
     await copy(codeContent);
   };
+  // Render raw code with syntax highlighting using react-syntax-highlighter
+  if (!inline && (showRawCode || !autoTypeInPanel)) {
+    return (
+      <div className="relative my-4 sm:my-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 w-full">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
+          <span className="text-xs sm:text-sm font-medium text-gray-600 uppercase tracking-wide dark:text-gray-300">
+            Raw Code ({lang || 'text'})
+          </span>
+          <div className="flex">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyCode}
+              className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-gray-500 hover:text-green-400 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-green-400 dark:hover:bg-gray-700"
+              title="Copy code"
+              aria-label="Copy code to clipboard"
+            >
+              {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
+            </Button>
+            {autoTypeInPanel && ( // Only show toggle button if autoTypeInPanel is true
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowRawCode(false)}
+                className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+                title="Hide raw code"
+                aria-label="Hide raw code"
+              >
+                <X className="h-3 w-3 sm:h-4 sm:w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="relative bg-white dark:bg-gray-900 w-full box-border">
+          <div className="overflow-x-auto max-w-[100vw] sm:max-w-full">
+            <SyntaxHighlighter
+              language={lang || 'text'}
+              style={vscDarkPlus}
+              showLineNumbers={true}
+              customStyle={{
+                margin: 0,
+                padding: '0.75rem 1rem',
+                fontSize: '0.875rem',
+                lineHeight: '1.5',
+                background: 'transparent',
+                borderRadius: '0 0 0.375rem 0.375rem',
+              }}
+              codeTagProps={{
+                className: 'font-mono text-gray-800 dark:text-gray-100',
+              }}
+              wrapLongLines
+            >
+              {codeContent}
+            </SyntaxHighlighter>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
+  // Handle special cases like HTML, Mermaid, Chart.js, Three.js, and DOT
   if (!inline && lang === 'html') {
     return (
-      <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+      <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-600">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
             <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
@@ -126,8 +204,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
               variant="ghost"
               size="sm"
               onClick={handleCopyCode}
-              className="text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+              className="text-gray-500 hover:text-green-400 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-green-400 dark:hover:bg-gray-700"
               title="Copy code"
+              aria-label="Copy code to clipboard"
             >
               {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
             </Button>
@@ -135,8 +214,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
               variant="ghost"
               size="sm"
               onClick={() => setShowRawCode(!showRawCode)}
-              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-gray-200 dark:hover:bg-gray-700"
               title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+              aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
             >
               {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
             </Button>
@@ -146,47 +226,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
     );
   }
 
-  if (showRawCode) {
-    return (
-      <div className="relative my-4 sm:my-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full">
-        <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-          <span className="text-xs sm:text-sm font-medium text-gray-600 uppercase tracking-wide dark:text-gray-300">
-            Raw Code ({lang})
-          </span>
-          <div className="flex">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCopyCode}
-              className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-              title="Copy code"
-            >
-              {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowRawCode(false)}
-              className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
-              title="Hide raw code"
-            >
-              <X className="h-3 w-3 sm:h-4 sm:w-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="relative bg-white dark:bg-gray-900 w-full box-border">
-          <div className="overflow-x-auto max-w-[100vw] sm:max-w-full">
-            <pre className="p-2 sm:p-3 font-mono text-xs sm:text-sm leading-relaxed max-w-full whitespace-pre-wrap break-words">
-              <code className="text-gray-800 dark:text-gray-200 block">{codeContent}</code>
-            </pre>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Handle diagram blocks (mermaid, chartjs, threejs, dot)
   const createDiagramBlock = (title: string, type: any) => (
-    <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+    <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-600">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
           <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
@@ -207,8 +249,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
             variant="ghost"
             size="sm"
             onClick={handleCopyCode}
-            className="text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+            className="text-gray-500 hover:text-green-400 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-green-400 dark:hover:bg-gray-700"
             title="Copy code"
+            aria-label="Copy code to clipboard"
           >
             {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
           </Button>
@@ -216,8 +259,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
             variant="ghost"
             size="sm"
             onClick={() => setShowRawCode(!showRawCode)}
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-gray-200 dark:hover:bg-gray-700"
             title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+            aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
           >
             {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
           </Button>
@@ -242,52 +286,10 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
     return createDiagramBlock('DOT Graph', 'dot');
   }
 
-  if (!inline && lang && !isFirstBlock) {
-    return (
-      <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
-            <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-            <span className="font-medium text-sm sm:text-base">{lang.toUpperCase()} Code</span>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
-              className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm flex-1 sm:flex-initial"
-            >
-              <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              <span className="hidden xs:inline">View Code</span>
-              <span className="xs:hidden">View</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCopyCode}
-              className="text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-              title="Copy code"
-            >
-              {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowRawCode(!showRawCode)}
-              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
-              title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
-            >
-              {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Handle generic code blocks
   if (!inline && lang) {
     return (
-      <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+      <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-600">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
             <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
@@ -308,8 +310,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
               variant="ghost"
               size="sm"
               onClick={handleCopyCode}
-              className="text-gray-500 hover:text-green-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+              className="text-gray-500 hover:text-green-400 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-green-400 dark:hover:bg-gray-700"
               title="Copy code"
+              aria-label="Copy code to clipboard"
             >
               {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
             </Button>
@@ -317,8 +320,9 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
               variant="ghost"
               size="sm"
               onClick={() => setShowRawCode(!showRawCode)}
-              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-gray-200 dark:hover:bg-gray-700"
               title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
+              aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
             >
               {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
             </Button>
@@ -327,7 +331,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
       </div>
     );
   }
-
+  // Inline code
   return (
     <code
       className="bg-gray-100 text-gray-900 px-1 sm:px-1.5 py-0.5 rounded font-mono text-xs sm:text-sm dark:bg-gray-800 dark:text-gray-100"
@@ -336,8 +340,8 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({ node, inline, className, chi
       {children}
     </code>
   );
-});
-
+}
+);
 interface MemoizedMarkdownRendererProps {
   content: string;
   messageId: string;
@@ -355,6 +359,7 @@ interface MemoizedMarkdownRendererProps {
   onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
   onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
   onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
+  isDiagramPanelOpen: boolean
 }
 
 export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> = memo(({
@@ -374,6 +379,8 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   onBlockDetected,
   onBlockUpdate,
   onBlockEnd,
+  isDiagramPanelOpen
+
 }) => {
   const { displayedText, isTyping } = useTypingAnimation({
     text: content,
@@ -434,6 +441,8 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
                     onSuggestAiCorrection={onSuggestAiCorrection}
                     onViewDiagram={onViewDiagram}
                     isFirstBlock={isFirstBlockLocal}
+                    isDiagramPanelOpen={isDiagramPanelOpen}
+
                   />
                 );
               },
@@ -538,3 +547,4 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
     </CodeBlockErrorBoundary>
   );
 });
+export { CodeBlock };

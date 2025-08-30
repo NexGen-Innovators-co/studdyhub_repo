@@ -15,8 +15,11 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
-import { highlightCode, themes, ThemeName } from '../../utils/codeHighlighting';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ErrorBoundary from '../ErrorBoundary';
+import * as ReactDOMClient from 'react-dom/client';
+
 Chart.register(...registerables);
 
 interface Slide {
@@ -36,7 +39,7 @@ interface DiagramPanelProps {
   imageUrl?: string;
   initialWidthPercentage?: number;
   liveContent?: string;
-  isPhone: () => boolean; // Make it required and ensure it's a memoized function
+  isPhone: () => boolean;
 }
 
 interface ThreeJSRendererProps {
@@ -45,10 +48,11 @@ interface ThreeJSRendererProps {
   onInvalidCode: Dispatch<SetStateAction<string | null>>;
   onSceneReady: (scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => void;
 }
+
 const ThreeJSRenderer = memo(({ codeContent, canvasRef, onInvalidCode, onSceneReady }: ThreeJSRendererProps) => {
   const animationFrameIdRef = useRef<number | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
-  const sceneInitializedRef = useRef<boolean>(false); // Track if scene is initialized
+  const sceneInitializedRef = useRef<boolean>(false);
 
   const initializeScene = useCallback(() => {
     if (!canvasRef.current || !codeContent || sceneInitializedRef.current) {
@@ -100,12 +104,12 @@ return createThreeJSScene;
           camera.aspect = width / height;
           camera.updateProjectionMatrix();
           renderer.setPixelRatio(window.devicePixelRatio);
-          renderer.render(scene, camera); // Re-render after resize
+          renderer.render(scene, camera);
         }
       };
 
       window.addEventListener('resize', handleResize);
-      handleResize(); // Initial resize
+      handleResize();
 
       return () => {
         console.log("[ThreeJSRenderer] Cleaning up on unmount.");
@@ -139,16 +143,13 @@ return createThreeJSScene;
   }, [codeContent, canvasRef, onInvalidCode, onSceneReady]);
 
   useEffect(() => {
-    // Delay the initialization of the scene
     const timeoutId = setTimeout(initializeScene, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
+    return () => clearTimeout(timeoutId);
   }, [initializeScene]);
 
   return null;
 });
+
 export const DiagramPanel = memo(({
   diagramContent,
   diagramType,
@@ -171,7 +172,6 @@ export const DiagramPanel = memo(({
   const lastMousePos = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const innerContentWrapperRef = useRef<HTMLDivElement>(null);
-  const [theme, setTheme] = useState<ThemeName>('github-dark');
   const htmlIframeRef = useRef<HTMLIFrameElement>(null);
   const mermaidIframeRef = useRef<HTMLIFrameElement>(null);
   const [slides, setSlides] = useState<Slide[]>([]);
@@ -192,7 +192,7 @@ export const DiagramPanel = memo(({
           return 'slides';
         }
       } catch (e) {
-        // Not valid JSON, keep as 'code' or 'threejs' based on diagramType
+        // Not valid JSON, keep as 'code'
       }
     }
     return diagramType;
@@ -260,7 +260,6 @@ mermaid.init(undefined, ".mermaid");
 });
 </script>
 </body>
-</html-pod>
 </html>
 `;
         doc.write(fullHtml);
@@ -336,152 +335,96 @@ mermaid.init(undefined, ".mermaid");
     };
 
     const renderCode = () => {
-      const codeStyle = `
-.code-block-wrapper {
-position: relative;
-counter-reset: line;
-padding-left: 40px;
-background-color: ${themes[theme].background};
-color: ${themes[theme].foreground};
-font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-font-size: 0.875rem;
-line-height: 1.4;
-width: 100%;
-height: 100%;
-overflow-x: auto;
-overflow-y: auto;
-white-space: pre;
-word-break: normal;
-word-wrap: normal;
--webkit-overflow-scrolling: touch;
-border-radius: 8px;
-border: 1px solid ${themes[theme].border};
-box-sizing: border-box;
-padding-top: 1rem;
-padding-bottom: 1rem;
-min-width: 0;
-flex-shrink: 0;
-}
+      // Clear container
+      container.innerHTML = '';
 
-.code-block-wrapper .code-line {
-position: relative;
-display: block;
-min-height: 1.4em;
-padding-right: 1rem;
-padding-left: 0.5rem;
-}
+      // Create a wrapper div for the code block
+      const wrapper = document.createElement('div');
+      wrapper.className = 'relative w-full h-full overflow-auto modern-scrollbar';
 
-.code-block-wrapper .code-line::before {
-content: counter(line);
-counter-increment: line;
-position: absolute;
-left: -40px;
-width: 30px;
-text-align: right;
-padding-right: 10px;
-color: ${themes[theme].lineNumbers};
-font-size: 0.85em;
-line-height: inherit;
-display: inline-block;
-pointer-events: none;
-user-select: none;
-box-sizing: border-box;
-}
+      // Create a container for the syntax highlighter
+      const codeContainer = document.createElement('div');
+      codeContainer.className = 'relative bg-white dark:bg-gray-900 w-full box-border';
+      wrapper.appendChild(codeContainer);
 
-.code-block-wrapper .code-line > .hljs-indent-guide {
-position: absolute;
-left: 0;
-top: 0;
-bottom: 0;
-width: 1px;
-background-color: rgba(${themes[theme].lineNumbers.match(/\d+/g)?.join(', ')}, 0.2);
-pointer-events: none;
-}
-`;
+      // Render the SyntaxHighlighter component into the container
+      const root = ReactDOMClient.createRoot(codeContainer);
+      root.render(
+        <SyntaxHighlighter
+          language={language || 'text'}
+          style={vscDarkPlus}
+          showLineNumbers={true}
+          wrapLines={true}
+          customStyle={{
+            margin: 0,
+            padding: '0.75rem 1rem',
+            fontSize: '0.875rem',
+            lineHeight: '1.5',
+            background: 'transparent',
+            borderRadius: '0 0 0.375rem 0.375rem',
+          }}
+          codeTagProps={{
+            className: 'font-mono text-gray-800 dark:text-gray-100',
+          }}
+        >
+          {renderContent}
+        </SyntaxHighlighter>
+      );
 
-      const styleElement = document.createElement('style');
-      styleElement.textContent = codeStyle;
-      container.appendChild(styleElement);
-
-      const pre = document.createElement('pre');
-      pre.className = `code-block-wrapper modern-scrollbar`;
-      container.appendChild(pre);
-
-      const highlightedHtml = highlightCode(renderContent, language || 'plaintext', themes[theme], { format: true });
-
-      const lines = highlightedHtml.split('\n');
-      const numberedAndIndentedHtml = lines.map(line => {
-        let indentationLevel = 0;
-        const leadingWhitespaceMatch = line.match(/^(\s*)/);
-        if (leadingWhitespaceMatch && leadingWhitespaceMatch[1]) {
-          const whitespace = leadingWhitespaceMatch[1];
-          indentationLevel = Math.floor(whitespace.replace(/\t/g, ' ').length / 4);
-        }
-
-        const indentationGuides = Array.from({ length: Math.max(0, indentationLevel) }, (_, i) => {
-          const guidePosition = (i + 1) * 16;
-          return `<span class="hljs-indent-guide" style="left: ${guidePosition}px;"></span>`;
-        }).join('');
-
-        return `<div class="code-line">${indentationGuides}${line || '&nbsp;'}</div>`;
-      }).join('');
-
-      const codeElement = document.createElement('code');
-      codeElement.innerHTML = numberedAndIndentedHtml;
-      pre.appendChild(codeElement);
+      container.appendChild(wrapper);
     };
 
     const renderPlainText = () => {
       const plainTextStyle = `
 .text-block-wrapper {
-position: relative;
-counter-reset: line;
-padding-left: 40px;
-background-color: ${themes[theme].background};
-color: ${themes[theme].foreground};
-font-family: sans-serif;
-font-size: 0.875rem;
-line-height: 1.4;
-width: 100%;
-height: 100%;
-overflow-x: auto;
-overflow-y: auto;
-white-space: pre-wrap;
-word-break: break-all;
-word-wrap: break-word;
--webkit-overflow-scrolling: touch;
-border-radius: 8px;
-border: 1px solid ${themes[theme].border};
-box-sizing: border-box;
-padding-top: 1rem;
-padding-bottom: 1rem;
-min-width: 0;
-flex-shrink: 0;
+  position: relative;
+  counter-reset: line;
+  padding-left: 40px;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  word-wrap: break-word;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid #3c3c3c;
+  box-sizing: border-box;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .text-block-wrapper .text-line {
-position: relative;
-display: block;
-min-height: 1.4em;
-padding-right: 1rem;
-padding-left: 0.5rem;
+  position: relative;
+  display: block;
+  min-height: 1.4em;
+  padding-right: 1rem;
+  padding-left: 0.5rem;
 }
 
 .text-block-wrapper .text-line::before {
-content: counter(line);
-counter-increment: line;
-position: absolute;
-left: -40px;
-width: 30px;
-text-align: right;
-padding-right: 10px;
-color: ${themes[theme].lineNumbers};
-font-size: 0.85em;
-line-height: inherit;
-display: inline-block;
-pointer-events: none;
-user-select: none;
-box-sizing: border-box;
+  content: counter(line);
+  counter-increment: line;
+  position: absolute;
+  left: -40px;
+  width: 30px;
+  text-align: right;
+  padding-right: 10px;
+  color: #858585;
+  font-size: 0.85em;
+  line-height: inherit;
+  display: inline-block;
+  pointer-events: none;
+  user-select: none;
+  box-sizing: border-box;
 }
 `;
 
@@ -518,7 +461,7 @@ box-sizing: border-box;
       default:
         break;
     }
-  }, [diagramContent, effectiveDiagramType, renderContent, imageUrl, onMermaidError, language, theme, sanitizeHtml, isInteractiveContent, slides.length]);
+  }, [effectiveDiagramType, renderContent, imageUrl, onMermaidError, language, isInteractiveContent, slides.length]);
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     setIsResizing(true);
@@ -687,9 +630,9 @@ box-sizing: border-box;
       console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
     }
-  }, [effectiveDiagramType, slides, currentSlideIndex]);
+  }, [effectiveDiagramType]);
 
-  const mobileFullScreen = isPhone(); // Directly use the isPhone function
+  const mobileFullScreen = isPhone();
 
   return (
     <motion.div
@@ -699,12 +642,12 @@ box-sizing: border-box;
           : 'flex-shrink-0 w-full md:flex-shrink-0'
         }
         ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
-      initial={{ x: '50%', opacity: 0 }}  // Start partially off-screen with fade
-      animate={{ x: 0, opacity: 1 }}      // Slide in with fade in
-      exit={{ x: '50%', opacity: 0 }}     // Slide out with fade out
+      initial={{ x: '50%', opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: '50%', opacity: 0 }}
       transition={{
         duration: 0.2,
-        ease: [0.25, 0.46, 0.45, 0.94]    // Custom cubic-bezier for smooth motion
+        ease: [0.25, 0.46, 0.45, 0.94]
       }}
       style={{
         width: mobileFullScreen ? '100%' : `${panelWidth}%`,
@@ -737,17 +680,6 @@ box-sizing: border-box;
           )}
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
-          {effectiveDiagramType === 'code' && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTheme(prev => (prev === 'github-dark' ? 'github-light' : 'github-dark'))}
-              title="Toggle theme"
-              className="h-8 w-8 sm:h-9 sm:w-9 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-            >
-              {theme === 'github-dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-          )}
           {effectiveDiagramType === 'slides' && slides.length > 1 && (
             <>
               <Button
@@ -881,7 +813,7 @@ ${isInteractiveContent && isDragging ? 'cursor-grabbing' : ''}
                 sandbox="allow-scripts allow-same-origin"
               />
             ) : effectiveDiagramType === 'slides' ? (
-              slides.length > 0 && currentSlideIndex < slides.length ? ( // Check if slides exist and currentSlideIndex is valid
+              slides.length > 0 && currentSlideIndex < slides.length ? (
                 <div
                   id="current-slide-content"
                   className="w-full h-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-gray-700 dark:to-gray-800 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl overflow-auto"
