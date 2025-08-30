@@ -11,7 +11,7 @@ import { useAppOperations } from '../hooks/useAppOperations';
 // import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../integrations/supabase/client';
-import { Message, Quiz, ClassRecording,ChatSession,MessagePart,FileData } from '../types/Class';
+import { Message, Quiz, ClassRecording, ChatSession, MessagePart, FileData } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 // import { User } from '@supabase/supabase-js';
@@ -744,7 +744,7 @@ const Index = () => {
         }
         // If an old message had an image, include its reference if possible (or actual data if stored)
         if (msg.imageUrl && msg.imageMimeType) {
-         
+
         }
         chatHistoryForAI.push({ role: msg.role, parts: msgParts });
       });
@@ -1352,7 +1352,7 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-700 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
+    <div className="h-screen flex overflow-hidden bg-transparent dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 "

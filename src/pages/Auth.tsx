@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2, XCircle, RefreshCw, Clock } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -127,6 +127,96 @@ const PasswordStrength = React.memo(({ password }: { password: string }) => {
   );
 });
 
+// Resend verification component
+const ResendVerification = React.memo(({ email, onSuccess }: { email: string; onSuccess?: () => void }) => {
+  const [isResending, setIsResending] = useState(false);
+  const [lastSentTime, setLastSentTime] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState(0);
+
+  // Countdown timer for resend cooldown (60 seconds)
+  useEffect(() => {
+    if (lastSentTime) {
+      const interval = setInterval(() => {
+        const timePassed = Math.floor((Date.now() - lastSentTime) / 1000);
+        const timeLeft = Math.max(60 - timePassed, 0);
+        setCountdown(timeLeft);
+
+        if (timeLeft === 0) {
+          clearInterval(interval);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [lastSentTime]);
+
+  const handleResend = async () => {
+    if (!email || isResending || countdown > 0) return;
+
+    setIsResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.toLowerCase().trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      });
+
+      if (error) {
+        if (error.message.includes('already confirmed')) {
+          toast.success('Your email is already verified! You can now sign in.');
+        } else if (error.message.includes('rate limit')) {
+          toast.error('Please wait before requesting another confirmation email.');
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.success('Confirmation email sent! Please check your inbox and spam folder.');
+        setLastSentTime(Date.now());
+        setCountdown(60);
+        onSuccess?.();
+      }
+    } catch (error) {
+      toast.error('Failed to resend confirmation email. Please try again.');
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg">
+      <div className="flex items-center gap-2 mb-2">
+        <Mail className="h-4 w-4 text-blue-400" />
+        <p className="text-sm text-blue-300 font-medium">Email Verification Required</p>
+      </div>
+      <p className="text-xs text-blue-200/80 mb-3">
+        Didn't receive the confirmation email? Check your spam folder or request a new one.
+      </p>
+      <LoadingButton
+        onClick={handleResend}
+        isLoading={isResending}
+        disabled={countdown > 0}
+        variant="outline"
+        size="sm"
+        className="w-full bg-blue-800/50 border-blue-600 text-blue-200 hover:bg-blue-700/50 hover:text-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {countdown > 0 ? (
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Resend in {countdown}s
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Resend Confirmation
+          </div>
+        )}
+      </LoadingButton>
+    </div>
+  );
+});
+
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -137,6 +227,8 @@ const Auth = () => {
   const [emailError, setEmailError] = useState('');
   const [nameError, setNameError] = useState('');
   const [isCheckingName, setIsCheckingName] = useState(false);
+  const [showResendVerification, setShowResendVerification] = useState(false);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
   const navigate = useNavigate();
 
   // Enhanced email validation
@@ -244,6 +336,8 @@ const Auth = () => {
     setEmailError('');
     setNameError('');
     setShowPassword(false);
+    setShowResendVerification(false);
+    setPendingVerificationEmail('');
   }, []);
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -284,11 +378,13 @@ const Auth = () => {
           toast.error('This email is already registered. Please sign in instead.');
           handleTabChange('signin');
           setEmail(email);
-        } else { 
+        } else {
           toast.error(error.message);
         }
       } else {
         toast.success('Account created! Please check your email for a confirmation link.');
+        setPendingVerificationEmail(email.toLowerCase().trim());
+        setShowResendVerification(true);
       }
     } catch (error) {
       toast.error('An unexpected error occurred during sign-up.');
@@ -307,8 +403,6 @@ const Auth = () => {
     setIsLoading(true);
 
     try {
-
-
       const { error } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase().trim(),
         password,
@@ -319,6 +413,8 @@ const Auth = () => {
           toast.error('Invalid email or password. Please try again.');
         } else if (error.message.includes('Email not confirmed')) {
           toast.error('Please check your email and confirm your account before signing in.');
+          setPendingVerificationEmail(email.toLowerCase().trim());
+          setShowResendVerification(true);
         } else {
           toast.error(error.message);
         }
@@ -411,7 +507,7 @@ const Auth = () => {
                 </TabsList>
 
                 <TabsContent value="signin" className="space-y-6 mt-6">
-                  <div className="space-y-4"> 
+                  <div className="space-y-4">
                     <Button
                       variant="outline"
                       onClick={handleGoogleSignIn}
@@ -505,6 +601,14 @@ const Auth = () => {
                       Sign In
                     </LoadingButton>
                   </form>
+
+                  {/* Show resend verification for sign in if needed */}
+                  {showResendVerification && pendingVerificationEmail && currentTab === 'signin' && (
+                    <ResendVerification
+                      email={pendingVerificationEmail}
+                      onSuccess={() => setShowResendVerification(false)}
+                    />
+                  )}
 
                   <div className="text-center text-sm text-gray-400 mt-4">
                     Don't have an account?{' '}
@@ -607,6 +711,14 @@ const Auth = () => {
                       Create Account
                     </LoadingButton>
                   </form>
+
+                  {/* Show resend verification for sign up if needed */}
+                  {showResendVerification && pendingVerificationEmail && currentTab === 'signup' && (
+                    <ResendVerification
+                      email={pendingVerificationEmail}
+                      onSuccess={() => setShowResendVerification(false)}
+                    />
+                  )}
 
                   <div className="text-center text-sm text-gray-400 mt-4">
                     Already have an account?{' '}
