@@ -10,7 +10,7 @@ import { X, RefreshCw } from 'lucide-react';
 import { useEnhancedTyping } from '../hooks/useEnhancedTyping';
 import { toast } from 'sonner';
 import Mermaid from './Mermaid';
-import { MemoizedMarkdownRenderer } from './aiChat/MarkdownRenderer';
+import { MemoizedMarkdownRenderer } from './aiChat/Components/MarkdownRenderer';
 import 'highlight.js/styles/github-dark.css';
 
 interface EnhancedMarkdownRendererProps {

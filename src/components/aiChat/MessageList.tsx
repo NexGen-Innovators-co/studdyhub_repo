@@ -3,7 +3,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User } from 'lucide-react';
 import { toast } from 'sonner';
-import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
+import { MemoizedMarkdownRenderer } from './Components/MarkdownRenderer';
 // import { EnhancedMarkdownRenderer } from '../EnhancedMarkdownRenderer';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { Document } from '../../types/Document';

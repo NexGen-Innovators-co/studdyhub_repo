@@ -1,2 +1,2 @@
-import AiChat from "./aiChat/AiChat";
+import AiChat from "./aiChat/Components/AiChat";
 export default AiChat;

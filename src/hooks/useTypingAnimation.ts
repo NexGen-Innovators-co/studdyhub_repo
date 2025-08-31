@@ -48,7 +48,7 @@ export const useTypingAnimation = ({
   const detectBlocks = (text: string): CodeBlock[] => {
     const blocks: CodeBlock[] = [];
     let blockIndex = 0;
-    
+
     const codeBlockRegex = /```([a-z]*)\n([\s\S]*?)\n```/gi;
     let match;
     while ((match = codeBlockRegex.exec(text)) !== null) {
@@ -128,7 +128,7 @@ export const useTypingAnimation = ({
       clearTimeout(timeoutRef.current);
     }
 
-    const typeNextWord = () => {
+    const typeNextChunk = () => {
       if (indexRef.current >= words.length) {
         setIsTyping(false);
         setCurrentBlock(null);
@@ -147,17 +147,17 @@ export const useTypingAnimation = ({
       if (enteringBlock) {
         detectedBlocksRef.current.add(`${enteringBlock.start}-${enteringBlock.end}`);
         setCurrentBlock(enteringBlock);
-        
+
         // Only call onBlockDetected if autoTypeInPanel is true and it's the first block
         if (enteringBlock.isFirstBlock && autoTypeInPanel && onBlockDetected) {
-            onBlockDetected(enteringBlock.type, enteringBlock.innerContent, enteringBlock.language, enteringBlock.isFirstBlock, enteringBlock.blockIndex);
+          onBlockDetected(enteringBlock.type, enteringBlock.innerContent, enteringBlock.language, enteringBlock.isFirstBlock, enteringBlock.blockIndex);
         }
 
         // Always display placeholder in main text area for all blocks IF autoTypeInPanel is true
         if (autoTypeInPanel) {
           setDisplayedText(prev => prev + '\n[Code block displayed in panel...]\n');
         }
-        
+
         if (enteringBlock.isFirstBlock && autoTypeInPanel) {
           // Send entire block content to panel at once for first block
           if (onBlockUpdate) {
@@ -177,47 +177,51 @@ export const useTypingAnimation = ({
           indexRef.current = i;
           setCurrentBlock(null); // Clear current block after processing
           setBlockText(''); // Clear blockText
-          timeoutRef.current = setTimeout(typeNextWord, 50); // Move quickly past the block
+          timeoutRef.current = setTimeout(typeNextChunk, 50); // Move quickly past the block
           return; // Skip remaining word processing for this iteration
         }
       }
 
-      const nextWord = words[indexRef.current];
+      // Determine the number of words to process in this chunk
+      const wordsPerChunk = Math.max(1, Math.floor(wordsPerSecond / 5)); // Adjust divisor as needed
+      const chunkWords = words.slice(indexRef.current, indexRef.current + wordsPerChunk);
+      const nextChunk = chunkWords.join('');
 
       // Determine where the typing should happen
       if (currentBlock && !autoTypeInPanel) {
         // Type block content in main text area if not in panel
         setBlockText(prev => {
-          const newText = prev + nextWord;
+          const newText = prev + nextChunk;
           // Only call onBlockUpdate if autoTypeInPanel is false
           if (onBlockUpdate) {
             onBlockUpdate(currentBlock.type, newText, currentBlock.language, currentBlock.isFirstBlock, currentBlock.blockIndex);
           }
           return newText;
         });
-        const newPosition = words.slice(0, indexRef.current + 1).join('').length;
+        const newPosition = words.slice(0, indexRef.current + chunkWords.length).join('').length;
         if (newPosition >= (currentBlock?.end || 0)) {
           // Only call onBlockEnd if autoTypeInPanel is false
           if (onBlockEnd) {
-            onBlockEnd(currentBlock.type, blockText + nextWord, currentBlock.language, currentBlock.isFirstBlock, currentBlock.blockIndex);
+            onBlockEnd(currentBlock.type, blockText + nextChunk, currentBlock.language, currentBlock.isFirstBlock, currentBlock.blockIndex);
           }
           setCurrentBlock(null);
           setBlockText('');
         }
       } else {
         // Type non-block content in main text area, or if it's a block but autoTypeInPanel is true (handled by the if-block above)
-        setDisplayedText(prev => prev + nextWord);
+        setDisplayedText(prev => prev + nextChunk);
       }
 
-      indexRef.current++;
+      indexRef.current += chunkWords.length;
 
-      const isActualWord = nextWord?.trim().length > 0;
-      const delay = isActualWord ? 1000 / wordsPerSecond : 50;
+      // Calculate delay based on the number of actual words in the chunk
+      const actualWordsInChunk = chunkWords.filter(word => word?.trim().length > 0).length;
+      const delay = actualWordsInChunk > 0 ? (1000 / wordsPerSecond) * actualWordsInChunk : 50;
 
-      timeoutRef.current = setTimeout(typeNextWord, delay);
+      timeoutRef.current = setTimeout(typeNextChunk, delay);
     };
 
-    timeoutRef.current = setTimeout(typeNextWord, 200);
+    timeoutRef.current = setTimeout(typeNextChunk, 200);
 
     return () => {
       if (timeoutRef.current) {

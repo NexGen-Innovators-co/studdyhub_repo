@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Send, Bot, Loader2, FileText, XCircle, BookOpen, StickyNote, Camera, Upload, Image, Mic, ChevronDown, X, File, Paperclip } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Card, CardContent } from '../ui/card';
-import { Badge } from '../ui/badge';
-import { UserProfile, Document } from '../../types/Document';
-import { Note } from '../../types/Note';
-import { supabase } from '../../integrations/supabase/client';
-import { DocumentSelector } from '../DocumentSelector';
+import { Button } from '../../ui/button';
+import { Card, CardContent } from '../../ui/card';
+import { Badge } from '../../ui/badge';
+import { UserProfile, Document } from '../../../types/Document';
+import { Note } from '../../../types/Note';
+import { supabase } from '../../../integrations/supabase/client';
+import { DocumentSelector } from '../../DocumentSelector';
 import { toast } from 'sonner';
 import { DiagramPanel } from './DiagramPanel';
 import { generateId } from '@/utils/helpers';
-import { MessageList } from './MessageList';
-import { ConfirmationModal } from '../ConfirmationModal';
-import { Message } from '../../types/Class';
-import BookPagesAnimation from '../bookloader';
+import { MessageList } from '../MessageList';
+import { ConfirmationModal } from '../../ConfirmationModal';
+import { Message, ChatSession } from '../../../types/Class';
+import BookPagesAnimation from '../../bookloader';
 
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
@@ -59,15 +59,6 @@ declare global {
   }
 }
 
-interface ChatSession {
-  id: string;
-  title: string;
-  created_at: string;
-  updated_at: string;
-  last_message_at: string;
-  document_ids: string[];
-  message_count?: number;
-}
 
 interface AttachedFile {
   file: File;

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, memo, useMemo, MutableRefObject, Dispatch, SetStateAction } from 'react';
 import { motion } from 'framer-motion';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+import { Button } from '../../ui/button';
+import { Badge } from '../../ui/badge';
 import {
   X, Download, Maximize2, Minimize2, ZoomIn, ZoomOut, Eye, FileCode,
   Hand, ChevronLeft, ChevronRight, Sun, Moon, MousePointer
@@ -17,7 +17,7 @@ import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import ErrorBoundary from '../ErrorBoundary';
+import ErrorBoundary from '../../ErrorBoundary';
 import * as ReactDOMClient from 'react-dom/client';
 
 Chart.register(...registerables);
