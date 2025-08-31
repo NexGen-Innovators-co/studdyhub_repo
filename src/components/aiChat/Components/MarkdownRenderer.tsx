@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { AlertTriangle, Copy, Check, Loader2, Maximize2, X, RefreshCw, ChevronDown, ChevronUp, Image, FileText, BookOpen, StickyNote, Sparkles } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Card, CardContent } from '../ui/card';
-import { Badge } from '../ui/badge';
+import { Button } from '../../ui/button';
+import { Card, CardContent } from '../../ui/card';
+import { Badge } from '../../ui/badge';
 import { Chart, registerables } from 'chart.js';
 import { lowlight } from 'lowlight';
 import { LanguageFn } from 'highlight.js';
@@ -19,8 +19,8 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
-import { useTypingAnimation } from '../../hooks/useTypingAnimation';
+import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard';
+import { useTypingAnimation } from '../../../hooks/useTypingAnimation';
 
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Use vscDarkPlus for dark mode
@@ -422,7 +422,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   const { displayedText, isTyping } = useTypingAnimation({
     text: content,
     messageId,
-    wordsPerSecond: 100,
+    wordsPerSecond: 500,
     enabled: enableTyping && !isUserMessage && isLastMessage,
     onComplete: onTypingComplete,
     isAlreadyComplete: isAlreadyTyped,
