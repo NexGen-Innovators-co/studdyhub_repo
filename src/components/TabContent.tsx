@@ -3,7 +3,7 @@ import { NotesList } from './NotesList';
 import { NoteEditor } from './NoteEditor';
 import { ClassRecordings } from './ClassRecordings';
 import { Schedule } from './Schedule';
-import AIChat from './AIChat';
+import AIChat from './aiChat/Components/AiChat';
 import { DocumentUpload } from './DocumentUpload';
 import { UserSettings } from './UserSettings';
 import Dashboard from './Dashboard'; // FIXED: Import the Dashboard component
@@ -375,7 +375,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'chat':
       return (
-        <div className="flex flex-1 min-h-0 relative overflow-hidden">  
+        <div className="flex flex-1 min-h-0 relative overflow-hidden">
           <div className={`flex-1 flex flex-col min-w-0 dark:bg-transparent`}>
             <AIChat {...chatProps} />
           </div>

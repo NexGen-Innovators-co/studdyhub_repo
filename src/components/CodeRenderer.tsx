@@ -31,7 +31,7 @@ import { Graphviz } from '@hpcc-js/wasm';
 
 // Direct import for Chart.js
 import { Chart, registerables } from 'chart.js';
-import { CodeBlockErrorBoundary } from './aiChat/Components/MarkdownRenderer';
+import { CodeBlockErrorBoundary } from './aiChat/Components/CodeBlock';
 import Mermaid from './Mermaid';
 Chart.register(...registerables); // Register Chart.js components globally
 

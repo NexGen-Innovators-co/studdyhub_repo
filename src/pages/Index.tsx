@@ -621,14 +621,13 @@ const Index = () => {
     );
   }, [setChatMessages]);
 
-  // Enhanced message submission with better progress tracking
   const handleSubmit = useCallback(async (
     messageContent: string,
     attachedDocumentIds?: string[],
     attachedNoteIds?: string[],
     imageUrl?: string,
     imageMimeType?: string,
-    imageDataBase64?: string, // This parameter is not used, remove if not needed
+    imageDataBase64?: string,
     aiMessageIdToUpdate: string | null = null,
     attachedFiles?: FileData[]
   ) => {
@@ -637,33 +636,31 @@ const Index = () => {
       (attachedNoteIds && attachedNoteIds.length > 0) ||
       imageUrl ||
       (attachedFiles && attachedFiles.length > 0);
-
+  
     if (!hasTextContent && !hasAttachments) {
       toast.warning('Please enter a message or attach files to send.');
       return;
     }
-
+  
     if (isAILoading || isSubmittingUserMessage) {
       toast.info('Please wait for the current message to complete.');
       return;
     }
-
+  
     setIsSubmittingUserMessage(true);
     setIsAILoading(true);
     let processedFiles: FileData[] = attachedFiles || [];
     let cleanupTimeout: NodeJS.Timeout | null = null;
-
+  
     try {
-
-
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         toast.error('You must be logged in to chat.');
         return;
       }
-
+  
       let currentSessionId = activeChatSessionId;
-
+  
       if (!currentSessionId) {
         currentSessionId = await createNewChatSession();
         if (!currentSessionId) {
@@ -671,66 +668,62 @@ const Index = () => {
           return;
         }
       }
-
+  
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
-
-
-      // Enhanced file processing progress
-      if (attachedFiles && attachedFiles.length > 0) {
-        setFileProcessingProgress({
-          processing: true,
-          completed: 0,
-          total: attachedFiles.length,
-          phase: 'validating'
-        });
-        toast.info(`Processing ${attachedFiles.length} file${attachedFiles.length > 1 ? 's' : ''}...`);
-      }
-
-      // Build the parts for the *current* user message (text, documents, notes, files)
+  
+      // Build the parts for the current user message
       const currentMessageParts: MessagePart[] = [];
       if (messageContent) {
-        currentMessageParts.push({ text: messageContent }); // Ensure full message content
+        currentMessageParts.push({ text: messageContent }); // User's input message
       }
-
+  
       const currentAttachedContext = buildRichContext(finalAttachedDocumentIds, finalAttachedNoteIds, documents, notes);
       if (currentAttachedContext) {
         currentMessageParts.push({ text: `\n\nAttached Context:\n${currentAttachedContext}` });
       }
-
+  
       if (imageUrl && imageMimeType) {
-        // This handles cases where an image URL is directly provided (e.g., for regeneration)
-        // If image data base64 is also present, prefer it for sending
         if (imageDataBase64) {
           currentMessageParts.push({
             inlineData: { mimeType: imageMimeType, data: imageDataBase64 }
           });
         } else {
-
+          // Handle image URL if needed
         }
       }
-
+  
+      // Process attached files
+      processedFiles = await Promise.all(
+        (attachedFiles || []).map(async (file) => {
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              console.log(`Processing file: ${file.name}`);
+              resolve(file);
+            }, 200);
+          });
+        })
+      );
+  
       processedFiles.forEach(file => {
         if (file.content) {
           currentMessageParts.push({ text: `[File: ${file.name}]\n${file.content}` });
-        } else if (file.data && file.type === 'image') {
+        } else if (file.type === 'image') {
           currentMessageParts.push({
             inlineData: { mimeType: file.mimeType, data: file.data }
           });
         }
       });
-
+  
       const historicalMessagesForAI = allChatMessages
         .filter(msg => msg.session_id === currentSessionId)
         .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate))
         .slice(-MAX_HISTORY_MESSAGES);
-
+  
       const chatHistoryForAI: Array<{ role: string; parts: MessagePart[] }> = [];
-
-      // Reconstruct chat history for AI, ensuring full content of past messages
+  
       historicalMessagesForAI.forEach(msg => {
         const msgParts: MessagePart[] = [{ text: msg.content }];
-        // Add attached document/note context for historical messages if available and not too large
         if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 || msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
           const historicalContext = buildRichContext(
             msg.attachedDocumentIds || [],
@@ -738,22 +731,21 @@ const Index = () => {
             documents,
             notes
           );
-          if (historicalContext && historicalContext.length < 1000000) { // Still apply a limit to historical context additions
+          if (historicalContext && historicalContext.length < 1000000) {
             msgParts.push({ text: `\n\nPrevious Context:\n${historicalContext}` });
           }
         }
-        // If an old message had an image, include its reference if possible (or actual data if stored)
         if (msg.imageUrl && msg.imageMimeType) {
-
+          // Handle historical image if needed
         }
         chatHistoryForAI.push({ role: msg.role, parts: msgParts });
       });
-
-      // Update progress before sending
+  
       if (fileProcessingProgress.processing) {
         setFileProcessingProgress(prev => ({ ...prev, phase: 'uploading' }));
       }
-
+  
+      // Send the original user message as the message field
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
           userId: currentUser.id,
@@ -765,74 +757,55 @@ const Index = () => {
             difficulty: 'intermediate',
           },
           chatHistory: chatHistoryForAI,
-          message: currentMessageParts.slice(-1)[0].text, // The primary text of the current user message
-          // Send full files payload so backend can store and attach them (images, pdfs, docs, etc.)
+          message: messageContent || '', // Use the original user message
+          messageParts: currentMessageParts, // Send all parts separately
           files: processedFiles,
           attachedDocumentIds: finalAttachedDocumentIds,
           attachedNoteIds: finalAttachedNoteIds,
-          imageUrl: imageUrl, // Pass imageUrl if it's still relevant (e.g., for regeneration)
-          imageMimeType: imageMimeType, // Pass imageMimeType if it's still relevant
+          imageUrl: imageUrl,
+          imageMimeType: imageMimeType,
           aiMessageIdToUpdate: aiMessageIdToUpdate,
         },
-
-      }
-
-      );
+      });
+  
       if (error) {
         console.error('Edge function error:', error);
         throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
       }
-
+  
       if (!data || !data.response) {
         throw new Error('Empty response from AI service');
       }
-
-
-      // Clear the cleanup timeout since real-time updates should handle message replacement
-      if (cleanupTimeout) {
-        clearTimeout(cleanupTimeout);
-        cleanupTimeout = null;
-      }
-
+  
       setChatSessions(prev => {
         const updated = prev.map(session =>
           session.id === currentSessionId
             ? {
-              ...session,
-              last_message_at: new Date().toISOString(),
-              document_ids: [...new Set([...session.document_ids, ...finalAttachedDocumentIds])]
-            }
+                ...session,
+                last_message_at: new Date().toISOString(),
+                document_ids: [...new Set([...session.document_ids, ...finalAttachedDocumentIds])]
+              }
             : session
         );
         return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
       });
-
-      // Enhanced success messaging
+  
       if (processedFiles.length > 0) {
         const successful = processedFiles.filter(f => f.processing_status === 'completed').length;
         const failed = processedFiles.filter(f => f.processing_status === 'failed').length;
-
+  
         if (successful > 0 && failed === 0) {
-          toast.success(`✅ Successfully processed ${successful} file${successful > 1 ? 's' : ''}`);
+          toast.success(`Successfully processed ${successful} file${successful > 1 ? 's' : ''}`);
         } else if (successful > 0 && failed > 0) {
-          toast.warning(`⚠️ Processed ${successful} file${successful > 1 ? 's' : ''}, ${failed} failed`);
+          toast.warning(`Processed ${successful} file${successful > 1 ? 's' : ''}, ${failed} failed`);
         } else if (failed > 0) {
-          toast.error(`❌ Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
+          toast.error(`Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
         }
       }
-
+  
     } catch (error: any) {
       console.error('Error in handleSubmit:', error);
-
-      // Clear the cleanup timeout
-      if (cleanupTimeout) {
-        clearTimeout(cleanupTimeout);
-        cleanupTimeout = null;
-      }
-
-
       let errorMessage = 'Failed to send message';
-
       if (error.message?.includes('content size exceeds')) {
         errorMessage = 'Message too large. Please reduce file sizes or message length.';
       } else if (error.message?.includes('rate limit')) {
@@ -842,16 +815,11 @@ const Index = () => {
       } else if (error.message) {
         errorMessage += `: ${error.message}`;
       }
-
       toast.error(errorMessage);
-
     } finally {
-      // Ensure cleanup timeout is cleared in finally block
       if (cleanupTimeout) {
         clearTimeout(cleanupTimeout);
-        cleanupTimeout = null;
       }
-
       setIsSubmittingUserMessage(false);
       setIsAILoading(false);
       setFileProcessingProgress({
@@ -873,7 +841,6 @@ const Index = () => {
     userProfile,
     setIsAILoading,
   ]);
-
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     try {
