@@ -155,7 +155,15 @@ export const useTypingAnimation = ({
 
         // Always display placeholder in main text area for all blocks IF autoTypeInPanel is true
         if (autoTypeInPanel) {
-          setDisplayedText(prev => prev + '\n[Code block displayed in panel...]\n');
+          const renderingText = enteringBlock.isFirstBlock ? "Rendering..." : "Loading...";
+          setDisplayedText(prev => prev + ` \n<div class="block mx-2 p-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 w-full">
+            <div class="flex items-center space-x-2">
+              <div class="animate-pulse w-2 h-2 bg-blue-500 rounded-full"></div>
+              <div class="animate-pulse w-2 h-2 bg-blue-500 rounded-full" style="animation-delay: 0.2s"></div>
+              <div class="animate-pulse w-2 h-2 bg-blue-500 rounded-full" style="animation-delay: 0.4s"></div>
+              <span class="text-sm text-gray-500">${renderingText}</span>
+            </div>
+          </div>\n`);
         }
 
         if (enteringBlock.isFirstBlock && autoTypeInPanel) {

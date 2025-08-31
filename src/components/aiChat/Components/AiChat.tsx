@@ -11,11 +11,11 @@ import { DocumentSelector } from '../../DocumentSelector';
 import { toast } from 'sonner';
 import { DiagramPanel } from './DiagramPanel';
 import { generateId } from '@/utils/helpers';
-import { MessageList } from '../MessageList';
+import { MessageList } from './MessageList';
 import { ConfirmationModal } from '../../ConfirmationModal';
 import { Message, ChatSession } from '../../../types/Class';
 import BookPagesAnimation from '../../bookloader';
-
+import { debounce } from 'lodash';
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
@@ -108,7 +108,6 @@ interface AIChatProps {
     }>
   ) => Promise<void>;
   onMessageUpdate: (message: Message) => void;
-  onDiagramCodeUpdate: (messageId: string, newCode: string) => Promise<void>; // Add this line
 }
 const getFileType = (file: File): 'image' | 'document' | 'other' => {
   const imageTypes = [
@@ -219,7 +218,6 @@ const AIChat: React.FC<AIChatProps> = ({
   learningPreferences,
   onSendMessageToBackend,
   onMessageUpdate,
-  onDiagramCodeUpdate
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -625,16 +623,17 @@ const AIChat: React.FC<AIChatProps> = ({
       }
     }
   }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages]);
+  const debouncedHandleScroll = useMemo(() => debounce(handleScroll, 200), [handleScroll]); // Adjust the delay (200ms) as needed
 
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
     if (chatContainer) {
-      chatContainer.addEventListener('scroll', handleScroll);
+      chatContainer.addEventListener('scroll', debouncedHandleScroll);
       return () => {
-        chatContainer.removeEventListener('scroll', handleScroll);
+        chatContainer.removeEventListener('scroll', debouncedHandleScroll);
       };
     }
-  }, [handleScroll]);
+  }, [debouncedHandleScroll]);
 
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
@@ -846,6 +845,7 @@ const AIChat: React.FC<AIChatProps> = ({
       const noteIds = selectedDocumentIds.filter(id => notes.some(note => note.id === id)
       );
 
+      // ** ENSURE ALL FILES ARE PROCESSED BEFORE CONTINUING **
       const filesForBackend = await Promise.all(
         attachedFiles.map(async (attachedFile) => {
           const fileType = getFileType(attachedFile.file);
@@ -945,7 +945,6 @@ const AIChat: React.FC<AIChatProps> = ({
     activeChatSessionId,
     onSendMessageToBackend
   ]);
-
   const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
     setMergedDocuments(prevDocs => {
       const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
@@ -1084,6 +1083,11 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const displayMessages = useMemo(() => messages, [messages]);
 
+  function handleDiagramCodeUpdate(messageId: string, newCode: string): Promise<void> {
+    toast.info('Diagram code updated. You can regenerate the response to see changes.');
+    return Promise.resolve();
+  }
+
   return (
     <>
       <div className="flex flex-col h-full border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans">
@@ -1143,7 +1147,7 @@ const AIChat: React.FC<AIChatProps> = ({
               onBlockDetected={handleBlockDetected}
               onBlockUpdate={handleBlockUpdate}
               onBlockEnd={handleBlockEnd}
-              onDiagramCodeUpdate={onDiagramCodeUpdate}
+              onDiagramCodeUpdate={handleDiagramCodeUpdate}
 
             />
 
