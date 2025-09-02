@@ -611,83 +611,64 @@ if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error('Missing Supabase configuration: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables are not set.');
 }
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-const updates = {
-  updated_at: new Date().toISOString(),
-  last_message_at: new Date().toISOString()
-};
 /**
-* Context-aware conversation memory retrieval
-*/ /**
-* Context-aware conversation memory retrieval
-*/ async function getConversationHistory(userId, sessionId, maxMessages = ENHANCED_PROCESSING_CONFIG.MAX_CONVERSATION_HISTORY) {
+* Update existing conversation summary with new messages
+*/ async function updateConversationSummary(existingSummary, recentMessages, userId, sessionId) {
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  if (!geminiApiKey) return existingSummary;
+  const messageTexts = recentMessages.map((msg) => `${msg.role}: ${msg.content}`).join('\n\n');
+  const updatePrompt = `Update the existing conversation summary with new messages while preserving all important context:
+
+EXISTING SUMMARY:
+${existingSummary}
+
+NEW MESSAGES TO INTEGRATE:
+${messageTexts}
+
+UPDATE REQUIREMENTS:
+1. Merge new information with existing summary
+2. Maintain chronological flow and context
+3. Preserve all important facts and decisions from both old and new content
+4. Keep user preferences and technical details
+5. Highlight any new developments or changes
+6. Maintain concise but comprehensive format (max 1200 words)
+7. Ensure continuity between old and new information
+
+FORMAT: Provide an updated comprehensive summary that includes both existing and new context.`;
+  const contents = [
+    {
+      role: 'user',
+      parts: [
+        {
+          text: updatePrompt
+        }
+      ]
+    }
+  ];
   try {
-    console.log(`Retrieving conversation history for session ${sessionId}, user ${userId}`);
-    const { data: messages, error } = await supabase.from('chat_messages').select(`
-id,
-content,
-role,
-attached_document_ids,
-attached_note_ids,
-image_url,
-image_mime_type,
-timestamp,
-is_error
-`) // Corrected: Added closing parenthesis here
-      .eq('user_id', userId).eq('session_id', sessionId).eq('is_error', false) // Exclude error messages from context
-      .order('timestamp', {
-        ascending: true
-      }).limit(maxMessages);
-    if (error) {
-      console.error('Error fetching conversation history:', error);
-      return [];
+    const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
+    if (response.success && response.content) {
+      // Save the updated summary to the chat_sessions table
+      const { error } = await supabase.from('chat_sessions').update({
+        context_summary: response.content,
+        updated_at: new Date().toISOString()
+      }).eq('id', sessionId).eq('user_id', userId);
+      if (error) {
+        console.error('Error saving updated conversation summary:', error);
+        return existingSummary; // Return old summary if save fails
+      } else {
+        console.log(`Conversation summary updated for session ${sessionId}`);
+      }
+      return response.content;
     }
-    if (!messages || messages.length === 0) {
-      console.log('No conversation history found');
-      return [];
-    }
-    console.log(`Retrieved ${messages.length} messages from conversation history`);
-    return messages;
   } catch (error) {
-    console.error('Error in getConversationHistory:', error);
-    return [];
+    console.error('Error updating conversation summary:', error);
   }
+  return existingSummary; // Return existing summary if update fails
 }
 /**
-* Intelligent context management with conversation summarization
-*/ async function buildIntelligentContext(userId, sessionId, currentMessage, attachedDocumentIds = [], attachedNoteIds = []) {
-  const conversationHistory = await getConversationHistory(userId, sessionId);
-  // If conversation is short, include all messages
-  if (conversationHistory.length <= ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW) {
-    console.log('Short conversation - including all messages in context');
-    return {
-      recentMessages: conversationHistory,
-      conversationSummary: null,
-      totalMessages: conversationHistory.length
-    };
-  }
-  // For longer conversations, implement intelligent context management
-  const recentMessages = conversationHistory.slice(-ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
-  const olderMessages = conversationHistory.slice(0, -ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
-  // Create a summary of older messages if there are many
-  let conversationSummary = null;
-  if (olderMessages.length > ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
-    try {
-      conversationSummary = await createConversationSummary(olderMessages, userId);
-      console.log(`Created conversation summary for ${olderMessages.length} older messages`);
-    } catch (error) {
-      console.error('Error creating conversation summary:', error);
-    }
-  }
-  return {
-    recentMessages,
-    conversationSummary,
-    totalMessages: conversationHistory.length,
-    summarizedMessages: olderMessages.length
-  };
-}
-/**
-* Create intelligent conversation summary using Gemini
-*/ async function createConversationSummary(messages, userId) {
+* Create intelligent conversation summary using Gemini and save it to database
+*/ async function createConversationSummary(messages, userId, sessionId) {
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
   if (!geminiApiKey) return null;
   // Extract key information from messages
@@ -721,12 +702,110 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
   try {
     const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
     if (response.success && response.content) {
+      // Save the summary to the chat_sessions table
+      const { error } = await supabase.from('chat_sessions').update({
+        context_summary: response.content,
+        updated_at: new Date().toISOString()
+      }).eq('id', sessionId).eq('user_id', userId);
+      if (error) {
+        console.error('Error saving conversation summary:', error);
+      } else {
+        console.log(`Conversation summary saved for session ${sessionId}`);
+      }
       return response.content;
     }
   } catch (error) {
     console.error('Error creating conversation summary:', error);
   }
   return null;
+}
+/**
+* Intelligent context management with conversation summarization
+*/ async function buildIntelligentContext(userId, sessionId, currentMessage, attachedDocumentIds = [], attachedNoteIds = []) {
+  const conversationHistory = await getConversationHistory(userId, sessionId);
+  // If conversation is short, include all messages
+  if (conversationHistory.length <= ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW) {
+    console.log('Short conversation - including all messages in context');
+    return {
+      recentMessages: conversationHistory,
+      conversationSummary: null,
+      totalMessages: conversationHistory.length
+    };
+  }
+  // For longer conversations, implement intelligent context management
+  const recentMessages = conversationHistory.slice(-ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
+  const olderMessages = conversationHistory.slice(0, -ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
+  // Get existing summary from database first
+  let conversationSummary = null;
+  try {
+    const { data: sessionData, error } = await supabase.from('chat_sessions').select('context_summary').eq('id', sessionId).eq('user_id', userId).single();
+    if (!error && sessionData?.context_summary) {
+      conversationSummary = sessionData.context_summary;
+      console.log('Using existing conversation summary from database');
+    }
+  } catch (error) {
+    console.error('Error fetching existing summary:', error);
+  }
+  // Create or update summary based on conversation length
+  if (olderMessages.length > ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
+    try {
+      if (!conversationSummary) {
+        // Create initial summary
+        conversationSummary = await createConversationSummary(olderMessages, userId, sessionId);
+        console.log(`Created new conversation summary for ${olderMessages.length} older messages`);
+      } else {
+        // Check if we need to update the summary (every 10 new messages beyond the window)
+        const messagesToSummarize = Math.floor(olderMessages.length / 10) * 10;
+        const lastSummarySize = conversationSummary.length > 0 ? Math.floor(conversationSummary.length / 100) * 10 : 0;
+        if (messagesToSummarize > lastSummarySize + 10) {
+          console.log(`Updating conversation summary to include ${olderMessages.length} messages`);
+          conversationSummary = await updateConversationSummary(conversationSummary, olderMessages.slice(-20), userId, sessionId);
+        }
+      }
+    } catch (error) {
+      console.error('Error managing conversation summary:', error);
+    }
+  }
+  return {
+    recentMessages,
+    conversationSummary,
+    totalMessages: conversationHistory.length,
+    summarizedMessages: olderMessages.length
+  };
+}
+/**
+* Enhanced conversation history retrieval with better error handling
+*/ async function getConversationHistory(userId, sessionId, maxMessages = ENHANCED_PROCESSING_CONFIG.MAX_CONVERSATION_HISTORY) {
+  try {
+    console.log(`Retrieving conversation history for session ${sessionId}, user ${userId}`);
+    const { data: messages, error } = await supabase.from('chat_messages').select(`
+        id,
+        content,
+        role,
+        attached_document_ids,
+        attached_note_ids,
+        image_url,
+        image_mime_type,
+        timestamp,
+        is_error
+      `).eq('user_id', userId).eq('session_id', sessionId).eq('is_error', false) // Exclude error messages from context
+      .order('timestamp', {
+        ascending: true
+      }).limit(maxMessages);
+    if (error) {
+      console.error('Error fetching conversation history:', error);
+      return [];
+    }
+    if (!messages || messages.length === 0) {
+      console.log('No conversation history found');
+      return [];
+    }
+    console.log(`Retrieved ${messages.length} messages from conversation history`);
+    return messages;
+  } catch (error) {
+    console.error('Error in getConversationHistory:', error);
+    return [];
+  }
 }
 /**
 * Optimized base64 conversion with chunking for large files
@@ -1596,7 +1675,8 @@ This is an archive file that contains compressed data. Without extraction capabi
 }
 /**
 * Save chat message to database with enhanced context tracking
-*/ async function saveChatMessage({ userId, sessionId, content, role, attachedDocumentIds = null, attachedNoteIds = null, isError = false, imageUrl = null, imageMimeType = null, conversationContext = null }) {
+*/ async function saveChatMessage({ userId, sessionId, content, role, attachedDocumentIds = null, attachedNoteIds = null, isError = false, imageUrl = null, imageMimeType = null, conversationContext = null, filesMetadata = null // Add filesMetadata parameter
+}) {
   try {
     const { data, error } = await supabase.from('chat_messages').insert({
       user_id: userId,
@@ -1609,7 +1689,8 @@ This is an archive file that contains compressed data. Without extraction capabi
       image_url: imageUrl,
       image_mime_type: imageMimeType,
       conversation_context: conversationContext,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      files_metadata: filesMetadata // Save file metadata
     }).select('id').single();
     if (error) {
       console.error('Error saving chat message:', error);
@@ -1677,11 +1758,48 @@ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
 * Create system prompt for StuddyHub AI
 */ function createSystemPrompt(learningStyle, learningPreferences) {
   // Core Identity and Mission
+  console.log(learningPreferences, learningStyle);
   const coreIdentity = `
 You are StuddyHub AI, a dynamic educational platform with advanced context-aware memory.
-**CORE MISSION:** Deliver transformative learning through personalized paths, high-quality visualizations, and intuitive conversational guidance while maintaining full conversation context and continuity.
+**CORE MISSION:** Deliver transformative learning through personalized paths, high-quality visualizations, and intuitive conversational guidance while maintaining full conversation context and continuity. You should provide helpful responses about the usage, features, and troubleshooting of the StuddyHub application.
 
 **CONTEXT AWARENESS:** You have access to the complete conversation history and can reference previous discussions, maintaining continuity across long conversations. When users ask about earlier parts of the conversation, you can recall and reference specific details.
+
+The StuddyHub application is a React-based learning platform with the following key features:
+
+- **Dashboard:** Provides an overview of the user's learning activity, progress, and quick actions. Key metrics include total notes, recordings, document count, and AI conversations. Quick actions allow users to create new notes, recordings, documents, or schedule events.
+- **Notes:** Allows users to create, edit, and categorize notes. Notes can be organized by category (All Notes, General, Math, Science, History, Language, Other).
+- **Recordings:** Enables users to record class sessions, upload audio files, and generate quizzes and summaries.
+- **Schedule:** Helps users plan their study time with a schedule and timetable feature.
+- **AI Chat:** An AI assistant that can answer questions, provide explanations, and assist with learning tasks. It supports file uploads, document linking, and note linking for context.
+- **Documents:** Allows users to upload and manage various learning materials (PDFs, text files, etc.).
+- **Social:** A social feed where users can share their progress and engage with other learners (feature under development).
+- **Settings:** Allows users to customize their profile and learning preferences (learning style, explanation style, difficulty, etc.).
+- **Authentication:** Uses Supabase for user authentication and data storage.
+
+The application uses the following libraries and frameworks:
+
+- React: For building the user interface.
+- Tailwind CSS: For styling the components.
+- Lucide React: For icons.
+- Framer Motion: For animations.
+- Chart.js: For creating charts and graphs.
+- Three.js: For rendering 3D scenes.
+- React Markdown: For rendering Markdown content.
+- React Syntax Highlighter: For code syntax highlighting.
+- Supabase: For backend services (authentication, database, storage).
+- Sonner: For toast notifications.
+
+The application uses the following data structures:
+
+- UserProfile: {id: string, full_name: string, avatar_url: string, learning_style: string, learning_preferences: {explanation_style: string, examples: boolean, difficulty: string}}
+- Note: {id: string, title: string, category: string, content: string, aiSummary: string, createdAt: string}
+- ClassRecording: {id: string, title: string, subject: string, date: string, duration: number, audioUrl: string, document_id: string}
+- ScheduleItem: {id: string, title: string, subject: string, type: string, startTime: string, endTime: string, location: string, description: string}
+- Message: {id: string, content: string, role: string, timestamp: string, attachedDocumentIds: string[], attachedNoteIds: string[]}
+- ChatSession: {id: string, title: string, createdAt: string, updatedAt: string, lastMessageAt: string, documentIds: string[]}
+- Quiz: {id: string, classId: string, questions: {question: string, options: string[], correctAnswer: string}[]}
+- Document: {id: string, title: string, file_name: string, file_url: string, file_type: string, file_size: number, content_extracted: string, type: string, processing_status: string, processing_error: string}
 `;
   // General Requirements
   const generalRequirements = `
@@ -1692,6 +1810,7 @@ You are StuddyHub AI, a dynamic educational platform with advanced context-aware
 - Optimized performance and responsiveness.
 - Consistent StuddyHub AI branding.
 - Full conversation context awareness and continuity.
+- When asked about code or features, provide relevant details about the components, data structures, and libraries used.
 `;
   // UI Guidance
   const uiGuidance = `
@@ -1742,7 +1861,7 @@ K -->|Quizzes Tab| M[Load Quizzes]
 \`\`\``;
   const dotGraphExcellence = `
 **DOT GRAPH RULES:**
-- Start with digraph G { or graph G {; specify rankdir (e.g., LR, TB).
+- Start with digraph G { or graph G {; specify rankdir (e.g., TB).
 - Define nodes with labels: a [label="Node A"].
 - Use edge syntax: -> (directed) or -- (undirected).
 - Escape special characters in labels: "Node \\"A\\"".
@@ -1786,7 +1905,7 @@ A -> B [label="Next"];
   const threeJsExcellence = `
 **THREE.JS RULES:**
 - Always name the function as createThreeJSScene
-- Generate a complete JavaScript function named createThreeJSScene(canvas, THREE, OrbitControls, GLTLoader) that takes canvas, THREE, OrbitControls, and GLTLoader as parameters.
+- Generate a complete JavaScript function named createThreeJSScene(canvas, THREE, OrbitControls, GLTFLoader) that takes canvas, THREE, OrbitControls, and GLTFLoader as parameters.
 - Inside the function, define scene, camera, renderer, controls, and necessary lights (e.g., ambient and directional lights).
 - Use MeshStandardMaterial for all materials to ensure consistent lighting.
 - Do NOT define or call an animate function or include requestAnimationFrame within the function the caller (e.g., a React component) will handle starting and managing the animation loop.
@@ -1797,10 +1916,9 @@ A -> B [label="Next"];
 - Ensure the code is production-quality, syntactically correct, and compatible with execution via new Function in a React component.
 - Do not include any external file I/O or network calls beyond texture loading from a CDN.
 - Avoid duplicate animation loops or any self-calling animation logic within the function.
-
 **TEMPLATE:**
 \`\`\`threejs
-function createThreeJSScene(canvas, THREE, OrbitControls, GLTLoader) {
+function createThreeJSScene(canvas, THREE, OrbitControls, GLTFLoader) {
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
 camera.position.set(0, 0, 5);
@@ -1897,7 +2015,7 @@ return { scene, renderer, camera, controls, cleanup };
 },
 {
 "title": "Deep Learning Architectures",
-"content": "- Neural Networks\\n- Convolutional Neural Networks (CNNs)\\n- Recurrent Neural Networks (RNNs)",
+"content": "- Neural Networks\n- Convolutional Neural Networks (CNNs)\n- Recurrent Neural Networks (RNNs)",
 "layout": "title-and-markdown-bullets"
 }
 ]
@@ -1912,16 +2030,12 @@ return { scene, renderer, camera, controls, cleanup };
 - Maintain context awareness throughout long conversations.
 `;
   const adaptiveLearningSystem = `
+These are the user preferences
 **ADAPTIVE LEARNING:**
-- Tailor content to ${learningStyle}:
-- Visual: Prioritize diagrams (Mermaid, Chart.js), visual examples.
-- Auditory: Narrative explanations, voice interactions ("Use the Mic icon").
-- Kinesthetic: Interactive tasks ("Modify this code in the Code Editor").
-- Reading/Writing: Text explanations and references.
+- learning style: ${learningStyle}
 - Difficulty: ${learningPreferences?.difficulty || 'intermediate'} (beginner, intermediate, advanced).
-- Analyze user input, extract key concepts, deliver multi-modal content.
-- Suggest next steps ("Explore the Quizzes Tab").
-- Remember user preferences and adapt based on conversation history.
+- Explanation Style: ${learningPreferences?.explanation_style || 'detailed'} (simple, detailed, comprehensive).
+- Examples: ${learningPreferences?.examples ? 'Included' : 'Omitted'}.
 `;
   const errorPreventionProtocols = `
 **ERROR PREVENTION:**
@@ -2104,6 +2218,8 @@ ${finalSystemIntegration}
         imageMimeType: formData.get('imageMimeType'),
         aiMessageIdToUpdate: formData.get('aiMessageIdToUpdate')
       };
+      // Capture the user message *before* processing files
+      const userMessage = requestData.message;
       for (const [key, value] of formData.entries()) {
         if (value instanceof File) {
           const processedFile = await processFile(value);
@@ -2160,18 +2276,31 @@ ${finalSystemIntegration}
     console.log(`Starting processing of ${files.length} files with context-aware memory...`);
     // Use enhanced batch processing with zero truncation
     await enhancedBatchProcessing(files, geminiApiKey, userId);
-    // Save processed files to database
+    // Collect file metadata *before* saving the chat message
+    const filesMetadata = [];
     for (const file of files) {
       const documentId = await saveFileToDatabase(file, userId);
       if (documentId) {
         uploadedDocumentIds.push(documentId);
-        // Set image URL for user message if this is an image
-        if (file.type === 'image' && !userMessageImageUrl) {
-          const { data: docData, error: docError } = await supabase.from('documents').select('file_url, file_type').eq('id', documentId).single();
-          if (docData && !docError) {
+        // Collect file metadata
+        const { data: docData, error: docError } = await supabase.from('documents').select('file_url, file_type, file_name, type, processing_status, processing_error').eq('id', documentId).single();
+        if (docData && !docError) {
+          filesMetadata.push({
+            id: documentId,
+            name: docData.file_name,
+            type: docData.type,
+            mimeType: docData.file_type,
+            url: docData.file_url,
+            status: docData.processing_status,
+            error: docData.processing_error
+          });
+          // Set image URL for user message if this is an image
+          if (docData.type === 'image' && !userMessageImageUrl) {
             userMessageImageUrl = docData.file_url;
             userMessageImageMimeType = docData.file_type;
           }
+        } else {
+          console.error(`Error fetching file metadata for doc ID ${documentId}:`, docError);
         }
       }
     }
@@ -2193,7 +2322,7 @@ ${finalSystemIntegration}
     const systemPrompt = createSystemPrompt(learningStyle, learningPreferences);
     // Build context-aware conversation
     const conversationData = await buildGeminiConversation(userId, sessionId, message, files, attachedContext, systemPrompt);
-    // Save user message with context info
+    // Save user message with context info and file metadata
     if (message || files.length > 0 || attachedContext) {
       const userMessageData = {
         userId,
@@ -2209,7 +2338,8 @@ ${finalSystemIntegration}
           recentMessages: conversationData.contextInfo.recentMessages?.length || 0,
           summarizedMessages: conversationData.contextInfo.summarizedMessages || 0,
           hasSummary: !!conversationData.contextInfo.conversationSummary
-        }
+        },
+        filesMetadata: filesMetadata.length > 0 ? filesMetadata : null // Pass file metadata here
       };
       await saveChatMessage(userMessageData);
     }

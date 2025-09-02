@@ -879,16 +879,18 @@ export const useAppData = () => {
               // Note: replaceOptimisticMessage should be passed from parent component if needed
             } else if (payload.eventType === 'UPDATE') {
               const updated = payload.new as any;
-              setChatMessages(prev => prev.map(m => {
-                if (m.id !== updated.id) return m;
-                // Preserve existing content if incoming payload has null/undefined content
-                const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
-                return {
-                  ...m,
-                  ...updated,
-                  content: preservedContent
-                };
-              }));
+              setChatMessages(prev => {
+                return prev.map(m => {
+                  if (m.id !== updated.id) return m;
+                  // Preserve existing content if incoming payload has null/undefined content
+                  const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
+                  return {
+                    ...m,
+                    ...updated,
+                    content: preservedContent,
+                  };
+                });
+              });
             } else if (payload.eventType === 'DELETE') {
               setChatMessages(prevMessages =>
                 prevMessages.filter(msg => msg.id !== payload.old.id)

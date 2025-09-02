@@ -52,7 +52,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   const { displayedText, isTyping } = useTypingAnimation({
     text: content,
     messageId,
-    wordsPerSecond: 10,
+    wordsPerSecond: 80,
     enabled: enableTyping && !isUserMessage && isLastMessage,
     onComplete: onTypingComplete,
     isAlreadyComplete: isAlreadyTyped,
