@@ -402,7 +402,6 @@ const Index = () => {
 
   // Also update the createNewChatSession function to ensure message_count is properly set
   // Replace the existing createNewChatSession function around line 690-750
-
   const createNewChatSession = useCallback(async (): Promise<string | null> => {
     try {
       if (!user) {
@@ -636,31 +635,31 @@ const Index = () => {
       (attachedNoteIds && attachedNoteIds.length > 0) ||
       imageUrl ||
       (attachedFiles && attachedFiles.length > 0);
-  
+
     if (!hasTextContent && !hasAttachments) {
       toast.warning('Please enter a message or attach files to send.');
       return;
     }
-  
+
     if (isAILoading || isSubmittingUserMessage) {
       toast.info('Please wait for the current message to complete.');
       return;
     }
-  
+
     setIsSubmittingUserMessage(true);
     setIsAILoading(true);
     let processedFiles: FileData[] = attachedFiles || [];
     let cleanupTimeout: NodeJS.Timeout | null = null;
-  
+
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         toast.error('You must be logged in to chat.');
         return;
       }
-  
+
       let currentSessionId = activeChatSessionId;
-  
+
       if (!currentSessionId) {
         currentSessionId = await createNewChatSession();
         if (!currentSessionId) {
@@ -668,21 +667,21 @@ const Index = () => {
           return;
         }
       }
-  
+
       let finalAttachedDocumentIds = attachedDocumentIds || [];
       const finalAttachedNoteIds = attachedNoteIds || [];
-  
+
       // Build the parts for the current user message
       const currentMessageParts: MessagePart[] = [];
       if (messageContent) {
         currentMessageParts.push({ text: messageContent }); // User's input message
       }
-  
+
       const currentAttachedContext = buildRichContext(finalAttachedDocumentIds, finalAttachedNoteIds, documents, notes);
       if (currentAttachedContext) {
         currentMessageParts.push({ text: `\n\nAttached Context:\n${currentAttachedContext}` });
       }
-  
+
       if (imageUrl && imageMimeType) {
         if (imageDataBase64) {
           currentMessageParts.push({
@@ -692,7 +691,7 @@ const Index = () => {
           // Handle image URL if needed
         }
       }
-  
+
       // Process attached files
       processedFiles = await Promise.all(
         (attachedFiles || []).map(async (file) => {
@@ -704,7 +703,7 @@ const Index = () => {
           });
         })
       );
-  
+
       processedFiles.forEach(file => {
         if (file.content) {
           currentMessageParts.push({ text: `[File: ${file.name}]\n${file.content}` });
@@ -714,14 +713,14 @@ const Index = () => {
           });
         }
       });
-  
+
       const historicalMessagesForAI = allChatMessages
         .filter(msg => msg.session_id === currentSessionId)
         .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate))
         .slice(-MAX_HISTORY_MESSAGES);
-  
+
       const chatHistoryForAI: Array<{ role: string; parts: MessagePart[] }> = [];
-  
+
       historicalMessagesForAI.forEach(msg => {
         const msgParts: MessagePart[] = [{ text: msg.content }];
         if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 || msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
@@ -740,11 +739,11 @@ const Index = () => {
         }
         chatHistoryForAI.push({ role: msg.role, parts: msgParts });
       });
-  
+
       if (fileProcessingProgress.processing) {
         setFileProcessingProgress(prev => ({ ...prev, phase: 'uploading' }));
       }
-  
+
       // Send the original user message as the message field
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: {
@@ -767,33 +766,33 @@ const Index = () => {
           aiMessageIdToUpdate: aiMessageIdToUpdate,
         },
       });
-  
+
       if (error) {
         console.error('Edge function error:', error);
         throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
       }
-  
+
       if (!data || !data.response) {
         throw new Error('Empty response from AI service');
       }
-  
+
       setChatSessions(prev => {
         const updated = prev.map(session =>
           session.id === currentSessionId
             ? {
-                ...session,
-                last_message_at: new Date().toISOString(),
-                document_ids: [...new Set([...session.document_ids, ...finalAttachedDocumentIds])]
-              }
+              ...session,
+              last_message_at: new Date().toISOString(),
+              document_ids: [...new Set([...session.document_ids, ...finalAttachedDocumentIds])]
+            }
             : session
         );
         return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
       });
-  
+
       if (processedFiles.length > 0) {
         const successful = processedFiles.filter(f => f.processing_status === 'completed').length;
         const failed = processedFiles.filter(f => f.processing_status === 'failed').length;
-  
+
         if (successful > 0 && failed === 0) {
           toast.success(`Successfully processed ${successful} file${successful > 1 ? 's' : ''}`);
         } else if (successful > 0 && failed > 0) {
@@ -802,7 +801,7 @@ const Index = () => {
           toast.error(`Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
         }
       }
-  
+
     } catch (error: any) {
       console.error('Error in handleSubmit:', error);
       let errorMessage = 'Failed to send message';
@@ -1264,6 +1263,12 @@ const Index = () => {
     }
   }, [user, authLoading, navigate]);
 
+  const currentPathLocation = useLocation();
+  const isNotesTab = currentPathLocation.pathname.startsWith('/notes');
+  const headerClass = isNotesTab
+    ? 'hidden lg:block'
+    : "flex  items-center  sm:hidden justify-between w-full p-0 sm:p-0  shadow-none bg-transparent border-none"; // Hide on other tabs for larger screens
+
   // Real-time listener for chat messages
   useEffect(() => {
     if (!user) return;
@@ -1336,7 +1341,7 @@ const Index = () => {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 bg-transparent border-none shadow-none">
-        <div className="flex items-center sm:hidden justify-between w-full p-0 sm:p-0  shadow-none bg-transparent border-none">
+        <div className={headerClass}>
           <Header {...headerProps} />
 
         </div>

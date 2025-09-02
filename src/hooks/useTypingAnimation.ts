@@ -133,9 +133,10 @@ export const useTypingAnimation = ({
         setIsTyping(false);
         setCurrentBlock(null);
         setBlockText('');
+        console.log("Typing complete! Calling onComplete for message ID:", messageId); // ADD THIS LINE
         onComplete?.(messageId);
         return;
-      }
+        }
 
       const currentPosition = words.slice(0, indexRef.current).join('').length;
       const enteringBlock = blocks.find(block =>
