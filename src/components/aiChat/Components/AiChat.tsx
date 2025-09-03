@@ -623,17 +623,16 @@ const AIChat: React.FC<AIChatProps> = ({
       }
     }
   }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages]);
-  const debouncedHandleScroll = useMemo(() => debounce(handleScroll, 200), [handleScroll]); // Adjust the delay (200ms) as needed
-
+  // const debouncedHandleScroll = useMemo(() => debounce(handleScroll, 200), [handleScroll]); 
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
     if (chatContainer) {
-      chatContainer.addEventListener('scroll', debouncedHandleScroll);
+      chatContainer.addEventListener('scroll', handleScroll);
       return () => {
-        chatContainer.removeEventListener('scroll', debouncedHandleScroll);
+        chatContainer.removeEventListener('scroll', handleScroll);
       };
     }
-  }, [debouncedHandleScroll]);
+  }, [handleScroll]);
 
   useEffect(() => {
     const chatContainer = chatContainerRef.current;

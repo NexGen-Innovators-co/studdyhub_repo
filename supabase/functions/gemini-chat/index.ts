@@ -1,6 +1,9 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import mammoth from 'https://esm.sh/mammoth@1.6.0';
+import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
+import JSZIP from 'https://esm.sh/jszip@3.10.1';
+import xml2js from 'https://esm.sh/xml2js@0.5.0';
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,7 +18,7 @@ const ENHANCED_PROCESSING_CONFIG = {
   CHUNK_OVERLAP: 500,
   // Enhanced chunking strategy
   INTELLIGENT_CHUNK_SIZE: 1.8 * 1024 * 1024,
-  MIN_CHUNK_SIZE: 100 * 1024,
+  MIN_CHUNK_SIZE: 100 * 1024 * 1024,
   // Processing priorities
   BATCH_SIZE: 3,
   RETRY_ATTEMPTS: 3,
@@ -24,9 +27,9 @@ const ENHANCED_PROCESSING_CONFIG = {
   MAX_TOTAL_CONTEXT: 4 * 1024 * 1024,
   MAX_SINGLE_FILE_CONTENT: 2 * 1024 * 1024,
   // Context Memory Configuration
-  MAX_CONVERSATION_HISTORY: 50,
+  MAX_CONVERSATION_HISTORY: 1000,
   CONTEXT_MEMORY_WINDOW: 30,
-  SUMMARY_THRESHOLD: 20,
+  SUMMARY_THRESHOLD: 10,
   CONTEXT_RELEVANCE_SCORE: 0.7 // Minimum relevance score for including older messages
 };
 // Enhanced file type mappings with processing strategies
@@ -107,43 +110,43 @@ const ENHANCED_FILE_TYPES = {
   // Documents - structured processing with extraction and chunking
   'application/pdf': {
     type: 'pdf',
-    strategy: 'extract_and_chunk',
+    strategy: 'local_extract_and_chunk',
     priority: 2,
     maxSize: 200 * 1024 * 1024
   },
   'application/msword': {
     type: 'document',
-    strategy: 'extract_and_chunk',
+    strategy: 'local_extract_and_chunk',
     priority: 2,
     maxSize: 100 * 1024 * 1024
   },
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
     type: 'document',
-    strategy: 'extract_and_chunk',
+    strategy: 'local_extract_and_chunk',
     priority: 2,
     maxSize: 100 * 1024 * 1024
   },
   'application/vnd.ms-excel': {
     type: 'spreadsheet',
-    strategy: 'extract_and_chunk',
+    strategy: 'local_extract_and_chunk',
     priority: 2,
     maxSize: 50 * 1024 * 1024
   },
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
     type: 'spreadsheet',
-    strategy: 'extract_and_chunk',
+    strategy: 'local_extract_and_chunk',
     priority: 2,
     maxSize: 50 * 1024 * 1024
   },
   'application/vnd.ms-powerpoint': {
     type: 'presentation',
-    strategy: 'extract_and_chunk',
+    strategy: 'local_extract_and_chunk',
     priority: 2,
     maxSize: 100 * 1024 * 1024
   },
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
     type: 'presentation',
-    strategy: 'extract_and_chunk',
+    strategy: 'local_extract_and_chunk',
     priority: 2,
     maxSize: 100 * 1024 * 1024
   },
@@ -612,61 +615,29 @@ if (!supabaseUrl || !supabaseServiceKey) {
 }
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 /**
-* Update existing conversation summary with new messages
-*/ async function updateConversationSummary(existingSummary, recentMessages, userId, sessionId) {
-  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  if (!geminiApiKey) return existingSummary;
-  const messageTexts = recentMessages.map((msg) => `${msg.role}: ${msg.content}`).join('\n\n');
-  const updatePrompt = `Update the existing conversation summary with new messages while preserving all important context:
-
-EXISTING SUMMARY:
-${existingSummary}
-
-NEW MESSAGES TO INTEGRATE:
-${messageTexts}
-
-UPDATE REQUIREMENTS:
-1. Merge new information with existing summary
-2. Maintain chronological flow and context
-3. Preserve all important facts and decisions from both old and new content
-4. Keep user preferences and technical details
-5. Highlight any new developments or changes
-6. Maintain concise but comprehensive format (max 1200 words)
-7. Ensure continuity between old and new information
-
-FORMAT: Provide an updated comprehensive summary that includes both existing and new context.`;
-  const contents = [
-    {
-      role: 'user',
-      parts: [
-        {
-          text: updatePrompt
-        }
-      ]
-    }
-  ];
-  try {
-    const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
-    if (response.success && response.content) {
-      // Save the updated summary to the chat_sessions table
-      const { error } = await supabase.from('chat_sessions').update({
-        context_summary: response.content,
-        updated_at: new Date().toISOString()
-      }).eq('id', sessionId).eq('user_id', userId);
-      if (error) {
-        console.error('Error saving updated conversation summary:', error);
-        return existingSummary; // Return old summary if save fails
-      } else {
-        console.log(`Conversation summary updated for session ${sessionId}`);
-      }
-      return response.content;
-    }
-  } catch (error) {
-    console.error('Error updating conversation summary:', error);
+* Relevance Scoring Function
+*/ function scoreByKeywordMatching(message, query, keywords) {
+  let score = 0;
+  // Convert both message and query to lowercase for case-insensitive matching
+  const lowerMessage = message.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  // Add score if query appears in message
+  if (lowerMessage.includes(lowerQuery)) {
+    score += 5;
   }
-  return existingSummary; // Return existing summary if update fails
+  // Add score for each keyword found in the message
+  keywords.forEach((keyword) => {
+    if (lowerMessage.includes(keyword.toLowerCase())) {
+      score += 3;
+    }
+  });
+  return score;
 }
 /**
+* Update existing conversation summary with new messages
+*/ /**
+* Create intelligent conversation summary using Gemini and save it to database
+*/ /**
 * Create intelligent conversation summary using Gemini and save it to database
 */ async function createConversationSummary(messages, userId, sessionId) {
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
@@ -713,28 +684,84 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
         console.log(`Conversation summary saved for session ${sessionId}`);
       }
       return response.content;
+    } else {
+      console.error('Gemini API call failed:', response.error);
     }
   } catch (error) {
     console.error('Error creating conversation summary:', error);
   }
   return null;
 }
+async function updateConversationSummary(existingSummary, recentMessages, userId, sessionId) {
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  if (!geminiApiKey) return existingSummary;
+  const messageTexts = recentMessages.map((msg) => `${msg.role}: ${msg.content}`).join('\n\n');
+  const updatePrompt = `Update the existing conversation summary with new messages while preserving all important context:
+
+EXISTING SUMMARY:
+${existingSummary}
+
+NEW MESSAGES TO INTEGRATE:
+${messageTexts}
+
+UPDATE REQUIREMENTS:
+1. Merge new information with existing summary
+2. Maintain chronological flow and context
+3. Preserve all important facts and decisions from both old and new content
+4. Keep user preferences and technical details
+5. Highlight any new developments or changes
+6. Maintain concise but comprehensive format (max 1200 words)
+7. Ensure continuity between old and new information
+
+FORMAT: Provide an updated comprehensive summary that includes both existing and new context.`;
+  const contents = [
+    {
+      role: 'user',
+      parts: [
+        {
+          text: updatePrompt
+        }
+      ]
+    }
+  ];
+  try {
+    const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
+    if (response.success && response.content) {
+      // Save the updated summary to the chat_sessions table
+      const { error } = await supabase.from('chat_sessions').update({
+        context_summary: response.content,
+        updated_at: new Date().toISOString()
+      }).eq('id', sessionId).eq('user_id', userId);
+      if (error) {
+        console.error('Error saving updated conversation summary:', error);
+        return existingSummary; // Return old summary if save fails
+      } else {
+        console.log(`Conversation summary updated for session ${sessionId}`);
+      }
+      return response.content;
+    } else {
+      console.error('Gemini API call failed:', response.error);
+    }
+  } catch (error) {
+    console.error('Error updating conversation summary:', error);
+  }
+  return existingSummary; // Return existing summary if update fails
+}
 /**
 * Intelligent context management with conversation summarization
 */ async function buildIntelligentContext(userId, sessionId, currentMessage, attachedDocumentIds = [], attachedNoteIds = []) {
   const conversationHistory = await getConversationHistory(userId, sessionId);
-  // If conversation is short, include all messages
-  if (conversationHistory.length <= ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW) {
-    console.log('Short conversation - including all messages in context');
-    return {
-      recentMessages: conversationHistory,
-      conversationSummary: null,
-      totalMessages: conversationHistory.length
-    };
-  }
-  // For longer conversations, implement intelligent context management
-  const recentMessages = conversationHistory.slice(-ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
-  const olderMessages = conversationHistory.slice(0, -ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
+  // Define keywords based on the current message
+  const keywords = currentMessage.split(/\s+/).filter((word) => word.length > 3); // Example: words longer than 3 chars
+  // Score each message in conversation history based on relevance to current message
+  const scoredMessages = conversationHistory.map((message) => ({
+    ...message,
+    relevanceScore: scoreByKeywordMatching(message.content, currentMessage, keywords)
+  }));
+  // Sort messages by relevance score in descending order
+  scoredMessages.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  // Select the most relevant messages
+  const relevantMessages = scoredMessages.slice(0, ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
   // Get existing summary from database first
   let conversationSummary = null;
   try {
@@ -746,49 +773,49 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
   } catch (error) {
     console.error('Error fetching existing summary:', error);
   }
+  // Log key variables for debugging
+  console.log(`Conversation length: ${conversationHistory.length}, CONTEXT_MEMORY_WINDOW: ${ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW}, SUMMARY_THRESHOLD: ${ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD}`);
+  console.log(`Older messages length: ${scoredMessages.length - relevantMessages.length}, Conversation summary exists: ${!!conversationSummary}`);
   // Create or update summary based on conversation length
-  if (olderMessages.length > ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
+  if (scoredMessages.length - relevantMessages.length > ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
     try {
       if (!conversationSummary) {
         // Create initial summary
+        const olderMessages = scoredMessages.slice(ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
         conversationSummary = await createConversationSummary(olderMessages, userId, sessionId);
         console.log(`Created new conversation summary for ${olderMessages.length} older messages`);
       } else {
-        // Check if we need to update the summary (every 10 new messages beyond the window)
-        const messagesToSummarize = Math.floor(olderMessages.length / 10) * 10;
-        const lastSummarySize = conversationSummary.length > 0 ? Math.floor(conversationSummary.length / 100) * 10 : 0;
-        if (messagesToSummarize > lastSummarySize + 10) {
-          console.log(`Updating conversation summary to include ${olderMessages.length} messages`);
-          conversationSummary = await updateConversationSummary(conversationSummary, olderMessages.slice(-20), userId, sessionId);
-        }
+        // Update summary
+        const recentMessages = relevantMessages.slice(-20);
+        conversationSummary = await updateConversationSummary(conversationSummary, recentMessages, userId, sessionId);
+        console.log(`Updated conversation summary with ${recentMessages.length} recent messages`);
       }
     } catch (error) {
       console.error('Error managing conversation summary:', error);
     }
   }
   return {
-    recentMessages,
+    recentMessages: relevantMessages,
     conversationSummary,
     totalMessages: conversationHistory.length,
-    summarizedMessages: olderMessages.length
+    summarizedMessages: conversationHistory.length - relevantMessages.length // Add summarizedMessages property
   };
 }
 /**
 * Enhanced conversation history retrieval with better error handling
 */ async function getConversationHistory(userId, sessionId, maxMessages = ENHANCED_PROCESSING_CONFIG.MAX_CONVERSATION_HISTORY) {
   try {
-    console.log(`Retrieving conversation history for session ${sessionId}, user ${userId}`);
     const { data: messages, error } = await supabase.from('chat_messages').select(`
-        id,
-        content,
-        role,
-        attached_document_ids,
-        attached_note_ids,
-        image_url,
-        image_mime_type,
-        timestamp,
-        is_error
-      `).eq('user_id', userId).eq('session_id', sessionId).eq('is_error', false) // Exclude error messages from context
+id,
+content,
+role,
+attached_document_ids,
+attached_note_ids,
+image_url,
+image_mime_type,
+timestamp,
+is_error
+`).eq('user_id', userId).eq('session_id', sessionId).eq('is_error', false) // Exclude error messages from context
       .order('timestamp', {
         ascending: true
       }).limit(maxMessages);
@@ -800,7 +827,6 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
       console.log('No conversation history found');
       return [];
     }
-    console.log(`Retrieved ${messages.length} messages from conversation history`);
     return messages;
   } catch (error) {
     console.error('Error in getConversationHistory:', error);
@@ -820,6 +846,8 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
   return btoa(binary);
 }
 /**
+* Enhanced intelligent text chunking that preserves context and completeness
+*/ /**
 * Enhanced intelligent text chunking that preserves context and completeness
 */ function createIntelligentChunks(content, fileType, maxChunkSize = ENHANCED_PROCESSING_CONFIG.INTELLIGENT_CHUNK_SIZE) {
   if (content.length <= maxChunkSize) {
@@ -885,6 +913,7 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
   };
   const patterns = breakPatterns[fileType] || breakPatterns.text;
   let currentPos = 0;
+  let chunkStart; // Declare chunkStart outside the loop
   while (currentPos < content.length) {
     let chunkEnd = Math.min(currentPos + maxChunkSize, content.length);
     // Find the best break point within the chunk
@@ -893,7 +922,7 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
       // Try each pattern in order of preference
       for (const pattern of patterns) {
         const searchStart = Math.max(currentPos + maxChunkSize * 0.7, currentPos + ENHANCED_PROCESSING_CONFIG.MIN_CHUNK_SIZE);
-        const searchText = content.slice(searchStart, chunkEnd + 200);
+        const searchText = content.slice(searchStart, chunkStart, chunkEnd + 200);
         const match = searchText.search(pattern);
         if (match !== -1) {
           bestBreak = searchStart + match + searchText.match(pattern)[0].length;
@@ -902,8 +931,7 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
       }
       chunkEnd = bestBreak;
     }
-    // Extract chunk with overlap from previous chunk (except for first chunk)
-    const chunkStart = currentPos === 0 ? 0 : Math.max(currentPos - overlap, 0);
+    chunkStart = currentPos === 0 ? 0 : Math.max(currentPos - overlap, 0);
     const chunk = content.slice(chunkStart, chunkEnd);
     // Add chunk metadata for context preservation
     const chunkInfo = currentPos === 0 ? '' : `[CONTINUATION FROM PREVIOUS CHUNK]\n\n`;
@@ -915,6 +943,8 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
   return chunks;
 }
 /**
+* Intelligent context management with conversation summarization
+*/ /**
 * Find overlap length between two text segments
 */ function findOverlapLength(text1, text2) {
   let maxOverlap = 0;
@@ -1153,6 +1183,87 @@ CSV CONTENT TO PROCESS:`;
   }
 }
 /**
+* Extract text from PPTX files using JSZIP and DOMParser
+*/ async function extractPptxText(buffer) {
+  try {
+    const zip = await JSZIP.loadAsync(buffer);
+    const slideFiles = Object.keys(zip.files).filter((f) => f.startsWith('ppt/slides/slide')).sort((a, b) => {
+      const aNum = parseInt(a.split('slide')[1].split('.xml')[0], 10);
+      const bNum = parseInt(b.split('slide')[1].split('.xml')[0], 10);
+      return aNum - bNum;
+    });
+    let text = '';
+    for (const slideFile of slideFiles) {
+      const xml = await zip.file(slideFile).async('string');
+      const result = await xml2js.parseStringPromise(xml);
+      text += `Slide: ${slideFile.match(/slide(\d+)\.xml/)[1]}\n`;
+      const shapes = result['p:sld']?.['p:cSld']?.[0]?.['p:spTree']?.[0]?.['p:sp'] || [];
+      for (const shape of shapes) {
+        const paragraphs = shape['p:txBody']?.[0]?.['a:p'] || [];
+        for (const paragraph of paragraphs) {
+          const runs = paragraph['a:r'] || [];
+          for (const run of runs) {
+            const textContent = run['a:t']?.[0] || '';
+            text += textContent;
+          }
+          text += '\n';
+        }
+        text += '\n---\n\n';
+      }
+    }
+    return text.trim();
+  } catch (error) {
+    console.error('Error extracting PPTX text:', error);
+    return '[Error extracting text from PPTX]';
+  }
+}
+/**
+* Process documents locally with library extraction and optional chunking
+*/ /**
+* Process documents locally with library extraction and optional chunking
+*/ async function processLocalDocumentWithExtractionAndChunking(file, geminiApiKey) {
+  const buffer = Uint8Array.from(atob(file.data), (c) => c.charCodeAt(0));
+  let extractedText = '';
+  try {
+    if (file.mimeType === 'application/pdf') {
+      // Skip local PDF processing due to Deno incompatibility and fallback to Gemini
+      return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
+    } else if (file.mimeType === 'application/msword' || file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const result = await mammoth.extractRawText({
+        arrayBuffer: buffer
+      });
+      extractedText = result.value;
+    } else if (file.mimeType === 'application/vnd.ms-excel' || file.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      const workbook = XLSX.read(buffer, {
+        type: 'array'
+      });
+      extractedText = '';
+      workbook.SheetNames.forEach((sheetName, index) => {
+        const sheet = workbook.Sheets[sheetName];
+        extractedText += `Sheet ${index + 1}: ${sheetName}\n`;
+        extractedText += XLSX.utils.sheet_to_txt(sheet) + '\n\n';
+      });
+    } else if (file.mimeType === 'application/vnd.ms-powerpoint' || file.mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+      extractedText = await extractPptxText(buffer);
+    } else {
+      // Fallback to Gemini if no local library supports it
+      return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
+    }
+    if (extractedText.length <= ENHANCED_PROCESSING_CONFIG.INTELLIGENT_CHUNK_SIZE) {
+      file.content = extractedText;
+    } else {
+      // If large, chunk and process with Gemini for enhanced summarization or fidelity
+      const chunks = createIntelligentChunks(extractedText, file.type);
+      const prompt = EXTRACTION_PROMPTS[file.type] || EXTRACTION_PROMPTS.document;
+      file.content = await processChunkedContent(chunks, prompt, geminiApiKey);
+    }
+  } catch (error) {
+    console.error(`Local extraction failed for ${file.name}:`, error);
+    // Fallback to Gemini API on any local processing error
+    return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
+  }
+}
+/**
 * Process documents with Gemini extraction and intelligent chunking
 */ async function processDocumentWithExtractionAndChunking(file, geminiApiKey) {
   const prompt = EXTRACTION_PROMPTS[file.type] || EXTRACTION_PROMPTS.document;
@@ -1301,6 +1412,9 @@ This is an archive file that contains compressed data. Without extraction capabi
         break;
       case 'extract_and_chunk':
         await processDocumentWithExtractionAndChunking(file, geminiApiKey);
+        break;
+      case 'local_extract_and_chunk':
+        await processLocalDocumentWithExtractionAndChunking(file, geminiApiKey);
         break;
       case 'vision_analysis':
         await processImageWithVision(file, geminiApiKey);
@@ -1711,6 +1825,10 @@ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
     }
     if (existingSession) {
       // Update existing session
+      const updates = {
+        document_ids: newDocumentIds,
+        message_count: existingSession.message_count || 0
+      };
       if (newDocumentIds.length > 0) {
         const currentDocIds = existingSession.document_ids || [];
         const updatedDocIds = [
@@ -1745,10 +1863,14 @@ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
 * Update session last message timestamp and context
 */ async function updateSessionLastMessage(sessionId, contextSummary = null) {
   try {
+    const update = {
+      last_message_at: new Date().toISOString(),
+      context_summary: contextSummary
+    };
     if (contextSummary) {
-      updates.context_summary = contextSummary;
+      update.context_summary = contextSummary;
     }
-    const { error } = await supabase.from('chat_sessions').update(updates).eq('id', sessionId);
+    const { error } = await supabase.from('chat_sessions').update(update).eq('id', sessionId);
     if (error) console.error('Error updating session last message time:', error);
   } catch (error) {
     console.error('Database error when updating session:', error);
@@ -1758,7 +1880,6 @@ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
 * Create system prompt for StuddyHub AI
 */ function createSystemPrompt(learningStyle, learningPreferences) {
   // Core Identity and Mission
-  console.log(learningPreferences, learningStyle);
   const coreIdentity = `
 You are StuddyHub AI, a dynamic educational platform with advanced context-aware memory.
 **CORE MISSION:** Deliver transformative learning through personalized paths, high-quality visualizations, and intuitive conversational guidance while maintaining full conversation context and continuity. You should provide helpful responses about the usage, features, and troubleshooting of the StuddyHub application.
@@ -1839,7 +1960,7 @@ The application uses the following data structures:
 Strictly Adhere to Mermaid Diagram Rules:
 **MERMAID DIAGRAM RULES:**
 - Graph type declared? Nodes defined before connections? Valid syntax?
-- Avoid parentheses in square brackets or in other parenthesis: This is a strict rule. Do not use parentheses within square brackets or nested within other parentheses in node labels. For example, use A[Start - User Auth] instead of A[Start (User Auth)] or A[Start (User: Auth)]. If parentheses are absolutely necessary for clarity, explore alternative label phrasing to avoid them altogether
+- Avoid parentheses in square brackets or in other parenthesis: This is a strict rule. Do not use parentheses within square brackets or nested within other parentheses in node labels. For example, use A[Start - User Auth] instead of A[Start (User Auth)]. If parentheses are absolutely necessary for clarity, explore alternative label phrasing to avoid them altogether
 - Use proper link styles: -->, ---, -.->, ==>.
 **TEMPLATE:**
 \`\`\`mermaid
@@ -2015,7 +2136,9 @@ return { scene, renderer, camera, controls, cleanup };
 },
 {
 "title": "Deep Learning Architectures",
-"content": "- Neural Networks\n- Convolutional Neural Networks (CNNs)\n- Recurrent Neural Networks (RNNs)",
+"content": "- Neural Networks
+- Convolutional Neural Networks (CNNs)
+- Recurrent Neural Networks (RNNs)",
 "layout": "title-and-markdown-bullets"
 }
 ]
@@ -2032,10 +2155,10 @@ return { scene, renderer, camera, controls, cleanup };
   const adaptiveLearningSystem = `
 These are the user preferences
 **ADAPTIVE LEARNING:**
-- learning style: ${learningStyle}
-- Difficulty: ${learningPreferences?.difficulty || 'intermediate'} (beginner, intermediate, advanced).
-- Explanation Style: ${learningPreferences?.explanation_style || 'detailed'} (simple, detailed, comprehensive).
-- Examples: ${learningPreferences?.examples ? 'Included' : 'Omitted'}.
+- learning style: kinesthetic
+- Difficulty: beginner (beginner, intermediate, advanced).
+- Explanation Style: detailed (simple, detailed, comprehensive).
+- Examples: Included.
 `;
   const errorPreventionProtocols = `
 **ERROR PREVENTION:**
@@ -2088,103 +2211,141 @@ ${finalSystemIntegration}
 }
 /**
 * Build context-aware conversation for Gemini API
+*/ /**
+* Asynchronously builds a structured conversation history for the Gemini API.
+* Includes intelligent context retrieval, history summarization, and attachment processing.
+*
+* @param {string} userId - The ID of the user.
+* @param {string} sessionId - The ID of the current chat session.
+* @param {string} currentMessage - The latest message from the user.
+* @param {Array<Object>} [files=[]] - An array of file objects to be included in the current message.
+* @param {string} [attachedContext=''] - Additional text context from attached documents or notes.
+* @param {string} [systemPrompt=''] - The initial system prompt to guide the model's behavior.
+* @returns {Promise<Object>} A promise that resolves to an object containing the `contents` for the Gemini API and `contextInfo`.
 */ async function buildGeminiConversation(userId, sessionId, currentMessage, files = [], attachedContext = '', systemPrompt = '') {
-  // Get intelligent conversation context
-  const contextData = await buildIntelligentContext(userId, sessionId, currentMessage);
-  // Start with system prompt
-  const geminiContents = [
-    {
-      role: 'user',
-      parts: [
-        {
-          text: systemPrompt
-        }
-      ]
-    }
-  ];
-  // Add conversation summary if available
-  if (contextData.conversationSummary) {
-    geminiContents.push({
-      role: 'user',
-      parts: [
-        {
-          text: `CONVERSATION CONTEXT SUMMARY:\n${contextData.conversationSummary}\n\n[The above is a summary of earlier messages. The following are recent messages:]`
-        }
-      ]
-    });
-  }
-  // Add recent conversation history
-  if (contextData.recentMessages && contextData.recentMessages.length > 0) {
-    for (const msg of contextData.recentMessages) {
-      if (msg.role === 'user') {
-        const userParts = [
+  // A unique prefix for all logs within this function call for easy tracing
+  try {
+    // 1. Get intelligent conversation context
+    const contextData = await buildIntelligentContext(userId, sessionId, currentMessage);
+    const geminiContents = [];
+    // 2. Start with system prompt if provided
+    if (systemPrompt) {
+      geminiContents.push({
+        role: 'user',
+        parts: [
           {
-            text: msg.content || ''
+            text: systemPrompt
           }
-        ];
-        // Add image if present
-        if (msg.image_url && msg.image_mime_type) {
-          // Note: We can't directly add images from URLs to Gemini,
-          // so we include a reference in the text
-          userParts[0].text += `\n[User shared an image: ${msg.image_url}]`;
-        }
-        geminiContents.push({
-          role: 'user',
-          parts: userParts
-        });
-      } else if (msg.role === 'assistant' || msg.role === 'model') {
-        geminiContents.push({
-          role: 'model',
-          parts: [
+        ]
+      });
+      // The model's first turn should be an acknowledgement or start of the conversation
+      geminiContents.push({
+        role: 'model',
+        parts: [
+          {
+            text: 'OK.'
+          }
+        ] // A simple acknowledgement helps prime the model
+      });
+    }
+    // 3. Add conversation summary if available
+    if (contextData.conversationSummary) {
+      geminiContents.push({
+        role: 'user',
+        parts: [
+          {
+            text: `CONVERSATION CONTEXT SUMMARY:\n${contextData.conversationSummary}\n\n[The above is a summary of earlier messages. The following are recent messages:]`
+          }
+        ]
+      });
+      // Add a model part to acknowledge the context
+      geminiContents.push({
+        role: 'model',
+        parts: [
+          {
+            text: 'Acknowledged. I have reviewed the conversation summary.'
+          }
+        ]
+      });
+    }
+    // 4. Add recent conversation history
+    if (contextData.recentMessages && contextData.recentMessages.length > 0) {
+      for (const msg of contextData.recentMessages) {
+        if (msg.role === 'user') {
+          const userParts = [
             {
               text: msg.content || ''
             }
-          ]
-        });
-      }
-    }
-  }
-  // Add current message with full content
-  if (currentMessage || files.length > 0 || attachedContext) {
-    const currentMessageParts = [];
-    if (currentMessage) {
-      currentMessageParts.push({
-        text: currentMessage
-      });
-    }
-    if (attachedContext) {
-      currentMessageParts.push({
-        text: `\n\nATTACHED CONTEXT:\n${attachedContext}`
-      });
-    }
-    // Add processed file content
-    for (const file of files) {
-      if (file.type === 'image' && file.data) {
-        currentMessageParts.push({
-          inlineData: {
-            mimeType: file.mimeType,
-            data: file.data
+          ];
+          if (msg.image_url && msg.image_mime_type) {
+            // Note: Including a text reference for images in past messages
+            userParts[0].text += `\n[User previously shared an image: ${msg.image_url}]`;
           }
-        });
-      } else if (file.content) {
-        const fileTypeLabel = file.type.toUpperCase();
+          geminiContents.push({
+            role: 'user',
+            parts: userParts
+          });
+        } else if (msg.role === 'assistant' || msg.role === 'model') {
+          geminiContents.push({
+            role: 'model',
+            parts: [
+              {
+                text: msg.content || ''
+              }
+            ]
+          });
+        }
+      }
+    }
+    // 5. Add current message with full content, files, and context
+    if (currentMessage || files.length > 0 || attachedContext) {
+      const currentMessageParts = [];
+      // Add main text message
+      if (currentMessage) {
         currentMessageParts.push({
-          text: `\n\n[File: ${file.name} (${fileTypeLabel}) Content Start]\n${file.content}\n[File Content End]`
+          text: currentMessage
+        });
+      }
+      // Add attached context from documents/notes
+      if (attachedContext) {
+        currentMessageParts.push({
+          text: `\n\nATTACHED CONTEXT:\n${attachedContext}`
+        });
+      }
+      // Add processed file content (images, text, etc.)
+      if (files.length > 0) {
+        for (const file of files) {
+          if (file.type === 'image' && file.data) {
+            currentMessageParts.push({
+              inlineData: {
+                mimeType: file.mimeType,
+                data: file.data
+              }
+            });
+          } else if (file.content) {
+            const fileTypeLabel = file.type.toUpperCase();
+            currentMessageParts.push({
+              text: `\n\n[File: ${file.name} (${fileTypeLabel}) Content Start]\n${file.content}\n[File Content End]`
+            });
+          }
+        }
+      }
+      if (currentMessageParts.length > 0) {
+        geminiContents.push({
+          role: 'user',
+          parts: currentMessageParts
         });
       }
     }
-    if (currentMessageParts.length > 0) {
-      geminiContents.push({
-        role: 'user',
-        parts: currentMessageParts
-      });
-    }
+    return {
+      contents: geminiContents,
+      contextInfo: contextData
+    };
+  } catch (error) {
+    // Log the error with the contextual prefix for easy debugging
+    // Re-throw the error so the calling function (e.g., the server handler) can handle it appropriately
+    throw error;
   }
-  console.log(`Built conversation context with ${contextData.totalMessages} total messages (${contextData.recentMessages?.length || 0} recent, ${contextData.summarizedMessages || 0} summarized)`);
-  return {
-    contents: geminiContents,
-    contextInfo: contextData
-  };
 }
 /**
 * Main server handler
