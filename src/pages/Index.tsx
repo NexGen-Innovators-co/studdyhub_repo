@@ -21,7 +21,7 @@ import { useAudioProcessing } from '../hooks/useAudioProcessing';
 import { insertUserMessage, requestAIResponse } from '../services/messageServices';
 import { LoadingScreen } from '@/components/bookloader';
 // Optimized constants
-const MAX_HISTORY_MESSAGES = 30;
+const MAX_HISTORY_MESSAGES = 1000;
 const CHAT_SESSIONS_PER_PAGE = 15;
 const CHAT_MESSAGES_PER_PAGE = 25;
 
@@ -906,10 +906,9 @@ const Index = () => {
         lastUserMessageContent,
         lastUserMessage.attachedDocumentIds,
         lastUserMessage.attachedNoteIds,
-        lastUserMessage.imageUrl,
-        lastUserMessage.imageMimeType,
         undefined, // imageDataBase64 is not passed for regeneration
-        lastAssistantMessage.id
+        lastAssistantMessage.id,
+        undefined, //attachedFiles
       );
     } catch (error) {
       console.error('Error regenerating response:', error);
@@ -951,10 +950,9 @@ const Index = () => {
         originalUserMessageContent,
         lastUserMessage.attachedDocumentIds,
         lastUserMessage.attachedNoteIds,
-        lastUserMessage.imageUrl,
-        lastUserMessage.imageMimeType,
         undefined, // imageDataBase64 is not passed for retry
-        failedAiMessageId
+        failedAiMessageId,
+        undefined, //attachedFiles
       );
     } catch (error) {
       console.error('Error retrying message:', error);
@@ -1269,43 +1267,43 @@ const Index = () => {
     ? 'hidden lg:block'
     : "flex  items-center  sm:hidden justify-between w-full p-0 sm:p-0  shadow-none bg-transparent border-none"; // Hide on other tabs for larger screens
 
-  // Real-time listener for chat messages
-  useEffect(() => {
-    if (!user) return;
+  // // Real-time listener for chat messages
+  // useEffect(() => {
+  //   if (!user) return;
 
-    const messagesChannel = supabase
-      .channel(`chat_messages_user_${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
-        (payload) => {
-          const newMessage = payload.new as Message;
-          setChatMessages(prevMessages => {
-            if (!prevMessages.some(msg => msg.id === newMessage.id)) {
-              return [...prevMessages, newMessage].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-            }
-            return prevMessages;
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
-        (payload) => {
-          const updatedMessage = payload.new as Message;
-          setChatMessages(prevMessages =>
-            prevMessages.map(msg =>
-              msg.id === updatedMessage.id ? updatedMessage : msg
-            ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-          );
-        }
-      )
-      .subscribe();
+  //   const messagesChannel = supabase
+  //     .channel(`chat_messages_user_${user.id}`)
+  //     .on(
+  //       'postgres_changes',
+  //       { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
+  //       (payload) => {
+  //         const newMessage = payload.new as Message;
+  //         setChatMessages(prevMessages => {
+  //           if (!prevMessages.some(msg => msg.id === newMessage.id)) {
+  //             return [...prevMessages, newMessage].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  //           }
+  //           return prevMessages;
+  //         });
+  //       }
+  //     )
+  //     .on(
+  //       'postgres_changes',
+  //       { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
+  //       (payload) => {
+  //         const updatedMessage = payload.new as Message;
+  //         setChatMessages(prevMessages =>
+  //           prevMessages.map(msg =>
+  //             msg.id === updatedMessage.id ? updatedMessage : msg
+  //           ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  //         );
+  //       }
+  //     )
+  //     .subscribe();
 
-    return () => {
-      messagesChannel.unsubscribe();
-    };
-  }, [user, setChatMessages]);
+  //   return () => {
+  //     messagesChannel.unsubscribe();
+  //   };
+  // }, [user, setChatMessages]);
 
 
   // Enhanced loading with progressive phases
