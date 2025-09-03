@@ -23,7 +23,7 @@ import * as ReactDOMClient from 'react-dom/client';
 import { HtmlRenderer } from './HtmlRenderer';
 import { MermaidRenderer } from './MermaidRenderer';
 import { SlidesRenderer } from './SlidesRenderer';
-import { ThreeJsRenderer } from './THreeJsRenderer';
+import { ThreeJsRenderer } from './ThreeJsRenderer';
 import { DotRenderer } from './DotRenderer';
 import { ChartJsRenderer } from './ChartJsRenderer';
 import { CodeRenderer } from './CodeRenderer';
