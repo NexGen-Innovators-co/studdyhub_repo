@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import * as ReactDOMClient from 'react-dom/client';
@@ -8,7 +8,7 @@ interface CodeRendererProps {
     language?: string;
 }
 
-export const CodeRenderer: React.FC<CodeRendererProps> = ({ codeContent, language }) => {
+export const CodeRenderer: React.FC<CodeRendererProps> = memo(({ codeContent, language }) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -52,4 +52,4 @@ export const CodeRenderer: React.FC<CodeRendererProps> = ({ codeContent, languag
     return (
         <div ref={containerRef} className="w-full h-full" />
     );
-};
+});

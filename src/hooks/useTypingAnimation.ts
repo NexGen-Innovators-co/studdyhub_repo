@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface UseTypingAnimationProps {
   text: string;
@@ -40,71 +40,76 @@ export const useTypingAnimation = ({
   const [isTyping, setIsTyping] = useState(false);
   const [currentBlock, setCurrentBlock] = useState<CodeBlock | null>(null);
   const [blockText, setBlockText] = useState('');
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<number>();
   const wordsRef = useRef<string[]>([]);
   const indexRef = useRef(0);
   const detectedBlocksRef = useRef<Set<string>>(new Set());
+  const blocksRef = useRef<CodeBlock[]>([]); // Ref to store detected blocks
+  const wordsPerChunkRef = useRef(Math.max(1, Math.floor(wordsPerSecond / 5))); // Store wordsPerChunk in ref
 
-  const detectBlocks = (text: string): CodeBlock[] => {
-    const blocks: CodeBlock[] = [];
-    let blockIndex = 0;
+  // Memoize the detectBlocks function
+  const detectBlocks = useRef(
+    (text: string): CodeBlock[] => {
+      const blocks: CodeBlock[] = [];
+      let blockIndex = 0;
 
-    const codeBlockRegex = /```([a-z]*)\n([\s\S]*?)\n```/gi;
-    let match;
-    while ((match = codeBlockRegex.exec(text)) !== null) {
-      const language = match[1] || 'text';
-      const innerContent = match[2]; // Content between ```language and ```
-      const fullContent = match[0]; // Full block including fences
-      blocks.push({
-        type: 'code',
-        start: match.index,
-        end: match.index + fullContent.length,
-        content: fullContent,
-        innerContent,
-        language,
-        isFirstBlock: blockIndex === 0,
-        blockIndex
-      });
-      blockIndex++;
-    }
-
-    const mermaidRegex = /(```mermaid\n[\s\S]*?\n```|```mmd\n[\s\S]*?\n```)/gi;
-    let mermaidMatch;
-    while ((mermaidMatch = mermaidRegex.exec(text)) !== null) {
-      const fullContent = mermaidMatch[0];
-      const innerContent = fullContent.slice(fullContent.indexOf('\n') + 1, fullContent.lastIndexOf('\n```'));
-      blocks.push({
-        type: 'mermaid',
-        start: mermaidMatch.index,
-        end: mermaidMatch.index + fullContent.length,
-        content: fullContent,
-        innerContent,
-        isFirstBlock: blockIndex === 0,
-        blockIndex
-      });
-      blockIndex++;
-    }
-
-    const htmlRegex = /(<[^>]+>[\s\S]*?<\/[^>]+>|<[^>]+\/>)/gi;
-    let htmlMatch;
-    while ((htmlMatch = htmlRegex.exec(text)) !== null) {
-      if (htmlMatch[0].length > 20) {
-        const fullContent = htmlMatch[0];
+      const codeBlockRegex = /```([a-z]*)\n([\s\S]*?)\n```/gi;
+      let match;
+      while ((match = codeBlockRegex.exec(text)) !== null) {
+        const language = match[1] || 'text';
+        const innerContent = match[2]; // Content between ```language and ```
+        const fullContent = match[0]; // Full block including fences
         blocks.push({
-          type: 'html',
-          start: htmlMatch.index,
-          end: htmlMatch.index + fullContent.length,
+          type: 'code',
+          start: match.index,
+          end: match.index + fullContent.length,
           content: fullContent,
-          innerContent: fullContent,
+          innerContent,
+          language,
           isFirstBlock: blockIndex === 0,
           blockIndex
         });
         blockIndex++;
       }
-    }
 
-    return blocks.sort((a, b) => a.start - b.start);
-  };
+      const mermaidRegex = /(```mermaid\n[\s\S]*?\n```|```mmd\n[\s\S]*?\n```)/gi;
+      let mermaidMatch;
+      while ((mermaidMatch = mermaidRegex.exec(text)) !== null) {
+        const fullContent = mermaidMatch[0];
+        const innerContent = fullContent.slice(fullContent.indexOf('\n') + 1, fullContent.lastIndexOf('\n```'));
+        blocks.push({
+          type: 'mermaid',
+          start: mermaidMatch.index,
+          end: mermaidMatch.index + fullContent.length,
+          content: fullContent,
+          innerContent,
+          isFirstBlock: blockIndex === 0,
+          blockIndex
+        });
+        blockIndex++;
+      }
+
+      const htmlRegex = /(<[^>]+>[\s\S]*?<\/[^>]+>|<[^>]+\/>)/gi;
+      let htmlMatch;
+      while ((htmlMatch = htmlRegex.exec(text)) !== null) {
+        if (htmlMatch[0].length > 20) {
+          const fullContent = htmlMatch[0];
+          blocks.push({
+            type: 'html',
+            start: htmlMatch.index,
+            end: htmlMatch.index + fullContent.length,
+            content: fullContent,
+            innerContent: fullContent,
+            isFirstBlock: blockIndex === 0,
+            blockIndex
+          });
+          blockIndex++;
+        }
+      }
+
+      return blocks.sort((a, b) => a.start - b.start);
+    }
+  ).current;
 
   useEffect(() => {
     if (!enabled || isAlreadyComplete) {
@@ -113,7 +118,10 @@ export const useTypingAnimation = ({
       return;
     }
 
+    // Detect blocks only once when the text prop changes
     const blocks = detectBlocks(text);
+    blocksRef.current = blocks; // Store blocks in the ref
+
     const words = text.split(/(\s+)/);
     wordsRef.current = words;
 
@@ -136,10 +144,10 @@ export const useTypingAnimation = ({
         console.log("Typing complete! Calling onComplete for message ID:", messageId); // ADD THIS LINE
         onComplete?.(messageId);
         return;
-        }
+      }
 
       const currentPosition = words.slice(0, indexRef.current).join('').length;
-      const enteringBlock = blocks.find(block =>
+      const enteringBlock = blocksRef.current.find(block =>
         currentPosition >= block.start &&
         currentPosition < block.end &&
         !detectedBlocksRef.current.has(`${block.start}-${block.end}`)
@@ -158,13 +166,10 @@ export const useTypingAnimation = ({
         if (autoTypeInPanel) {
           const renderingText = enteringBlock.isFirstBlock ? "Rendering..." : "Loading...";
           setDisplayedText(prev => prev + ` \n<div class="block mx-2 p-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 w-full">
-            <div class="flex items-center space-x-2">
-              <div class="animate-pulse w-2 h-2 bg-blue-500 rounded-full"></div>
-              <div class="animate-pulse w-2 h-2 bg-blue-500 rounded-full" style="animation-delay: 0.2s"></div>
-              <div class="animate-pulse w-2 h-2 bg-blue-500 rounded-full" style="animation-delay: 0.4s"></div>
-              <span class="text-sm text-gray-500">${renderingText}</span>
-            </div>
-          </div>\n`);
+<div class="flex items-center space-x-2">
+<span class="text-sm text-gray-500">${renderingText}</span>
+</div>
+</div>\n`);
         }
 
         if (enteringBlock.isFirstBlock && autoTypeInPanel) {
@@ -186,14 +191,13 @@ export const useTypingAnimation = ({
           indexRef.current = i;
           setCurrentBlock(null); // Clear current block after processing
           setBlockText(''); // Clear blockText
-          timeoutRef.current = setTimeout(typeNextChunk, 50); // Move quickly past the block
+          timeoutRef.current = window.setTimeout(typeNextChunk, 50); // Move quickly past the block
           return; // Skip remaining word processing for this iteration
         }
       }
 
       // Determine the number of words to process in this chunk
-      const wordsPerChunk = Math.max(1, Math.floor(wordsPerSecond / 5)); // Adjust divisor as needed
-      const chunkWords = words.slice(indexRef.current, indexRef.current + wordsPerChunk);
+      const chunkWords = words.slice(indexRef.current, indexRef.current + wordsPerChunkRef.current);
       const nextChunk = chunkWords.join('');
 
       // Determine where the typing should happen
@@ -227,17 +231,17 @@ export const useTypingAnimation = ({
       const actualWordsInChunk = chunkWords.filter(word => word?.trim().length > 0).length;
       const delay = actualWordsInChunk > 0 ? (1000 / wordsPerSecond) * actualWordsInChunk : 50;
 
-      timeoutRef.current = setTimeout(typeNextChunk, delay);
+      timeoutRef.current = window.setTimeout(typeNextChunk, delay);
     };
 
-    timeoutRef.current = setTimeout(typeNextChunk, 200);
+    timeoutRef.current = window.setTimeout(typeNextChunk, 200);
 
     return () => {
       if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+        window.clearTimeout(timeoutRef.current);
       }
     };
-  }, [text, messageId, wordsPerSecond, enabled, onComplete, isAlreadyComplete, onBlockDetected, onBlockUpdate, onBlockEnd, autoTypeInPanel]);
+  }, [text, messageId, wordsPerSecond, enabled, onComplete, isAlreadyComplete, onBlockDetected, onBlockUpdate, onBlockEnd, autoTypeInPanel, detectBlocks]);
 
   return {
     displayedText,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { AlertTriangle, Copy, Check, Loader2, Maximize2, X, RefreshCw, ChevronDown, ChevronUp, Image, FileText, BookOpen, StickyNote, Sparkles } from 'lucide-react';
 import { Button } from '../../ui/button';
 import ReactMarkdown from 'react-markdown';
@@ -28,6 +28,22 @@ interface MemoizedMarkdownRendererProps {
   isDiagramPanelOpen: boolean;
   onDiagramCodeUpdate: (messageId: string, newCode: string) => Promise<void>; // Add this line
 }
+
+// Define a separate memoized component for ReactMarkdown
+const MemoizedReactMarkdown = memo(
+  ({ content, components }: { content: string; components: any }) => {
+    return (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        components={components}
+      >
+        {content}
+      </ReactMarkdown>
+    );
+  }
+);
+
 export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> = memo(({
   content,
   messageId,
@@ -52,7 +68,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   const { displayedText, isTyping } = useTypingAnimation({
     text: content,
     messageId,
-    wordsPerSecond: 80,
+    wordsPerSecond: 10,
     enabled: enableTyping && !isUserMessage && isLastMessage,
     onComplete: onTypingComplete,
     isAlreadyComplete: isAlreadyTyped,
@@ -90,102 +106,102 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
 
   let blockIndex = 0;
 
+  // Memoize the components object
+  const components = useMemo(() => ({
+    code: (props: any) => {
+      const isFirstBlockLocal = blockIndex === 0;
+      blockIndex++;
+      return (
+        <CodeBlock
+          {...props}
+          onMermaidError={onMermaidError}
+          onSuggestAiCorrection={onSuggestAiCorrection}
+          onViewDiagram={onViewDiagram}
+          isFirstBlock={isFirstBlockLocal}
+          autoTypeInPanel={autoTypeInPanel}
+          isDiagramPanelOpen={isDiagramPanelOpen}
+          onDiagramCodeUpdate={(newCode) => onDiagramCodeUpdate(messageId, newCode)}
+          isTyping={enableTyping && !isUserMessage && isLastMessage && !isAlreadyTyped}
+        />
+      );
+    },
+    h1: (props) => (
+      <h1 className={`text-xl sm:text-2xl font-semibold ${headingColorClass} mt-6 sm:mt-8 mb-3 sm:mb-4 leading-tight font-claude`} {...props} />
+    ),
+    h2: (props) => (
+      <h2 className={`text-lg sm:text-xl font-semibold ${headingColorClass} mt-5 sm:mt-6 mb-2 sm:mb-3 leading-tight font-claude`} {...props} />
+    ),
+    h3: (props) => (
+      <h3 className={`text-base sm:text-lg font-semibold ${headingColorClass} mt-4 sm:mt-5 mb-2 leading-tight font-claude`} {...props} />
+    ),
+    h4: (props) => (
+      <h4 className={`text-sm sm:text-base font-semibold ${headingColorClass} mt-3 sm:mt-4 mb-1 sm:mb-2 leading-tight font-claude`} {...props} />
+    ),
+    h5: (props) => (
+      <h5 className={`text-sm font-semibold ${headingColorClass} mt-3 mb-1 leading-tight font-claude`} {...props} />
+    ),
+    h6: (props) => (
+      <h6 className={`text-sm font-medium ${headingColorClass} mt-2 mb-1 leading-tight font-claude`} {...props} />
+    ),
+    p: (props) => (
+      <p className={`${textColorClass} leading-relaxed mb-3 sm:mb-4 last:mb-0 font-claude text-sm sm:text-base`} {...props} />
+    ),
+    a: (props) => (
+      <a className={`${linkColorClass} transition-colors font-claude break-words`} {...props} />
+    ),
+    ul: (props) => (
+      <ul className={`list-disc ml-4 sm:ml-6 mb-3 sm:mb-4 space-y-1 ${textColorClass} font-claude text-sm sm:text-base`} {...props} />
+    ),
+    ol: (props) => (
+      <ol className={`list-decimal ml-4 sm:ml-6 mb-3 sm:mb-4 space-y-1 ${textColorClass} font-claude text-sm sm:text-base`} {...props} />
+    ),
+    li: (props) => (
+      <li className="leading-relaxed font-claude" {...props} />
+    ),
+    blockquote: (props) => (
+      <blockquote className={`border-l-4 ${blockquoteBgClass} pl-3 sm:pl-4 py-2 my-3 sm:my-4 ${blockquoteTextColorClass} rounded-r font-claude text-sm sm:text-base`} {...props} />
+    ),
+    table: (props) => (
+      <div className="my-4 sm:my-6 -mx-2 sm:-mx-0">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+          <table className="w-full min-w-full border-collapse bg-white dark:bg-gray-900 font-claude text-sm sm:text-base" {...props} />
+        </div>
+      </div>
+    ),
+    thead: (props) => (
+      <thead className="bg-gray-50 dark:bg-gray-800" {...props} />
+    ),
+    th: (props) => (
+      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-gray-100 font-claude text-xs sm:text-sm" {...props} />
+    ),
+    tbody: (props) => (
+      <tbody className="divide-y divide-gray-200 dark:divide-gray-700" {...props} />
+    ),
+    tr: (props) => (
+      <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50" {...props} />
+    ),
+    td: (props) => (
+      <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900 dark:text-gray-100 font-claude text-xs sm:text-sm break-words" {...props} />
+    ),
+    hr: (props) => (
+      <hr className="my-6 sm:my-8 border-t border-gray-200 dark:border-gray-700" {...props} />
+    ),
+    strong: (props) => (
+      <strong className={`font-semibold ${textColorClass} font-claude`} {...props} />
+    ),
+    em: (props) => (
+      <em className={`italic ${textColorClass} font-claude`} {...props} />
+    ),
+  }), [textColorClass, linkColorClass, headingColorClass, blockquoteTextColorClass, blockquoteBgClass, onMermaidError, onSuggestAiCorrection, onViewDiagram, autoTypeInPanel, isDiagramPanelOpen, onDiagramCodeUpdate, enableTyping, isUserMessage, isLastMessage, isAlreadyTyped]);
+
   return (
     <CodeBlockErrorBoundary>
       <div className={`relative ${isUserMessage ? 'sm:max-w-[50%] max-w-2xl' : 'max-w-[100vw] sm:max-w-full'}`}>
         <div className="font-claude">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeRaw]}
-            components={{
-              code: (props: any) => {
-                const isFirstBlockLocal = blockIndex === 0;
-                blockIndex++;
-                return (
-                  <CodeBlock
-                    {...props}
-                    onMermaidError={onMermaidError}
-                    onSuggestAiCorrection={onSuggestAiCorrection}
-                    onViewDiagram={onViewDiagram}
-                    isFirstBlock={isFirstBlockLocal}
-                    autoTypeInPanel={autoTypeInPanel}
-                    isDiagramPanelOpen={isDiagramPanelOpen}
-                    onDiagramCodeUpdate={(newCode) => onDiagramCodeUpdate(messageId, newCode)}
-                    isTyping={enableTyping && !isUserMessage && isLastMessage && !isAlreadyTyped}
-                  />
-                );
-              },
-              h1: (props) => (
-                <h1 className={`text-xl sm:text-2xl font-semibold ${headingColorClass} mt-6 sm:mt-8 mb-3 sm:mb-4 leading-tight font-claude`} {...props} />
-              ),
-              h2: (props) => (
-                <h2 className={`text-lg sm:text-xl font-semibold ${headingColorClass} mt-5 sm:mt-6 mb-2 sm:mb-3 leading-tight font-claude`} {...props} />
-              ),
-              h3: (props) => (
-                <h3 className={`text-base sm:text-lg font-semibold ${headingColorClass} mt-4 sm:mt-5 mb-2 leading-tight font-claude`} {...props} />
-              ),
-              h4: (props) => (
-                <h4 className={`text-sm sm:text-base font-semibold ${headingColorClass} mt-3 sm:mt-4 mb-1 sm:mb-2 leading-tight font-claude`} {...props} />
-              ),
-              h5: (props) => (
-                <h5 className={`text-sm font-semibold ${headingColorClass} mt-3 mb-1 leading-tight font-claude`} {...props} />
-              ),
-              h6: (props) => (
-                <h6 className={`text-sm font-medium ${headingColorClass} mt-2 mb-1 leading-tight font-claude`} {...props} />
-              ),
-              p: (props) => (
-                <p className={`${textColorClass} leading-relaxed mb-3 sm:mb-4 last:mb-0 font-claude text-sm sm:text-base`} {...props} />
-              ),
-              a: (props) => (
-                <a className={`${linkColorClass} transition-colors font-claude break-words`} {...props} />
-              ),
-              ul: (props) => (
-                <ul className={`list-disc ml-4 sm:ml-6 mb-3 sm:mb-4 space-y-1 ${textColorClass} font-claude text-sm sm:text-base`} {...props} />
-              ),
-              ol: (props) => (
-                <ol className={`list-decimal ml-4 sm:ml-6 mb-3 sm:mb-4 space-y-1 ${textColorClass} font-claude text-sm sm:text-base`} {...props} />
-              ),
-              li: (props) => (
-                <li className="leading-relaxed font-claude" {...props} />
-              ),
-              blockquote: (props) => (
-                <blockquote className={`border-l-4 ${blockquoteBgClass} pl-3 sm:pl-4 py-2 my-3 sm:my-4 ${blockquoteTextColorClass} rounded-r font-claude text-sm sm:text-base`} {...props} />
-              ),
-              table: (props) => (
-                <div className="my-4 sm:my-6 -mx-2 sm:-mx-0">
-                  <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                    <table className="w-full min-w-full border-collapse bg-white dark:bg-gray-900 font-claude text-sm sm:text-base" {...props} />
-                  </div>
-                </div>
-              ),
-              thead: (props) => (
-                <thead className="bg-gray-50 dark:bg-gray-800" {...props} />
-              ),
-              th: (props) => (
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-gray-100 font-claude text-xs sm:text-sm" {...props} />
-              ),
-              tbody: (props) => (
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700" {...props} />
-              ),
-              tr: (props) => (
-                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50" {...props} />
-              ),
-              td: (props) => (
-                <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900 dark:text-gray-100 font-claude text-xs sm:text-sm break-words" {...props} />
-              ),
-              hr: (props) => (
-                <hr className="my-6 sm:my-8 border-t border-gray-200 dark:border-gray-700" {...props} />
-              ),
-              strong: (props) => (
-                <strong className={`font-semibold ${textColorClass} font-claude`} {...props} />
-              ),
-              em: (props) => (
-                <em className={`italic ${textColorClass} font-claude`} {...props} />
-              ),
-            }}
-          >
-            {contentToRender}
-          </ReactMarkdown>
+          <MemoizedReactMarkdown
+            content={contentToRender}
+            components={components}
+          />
         </div>
 
         {isTyping && (
