@@ -6,7 +6,7 @@ import { Schedule } from './Schedule';
 import AIChat from './aiChat/Components/AiChat';
 import { DocumentUpload } from './DocumentUpload';
 import { UserSettings } from './UserSettings';
-import Dashboard from './Dashboard'; // FIXED: Import the Dashboard component
+import Dashboard from './Dashboard';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
@@ -24,9 +24,8 @@ interface ChatSession {
   message_count?: number;
 }
 
-// FIXED: Updated TabContentProps to include dashboard and navigation handlers
 interface TabContentProps {
-  activeTab: 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social'; // Added 'social'
+  activeTab: 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social';
 
   filteredNotes: Note[];
   activeNote: Note | null;
@@ -49,11 +48,9 @@ interface TabContentProps {
   onUpdateScheduleItem: (item: ScheduleItem) => Promise<void>;
   onDeleteScheduleItem: (id: string) => Promise<void>;
 
-  // FIXED: Dashboard navigation handlers
   onNavigateToTab?: (tab: string) => void;
   onCreateNew?: (type: 'note' | 'recording' | 'schedule' | 'document') => void;
 
-  // FIXED: Updated onSendMessage to include attachedFiles parameter
   onSendMessage: (
     message: string,
     attachedDocumentIds?: string[],
@@ -86,7 +83,6 @@ interface TabContentProps {
   onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
   onSelectedDocumentIdsChange: React.Dispatch<React.SetStateAction<string[]>>;
   selectedDocumentIds: string[];
-  // onNewMessage: (message: Message) => void;
   isNotesHistoryOpen: boolean;
   onRegenerateResponse: (lastUserMessageContent: string) => Promise<void>;
   onDeleteMessage: (messageId: string) => Promise<void>;
@@ -98,15 +94,15 @@ interface TabContentProps {
   isLoadingSessionMessages: boolean;
   onReprocessAudio: (audioUrl: string, documentId: string) => Promise<void>;
   onDeleteRecording: (recordingId: string, documentId: string | null, audioUrl: string | null) => Promise<void>;
-  onMessageUpdate: (message: Message) => void; // New prop for message updates
+  onMessageUpdate: (message: Message) => void;
 
-  // Infinite scroll controls
   hasMoreDocuments: boolean;
   isLoadingDocuments: boolean;
   onLoadMoreDocuments: () => void;
   hasMoreRecordings: boolean;
   isLoadingRecordings: boolean;
   onLoadMoreRecordings: () => void;
+  handleReplaceOptimisticMessage: (tempId: string, newMessage: Message) => void;
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -183,7 +179,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     chatSessions: props.chatSessions,
     isLoading: isAILoading,
     setIsLoading: props.setIsAILoading,
-    // onNewMessage: props.onNewMessage,
     onDeleteMessage: props.onDeleteMessage,
     onRegenerateResponse: props.onRegenerateResponse,
     onRetryFailedMessage: props.onRetryFailedMessage,
@@ -195,7 +190,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onDocumentUpdated: props.onDocumentUpdated,
     isLoadingSessionMessages: props.isLoadingSessionMessages,
     learningStyle: userProfile?.learning_style || 'visual',
-    learningPreferences: userProfile?.learning_preferences || {}, // Ensure this is always an object
+    learningPreferences: userProfile?.learning_preferences || {},
     onSendMessageToBackend: async (
       messageContent: string,
       attachedDocumentIds?: string[],
@@ -211,7 +206,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         processing_error: string | null;
       }>
     ) => {
-      // Handle backward compatibility for single image
       let imageUrl: string | undefined;
       let imageMimeType: string | undefined;
       let imageDataBase64: string | undefined;
@@ -219,13 +213,12 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       if (attachedFiles && attachedFiles.length > 0) {
         const imageFile = attachedFiles.find(file => file.type === 'image');
         if (imageFile && imageFile.data) {
-          imageUrl = `data:${imageFile.mimeType};base64,${imageFile.data}`;
+          imageUrl = imageFile.data;
           imageMimeType = imageFile.mimeType;
-          imageDataBase64 = imageUrl;
+          imageDataBase64 = imageFile.data;
         }
       }
 
-      // FIXED: Now properly pass attachedFiles to the handleSubmit function
       await props.onSendMessage(
         messageContent,
         attachedDocumentIds,
@@ -234,10 +227,12 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         imageMimeType,
         imageDataBase64,
         null, // aiMessageIdToUpdate
-        attachedFiles // FIXED: Pass attachedFiles as the 8th parameter
+        attachedFiles
       );
     },
-    onMessageUpdate: props.onMessageUpdate, // Pass new prop here
+    onMessageUpdate: props.onMessageUpdate,
+    onReplaceOptimisticMessage: props.handleReplaceOptimisticMessage
+
   }),
     [
       props.activeChatSessionId,
@@ -254,7 +249,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       props.chatSessions,
       isAILoading,
       props.setIsAILoading,
-      // props.onNewMessage,
       props.onDeleteMessage,
       props.onRegenerateResponse,
       props.onRetryFailedMessage,
@@ -267,7 +261,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       props.isLoadingSessionMessages,
       userProfile?.learning_style,
       userProfile?.learning_preferences,
-      props.onMessageUpdate, // Add to dependencies
+      props.onMessageUpdate,
     ]);
 
   const documentsProps = useMemo(() => ({
@@ -286,7 +280,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onClose: onToggleNotesHistory,
   }), [props.filteredNotes, props.activeNote, props.onNoteSelect, props.onNoteDelete, isNotesHistoryOpen, onToggleNotesHistory]);
 
-  // FIXED: Dashboard props
   const dashboardProps = useMemo(() => ({
     notes: props.filteredNotes,
     recordings: props.recordings ?? [],
@@ -308,7 +301,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   ]);
 
   switch (activeTab) {
-    case 'dashboard': // FIXED: Add dashboard case
+    case 'dashboard':
       return (
         <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>
@@ -347,7 +340,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
                 <div className="text-center">
-                  <div className="text-4xl sm:text-6xl mb-4">📝</div>
+                  <div className="text-4xl sm:text-6xl mb-4"> </div>
                   <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
                   <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
                 </div>

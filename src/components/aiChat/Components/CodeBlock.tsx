@@ -114,31 +114,31 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
         setEditedCode(codeContent); // Initialize editedCode with codeContent
     }, [codeContent]);
 
-    const handleCopyCode = async () => {
+    const handleCopyCode = useCallback(async () => {
         await copy(editedCode); // Copy editedCode instead of codeContent
-    };
+    }, [copied, copy, editedCode]);
 
-    const handleCodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const handleCodeChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setEditedCode(e.target.value);
-    };
+    }, []);
 
-    const handleUpdateDiagram = () => {
+    const handleUpdateDiagram = useCallback(() => {
         onDiagramCodeUpdate(editedCode); // Call the callback with the edited code
         onViewDiagram(lang as any, editedCode); // Refresh the diagram in the panel
         setIsEditing(false); // Exit edit mode
-    };
+    }, [editedCode, lang, onDiagramCodeUpdate, onViewDiagram]);
     useEffect(() => {
         if (isEditing) {
             setShowRawCode(true);
         }
     }, [isEditing]);
-    const handleToggleRawCode = () => {
+    const handleToggleRawCode = useCallback(() => {
         setShowRawCode(!showRawCode);
-    };
-    const handleSaveCode = () => {
+    }, [showRawCode]);
+    const handleSaveCode = useCallback(() => {
         onViewDiagram(lang as any, editedCode);
         setIsEditing(false);
-    };
+    }, [editedCode, lang, onViewDiagram]);
 
     // Updated effect to show raw code when typing and panel is not open
     useEffect(() => {
@@ -157,7 +157,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
     const shouldShowRawCode = showRawCode || (isTyping && !inline && lang && !isDiagramPanelOpen);
 
     // Render raw code with syntax highlighting using react-syntax-highlighter
-    if (!inline && shouldShowRawCode) {
+    const renderRawCode = useCallback(() => {
         return (
             <div className="relative my-4 sm:my-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 w-full">
                 <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
@@ -178,7 +178,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setShowRawCode(!showRawCode)}
+                            onClick={handleToggleRawCode}
                             className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-gray-200 dark:hover:bg-gray-700"
                             title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
                             aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
@@ -212,10 +212,10 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                 </div>
             </div>
         );
-    }
+    }, [codeContent, copied, handleCopyCode, handleToggleRawCode, lang, showRawCode]);
 
     // Handle special cases like HTML, Mermaid, Chart.js, Three.js, and DOT
-    if (!inline && lang === 'html') {
+    const renderHTMLBlock = useCallback(() => {
         return (
             <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-600">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -247,7 +247,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setShowRawCode(!showRawCode)}
+                            onClick={handleToggleRawCode}
                             className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-gray-200 dark:hover:bg-gray-700"
                             title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
                             aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
@@ -258,10 +258,10 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                 </div>
             </div>
         );
-    }
+    }, [codeContent, copied, handleCopyCode, handleToggleRawCode, lang, onViewDiagram, showRawCode]);
 
     // Handle diagram blocks (mermaid, chartjs, threejs, dot)
-    const createDiagramBlock = (title: string, type: any) => (
+    const createDiagramBlock = useCallback((title: string, type: any) => (
         <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-600">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
@@ -292,7 +292,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setShowRawCode(!showRawCode)}
+                        onClick={handleToggleRawCode}
                         className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-gray-200 dark:hover:bg-gray-700"
                         title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
                         aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
@@ -302,79 +302,45 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                 </div>
             </div>
         </div>
-    );
+    ), [codeContent, copied, handleCopyCode, handleToggleRawCode, lang, onViewDiagram, showRawCode]);
 
-    if (!inline && lang === 'mermaid') {
-        return createDiagramBlock('Mermaid Diagram', 'mermaid');
-    }
+    const renderDiagramBlock = useCallback((title: string, type: any) => {
+        return createDiagramBlock(title, type);
+    }, [createDiagramBlock]);
 
-    if (!inline && lang === 'chartjs') {
-        return createDiagramBlock('Chart.js Graph', 'chartjs');
-    }
-
-    if (!inline && lang === 'threejs') {
-        return createDiagramBlock('Three.js 3D Scene', 'threejs');
-    }
-
-    if (!inline && lang === 'dot') {
-        return createDiagramBlock('DOT Graph', 'dot');
-    }
-
-    // Handle generic code blocks - now they will show raw code when typing
-    if (!inline && lang) {
-        return (
-            <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-600">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
-                        <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                        <span className="font-medium text-sm sm:text-base">{lang.toUpperCase()} Code</span>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onViewDiagram && onViewDiagram('code', codeContent, lang)}
-                            className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm flex-1 sm:flex-initial"
-                        >
-                            <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                            <span className="hidden xs:inline">View Code</span>
-                            <span className="xs:hidden">View</span>
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleCopyCode}
-                            className="text-gray-500 hover:text-green-400 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-green-400 dark:hover:bg-gray-700"
-                            title="Copy code"
-                            aria-label="Copy code to clipboard"
-                        >
-                            {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowRawCode(!showRawCode)}
-                            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-gray-200 dark:hover:bg-gray-700"
-                            title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
-                            aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
-                        >
-                            {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
     // Inline code
-    return (
-        <code
-            className="bg-gray-100 text-gray-900 px-1 sm:px-1.5 py-0.5 rounded font-mono text-xs sm:text-sm dark:bg-gray-800 dark:text-gray-100"
-            {...props}
-        >
-            {children}
-        </code>
-    );
+    const renderInlineCode = useCallback(() => {
+        return (
+            <code
+                className="bg-gray-100 text-gray-900 px-1 sm:px-1.5 py-0.5 rounded font-mono text-xs sm:text-sm dark:bg-gray-800 dark:text-gray-100"
+                {...props}
+            >
+                {children}
+            </code>
+        );
+    }, [children, props]);
 
+    // Determine the content to render
+    let content;
+    if (!inline && shouldShowRawCode) {
+        content = renderRawCode();
+    } else if (!inline && lang === 'html') {
+        content = renderHTMLBlock();
+    } else if (!inline && lang === 'mermaid') {
+        content = renderDiagramBlock('Mermaid Diagram', 'mermaid');
+    } else if (!inline && lang === 'chartjs') {
+        content = renderDiagramBlock('Chart.js Graph', 'chartjs');
+    } else if (!inline && lang === 'threejs') {
+        content = renderDiagramBlock('Three.js 3D Scene', 'threejs');
+    } else if (!inline && lang === 'dot') {
+        content = renderDiagramBlock('DOT Graph', 'dot');
+    } else if (!inline && lang) {
+        content = renderDiagramBlock(lang.toUpperCase() + ' Code', 'code');
+    } else {
+        content = renderInlineCode();
+    }
+
+    return <>{content}</>;
 });
 
 export { CodeBlock };

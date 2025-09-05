@@ -828,7 +828,7 @@ export const useAppData = () => {
     }
   }, []);
 
-  const setupChatMessageListener = useCallback(async (user: any) => {
+  const setupChatMessageListener = async (user: any) => {
     try {
       const channel = supabase
         .channel(`chat_messages_${user.id}`)
@@ -849,8 +849,8 @@ export const useAppData = () => {
               isError: msg.is_error,
               attachedDocumentIds: msg.attached_document_ids,
               attachedNoteIds: msg.attached_note_ids,
-              imageUrl: msg.image_url,
-              imageMimeType: msg.image_mime_type,
+              image_url: msg.image_url,
+              image_mime_type: msg.image_mime_type,
               session_id: msg.session_id,
               has_been_displayed: msg.has_been_displayed
             });
@@ -904,7 +904,7 @@ export const useAppData = () => {
     } catch (error) {
       console.error('Error setting up chat message listener:', error);
     }
-  }, []);
+  }
 
 
   const setupNotesListener = useCallback(async (user: any) => {

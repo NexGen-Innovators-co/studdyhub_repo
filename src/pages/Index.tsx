@@ -21,20 +21,6 @@ import { useAudioProcessing } from '../hooks/useAudioProcessing';
 import { insertUserMessage, requestAIResponse } from '../services/messageServices';
 import { LoadingScreen } from '@/components/bookloader';
 // Optimized constants
-const MAX_HISTORY_MESSAGES = 1000;
-const CHAT_SESSIONS_PER_PAGE = 15;
-const CHAT_MESSAGES_PER_PAGE = 25;
-
-const extractFirstSentence = (text: string): string => {
-  if (!text || text.trim() === '') return 'New Chat';
-
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-  if (sentences.length === 0) return 'New Chat';
-
-  const firstSentence = sentences[0].trim();
-  return firstSentence.length > 100 ? firstSentence.substring(0, 97) + '...' : firstSentence;
-};
-
 const Index = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -42,6 +28,18 @@ const Index = () => {
   const { sessionId: urlSessionId } = useParams(); // Get sessionId from URL parameters
 
   // Theme management
+  // Optimized constants
+  const MAX_HISTORY_MESSAGES = 1000;
+  const CHAT_SESSIONS_PER_PAGE = 15;
+  const CHAT_MESSAGES_PER_PAGE = 25;
+
+  const extractFirstSentence = useCallback((text: string): string => {
+    if (!text || text.trim() === '') return 'New Chat';
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    if (sentences.length === 0) return 'New Chat';
+    const firstSentence = sentences[0].trim();
+    return firstSentence.length > 100 ? firstSentence.substring(0, 97) + '...' : firstSentence;
+  }, []);
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
@@ -81,11 +79,7 @@ const Index = () => {
     filteredNotes,
     loading: dataLoading,
     quizzes,
-    dataLoading: specificDataLoading,
     dataPagination,
-    loadingPhase,
-    loadingProgress,
-    loadingMessage,
     setNotes,
     setRecordings,
     setScheduleItems,
@@ -149,7 +143,7 @@ const Index = () => {
       case 'settings': return 'settings';
       default: return 'dashboard';
     }
-  }, [location.pathname]) as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings';
+  }, [location.pathname]);
 
   useEffect(() => {
     // FIXED: Cast to the expected type
@@ -159,7 +153,7 @@ const Index = () => {
   // Smart data loading based on tab activation
   useEffect(() => {
     // Only trigger loading if we're past initial loading phase
-    if (loadingPhase.phase === 'complete') {
+    if (!dataLoading) {
       switch (currentActiveTab) {
         case 'dashboard':
           // Dashboard needs overview of all data
@@ -188,7 +182,7 @@ const Index = () => {
           break;
       }
     }
-  }, [currentActiveTab, loadingPhase.phase, loadDataIfNeeded]);
+  }, [currentActiveTab, loadDataIfNeeded, dataLoading]);
 
   // Chat session loading
   const loadChatSessions = useCallback(async () => {
@@ -268,13 +262,13 @@ const Index = () => {
 
       // Merge new messages for the current session without removing existing ones from other sessions
       setChatMessages(prevAllMessages => {
-        const otherSessionMessages = prevAllMessages.filter(m => m.session_id !== sessionId);
+        const otherherSessionMessages = prevAllMessages.filter(m => m.session_id !== sessionId);
         const newMessagesForSession = fetchedMessages.filter(
-          fm => !otherSessionMessages.some(pm => pm.id === fm.id)
+          fm => !otherherSessionMessages.some(pm => pm.id === fm.id)
         );
         // Combine messages from other sessions with new messages for the current session
         // Then add messages from this session, ensuring no duplicates
-        const combinedMessages = [...otherSessionMessages];
+        const combinedMessages = [...otherherSessionMessages];
         newMessagesForSession.forEach(newMessage => {
           if (!combinedMessages.some(m => m.id === newMessage.id)) {
             combinedMessages.push(newMessage);
@@ -344,10 +338,10 @@ const Index = () => {
 
   // Load data when conditions are met
   useEffect(() => {
-    if (user && loadingPhase.phase === 'complete') {
+    if (user) {
       loadChatSessions();
     }
-  }, [user, loadChatSessions, chatSessionsLoadedCount, loadingPhase.phase]);
+  }, [user, loadChatSessions, chatSessionsLoadedCount]);
   const sessionIdFromUrl = useMemo(() => {
     const pathParts = location.pathname.split('/');
     if (pathParts[1] === 'chat' && pathParts[2]) {
@@ -357,12 +351,12 @@ const Index = () => {
   }, [location.pathname]);
 
   useEffect(() => {
-    // console.log('Session restoration check:', { 
-    //   sessionIdFromUrl, 
-    //   activeChatSessionId,
-    //   pathname: location.pathname,
-    //   userExists: !!user,
-    //   chatSessionsLoaded: chatSessions.length > 0
+    // console.log('Session restoration check:', {
+    // sessionIdFromUrl,
+    // activeChatSessionId,
+    // pathname: location.pathname,
+    // userExists: !!user,
+    // chatSessionsLoaded: chatSessions.length > 0
     // });
 
     // If we have a sessionId in URL but no active session set, or if they're different
@@ -451,35 +445,35 @@ const Index = () => {
       setHasMoreMessages(false); // No messages to load for new session
       setIsLoadingSessionMessages(false); // No loading needed
 
-      // Auto-update title based on first AI response (keep this part)
-      const subscription = supabase
-        .channel(`chat_messages:session:${newSession.id}`)
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `session_id=eq.${newSession.id}` },
-          async (payload) => {
-            if (payload.new.role === 'assistant') {
-              const firstSentence = extractFirstSentence(payload.new.content);
-              try {
-                const { error: updateError } = await supabase
-                  .from('chat_sessions')
-                  .update({ title: firstSentence })
-                  .eq('id', newSession.id)
-                  .eq('user_id', user.id);
+      // // Auto-update title based on first AI response (keep this part)
+      // const subscription = supabase
+      //   .channel(`chat_messages:session:${newSession.id}`)
+      //   .on(
+      //     'postgres_changes',
+      //     { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `session_id=eq.${newSession.id}` },
+      //     async (payload) => {
+      //       if (payload.new.role === 'assistant') {
+      //         const firstSentence = extractFirstSentence(payload.new.content);
+      //         try {
+      //           const { error: updateError } = await supabase
+      //             .from('chat_sessions')
+      //             .update({ title: firstSentence })
+      //             .eq('id', newSession.id)
+      //             .eq('user_id', user.id);
 
-                if (updateError) throw updateError;
+      //           if (updateError) throw updateError;
 
-                setChatSessions(prev =>
-                  prev.map(s => (s.id === newSession.id ? { ...s, title: firstSentence } : s))
-                );
-              } catch (updateError) {
-                console.error('Error updating session title:', updateError);
-              }
-              subscription.unsubscribe();
-            }
-          }
-        )
-        .subscribe();
+      //           setChatSessions(prev =>
+      //             prev.map(s => (s.id === newSession.id ? { ...s, title: firstSentence } : s))
+      //           );
+      //         } catch (updateError) {
+      //           console.error('Error updating session title:', updateError);
+      //         }
+      //         subscription.unsubscribe();
+      //       }
+      //     }
+      //   )
+      //   .subscribe();
 
       toast.success('New chat session created!');
       return newSession.id;
@@ -734,7 +728,7 @@ const Index = () => {
             msgParts.push({ text: `\n\nPrevious Context:\n${historicalContext}` });
           }
         }
-        if (msg.imageUrl && msg.imageMimeType) {
+        if (msg.image_url && msg.image_mime_type) {
           // Handle historical image if needed
         }
         chatHistoryForAI.push({ role: msg.role, parts: msgParts });
@@ -767,6 +761,9 @@ const Index = () => {
         },
       });
 
+      console.log('[handleSubmit] Edge Function Response:', data); // Added log
+
+
       if (error) {
         console.error('Edge function error:', error);
         throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
@@ -782,13 +779,13 @@ const Index = () => {
             ? {
               ...session,
               last_message_at: new Date().toISOString(),
-              document_ids: [...new Set([...session.document_ids, ...finalAttachedDocumentIds])]
+              document_ids: [...new Set([...session.document_ids, ...finalAttachedDocumentIds])],
+              title: data.title // Update title from edge function.
             }
             : session
         );
         return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
       });
-
       if (processedFiles.length > 0) {
         const successful = processedFiles.filter(f => f.processing_status === 'completed').length;
         const failed = processedFiles.filter(f => f.processing_status === 'failed').length;
@@ -1088,7 +1085,6 @@ const Index = () => {
     setIsSidebarOpen(false);
   }, [navigate, setIsSidebarOpen, activeChatSessionId]);
 
-
   const headerProps = useMemo(() => ({
     searchQuery,
     onSearchChange: setSearchQuery,
@@ -1143,11 +1139,11 @@ const Index = () => {
     currentTheme,
     handleThemeChange,
     navigate, // Add navigate to dependencies
-    sessionIdFromUrl, // Add sessionIdFromUrl to 
+    sessionIdFromUrl, // Add sessionIdFromUrl to
   ]);
 
   const tabContentProps = useMemo(() => ({
-    activeTab: currentActiveTab,
+    activeTab: currentActiveTab as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social',
     filteredNotes,
     activeNote,
     recordings: recordings ?? [],
@@ -1166,7 +1162,7 @@ const Index = () => {
     onAddScheduleItem: addScheduleItem,
     onUpdateScheduleItem: updateScheduleItem,
     onDeleteScheduleItem: deleteScheduleItem,
-    onSendMessage: handleSubmit,
+    onSendMessage: handleSubmit, // Changed to handleSubmit
     onDocumentUploaded: handleDocumentUploaded,
     onDocumentUpdated: updateDocument,
     onDocumentDeleted: handleDocumentDeleted,
@@ -1198,10 +1194,10 @@ const Index = () => {
     onCreateNew: handleCreateNew,
     // Infinite scroll controls
     hasMoreDocuments: dataPagination.documents.hasMore,
-    isLoadingDocuments: specificDataLoading.documents,
+    isLoadingDocuments: false,
     onLoadMoreDocuments: loadMoreDocuments,
     hasMoreRecordings: dataPagination.recordings.hasMore,
-    isLoadingRecordings: specificDataLoading.recordings,
+    isLoadingRecordings: false,
     onLoadMoreRecordings: loadMoreRecordings,
     onMessageUpdate: handleMessageUpdate,
   }), [
@@ -1253,6 +1249,8 @@ const Index = () => {
     handleNavigateToTab,
     handleCreateNew,
     handleMessageUpdate,
+    dataPagination.documents.hasMore,
+    dataPagination.recordings.hasMore,
   ]);
 
   useEffect(() => {
@@ -1262,119 +1260,108 @@ const Index = () => {
   }, [user, authLoading, navigate]);
 
   const currentPathLocation = useLocation();
-  const isNotesTab = currentPathLocation.pathname.startsWith('/notes');
-  const headerClass = isNotesTab
-    ? 'hidden lg:block'
-    : "flex  items-center  sm:hidden justify-between w-full p-0 sm:p-0  shadow-none bg-transparent border-none"; // Hide on other tabs for larger screens
+  const headerClass = useMemo(() => {
+    const isNotesTab = currentPathLocation.pathname.startsWith('/notes');
+    return isNotesTab
+      ? 'hidden lg:block' : "flex items-center sm:hidden justify-between w-full p-0 sm:p-0 shadow-none bg-transparent border-none";
+  }, [currentPathLocation.pathname]);
 
   // // Real-time listener for chat messages
   // useEffect(() => {
-  //   if (!user) return;
+  // if (!user) return;
 
-  //   const messagesChannel = supabase
-  //     .channel(`chat_messages_user_${user.id}`)
-  //     .on(
-  //       'postgres_changes',
-  //       { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
-  //       (payload) => {
-  //         const newMessage = payload.new as Message;
-  //         setChatMessages(prevMessages => {
-  //           if (!prevMessages.some(msg => msg.id === newMessage.id)) {
-  //             return [...prevMessages, newMessage].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  //           }
-  //           return prevMessages;
-  //         });
-  //       }
-  //     )
-  //     .on(
-  //       'postgres_changes',
-  //       { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
-  //       (payload) => {
-  //         const updatedMessage = payload.new as Message;
-  //         setChatMessages(prevMessages =>
-  //           prevMessages.map(msg =>
-  //             msg.id === updatedMessage.id ? updatedMessage : msg
-  //           ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-  //         );
-  //       }
-  //     )
-  //     .subscribe();
+  // const messagesChannel = supabase
+  // .channel(`chat_messages_user_${user.id}`)
+  // .on(
+  // 'postgres_changes',
+  // { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
+  // (payload) => {
+  // const newMessage = payload.new as Message;
+  // setChatMessages(prevMessages => {
+  // if (!prevMessages.some(msg => msg.id === newMessage.id)) {
+  // return [...prevMessages, newMessage].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  // }
+  // return prevMessages;
+  // });
+  // }
+  // )
+  // .on(
+  // 'postgres_changes',
+  // { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` },
+  // (payload) => {
+  // const updatedMessage = payload.new as Message;
+  // setChatMessages(prevMessages =>
+  // prevMessages.map(msg =>
+  // msg.id === updatedMessage.id ? updatedMessage : msg
+  // ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  // );
+  // }
+  // )
+  // .subscribe();
 
-  //   return () => {
-  //     messagesChannel.unsubscribe();
-  //   };
+  // return () => {
+  // messagesChannel.unsubscribe();
+  // };
   // }, [user, setChatMessages]);
 
 
   // Enhanced loading with progressive phases
-  if (authLoading || dataLoading || loadingPhase.phase !== 'complete') {
-    return (
-      <LoadingScreen
-        progress={loadingProgress}
-        message={loadingMessage}
-        phase={loadingPhase.phase}
-      />
-    );
+  if (authLoading) {
+    return <LoadingScreen message="Authenticating..." progress={50} phase='initial' />;
+  }
+
+  if (dataLoading) {
+    return <LoadingScreen message="Loading data..." progress={80} phase='core' />;
   }
 
   if (!user) {
     return null;
   }
 
-  return (
-    <div className="h-screen flex overflow-hidden bg-transparent dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 "
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+  function handleReplaceOptimisticMessage(tempId: string, newMessage: Message): void {
+    setChatMessages(prevMessages =>
+      prevMessages.map(msg => (msg.id === tempId ? newMessage : msg))
+    );
+  }
 
-      <div
-        className={`${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-      fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
-      transition-transform duration-500 ease-in-out`}
-      >
-        <Sidebar {...sidebarProps} />
+  return (
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      <div className={headerClass}>
+        <Header {...headerProps} />
+
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 bg-transparent border-none shadow-none">
-        <div className={headerClass}>
-          <Header {...headerProps} />
-
-        </div>
-
-        {fileProcessingProgress.processing && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 p-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-blue-700 dark:text-blue-300">
-                {fileProcessingProgress.phase === 'validating' && 'Validating files...'}
-                {fileProcessingProgress.phase === 'processing' && 'Processing files...'}
-                {fileProcessingProgress.phase === 'uploading' && 'Uploading files...'}
-                {fileProcessingProgress.phase === 'complete' && 'Processing complete!'}
-                {fileProcessingProgress.phase !== 'complete' &&
-                  ` (${fileProcessingProgress.completed}/${fileProcessingProgress.total})`
-                }
-              </span>
-              <div className="w-32 bg-blue-200 dark:bg-blue-800 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(fileProcessingProgress.completed / fileProcessingProgress.total) * 100}%`
-                  }}
-                />
-              </div>
+      {fileProcessingProgress.processing && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 p-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-blue-700 dark:text-blue-300">
+              {fileProcessingProgress.phase === 'validating' && 'Validating files...'}
+              {fileProcessingProgress.phase === 'processing' && 'Processing files...'}
+              {fileProcessingProgress.phase === 'uploading' && 'Uploading files...'}
+              {fileProcessingProgress.phase === 'complete' && 'Processing complete!'}
+              {fileProcessingProgress.phase !== 'complete' &&
+                ` (${fileProcessingProgress.completed}/${fileProcessingProgress.total})`
+              }
+            </span>
+            <div className="w-32 bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{
+                  width: `${(fileProcessingProgress.completed / fileProcessingProgress.total) * 100}%`
+                }}
+              />
             </div>
-            {fileProcessingProgress.currentFile && fileProcessingProgress.phase !== 'complete' && (
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                Processing: {fileProcessingProgress.currentFile}
-              </p>
-            )}
           </div>
-        )}
-        <div className="flex-1 flex overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
-          <TabContent {...tabContentProps} />
+          {fileProcessingProgress.currentFile && fileProcessingProgress.phase !== 'complete' && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Processing: {fileProcessingProgress.currentFile}
+            </p>
+          )}
         </div>
+      )}
+      <div className="flex-1 flex overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
+        <Sidebar {...sidebarProps} />
+        <TabContent handleReplaceOptimisticMessage={handleReplaceOptimisticMessage} {...sidebarProps} {...tabContentProps} />
       </div>
     </div>
   );

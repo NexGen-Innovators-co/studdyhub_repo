@@ -15,7 +15,9 @@ import { MessageList } from './MessageList';
 import { ConfirmationModal } from '../../ConfirmationModal';
 import { Message, ChatSession } from '../../../types/Class';
 import BookPagesAnimation from '../../bookloader';
-import { debounce } from 'lodash';
+import { throttle } from 'lodash';
+import { v4 as uuidv4 } from 'uuid';
+
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
@@ -59,7 +61,6 @@ declare global {
   }
 }
 
-
 interface AttachedFile {
   file: File;
   preview?: string;
@@ -81,7 +82,6 @@ interface AIChatProps {
   onDeleteChatSession: (sessionId: string) => void;
   onRenameChatSession: (sessionId: string, newTitle: string) => void;
   onChatSessionSelect: (sessionId: string) => void;
-  chatSessions: ChatSession[];
   onDeleteMessage: (messageId: string) => void;
   onRegenerateResponse: (lastUserMessageContent: string) => Promise<void>;
   onRetryFailedMessage: (originalUserMessageContent: string, failedAiMessageId: string) => Promise<void>;
@@ -96,7 +96,7 @@ interface AIChatProps {
     messageContent: string,
     attachedDocumentIds?: string[],
     attachedNoteIds?: string[],
-    attachedFiles?: Array<{
+    processedFiles?: Array<{
       name: string;
       mimeType: string;
       data: string | null;
@@ -108,7 +108,9 @@ interface AIChatProps {
     }>
   ) => Promise<void>;
   onMessageUpdate: (message: Message) => void;
+  onReplaceOptimisticMessage: (optimisticId: string, newMessage: Message) => void;
 }
+
 const getFileType = (file: File): 'image' | 'document' | 'other' => {
   const imageTypes = [
     'image/jpg',
@@ -218,6 +220,7 @@ const AIChat: React.FC<AIChatProps> = ({
   learningPreferences,
   onSendMessageToBackend,
   onMessageUpdate,
+  onReplaceOptimisticMessage
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -249,9 +252,8 @@ const AIChat: React.FC<AIChatProps> = ({
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const lastInterimTranscriptRef = useRef<string>('');
   const [panelWidth, setPanelWidth] = useState<number>(() => {
-    // Initialize panelWidth with a default value or retrieve it from localStorage
     const storedWidth = localStorage.getItem('diagramPanelWidth');
-    return storedWidth ? parseFloat(storedWidth) : 65; // Default to 65 if not in localStorage
+    return storedWidth ? parseFloat(storedWidth) : 65;
   });
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -260,6 +262,140 @@ const AIChat: React.FC<AIChatProps> = ({
   const prevSessionIdRef = useRef<string | null>(null);
   const [autoTypeInPanel, setAutoTypeInPanel] = useState(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
+  const generateOptimisticId = () => `optimistic-ai-${uuidv4()}`;
+
+  // Throttled textarea resize
+  const resizeTextarea = useCallback(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, []);
+
+  // Handle textarea change
+  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputMessage(e.target.value);
+    // Call resize directly instead of throttling
+    requestAnimationFrame(resizeTextarea);
+  }, [resizeTextarea]);
+
+  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
+    setIsLoading(true);
+    e.preventDefault();
+    if (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) {
+      toast.error('Please enter a message, attach files, or select documents/notes.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const userId = userProfile?.id;
+      if (!userId) {
+        toast.error("User ID is missing. Please ensure you are logged in.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (activeChatSessionId) {
+        await supabase
+          .from('chat_sessions')
+          .update({ document_ids: selectedDocumentIds })
+          .eq('id', activeChatSessionId)
+          .eq('user_id', userId);
+      }
+
+      const documentIds = selectedDocumentIds.filter(id => documents.some(doc => doc.id === id));
+      const noteIds = selectedDocumentIds.filter(id => notes.some(note => note.id === id));
+
+      const filesForBackend = await Promise.all(
+        attachedFiles.map(async (attachedFile) => {
+          const fileType = getFileType(attachedFile.file);
+          let data: string | null = null;
+          let content: string | null = null;
+
+          try {
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve, reject) => {
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = () => reject(new Error('Failed to read file'));
+              reader.readAsDataURL(attachedFile.file);
+            });
+
+            const base64Result = await base64Promise;
+            data = base64Result.split(',')[1];
+
+            if (fileType === 'document' || attachedFile.file.type.startsWith('text/')) {
+              try {
+                const textReader = new FileReader();
+                const textPromise = new Promise<string>((resolve, reject) => {
+                  textReader.onloadend = () => resolve(textReader.result as string);
+                  textReader.onerror = () => reject(new Error('Failed to read text content'));
+                  textReader.readAsText(attachedFile.file);
+                });
+                content = await textPromise;
+              } catch (textError) {
+                console.warn('Could not extract text content from file:', textError);
+              }
+            }
+          } catch (error) {
+            console.error('Error processing file:', attachedFile.file.name, error);
+            toast.error(`Failed to process file: ${attachedFile.file.name}`);
+            throw error;
+          }
+
+          return {
+            name: attachedFile.file.name,
+            mimeType: attachedFile.file.type,
+            data,
+            type: fileType,
+            size: attachedFile.file.size,
+            content,
+            processing_status: 'pending',
+            processing_error: null,
+          };
+        })
+      );
+
+      const optimisticAiMessageId = generateOptimisticId();
+      const optimisticAiMessage: Message = {
+        id: optimisticAiMessageId,
+        content: 'Generating response...',
+        role: 'assistant',
+        timestamp: new Date().toISOString(),
+        isError: false,
+        attachedDocumentIds: [],
+        attachedNoteIds: [],
+        session_id: activeChatSessionId,
+        has_been_displayed: false,
+      };
+
+      onSendMessageToBackend(inputMessage.trim(), documentIds, noteIds, filesForBackend);
+
+      setInputMessage('');
+      setAttachedFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+    } catch (error: any) {
+      console.error("Error sending message:", error);
+      let errorMessage = 'Failed to send message.';
+      if (error.message.includes('Content size exceeds limit')) {
+        errorMessage = 'Message or context too large. Some older messages or document content was truncated.';
+      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        errorMessage = 'Network error: Unable to connect to the server. Please check your internet connection.';
+      } else if (error.message.includes('401')) {
+        errorMessage = 'Authentication failed. Please try logging in again.';
+      } else if (error.message.includes('403')) {
+        errorMessage = 'Access denied. Please check your permissions.';
+      } else if (error.message.includes('500')) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      toast.error(`Error: ${errorMessage}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [inputMessage, attachedFiles, userProfile?.id, activeChatSessionId, selectedDocumentIds, onSendMessageToBackend]);
 
   const isPhone = useCallback(() => {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -290,9 +426,9 @@ const AIChat: React.FC<AIChatProps> = ({
       console.error('Unexpected error marking message as displayed:', error);
       toast.error('An unexpected error occurred while updating message status.');
     }
-  }, [userProfile, activeChatSessionId, messages, onMessageUpdate]);
+  }, [userProfile?.id, activeChatSessionId, messages, onMessageUpdate]);
 
-  const handleBlockDetected = useCallback((blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => {
+  const handleBlockDetected = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
     if (autoTypeInPanel && isFirstBlock) {
       setActiveDiagram(prev => {
         if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
@@ -303,7 +439,7 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [autoTypeInPanel]);
 
-  const handleBlockUpdate = useCallback((blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => {
+  const handleBlockUpdate = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
     if (autoTypeInPanel && isFirstBlock) {
       setActiveDiagram(prev => {
         if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
@@ -314,17 +450,16 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [autoTypeInPanel]);
 
-  const handleBlockEnd = useCallback((blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean) => {
+  const handleBlockEnd = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
     if (autoTypeInPanel && isFirstBlock) {
-      // Optionally keep panel open
     }
   }, [autoTypeInPanel]);
 
   const handleViewContent = useCallback((type, content, language, imageUrl) => {
-    setActiveDiagram(null); // Clear first
+    setActiveDiagram(null);
     setTimeout(() => {
       setActiveDiagram({ type, content, language, imageUrl });
-    }, 0); // Set on next tick
+    }, 0);
   }, []);
 
   const memoizedOnMermaidError = useCallback((code: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => {
@@ -340,7 +475,6 @@ const AIChat: React.FC<AIChatProps> = ({
     toast.info("AI correction prepared in input. Review and send to apply.");
   }, []);
 
-  // Request Notification Permission
   const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
     if (!("Notification" in window)) {
       console.warn("Notification API not supported in this browser.");
@@ -356,17 +490,14 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, []);
 
-  // Show Browser Notification
   const showNotification = useCallback((title: string, options: NotificationOptions) => {
     if (Notification.permission === "granted") {
       new Notification(title, options);
     }
   }, []);
 
-  // Add permission status tracking
   const [micPermissionStatus, setMicPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'checking'>('unknown');
 
-  // Check if microphone permission is already granted
   const checkMicrophonePermission = useCallback(async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
     try {
       if (navigator.permissions && navigator.permissions.query) {
@@ -380,9 +511,7 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, []);
 
-  // FIXED: Improved microphone permission request with status tracking
   const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
-    // First check if permission is already granted
     const currentStatus = await checkMicrophonePermission();
     if (currentStatus === 'granted') {
       setMicPermissionStatus('granted');
@@ -392,15 +521,10 @@ const AIChat: React.FC<AIChatProps> = ({
     setMicPermissionStatus('checking');
 
     try {
-      // Request media stream - this will prompt for permission if needed
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // If successful, stop all tracks immediately (we just needed permission)
       stream.getTracks().forEach(track => track.stop());
-
       setMicPermissionStatus('granted');
 
-      // Show success notification only for first-time grants
       if (currentStatus === 'prompt' || currentStatus === 'unknown') {
         showNotification("Microphone Access Granted", {
           body: "You can now use speech recognition.",
@@ -409,31 +533,22 @@ const AIChat: React.FC<AIChatProps> = ({
       }
 
       return true;
-
     } catch (error: any) {
       console.error('Error requesting microphone permission:', error);
       setMicPermissionStatus('denied');
-
-      // Handle different types of permission errors
-      if (error.name === 'NotAllowedError') {
-        toast.error('Microphone access was denied. Please click the microphone icon in your browser address bar to allow access, then try again.');
-      } else if (error.name === 'NotFoundError') {
-        toast.error('No microphone found. Please check that a microphone is connected to your device.');
-      } else if (error.name === 'NotReadableError') {
-        toast.error('Microphone is already in use by another application. Please close other apps using the microphone and try again.');
-      } else if (error.name === 'OverconstrainedError') {
-        toast.error('Microphone constraints could not be satisfied. Please try again.');
-      } else if (error.name === 'SecurityError') {
-        toast.error('Microphone access blocked due to security restrictions. Please ensure you are using HTTPS.');
-      } else {
-        toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
-      }
-
+      toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
       return false;
     }
   }, [showNotification, checkMicrophonePermission]);
 
-  // FIXED: Enhanced speech recognition setup with better duplicate prevention
+  const throttledSetSpeechInput = useCallback(
+    throttle((newMessage: string) => {
+      setInputMessage(newMessage);
+      resizeTextarea();
+    }, 200),
+    [resizeTextarea]
+  );
+
   useEffect(() => {
     const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionConstructor) {
@@ -445,15 +560,12 @@ const AIChat: React.FC<AIChatProps> = ({
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
     recognitionRef.current.lang = 'en-US';
-
-    // Add maxAlternatives for better recognition
     (recognitionRef.current as any).maxAlternatives = 1;
 
     recognitionRef.current.onresult = (event: SpeechRecognitionResultEvent) => {
       let finalTranscript = '';
       let interimTranscript = '';
 
-      // Only process new results from the last result index
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript.trim();
         if (event.results[i].isFinal) {
@@ -463,55 +575,23 @@ const AIChat: React.FC<AIChatProps> = ({
         }
       }
 
-      setInputMessage((prev) => {
-        // Remove the previous interim transcript completely
-        let baseMessage = prev.replace(lastInterimTranscriptRef.current, '').trim();
-
-        // Add final transcript if we have it
-        if (finalTranscript) {
-          const newMessage = baseMessage + (baseMessage ? ' ' : '') + finalTranscript.trim();
-          lastInterimTranscriptRef.current = ''; // Clear interim since we added final
-          return newMessage;
-        }
-
-        // Otherwise, add interim transcript
-        if (interimTranscript) {
-          const newMessage = baseMessage + (baseMessage ? ' ' : '') + interimTranscript;
-          lastInterimTranscriptRef.current = interimTranscript;
-          return newMessage;
-        }
-
-        return prev;
-      });
+      const baseMessage = inputMessage.replace(lastInterimTranscriptRef.current, '').trim();
+      if (finalTranscript) {
+        const newMessage = baseMessage + (baseMessage ? ' ' : '') + finalTranscript.trim();
+        lastInterimTranscriptRef.current = '';
+        setInputMessage(newMessage);
+        resizeTextarea();
+      } else if (interimTranscript) {
+        const newMessage = baseMessage + (baseMessage ? ' ' : '') + interimTranscript;
+        lastInterimTranscriptRef.current = interimTranscript;
+        throttledSetSpeechInput(newMessage);
+      }
     };
 
     recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error, event.message);
       setIsRecognizing(false);
-
-      switch (event.error) {
-        case 'no-speech':
-          toast.info('No speech detected. Please try again.');
-          break;
-        case 'not-allowed':
-          setMicPermissionStatus('denied');
-          toast.error('Microphone access denied. Please allow microphone permissions and try again.');
-          break;
-        case 'service-not-allowed':
-          toast.error('Speech recognition service not allowed. Please check your browser settings.');
-          break;
-        case 'network':
-          toast.error('Network error occurred during speech recognition.');
-          break;
-        case 'audio-capture':
-          toast.error('Audio capture failed. Please check your microphone connection.');
-          break;
-        case 'aborted':
-          // Don't show error for user-initiated stops
-          break;
-        default:
-          toast.error(`Speech recognition failed: ${event.error}`);
-      }
+      toast.error(`Speech recognition failed: ${event.error}`);
     };
 
     recognitionRef.current.onend = () => {
@@ -524,35 +604,28 @@ const AIChat: React.FC<AIChatProps> = ({
         recognitionRef.current.stop();
       }
     };
-  }, []);
+  }, [inputMessage, throttledSetSpeechInput, resizeTextarea]);
 
-  // Check microphone permission on component mount
   useEffect(() => {
     checkMicrophonePermission().then(status => {
       setMicPermissionStatus(status === 'granted' ? 'granted' : status === 'denied' ? 'denied' : 'unknown');
     });
   }, [checkMicrophonePermission]);
 
-  // FIXED: Better speech recognition start function with permission caching
   const startRecognition = useCallback(async () => {
     if (!recognitionRef.current) {
       toast.error('Speech recognition is not supported in this browser.');
       return;
     }
 
-    if (isRecognizing) {
-      return;
-    }
+    if (isRecognizing) return;
 
-    // Only request permission if we don't already have it
     if (micPermissionStatus !== 'granted') {
-      // Request notification permission first (optional)
       const hasNotificationPermission = await requestNotificationPermission();
       if (!hasNotificationPermission) {
         console.warn("Notification permission not granted, proceeding without notifications.");
       }
 
-      // Request microphone permission
       const hasMicrophonePermission = await requestMicrophonePermission();
       if (!hasMicrophonePermission) {
         setIsRecognizing(false);
@@ -561,38 +634,24 @@ const AIChat: React.FC<AIChatProps> = ({
     }
 
     try {
-      // Clear any previous interim results
       lastInterimTranscriptRef.current = '';
-
-      // Start speech recognition
       recognitionRef.current.start();
       setIsRecognizing(true);
-      toast.info(' Listening... Click the mic button again to stop.');
-
+      toast.info('Listening... Click the mic button again to stop.');
     } catch (error: any) {
       console.error('Error starting speech recognition:', error);
-
-      // Handle speech recognition specific errors
-      if (error.name === 'InvalidStateError') {
-        toast.error('Speech recognition is already running. Please wait a moment and try again.');
-      } else {
-        toast.error(`Failed to start speech recognition: ${error.message || 'Unknown error'}`);
-      }
-
+      toast.error(`Failed to start speech recognition: ${error.message || 'Unknown error'}`);
       setIsRecognizing(false);
     }
   }, [isRecognizing, micPermissionStatus, requestMicrophonePermission, requestNotificationPermission]);
 
-  const stopRecognition = useCallback(async () => {
-    if (!recognitionRef.current) {
-      toast.error('Speech recognition is not supported in this browser.');
-      return;
-    };
-    if (recognitionRef.current && isRecognizing) {
+  const stopRecognition = useCallback(() => {
+    if (!recognitionRef.current) return;
+    if (isRecognizing) {
       recognitionRef.current.stop();
       setIsRecognizing(false);
       lastInterimTranscriptRef.current = '';
-      toast.success(' Speech recognition stopped.');
+      toast.success('Speech recognition stopped.');
     }
   }, [isRecognizing]);
 
@@ -602,28 +661,26 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleScroll = useCallback(async () => {
     const chatContainer = chatContainerRef.current;
-    if (chatContainer === null) return;
-    if (chatContainer) {
-      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 100;
-      setShowScrollToBottomButton(!isAtBottom && scrollHeight > clientHeight);
+    if (!chatContainer) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 100;
+    setShowScrollToBottomButton(!isAtBottom && scrollHeight > clientHeight);
 
-      const scrollThreshold = 100;
-      if (scrollTop < scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
-        setIsLoadingOlderMessages(true);
-        const oldScrollHeight = scrollHeight;
-        await onLoadOlderMessages();
-        setTimeout(() => {
-          if (chatContainerRef.current) {
-            const newScrollHeight = chatContainerRef.current.scrollHeight;
-            chatContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
-          }
-        }, 0);
-        setIsLoadingOlderMessages(false);
-      }
+    const scrollThreshold = 100;
+    if (scrollTop < scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
+      setIsLoadingOlderMessages(true);
+      const oldScrollHeight = scrollHeight;
+      await onLoadOlderMessages();
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          const newScrollHeight = chatContainerRef.current.scrollHeight;
+          chatContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
+        }
+      }, 0);
+      setIsLoadingOlderMessages(false);
     }
   }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages]);
-  // const debouncedHandleScroll = useMemo(() => debounce(handleScroll, 200), [handleScroll]); 
+
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
     if (chatContainer) {
@@ -639,7 +696,6 @@ const AIChat: React.FC<AIChatProps> = ({
     if (!chatContainer) return;
 
     const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
-
     if (isSessionChange) {
       if (!isLoadingSessionMessages && messages.length > 0) {
         setTimeout(() => {
@@ -730,13 +786,6 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [messages, isLoading, isLoadingSessionMessages, isPhone, isSpeaking, isPaused, stripCodeBlocks]);
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
-    }
-  }, [inputMessage, attachedFiles]);
-
   const handleMessageDeleteClick = useCallback((messageId: string) => {
     setMessageToDelete(messageId);
     setShowDeleteConfirm(true);
@@ -775,7 +824,6 @@ const AIChat: React.FC<AIChatProps> = ({
 
     files.forEach(file => {
       const validation = validateFile(file);
-
       if (!validation.isValid) {
         toast.error(validation.error);
         return;
@@ -812,138 +860,6 @@ const AIChat: React.FC<AIChatProps> = ({
     setAttachedFiles([]);
   }, []);
 
-  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
-    setIsLoading(true);
-    e.preventDefault();
-    if (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) {
-      toast.error('Please enter a message, attach files, or select documents/notes.');
-      return;
-    }
-
-    try {
-      const userId = userProfile?.id;
-
-      if (!userId) {
-        toast.error("User ID is missing. Please ensure you are logged in.");
-        setIsLoading(false);
-        return;
-      }
-
-      if (activeChatSessionId) {
-        await supabase
-          .from('chat_sessions')
-          .update({ document_ids: selectedDocumentIds })
-          .eq('id', activeChatSessionId)
-          .eq('user_id', userId);
-      }
-
-      const documentIds = selectedDocumentIds.filter(id =>
-        documents.some(doc => doc.id === id)
-      );
-
-      const noteIds = selectedDocumentIds.filter(id => notes.some(note => note.id === id)
-      );
-
-      // ** ENSURE ALL FILES ARE PROCESSED BEFORE CONTINUING **
-      const filesForBackend = await Promise.all(
-        attachedFiles.map(async (attachedFile) => {
-          const fileType = getFileType(attachedFile.file);
-          let data: string | null = null;
-          let content: string | null = null;
-
-          try {
-            const reader = new FileReader();
-            const base64Promise = new Promise<string>((resolve, reject) => {
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.onerror = () => reject(new Error('Failed to read file'));
-              reader.readAsDataURL(attachedFile.file);
-            });
-
-            const base64Result = await base64Promise;
-            data = base64Result.split(',')[1];
-
-            if (fileType === 'document' || attachedFile.file.type.startsWith('text/')) {
-              try {
-                const textReader = new FileReader();
-                const textPromise = new Promise<string>((resolve, reject) => {
-                  textReader.onloadend = () => resolve(textReader.result as string);
-                  textReader.onerror = () => reject(new Error('Failed to read text content'));
-                  textReader.readAsText(attachedFile.file);
-                });
-                content = await textPromise;
-              } catch (textError) {
-                console.warn('Could not extract text content from file:', textError);
-              }
-            }
-          } catch (error) {
-            console.error('Error processing file:', attachedFile.file.name, error);
-            toast.error(`Failed to process file: ${attachedFile.file.name}`);
-            throw error;
-          }
-
-          return {
-            name: attachedFile.file.name,
-            mimeType: attachedFile.file.type,
-            data,
-            type: fileType,
-            size: attachedFile.file.size,
-            content,
-            processing_status: 'pending',
-            processing_error: null,
-          };
-        })
-      );
-
-      await onSendMessageToBackend(
-        inputMessage.trim(),
-        documentIds,
-        noteIds,
-        filesForBackend
-      );
-
-      setInputMessage('');
-      setAttachedFiles([]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      if (cameraInputRef.current) {
-        cameraInputRef.current.value = '';
-      }
-
-    } catch (error: any) {
-      console.error("Error sending message:", error);
-
-      let errorMessage = 'Failed to send message.';
-
-      if (error.message.includes('Content size exceeds limit')) {
-        errorMessage = 'Message or context too large. Some older messages or document content was truncated.';
-      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = 'Network error: Unable to connect to the server. Please check your internet connection.';
-      } else if (error.message.includes('401')) {
-        errorMessage = 'Authentication failed. Please try logging in again.';
-      } else if (error.message.includes('403')) {
-        errorMessage = 'Access denied. Please check your permissions.';
-      } else if (error.message.includes('500')) {
-        errorMessage = 'Server error. Please try again later.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      toast.error(`Error: ${errorMessage}`);
-
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    inputMessage,
-    attachedFiles,
-    userProfile,
-    selectedDocumentIds,
-    documents,
-    notes,
-    activeChatSessionId,
-    onSendMessageToBackend
-  ]);
   const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
     setMergedDocuments(prevDocs => {
       const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
@@ -1054,14 +970,10 @@ const AIChat: React.FC<AIChatProps> = ({
       setExpandedMessages(new Set());
       setZoomLevel(1);
       setPanOffset({ x: 0, y: 0 });
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      if (cameraInputRef.current) {
-        cameraInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
     }
-  }, [activeChatSessionId, stopSpeech,]);
+  }, [activeChatSessionId, stopSpeech]);
 
   const selectedDocumentTitles = useMemo(() => {
     return mergedDocuments
@@ -1080,6 +992,43 @@ const AIChat: React.FC<AIChatProps> = ({
       .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'image');
   }, [mergedDocuments, selectedDocumentIds]);
 
+  const contextBadges = useMemo(() => (
+    <div className="mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700">
+      <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200 font-claude">Context:</span>
+      {attachedFiles.length > 0 && (
+        <Badge
+          variant="secondary"
+          className="bg-orange-500/20 text-orange-800 border-orange-400 flex items-center gap-1 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700 text-sm md:text-base font-sans"
+        >
+          <Paperclip className="h-3 w-3" />
+          {attachedFiles.length} File{attachedFiles.length > 1 ? 's' : ''}
+          <XCircle
+            className="h-3 w-3 ml-1 cursor-pointer text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-200"
+            onClick={handleRemoveAllFiles}
+          />
+        </Badge>
+      )}
+      {selectedImageDocuments.length > 0 && (
+        <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
+          <Image className="h-3 w-3" /> {selectedImageDocuments.length} Image Doc{selectedImageDocuments.length > 1 ? 's' : ''}
+          <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !selectedImageDocuments.map(imgDoc => imgDoc.id).includes(id)))} />
+        </Badge>
+      )}
+      {selectedDocumentTitles.length > 0 && (
+        <Badge variant="secondary" className="bg-purple-500/20 text-purple-800 border-purple-400 flex items-center gap-1 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700 text-sm md:text-base font-sans">
+          <BookOpen className="h-3 w-3 mr-1" /> {selectedDocumentTitles.length} Text Doc{selectedDocumentTitles.length > 1 ? 's' : ''}
+          <XCircle className="h-3 w-3 ml-1 cursor-pointer text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !documents.filter(doc => doc.type === 'text').map(d => d.id).includes(id)))} />
+        </Badge>
+      )}
+      {selectedNoteTitles.length > 0 && (
+        <Badge variant="secondary" className="bg-green-500/20 text-green-800 border-green-400 flex items-center gap-1 dark:bg-green-950 dark:text-green-300 dark:border-green-700 text-sm md:text-base font-sans">
+          <StickyNote className="h-3 w-3 mr-1" /> {selectedNoteTitles.length} Note{selectedNoteTitles.length > 1 ? 's' : ''}
+          <XCircle className="h-3 w-3 ml-1 cursor-pointer text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !notes.map(n => n.id).includes(id)))} />
+        </Badge>
+      )}
+    </div>
+  ), [attachedFiles, selectedImageDocuments, selectedDocumentTitles, selectedNoteTitles, handleRemoveAllFiles, onSelectionChange, documents, notes, selectedDocumentIds]);
+
   const displayMessages = useMemo(() => messages, [messages]);
 
   function handleDiagramCodeUpdate(messageId: string, newCode: string): Promise<void> {
@@ -1092,11 +1041,10 @@ const AIChat: React.FC<AIChatProps> = ({
       <div className="flex flex-col h-full border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans">
         <motion.div
           className={`relative flex flex-col h-full rounded-lg panel-transition
-          ${isDiagramPanelOpen
+            ${isDiagramPanelOpen
               ? (isPhone()
-                ? 'hidden' // Hide chat completely on mobile when panel is open
-                : `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0`
-              )
+                ? 'hidden'
+                : `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0`)
               : 'w-full flex-1'
             } bg-transparent dark:bg-transparent`}
           initial={{ width: '100%' }}
@@ -1108,7 +1056,7 @@ const AIChat: React.FC<AIChatProps> = ({
           transition={{ duration: 0.1, ease: 'easeInOut' }}
         >
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar pb-36 md:pb-6">
-            {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && (
+            {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && !isSubmittingUserMessage && (
               <div className="text-center py-8 flex-grow flex flex-col justify-center items-center text-slate-400 dark:text-gray-500">
                 <BookPagesAnimation size="xl" showText={false} className="mb-6" />
                 <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200 font-claude">Welcome to your AI Study Assistant!</h3>
@@ -1147,9 +1095,7 @@ const AIChat: React.FC<AIChatProps> = ({
               onBlockUpdate={handleBlockUpdate}
               onBlockEnd={handleBlockEnd}
               onDiagramCodeUpdate={handleDiagramCodeUpdate}
-
             />
-
             {isGeneratingImage && (
               <div className="flex justify-center font-sans">
                 <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
@@ -1168,15 +1114,12 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
-          <div className={`fixed bottom-0 left-0 right-0  sm:pb-8 md:shadow-none md:static rounded-t-lg md:rounded-lg bg-transparent  dark:bg-transparent dark:border-gray-700 font-sans z-10 
-          ${isDiagramPanelOpen
-              ? (isPhone()
-                ? 'hidden' // Hide input on mobile when panel is open
-                : `md:pr-[calc(${panelWidth}%+1.5rem)]`
-              )
+          <div className={`fixed bottom-0 left-0 right-0 sm:pb-8 md:shadow-none md:static rounded-t-lg md:rounded-lg bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
+            ${isDiagramPanelOpen
+              ? (isPhone() ? 'hidden' : `md:pr-[calc(${panelWidth}%+1.5rem)]`)
               : ''
-            }`}><div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md  dark:border-gray-700 p-2">
-              {/* FIXED: Speech recognition status indicator */}
+            }`}>
+            <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2">
               {isRecognizing && (
                 <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 dark:bg-red-900/20 dark:border-red-800">
                   <div className="flex items-center gap-2">
@@ -1188,49 +1131,11 @@ const AIChat: React.FC<AIChatProps> = ({
                   </div>
                 </div>
               )}
-              {(attachedFiles.length > 0 || selectedDocumentIds.length > 0) && (
-                <div className={`mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700`}>
-                  <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200 font-claude">Context:</span>
-
-                  {attachedFiles.length > 0 && (
-                    <Badge
-                      variant="secondary"
-                      className="bg-orange-500/20 text-orange-800 border-orange-400 flex items-center gap-1 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700 text-sm md:text-base font-sans"
-                    >
-                      <Paperclip className="h-3 w-3" />
-                      {attachedFiles.length} File{attachedFiles.length > 1 ? 's' : ''}
-                      <XCircle
-                        className="h-3 w-3 ml-1 cursor-pointer text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-200"
-                        onClick={handleRemoveAllFiles}
-                      />
-                    </Badge>
-                  )}
-
-                  {selectedImageDocuments.length > 0 && (
-                    <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
-                      <Image className="h-3 w-3" /> {selectedImageDocuments.length} Image Doc{selectedImageDocuments.length > 1 ? 's' : ''}
-                      <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !selectedImageDocuments.map(imgDoc => imgDoc.id).includes(id)))} />
-                    </Badge>
-                  )}
-                  {selectedDocumentTitles.length > 0 && (
-                    <Badge variant="secondary" className="bg-purple-500/20 text-purple-800 border-purple-400 flex items-center gap-1 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700 text-sm md:text-base font-sans">
-                      <BookOpen className="h-3 w-3 mr-1" /> {selectedDocumentTitles.length} Text Doc{selectedDocumentTitles.length > 1 ? 's' : ''}
-                      <XCircle className="h-3 w-3 ml-1 cursor-pointer text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !documents.filter(doc => doc.type === 'text').map(d => d.id).includes(id)))} />
-                    </Badge>
-                  )}
-                  {selectedNoteTitles.length > 0 && (
-                    <Badge variant="secondary" className="bg-green-500/20 text-green-800 border-green-400 flex items-center gap-1 dark:bg-green-950 dark:text-green-300 dark:border-green-700 text-sm md:text-base font-sans">
-                      <StickyNote className="h-3 w-3 mr-1" /> {selectedNoteTitles.length} Note{selectedNoteTitles.length > 1 ? 's' : ''}
-                      <XCircle className="h-3 w-3 ml-1 cursor-pointer text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !notes.map(n => n.id).includes(id)))} />
-                    </Badge>
-                  )}
-                </div>
-              )}
-
+              {(attachedFiles.length > 0 || selectedDocumentIds.length > 0) && contextBadges}
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
+                onChange={handleTextareaChange}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -1244,7 +1149,6 @@ const AIChat: React.FC<AIChatProps> = ({
               />
               <div className="flex items-center gap-2 mt-2 justify-between">
                 <div className="flex items-center gap-2">
-                  {/* FIXED: Enhanced microphone button with better visual feedback */}
                   <Button
                     type="button"
                     variant="ghost"
@@ -1286,7 +1190,6 @@ const AIChat: React.FC<AIChatProps> = ({
                       </div>
                     )}
                   </Button>
-
                   <input
                     type="file"
                     accept="image/*"
@@ -1306,7 +1209,6 @@ const AIChat: React.FC<AIChatProps> = ({
                   >
                     <Camera className="h-5 w-5" />
                   </Button>
-
                   <input
                     type="file"
                     accept="*/*"
@@ -1315,7 +1217,6 @@ const AIChat: React.FC<AIChatProps> = ({
                     onChange={handleFileChange}
                     className="hidden"
                   />
-
                   <Button
                     type="button"
                     variant="ghost"
@@ -1327,7 +1228,6 @@ const AIChat: React.FC<AIChatProps> = ({
                   >
                     <Paperclip className="h-5 w-5" />
                   </Button>
-
                   <Button
                     type="button"
                     variant="ghost"
@@ -1410,8 +1310,8 @@ const AIChat: React.FC<AIChatProps> = ({
             size="icon"
             onClick={() => scrollToBottom('smooth')}
             className={`fixed bottom-28 right-6 md:bottom-8 bg-white rounded-full shadow-lg p-2 z-20 transition-all duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 font-sans
-${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
-`}
+              ${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
+            `}
             title="Scroll to bottom"
           >
             <ChevronDown className="h-5 w-5 text-slate-600 dark:text-gray-300" />
@@ -1422,4 +1322,16 @@ ${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
   );
 };
 
-export default React.memo(AIChat);
+// Custom equality function for React.memo
+const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
+  return (
+    prevProps.isLoading === nextProps.isLoading &&
+    prevProps.isSubmittingUserMessage === nextProps.isSubmittingUserMessage &&
+    prevProps.isLoadingSessionMessages === nextProps.isLoadingSessionMessages &&
+    prevProps.activeChatSessionId === nextProps.activeChatSessionId &&
+    prevProps.messages === nextProps.messages &&
+    prevProps.selectedDocumentIds === nextProps.selectedDocumentIds
+  );
+};
+
+export default React.memo(AIChat, arePropsEqual);

@@ -50,23 +50,49 @@ export interface Message {
   role: 'user' | 'assistant';
   timestamp: string;
   isError?: boolean;
-  attachedDocumentIds?: string[];
-  attachedNoteIds?: string[];
-  imageUrl?: string;
-  imageMimeType?: string;
   session_id?: string;
   has_been_displayed?: boolean;
   isUpdating?: boolean;
-  attachedFiles?: Array<{
-    name: string;
-    mimeType: string;
-    type: 'image' | 'document' | 'other';
-    size: number;
-    content?: string | null;
-    processing_status?: string;
-    processing_error?: string | null;
+  attachedDocumentIds?: string[];
+  attachedNoteIds?: string[];
+  image_url?: string; // Legacy image URL
+  image_mime_type?: string; // Legacy image MIME type
+  files_metadata?: string | Array<{ // Use string | array to handle both JSON string and array
+  id: string;
+  name: string;
+  mimeType: string;
+  url: string;
+  type: 'image' | 'document' | 'other';
+  size?: number;
+  content?: string | null;
+  processing_status?: string;
+  processing_error?: string | null;
+  status?: string;
+  error?: string;
+  }> | {
+  id: string;
+  name: string;
+  mimeType: string;
+  url: string;
+  type: 'image' | 'document' | 'other';
+  size?: number;
+  content?: string | null;
+  processing_status?: string;
+  processing_error?: string | null;
+  status?: string;
+  error?: string;
+  };
+  attachedFiles?: Array<{ // Legacy attached files
+  name: string;
+  mimeType: string;
+  type: 'image' | 'document' | 'other';
+  size: number;
+  content?: string | null;
+  processing_status?: string;
+  processing_error?: string | null;
   }>;
-}
+  conversation_context?: string;
+  }
 export interface ChatSession {
   id: string;
   title: string;

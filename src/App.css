@@ -40,3 +40,156 @@
 .read-the-docs {
   color: #888;
 }
+/* Add these styles to your global CSS file or component styles */
+
+/* Scrollbar styles for file preview container */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.scrollbar-thumb-slate-300::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+}
+
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.dark .scrollbar-thumb-gray-600::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+}
+
+/* Webkit scrollbar styles */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 2px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+}
+
+/* File preview container styles */
+.file-preview-container {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure file previews don't shrink */
+.file-preview-item {
+  flex-shrink: 0;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+}
+
+.file-preview-item:hover {
+  transform: scale(1.05);
+}
+
+/* Image preview styles */
+.file-preview-image {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+@media (min-width: 640px) {
+  .file-preview-image {
+    width: 4rem;
+    height: 4rem;
+  }
+}
+
+.dark .file-preview-image {
+  border-color: #4b5563;
+  background-color: #374151;
+}
+
+/* File icon container styles */
+.file-preview-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+@media (min-width: 640px) {
+  .file-preview-icon {
+    width: 4rem;
+    height: 4rem;
+  }
+}
+
+.dark .file-preview-icon {
+  border-color: #4b5563;
+  background-color: #374151;
+}
+
+/* File name overlay styles */
+.file-name-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.6));
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.25rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.file-preview-item:hover .file-name-overlay {
+  opacity: 1;
+}
+
+/* Processing indicator styles */
+.processing-indicator {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  z-index: 10;
+}
+
+/* Responsive styles for mobile */
+@media (max-width: 640px) {
+  .file-preview-container {
+    gap: 0.25rem;
+  }
+  
+  .file-preview-image,
+  .file-preview-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  
+  .file-name-overlay {
+    font-size: 0.625rem;
+    padding: 0.125rem;
+  }
+}
