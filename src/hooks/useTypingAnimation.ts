@@ -141,7 +141,7 @@ export const useTypingAnimation = ({
         setIsTyping(false);
         setCurrentBlock(null);
         setBlockText('');
-        console.log("Typing complete! Calling onComplete for message ID:", messageId); // ADD THIS LINE
+        // console.log("Typing complete! Calling onComplete for message ID:", messageId); // ADD THIS LINE
         onComplete?.(messageId);
         return;
       }

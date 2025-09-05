@@ -761,8 +761,6 @@ const Index = () => {
         },
       });
 
-      console.log('[handleSubmit] Edge Function Response:', data); // Added log
-
 
       if (error) {
         console.error('Edge function error:', error);
