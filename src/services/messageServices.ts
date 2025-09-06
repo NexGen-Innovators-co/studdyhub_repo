@@ -1,7 +1,7 @@
 // services/messageServices.ts
 import { supabase } from '../integrations/supabase/client';
 import { Message } from '../types/Class';
-import { generateId } from '../utils/helpers';
+import { generateId } from '../components/classRecordings/utils/helpers';
 
 export interface ProcessedFile {
   name: string;

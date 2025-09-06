@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { Message } from '../types/Class';
-import { generateId } from '../utils/helpers';
+import { generateId } from '../components/classRecordings/utils/helpers';
 
 interface UseInstantMessageReturn {
   optimisticMessages: Message[];
@@ -52,9 +52,9 @@ export const useInstantMessage = (actualMessages: Message[]): UseInstantMessageR
   }, []);
 
   const updateOptimisticMessage = useCallback((id: string, content: string, isComplete: boolean = false) => {
-    setOptimisticMessages(prev => 
-      prev.map(msg => 
-        msg.id === id 
+    setOptimisticMessages(prev =>
+      prev.map(msg =>
+        msg.id === id
           ? { ...msg, content }
           : msg
       )
@@ -79,16 +79,16 @@ export const useInstantMessage = (actualMessages: Message[]): UseInstantMessageR
 
   // Only add optimistic messages that don't exist in actual messages
   const allMessages = [...actualMessages];
-  
+
   optimisticMessages.forEach(optimistic => {
     // Check if this optimistic message is not already in actual messages
-    const exists = allMessages.some(actual => 
-      actual.id === optimistic.id || 
-      (actual.content.trim() === optimistic.content.trim() && 
-       actual.role === optimistic.role &&
-       Math.abs(new Date(actual.timestamp).getTime() - new Date(optimistic.timestamp).getTime()) < 5000)
+    const exists = allMessages.some(actual =>
+      actual.id === optimistic.id ||
+      (actual.content.trim() === optimistic.content.trim() &&
+        actual.role === optimistic.role &&
+        Math.abs(new Date(actual.timestamp).getTime() - new Date(optimistic.timestamp).getTime()) < 5000)
     );
-    
+
     if (!exists) {
       allMessages.push(optimistic);
     }
@@ -96,7 +96,7 @@ export const useInstantMessage = (actualMessages: Message[]): UseInstantMessageR
 
   // Sort by timestamp
   allMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  
+
   // Filter out duplicate welcome messages
   const seenWelcomeMessages = new Set();
   const filteredMessages = allMessages.filter(message => {

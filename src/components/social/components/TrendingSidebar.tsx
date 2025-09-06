@@ -25,8 +25,8 @@ export const TrendingSidebar: React.FC<TrendingSidebarProps> = ({
           </CardHeader>
           <CardContent className="space-y-3">
             {hashtags.map((hashtag, index) => (
-              <div 
-                key={hashtag.id} 
+              <div
+                key={hashtag.id}
                 className="flex items-center justify-between hover:bg-muted/50 rounded-lg p-2 cursor-pointer transition-colors"
                 onClick={() => toast.info(`Filtering by hashtag #${hashtag.name}`)}
               >

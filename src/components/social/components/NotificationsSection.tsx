@@ -56,8 +56,8 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
               <div
                 key={notification.id}
                 className={`flex items-center gap-3 p-3 rounded-lg ${notification.is_read
-                    ? 'bg-slate-50 dark:bg-gray-900'
-                    : 'bg-blue-50 dark:bg-blue-900/50'
+                  ? 'bg-slate-50 dark:bg-gray-900'
+                  : 'bg-blue-50 dark:bg-blue-900/50'
                   }`}
               >
                 <div className="flex-1">

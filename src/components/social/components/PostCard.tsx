@@ -3,9 +3,9 @@ import { Card, CardContent, CardHeader } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../ui/dialog';
-import { 
-  MoreHorizontal, Award, Target, UsersIcon, Lock, Globe, 
-  Eye, FileText, Share, Flag 
+import {
+  MoreHorizontal, Award, Target, UsersIcon, Lock, Globe,
+  Eye, FileText, Share, Flag
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PostCardProps } from '../types/social';
@@ -67,7 +67,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
   }, [post.id, onPostView]);
 
   return (
-    <Card 
+    <Card
       ref={cardRef}
       className="mb-6 hover:shadow-lg bg-white dark:bg-gray-900 transition-shadow duration-200"
     >
@@ -115,8 +115,8 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
                   <Share className="h-4 w-4 mr-2" />
                   Share Post
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   className="justify-start text-red-600 hover:bg-red-50 hover:text-red-700"
                   onClick={() => toast.info(`Reporting post ${post.id}. This feature is in development.`)}
                 >
@@ -168,9 +168,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
         {post.hashtags && post.hashtags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">
             {post.hashtags.map((hashtag, index) => (
-              <HashtagBadge 
-                key={index} 
-                hashtag={hashtag} 
+              <HashtagBadge
+                key={index}
+                hashtag={hashtag}
                 onClick={() => toast.info(`Filtering by hashtag #${hashtag.name}`)}
               />
             ))}

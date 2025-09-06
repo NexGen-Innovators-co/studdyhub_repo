@@ -16,10 +16,10 @@ import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 // import { User } from '@supabase/supabase-js';
 // import { generateId } from '@/utils/helpers';
-import { useAudioProcessing } from '../hooks/useAudioProcessing';
+import { useAudioProcessing } from '../components/classRecordings/hooks/useAudioProcessing';
 // import BookPagesAnimation, { LoadingScreen } from '../components/bookloader';
 import { insertUserMessage, requestAIResponse } from '../services/messageServices';
-import { LoadingScreen } from '@/components/bookloader';
+import { LoadingScreen } from '@/components/ui/bookloader';
 // Optimized constants
 const Index = () => {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -33,13 +33,6 @@ const Index = () => {
   const CHAT_SESSIONS_PER_PAGE = 15;
   const CHAT_MESSAGES_PER_PAGE = 25;
 
-  const extractFirstSentence = useCallback((text: string): string => {
-    if (!text || text.trim() === '') return 'New Chat';
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    if (sentences.length === 0) return 'New Chat';
-    const firstSentence = sentences[0].trim();
-    return firstSentence.length > 100 ? firstSentence.substring(0, 97) + '...' : firstSentence;
-  }, []);
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
