@@ -8,7 +8,7 @@ import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Document } from '../../../types/Document';
 import { Message } from '../../../types/Class';
 import { cn } from '../utils/cn';
-import BookPagesAnimation from '../../bookloader';
+import BookPagesAnimation from '../../ui/bookloader';
 import AIBot from '../../ui/aibot';
 
 interface AttachedFile {

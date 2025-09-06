@@ -74,9 +74,9 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({
           Photo
         </Button>
 
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           className="text-blue-600 hover:bg-blue-50"
           onClick={() => fileInputRef.current?.click()}
         >
@@ -84,9 +84,9 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({
           Video
         </Button>
 
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           className="text-purple-600 hover:bg-purple-50"
           onClick={() => fileInputRef.current?.click()}
         >

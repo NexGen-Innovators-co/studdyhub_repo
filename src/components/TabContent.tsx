@@ -1,18 +1,18 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { NotesList } from './NotesList';
-import { NoteEditor } from './NoteEditor';
-import { ClassRecordings } from './ClassRecordings';
-import { Schedule } from './Schedule';
-import AIChat from './aiChat/Components/AiChat';
-import { DocumentUpload } from './DocumentUpload';
-import { UserSettings } from './UserSettings';
-import Dashboard from './Dashboard';
+import { NotesList } from './notes/components/NotesList';
+import { NoteEditor } from './notes/NoteEditor';
+import { ClassRecordings } from './classRecordings/ClassRecordings';
+import { Schedule } from './shedules/Schedule';
+import AIChat from './aiChat/AiChat';
+import { DocumentUpload } from './documents/DocumentUpload';
+import { UserSettings } from './userSettings/UserSettings';
+import Dashboard from './dashboard/Dashboard';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import ErrorBoundary from './ErrorBoundary';
 import { toast } from 'sonner';
-import { SocialFeed } from './SocialFeed';
+import { SocialFeed } from './social/SocialFeed'
 
 interface ChatSession {
   id: string;

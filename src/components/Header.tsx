@@ -4,9 +4,9 @@ import { Button } from './ui/button';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Input } from './ui/input';
-import BookPagesAnimation from './bookloader';
+import BookPagesAnimation from './ui/bookloader';
 import { toast } from 'sonner';
-import { ConfirmationModal } from './ConfirmationModal';
+import { ConfirmationModal } from './ui/ConfirmationModal';
 
 interface HeaderProps {
   searchQuery: string;
