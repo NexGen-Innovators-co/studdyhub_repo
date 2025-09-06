@@ -1,4 +1,4 @@
-// Index.tsx - Fixed Dashboard Integration
+// Index.tsx - Main application component with centralized state management
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation, Routes, Route, useParams } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
@@ -7,31 +7,60 @@ import { TabContent } from '../components/TabContent';
 import { useAuth } from '../hooks/useAuth';
 import { useAppData } from '../hooks/useAppData';
 import { useAppOperations } from '../hooks/useAppOperations';
-// import { Button } from '../components/ui/button';
-// import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../integrations/supabase/client';
 import { Message, Quiz, ClassRecording, ChatSession, MessagePart, FileData } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
-// import { User } from '@supabase/supabase-js';
-// import { generateId } from '@/utils/helpers';
 import { useAudioProcessing } from '../hooks/useAudioProcessing';
-// import BookPagesAnimation, { LoadingScreen } from '../components/bookloader';
 import { insertUserMessage, requestAIResponse } from '../services/messageServices';
 import { LoadingScreen } from '@/components/bookloader';
+import { AppStateProvider, useAppState } from '../contexts/AppStateContext';
+
 // Optimized constants
-const Index = () => {
+const MAX_HISTORY_MESSAGES = 1000;
+const CHAT_SESSIONS_PER_PAGE = 15;
+const CHAT_MESSAGES_PER_PAGE = 25;
+
+const IndexContent = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation(); // Use useLocation hook to get location object
-  const { sessionId: urlSessionId } = useParams(); // Get sessionId from URL parameters
+  const location = useLocation();
+  const { sessionId: urlSessionId } = useParams();
+  
+  // Use centralized state management
+  const { 
+    state, 
+    dispatch, 
+    loadChatMessages, 
+    loadSessionDocuments, 
+    subscribeToMessages, 
+    unsubscribeFromMessages 
+  } = useAppState();
 
-  // Theme management
-  // Optimized constants
-  const MAX_HISTORY_MESSAGES = 1000;
-  const CHAT_SESSIONS_PER_PAGE = 15;
-  const CHAT_MESSAGES_PER_PAGE = 25;
+  // Use app data hook for backward compatibility (gradual migration)
+  const appData = useAppData();
+  const {
+    notes,
+    recordings,
+    scheduleItems,
+    documents,
+    userProfile,
+    activeNote,
+    setActiveNote,
+    searchQuery,
+    setSearchQuery,
+    selectedCategory,
+    setSelectedCategory,
+    isSidebarOpen,
+    setIsSidebarOpen,
+    activeTab,
+    setActiveTab,
+    loading,
+    quizzes,
+    chatMessages,
+    setChatMessages
+  } = appData;
 
   const extractFirstSentence = useCallback((text: string): string => {
     if (!text || text.trim() === '') return 'New Chat';
@@ -1362,6 +1391,14 @@ const Index = () => {
         <TabContent handleReplaceOptimisticMessage={handleReplaceOptimisticMessage} {...sidebarProps} {...tabContentProps} />
       </div>
     </div>
+  );
+};
+
+const Index = () => {
+  return (
+    <AppStateProvider>
+      <IndexContent />
+    </AppStateProvider>
   );
 };
 
