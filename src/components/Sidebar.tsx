@@ -752,128 +752,140 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 
   return (
-    <div
-      className={`bg-white border-r h-full border-slate-200 transition-transform duration-300 ease-in-out
-  ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-  fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg lg:shadow-none
-  lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden
-  dark:bg-gray-900 dark:border-gray-600`}
-    >
-      <div className="p-6 sm:p-4 flex-1 overflow-y-auto modern-scrollbar">
-        <div className="mb-2">
-          {isOpen && (
-            <h2 className="font-semibold text-slate-800
+    <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={onToggle}
+        />
+      )}
+      <div
+        className={`bg-white border-r h-full border-slate-200 transition-transform duration-300 ease-in-out
+        ${isOpen
+            ? 'translate-x-0 w-72 md:w-64'
+            : '-translate-x-full md:translate-x-0 md:w-14 md:hover:w-64'
+          }
+        fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg lg:shadow-none
+        lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden
+        dark:bg-gray-900 dark:border-gray-600`}
+      >
+        <div className="p-6 sm:p-4 flex-1 overflow-y-auto modern-scrollbar">
+          <div className="mb-2">
+            {isOpen && (
+              <h2 className="font-semibold text-slate-800
   lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300
   dark:text-gray-200">
-              Navigation
-            </h2>
-          )}
-          <TabsList {...tabsListProps} />
-        </div>
+                Navigation
+              </h2>
+            )}
+            <TabsList {...tabsListProps} />
+          </div>
 
-        <div className="mt-4 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
-          <ThemeToggle {...themeToggleProps} />
-        </div>
+          <div className="mt-4 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
+            <ThemeToggle {...themeToggleProps} />
+          </div>
 
-        {/* Chat Sessions Section - Conditionally rendered based on activeTab */}
-        {activeTab === 'chat' && (
-          <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-2">
-              {isOpen && (
-                <h2 className="font-semibold text-slate-800 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-200">
-                  Chat Sessions
-                </h2>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleNewChat}
-                className={`text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'
-                  }`}
-                title="New Chat"
-                disabled={isNewChatLoading}
-              >
-                {isNewChatLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className={`h-4 w-4 ${isOpen ? 'mr-2' : ''}`} />
+          {/* Chat Sessions Section - Conditionally rendered based on activeTab */}
+          {activeTab === 'chat' && (
+            <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-2">
+                {isOpen && (
+                  <h2 className="font-semibold text-slate-800 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-200">
+                    Chat Sessions
+                  </h2>
                 )}
-                <span className={`${isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-9 lg:w-full lg:pl-1 lg:pointer-events-none'
-                  }`}>
-                  New Chat
-                </span>
-              </Button>
-            </div>
-            {/* Scrollable container for chat sessions */}
-            <div
-              ref={chatSessionsRef}
-              className={`space-y-1 transition-all duration-300 ease-in-out
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleNewChat}
+                  className={`text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'
+                    }`}
+                  title="New Chat"
+                  disabled={isNewChatLoading}
+                >
+                  {isNewChatLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className={`h-4 w-4 ${isOpen ? 'mr-2' : ''}`} />
+                  )}
+                  <span className={`${isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-9 lg:w-full lg:pl-1 lg:pointer-events-none'
+                    }`}>
+                    New Chat
+                  </span>
+                </Button>
+              </div>
+              {/* Scrollable container for chat sessions */}
+              <div
+                ref={chatSessionsRef}
+                className={`space-y-1 transition-all duration-300 ease-in-out
   ${isOpen
-                  ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
-                  : 'max-h-0 overflow-hidden'
-                }
+                    ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
+                    : 'max-h-0 overflow-hidden'
+                  }
   lg:group-hover:max-h-[50vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar
   lg:max-h-0 lg:overflow-hidden`}
-            >
-              <ChatSessionsList {...chatSessionsListProps} />
-              {/* The "Load More" button itself is removed, as loading is now triggered by scroll.
+              >
+                <ChatSessionsList {...chatSessionsListProps} />
+                {/* The "Load More" button itself is removed, as loading is now triggered by scroll.
   You can keep it if you want it as a fallback or for visual indication,
   but its click handler won't be the primary trigger anymore.
   */}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'notes' && (
-          <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
-            {isOpen && (
-              <div className="mb-2
-  lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
-                <h2 className="font-semibold text-slate-800 dark:text-gray-200">
-                  Categories
-                </h2>
-                <p className="text-sm text-slate-500 dark:text-gray-400">
-                  {noteCount} notes
-                </p>
               </div>
-            )}
+            </div>
+          )}
 
-            <CategoriesList {...categoriesListProps} />
-          </div>
-        )}
-      </div>
-      <div
-        className={`flex-shrink-0 border-t border-slate-200 p-4
-  dark:border-gray-700 transition-all duration-300 ease-in-out`}
-      >
-        <div className="flex items-center gap-2">
-          <AvatarMenu {...avatarMenuProps} />
-          <UserAvatar {...userAvatarProps} />
+          {activeTab === 'notes' && (
+            <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
+              {isOpen && (
+                <div className="mb-2
+  lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+                  <h2 className="font-semibold text-slate-800 dark:text-gray-200">
+                    Categories
+                  </h2>
+                  <p className="text-sm text-slate-500 dark:text-gray-400">
+                    {noteCount} notes
+                  </p>
+                </div>
+              )}
+
+              <CategoriesList {...categoriesListProps} />
+            </div>
+          )}
         </div>
-      </div>
-      <ConfirmationModal
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={handleConfirmDelete}
-        title="Delete Chat Session"
-        message="Are you sure you want to delete this chat session? All messages within it will also be deleted. This action cannot be undone."
-      />
+        <div
+          className={`flex-shrink-0 border-t border-slate-200 p-4
+  dark:border-gray-700 transition-all duration-300 ease-in-out`}
+        >
+          <div className="flex items-center gap-2">
+            <AvatarMenu {...avatarMenuProps} />
+            <UserAvatar {...userAvatarProps} />
+          </div>
+        </div>
+        <ConfirmationModal
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={handleConfirmDelete}
+          title="Delete Chat Session"
+          message="Are you sure you want to delete this chat session? All messages within it will also be deleted. This action cannot be undone."
+        />
 
-      <RenameModal
-        isOpen={showRenameModal}
-        onClose={() => setShowRenameModal(false)}
-        onConfirm={handleConfirmRename}
-        title="Rename Chat Session"
-        message="Enter a new title for your chat session:"
-        initialValue={sessionToRenameTitle}
-      />
-      <ConfirmationModal
-        isOpen={showLogoutConfirm}
-        onClose={() => setShowLogoutConfirm(false)}
-        onConfirm={handleConfirmLogout}
-        title="Sign Out"
-        message="Are you sure you want to sign out? You will be redirected to the login page."
-      />
-    </div>
+        <RenameModal
+          isOpen={showRenameModal}
+          onClose={() => setShowRenameModal(false)}
+          onConfirm={handleConfirmRename}
+          title="Rename Chat Session"
+          message="Enter a new title for your chat session:"
+          initialValue={sessionToRenameTitle}
+        />
+        <ConfirmationModal
+          isOpen={showLogoutConfirm}
+          onClose={() => setShowLogoutConfirm(false)}
+          onConfirm={handleConfirmLogout}
+          title="Sign Out"
+          message="Are you sure you want to sign out? You will be redirected to the login page."
+        />
+      </div>
+    </>
   );
 };
