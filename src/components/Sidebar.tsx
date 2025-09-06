@@ -132,13 +132,13 @@ const CategoriesList = memo(
             onClick={() => onCategoryChange(category.id)}
           >
             <Icon
-              className={`h-3 w-3 ${isOpen ? 'mr-2' : 'lg:group-hover:mr-2 lg:transition-all lg:duration-300'
+              className={`h-3 w-3 ${isOpen ? 'mr-2' : 'md:group-hover:mr-2 md:transition-all md:duration-300'
                 }`}
             />
             <span
               className={`truncate ${isOpen
                 ? ''
-                : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+                : 'md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300 md:pointer-events-none'
                 }`}
             >
               {category.name}
@@ -193,13 +193,13 @@ const TabsList = memo(
             }}
           >
             <Icon
-              className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
+              className={`h-4 w-4 ${isOpen ? 'mr-3' : 'md:group-hover:mr-3 md:transition-all md:duration-300'
                 }`}
             />
             <span
               className={`truncate ${isOpen
                 ? ''
-                : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+                : 'md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300 md:pointer-events-none'
                 }`}
             >
               {tab.name}
@@ -233,7 +233,7 @@ const ChatSessionsList = memo(
   }) => (
     <div className="space-y-1">
       {chatSessions.length === 0 && isOpen ? (
-        <p className="text-sm text-slate-500 py-2 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-400">
+        <p className="text-sm text-slate-500 py-2 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300 dark:text-gray-400">
           No chat sessions yet.
         </p>
       ) : (
@@ -258,13 +258,13 @@ const ChatSessionsList = memo(
                 style={{ maxWidth: '160px' }}
               >
                 <MessageCircle
-                  className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
+                  className={`h-4 w-4 ${isOpen ? 'mr-3' : 'md:group-hover:mr-3 md:transition-all md:duration-300'
                     }`}
                 />
                 <span
                   className={`truncate ${isOpen
                     ? ''
-                    : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+                    : 'md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300 md:pointer-events-none'
                     }`}
                 >
                   {session.title}
@@ -319,19 +319,19 @@ const ThemeToggle = memo(
     >
       {currentTheme === 'light' ? (
         <Moon
-          className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
+          className={`h-4 w-4 ${isOpen ? 'mr-3' : 'md:group-hover:mr-3 md:transition-all md:duration-300'
             }`}
         />
       ) : (
         <Sun
-          className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
+          className={`h-4 w-4 ${isOpen ? 'mr-3' : 'md:group-hover:mr-3 md:transition-all md:duration-300'
             }`}
         />
       )}
       <span
         className={`truncate ${isOpen
           ? ''
-          : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+          : 'md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300 md:pointer-events-none'
           }`}
       >
         {currentTheme === 'light' ? 'Dark Mode' : 'Light Mode'}
@@ -504,7 +504,7 @@ const RenameModal: React.FC<RenameModalProps> = ({
   );
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({
+const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onToggle,
   selectedCategory,
@@ -523,94 +523,73 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentTheme,
   onThemeChange,
   fullName,
-  avatarUrl,
+  avatarUrl
 }) => {
-  const [isNewChatLoading, setIsNewChatLoading] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [sessionToDeleteId, setSessionToDeleteId] = useState<string | null>(
-    null,
-  );
-  const [showRenameModal, setShowRenameModal] = useState(false);
-  const [sessionToRenameId, setSessionToRenameId] = useState<string | null>(
-    null,
-  );
-  const [sessionToRenameTitle, setSessionToRenameTitle] = useState<string>(
-    '',
-  );
-
   const { signOut } = useAuth();
   const navigate = useNavigate();
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isNewChatLoading, setIsNewChatLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [sessionToDeleteId, setSessionToDeleteId] = useState<string | null>(null);
+  const [sessionToRenameId, setSessionToRenameId] = useState<string | null>(null);
+  const [sessionToRenameTitle, setSessionToRenameTitle] = useState<string>('');
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 
-  const getInitials = useCallback((name: string | null) => {
-    if (!name) return 'U';
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2);
+  const categories = useMemo(() => [
+    { id: 'all', name: 'All Notes', icon: FileText },
+    { id: 'general', name: 'General', icon: Hash },
+    { id: 'math', name: 'Mathematics', icon: Calculator },
+    { id: 'science', name: 'Science', icon: FlaskConical },
+    { id: 'history', name: 'History', icon: Clock },
+    { id: 'language', name: 'Language', icon: Globe },
+    { id: 'other', name: 'Other', icon: FileText }
+  ], []);
+
+  const tabs = useMemo(() => [
+    { id: 'notes', name: 'Notes', icon: FileText },
+    { id: 'recordings', name: 'Recordings', icon: Mic },
+    { id: 'schedule', name: 'Schedule', icon: Calendar },
+    { id: 'chat', name: 'AI Chat', icon: MessageCircle },
+    { id: 'documents', name: 'Documents', icon: Upload },
+    { id: 'social', name: 'Social', icon: Users },
+    { id: 'settings', name: 'Settings', icon: Settings }
+  ], []);
+
+  const getInitials = useCallback((name: string | null): string => {
+    if (!name || name.trim() === '') return 'U';
+    const names = name.trim().split(' ');
+    if (names.length === 1) return names[0].charAt(0).toUpperCase();
+    return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
   }, []);
 
-  const handleSignOut = useCallback(async () => {
-    try {
-      await signOut();
-      toast.success('Signed out successfully');
-      navigate('/auth');
-    } catch (error) {
-      toast.error('Error signing out');
-    }
-  }, [signOut, navigate]);
-
   const handleImageError = useCallback((e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    e.currentTarget.style.display = 'none';
+    setAvatarError(true);
+    (e.target as HTMLImageElement).style.display = 'none';
   }, []);
 
   const handleAvatarClick = useCallback(() => {
-    setIsAvatarMenuOpen((prev) => !prev);
+    setIsAvatarMenuOpen(prev => !prev);
   }, []);
 
-  const handleLogoutClick = useCallback(() => {
-    setIsAvatarMenuOpen(false);
-    setShowLogoutConfirm(true);
-  }, []);
-
-  const handleConfirmLogout = useCallback(() => {
-    handleSignOut();
-    setShowLogoutConfirm(false);
-  }, [handleSignOut]);
-
-  // Ref for the scrollable chat sessions container
-  const chatSessionsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const currentChatSessionsRef = chatSessionsRef.current;
-
-    const handleScroll = () => {
-      if (currentChatSessionsRef && hasMoreChatSessions) {
-        // Check if the user has scrolled to the bottom
-        const { scrollTop, scrollHeight, clientHeight } = currentChatSessionsRef;
-        if (scrollTop + clientHeight >= scrollHeight - 5) {
-          // -5 for a small buffer
-          onLoadMoreChatSessions();
-        }
-      }
-    };
-
-    if (currentChatSessionsRef) {
-      currentChatSessionsRef.addEventListener('scroll', handleScroll);
+  const handleLogoutClick = useCallback(async () => {
+    try {
+      await signOut();
+      navigate('/auth');
+      toast.success('Logged out successfully');
+    } catch (error) {
+      console.error('Error logging out:', error);
+      toast.error('Error logging out');
     }
+  }, [signOut, navigate]);
 
-    // Clean up the event listener
-    return () => {
-      if (currentChatSessionsRef) {
-        currentChatSessionsRef.removeEventListener('scroll', handleScroll);
-      }
-    };
-  }, [hasMoreChatSessions, onLoadMoreChatSessions, activeTab]); // Re-run effect if these dependencies change
+  const handleThemeToggle = useCallback(() => {
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    onThemeChange(newTheme);
+  }, [currentTheme, onThemeChange]);
 
-  const handleNewChat = useCallback(async () => {
+  const handleNewChatClick = useCallback(async () => {
     setIsNewChatLoading(true);
     try {
       const newSessionId = await onNewChatSession();
@@ -638,20 +617,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setSessionToDeleteId(null);
       setShowDeleteConfirm(false);
     }
-  }, [onDeleteChatSession, sessionToDeleteId]);
-  const tabs = useMemo(
-    () => [
-      { id: 'dashboard', name: 'Dashboard', icon: Book },
-      { id: 'notes', name: 'Notes', icon: FileText },
-      { id: 'recordings', name: 'Recordings', icon: Mic },
-      { id: 'schedule', name: 'Schedule', icon: Calendar },
-      { id: 'chat', name: 'AI Chat', icon: MessageCircle },
-      { id: 'documents', name: 'Documents', icon: Upload },
-      { id: 'social', name: 'Social Feed', icon: Users },
-      { id: 'settings', name: 'Settings', icon: Settings },
-    ],
-    []
-  );
+  }, [sessionToDeleteId, onDeleteChatSession]);
+
+  const handleCancelDelete = useCallback(() => {
+    setSessionToDeleteId(null);
+    setShowDeleteConfirm(false);
+  }, []);
+
   const handleRenameChatClick = useCallback((sessionId: string, currentTitle: string, event: React.MouseEvent) => {
     event.stopPropagation();
     setSessionToRenameId(sessionId);
@@ -660,220 +632,205 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const handleConfirmRename = useCallback(async (newTitle: string) => {
-    if (sessionToRenameId && newTitle.trim() !== '') {
-      await onRenameChatSession(sessionToRenameId, newTitle.trim());
+    if (sessionToRenameId) {
+      await onRenameChatSession(sessionToRenameId, newTitle);
+      setSessionToRenameId(null);
+      setSessionToRenameTitle('');
+      setShowRenameModal(false);
     }
+  }, [sessionToRenameId, onRenameChatSession]);
+
+  const handleCancelRename = useCallback(() => {
     setSessionToRenameId(null);
     setSessionToRenameTitle('');
     setShowRenameModal(false);
-  }, [onRenameChatSession, sessionToRenameId]);
-
-  const handleThemeToggle = useCallback(() => {
-    onThemeChange(currentTheme === 'light' ? 'dark' : 'light');
-  }, [currentTheme, onThemeChange]);
-
-  const categoriesListProps = useMemo(
-    () => ({
-      categories: [
-        { id: 'all', name: 'All Notes', icon: Book },
-        { id: 'math', name: 'Math', icon: Calculator },
-        { id: 'science', name: 'Science', icon: FlaskConical },
-        { id: 'history', name: 'History', icon: Clock },
-        { id: 'geography', name: 'Geography', icon: Globe },
-        { id: 'literature', name: 'Literature', icon: FileText },
-        { id: 'programming', name: 'Programming', icon: Hash },
-      ],
-      selectedCategory,
-      onCategoryChange,
-      isOpen,
-    }),
-    [selectedCategory, onCategoryChange, isOpen],
-  );
-
-  const tabsListProps = useMemo(
-    () => ({
-      tabs,
-      activeTab,
-      onTabChange,
-      activeChatSessionId,
-      isOpen,
-    }),
-    [tabs, activeTab, onTabChange, activeChatSessionId, isOpen],
-  );
-
-  const chatSessionsListProps = useMemo(
-    () => ({
-      chatSessions,
-      activeChatSessionId,
-      onChatSessionSelect,
-      onDeleteChatClick: handleDeleteChatClick,
-      onRenameChatClick: handleRenameChatClick,
-      isOpen,
-    }),
-    [
-      chatSessions,
-      activeChatSessionId,
-      onChatSessionSelect,
-      handleDeleteChatClick,
-      handleRenameChatClick,
-      isOpen,
-    ],
-  );
-
-  const themeToggleProps = useMemo(
-    () => ({
-      currentTheme,
-      onThemeChange: handleThemeToggle,
-      isOpen,
-    }),
-    [currentTheme, handleThemeToggle, isOpen]
-  );
-
-
-
-  const userAvatarProps = useMemo(
-    () => ({
-      fullName,
-      avatarUrl,
-      getInitials,
-      onAvatarClick: handleAvatarClick,
-      handleImageError,
-      isAvatarMenuOpen,
-    }),
-    [fullName, avatarUrl, getInitials, handleAvatarClick, handleImageError, isAvatarMenuOpen],
-  );
-
-  const avatarMenuProps = useMemo(
-    () => ({
-      isOpen: isAvatarMenuOpen,
-      onLogoutClick: handleLogoutClick,
-    }),
-    [isAvatarMenuOpen, handleLogoutClick],
-  );
+  }, []);
 
   return (
-    <div
-      className={`bg-white border-r h-full border-slate-200 transition-transform duration-300 ease-in-out
-  ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-  fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg lg:shadow-none
-  lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden
-  dark:bg-gray-900 dark:border-gray-600`}
-    >
-      <div className="p-6 sm:p-4 flex-1 overflow-y-auto modern-scrollbar">
-        <div className="mb-2">
-          {isOpen && (
-            <h2 className="font-semibold text-slate-800
-  lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300
-  dark:text-gray-200">
-              Navigation
-            </h2>
-          )}
-          <TabsList {...tabsListProps} />
-        </div>
+    <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={onToggle}
+        />
+      )}
 
-        <div className="mt-4 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
-          <ThemeToggle {...themeToggleProps} />
-        </div>
-
-        {/* Chat Sessions Section - Conditionally rendered based on activeTab */}
-        {activeTab === 'chat' && (
-          <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-2">
-              {isOpen && (
-                <h2 className="font-semibold text-slate-800 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-200">
-                  Chat Sessions
-                </h2>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleNewChat}
-                className={`text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'
-                  }`}
-                title="New Chat"
-                disabled={isNewChatLoading}
-              >
-                {isNewChatLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className={`h-4 w-4 ${isOpen ? 'mr-2' : ''}`} />
-                )}
-                <span className={`${isOpen ? '' : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-9 lg:w-full lg:pl-1 lg:pointer-events-none'
-                  }`}>
-                  New Chat
-                </span>
-              </Button>
-            </div>
-            {/* Scrollable container for chat sessions */}
-            <div
-              ref={chatSessionsRef}
-              className={`space-y-1 transition-all duration-300 ease-in-out
-  ${isOpen
-                  ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
-                  : 'max-h-0 overflow-hidden'
-                }
-  lg:group-hover:max-h-[50vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar
-  lg:max-h-0 lg:overflow-hidden`}
-            >
-              <ChatSessionsList {...chatSessionsListProps} />
-              {/* The "Load More" button itself is removed, as loading is now triggered by scroll.
-  You can keep it if you want it as a fallback or for visual indication,
-  but its click handler won't be the primary trigger anymore.
-  */}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'notes' && (
-          <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
+      {/* Sidebar */}
+      <div
+        className={`group fixed top-0 left-0 z-50 bg-white dark:bg-gray-900 shadow-xl transform transition-all duration-300 ease-in-out md:relative md:z-auto md:shadow-none border-r border-slate-200 dark:border-gray-700 flex flex-col h-screen
+          ${
+            isOpen
+              ? 'translate-x-0 w-72 md:w-64'
+              : '-translate-x-full md:translate-x-0 md:w-14 md:hover:w-64'
+          }`}
+      >
+        {/* Header with User Info and Close Button */}
+        <div className="flex items-center justify-between p-4 md:p-3 border-b border-slate-200 dark:border-gray-700">
+          <div className="flex items-center space-x-3">
+            <UserAvatar
+              fullName={fullName}
+              avatarUrl={avatarUrl}
+              getInitials={getInitials}
+              onAvatarClick={handleAvatarClick}
+              handleImageError={handleImageError}
+              isAvatarMenuOpen={isAvatarMenuOpen}
+            />
             {isOpen && (
-              <div className="mb-2
-  lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
-                <h2 className="font-semibold text-slate-800 dark:text-gray-200">
-                  Categories
-                </h2>
-                <p className="text-sm text-slate-500 dark:text-gray-400">
-                  {noteCount} notes
-                </p>
+              <div className="flex flex-col min-w-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300">
+                <span className="text-sm font-medium text-slate-800 dark:text-white truncate">
+                  {fullName || 'User'}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-gray-400">
+                  {isRealtimeConnected ? 'Online' : 'Connecting...'}
+                </span>
               </div>
             )}
-
-            <CategoriesList {...categoriesListProps} />
           </div>
-        )}
-      </div>
-      <div
-        className={`flex-shrink-0 border-t border-slate-200 p-4
-  dark:border-gray-700 transition-all duration-300 ease-in-out`}
-      >
-        <div className="flex items-center gap-2">
-          <AvatarMenu {...avatarMenuProps} />
-          <UserAvatar {...userAvatarProps} />
+
+          {/* Mobile close button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggle}
+            className="md:hidden text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+
+          {/* Desktop mini actions (when collapsed) */}
+          {!isOpen && (
+            <div className="hidden md:flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <AvatarMenu
+                isOpen={isAvatarMenuOpen}
+                onLogoutClick={handleLogoutClick}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Main Navigation */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+          {/* Main Tabs */}
+          <div>
+            <h3 className={`text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-3 ${
+              isOpen ? '' : 'md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300'
+            }`}>
+              Dashboard
+            </h3>
+            <TabsList
+              tabs={tabs}
+              activeTab={activeTab}
+              onTabChange={onTabChange}
+              activeChatSessionId={activeChatSessionId}
+              isOpen={isOpen}
+            />
+          </div>
+
+          {/* Chat Sessions Section */}
+          {activeTab === 'chat' && (
+            <div>
+              <div className={`flex items-center justify-between mb-3 ${
+                !isOpen ? 'md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300' : ''
+              }`}>
+                <h3 className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
+                  Chat Sessions
+                </h3>
+                {isOpen && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleNewChatClick}
+                    className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-slate-200 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
+                    title="New Chat"
+                    disabled={isNewChatLoading}
+                  >
+                    {isNewChatLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
+              <ChatSessionsList
+                chatSessions={chatSessions}
+                activeChatSessionId={activeChatSessionId}
+                onChatSessionSelect={onChatSessionSelect}
+                onDeleteChatClick={handleDeleteChatClick}
+                onRenameChatClick={handleRenameChatClick}
+                isOpen={isOpen}
+              />
+              {hasMoreChatSessions && isOpen && (
+                <Button
+                  variant="ghost"
+                  className="w-full mt-2 text-slate-600 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-gray-800"
+                  onClick={onLoadMoreChatSessions}
+                >
+                  Load More
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Categories Section (for Notes tab) */}
+          {activeTab === 'notes' && (
+            <div>
+              <h3 className={`text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-3 ${
+                isOpen ? '' : 'md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300'
+              }`}>
+                Categories ({noteCount})
+              </h3>
+              <CategoriesList
+                categories={categories}
+                selectedCategory={selectedCategory}
+                onCategoryChange={onCategoryChange}
+                isOpen={isOpen}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="border-t border-slate-200 dark:border-gray-700 p-3 space-y-2">
+          {/* Mobile avatar menu */}
+          {isOpen && (
+            <div className="flex items-center space-x-2 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:duration-300">
+              <AvatarMenu
+                isOpen={isAvatarMenuOpen}
+                onLogoutClick={handleLogoutClick}
+              />
+            </div>
+          )}
+
+          {/* Theme toggle */}
+          <ThemeToggle
+            currentTheme={currentTheme}
+            onThemeChange={handleThemeToggle}
+            isOpen={isOpen}
+          />
         </div>
       </div>
+
+      {/* Modals */}
       <ConfirmationModal
         isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
+        onClose={handleCancelDelete}
         onConfirm={handleConfirmDelete}
         title="Delete Chat Session"
-        message="Are you sure you want to delete this chat session? All messages within it will also be deleted. This action cannot be undone."
+        message="Are you sure you want to delete this chat session? This action cannot be undone."
       />
 
       <RenameModal
         isOpen={showRenameModal}
-        onClose={() => setShowRenameModal(false)}
+        onClose={handleCancelRename}
         onConfirm={handleConfirmRename}
         title="Rename Chat Session"
-        message="Enter a new title for your chat session:"
+        message="Enter a new name for this chat session:"
         initialValue={sessionToRenameTitle}
       />
-      <ConfirmationModal
-        isOpen={showLogoutConfirm}
-        onClose={() => setShowLogoutConfirm(false)}
-        onConfirm={handleConfirmLogout}
-        title="Sign Out"
-        message="Are you sure you want to sign out? You will be redirected to the login page."
-      />
-    </div>
+    </>
   );
 };
+
+export { Sidebar };

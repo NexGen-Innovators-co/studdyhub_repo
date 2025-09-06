@@ -458,8 +458,8 @@ export const useAppOperations = ({
             isError: false,
             attachedDocumentIds: attachedDocumentIds || [],
             attachedNoteIds: attachedNoteIds || [],
-            imageUrl,
-            imageMimeType,
+            image_url: imageUrl,
+            image_mime_type: imageMimeType,
             session_id: session_id || undefined,
             has_been_displayed: false, // NEW: Default to false
           };
