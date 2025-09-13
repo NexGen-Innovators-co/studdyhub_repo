@@ -857,12 +857,12 @@ export const useAppData = () => {
 
             if (payload.eventType === 'INSERT') {
               const newMessage = formatMessage(payload.new) as Message;
-              // console.log('[useAppData] New message received via realtime:', newMessage);
+              console.log('[useAppData] New message received via realtime:', newMessage);
 
               setChatMessages(prevMessages => {
                 const exists = prevMessages.some(msg => msg.id === newMessage.id);
                 if (exists) {
-                  // console.log('[useAppData] Message already exists, updating if needed');
+                  console.log('[useAppData] Message already exists, updating if needed');
                   return prevMessages.map(msg =>
                     msg.id === newMessage.id
                       ? { ...msg, ...newMessage }
@@ -870,7 +870,7 @@ export const useAppData = () => {
                   );
                 }
 
-                // console.log('[useAppData] Adding new message to state');
+                console.log('[useAppData] Adding new message to state');
                 const updatedMessages = [...prevMessages, newMessage];
                 updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
                 return updatedMessages;
@@ -882,6 +882,7 @@ export const useAppData = () => {
               setChatMessages(prev => {
                 return prev.map(m => {
                   if (m.id !== updated.id) return m;
+                  console.log('[useAppData] Message updated via realtime:', updated);
                   // Preserve existing content if incoming payload has null/undefined content
                   const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
                   return {

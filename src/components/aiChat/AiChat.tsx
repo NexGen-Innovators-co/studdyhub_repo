@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Bot, Loader2, FileText, XCircle, BookOpen, StickyNote, Camera, Upload, Image, Mic, ChevronDown, X, File, Paperclip } from 'lucide-react';
+import { Send, Loader2, FileText, XCircle, BookOpen, StickyNote, Camera, Paperclip, Image, Mic, ChevronDown, File, Upload } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { UserProfile, Document } from '../../types/Document';
 import { Note } from '../../types/Note';
@@ -13,10 +12,11 @@ import { DiagramPanel } from './Components/DiagramPanel';
 import { generateId } from '@/components/classRecordings/utils/helpers';
 import { MessageList } from './Components/MessageList';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
-import { Message, ChatSession } from '../../types/Class';
+import { Message } from '../../types/Class';
 import BookPagesAnimation from '../ui/bookloader';
 import { throttle } from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
+import { useAppContext } from '../../contexts/AppContext';
 
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
@@ -175,7 +175,6 @@ const formatFileSize = (bytes: number): string => {
 
 const validateFile = (file: File): { isValid: boolean; error?: string } => {
   const MAX_FILE_SIZE = 25 * 1024 * 1024;
-  const type = getFileType(file);
 
   if (file.size > MAX_FILE_SIZE) {
     return {
@@ -221,6 +220,7 @@ const AIChat: React.FC<AIChatProps> = ({
   onSendMessageToBackend,
   onMessageUpdate,
   onReplaceOptimisticMessage
+
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -264,6 +264,17 @@ const AIChat: React.FC<AIChatProps> = ({
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const generateOptimisticId = () => `optimistic-ai-${uuidv4()}`;
 
+  // **New State Variables for Drag and Drop:**
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragCounter, setDragCounter] = useState(0);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  // **New State Variable:**
+  const [isLastAiMessageDisplayed, setIsLastAiMessageDisplayed] = useState(true);
+
+  // NEW: State to track if a message is currently being sent
+  const [isCurrentlySending, setIsCurrentlySending] = useState(false);
+
   // Throttled textarea resize
   const resizeTextarea = useCallback(() => {
     if (textareaRef.current) {
@@ -279,12 +290,112 @@ const AIChat: React.FC<AIChatProps> = ({
     requestAnimationFrame(resizeTextarea);
   }, [resizeTextarea]);
 
-  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
-    setIsLoading(true);
+  // **Drag and Drop Event Handlers:**
+  const handleDragEnter = useCallback((e: DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(prev => prev + 1);
+
+    if (e.dataTransfer?.items) {
+      const hasFiles = Array.from(e.dataTransfer.items).some(item => item.kind === 'file');
+      if (hasFiles) {
+        setIsDragging(true);
+      }
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(prev => {
+      const newCount = prev - 1;
+      if (newCount === 0) {
+        setIsDragging(false);
+      }
+      return newCount;
+    });
+  }, []);
+
+  const handleDragOver = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    setDragCounter(0);
+
+    if (!e.dataTransfer?.files) return;
+
+    const files = Array.from(e.dataTransfer.files);
+    processFiles(files);
+  }, []);
+
+  // **Process files function (extracted for reuse):**
+  const processFiles = useCallback((files: File[]) => {
+    files.forEach(file => {
+      const validation = validateFile(file);
+      if (!validation.isValid) {
+        toast.error(validation.error);
+        return;
+      }
+
+      const fileId = generateId();
+      const fileType = getFileType(file);
+      const attachedFile: AttachedFile = {
+        file,
+        type: fileType,
+        id: fileId
+      };
+
+      if (fileType === 'image') {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          attachedFile.preview = reader.result as string;
+          setAttachedFiles(prev => [...prev, attachedFile]);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setAttachedFiles(prev => [...prev, attachedFile]);
+      }
+    });
+  }, []);
+
+  // **Set up drag and drop event listeners:**
+  useEffect(() => {
+    const dropZone = dropZoneRef.current;
+    if (!dropZone) return;
+
+    dropZone.addEventListener('dragenter', handleDragEnter);
+    dropZone.addEventListener('dragleave', handleDragLeave);
+    dropZone.addEventListener('dragover', handleDragOver);
+    dropZone.addEventListener('drop', handleDrop);
+
+    return () => {
+      dropZone.removeEventListener('dragenter', handleDragEnter);
+      dropZone.removeEventListener('dragleave', handleDragLeave);
+      dropZone.removeEventListener('dragover', handleDragOver);
+      dropZone.removeEventListener('drop', handleDrop);
+    };
+  }, [handleDragEnter, handleDragLeave, handleDragOver, handleDrop]);
+
+  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Prevent multiple sends
+    if (isCurrentlySending) {
+      return;
+    }
+
+    setIsCurrentlySending(true); // Set sending flag
+    setIsLoading(true);
+
     if (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) {
       toast.error('Please enter a message, attach files, or select documents/notes.');
       setIsLoading(false);
+      setIsCurrentlySending(false); // Clear sending flag
       return;
     }
 
@@ -293,6 +404,7 @@ const AIChat: React.FC<AIChatProps> = ({
       if (!userId) {
         toast.error("User ID is missing. Please ensure you are logged in.");
         setIsLoading(false);
+        setIsCurrentlySending(false); // Clear sending flag
         return;
       }
 
@@ -375,6 +487,9 @@ const AIChat: React.FC<AIChatProps> = ({
       setAttachedFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (cameraInputRef.current) cameraInputRef.current.value = '';
+
+      // **Disable the send button after sending the message:**
+      setIsLastAiMessageDisplayed(false);
     } catch (error: any) {
       console.error("Error sending message:", error);
       let errorMessage = 'Failed to send message.';
@@ -394,8 +509,9 @@ const AIChat: React.FC<AIChatProps> = ({
       toast.error(`Error: ${errorMessage}`);
     } finally {
       setIsLoading(false);
+      setIsCurrentlySending(false); // Always clear the sending flag
     }
-  }, [inputMessage, attachedFiles, userProfile?.id, activeChatSessionId, selectedDocumentIds, onSendMessageToBackend]);
+  }, [inputMessage, attachedFiles, userProfile?.id, activeChatSessionId, selectedDocumentIds, onSendMessageToBackend, isCurrentlySending]);
 
   const isPhone = useCallback(() => {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -421,6 +537,11 @@ const AIChat: React.FC<AIChatProps> = ({
         toast.error(`Failed to mark message as displayed: ${error.message}`);
       } else {
         onMessageUpdate({ ...messages.find(msg => msg.id === messageId)!, has_been_displayed: true });
+
+        // **Check if the message is the last AI message and enable the send button:**
+        if (messages.length > 0 && messages[messages.length - 1].id === messageId && messages[messages.length - 1].role === 'assistant') {
+          setIsLastAiMessageDisplayed(true);
+        }
       }
     } catch (error) {
       console.error('Unexpected error marking message as displayed:', error);
@@ -666,7 +787,7 @@ const AIChat: React.FC<AIChatProps> = ({
     const isAtBottom = scrollTop + clientHeight >= scrollHeight - 100;
     setShowScrollToBottomButton(!isAtBottom && scrollHeight > clientHeight);
 
-    const scrollThreshold = 100;
+    const scrollThreshold = 200;
     if (scrollTop < scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
       setIsLoadingOlderMessages(true);
       const oldScrollHeight = scrollHeight;
@@ -794,7 +915,6 @@ const AIChat: React.FC<AIChatProps> = ({
   const handleConfirmDelete = useCallback(() => {
     if (messageToDelete) {
       onDeleteMessage(messageToDelete);
-      toast.success('Message deleted.');
       setShowDeleteConfirm(false);
       setMessageToDelete(null);
     }
@@ -821,36 +941,9 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-
-    files.forEach(file => {
-      const validation = validateFile(file);
-      if (!validation.isValid) {
-        toast.error(validation.error);
-        return;
-      }
-
-      const fileId = generateId();
-      const fileType = getFileType(file);
-      const attachedFile: AttachedFile = {
-        file,
-        type: fileType,
-        id: fileId
-      };
-
-      if (fileType === 'image') {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          attachedFile.preview = reader.result as string;
-          setAttachedFiles(prev => [...prev, attachedFile]);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        setAttachedFiles(prev => [...prev, attachedFile]);
-      }
-    });
-
+    processFiles(files);
     event.target.value = '';
-  }, []);
+  }, [processFiles]);
 
   const handleRemoveFile = useCallback((fileId: string) => {
     setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
@@ -1038,15 +1131,37 @@ const AIChat: React.FC<AIChatProps> = ({
 
   return (
     <>
-      <div className="flex flex-col h-full border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans">
-        <motion.div
-          className={`relative flex flex-col h-full rounded-lg panel-transition
-            ${isDiagramPanelOpen
-              ? (isPhone()
-                ? 'hidden'
-                : `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0`)
-              : 'w-full flex-1'
-            } bg-transparent dark:bg-transparent`}
+      <div
+        ref={dropZoneRef}
+        className={`flex flex-col h-full border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+          }`}
+      >
+        {/* **Drag and Drop Overlay:** */}
+        {isDragging && (
+          <div className="fixed inset-0 bg-blue-500/20 dark:bg-blue-500/30 z-50 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-lg border-2 border-dashed border-blue-500 shadow-lg">
+              <div className="flex flex-col items-center gap-4">
+                <Upload className="h-16 w-16 text-blue-500" />
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
+                    Drop files here to attach
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Images, documents, and other files are supported
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <motion.div className={`relative flex flex-col h-full rounded-lg panel-transition
+  ${isDiagramPanelOpen
+            ? (isPhone()
+              ? 'hidden'
+              : `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0`)
+            : 'w-full flex-1'
+          } bg-transparent dark:bg-transparent`}
           initial={{ width: '100%' }}
           animate={{
             width: isDiagramPanelOpen
@@ -1061,7 +1176,7 @@ const AIChat: React.FC<AIChatProps> = ({
                 <BookPagesAnimation size="xl" showText={false} className="mb-6" />
                 <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200 font-claude">Welcome to your AI Study Assistant!</h3>
                 <p className="text-base md:text-lg text-slate-500 max-w-md mx-auto dark:text-gray-400 font-claude leading-relaxed">
-                  I can help with questions about your notes, create study guides, explain concepts, and assist with academic work. Select documents and start chatting or use the microphone!
+                  I can help with questions about your notes, create study guides, explain concepts, and assist with academic work. Select documents and start chatting, use the microphone, or drag and drop files!
                 </p>
               </div>
             )}
@@ -1115,7 +1230,7 @@ const AIChat: React.FC<AIChatProps> = ({
           </div>
 
           <div className={`fixed bottom-0 left-0 right-0 sm:pb-8 md:shadow-none md:static rounded-t-lg md:rounded-lg bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
-            ${isDiagramPanelOpen
+${isDiagramPanelOpen
               ? (isPhone() ? 'hidden' : `md:pr-[calc(${panelWidth}%+1.5rem)]`)
               : ''
             }`}>
@@ -1142,7 +1257,7 @@ const AIChat: React.FC<AIChatProps> = ({
                     handleSendMessage(e);
                   }
                 }}
-                placeholder="What do you want to know?"
+                placeholder="What do you want to know? (You can also drag and drop files here)"
                 className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300 font-claude"
                 disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
                 rows={1}
@@ -1251,11 +1366,20 @@ const AIChat: React.FC<AIChatProps> = ({
                 <Button
                   type="submit"
                   onClick={handleSendMessage}
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0)}
+                  disabled={
+                    isLoading ||
+                    isSubmittingUserMessage ||
+                    isGeneratingImage ||
+                    isUpdatingDocuments ||
+                    (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) ||
+                    // **Disable the button until the last AI message is displayed:**
+                    !isLastAiMessageDisplayed ||
+                    isCurrentlySending // NEW: Disable while sending
+                  }
                   className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
                   title="Send Message"
                 >
-                  {isSubmittingUserMessage ? (
+                  {isSubmittingUserMessage || isCurrentlySending ? ( // Show loader if submitting or sending
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
@@ -1310,8 +1434,8 @@ const AIChat: React.FC<AIChatProps> = ({
             size="icon"
             onClick={() => scrollToBottom('smooth')}
             className={`fixed bottom-28 right-6 md:bottom-8 bg-white rounded-full shadow-lg p-2 z-20 transition-all duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 font-sans
-              ${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
-            `}
+${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
+`}
             title="Scroll to bottom"
           >
             <ChevronDown className="h-5 w-5 text-slate-600 dark:text-gray-300" />

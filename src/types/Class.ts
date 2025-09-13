@@ -101,6 +101,7 @@ export interface ChatSession {
   last_message_at: string;
   document_ids: string[];
   message_count?: number;
+  user_id: string;
 }
 export interface MessagePart {
   text?: string;

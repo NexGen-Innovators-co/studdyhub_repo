@@ -1,12 +1,12 @@
 import React, { useCallback, useState } from 'react';
 import { Search, Plus, Menu, Bell, LogOut } from 'lucide-react';
-import { Button } from './ui/button';
-import { useAuth } from '../hooks/useAuth';
+import { Button } from '../ui/button';
+import { useAuth } from '../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { Input } from './ui/input';
-import BookPagesAnimation from './ui/bookloader';
+import { Input } from '../ui/input';
+import BookPagesAnimation from '../ui/bookloader';
 import { toast } from 'sonner';
-import { ConfirmationModal } from './ui/ConfirmationModal';
+import { ConfirmationModal } from '../ui/ConfirmationModal';
 
 interface HeaderProps {
   searchQuery: string;

@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useState, useRef, useEffect } from 'react';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User, File, Download, Check } from 'lucide-react';
+import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User, File, Download, Check, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
@@ -10,6 +10,7 @@ import { Message } from '../../../types/Class';
 import { cn } from '../utils/cn';
 import BookPagesAnimation from '../../ui/bookloader';
 import AIBot from '../../ui/aibot';
+import { Note } from '@/types';
 
 interface AttachedFile {
     id?: string;
@@ -81,9 +82,12 @@ const FilePreview: React.FC<{
     file: AttachedFile;
     onPreview: (file: AttachedFile) => void;
     className?: string;
-}> = ({ file, onPreview, className }) => {
+    showLabel?: boolean;
+}> = ({ file, onPreview, className, showLabel = true }) => {
     const isImage = file.type === 'image';
     const imageUrl = file.url || (file.data ? `data:${file.mimeType};base64,${file.data}` : 'https://placehold.co/400x300/e0e0e0/555555?text=Image+Load+Error');
+    const hasError = file.processing_error || file.error;
+    const isProcessing = file.processing_status === 'processing' || file.status === 'processing';
 
     return (
         <div
@@ -92,11 +96,11 @@ const FilePreview: React.FC<{
                 className
             )}
             onClick={() => {
-                if (file.processing_status === 'processing' || file.status === 'processing') {
+                if (isProcessing) {
                     toast.info('File is still processing, please wait.');
                     return;
                 }
-                if (file.processing_error || file.error) {
+                if (hasError) {
                     toast.error('Cannot preview file due to processing error.');
                     return;
                 }
@@ -105,7 +109,7 @@ const FilePreview: React.FC<{
             title={`${file.name} ${file.size ? `(${formatFileSize(file.size)})` : ''}`}
         >
             {isImage && imageUrl ? (
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg overflow-hidden border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm">
                     <img
                         src={imageUrl}
                         alt={file.name}
@@ -117,25 +121,80 @@ const FilePreview: React.FC<{
                     />
                 </div>
             ) : (
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-700 flex items-center justify-center shadow-sm">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-700 flex items-center justify-center shadow-sm">
                     {getFileIcon(file)}
                 </div>
             )}
-            <div className="absolute inset-x-0 bottom-0 bg-black bg-opacity-75 text-white text-xs p-1 rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <div className="truncate">
-                    {file.name.length > 12 ? `${file.name.substring(0, 12)}...` : file.name}
-                </div>
-            </div>
-            {(file.processing_status === 'processing' || file.status === 'processing') && (
+
+            {/* Status indicators */}
+            {isProcessing && (
                 <div className="absolute top-1 right-1">
                     <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
                 </div>
             )}
-            {(file.processing_error || file.error) && (
+            {hasError && (
                 <div className="absolute top-1 right-1">
                     <X className="h-3 w-3 text-red-500" />
                 </div>
             )}
+
+            {/* File label */}
+            {showLabel && (
+                <div className="mt-2 text-center">
+                    <div className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[80px]" title={file.name}>
+                        {file.name.length > 12 ? `${file.name.substring(0, 12)}...` : file.name}
+                    </div>
+                    {file.size && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {formatFileSize(file.size)}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const AttachmentSection: React.FC<{
+    title: string;
+    icon: React.ReactNode;
+    children: React.ReactNode;
+    count: number;
+    className?: string;
+}> = ({ title, icon, children, count, className }) => {
+    return (
+        <div className={cn("mb-3", className)}>
+            <div className="flex items-center gap-2 mb-2">
+                {icon}
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {title} ({count})
+                </span>
+            </div>
+            <div className="pl-6">
+                {children}
+            </div>
+        </div>
+    );
+};
+
+const AttachmentList: React.FC<{
+    items: Array<{
+        id: string;
+        name: string;
+        onClick: () => void;
+    }>;
+}> = ({ items }) => {
+    return (
+        <div className="space-y-1">
+            {items.map((item, idx) => (
+                <button
+                    key={`${item.id}-${idx}`}
+                    onClick={item.onClick}
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/30 px-2 py-1 rounded-md transition-colors w-full text-left"
+                >
+                    <span className="truncate">{item.name}</span>
+                </button>
+            ))}
         </div>
     );
 };
@@ -148,26 +207,29 @@ const parseAttachedFiles = (message: Message): AttachedFile[] => {
                 ? JSON.parse(message.files_metadata)
                 : message.files_metadata;
             const metadataArray = Array.isArray(metadata) ? metadata : [metadata];
-            files = metadataArray.map((file: any) => ({
-                id: file.id,
-                name: file.name || 'Unknown file',
-                mimeType: file.mimeType || 'application/octet-stream',
-                url: file.url,
-                data: file.data,
-                type: file.type === 'image' || (file.mimeType && file.mimeType.startsWith('image/')) ? 'image' :
-                    file.type === 'document' || (file.mimeType && (
-                        file.mimeType.includes('text/') ||
-                        file.mimeType.includes('application/pdf') ||
-                        file.mimeType.includes('application/msword') ||
-                        file.mimeType.includes('application/vnd.')
-                    )) ? 'document' : 'other',
-                size: file.size,
-                content: file.content,
-                processing_status: file.processing_status,
-                processing_error: file.processing_error,
-                status: file.status,
-                error: file.error
-            }));
+            files = metadataArray.map((file: any) => {
+                console.log('Parsing file metadata:', file); // Add this line
+                return {
+                    id: file.id,
+                    name: file.name || 'Unknown file',
+                    mimeType: file.mimeType || 'application/octet-stream',
+                    url: file.url,
+                    data: file.data,
+                    type: file.type === 'image' || (file.mimeType && file.mimeType.startsWith('image/')) ? 'image' :
+                        file.type === 'document' || (file.mimeType && (
+                            file.mimeType.includes('text/') ||
+                            file.mimeType.includes('application/pdf') ||
+                            file.mimeType.includes('application/msword') ||
+                            file.mimeType.includes('application/vnd.')
+                        )) ? 'document' : 'other',
+                    size: file.size,
+                    content: file.content,
+                    processing_status: file.processing_status,
+                    processing_error: file.processing_error,
+                    status: file.status,
+                    error: file.error
+                };
+            });
         } catch (error) {
             console.error('Error parsing files_metadata:', error);
             toast.error('Failed to parse file metadata.');
@@ -251,6 +313,17 @@ export const MessageList = memo(({
             const docs = mergedDocuments.filter(doc => docIds.includes(doc.id));
             if (docs.length > 0) {
                 const doc = docs[0]; // Show first document for simplicity
+
+                if (doc.processing_status === 'processing') {
+                    toast.info('Document is still processing, please wait.');
+                    return;
+                }
+
+                if (doc.processing_status === 'failed' || !doc.content_extracted) {
+                    toast.error('No viewable content for this document or processing failed.');
+                    return;
+                }
+
                 if (doc.type === 'image' && doc.file_url) {
                     onViewContent('image', undefined, undefined, doc.file_url);
                 } else if (doc.content_extracted) {
@@ -289,6 +362,7 @@ export const MessageList = memo(({
         }
     }, [onViewContent, mergedDocuments]);
 
+    // 
     const handleFilePreview = useCallback((file: AttachedFile) => {
         if (file.type === 'image') {
             const imageUrl = file.url || (file.data ? `data:${file.mimeType};base64,${file.data}` : null);
@@ -298,17 +372,7 @@ export const MessageList = memo(({
                 toast.error('No image data available for preview.');
             }
         } else if (file.type === 'document' && file.content) {
-            const extension = file.name.split('.').pop()?.toLowerCase();
-            const languageMap: { [key: string]: string } = {
-                'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
-                'py': 'python', 'java': 'java', 'cpp': 'cpp', 'c': 'c', 'cs': 'csharp',
-                'php': 'php', 'rb': 'ruby', 'go': 'go', 'rs': 'rust', 'swift': 'swift',
-                'kt': 'kotlin', 'scala': 'scala', 'sql': 'sql', 'html': 'html', 'css': 'css',
-                'scss': 'scss', 'json': 'json', 'xml': 'xml', 'yaml': 'yaml', 'yml': 'yaml',
-                'md': 'markdown', 'txt': 'text', 'log': 'text'
-            };
-            const language = extension && languageMap[extension] ? languageMap[extension] : 'text';
-            onViewContent('code', file.content, language);
+            onViewContent('document-text', file.content, 'text'); // Use document-text type
         } else {
             const fileInfo = `File: ${file.name}\n${file.size ? `Size: ${formatFileSize(file.size)}\n` : ''}Type: ${file.mimeType}`;
             onViewContent('document-text', fileInfo, 'text');
@@ -325,6 +389,183 @@ export const MessageList = memo(({
         }
     }, [onDiagramCodeUpdate]);
 
+    const renderAttachments = useCallback((message: Message) => {
+        const attachedFiles = parseAttachedFiles(message);
+        const attachedDocumentTitles = message.attachedDocumentIds?.map(id => {
+            const doc = mergedDocuments.find(d => d.id === id);
+            return { id, name: doc ? doc.title : 'Unknown Document', type: 'document' as const, doc, processing_status: doc?.processing_status, processing_error: doc?.processing_error }; // Include the entire document object
+        }) || [];
+        const attachedNoteTitles = message.attachedNoteIds?.map(id => {
+            const note = mergedDocuments.find(d => d.id === id);
+            return { id, name: note ? note.title : 'Unknown Note', type: 'note' as const };
+        }) || [];
+
+        const hasAttachments = attachedFiles.length > 0 || attachedDocumentTitles.length > 0 || attachedNoteTitles.length > 0;
+
+        if (!hasAttachments) return null;
+
+        // Combine all attachments into a single array
+        const allAttachments = [
+            ...attachedFiles.map(file => ({
+                id: file.id || `file-${file.name}`,
+                name: file.name,
+                type: 'file' as const,
+                file,
+                onClick: () => handleFilePreview(file),
+                icon: getFileIcon(file),
+                processing: file.processing_status === 'processing' || file.status === 'processing',
+                error: file.processing_error || file.error
+            })),
+            ...attachedDocumentTitles.map(doc => ({
+                id: doc.id,
+                name: doc.name,
+                type: 'document' as const,
+                onClick: () => handleViewAttachedFile('documents', doc.id),
+                icon: <FileText className="h-3 w-3" />,
+                processing: doc.processing_status === 'processing' || false, // Add processing status
+                error: doc.processing_error || false,
+                doc // Keep the document object
+            })),
+            ...attachedNoteTitles.map(note => ({
+                id: note.id,
+                name: note.name,
+                type: 'note' as const,
+                onClick: () => handleViewAttachedFile('notes', note.id),
+                icon: <StickyNote className="h-3 w-3" />,
+                processing: false,
+                error: false
+            }))
+        ];
+
+        return (
+            <div className="mb-3 overflow-x-auto">
+                <div className="flex gap-2 pb-2 min-w-max">
+                    {allAttachments.map((attachment, idx) => {
+                        // Special handling for image files
+                        if (attachment.type === 'file' && attachment.file?.type === 'image') {
+                            const imageUrl = attachment.file.url ||
+                                (attachment.file.data ? `data:${attachment.file.mimeType};base64,${attachment.file.data}` : null);
+
+                            return (
+                                <div
+                                    key={`${message.id}-attachment-${idx}`}
+                                    className="relative flex-shrink-0 cursor-pointer group"
+                                    onClick={() => {
+                                        if (attachment.processing) {
+                                            toast.info('File is still processing, please wait.');
+                                            return;
+                                        }
+                                        if (!attachment.error) {
+                                            console.log(attachment.error);
+                                            toast.error('Cannot preview file due to processing error.');
+                                            return;
+                                        }
+                                        attachment.onClick();
+                                    }}
+                                    title={attachment.name}
+                                >
+                                    <div className="w-12 h-12 rounded-lg overflow-hidden border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105">
+                                        {imageUrl ? (
+                                            <img
+                                                src={imageUrl}
+                                                alt={attachment.name}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    const target = e.target as HTMLImageElement;
+                                                    target.src = 'https://placehold.co/400x300/e0e0e0/555555?text=Error';
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                                {attachment.icon}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Status indicators */}
+                                    {attachment.processing && (
+                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                                            <Loader2 className="h-2 w-2 animate-spin text-white" />
+                                        </div>
+                                    )}
+                                    {!attachment.error && (
+                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                                            <X className="h-2 w-2 text-white" />
+                                        </div>
+                                    )}
+
+                                    {/* Tooltip on hover */}
+                                    <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                                        {attachment.name.length > 15 ? `${attachment.name.substring(0, 15)}...` : attachment.name}
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        // Default container for documents, notes, and non-image files
+                        return (
+                            <div
+                                key={`${message.id}-attachment-${idx}`}
+                                className="relative flex-shrink-0 cursor-pointer group"
+                                onClick={() => {
+                                    if (attachment.processing) {
+                                        toast.info('File is still processing, please wait.');
+                                        return;
+                                    }
+                                    if (!attachment.error) {
+                                        console.log(attachment.error);
+                                        toast.error('Cannot preview file due to processing error.');
+                                        return;
+                                    }
+                                    attachment.onClick();
+                                }}
+                                title={attachment.name}
+                            >
+                                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-700 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all duration-200 hover:scale-105 min-w-0">
+                                    <div className="flex-shrink-0 text-blue-600 dark:text-blue-400">
+                                        {attachment.icon}
+                                    </div>
+                                    <span className="text-xs font-medium text-blue-700 dark:text-blue-300 truncate max-w-[80px]">
+                                        {attachment.name.length > 12 ? `${attachment.name.substring(0, 12)}...` : attachment.name}
+                                    </span>
+
+                                    {/* Type badge */}
+                                    {attachment.type !== 'file' && (
+                                        <div className="flex-shrink-0">
+                                            <Badge
+                                                variant="secondary"
+                                                className="text-xs px-1.5 py-0.5 bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200"
+                                            >
+                                                {attachment.type === 'document' ? 'DOC' : 'NOTE'}
+                                            </Badge>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Status indicators */}
+                                {attachment.processing && (
+                                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                                        <Loader2 className="h-2 w-2 animate-spin text-white" />
+                                    </div>
+                                )}
+                                {!attachment.error && (
+                                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                                        <X className="h-2 w-2 text-white" />
+                                    </div>
+                                )}
+
+                                {/* Full name tooltip on hover */}
+                                <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                                    {attachment.name}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }, [mergedDocuments, handleFilePreview, handleViewAttachedFile, getFileIcon]);
+
     const renderMessage = useCallback((message: Message, index: number) => {
         const isUserMessage = message.role === 'user';
         const isLastMessage = index === messages.length - 1;
@@ -333,51 +574,9 @@ export const MessageList = memo(({
         const showDateHeader = lastDateRef.current !== messageDate;
         lastDateRef.current = messageDate;
 
-        const attachedFiles = parseAttachedFiles(message);
-        const attachedDocumentTitles = message.attachedDocumentIds?.map(id => {
-            const doc = mergedDocuments.find(d => d.id === id);
-            return doc ? doc.title : 'Unknown Document';
-        }) || [];
-        const attachedNoteTitles = message.attachedNoteIds?.map(id => {
-            const note = mergedDocuments.find(d => d.id === id);
-            return note ? note.title : 'Unknown Note';
-        }) || [];
-
         const contentToRender = isUserMessage ? (
             <>
-                {(attachedFiles.length > 0 || attachedDocumentTitles.length > 0 || attachedNoteTitles.length > 0) && (
-                    <div className="mb-2 flex flex-wrap items-center gap-1 sm:gap-2">
-                        {attachedFiles.length > 0 && (
-                            <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 font-claude">
-                                {attachedFiles.map((file, idx) => (
-                                    <FilePreview
-                                        key={`${message.id}-file-${idx}`}
-                                        file={file}
-                                        onPreview={handleFilePreview}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                        {attachedDocumentTitles.length > 0 && (
-                            <div
-                                className="flex items-center gap-1 text-xs text-blue-500 font-claude hover:text-blue-600 cursor-pointer transition-colors"
-                                onClick={() => handleViewAttachedFile('documents', message.attachedDocumentIds)}
-                            >
-                                <FileText className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
-                                <span className="text-xs">{attachedDocumentTitles.length} doc{attachedDocumentTitles.length > 1 ? 's' : ''}</span>
-                            </div>
-                        )}
-                        {attachedNoteTitles.length > 0 && (
-                            <div
-                                className="flex items-center gap-1 text-xs text-slate-500 font-claude hover:text-blue-500 cursor-pointer transition-colors"
-                                onClick={() => handleViewAttachedFile('notes', message.attachedNoteIds)}
-                            >
-                                <StickyNote className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
-                                <span className="text-xs">{attachedNoteTitles.length} note{attachedNoteTitles.length > 1 ? 's' : ''}</span>
-                            </div>
-                        )}
-                    </div>
-                )}
+                {renderAttachments(message)}
                 <div className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 p-2 sm:p-3 rounded-lg border border-blue-200 dark:border-blue-800 max-w-full font-claude leading-relaxed break-words whitespace-pre-wrap overflow-auto">
                     {message.content.length > 200 && !isMessageExpanded ? (
                         <>
@@ -466,8 +665,45 @@ export const MessageList = memo(({
                     )}
                     aria-label={isUserMessage ? `User message: ${message.content}` : `Assistant message: ${message.content}`}
                 >
-                    {message.role === 'assistant' && (
-                        <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
+                    {message.role === 'assistant' && isSpeaking && speakingMessageId === message.id ? (
+                        <>
+                            <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
+
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={isPaused ? resumeSpeech : pauseSpeech}
+                                className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-yellow-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-yellow-400 dark:hover:bg-gray-700"
+                                title={isPaused ? "Resume speech" : "Pause speech"}
+                            >
+                                {isPaused ? <Volume2 className="h-3 w-3 sm:h-4 sm:w-4" /> : <Pause className="h-3 w-3 sm:h-4 sm:w-4" />}
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={stopSpeech}
+                                className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                                title="Stop speech"
+                            >
+                                <Square className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                        </>
+                    ) : message.role === 'assistant' && !isSpeaking ? (
+                        <>
+                            <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
+
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => speakMessage(message.id, message.content)}
+                                className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+                                title="Speak message"
+                            >
+                                <Volume2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                        </>
+                    ) : (
+                        message.role === 'assistant' && <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
                     )}
                     {message.role === 'user' && (
                         <div className="hidden sm:flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 order-2 flex-shrink-0">
@@ -520,39 +756,7 @@ export const MessageList = memo(({
                                         >
                                             <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                                         </Button>
-                                        {isSpeaking && speakingMessageId === message.id ? (
-                                            <>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={isPaused ? resumeSpeech : pauseSpeech}
-                                                    className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-yellow-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-yellow-400 dark:hover:bg-gray-700"
-                                                    title={isPaused ? "Resume speech" : "Pause speech"}
-                                                >
-                                                    {isPaused ? <Volume2 className="h-3 w-3 sm:h-4 sm:w-4" /> : <Pause className="h-3 w-3 sm:h-4 sm:w-4" />}
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={stopSpeech}
-                                                    className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                                                    title="Stop speech"
-                                                >
-                                                    <Square className="h-3 w-3 sm:h-4 sm:w-4" />
-                                                </Button>
-                                            </>
-                                        ) : (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => speakMessage(message.id, message.content)}
-                                                className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
-                                                title="Read aloud"
-                                                disabled={isLoading}
-                                            >
-                                                <Volume2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                            </Button>
-                                        )}
+
                                     </>
                                 )}
                                 {isUserMessage && (
@@ -572,7 +776,7 @@ export const MessageList = memo(({
                 </div>
             </React.Fragment>
         );
-    }, [formatDate, formatTime, onToggleUserMessageExpansion, expandedMessages, onMermaidError, onSuggestAiCorrection, onViewContent, enableTypingAnimation, isLoading, onMarkMessageDisplayed, autoTypeInPanel, onBlockDetected, onBlockUpdate, onBlockEnd, isDiagramPanelOpen, handleDiagramCodeUpdate, onRegenerateClick, copy, onDeleteClick, isSpeaking, speakingMessageId, isPaused, resumeSpeech, pauseSpeech, stopSpeech, speakMessage, handleFilePreview, mergedDocuments]);
+    }, [formatDate, formatTime, onToggleUserMessageExpansion, expandedMessages, onMermaidError, onSuggestAiCorrection, onViewContent, enableTypingAnimation, isLoading, onMarkMessageDisplayed, autoTypeInPanel, onBlockDetected, onBlockUpdate, onBlockEnd, isDiagramPanelOpen, handleDiagramCodeUpdate, onRegenerateClick, copy, onDeleteClick, isSpeaking, speakingMessageId, isPaused, resumeSpeech, pauseSpeech, stopSpeech, speakMessage, renderAttachments, messages]);
 
     return (
         <div

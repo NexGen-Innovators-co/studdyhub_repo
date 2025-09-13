@@ -508,7 +508,7 @@ const Auth = () => {
 
                 <TabsContent value="signin" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    <Button
+                    {/* <Button
                       variant="outline"
                       onClick={handleGoogleSignIn}
                       className="w-full h-12 rounded-lg border border-gray-600 bg-gray-700/50 backdrop-blur-sm text-gray-100 hover:bg-gray-600/50 transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02]"
@@ -521,17 +521,17 @@ const Auth = () => {
                         <path d="M0.400326 12.0001C0.400326 11.2001 0.480326 10.4001 0.640326 9.60009L4.64033 6.64009C4.32033 7.28009 4.08033 7.92009 3.92033 8.64009H0.400326V12.0001Z" fill="#FBBC04" />
                       </svg>
                       Continue with Google
-                    </Button>
+                    </Button> */}
                   </div>
 
-                  <div className="relative flex items-center justify-center my-6">
+                  {/* <div className="relative flex items-center justify-center my-6">
                     <div className="absolute inset-0 flex items-center">
                       <span className="w-full border-t border-gray-700" />
                     </div>
                     <div className="relative z-10 bg-gray-900 px-4 text-sm text-gray-400">
                       or
                     </div>
-                  </div>
+                  </div> */}
 
                   <form onSubmit={handleSignIn} className="space-y-4">
                     <div className="space-y-2">
