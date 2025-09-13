@@ -1,5 +1,5 @@
-// Enhanced src/components/DocumentUpload.tsx
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+// src/components/DocumentUpload.tsx
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
   UploadCloud, FileText, Image, Loader2, Check, XCircle, AlertTriangle,
   RefreshCw, Eye, Download, Calendar, HardDrive, Search, Filter,
@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
 import { Document } from '../../types/Document';
 import { useAuth } from '../../hooks/useAuth';
+import { useAppContext } from '../../contexts/AppContext';
 
 interface DocumentUploadProps {
   documents: Document[];
@@ -48,6 +49,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [showFilters, setShowFilters] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { loadMoreDocuments, dataPagination } = useAppContext();
+  const lastDocumentRef = useRef<HTMLDivElement>(null);
 
   // Utility functions
   const formatFileSize = (bytes: number) => {
@@ -549,8 +552,24 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
   };
 
+  const observer = useRef<IntersectionObserver | null>(null);
+
+  const lastDocumentElementRef = useCallback(
+    (node: HTMLDivElement) => {
+      if (dataPagination.documents.isLoading) return;
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && dataPagination.documents.hasMore) {
+          loadMoreDocuments();
+        }
+      });
+      if (node) observer.current.observe(node);
+    },
+    [loadMoreDocuments, dataPagination.documents.isLoading, dataPagination.documents.hasMore]
+  );
+
   return (
-    <div className="min-h-screen  p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Enhanced Header */}
         <div className="text-center mb-8 md:mb-12">
@@ -603,7 +622,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 className="hidden"
-                accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.ico,.heic,.heif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.ods,.odp,.csv,.md,.html,.xml,.json,.js,.ts,.css,.py,.java,.c,.cpp,.cs,.php,.rb,.go,.rs,.sql,.zip,.rar,.7z,.tar,.gz,.mp3,.wav,.ogg,.m4a,.webm,.flac,.mp4,.avi,.mov,.wmv,.mkv"
+                accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.ico,.heic,.heif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.ods,.odp,.csv,.md,.html,.xml,.json,.js,.ts,.css,.py,.java,.c,.cpp,.cs,.php,.rb,.go,.rs,.sql,.zip,.rar,.7z,.tar,.gz,.mp3,.wav,.ogg,.m4a,.webm,.flac,.mp4,.avi,.mov,.wmv,.webm,.mkv"
                 disabled={isUploading}
               />
 
@@ -842,227 +861,243 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
               ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
               : "space-y-4"
             }>
-              {filteredAndSortedDocuments.map((doc) => (
-                <Card
-                  key={doc.id}
-                  className={`group border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
-                    }`}
-                >
-                  <CardContent className="p-0">
-                    {viewMode === 'grid' ? (
-                      <>
-                        {/* Grid View */}
-                        <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800">
-                          {doc.type === 'image' && doc.file_url ? (
-                            <img
-                              src={doc.file_url}
-                              alt={doc.title}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error';
-                                e.currentTarget.alt = 'Image failed to load';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              {React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
-                                className: "h-16 w-16 text-slate-400 dark:text-slate-500"
-                              })}
-                            </div>
-                          )}
-
-                          {/* Status Badge */}
-                          <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
-                            {getStatusIcon(doc.processing_status as string)}
-                            <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
-                          </div>
-
-                          {/* Category Badge */}
-                          <div className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
-                            {getFileCategory(doc.file_type).toUpperCase()}
-                          </div>
-
-                          {/* Processing Overlay */}
-                          {isDocumentProcessing(doc.id) && (
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                              <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                                <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                                  Processing...
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="p-6 space-y-4">
-                          <div>
-                            <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2 line-clamp-2">
-                              {doc.title}
-                            </h3>
-                            <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
-                                {formatDate(doc.created_at)}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <HardDrive className="h-4 w-4" />
-                                {formatFileSize(doc.file_size)}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 min-h-[80px]">
-                            <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
-                              {doc.content_extracted || 'No content extracted yet...'}
-                            </p>
-                          </div>
-
-                          {doc.processing_status === 'failed' && doc.processing_error && (
-                            <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-3">
-                              <p className="text-sm text-red-600 dark:text-red-400">
-                                <span className="font-medium">Error:</span> {(doc.processing_error as string)}
-                              </p>
-                            </div>
-                          )}
-
-                          <div className="flex gap-2 pt-2">
-                            {doc.processing_status === 'failed' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => triggerAnalysis(doc)}
-                                disabled={isUploading || isDocumentProcessing(doc.id)}
-                                className="flex-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10 border-blue-200 dark:border-blue-500/20"
-                              >
-                                {isDocumentProcessing(doc.id) ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Processing...
-                                  </>
-                                ) : (
-                                  <>
-                                    <RefreshCw className="h-4 w-4 mr-2" />
-                                    Retry
-                                  </>
-                                )}
-                              </Button>
-                            )}
-
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openPreview(doc)}
-                              className="flex-1 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
-                            >
-                              <Eye className="h-4 w-4 mr-2" />
-                              Preview
-                            </Button>
-
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
-                              disabled={isUploading || isDocumentProcessing(doc.id)}
-                              className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {/* List View */}
-                        <div className="flex items-center p-6 gap-4">
-                          <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center relative">
+              {filteredAndSortedDocuments.map((doc, index) => {
+                const isLastDocument = index === filteredAndSortedDocuments.length - 1;
+                return (
+                  <Card
+                    key={doc.id}
+                    ref={isLastDocument ? lastDocumentElementRef : null}
+                    className={`group border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
+                      }`}
+                  >
+                    <CardContent className="p-0">
+                      {viewMode === 'grid' ? (
+                        <>
+                          {/* Grid View */}
+                          <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800">
                             {doc.type === 'image' && doc.file_url ? (
                               <img
                                 src={doc.file_url}
                                 alt={doc.title}
-                                className="w-full h-full object-cover rounded-lg"
+                                className="w-full h-full object-cover"
                                 onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error';
+                                  e.currentTarget.alt = 'Image failed to load';
                                 }}
                               />
                             ) : (
-                              React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
-                                className: "h-8 w-8 text-slate-400 dark:text-slate-500"
-                              })
+                              <div className="w-full h-full flex items-center justify-center">
+                                {React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
+                                  className: "h-16 w-16 text-slate-400 dark:text-slate-500"
+                                })}
+                              </div>
+                            )}
+
+                            {/* Status Badge */}
+                            <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
+                              {getStatusIcon(doc.processing_status as string)}
+                              <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                            </div>
+
+                            {/* Category Badge */}
+                            <div className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
+                              {getFileCategory(doc.file_type).toUpperCase()}
+                            </div>
+
+                            {/* Processing Overlay */}
+                            {isDocumentProcessing(doc.id) && (
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
+                                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                                    Processing...
+                                  </span>
+                                </div>
+                              </div>
                             )}
                           </div>
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 truncate">
-                                  {doc.title}
-                                </h3>
-                                <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                  <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
-                                    {getFileCategory(doc.file_type).toUpperCase()}
-                                  </div>
-                                  <span className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {formatDate(doc.created_at)}
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <HardDrive className="h-3 w-3" />
-                                    {formatFileSize(doc.file_size)}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
-                                  {doc.content_extracted || 'No content extracted yet...'}
+                          <div className="p-6 space-y-4">
+                            <div>
+                              <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2 line-clamp-2">
+                                {doc.title}
+                              </h3>
+                              <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-4 w-4" />
+                                  {formatDate(doc.created_at)}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <HardDrive className="h-4 w-4" />
+                                  {formatFileSize(doc.file_size)}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 min-h-[80px]">
+                              <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
+                                {doc.content_extracted || 'No content extracted yet...'}
+                              </p>
+                            </div>
+
+                            {doc.processing_status === 'failed' && doc.processing_error && (
+                              <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-3">
+                                <p className="text-sm text-red-600 dark:text-red-400">
+                                  <span className="font-medium">Error:</span> {(doc.processing_error as string)}
                                 </p>
                               </div>
+                            )}
 
-                              <div className="flex items-center gap-2 ml-4">
-                                <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
-                                  {getStatusIcon(doc.processing_status as string)}
-                                  <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                            <div className="flex gap-2 pt-2">
+                              {doc.processing_status === 'failed' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => triggerAnalysis(doc)}
+                                  disabled={isUploading || isDocumentProcessing(doc.id)}
+                                  className="flex-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10 border-blue-200 dark:border-blue-500/20"
+                                >
+                                  {isDocumentProcessing(doc.id) ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Processing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <RefreshCw className="h-4 w-4 mr-2" />
+                                      Retry
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openPreview(doc)}
+                                className="flex-1 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                Preview
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                disabled={isUploading || isDocumentProcessing(doc.id)}
+                                className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* List View */}
+                          <div className="flex items-center p-6 gap-4">
+                            <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center relative">
+                              {doc.type === 'image' && doc.file_url ? (
+                                <img
+                                  src={doc.file_url}
+                                  alt={doc.title}
+                                  className="w-full h-full object-cover rounded-lg"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
+                                  className: "h-8 w-8 text-slate-400 dark:text-slate-500"
+                                })
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                    {doc.title}
+                                  </h3>
+                                  <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
+                                      {getFileCategory(doc.file_type).toUpperCase()}
+                                    </div>
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      {formatDate(doc.created_at)}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <HardDrive className="h-3 w-3" />
+                                      {formatFileSize(doc.file_size)}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
+                                    {doc.content_extracted || 'No content extracted yet...'}
+                                  </p>
                                 </div>
 
-                                <div className="flex gap-1">
-                                  {doc.processing_status === 'failed' && (
+                                <div className="flex items-center gap-2 ml-4">
+                                  <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
+                                    {getStatusIcon(doc.processing_status as string)}
+                                    <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                                  </div>
+
+                                  <div className="flex gap-1">
+                                    {doc.processing_status === 'failed' && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => triggerAnalysis(doc)}
+                                        disabled={isUploading || isDocumentProcessing(doc.id)}
+                                        className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
+                                      >
+                                        <RefreshCw className="h-4 w-4" />
+                                      </Button>
+                                    )}
+
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => triggerAnalysis(doc)}
-                                      disabled={isUploading || isDocumentProcessing(doc.id)}
-                                      className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
+                                      onClick={() => openPreview(doc)}
+                                      className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
                                     >
-                                      <RefreshCw className="h-4 w-4" />
+                                      <Eye className="h-4 w-4" />
                                     </Button>
-                                  )}
 
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => openPreview(doc)}
-                                    className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
-                                    disabled={isUploading || isDocumentProcessing(doc.id)}
-                                    className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                      disabled={isUploading || isDocumentProcessing(doc.id)}
+                                      className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+          {dataPagination.documents.isLoading && (
+            <div className="flex justify-center items-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-600 dark:text-blue-400 mr-3" />
+              <p className="text-slate-600 dark:text-slate-400">Loading more documents...</p>
+            </div>
+          )}
+          {dataPagination.documents.hasMore ? null : (
+            <div className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400">
+              No more documents to load.
             </div>
           )}
         </div>
@@ -1243,7 +1278,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                       setPreviewOpen(false);
                       handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
                     }}
-                    disabled={isDocumentProcessing(selectedDocument.id)}
+                    disabled={isUploading || isDocumentProcessing(selectedDocument.id)}
                     className="flex-1 sm:flex-none text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
@@ -1252,6 +1287,17 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+        {dataPagination.documents.isLoading && (
+          <div className="flex justify-center items-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin text-blue-600 dark:text-blue-400 mr-3" />
+            <p className="text-slate-600 dark:text-slate-400">Loading more documents...</p>
+          </div>
+        )}
+        {dataPagination.documents.hasMore ? null : (
+          <div className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400">
+            No more documents to load.
           </div>
         )}
       </div>

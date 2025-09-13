@@ -4,6 +4,7 @@ import mammoth from 'https://esm.sh/mammoth@1.6.0';
 import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
 import JSZIP from 'https://esm.sh/jszip@3.10.1';
 import xml2js from 'https://esm.sh/xml2js@0.5.0';
+import { encode, decode } from "npm:gpt-tokenizer";
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,7 +19,7 @@ const ENHANCED_PROCESSING_CONFIG = {
   CHUNK_OVERLAP: 500,
   // Enhanced chunking strategy
   INTELLIGENT_CHUNK_SIZE: 1.8 * 1024 * 1024,
-  MIN_CHUNK_SIZE: 100 * 1024 * 1024,
+  MIN_CHUNK_SIZE: 100 * 1024,
   // Processing priorities
   BATCH_SIZE: 3,
   RETRY_ATTEMPTS: 3,
@@ -614,32 +615,47 @@ if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error('Missing Supabase configuration: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables are not set.');
 }
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-/**
-* Relevance Scoring Function
-*/ function scoreByKeywordMatching(message, query, keywords) {
-  let score = 0;
-  // Convert both message and query to lowercase for case-insensitive matching
-  const lowerMessage = message.toLowerCase();
-  const lowerQuery = query.toLowerCase();
-  // Add score if query appears in message
-  if (lowerMessage.includes(lowerQuery)) {
-    score += 5;
+// Function to calculate the base token count (system prompt, attached context)
+const calculateBaseTokenCount = async (assembledSystemPrompt, attachedContext) => {
+  let baseTokenCount = 0;
+  if (assembledSystemPrompt) baseTokenCount += await calculateTokenCount(assembledSystemPrompt);
+  if (attachedContext) baseTokenCount += await calculateTokenCount(attachedContext);
+  return baseTokenCount;
+};
+// Function to calculate token count
+async function calculateTokenCount(text) {
+  try {
+    const encoded = encode(text);
+    return encoded.length;
+  } catch (error) {
+    console.error("Error calculating token count:", error);
+    // Fallback to word count in case of error
+    return text.split(/\s+/).length;
   }
-  // Add score for each keyword found in the message
-  keywords.forEach((keyword) => {
-    if (lowerMessage.includes(keyword.toLowerCase())) {
-      score += 3;
-    }
-  });
-  return score;
 }
-/**
-* Update existing conversation summary with new messages
-*/ /**
-* Create intelligent conversation summary using Gemini and save it to database
-*/ /**
-* Create intelligent conversation summary using Gemini and save it to database
-*/ async function createConversationSummary(messages, userId, sessionId) {
+// Function to truncate text to a token limit
+async function truncateToTokenLimit(text, maxTokens) {
+  try {
+    const encoded = encode(text);
+    if (encoded.length <= maxTokens) {
+      return text;
+    } else {
+      const truncatedEncoded = encoded.slice(0, maxTokens);
+      const truncatedText = decode(truncatedEncoded);
+      return truncatedText + " [TRUNCATED]";
+    }
+  } catch (error) {
+    console.error("Error truncating text:", error);
+    // Fallback: Truncate by words if tokenization fails
+    const words = text.split(/\s+/);
+    if (words.length <= maxTokens) {
+      return text;
+    } else {
+      return words.slice(0, maxTokens).join(" ") + " [TRUNCATED]";
+    }
+  }
+}
+async function createConversationSummary(messages, userId, sessionId) {
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
   if (!geminiApiKey) return null;
   // Extract key information from messages
@@ -671,6 +687,7 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
     }
   ];
   try {
+    console.log(`[createConversationSummary] Creating summary for session ${sessionId}, user ${userId}, message count: ${messages.length}`); // Added log
     const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
     if (response.success && response.content) {
       // Save the summary to the chat_sessions table
@@ -679,16 +696,16 @@ FORMAT: Provide a structured summary that can be used as context for continuing 
         updated_at: new Date().toISOString()
       }).eq('id', sessionId).eq('user_id', userId);
       if (error) {
-        console.error('Error saving conversation summary:', error);
+        console.error('[createConversationSummary] Error saving conversation summary:', error);
       } else {
-        console.log(`Conversation summary saved for session ${sessionId}`);
+        console.log(`[createConversationSummary] Conversation summary saved for session ${sessionId}`);
       }
       return response.content;
     } else {
-      console.error('Gemini API call failed:', response.error);
+      console.error('[createConversationSummary] Gemini API call failed:', response.error); // Added log
     }
   } catch (error) {
-    console.error('Error creating conversation summary:', error);
+    console.error('[createConversationSummary] Error creating conversation summary:', error);
   }
   return null;
 }
@@ -725,6 +742,7 @@ FORMAT: Provide an updated comprehensive summary that includes both existing and
     }
   ];
   try {
+    console.log(`[updateConversationSummary] Updating summary for session ${sessionId}, user ${userId}, message count: ${recentMessages.length}`); // Added log
     const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
     if (response.success && response.content) {
       // Save the updated summary to the chat_sessions table
@@ -733,89 +751,98 @@ FORMAT: Provide an updated comprehensive summary that includes both existing and
         updated_at: new Date().toISOString()
       }).eq('id', sessionId).eq('user_id', userId);
       if (error) {
-        console.error('Error saving updated conversation summary:', error);
+        console.error('[updateConversationSummary] Error saving updated conversation summary:', error);
         return existingSummary; // Return old summary if save fails
       } else {
-        console.log(`Conversation summary updated for session ${sessionId}`);
+        console.log(`[updateConversationSummary] Conversation summary updated for session ${sessionId}`);
       }
       return response.content;
     } else {
-      console.error('Gemini API call failed:', response.error);
+      console.error('[updateConversationSummary] Gemini API call failed:', response.error); // Added log
     }
   } catch (error) {
-    console.error('Error updating conversation summary:', error);
+    console.error('[updateConversationSummary] Error updating conversation summary:', error);
   }
   return existingSummary; // Return existing summary if update fails
 }
 /**
 * Intelligent context management with conversation summarization
-*/ async function buildIntelligentContext(userId, sessionId, currentMessage, attachedDocumentIds = [], attachedNoteIds = []) {
+*/ async function buildIntelligentContext(userId, sessionId, currentMessage, attachedDocumentIds = [], attachedNoteIds = [], initialContextWindow = ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW) {
   const conversationHistory = await getConversationHistory(userId, sessionId);
-  // Define keywords based on the current message
-  const keywords = currentMessage.split(/\s+/).filter((word) => word.length > 3); // Example: words longer than 3 chars
-  // Score each message in conversation history based on relevance to current message
-  const scoredMessages = conversationHistory.map((message) => ({
-    ...message,
-    relevanceScore: scoreByKeywordMatching(message.content, currentMessage, keywords)
-  }));
-  // Sort messages by relevance score in descending order
-  scoredMessages.sort((a, b) => b.relevanceScore - a.relevanceScore);
-  // Select the most relevant messages
-  const relevantMessages = scoredMessages.slice(0, ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
+  // If conversation is short, include all messages
+  if (conversationHistory.length <= initialContextWindow) {
+    console.log('[buildIntelligentContext] Short conversation - including all messages in context');
+    return {
+      recentMessages: conversationHistory,
+      conversationSummary: null,
+      totalMessages: conversationHistory.length
+    };
+  }
+  // For longer conversations, implement intelligent context management
+  const recentMessages = conversationHistory.slice(-initialContextWindow);
+  const olderMessages = conversationHistory.slice(0, -initialContextWindow);
   // Get existing summary from database first
   let conversationSummary = null;
   try {
     const { data: sessionData, error } = await supabase.from('chat_sessions').select('context_summary').eq('id', sessionId).eq('user_id', userId).single();
-    if (!error && sessionData?.context_summary) {
+    if (error) {
+      console.error('[buildIntelligentContext] Error fetching existing summary:', error);
+    } else if (sessionData?.context_summary) {
       conversationSummary = sessionData.context_summary;
-      console.log('Using existing conversation summary from database');
+      console.log('[buildIntelligentContext] Using existing conversation summary from database');
+    } else {
+      console.log('[buildIntelligentContext] No existing conversation summary found in database.');
     }
   } catch (error) {
-    console.error('Error fetching existing summary:', error);
+    console.error('[buildIntelligentContext] Error fetching existing summary:', error);
   }
   // Log key variables for debugging
-  console.log(`Conversation length: ${conversationHistory.length}, CONTEXT_MEMORY_WINDOW: ${ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW}, SUMMARY_THRESHOLD: ${ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD}`);
-  console.log(`Older messages length: ${scoredMessages.length - relevantMessages.length}, Conversation summary exists: ${!!conversationSummary}`);
-  // Create or update summary based on conversation length
-  if (scoredMessages.length - relevantMessages.length > ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
+  console.log(`[buildIntelligentContext] Conversation length: ${conversationHistory.length}, CONTEXT_MEMORY_WINDOW: ${initialContextWindow}, SUMMARY_THRESHOLD: ${ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD}`);
+  console.log(`[buildIntelligentContext] Older messages length: ${olderMessages.length}, Conversation summary exists: ${!!conversationSummary}`);
+  // Simplified summary update logic: Update every UPDATE_SUMMARY_INTERVAL messages
+  const shouldUpdateSummary = olderMessages.length > ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD;
+  if (shouldUpdateSummary) {
     try {
       if (!conversationSummary) {
         // Create initial summary
-        const olderMessages = scoredMessages.slice(ENHANCED_PROCESSING_CONFIG.CONTEXT_MEMORY_WINDOW);
+        console.log('[buildIntelligentContext] Creating initial conversation summary.');
         conversationSummary = await createConversationSummary(olderMessages, userId, sessionId);
-        console.log(`Created new conversation summary for ${olderMessages.length} older messages`);
+        console.log(`[buildIntelligentContext] Created new conversation summary for ${olderMessages.length} older messages`);
       } else {
-        // Update summary
-        const recentMessages = relevantMessages.slice(-20);
-        conversationSummary = await updateConversationSummary(conversationSummary, recentMessages, userId, sessionId);
-        console.log(`Updated conversation summary with ${recentMessages.length} recent messages`);
+        // Update existing summary every UPDATE_SUMMARY_INTERVAL messages
+        console.log(`[buildIntelligentContext] Updating conversation summary to include ${olderMessages.length} messages`);
+        conversationSummary = await updateConversationSummary(conversationSummary, olderMessages, userId, sessionId);
       }
     } catch (error) {
-      console.error('Error managing conversation summary:', error);
+      console.error('[buildIntelligentContext] Error managing conversation summary:', error);
     }
+  } else {
+    console.log('[buildIntelligentContext] Not enough older messages to update summary.');
   }
   return {
-    recentMessages: relevantMessages,
+    recentMessages,
     conversationSummary,
     totalMessages: conversationHistory.length,
-    summarizedMessages: conversationHistory.length - relevantMessages.length // Add summarizedMessages property
+    summarizedMessages: olderMessages.length
   };
 }
+// ** BUILD GEMINI CONVERSATION (Modified) **
 /**
 * Enhanced conversation history retrieval with better error handling
 */ async function getConversationHistory(userId, sessionId, maxMessages = ENHANCED_PROCESSING_CONFIG.MAX_CONVERSATION_HISTORY) {
   try {
+    console.log(`Retrieving conversation history for session ${sessionId}, user ${userId}`);
     const { data: messages, error } = await supabase.from('chat_messages').select(`
-id,
-content,
-role,
-attached_document_ids,
-attached_note_ids,
-image_url,
-image_mime_type,
-timestamp,
-is_error
-`).eq('user_id', userId).eq('session_id', sessionId).eq('is_error', false) // Exclude error messages from context
+        id,
+        content,
+        role,
+        attached_document_ids,
+        attached_note_ids,
+        image_url,
+        image_mime_type,
+        timestamp,
+        is_error
+      `).eq('user_id', userId).eq('session_id', sessionId).eq('is_error', false) // Exclude error messages from context
       .order('timestamp', {
         ascending: true
       }).limit(maxMessages);
@@ -827,6 +854,7 @@ is_error
       console.log('No conversation history found');
       return [];
     }
+    console.log(`Retrieved ${messages.length} messages from conversation history`);
     return messages;
   } catch (error) {
     console.error('Error in getConversationHistory:', error);
@@ -846,8 +874,6 @@ is_error
   return btoa(binary);
 }
 /**
-* Enhanced intelligent text chunking that preserves context and completeness
-*/ /**
 * Enhanced intelligent text chunking that preserves context and completeness
 */ function createIntelligentChunks(content, fileType, maxChunkSize = ENHANCED_PROCESSING_CONFIG.INTELLIGENT_CHUNK_SIZE) {
   if (content.length <= maxChunkSize) {
@@ -913,7 +939,6 @@ is_error
   };
   const patterns = breakPatterns[fileType] || breakPatterns.text;
   let currentPos = 0;
-  let chunkStart; // Declare chunkStart outside the loop
   while (currentPos < content.length) {
     let chunkEnd = Math.min(currentPos + maxChunkSize, content.length);
     // Find the best break point within the chunk
@@ -922,7 +947,7 @@ is_error
       // Try each pattern in order of preference
       for (const pattern of patterns) {
         const searchStart = Math.max(currentPos + maxChunkSize * 0.7, currentPos + ENHANCED_PROCESSING_CONFIG.MIN_CHUNK_SIZE);
-        const searchText = content.slice(searchStart, chunkStart, chunkEnd + 200);
+        const searchText = content.slice(searchStart, chunkEnd + 200);
         const match = searchText.search(pattern);
         if (match !== -1) {
           bestBreak = searchStart + match + searchText.match(pattern)[0].length;
@@ -931,7 +956,8 @@ is_error
       }
       chunkEnd = bestBreak;
     }
-    chunkStart = currentPos === 0 ? 0 : Math.max(currentPos - overlap, 0);
+    // Extract chunk with overlap from previous chunk (except for first chunk)
+    const chunkStart = currentPos === 0 ? 0 : Math.max(currentPos - overlap, 0);
     const chunk = content.slice(chunkStart, chunkEnd);
     // Add chunk metadata for context preservation
     const chunkInfo = currentPos === 0 ? '' : `[CONTINUATION FROM PREVIOUS CHUNK]\n\n`;
@@ -943,8 +969,6 @@ is_error
   return chunks;
 }
 /**
-* Intelligent context management with conversation summarization
-*/ /**
 * Find overlap length between two text segments
 */ function findOverlapLength(text1, text2) {
   let maxOverlap = 0;
@@ -1208,8 +1232,9 @@ CSV CONTENT TO PROCESS:`;
           }
           text += '\n';
         }
-        text += '\n---\n\n';
+        text += '\n';
       }
+      text += '\n---\n\n';
     }
     return text.trim();
   } catch (error) {
@@ -1220,8 +1245,8 @@ CSV CONTENT TO PROCESS:`;
 /**
 * Process documents locally with library extraction and optional chunking
 */ /**
-* Process documents locally with library extraction and optional chunking
-*/ async function processLocalDocumentWithExtractionAndChunking(file, geminiApiKey) {
+ * Process documents locally with library extraction and optional chunking
+ */ async function processLocalDocumentWithExtractionAndChunking(file, geminiApiKey) {
   const buffer = Uint8Array.from(atob(file.data), (c) => c.charCodeAt(0));
   let extractedText = '';
   try {
@@ -1816,9 +1841,51 @@ This is an archive file that contains compressed data. Without extraction capabi
     return null;
   }
 }
-async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
+const generateChatTitle = async (sessionId, userId, initialMessage) => {
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  if (!geminiApiKey) return 'New Chat';
+  const titlePrompt = `Create a concise and informative title (max 8 words) for a chat session. The title should summarize the main topic or question discussed in the following initial message: "${initialMessage}". The title should be in sentence case, not all caps. Return ONLY the title text itself, with no extra words or explanation. Example: 'Understanding Quantum Physics'`;
+  const contents = [
+    {
+      role: 'user',
+      parts: [
+        {
+          text: titlePrompt
+        }
+      ]
+    }
+  ];
   try {
-    const { data: existingSession, error: fetchError } = await supabase.from('chat_sessions').select('id, document_ids, message_count, context_summary').eq('id', sessionId).eq('user_id', userId).single();
+    const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
+    console.log('[generateChatTitle] Gemini API Response:', response); // Added log
+    if (response.success && response.content) {
+      let generatedTitle = response.content.trim();
+      // Refine title extraction: Remove any leading/trailing quotes and ensure it's sentence case
+      generatedTitle = generatedTitle.replace(/^["']|["']$/g, ''); // Remove leading/trailing quotes
+      generatedTitle = generatedTitle.charAt(0).toUpperCase() + generatedTitle.slice(1); // Sentence case
+      if (generatedTitle.length > 50) {
+        generatedTitle = generatedTitle.substring(0, 47) + '...';
+      }
+      return generatedTitle;
+    } else {
+      console.error('Failed to generate chat title:', response.error);
+      // Fallback: Extract a few words from the initial message
+      const words = initialMessage.split(' ');
+      const fallbackTitle = words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
+      return fallbackTitle || 'New Chat';
+    }
+  } catch (error) {
+    console.error('Error generating chat title:', error);
+    // Fallback: Extract a few words from the initial message
+    const words = initialMessage.split(' ');
+    const fallbackTitle = words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
+    return fallbackTitle || 'New Chat';
+  }
+};
+async function ensureChatSession(userId, sessionId, newDocumentIds = [], initialMessage = '') {
+  try {
+    const { data: existingSession, error: fetchError } = await supabase.from('chat_sessions').select('id, document_ids, message_count, context_summary, title') // Include title in select
+      .eq('id', sessionId).eq('user_id', userId).single();
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.error('Error fetching chat session:', fetchError);
       return;
@@ -1827,7 +1894,8 @@ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
       // Update existing session
       const updates = {
         document_ids: newDocumentIds,
-        message_count: existingSession.message_count || 0
+        message_count: existingSession.message_count || 0,
+        title: existingSession.title || ''
       };
       if (newDocumentIds.length > 0) {
         const currentDocIds = existingSession.document_ids || [];
@@ -1841,14 +1909,19 @@ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
       }
       // Increment message count
       updates.message_count = (existingSession.message_count || 0) + 1;
+      // If this is the first message and title isn't set, generate it
+      if (!existingSession.title && initialMessage) {
+        updates.title = await generateChatTitle(sessionId, userId, initialMessage);
+      }
       const { error: updateError } = await supabase.from('chat_sessions').update(updates).eq('id', sessionId);
       if (updateError) console.error('Error updating chat session:', updateError);
     } else {
-      // Create new session
+      // Create new session with title from initial message
+      const newTitle = initialMessage ? await generateChatTitle(sessionId, userId, initialMessage) : 'New Chat';
       const { error: insertError } = await supabase.from('chat_sessions').insert({
         id: sessionId,
         user_id: userId,
-        title: 'New Chat',
+        title: newTitle,
         document_ids: newDocumentIds,
         message_count: 1,
         last_message_at: new Date().toISOString()
@@ -1859,16 +1932,18 @@ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
     console.error('Database error when ensuring chat session:', error);
   }
 }
-/**
-* Update session last message timestamp and context
-*/ async function updateSessionLastMessage(sessionId, contextSummary = null) {
+async function updateSessionLastMessage(sessionId, contextSummary = null, title = null) {
   try {
     const update = {
       last_message_at: new Date().toISOString(),
-      context_summary: contextSummary
+      context_summary: contextSummary,
+      title: title || 'New chat'
     };
     if (contextSummary) {
       update.context_summary = contextSummary;
+    }
+    if (title) {
+      update.title = title;
     }
     const { error } = await supabase.from('chat_sessions').update(update).eq('id', sessionId);
     if (error) console.error('Error updating session last message time:', error);
@@ -1878,10 +1953,11 @@ async function ensureChatSession(userId, sessionId, newDocumentIds = []) {
 }
 /**
 * Create system prompt for StuddyHub AI
-*/ function createSystemPrompt(learningStyle, learningPreferences) {
+*/ function createSystemPrompt(learningStyle, learningPreferences, currentTheme = 'light') {
   // Core Identity and Mission
+  console.log(learningPreferences, learningStyle);
   const coreIdentity = `
-You are StuddyHub AI, a dynamic educational platform with advanced context-aware memory.
+You are StuddyHub AI, a dynamic educational platform with advanced context-aware memory in the studdyHub Ai Chat Section as the ai for the StuddyHub app.
 **CORE MISSION:** Deliver transformative learning through personalized paths, high-quality visualizations, and intuitive conversational guidance while maintaining full conversation context and continuity. You should provide helpful responses about the usage, features, and troubleshooting of the StuddyHub application.
 
 **CONTEXT AWARENESS:** You have access to the complete conversation history and can reference previous discussions, maintaining continuity across long conversations. When users ask about earlier parts of the conversation, you can recall and reference specific details.
@@ -1933,6 +2009,34 @@ The application uses the following data structures:
 - Full conversation context awareness and continuity.
 - When asked about code or features, provide relevant details about the components, data structures, and libraries used.
 `;
+  const colorSystem = `
+**INTELLIGENT COLOR SYSTEM:**
+
+**Light Theme Palette:**
+- Primary: #3B82F6 (StuddyHub Blue), #1E40AF (Deep Blue)
+- Accent: #10B981 (Emerald), #F59E0B (Amber), #EF4444 (Red)
+- Background: #FFFFFF, #F8FAFC, #F1F5F9
+- Text: #0F172A, #334155, #64748B
+- Border: #E2E8F0, #CBD5E1
+- Success: #10B981, Warning: #F59E0B, Error: #EF4444
+- Gradients: linear-gradient(135deg, #667eea 0%, #764ba2 100%)
+
+**Dark Theme Palette:**
+- Primary: #60A5FA (Light Blue), #3B82F6 (StuddyHub Blue)
+- Accent: #34D399 (Light Emerald), #FBBF24 (Light Amber), #F87171 (Light Red)
+- Background: #0F172A, #1E293B, #334155
+- Text: #F8FAFC, #E2E8F0, #CBD5E1
+- Border: #475569, #64748B
+- Success: #34D399, Warning: #FBBF24, Error: #F87171
+- Gradients: linear-gradient(135deg, #667eea 0%, #764ba2 100%)
+
+**Semantic Colors (Theme Adaptive):**
+- Info: Light(#3B82F6) / Dark(#60A5FA)
+- Success: Light(#10B981) / Dark(#34D399)
+- Warning: Light(#F59E0B) / Dark(#FBBF24)
+- Error: Light(#EF4444) / Dark(#F87171)
+- Neutral: Light(#6B7280) / Dark(#9CA3AF)
+`;
   // UI Guidance
   const uiGuidance = `
 **UI GUIDANCE:**
@@ -1957,35 +2061,74 @@ The application uses the following data structures:
 - Note unclear sections and provide partial transcription.
 `;
   const mermaidExcellenceStandards = `
-Strictly Adhere to Mermaid Diagram Rules:
-**MERMAID DIAGRAM RULES:**
-- Graph type declared? Nodes defined before connections? Valid syntax?
-- Avoid parentheses in square brackets or in other parenthesis: This is a strict rule. Do not use parentheses within square brackets or nested within other parentheses in node labels. For example, use A[Start - User Auth] instead of A[Start (User Auth)]. If parentheses are absolutely necessary for clarity, explore alternative label phrasing to avoid them altogether
-- Use proper link styles: -->, ---, -.->, ==>.
-**TEMPLATE:**
+**MERMAID DIAGRAM EXCELLENCE:**
+
+**Visual Standards:**
+- Use theme-appropriate colors automatically
+- Apply consistent node shapes and styling
+- Implement professional spacing and alignment
+- Add meaningful icons and visual hierarchy
+
+**Color Application Rules:**
+- Primary nodes: Use StuddyHub blue tones
+- Process nodes: Use neutral grays with accent borders
+- Decision nodes: Use amber/warning colors
+- Success/Complete: Use emerald/success colors
+- Error/Alert: Use red/error colors
+- Data/Storage: Use purple/violet tones
+
+**Enhanced Template:**
 \`\`\`mermaid
-flowchart TD
-A[Start - User Authenticated] --> B{Check User Profile}
-B -->|New User| C[Initialize Profile]
-B -->|Returning User| D[Load Existing Data]
-C --> E[Load Settings - Priority 1]
-D --> E
-E --> F[Phase Core - Progress 40%]
-F --> G[Load Notes - Priority 2]
-F --> H[Load Documents - Priority 3]
-G --> I[Phase Secondary - Progress 80%]
-H --> I
-I --> J[UI Ready]
-J --> K[Load Tab-Specific Content]
-K -->|Notes Tab| L[Display Notes]
-K -->|Quizzes Tab| M[Load Quizzes]
-\`\`\``;
+%%{init: {'theme':'base', 'themeVariables': { 
+  'primaryColor': '${currentTheme === 'dark' ? '#1E293B' : '#F8FAFC'}',
+  'primaryTextColor': '${currentTheme === 'dark' ? '#F8FAFC' : '#0F172A'}',
+  'primaryBorderColor': '${currentTheme === 'dark' ? '#60A5FA' : '#3B82F6'}',
+  'lineColor': '${currentTheme === 'dark' ? '#60A5FA' : '#3B82F6'}',
+  'secondaryColor': '${currentTheme === 'dark' ? '#334155' : '#F1F5F9'}',
+  'tertiaryColor': '${currentTheme === 'dark' ? '#475569' : '#E2E8F0'}',
+  'background': '${currentTheme === 'dark' ? '#0F172A' : '#FFFFFF'}',
+  'mainBkg': '${currentTheme === 'dark' ? '#1E293B' : '#F8FAFC'}',
+  'secondBkg': '${currentTheme === 'dark' ? '#334155' : '#F1F5F9'}'
+}}}%%
+flowchart TB
+    Start([🚀 User Authentication<br/>Initialize Session]) --> Profile{👤 Check Profile}
+    Profile -->|New User| Create[📝 Create Profile<br/>Set Preferences]
+    Profile -->|Returning| Load[📊 Load Dashboard<br/>Restore State]
+    Create --> Settings[⚙️ Configure Settings<br/>Learning Style Setup]
+    Load --> Settings
+    Settings --> Core[🎯 Core System Ready<br/>Progress: 60%]
+    Core --> Notes[📝 Load Notes Module]
+    Core --> Docs[📄 Load Documents Module]
+    Core --> AI[🤖 Initialize AI Chat]
+    Notes --> Ready[✅ Platform Ready<br/>All Systems Online]
+    Docs --> Ready
+    AI --> Ready
+    Ready --> Active[🎓 Active Learning State]
+    
+    classDef startEnd fill:${currentTheme === 'dark' ? '#10B981' : '#10B981'},stroke:#fff,stroke-width:2px,color:#fff
+    classDef process fill:${currentTheme === 'dark' ? '#3B82F6' : '#3B82F6'},stroke:#fff,stroke-width:2px,color:#fff
+    classDef decision fill:${currentTheme === 'dark' ? '#F59E0B' : '#F59E0B'},stroke:#fff,stroke-width:2px,color:#000
+    classDef success fill:${currentTheme === 'dark' ? '#10B981' : '#10B981'},stroke:#fff,stroke-width:2px,color:#fff
+    
+    class Start,Active startEnd
+    class Profile decision
+    class Create,Load,Settings,Core,Notes,Docs,AI process
+    class Ready success
+\`\`\`
+
+**Advanced Features:**
+- Emoji integration for visual appeal
+- Progress indicators in node labels
+- Consistent color classification
+- Professional spacing and alignment
+- Responsive design considerations
+`;
   const dotGraphExcellence = `
 **DOT GRAPH RULES:**
 - Start with digraph G { or graph G {; specify rankdir (e.g., TB).
 - Define nodes with labels: a [label="Node A"].
 - Use edge syntax: -> (directed) or -- (undirected).
-- Escape special characters in labels: "Node \\"A\\"".
+- Escape special characters in labels: "Node \\"A\\"". 
 **TEMPLATE:**
 \`\`\`dot
 digraph G {
@@ -1997,152 +2140,549 @@ A -> B [label="Next"];
 }
 \`\`\``;
   const chartJsExcellence = `
-**CHART.JS RULES:**
-- Supported chart types: bar, line, pie, doughnut, radar, polarArea, scatter.
-- Numeric data in datasets.
-- Set "maintainAspectRatio": false. Responsive design, tooltips, and legends.
-**TEMPLATE:**
+**CHART.JS VISUAL EXCELLENCE:**
+
+**Theme-Adaptive Configuration:**
 \`\`\`chartjs
 {
-"type": "bar",
-"data": {
-"labels": ["Q1", "Q2", "Q3"],
-"datasets": [{
-"label": "Progress",
-"data": [75, 85, 95],
-"backgroundColor": ["#3b82f6"]
-}]
-},
-"options": {
-"responsive": true,
-"maintainAspectRatio": false,
-"plugins": {
-"legend": {"display": true},
-"tooltip": {"enabled": true}
+  "type": "line",
+  "data": {
+    "labels": ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5", "Week 6"],
+    "datasets": [{
+      "label": "Learning Progress",
+      "data": [65, 72, 78, 85, 88, 95],
+      "borderColor": "${currentTheme === 'dark' ? '#60A5FA' : '#3B82F6'}",
+      "backgroundColor": "${currentTheme === 'dark' ? 'rgba(96, 165, 250, 0.1)' : 'rgba(59, 130, 246, 0.1)'}",
+      "borderWidth": 3,
+      "tension": 0.4,
+      "fill": true,
+      "pointBackgroundColor": "${currentTheme === 'dark' ? '#60A5FA' : '#3B82F6'}",
+      "pointBorderColor": "${currentTheme === 'dark' ? '#F8FAFC' : '#FFFFFF'}",
+      "pointBorderWidth": 2,
+      "pointRadius": 6,
+      "pointHoverRadius": 8
+    }, {
+      "label": "Quiz Scores",
+      "data": [70, 75, 80, 82, 90, 92],
+      "borderColor": "${currentTheme === 'dark' ? '#34D399' : '#10B981'}",
+      "backgroundColor": "${currentTheme === 'dark' ? 'rgba(52, 211, 153, 0.1)' : 'rgba(16, 185, 129, 0.1)'}",
+      "borderWidth": 3,
+      "tension": 0.4,
+      "fill": true,
+      "pointBackgroundColor": "${currentTheme === 'dark' ? '#34D399' : '#10B981'}",
+      "pointBorderColor": "${currentTheme === 'dark' ? '#F8FAFC' : '#FFFFFF'}",
+      "pointBorderWidth": 2,
+      "pointRadius": 6,
+      "pointHoverRadius": 8
+    }]
+  },
+  "options": {
+    "responsive": true,
+    "maintainAspectRatio": false,
+    "interaction": {
+      "intersect": false,
+      "mode": "index"
+    },
+    "plugins": {
+      "legend": {
+        "display": true,
+        "position": "top",
+        "labels": {
+          "color": "${currentTheme === 'dark' ? '#F8FAFC' : '#0F172A'}",
+          "font": {
+            "family": "Inter, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600"
+          },
+          "padding": 20,
+          "usePointStyle": true,
+          "pointStyle": "circle"
+        }
+      },
+      "tooltip": {
+        "enabled": true,
+        "backgroundColor": "${currentTheme === 'dark' ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)'}",
+        "titleColor": "${currentTheme === 'dark' ? '#F8FAFC' : '#0F172A'}",
+        "bodyColor": "${currentTheme === 'dark' ? '#E2E8F0' : '#334155'}",
+        "borderColor": "${currentTheme === 'dark' ? '#475569' : '#E2E8F0'}",
+        "borderWidth": 1,
+        "cornerRadius": 8,
+        "padding": 12,
+        "titleFont": {
+          "family": "Inter, system-ui, sans-serif",
+          "size": 14,
+          "weight": "600"
+        },
+        "bodyFont": {
+          "family": "Inter, system-ui, sans-serif",
+          "size": 13
+        }
+      }
+    },
+    "scales": {
+      "x": {
+        "display": true,
+        "grid": {
+          "color": "${currentTheme === 'dark' ? 'rgba(71, 85, 105, 0.3)' : 'rgba(226, 232, 240, 0.8)'}",
+          "lineWidth": 1
+        },
+        "ticks": {
+          "color": "${currentTheme === 'dark' ? '#CBD5E1' : '#64748B'}",
+          "font": {
+            "family": "Inter, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500"
+          }
+        },
+        "title": {
+          "display": true,
+          "text": "Time Period",
+          "color": "${currentTheme === 'dark' ? '#E2E8F0' : '#475569'}",
+          "font": {
+            "family": "Inter, system-ui, sans-serif",
+            "size": 13,
+            "weight": "600"
+          }
+        }
+      },
+      "y": {
+        "display": true,
+        "grid": {
+          "color": "${currentTheme === 'dark' ? 'rgba(71, 85, 105, 0.3)' : 'rgba(226, 232, 240, 0.8)'}",
+          "lineWidth": 1
+        },
+        "ticks": {
+          "color": "${currentTheme === 'dark' ? '#CBD5E1' : '#64748B'}",
+          "font": {
+            "family": "Inter, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500"
+          }
+        },
+        "title": {
+          "display": true,
+          "text": "Performance Score",
+          "color": "${currentTheme === 'dark' ? '#E2E8F0' : '#475569'}",
+          "font": {
+            "family": "Inter, system-ui, sans-serif",
+            "size": 13,
+            "weight": "600"
+          }
+        }
+      }
+    }
+  }
 }
-}
-}
-\`\`\``;
+\`\`\`
+**Chart Type Specific Enhancements:**
+- **Bar Charts:** Use gradient fills, rounded corners, hover animations
+- **Line Charts:** Smooth curves, animated drawing, point interactions
+- **Pie Charts:** 3D effects, exploded segments, percentage labels
+- **Doughnut Charts:** Center labels, progress indicators, interactive legends
+- **Radar Charts:** Filled areas, multiple datasets, skill assessments
+`;
   const threeJsExcellence = `
-**THREE.JS RULES:**
-- Always name the function as createThreeJSScene
-- Generate a complete JavaScript function named createThreeJSScene(canvas, THREE, OrbitControls, GLTFLoader) that takes canvas, THREE, OrbitControls, and GLTFLoader as parameters.
-- Inside the function, define scene, camera, renderer, controls, and necessary lights (e.g., ambient and directional lights).
-- Use MeshStandardMaterial for all materials to ensure consistent lighting.
-- Do NOT define or call an animate function or include requestAnimationFrame within the function the caller (e.g., a React component) will handle starting and managing the animation loop.
-- Apply per-frame updates (e.g., object rotation, position changes) directly to objects in the scene if needed, to be rendered by the caller's animation loop.
-- Load textures from a public CDN (e.g., https://cdn.jsdelivr.net) if needed, with fallback solid colors if texture loading fails. Handle texture loading errors gracefully (e.g., log errors and apply fallback).
-- Implement a cleanup function to dispose of geometries, materials, textures, and the renderer to prevent memory leaks.
-- Return exactly { scene, renderer, camera, controls, cleanup } at the end of the function.
-- Ensure the code is production-quality, syntactically correct, and compatible with execution via new Function in a React component.
-- Do not include any external file I/O or network calls beyond texture loading from a CDN.
-- Avoid duplicate animation loops or any self-calling animation logic within the function.
-**TEMPLATE:**
+**THREE.JS VISUAL EXCELLENCE:**
+
+**Enhanced Visual Standards:**
+- importations of libraries are handle in the app already so no importation just return the function 
+- HDR environment mapping for realistic lighting
+- Post-processing effects for premium look
+- Particle systems for dynamic environments
+- Advanced material systems with PBR
+- Smooth animations with easing functions
+- always follow the function name given (createThreeJSScene)
+**template to follow**
 \`\`\`threejs
-function createThreeJSScene(canvas, THREE, OrbitControls, GLTFLoader) {
+function createThreeJSScene(canvas, THREE, OrbitControls) {
+// Scene, Camera, and Renderer setup
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-camera.position.set(0, 0, 5);
+const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 2000);
+camera.position.set(0, 100, 300);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setSize(canvas.clientWidth / canvas.clientHeight);
-renderer.setClearColor(0x282c34);
+renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+// Ambient lighting based on theme
+const ambientIntensity = 0.25;
+const ambientColor = 0xF7FAFC;
+const ambientLight = new THREE.AmbientLight(ambientColor, ambientIntensity);
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-directionalLight.position.set(0, 1, 1);
+// Main directional light
+const dirLightColor = 0x3B82F6;
+const directionalLight = new THREE.DirectionalLight(dirLightColor, 0.8);
+directionalLight.position.set(10, 10, 5);
+directionalLight.castShadow = true;
 scene.add(directionalLight);
 
+// Accent lighting
+const accentLight = new THREE.PointLight(0x10B981, 0.5, 50);
+accentLight.position.set(-10, 5, 10);
+scene.add(accentLight);
+
+// OrbitControls setup
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
+controls.screenSpacePanning = false;
+controls.minDistance = 1;
+controls.maxDistance = 1000;
+controls.update();
 
-const geometry = new THREE.BoxGeometry(1, 1, 1);
-let material;
-try {
-const texture = new THREE.TextureLoader().load(
-'https://threejs.org/examples/textures/uv_grid_opengl.jpg',
-undefined,
-undefined,
-(error) => {
-console.error('Texture loading failed:', error);
-}
-);
-material = new THREE.MeshStandardMaterial({ map: texture, color: 0x00ff00 });
-} catch (error) {
-console.error('Texture loading error:', error);
-material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-}
-const cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
+// Sun creation
+const sunGeometry = new THREE.SphereGeometry(30, 32, 32);
+const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFF00 }); // Yellow
+const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+scene.add(sun);
 
-// Apply per-frame updates for the caller's animation loop
-cube.rotation.x += 0.01;
-cube.rotation.y += 0.01;
+// Planet data: radius, color, distance, speed
+const planetsData = [
+{ name: 'Mercury', radius: 3, color: 0x808080, distance: 60, speed: 0.04 }, // Gray
+{ name: 'Venus', radius: 6, color: 0xFFA500, distance: 90, speed: 0.03 }, // Orange
+{ name: 'Earth', radius: 7, color: 0x0077BE, distance: 120, speed: 0.025 }, // Blue
+{ name: 'Mars', radius: 4, color: 0xFF4500, distance: 150, speed: 0.022 }, // Red-Orange
+{ name: 'Jupiter', radius: 15, color: 0xFFD700, distance: 200, speed: 0.015 }, // Gold
+{ name: 'Saturn', radius: 13, color: 0xF0E68C, distance: 250, speed: 0.012 }, // Khaki
+{ name: 'Uranus', radius: 10, color: 0xADD8E6, distance: 300, speed: 0.01 }, // Light Blue
+{ name: 'Neptune', radius: 10, color: 0x000080, distance: 350, speed: 0.008 } // Navy
+];
 
-const cleanup = () => {
-scene.traverse((obj) => {
-if (obj.isMesh) {
-if (obj.geometry) obj.geometry.dispose();
-if (obj.material) {
-if (Array.isArray(obj.material)) {
-obj.material.forEach(mat => {
-if (mat.map) mat.map.dispose();
-mat.dispose();
+const planets = [];
+
+// Create planets
+planetsData.forEach(data => {
+const geometry = new THREE.SphereGeometry(data.radius, 32, 32);
+const material = new THREE.MeshStandardMaterial({ color: data.color });
+const planet = new THREE.Mesh(geometry, material);
+scene.add(planet); // Add to the scene, not as a child of the sun
+planets.push({ planet: planet, speed: data.speed, distance: data.distance, angle: 0 }); // Initialize angle
+
+// Orbit lines (optional, for visualization)
+const orbitRadius = data.distance;
+const orbitGeometry = new THREE.RingGeometry(orbitRadius - 0.1, orbitRadius + 0.1, 64);
+const orbitMaterial = new THREE.MeshBasicMaterial({ color: 0x3B82F6, side: THREE.DoubleSide });
+const orbit = new THREE.Mesh(orbitGeometry, orbitMaterial);
+orbit.rotation.x = Math.PI / 2;
+scene.add(orbit); // Add orbits to the scene as well
 });
-} else {
-if (obj.material.map) obj.material.map.dispose();
-obj.material.dispose();
+
+// Starfield creation
+const starsGeometry = new THREE.BufferGeometry();
+const starsMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF, size: 2 });
+
+const starCount = 1000;
+const starPositions = new Float32Array(starCount * 3);
+
+for (let i = 0; i < starCount * 3; i++) {
+starPositions[i] = (Math.random() - 0.5) * 2000; // Random position between -1000 and 1000
 }
-}
-}
+
+starsGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+
+const stars = new THREE.Points(starsGeometry, starsMaterial);
+scene.add(stars);
+
+// Animation loop
+const animate = () => {
+requestAnimationFrame(animate);
+
+planets.forEach(planetData => {
+// Increment the angle based on the speed
+planetData.angle += planetData.speed;
+
+// Calculate the new position using polar coordinates
+planetData.planet.position.x = Math.cos(planetData.angle) * planetData.distance;
+planetData.planet.position.z = Math.sin(planetData.angle) * planetData.distance;
+
+// Rotate the planet itself for some added effect
+planetData.planet.rotation.y += 0.01;
 });
-renderer.dispose();
+
+controls.update();
+renderer.render(scene, camera);
 };
 
-return { scene, renderer, camera, controls, cleanup };
+// Handle window resizing
+const handleResize = () => {
+camera.aspect = canvas.clientWidth / canvas.clientHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+};
+
+window.addEventListener('resize', handleResize);
+handleResize(); // Initial resize
+
+animate(); // Start animation
+
+return {
+scene,
+renderer,
+camera,
+controls,
+cleanup: () => {
+window.removeEventListener('resize', handleResize);
+renderer.dispose();
+sunGeometry.dispose();
+planetsData.forEach(() => {
+// planetGeometry.dispose(); //Fix this
+// planetMaterial.dispose();
+});
+sunMaterial.dispose();
+starsGeometry.dispose();
+starsMaterial.dispose();
+}
+};
 }
 \`\`\`
+
 `;
   const htmlExcellence = `
-**HTML RULES:**
-- Semantic HTML5, ARIA labels, mobile-first design (Tailwind CSS: blue-500, gray-100).
-- Avoid local storage. Cross-browser compatibility.
-**TEMPLATE:**
+**HTML VISUAL EXCELLENCE:**
+
+**Modern Design Principles:**
+- Glassmorphism effects with backdrop blur
+- Smooth micro-animations and transitions
+- Advanced CSS Grid and Flexbox layouts
+- Modern typography with Inter font family
+- Responsive design with mobile-first approach
+- Accessibility-first implementation
+
+**Enhanced Template:**
 \`\`\`html
-<section class="bg-blue-500 text-white p-6 rounded-lg" role="region" aria-label="Study Content">
-<h2 class="text-xl font-bold">Welcome to StuddyHub AI</h2>
-<p>Click the Mic icon to ask a question or uploada question or upload notes via the Paperclip button.</p>
-</section>
-\`\`\``;
+<!DOCTYPE html>
+<html lang="en" class="${currentTheme === 'dark' ? 'dark' : ''}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StuddyHub AI - Educational Excellence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        'studdy-blue': '#3B82F6',
+                        'studdy-dark-blue': '#1E40AF',
+                    },
+                    animation: {
+                        'fade-in-up': 'fadeInUp 0.6s ease-out',
+                        'scale-in': 'scaleIn 0.4s ease-out',
+                        'slide-in-right': 'slideInRight 0.5s ease-out',
+                    },
+                    backdropBlur: {
+                        'xs': '2px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .glassmorphism {
+            background: ${currentTheme === 'dark' ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.8)'};
+            backdrop-filter: blur(12px);
+            border: 1px solid ${currentTheme === 'dark' ? 'rgba(71, 85, 105, 0.3)' : 'rgba(226, 232, 240, 0.3)'};
+        }
+        .gradient-border {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1px;
+            border-radius: 12px;
+        }
+        .gradient-border-inner {
+            background: ${currentTheme === 'dark' ? '#0F172A' : '#FFFFFF'};
+            border-radius: 11px;
+            padding: 1.5rem;
+        }
+    </style>
+</head>
+<body class="${currentTheme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'} font-sans min-h-screen transition-all duration-300">
+    
+    <!-- Modern Hero Section -->
+    <section class="relative min-h-screen flex items-center justify-center overflow-hidden">
+        <!-- Animated Background -->
+        <div class="absolute inset-0 bg-gradient-to-br ${currentTheme === 'dark' ? 'from-slate-900 via-blue-900/20 to-slate-900' : 'from-blue-50 via-white to-blue-50'}"></div>
+        
+        <!-- Floating Elements -->
+        <div class="absolute top-20 left-10 w-20 h-20 ${currentTheme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-200/40'} rounded-full blur-xl animate-pulse"></div>
+        <div class="absolute bottom-20 right-10 w-32 h-32 ${currentTheme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-200/40'} rounded-full blur-xl animate-pulse delay-1000"></div>
+        
+        <!-- Main Content -->
+        <div class="relative z-10 max-w-4xl mx-auto px-6 text-center">
+            <!-- Glassmorphism Card -->
+            <div class="glassmorphism rounded-2xl p-8 md:p-12 animate-fade-in-up">
+                <div class="gradient-border mb-8 animate-scale-in">
+                    <div class="gradient-border-inner text-center">
+                        <h1 class="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-studdy-blue to-purple-600 bg-clip-text text-transparent">
+                            Welcome to StuddyHub AI
+                        </h1>
+                        <p class="text-xl md:text-2xl ${currentTheme === 'dark' ? 'text-slate-300' : 'text-slate-600'} mb-8 leading-relaxed">
+                            Transform your learning journey with AI-powered education, 
+                            personalized insights, and interactive experiences.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Feature Cards -->
+                <div class="grid md:grid-cols-3 gap-6 mb-8">
+                    <div class="glassmorphism rounded-xl p-6 hover:scale-105 transition-all duration-300 animate-slide-in-right">
+                        <div class="w-12 h-12 ${currentTheme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'} rounded-lg flex items-center justify-center mb-4 mx-auto">
+                            <svg class="w-6 h-6 text-studdy-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-2">Smart Learning</h3>
+                        <p class="${currentTheme === 'dark' ? 'text-slate-400' : 'text-slate-600'} text-sm">
+                            AI-powered personalization adapts to your learning style
+                        </p>
+                    </div>
+                    
+                    <div class="glassmorphism rounded-xl p-6 hover:scale-105 transition-all duration-300 animate-slide-in-right delay-200">
+                        <div class="w-12 h-12 ${currentTheme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-100'} rounded-lg flex items-center justify-center mb-4 mx-auto">
+                            <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-2">Progress Tracking</h3>
+                        <p class="${currentTheme === 'dark' ? 'text-slate-400' : 'text-slate-600'} text-sm">
+                            Visual insights and analytics for your learning journey
+                        </p>
+                    </div>
+                    
+                    <div class="glassmorphism rounded-xl p-6 hover:scale-105 transition-all duration-300 animate-slide-in-right delay-400">
+                        <div class="w-12 h-12 ${currentTheme === 'dark' ? 'bg-purple-500/20' : 'bg-purple-100'} rounded-lg flex items-center justify-center mb-4 mx-auto">
+                            <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-2">AI Assistant</h3>
+                        <p class="${currentTheme === 'dark' ? 'text-slate-400' : 'text-slate-600'} text-sm">
+                            24/7 intelligent support for all your questions
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- CTA Buttons -->
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button class="bg-gradient-to-r from-studdy-blue to-studdy-dark-blue hover:from-studdy-dark-blue hover:to-studdy-blue text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl">
+                        Start Learning Now
+                    </button>
+                    <button class="border-2 ${currentTheme === 'dark' ? 'border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-200' : 'border-slate-300 hover:border-slate-400 text-slate-700 hover:text-slate-800'} font-semibold py-3 px-8 rounded-xl transition-all duration-300 hover:scale-105">
+                        Learn More
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <script>
+        // Add interactive animations
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.glassmorphism');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = \`\${index * 100}ms\`;
+            });
+        });
+    </script>
+</body>
+</html>
+\`\`\`
+`;
   const slidesExcellence = `
-**SLIDE GENERATION RULES:**
-- JSON format: [{title: string, content: string | string[], layout?: string}].
-- Concise content.
-**TEMPLATE (JSON):**
+**SLIDES VISUAL EXCELLENCE:**
+
+**Modern Slide Principles:**
+- Consistent visual hierarchy
+- Theme-adaptive color schemes
+- Professional typography scaling
+- Engaging visual elements
+- Interactive design hints
+
+**Enhanced Template:**
 \`\`\`slides
 [
-{
-"title": "Introduction to AI",
-"content": ["What is AI?", "History of AI", "Key Concepts"],
-"layout": "title-and-bullets"
-},
-{
-"title": "Machine Learning Basics",
-"content": "Machine Learning is a subset of AI that enables systems to learn from data. It involves algorithms that build a model from example data.",
-"layout": "title-and-text"
-},
-{
-"title": "Deep Learning Architectures",
-"content": "- Neural Networks
-- Convolutional Neural Networks (CNNs)
-- Recurrent Neural Networks (RNNs)",
-"layout": "title-and-markdown-bullets"
-}
+  {
+    "title": "🚀 Introduction to Machine Learning",
+    "content": [
+      "🤖 **What is Machine Learning?**",
+      "   • Subset of AI that learns from data",
+      "   • Algorithms that improve with experience",
+      "   • Powers modern applications everywhere",
+      "",
+      "📊 **Key Benefits:**",
+      "   • Automated decision making",
+      "   • Pattern recognition at scale",
+      "   • Predictive analytics capability"
+    ],
+    "layout": "title-and-bullets",
+    "theme": {
+      "backgroundColor": "${currentTheme === 'dark' ? '#0F172A' : '#FFFFFF'}",
+      "textColor": "${currentTheme === 'dark' ? '#F8FAFC' : '#0F172A'}",
+      "accentColor": "${currentTheme === 'dark' ? '#60A5FA' : '#3B82F6'}",
+      "gradient": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+    }
+  },
+  {
+    "title": "🧠 Types of Machine Learning",
+    "content": "Machine Learning encompasses three main paradigms:\\n\\n**🎯 Supervised Learning**\\n• Uses labeled training data\\n• Predicts outcomes for new data\\n• Examples: Classification, Regression\\n\\n**🔍 Unsupervised Learning**\\n• Discovers patterns in unlabeled data\\n• Finds hidden structures\\n• Examples: Clustering, Dimensionality Reduction\\n\\n**🎮 Reinforcement Learning**\\n• Learns through interaction and rewards\\n• Trial-and-error approach\\n• Examples: Game playing, Robotics",
+    "layout": "title-and-rich-text",
+    "theme": {
+      "backgroundColor": "${currentTheme === 'dark' ? '#1E293B' : '#F8FAFC'}",
+      "textColor": "${currentTheme === 'dark' ? '#E2E8F0' : '#334155'}",
+      "accentColor": "${currentTheme === 'dark' ? '#34D399' : '#10B981'}"
+    }
+  },
+  {
+    "title": "📈 Deep Learning Architecture",
+    "content": [
+      "🏗️ **Neural Network Fundamentals:**",
+      "",
+      "**Input Layer** → **Hidden Layers** → **Output Layer**",
+      "",
+      "• **Neurons:** Basic processing units",
+      "• **Weights:** Connection strengths", 
+      "• **Activation Functions:** Non-linear transformations",
+      "• **Backpropagation:** Learning algorithm",
+      "",
+      "🎯 **Popular Architectures:**",
+      "• **CNNs:** Computer Vision tasks",
+      "• **RNNs:** Sequential data processing",
+      "• **Transformers:** Natural Language Processing"
+    ],
+    "layout": "title-and-structured-content",
+    "theme": {
+      "backgroundColor": "${currentTheme === 'dark' ? '#334155' : '#F1F5F9'}",
+      "textColor": "${currentTheme === 'dark' ? '#CBD5E1' : '#475569'}",
+      "accentColor": "${currentTheme === 'dark' ? '#FBBF24' : '#F59E0B'}"
+    }
+  }
 ]
-\`\`\``;
+\`\`\`
+
+**Advanced Slide Features:**
+- Emoji integration for visual engagement
+- Progressive disclosure of information
+- Consistent color theming across slides
+- Professional typography hierarchy
+- Interactive element suggestions
+`;
   const conversationalExcellence = `
 **CONVERSATIONAL STYLE:**
 - Warm, encouraging, professional tone (mentoring).
@@ -2155,10 +2695,10 @@ return { scene, renderer, camera, controls, cleanup };
   const adaptiveLearningSystem = `
 These are the user preferences
 **ADAPTIVE LEARNING:**
-- learning style: kinesthetic
-- Difficulty: beginner (beginner, intermediate, advanced).
-- Explanation Style: detailed (simple, detailed, comprehensive).
-- Examples: Included.
+- learning style: ${learningStyle}
+- Difficulty: ${learningPreferences?.difficulty || 'intermediate'} (beginner, intermediate, advanced).
+- Explanation Style: ${learningPreferences?.explanation_style || 'detailed'} (simple, detailed, comprehensive).
+- Examples: ${learningPreferences?.examples ? 'Included' : 'Omitted'}.
 `;
   const errorPreventionProtocols = `
 **ERROR PREVENTION:**
@@ -2209,36 +2749,30 @@ ${executionFramework}
 ${finalSystemIntegration}
 `;
 }
-/**
-* Build context-aware conversation for Gemini API
-*/ /**
-* Asynchronously builds a structured conversation history for the Gemini API.
-* Includes intelligent context retrieval, history summarization, and attachment processing.
-*
-* @param {string} userId - The ID of the user.
-* @param {string} sessionId - The ID of the current chat session.
-* @param {string} currentMessage - The latest message from the user.
-* @param {Array<Object>} [files=[]] - An array of file objects to be included in the current message.
-* @param {string} [attachedContext=''] - Additional text context from attached documents or notes.
-* @param {string} [systemPrompt=''] - The initial system prompt to guide the model's behavior.
-* @returns {Promise<Object>} A promise that resolves to an object containing the `contents` for the Gemini API and `contextInfo`.
-*/ async function buildGeminiConversation(userId, sessionId, currentMessage, files = [], attachedContext = '', systemPrompt = '') {
+async function buildGeminiConversation(userId, sessionId, currentMessage, files = [], attachedContext = '', systemPrompt = '') {
   // A unique prefix for all logs within this function call for easy tracing
+  const logPrefix = `[buildGeminiConversation][User:${userId}][Session:${sessionId}]`;
+  console.log(`${logPrefix} Starting conversation build.`);
+  // For deeper debugging, log the characteristics of the input
+  console.debug(`${logPrefix} Inputs - Message Length: ${currentMessage?.length || 0}, Files: ${files.length}, Attached Context Length: ${attachedContext?.length || 0}, System Prompt: ${!!systemPrompt}`);
   try {
+    // Create system prompt
+    let assembledSystemPrompt = systemPrompt;
     // 1. Get intelligent conversation context
-    const contextData = await buildIntelligentContext(userId, sessionId, currentMessage);
-    const geminiContents = [];
-    // 2. Start with system prompt if provided
-    if (systemPrompt) {
+    console.log(`${logPrefix} Fetching intelligent context...`);
+    let conversationData = await buildIntelligentContext(userId, sessionId, currentMessage, [], []);
+    let geminiContents = [];
+
+    if (assembledSystemPrompt) {
+      console.log(`${logPrefix} Adding system prompt.`);
       geminiContents.push({
         role: 'user',
         parts: [
           {
-            text: systemPrompt
+            text: assembledSystemPrompt
           }
         ]
       });
-      // The model's first turn should be an acknowledgement or start of the conversation
       geminiContents.push({
         role: 'model',
         parts: [
@@ -2249,16 +2783,16 @@ ${finalSystemIntegration}
       });
     }
     // 3. Add conversation summary if available
-    if (contextData.conversationSummary) {
+    if (conversationData.conversationSummary) {
+      console.log(`${logPrefix} Adding conversation summary to context.`);
       geminiContents.push({
         role: 'user',
         parts: [
           {
-            text: `CONVERSATION CONTEXT SUMMARY:\n${contextData.conversationSummary}\n\n[The above is a summary of earlier messages. The following are recent messages:]`
+            text: `CONVERSATION CONTEXT SUMMARY:\n${conversationData.conversationSummary}\n\n[The above is a summary of earlier messages. The following are recent messages:]`
           }
         ]
       });
-      // Add a model part to acknowledge the context
       geminiContents.push({
         role: 'model',
         parts: [
@@ -2269,8 +2803,43 @@ ${finalSystemIntegration}
       });
     }
     // 4. Add recent conversation history
-    if (contextData.recentMessages && contextData.recentMessages.length > 0) {
-      for (const msg of contextData.recentMessages) {
+    let recentMessages = conversationData.recentMessages;
+    // Check token count *after* summarization, before adding recent messages
+    let baseTokenCount = await calculateBaseTokenCount(assembledSystemPrompt, attachedContext);
+    let recentMessagesTokenCount = 0;
+    for (const msg of recentMessages) {
+      recentMessagesTokenCount += await calculateTokenCount(msg.content);
+    }
+    if (baseTokenCount + recentMessagesTokenCount > ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS) {
+      console.warn(`${logPrefix} Token limit exceeded after summarization. Truncating recent messages.`);
+      // Prioritize the last User message
+      const lastUserMessage = recentMessages.filter((msg) => msg.role === 'user').pop(); // Get last user message, if any
+      const otherMessages = recentMessages.filter((msg) => msg !== lastUserMessage);
+      let prioritizedRecentMessages = [];
+      if (lastUserMessage) {
+        prioritizedRecentMessages.push(lastUserMessage);
+        baseTokenCount += await calculateTokenCount(lastUserMessage.content);
+      }
+      // Truncate other messages until within limit
+      const truncatedOtherMessages = [];
+      for (let i = otherMessages.length - 1; i >= 0; i--) {
+        // Iterate backwards, removing oldest first
+        const msg = otherMessages[i];
+        const messageTokenCount = await calculateTokenCount(msg.content);
+        if (baseTokenCount + messageTokenCount <= ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS) {
+          truncatedOtherMessages.unshift(msg); // Add to the beginning to preserve order
+          baseTokenCount += messageTokenCount;
+        } else {
+          console.warn(`${logPrefix} Excluding message ${msg.id} due to token limit.`);
+          break; // Stop adding messages
+        }
+      }
+      prioritizedRecentMessages = truncatedOtherMessages.concat(prioritizedRecentMessages);
+      recentMessages = prioritizedRecentMessages; // Use truncated list
+    }
+    if (recentMessages && recentMessages.length > 0) {
+      console.log(`${logPrefix} Adding ${recentMessages.length} recent messages to history.`);
+      for (const msg of recentMessages) {
         if (msg.role === 'user') {
           const userParts = [
             {
@@ -2278,8 +2847,8 @@ ${finalSystemIntegration}
             }
           ];
           if (msg.image_url && msg.image_mime_type) {
-            // Note: Including a text reference for images in past messages
             userParts[0].text += `\n[User previously shared an image: ${msg.image_url}]`;
+            console.debug(`${logPrefix} Added image reference from history: ${msg.image_url}`);
           }
           geminiContents.push({
             role: 'user',
@@ -2299,6 +2868,7 @@ ${finalSystemIntegration}
     }
     // 5. Add current message with full content, files, and context
     if (currentMessage || files.length > 0 || attachedContext) {
+      console.log(`${logPrefix} Assembling current user turn.`);
       const currentMessageParts = [];
       // Add main text message
       if (currentMessage) {
@@ -2308,13 +2878,16 @@ ${finalSystemIntegration}
       }
       // Add attached context from documents/notes
       if (attachedContext) {
+        console.log(`${logPrefix} Adding attached context from documents/notes.`);
         currentMessageParts.push({
           text: `\n\nATTACHED CONTEXT:\n${attachedContext}`
         });
       }
       // Add processed file content (images, text, etc.)
       if (files.length > 0) {
+        console.log(`${logPrefix} Processing ${files.length} file(s) for the current turn.`);
         for (const file of files) {
+          console.debug(`${logPrefix} Adding file: ${file.name} (Type: ${file.type})`);
           if (file.type === 'image' && file.data) {
             currentMessageParts.push({
               inlineData: {
@@ -2336,18 +2909,24 @@ ${finalSystemIntegration}
           parts: currentMessageParts
         });
       }
+    } else {
+      console.log(`${logPrefix} No new message, files, or attached context in the current turn.`);
     }
+    console.log(`${logPrefix} Successfully built conversation. Final content array has ${geminiContents.length} parts.`);
     return {
       contents: geminiContents,
-      contextInfo: contextData
+      contextInfo: conversationData
     };
   } catch (error) {
     // Log the error with the contextual prefix for easy debugging
+    console.error(`${logPrefix} An error occurred during conversation build:`, error);
     // Re-throw the error so the calling function (e.g., the server handler) can handle it appropriately
     throw error;
   }
 }
 /**
+* Main server handler
+*/ /**
 * Main server handler
 */ serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -2473,7 +3052,8 @@ ${finalSystemIntegration}
       ])
     ];
     // Ensure chat session exists with enhanced context management
-    await ensureChatSession(userId, sessionId, allDocumentIds);
+    // In the main server handler, when calling ensureChatSession:
+    await ensureChatSession(userId, sessionId, allDocumentIds, message); // Pass the message
     // Build attached context with full content (no truncation)
     let attachedContext = '';
     if (allDocumentIds.length > 0 || attachedNoteIds.length > 0) {
@@ -2556,6 +3136,23 @@ ${finalSystemIntegration}
     }
     const data = await response.json();
     let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+    // Generate title from the first AI response
+    let aiGeneratedTitle = 'New Chat Session'; // Default title
+    // Fetch existing session to get the title
+    const { data: existingSession, error: fetchError } = await supabase.from('chat_sessions').select('title').eq('id', sessionId).eq('user_id', userId).single();
+    if (fetchError) {
+      console.error('Error fetching chat session for title:', fetchError);
+      // Fallback to "New Chat Session" if there's an error
+    } else if (existingSession && existingSession.title) {
+      if (existingSession.title === 'New Chat' || existingSession.title === 'New Chat Session') {
+        // If the title is the default and it's not the first message, generate a new title
+        aiGeneratedTitle = await generateChatTitle(sessionId, userId, message);
+      } else {
+        aiGeneratedTitle = existingSession.title; // Use existing title
+      }
+    } else if (conversationData.contextInfo.totalMessages === 0) {
+      aiGeneratedTitle = await generateChatTitle(sessionId, userId, message); // Generate new title for first message
+    }
     // Clean up the generated text
     generatedText = generatedText.split('\n').map((line) => line.replace(/[^\x20-\x7E\n\r]/g, ' ').replace(/\s+/g, ' ').trim()).filter((line) => line.length > 0 || line.trim().length === 0).join('\n');
     // Save assistant message with context info
@@ -2586,12 +3183,13 @@ ${finalSystemIntegration}
       await saveChatMessage(assistantMessageData);
     }
     // Update session timestamp with context summary if available
-    await updateSessionLastMessage(sessionId, conversationData.contextInfo.conversationSummary);
+    await updateSessionLastMessage(sessionId, conversationData.contextInfo.conversationSummary, aiGeneratedTitle);
     const processingTime = Date.now() - startTime;
     return new Response(JSON.stringify({
       response: generatedText,
       userId,
       sessionId,
+      title: aiGeneratedTitle,
       timestamp: new Date().toISOString(),
       processingTime,
       filesProcessed: files.length,
@@ -2629,7 +3227,7 @@ ${finalSystemIntegration}
           attachedDocumentIds: uploadedDocumentIds.length > 0 ? uploadedDocumentIds : null,
           attachedNoteIds: requestData.attachedNoteIds?.length > 0 ? requestData.attachedNoteIds : null,
           imageUrl: userMessageImageUrl || requestData.imageUrl,
-          imageMimeType: userMessageImageMimeType || requestData.imageMimeType
+          imageMimeType: requestData.imageMimeType || requestData.imageMimeType
         });
       } catch (dbError) {
         console.error('Failed to save error message to database:', dbError);

@@ -18,7 +18,7 @@ import html2canvas from 'html2canvas';
 import DOMPurify from 'dompurify';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import ErrorBoundary from '../../ErrorBoundary';
+import ErrorBoundary from '../../layout/ErrorBoundary';
 import * as ReactDOMClient from 'react-dom/client';
 import { HtmlRenderer } from './HtmlRenderer';
 import { MermaidRenderer } from './MermaidRenderer';

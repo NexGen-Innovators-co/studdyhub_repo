@@ -183,7 +183,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                             title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
                             aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
                         >
-                            {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
+                            {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />}
                         </Button>
                     </div>
                 </div>
@@ -252,7 +252,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                             title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
                             aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
                         >
-                            {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
+                            {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />}
                         </Button>
                     </div>
                 </div>
@@ -297,7 +297,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                         title={showRawCode ? 'Hide Raw Code' : 'Show Raw Code'}
                         aria-label={showRawCode ? 'Hide raw code' : 'Show raw code'}
                     >
-                        {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <FileText className="h-3 w-3 sm:h-4 sm:w-4" />}
+                        {showRawCode ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />}
                     </Button>
                 </div>
             </div>
