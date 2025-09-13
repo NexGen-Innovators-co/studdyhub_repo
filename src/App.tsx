@@ -60,6 +60,8 @@ const App = () => (
               <Route path="/chat/:sessionId" element={<Index />} />
               <Route path="/documents" element={<Index />} />
               <Route path="/social" element={<Index />} />
+              <Route path="/social/:tab" element={<Index />} />
+              <Route path="/social/post/:postId" element={<Index />} />
               <Route path="/settings" element={<Index />} />
 
               {/* Catch-all for NotFound */}

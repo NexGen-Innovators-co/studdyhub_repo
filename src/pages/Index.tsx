@@ -1,6 +1,5 @@
-// Index.tsx - Refactored to use AppContext
 import React, { useEffect, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom'; // Import useParams
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
 import { TabContent } from '../components/layout/TabContent';
@@ -11,23 +10,19 @@ import { LoadingScreen } from '@/components/ui/bookloader';
 const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  
+  const { tab, postId } = useParams<{ tab?: string; postId?: string }>(); // Get route params
+
   // Get everything from context
   const {
-    // Auth & loading states
     user,
     authLoading,
     dataLoading,
-    
-    // UI state
     currentTheme,
     isSidebarOpen,
     isAILoading,
     isSubmittingUserMessage,
     isLoadingSessionMessages,
     fileProcessingProgress,
-    
-    // Data
     notes,
     recordings,
     scheduleItems,
@@ -39,8 +34,6 @@ const Index = () => {
     filteredNotes,
     quizzes,
     dataPagination,
-    
-    // Chat data
     chatSessions,
     activeChatSessionId,
     selectedDocumentIds,
@@ -48,11 +41,7 @@ const Index = () => {
     hasMoreMessages,
     hasMoreChatSessions,
     isNotesHistoryOpen,
-    
-    // Computed values
     currentActiveTab,
-    
-    // Actions
     handleThemeChange,
     createNewChatSession,
     deleteChatSession,
@@ -64,14 +53,8 @@ const Index = () => {
     handleReplaceOptimisticMessage,
     handleNavigateToTab,
     handleCreateNew,
-    
-    // App operations
     appOperations,
-    
-    // Audio processing
     audioProcessing,
-    
-    // Data setters
     setNotes,
     setRecordings,
     setIsSidebarOpen,
@@ -79,12 +62,9 @@ const Index = () => {
     setSearchQuery,
     setSelectedCategory,
     setActiveTab,
-    
-    // Dispatch for direct state updates
     dispatch,
   } = useAppContext();
 
-  // Get message handlers
   const {
     handleSubmitMessage,
     handleDeleteMessage,
@@ -106,16 +86,16 @@ const Index = () => {
     onNewNote: appOperations.createNewNote,
     isSidebarOpen,
     onToggleSidebar: () => setIsSidebarOpen(prev => !prev),
-    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings',
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', // Include 'social'
     fullName: userProfile?.full_name || '',
     avatarUrl: userProfile?.avatar_url || '',
   }), [
-    searchQuery, 
-    setSearchQuery, 
-    appOperations.createNewNote, 
-    isSidebarOpen, 
-    setIsSidebarOpen, 
-    currentActiveTab, 
+    searchQuery,
+    setSearchQuery,
+    appOperations.createNewNote,
+    isSidebarOpen,
+    setIsSidebarOpen,
+    currentActiveTab,
     userProfile
   ]);
 
@@ -125,7 +105,7 @@ const Index = () => {
     selectedCategory,
     onCategoryChange: setSelectedCategory,
     noteCount: notes.length,
-    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings',
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', // Include 'social'
     onTabChange: (tab: string) => {
       if (tab.startsWith('chat/') && activeChatSessionId) {
         navigate(`/${tab}`);
@@ -174,6 +154,9 @@ const Index = () => {
 
   const tabContentProps = useMemo(() => ({
     activeTab: currentActiveTab as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social',
+    // Social Tab Routing
+    activeSocialTab: tab,
+    socialPostId: postId,
     filteredNotes,
     activeNote,
     recordings: recordings ?? [],
@@ -199,16 +182,16 @@ const Index = () => {
     onProfileUpdate: appOperations.handleProfileUpdate,
     chatSessions,
     activeChatSessionId,
-    onChatSessionSelect: (sessionId: string) => 
+    onChatSessionSelect: (sessionId: string) =>
       dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionId }),
     onNewChatSession: createNewChatSession,
     onDeleteChatSession: deleteChatSession,
     onRenameChatSession: renameChatSession,
-    onSelectedDocumentIdsChange: (ids: string[]) => 
+    onSelectedDocumentIdsChange: (ids: string[]) =>
       dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: ids }),
     selectedDocumentIds,
     isNotesHistoryOpen,
-    onToggleNotesHistory: () => 
+    onToggleNotesHistory: () =>
       dispatch({ type: 'SET_IS_NOTES_HISTORY_OPEN', payload: !isNotesHistoryOpen }),
     onDeleteMessage: handleDeleteMessage,
     onRegenerateResponse: handleRegenerateResponse,
@@ -227,14 +210,16 @@ const Index = () => {
     // Infinite scroll controls
     hasMoreDocuments: dataPagination.documents.hasMore,
     isLoadingDocuments: false,
-    onLoadMoreDocuments: () => {}, // From context
+    onLoadMoreDocuments: () => { }, // From context
     hasMoreRecordings: dataPagination.recordings.hasMore,
     isLoadingRecordings: false,
-    onLoadMoreRecordings: () => {}, // From context
+    onLoadMoreRecordings: () => { }, // From context
     onMessageUpdate: handleMessageUpdate,
     handleReplaceOptimisticMessage,
   }), [
     currentActiveTab,
+    tab, // Pass social tab
+    postId, // Pass post ID
     filteredNotes,
     activeNote,
     recordings,
@@ -265,13 +250,14 @@ const Index = () => {
     handleMessageUpdate,
     handleReplaceOptimisticMessage,
     dataPagination,
+    userProfile,
   ]);
 
   // Determine header visibility based on current path
   const headerClass = useMemo(() => {
     const isNotesTab = location.pathname.startsWith('/notes');
     return isNotesTab
-      ? 'hidden lg:block' 
+      ? 'hidden lg:block'
       : "flex items-center sm:hidden justify-between w-full p-0 sm:p-0 shadow-none bg-transparent border-none";
   }, [location.pathname]);
 
