@@ -804,7 +804,7 @@ const Auth = () => {
         <div className="flex-1 hidden lg:flex items-center justify-center p-8">
           <div className="max-w-xl text-center lg:text-left space-y-6 animate-fade-in">
             <blockquote className={`text-3xl font-semibold leading-relaxed text-gray-200 before:content-['"'] before:text-5xl before:text-gray-600 before:mr-2 before:align-top after:content-['"'] after:text-5xl after:text-gray-600 after:ml-2 after:align-bottom`}>
-              <p>studdyhub AI has revolutionized my study routine! The ability to automatically summarize lectures and generate flashcards from my notes saves me hours every week. It's like having a personal study assistant that truly understands my needs as a student.</p>
+              <p>studdyhub AI has changed my study routine! The ability to automatically summarize lectures and generate notes saves me hours every week. It's like having a personal study assistant that truly understands my needs as a student.</p>
             </blockquote>
             <div className="flex items-center justify-center lg:justify-start gap-3 mt-6">
               <OptimizedImage

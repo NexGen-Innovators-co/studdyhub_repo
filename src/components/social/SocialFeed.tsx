@@ -121,11 +121,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     }
   }, [initialActiveTab]);
 
-  useEffect(() => {
-    if (activeTab) {
-      navigate(`/social/${activeTab}`);
-    }
-  }, [activeTab, navigate]);
+  // useEffect(() => {
+  //   if (activeTab) {
+  //     navigate(`/social/${activeTab}`);
+  //   }
+  // }, [activeTab, navigate]);
 
   // Handler functions
   const handleCreatePost = async () => {
