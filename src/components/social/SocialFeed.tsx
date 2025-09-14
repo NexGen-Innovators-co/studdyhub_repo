@@ -51,7 +51,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const [selectedPrivacy, setSelectedPrivacy] = useState<Privacy>('public');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
-  // Custom hooks
+  // Custom hooks - Updated to use enhanced version
   const {
     posts,
     setPosts,
@@ -69,9 +69,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     isLoading,
     isLoadingGroups,
     isLoadingUserPosts,
+    isLoadingSuggestedUsers, // New
+    hasMoreSuggestedUsers,   // New
     refetchPosts,
     refetchGroups,
     refetchUserPosts,
+    refetchSuggestedUsers,   // New
+    loadMoreSuggestedUsers,  // New
   } = useSocialData(userProfile, sortBy, filterBy);
 
   const {
@@ -149,6 +153,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const handlePostDialogChange = () => {
     setShowPostDialog(!showPostDialog);
     return !showPostDialog;
+  };
+
+  // Enhanced follow user handler
+  const handleFollowUser = async (userId: string) => {
+    await followUser(userId);
+    // Refresh suggested users to get new recommendations
+    refetchSuggestedUsers();
   };
 
   // Filter posts based on search query
@@ -423,13 +434,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
             )}
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar - Enhanced with new props */}
           <div className="lg:col-span-4">
             <div className="sticky top-6">
               <TrendingSidebar
                 hashtags={trendingHashtags}
                 suggestedUsers={suggestedUsers}
-                onFollowUser={followUser}
+                onFollowUser={handleFollowUser}
+                isLoadingSuggestedUsers={isLoadingSuggestedUsers}
+                hasMoreSuggestedUsers={hasMoreSuggestedUsers}
+                onLoadMoreSuggestedUsers={loadMoreSuggestedUsers}
+                onRefreshSuggestedUsers={refetchSuggestedUsers}
               />
             </div>
           </div>

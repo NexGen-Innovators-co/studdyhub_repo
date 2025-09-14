@@ -45,10 +45,25 @@ export interface CommentSectionProps {
   currentUser: SocialUserWithDetails | null;
 }
 
+// Enhanced interface for suggested users with recommendation scoring
+export interface SuggestedUserWithScore extends SocialUserWithDetails {
+  recommendation_score?: number;
+}
+
 export interface TrendingSidebarProps {
   hashtags: any[];
-  suggestedUsers: SocialUserWithDetails[];
+  suggestedUsers: SuggestedUserWithScore[];
   onFollowUser: (userId: string) => void;
+}
+
+// Enhanced interface for suggested users component
+export interface SuggestedUsersProps {
+  users: SuggestedUserWithScore[];
+  onFollowUser: (userId: string) => void;
+  isLoading?: boolean;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  onRefresh?: () => void;
 }
 
 export interface PostActionsProps {
@@ -70,11 +85,26 @@ export interface HashtagBadgeProps {
   onClick?: () => void;
 }
 
-export interface SuggestedUsersProps {
-  users: SocialUserWithDetails[];
-  onFollowUser: (userId: string) => void;
-}
-
 export type SortBy = 'newest' | 'popular' | 'trending';
 export type FilterBy = 'all' | 'following' | 'groups';
 export type Privacy = 'public' | 'followers' | 'private';
+
+// New types for enhanced functionality
+export interface RecommendationQuery {
+  excludeIds: string[];
+  userInterests: string[];
+  limit: number;
+  offset: number;
+  minFollowers?: number;
+  maxFollowers?: number;
+  requireAvatar?: boolean;
+  requireBio?: boolean;
+  activeInDays?: number;
+}
+
+export interface PaginationState {
+  offset: number;
+  hasMore: boolean;
+  isLoading: boolean;
+  lastRefresh: Date | null;
+}

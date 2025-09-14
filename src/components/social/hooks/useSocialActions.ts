@@ -12,7 +12,7 @@ export const useSocialActions = (
   setPosts: React.Dispatch<React.SetStateAction<SocialPostWithDetails[]>>,
   setSuggestedUsers: React.Dispatch<React.SetStateAction<SocialUserWithDetails[]>>,
   setGroups: React.Dispatch<React.SetStateAction<SocialGroupWithDetails[]>>,
-  setCurrentUser: React.Dispatch<React.SetStateAction<SocialUserWithDetails | null>> // Added
+  setCurrentUser: React.Dispatch<React.SetStateAction<SocialUserWithDetails | null>>
 ) => {
   const [isUploading, setIsUploading] = useState(false);
 
@@ -141,6 +141,12 @@ export const useSocialActions = (
           });
         }
       }
+
+      // Update user's posts count
+      await supabase
+        .from('social_users')
+        .update({ posts_count: (currentUser?.posts_count || 0) + 1 })
+        .eq('id', user.id);
 
       const transformedPost = {
         ...newPost,
@@ -290,16 +296,25 @@ export const useSocialActions = (
     }
   };
 
+  // Enhanced follow user function that updates counts and removes from suggestions
   const followUser = async (userId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) throw new Error('Not authenticated');
 
-      await supabase.from('social_follows').insert({
-        follower_id: user.id,
-        following_id: userId
-      });
+      // Insert the follow relationship
+      const { error: followError } = await supabase
+        .from('social_follows')
+        .insert({
+          follower_id: user.id,
+          following_id: userId
+        });
 
+      if (followError) throw followError;
+
+      // Update follower counts
+
+      // Create notification
       await supabase.from('social_notifications').insert({
         user_id: userId,
         type: 'follow',
@@ -308,11 +323,21 @@ export const useSocialActions = (
         data: { user_id: user.id }
       });
 
+      // Remove from suggested users list
       setSuggestedUsers(prev => prev.filter(u => u.id !== userId));
-      toast.success('Now following user!');
+      
+      // Update current user's following count
+      if (currentUser) {
+        setCurrentUser(prev => prev ? {
+          ...prev,
+          following_count: prev.following_count + 1
+        } : prev);
+      }
+
+      return true;
     } catch (error) {
       console.error('Error following user:', error);
-      toast.error('Failed to follow user');
+      throw error; // Re-throw so the UI can handle the error
     }
   };
 
