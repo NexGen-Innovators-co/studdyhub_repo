@@ -1289,17 +1289,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             </div>
           </div>
         )}
-        {dataPagination.documents.isLoading && (
+        {dataPagination.documents.hasMore && (
           <div className="flex justify-center items-center py-4">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600 dark:text-blue-400 mr-3" />
             <p className="text-slate-600 dark:text-slate-400">Loading more documents...</p>
           </div>
         )}
-        {dataPagination.documents.hasMore ? null : (
-          <div className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400">
-            No more documents to load.
-          </div>
-        )}
+        
       </div>
     </div>
   );

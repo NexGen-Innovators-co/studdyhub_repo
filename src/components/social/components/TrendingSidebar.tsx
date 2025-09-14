@@ -7,16 +7,28 @@ import { toast } from 'sonner';
 import { SuggestedUsers } from './SuggestedUsers';
 import { formatEngagementCount } from '../utils/postUtils';
 
-export const TrendingSidebar: React.FC<TrendingSidebarProps> = ({
+interface EnhancedTrendingSidebarProps extends TrendingSidebarProps {
+  // Additional props for enhanced functionality
+  isLoadingSuggestedUsers?: boolean;
+  hasMoreSuggestedUsers?: boolean;
+  onLoadMoreSuggestedUsers?: () => void;
+  onRefreshSuggestedUsers?: () => void;
+}
+
+export const TrendingSidebar: React.FC<EnhancedTrendingSidebarProps> = ({
   hashtags,
   suggestedUsers,
   onFollowUser,
+  isLoadingSuggestedUsers = false,
+  hasMoreSuggestedUsers = false,
+  onLoadMoreSuggestedUsers,
+  onRefreshSuggestedUsers,
 }) => {
   return (
     <div className="space-y-6">
       {/* Trending Hashtags */}
       {hashtags.length > 0 && (
-        <Card>
+        <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-slate-200 dark:border-gray-700">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -48,8 +60,15 @@ export const TrendingSidebar: React.FC<TrendingSidebarProps> = ({
         </Card>
       )}
 
-      {/* Suggested Users */}
-      <SuggestedUsers users={suggestedUsers} onFollowUser={onFollowUser} />
+      {/* Enhanced Suggested Users with Lazy Loading */}
+      <SuggestedUsers 
+        users={suggestedUsers} 
+        onFollowUser={onFollowUser}
+        isLoading={isLoadingSuggestedUsers}
+        hasMore={hasMoreSuggestedUsers}
+        onLoadMore={onLoadMoreSuggestedUsers}
+        onRefresh={onRefreshSuggestedUsers}
+      />
     </div>
   );
 };

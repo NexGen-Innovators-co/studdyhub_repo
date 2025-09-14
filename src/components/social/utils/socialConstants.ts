@@ -37,9 +37,10 @@ export const DEFAULT_LIMITS = {
   POSTS_PER_PAGE: 20,
   COMMENTS_PER_PAGE: 10,
   TRENDING_HASHTAGS: 10,
-  SUGGESTED_USERS: 5,
+  SUGGESTED_USERS: 5, // Reduced for better UX with pagination
   NOTIFICATIONS: 10,
-  GROUPS_PER_PAGE: 10, // Add this
+  GROUPS_PER_PAGE: 10,
+  MAX_SUGGESTED_USERS_TOTAL: 100, // Maximum number of users to suggest in total
 } as const;
 
 export const FILE_CONSTRAINTS = {
@@ -54,4 +55,28 @@ export const SUPPORTED_FILE_TYPES = {
   DOCUMENTS: ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
 } as const;
 
+// Recommendation scoring weights
+export const RECOMMENDATION_WEIGHTS = {
+  COMMON_INTERESTS: 10,
+  RECENT_ACTIVITY: 5,
+  FOLLOWER_COUNT_BONUS: 5,
+  POST_ACTIVITY_BONUS: 3,
+  PROFILE_COMPLETENESS: 1,
+  VERIFIED_BONUS: 2,
+} as const;
 
+// Time-based constants for recommendations
+export const RECOMMENDATION_TIME = {
+  RECENT_ACTIVITY_DAYS: 30,
+  STALE_SUGGESTIONS_MINUTES: 60, // Refresh suggestions after 1 hour
+} as const;
+
+// User interest categories for better matching
+export const INTEREST_CATEGORIES = {
+  TECHNOLOGY: ['technology', 'programming', 'ai', 'web development', 'mobile development', 'data science'],
+  LEARNING: ['learning', 'education', 'studying', 'research', 'academic', 'knowledge'],
+  CREATIVE: ['art', 'design', 'photography', 'writing', 'music', 'creative'],
+  BUSINESS: ['business', 'entrepreneurship', 'marketing', 'finance', 'startups'],
+  LIFESTYLE: ['fitness', 'health', 'travel', 'food', 'fashion', 'lifestyle'],
+  ENTERTAINMENT: ['gaming', 'movies', 'books', 'sports', 'entertainment'],
+} as const;

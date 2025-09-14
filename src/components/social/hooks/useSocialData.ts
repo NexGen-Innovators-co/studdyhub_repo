@@ -8,23 +8,28 @@ import { DEFAULT_LIMITS } from '../utils/socialConstants';
 export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: FilterBy) => {
   const [posts, setPosts] = useState<SocialPostWithDetails[]>([]);
   const [trendingPosts, setTrendingPosts] = useState<SocialPostWithDetails[]>([]);
-  const [userPosts, setUserPosts] = useState<SocialPostWithDetails[]>([]); // New state for user posts
+  const [userPosts, setUserPosts] = useState<SocialPostWithDetails[]>([]);
   const [groups, setGroups] = useState<SocialGroupWithDetails[]>([]);
   const [currentUser, setCurrentUser] = useState<SocialUserWithDetails | null>(null);
   const [trendingHashtags, setTrendingHashtags] = useState<any[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<SocialUserWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
-  const [isLoadingUserPosts, setIsLoadingUserPosts] = useState(true); // New loading state for user posts
+  const [isLoadingUserPosts, setIsLoadingUserPosts] = useState(true);
+  
+  // New states for suggested users pagination
+  const [suggestedUsersOffset, setSuggestedUsersOffset] = useState(0);
+  const [isLoadingSuggestedUsers, setIsLoadingSuggestedUsers] = useState(false);
+  const [hasMoreSuggestedUsers, setHasMoreSuggestedUsers] = useState(true);
 
   useEffect(() => {
     initializeSocialUser();
     fetchPosts();
     fetchTrendingPosts();
-    fetchUserPosts(); // New function call
+    fetchUserPosts();
     fetchGroups();
     fetchTrendingHashtags();
-    fetchSuggestedUsers();
+    fetchSuggestedUsers(true); // Reset pagination when filters change
   }, [sortBy, filterBy]);
 
   const initializeSocialUser = async () => {
@@ -359,23 +364,137 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     }
   };
 
-  const fetchSuggestedUsers = async () => {
+  // Enhanced suggested users fetching with proper filtering and pagination
+  const fetchSuggestedUsers = async (reset: boolean = false) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (reset) {
+        setIsLoadingSuggestedUsers(true);
+        setSuggestedUsersOffset(0);
+        setSuggestedUsers([]);
+        setHasMoreSuggestedUsers(true);
+      } else if (isLoadingSuggestedUsers || !hasMoreSuggestedUsers) {
+        return;
+      } else {
+        setIsLoadingSuggestedUsers(true);
+      }
 
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setIsLoadingSuggestedUsers(false);
+        return;
+      }
+
+      const currentOffset = reset ? 0 : suggestedUsersOffset;
+      const limit = DEFAULT_LIMITS.SUGGESTED_USERS;
+
+      // Step 1: Get users the current user is already following
+      const { data: followingData } = await supabase
+        .from('social_follows')
+        .select('following_id')
+        .eq('follower_id', user.id);
+
+      const followingIds = followingData?.map(f => f.following_id) || [];
+      
+      // Add current user ID to exclusion list
+      const excludeIds = [...followingIds, user.id];
+
+      // Step 2: Get current user's interests for better recommendations
+      const { data: currentUserData } = await supabase
+        .from('social_users')
+        .select('interests')
+        .eq('id', user.id)
+        .single();
+
+      const userInterests = currentUserData?.interests || [];
+
+      // Step 3: Build the query with multiple scoring factors
+      let query = supabase
         .from('social_users')
         .select('*')
-        .neq('id', user.id)
-        .order('followers_count', { ascending: false })
-        .limit(DEFAULT_LIMITS.SUGGESTED_USERS);
+        .not('id', 'in', `(${excludeIds.join(',')})`)
+        .range(currentOffset, currentOffset + limit - 1);
 
-      if (!error && data) {
-        setSuggestedUsers(data);
+      // Step 4: Implement smart sorting algorithm
+      const { data: candidateUsers, error } = await query;
+
+      if (error) throw error;
+
+      if (!candidateUsers || candidateUsers.length === 0) {
+        setHasMoreSuggestedUsers(false);
+        setIsLoadingSuggestedUsers(false);
+        return;
       }
+
+      // Step 5: Score and rank users based on multiple factors
+      const scoredUsers = candidateUsers.map(candidate => {
+        let score = 0;
+
+        // Factor 1: Common interests (highest weight)
+        const commonInterests = candidate.interests?.filter(interest => 
+          userInterests.includes(interest)
+        ) || [];
+        score += commonInterests.length * 10;
+
+        // Factor 2: Recent activity (users active in last 30 days)
+        const lastActive = new Date(candidate.last_active);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        if (lastActive > thirtyDaysAgo) {
+          score += 5;
+        }
+
+        // Factor 3: Follower count (moderate weight - popular but not overwhelming)
+        const followerBonus = Math.min(candidate.followers_count / 100, 5);
+        score += followerBonus;
+
+        // Factor 4: Post activity (users who create content)
+        const postBonus = Math.min(candidate.posts_count / 10, 3);
+        score += postBonus;
+
+        // Factor 5: Profile completeness
+        let completenessScore = 0;
+        if (candidate.avatar_url) completenessScore += 1;
+        if (candidate.bio && candidate.bio !== 'New to the community!') completenessScore += 1;
+        if (candidate.interests && candidate.interests.length > 0) completenessScore += 1;
+        score += completenessScore;
+
+        // Factor 6: Verified users get a small boost
+        if (candidate.is_verified) score += 2;
+
+        return { ...candidate, recommendation_score: score };
+      });
+
+      // Sort by recommendation score
+      const sortedUsers = scoredUsers.sort((a, b) => b.recommendation_score - a.recommendation_score);
+
+      // Update state
+      if (reset) {
+        setSuggestedUsers(sortedUsers);
+      } else {
+        setSuggestedUsers(prev => [...prev, ...sortedUsers]);
+      }
+
+      setSuggestedUsersOffset(currentOffset + candidateUsers.length);
+      
+      // Check if we have more users to load
+      if (candidateUsers.length < limit) {
+        setHasMoreSuggestedUsers(false);
+      }
+
     } catch (error) {
       console.error('Error fetching suggested users:', error);
+      if (reset || suggestedUsers.length === 0) {
+        toast.error('Failed to load suggested users');
+      }
+    } finally {
+      setIsLoadingSuggestedUsers(false);
+    }
+  };
+
+  // Function to load more suggested users
+  const loadMoreSuggestedUsers = () => {
+    if (!isLoadingSuggestedUsers && hasMoreSuggestedUsers) {
+      fetchSuggestedUsers(false);
     }
   };
 
@@ -389,15 +508,19 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     groups,
     setGroups,
     currentUser,
-    setCurrentUser, // Added to allow updating currentUser after profile changes
+    setCurrentUser,
     trendingHashtags,
     suggestedUsers,
     setSuggestedUsers,
     isLoading,
     isLoadingGroups,
     isLoadingUserPosts,
+    isLoadingSuggestedUsers,
+    hasMoreSuggestedUsers,
     refetchPosts: fetchPosts,
     refetchGroups: fetchGroups,
     refetchUserPosts: fetchUserPosts,
+    refetchSuggestedUsers: () => fetchSuggestedUsers(true),
+    loadMoreSuggestedUsers,
   };
 };
