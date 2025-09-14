@@ -1,7 +1,7 @@
 import { SocialPostWithDetails } from '../../../integrations/supabase/socialTypes';
 
 // Base URL for the application, configurable via environment variable
-const BASE_URL =  import.meta.env.VITE_BASE_URL || 'https://yourapp.com';
+const BASE_URL =  import.meta.env.VITE_BASE_URL || 'https://studdyhub.vercel.app.com';
 console.log('BASE_URL:', BASE_URL);
 
 export const extractHashtags = (content: string): string[] => {
@@ -51,7 +51,7 @@ export const truncateText = (text: string, maxLength: number): string => {
 export const generateShareText = (post: SocialPostWithDetails): string => {
   const authorName = post.author?.display_name || 'Someone';
   const truncatedContent = truncateText(post.content, 100);
-  const postUrl = `${BASE_URL}/post/${post.id}`;
+  const postUrl = `${BASE_URL}/social/post/${post.id}`;
   return `Check out this post by ${authorName}: "${truncatedContent}" ${postUrl}`;
 };
 
