@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="/documentation-page" element={<DocumentationPage />} />
               <Route path="/user-guide-page" element={<UserGuidePage />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
 
               {/* Authenticated Application Routes */}
               <Route path="/dashboard" element={<Index />} />

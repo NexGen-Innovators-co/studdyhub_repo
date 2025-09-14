@@ -18,7 +18,7 @@ export interface PostCardProps {
   onCommentChange: (content: string) => void;
   onSubmitComment: () => void;
   currentUser: SocialUserWithDetails | null;
-  onClick?: (postId:string) => void; // Add this line
+  onClick?: (postId:string) => void; 
 }
 
 export interface CreatePostDialogProps {
