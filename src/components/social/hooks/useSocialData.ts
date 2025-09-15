@@ -49,7 +49,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
           .insert({
             id: user.id,
             username: userProfile?.full_name?.toLowerCase().replace(/\s+/g, '_') || `user_${user.id.slice(0, 8)}`,
-            display_name: userProfile?.full_name || 'Anonymous User',
+            display_name: userProfile?.full_name ||  `user_${user.id.slice(0, 8)}`,
             avatar_url: userProfile?.avatar_url || '',
             bio: 'New to the community!',
             interests: ['learning', 'technology']
