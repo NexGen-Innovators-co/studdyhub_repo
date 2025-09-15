@@ -79,7 +79,9 @@ export const useSocialComments = (
           type: 'comment',
           title: 'New comment on your post',
           message: `${currentUser?.display_name} commented on your post`,
-          data: { post_id: postId, comment_id: comment.id }
+          data: { post_id: postId, comment_id: comment.id },
+          actor_id: user.id, // Added
+          post_id: postId // Added
         });
       }
 

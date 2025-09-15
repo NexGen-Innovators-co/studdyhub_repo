@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { SortBy, FilterBy } from '../types/social';
 import { DEFAULT_LIMITS } from '../utils/socialConstants';
 
-export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: FilterBy) => {
+export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: FilterBy, onNotificationReceived?: (notification: any) => void) => {
   const [posts, setPosts] = useState<SocialPostWithDetails[]>([]);
   const [trendingPosts, setTrendingPosts] = useState<SocialPostWithDetails[]>([]);
   const [userPosts, setUserPosts] = useState<SocialPostWithDetails[]>([]);
@@ -38,6 +38,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   // Refs for cleanup
   const subscriptionsRef = useRef<any[]>([]);
   const currentUserIdRef = useRef<string | null>(null);
+
 
   // Initialize user and setup realtime listeners
   useEffect(() => {
@@ -111,21 +112,21 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     subscriptionsRef.current = [];
 
     // Listen to posts changes
-    const postsSubscription = supabase
-      .channel('social_posts_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'social_posts',
-          filter: 'privacy=eq.public'
-        },
-        (payload) => {
-          handlePostsRealtimeUpdate(payload);
-        }
-      )
-      .subscribe();
+    // const postsSubscription = supabase
+    //   .channel('social_posts_changes')
+    //   .on(
+    //     'postgres_changes',
+    //     {
+    //       event: '*',
+    //       schema: 'public',
+    //       table: 'social_posts',
+    //       filter: 'privacy=eq.public'
+    //     },
+    //     (payload) => {
+    //       handlePostsRealtimeUpdate(payload);
+    //     }
+    //   )
+    //   .subscribe();
 
     // Listen to notifications
     if (currentUserIdRef.current) {
@@ -139,15 +140,44 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
             table: 'social_notifications',
             filter: `user_id=eq.${currentUserIdRef.current}`
           },
-          (payload) => {
-            // Handle new notifications
-            toast.info('You have a new notification!');
+          async (payload) => {
+            // Fetch the complete notification data with related information
+            try {
+              const { data: notificationData, error } = await supabase
+                .from('social_notifications')
+                .select(`
+                  *,
+                  actor:social_users!social_notifications_actor_id_fkey(*),
+                  post:social_posts(*)
+                `)
+                .eq('id', payload.new.id)
+                .single();
+
+              if (!error && notificationData) {
+                // Call the callback to update notifications state
+                if (onNotificationReceived) {
+                  onNotificationReceived(notificationData);
+                }
+
+                // Show toast notification
+                let message = 'You have a new notification!';
+                toast.info(message);
+              }
+            } catch (error) {
+              console.error('Error fetching notification details:', error);
+              if (onNotificationReceived) {
+                onNotificationReceived(payload.new);
+              }
+              toast.info('You have a new notification!');
+            }
           }
         )
         .subscribe();
 
       subscriptionsRef.current.push(notificationsSubscription);
     }
+
+    
 
     // Listen to likes changes
     const likesSubscription = supabase
@@ -205,7 +235,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
       subscriptionsRef.current.push(followsSubscription);
     }
 
-    subscriptionsRef.current.push(postsSubscription, likesSubscription, commentsSubscription);
+    subscriptionsRef.current.push( likesSubscription, commentsSubscription);
   };
 
   const handlePostsRealtimeUpdate = (payload: any) => {

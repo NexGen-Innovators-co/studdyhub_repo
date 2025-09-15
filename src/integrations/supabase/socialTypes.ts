@@ -133,6 +133,8 @@ export interface SocialNotification {
     data?: any;
     is_read: boolean;
     created_at: string;
+    actor_id?: string; // Added
+    post_id?: string; // Added
 }
 
 export interface SocialEvent {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
-import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails } from '../../../integrations/supabase/socialTypes';
+import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails, SocialGroup } from '../../../integrations/supabase/socialTypes';
 import { toast } from 'sonner';
 import { extractHashtags, generateShareText } from '../utils/postUtils';
 import { Privacy } from '../types/social';
@@ -91,25 +91,54 @@ export const useSocialActions = (
 
   const createPost = async (content: string, privacy: Privacy, selectedFiles: File[], groupId?: string) => {
     if (!content.trim()) return;
-
+  
     try {
       setIsUploading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-
+  
+      // Step 1: Insert the post
       const { data: newPost, error: postError } = await supabase
         .from('social_posts')
         .insert({
           author_id: user.id,
           content: content,
           privacy: privacy,
-          group_id: groupId
+          group_id: groupId,
+          likes_count: 0,
+          comments_count: 0,
+          shares_count: 0,
+          bookmarks_count: 0,
+          views_count: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
-        .select(`*, author:social_users(*), group:social_groups(*), media:social_media(*)`)
+        .select()
         .single();
-
-      if (postError) throw postError;
-
+  
+      if (postError || !newPost) throw postError || new Error('Failed to create post');
+  
+      // Step 2: Fetch related data (author, group, media)
+      const { data: authorData, error: authorError } = await supabase
+        .from('social_users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+  
+      if (authorError || !authorData) throw authorError || new Error('Failed to fetch author');
+  
+      let groupData: SocialGroup | null = null;
+      if (groupId) {
+        const { data, error } = await supabase
+          .from('social_groups')
+          .select('*')
+          .eq('id', groupId)
+          .single();
+        if (error) throw error;
+        groupData = data;
+      }
+  
+      // Step 3: Upload media
       const mediaPromises = selectedFiles.map(async (file) => {
         const url = await uploadFile(file);
         if (url) {
@@ -119,13 +148,15 @@ export const useSocialActions = (
             url,
             filename: file.name,
             size_bytes: file.size,
-            mime_type: file.type
+            mime_type: file.type,
+            created_at: new Date().toISOString(),
           });
         }
       });
-
+  
       await Promise.all(mediaPromises.filter(Boolean));
-
+  
+      // Step 4: Handle hashtags
       const hashtags = extractHashtags(content);
       for (const tag of hashtags) {
         const { data: hashtag, error: hashtagError } = await supabase
@@ -133,31 +164,36 @@ export const useSocialActions = (
           .upsert({ name: tag }, { onConflict: 'name' })
           .select()
           .single();
-
+  
         if (!hashtagError && hashtag) {
           await supabase.from('social_post_hashtags').insert({
             post_id: newPost.id,
-            hashtag_id: hashtag.id
+            hashtag_id: hashtag.id,
+            created_at: new Date().toISOString(),
           });
         }
       }
-
-      // Update user's posts count
+  
+      // Step 5: Update user's posts count
       await supabase
         .from('social_users')
         .update({ posts_count: (currentUser?.posts_count || 0) + 1 })
         .eq('id', user.id);
-
-      const transformedPost = {
+  
+      // Step 6: Construct the SocialPostWithDetails object
+      const transformedPost: SocialPostWithDetails = {
         ...newPost,
-        media: [],
-        hashtags: [],
+        author: authorData,
+        group: groupData || undefined,
+        media: [], // Media will be empty initially; you can fetch it separately if needed
+        hashtags: hashtags.map((name) => ({ id: uuidv4(), name, posts_count: 1, created_at: new Date().toISOString() })),
         tags: [],
         is_liked: false,
-        is_bookmarked: false
+        is_bookmarked: false,
+        views_count: 0,
       };
-
-      setPosts(prev => [transformedPost, ...prev]);
+  
+      setPosts((prev) => [transformedPost, ...prev]);
       toast.success('Post created successfully!');
       return true;
     } catch (error) {
@@ -228,7 +264,9 @@ export const useSocialActions = (
             type: 'like',
             title: 'New like on your post',
             message: `${currentUser?.display_name} liked your post`,
-            data: { post_id: postId, user_id: user.id }
+            data: { post_id: postId, user_id: user.id },
+            actor_id: user.id, // Added
+            post_id: postId // Added
           });
         }
       }
@@ -320,7 +358,9 @@ export const useSocialActions = (
         type: 'follow',
         title: 'New follower',
         message: `${currentUser?.display_name} started following you`,
-        data: { user_id: user.id }
+        data: { user_id: user.id },
+        actor_id: user.id, // Added
+        post_id: null // Added
       });
 
       // Remove from suggested users list
