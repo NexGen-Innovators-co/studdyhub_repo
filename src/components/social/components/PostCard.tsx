@@ -1,11 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback, memo } from 'react';
 import { Card, CardContent, CardHeader } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../ui/dialog';
 import {
   MoreHorizontal, Award, Target, UsersIcon, Lock, Globe,
-  Eye, FileText, Share, Flag
+  Eye, FileText, Share, Flag, ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PostCardProps } from '../types/social';
@@ -18,7 +18,96 @@ interface PostCardWithViewTrackingProps extends PostCardProps {
   onPostView?: (postId: string) => void;
 }
 
-export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
+// Memoized media component for better performance
+const MediaDisplay = memo(({ media }: { media: any[] }) => {
+  if (!media || media.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-2 gap-2 mb-4 rounded-lg overflow-hidden">
+      {media.slice(0, 4).map((mediaItem, index) => (
+        <div key={mediaItem.id} className="relative group">
+          {mediaItem.type === 'image' && (
+            <img
+              src={mediaItem.url}
+              alt={mediaItem.filename}
+              className="w-full h-40 object-cover hover:scale-105 transition-transform cursor-pointer"
+              loading="lazy"
+              onClick={() => {
+                window.open(mediaItem.url, '_blank', 'noopener,noreferrer');
+              }}
+            />
+          )}
+          {mediaItem.type === 'video' && (
+            <video
+              src={mediaItem.url}
+              className="w-full h-40 object-cover"
+              controls
+              preload="metadata"
+            />
+          )}
+          {mediaItem.type === 'document' && (
+            <div className="w-full h-40 bg-muted flex items-center justify-center hover:bg-muted/80 cursor-pointer transition-colors"
+              onClick={() => window.open(mediaItem.url, '_blank', 'noopener,noreferrer')}
+            >
+              <div className="text-center">
+                <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm truncate px-2">{mediaItem.filename}</p>
+                <ExternalLink className="h-3 w-3 mx-auto mt-1 text-muted-foreground" />
+              </div>
+            </div>
+          )}
+
+          {/* Overlay for additional media */}
+          {index === 3 && media.length > 4 && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-semibold">
+              +{media.length - 4} more
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+});
+
+MediaDisplay.displayName = 'MediaDisplay';
+
+// Memoized hashtags component
+const HashtagDisplay = memo(({ hashtags }: { hashtags: any[] }) => {
+  if (!hashtags || hashtags.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2 mb-4">
+      {hashtags.map((hashtag, index) => (
+        <HashtagBadge
+          key={`${hashtag.id}-${index}`}
+          hashtag={hashtag}
+          onClick={() => toast.info(`Filtering by hashtag #${hashtag.name}`)}
+        />
+      ))}
+    </div>
+  );
+});
+
+HashtagDisplay.displayName = 'HashtagDisplay';
+
+// Memoized engagement stats component
+const EngagementStats = memo(({ post }: { post: any }) => (
+  <div className="flex items-center justify-between py-2 border-t border-b mb-3">
+    <div className="flex items-center space-x-6 text-sm text-muted-foreground">
+      <span>{formatEngagementCount(post.likes_count)} likes</span>
+      <span>{formatEngagementCount(post.comments_count)} comments</span>
+      <span>{formatEngagementCount(post.shares_count)} shares</span>
+    </div>
+    <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+      <Eye className="h-3 w-3" />
+      <span>{formatEngagementCount(post.views_count)} views</span>
+    </div>
+  </div>
+));
+
+EngagementStats.displayName = 'EngagementStats';
+
+export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(({
   post,
   onLike,
   onBookmark,
@@ -32,10 +121,13 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
   onSubmitComment,
   currentUser,
   onPostView,
+  onClick,
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const hasTriggeredView = useRef(false);
+  const intersectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Optimized intersection observer with debouncing
   useEffect(() => {
     if (!onPostView || hasTriggeredView.current || !cardRef.current) return;
 
@@ -43,19 +135,28 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting && entry.intersectionRatio > 0.5 && !hasTriggeredView.current) {
-            // Post is more than 50% visible - schedule view tracking
-            hasTriggeredView.current = true;
-            setTimeout(() => {
-              if (onPostView && hasTriggeredView.current) {
+            // Clear any existing timeout
+            if (intersectionTimeoutRef.current) {
+              clearTimeout(intersectionTimeoutRef.current);
+            }
+
+            // Schedule view tracking with debouncing
+            intersectionTimeoutRef.current = setTimeout(() => {
+              if (entry.isIntersecting && !hasTriggeredView.current) {
+                hasTriggeredView.current = true;
                 onPostView(post.id);
               }
-            }, 1000); // 1 second delay to ensure user is actually viewing
+            }, 1000); // 1 second delay
+          } else if (!entry.isIntersecting && intersectionTimeoutRef.current) {
+            // Cancel view tracking if user scrolls away quickly
+            clearTimeout(intersectionTimeoutRef.current);
+            intersectionTimeoutRef.current = null;
           }
         });
       },
       {
-        threshold: 0.5, // Trigger when 50% of the post is visible
-        rootMargin: '0px 0px -100px 0px' // Only trigger when post is well within viewport
+        threshold: 0.5,
+        rootMargin: '0px 0px -100px 0px'
       }
     );
 
@@ -63,18 +164,38 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
 
     return () => {
       observer.disconnect();
+      if (intersectionTimeoutRef.current) {
+        clearTimeout(intersectionTimeoutRef.current);
+      }
     };
   }, [post.id, onPostView]);
+
+  // Memoized click handler
+  const handleCardClick = useCallback((e: React.MouseEvent) => {
+    // Don't trigger click if user is clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, textarea')) return;
+
+    if (onClick) {
+      onClick(post.id);
+    }
+  }, [onClick, post.id]);
+
+  // Memoized share handler
+  const handleShare = useCallback(() => {
+    onShare(post);
+  }, [onShare, post]);
 
   return (
     <Card
       ref={cardRef}
-      className="mb-6 hover:shadow-lg bg-white dark:bg-gray-900 transition-shadow duration-200"
+      className="mb-6 hover:shadow-lg bg-white dark:bg-gray-900 transition-shadow duration-200 cursor-pointer group"
+      onClick={handleCardClick}
     >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <Avatar className="ring-2 ring-primary/10">
+            <Avatar className="ring-2 ring-primary/10 hover:ring-primary/20 transition-all">
               <AvatarImage src={post.author?.avatar_url} />
               <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5">
                 {post.author?.display_name?.charAt(0).toUpperCase() || 'U'}
@@ -82,7 +203,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
             </Avatar>
             <div>
               <div className="flex items-center gap-2">
-                <p className="font-semibold">{post.author?.display_name}</p>
+                <p className="font-semibold text-slate-800 dark:text-gray-200">
+                  {post.author?.display_name}
+                </p>
                 {post.author?.is_verified && (
                   <Award className="h-4 w-4 text-blue-500" />
                 )}
@@ -102,7 +225,12 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
           </div>
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DialogTrigger>
@@ -111,14 +239,24 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
                 <DialogTitle>Post Options</DialogTitle>
               </DialogHeader>
               <div className="flex flex-col space-y-2">
-                <Button variant="ghost" onClick={() => onShare(post)} className="justify-start">
+                <Button
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleShare();
+                  }}
+                  className="justify-start"
+                >
                   <Share className="h-4 w-4 mr-2" />
                   Share Post
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start text-red-600 hover:bg-red-50 hover:text-red-700"
-                  onClick={() => toast.info(`Reporting post ${post.id}. This feature is in development.`)}
+                  className="justify-start text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950 dark:hover:text-red-400"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toast.info(`Reporting post ${post.id}. This feature is in development.`);
+                  }}
                 >
                   <Flag className="h-4 w-4 mr-2" />
                   Report Post
@@ -130,88 +268,50 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = ({
       </CardHeader>
 
       <CardContent>
-        <p className="mb-4 whitespace-pre-wrap leading-relaxed">{post.content}</p>
-
-        {/* Media display */}
-        {post.media && post.media.length > 0 && (
-          <div className="grid grid-cols-2 gap-2 mb-4 rounded-lg overflow-hidden">
-            {post.media.slice(0, 4).map((media, index) => (
-              <div key={media.id} className="relative group">
-                {media.type === 'image' && (
-                  <img
-                    src={media.url}
-                    alt={media.filename}
-                    className="w-full h-40 object-cover hover:scale-105 transition-transform cursor-pointer"
-                  />
-                )}
-                {media.type === 'video' && (
-                  <video
-                    src={media.url}
-                    className="w-full h-40 object-cover"
-                    controls
-                  />
-                )}
-                {media.type === 'document' && (
-                  <div className="w-full h-40 bg-muted flex items-center justify-center">
-                    <div className="text-center">
-                      <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm truncate px-2">{media.filename}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Hashtags */}
-        {post.hashtags && post.hashtags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {post.hashtags.map((hashtag, index) => (
-              <HashtagBadge
-                key={index}
-                hashtag={hashtag}
-                onClick={() => toast.info(`Filtering by hashtag #${hashtag.name}`)}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Engagement Stats */}
-        <div className="flex items-center justify-between py-2 border-t border-b mb-3">
-          <div className="flex items-center space-x-6 text-sm text-muted-foreground">
-            <span>{formatEngagementCount(post.likes_count)} likes</span>
-            <span>{formatEngagementCount(post.comments_count)} comments</span>
-            <span>{formatEngagementCount(post.shares_count)} shares</span>
-          </div>
-          <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-            <Eye className="h-3 w-3" />
-            <span>{formatEngagementCount(post.views_count)} views</span>
-          </div>
+        {/* Post Content */}
+        <div className="mb-4">
+          <p className="whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-gray-200">
+            {post.content}
+          </p>
         </div>
 
+        {/* Media display */}
+        <MediaDisplay media={post.media} />
+
+        {/* Hashtags */}
+        <HashtagDisplay hashtags={post.hashtags} />
+
+        {/* Engagement Stats */}
+        <EngagementStats post={post} />
+
         {/* Action Buttons */}
-        <PostActions
-          post={post}
-          onLike={onLike}
-          onComment={onComment}
-          onShare={onShare}
-          onBookmark={onBookmark}
-        />
+        <div onClick={(e) => e.stopPropagation()}>
+          <PostActions
+            post={post}
+            onLike={onLike}
+            onComment={onComment}
+            onShare={handleShare}
+            onBookmark={onBookmark}
+          />
+        </div>
 
         {/* Comments Section */}
         {isExpanded && (
-          <CommentSection
-            postId={post.id}
-            comments={comments}
-            isLoading={isLoadingComments}
-            newComment={newComment}
-            onCommentChange={onCommentChange}
-            onSubmitComment={onSubmitComment}
-            currentUser={currentUser}
-          />
+          <div onClick={(e) => e.stopPropagation()}>
+            <CommentSection
+              postId={post.id}
+              comments={comments}
+              isLoading={isLoadingComments}
+              newComment={newComment}
+              onCommentChange={onCommentChange}
+              onSubmitComment={onSubmitComment}
+              currentUser={currentUser}
+            />
+          </div>
         )}
       </CardContent>
     </Card>
   );
-};
+});
+
+PostCard.displayName = 'PostCard';
