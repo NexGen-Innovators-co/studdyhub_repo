@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   useNavigate,
   useParams,
@@ -8,7 +8,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
-  Search, RefreshCw, Bell, TrendingUp, Users, User, SortDesc
+  Search, RefreshCw, Bell, TrendingUp, Users, User, SortDesc, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -51,7 +51,12 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const [selectedPrivacy, setSelectedPrivacy] = useState<Privacy>('public');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
-  // Custom hooks - Updated to use enhanced version
+  // Intersection Observer refs for infinite scroll
+  const feedObserverRef = useRef<HTMLDivElement>(null);
+  const trendingObserverRef = useRef<HTMLDivElement>(null);
+  const profileObserverRef = useRef<HTMLDivElement>(null);
+
+  // Custom hooks - Enhanced version with lazy loading
   const {
     posts,
     setPosts,
@@ -69,13 +74,23 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     isLoading,
     isLoadingGroups,
     isLoadingUserPosts,
-    isLoadingSuggestedUsers, // New
-    hasMoreSuggestedUsers,   // New
+    isLoadingSuggestedUsers,
+    isLoadingMorePosts,
+    hasMorePosts,
+    hasMoreTrendingPosts,
+    hasMoreUserPosts,
+    hasMoreSuggestedUsers,
+    hasMoreGroups,
     refetchPosts,
+    refetchTrendingPosts,
     refetchGroups,
     refetchUserPosts,
-    refetchSuggestedUsers,   // New
-    loadMoreSuggestedUsers,  // New
+    refetchSuggestedUsers,
+    loadMorePosts,
+    loadMoreTrendingPosts,
+    loadMoreUserPosts,
+    loadMoreGroups,
+    loadMoreSuggestedUsers,
   } = useSocialData(userProfile, sortBy, filterBy);
 
   const {
@@ -113,6 +128,79 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const navigate = useNavigate();
   const { tab: routeTab, postId: routePostId } = useParams<{ tab?: string; postId?: string }>();
 
+  // Setup intersection observers for infinite scroll
+  useEffect(() => {
+    const observers = [];
+
+    // Feed observer
+    if (feedObserverRef.current) {
+      const feedObserver = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasMorePosts && !isLoadingMorePosts) {
+            loadMorePosts();
+          }
+        },
+        {
+          threshold: 0.1,
+          rootMargin: '200px',
+        }
+      );
+
+      feedObserver.observe(feedObserverRef.current);
+      observers.push(feedObserver);
+    }
+
+    // Trending observer
+    if (trendingObserverRef.current) {
+      const trendingObserver = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasMoreTrendingPosts && !isLoadingMorePosts) {
+            loadMoreTrendingPosts();
+          }
+        },
+        {
+          threshold: 0.1,
+          rootMargin: '200px',
+        }
+      );
+
+      trendingObserver.observe(trendingObserverRef.current);
+      observers.push(trendingObserver);
+    }
+
+    // Profile observer
+    if (profileObserverRef.current) {
+      const profileObserver = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasMoreUserPosts && !isLoadingUserPosts) {
+            loadMoreUserPosts();
+          }
+        },
+        {
+          threshold: 0.1,
+          rootMargin: '200px',
+        }
+      );
+
+      profileObserver.observe(profileObserverRef.current);
+      observers.push(profileObserver);
+    }
+
+    return () => {
+      observers.forEach(observer => observer.disconnect());
+    };
+  }, [
+    activeTab,
+    hasMorePosts,
+    hasMoreTrendingPosts,
+    hasMoreUserPosts,
+    isLoadingMorePosts,
+    isLoadingUserPosts,
+    loadMorePosts,
+    loadMoreTrendingPosts,
+    loadMoreUserPosts
+  ]);
+
   useEffect(() => {
     return () => {
       cleanup();
@@ -132,7 +220,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
       setNewPostContent('');
       setSelectedFiles([]);
       setShowPostDialog(false);
-      refetchUserPosts(); // Refresh user posts after creating a new post
+      refetchUserPosts();
+      refetchPosts(); // Also refresh main feed
+      toast.success('Post created successfully!');
     }
   };
 
@@ -145,9 +235,12 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
       refetchGroups();
     } else if (activeTab === 'profile') {
       refetchUserPosts();
+    } else if (activeTab === 'trending') {
+      refetchTrendingPosts();
     } else {
       refetchPosts();
     }
+    toast.success('Content refreshed!');
   };
 
   const handlePostDialogChange = () => {
@@ -158,12 +251,23 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   // Enhanced follow user handler
   const handleFollowUser = async (userId: string) => {
     await followUser(userId);
-    // Refresh suggested users to get new recommendations
     refetchSuggestedUsers();
   };
 
   // Filter posts based on search query
   const filteredPosts = posts.filter(post => {
+    if (!searchQuery.trim()) return true;
+
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      post.content.toLowerCase().includes(searchLower) ||
+      post.author?.display_name?.toLowerCase().includes(searchLower) ||
+      post.author?.username?.toLowerCase().includes(searchLower) ||
+      post.hashtags?.some(hashtag => hashtag.name.toLowerCase().includes(searchLower))
+    );
+  });
+
+  const filteredTrendingPosts = trendingPosts.filter(post => {
     if (!searchQuery.trim()) return true;
 
     const searchLower = searchQuery.toLowerCase();
@@ -181,8 +285,47 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
 
   // If postId is present, display only that post
   const postToDisplay = routePostId
-    ? posts.find((post) => post.id === routePostId)
+    ? [...posts, ...trendingPosts, ...userPosts].find((post) => post.id === routePostId)
     : null;
+
+  // Loading component
+  const LoadingSpinner = ({ text = "Loading..." }: { text?: string }) => (
+    <div className="flex flex-col items-center justify-center py-8 space-y-3">
+      <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+      <p className="text-sm text-slate-500 dark:text-gray-400">{text}</p>
+    </div>
+  );
+
+  // Load more trigger component
+  const LoadMoreTrigger = ({ 
+    hasMore, 
+    isLoading, 
+    onLoadMore, 
+    observerRef 
+  }: { 
+    hasMore: boolean; 
+    isLoading: boolean; 
+    onLoadMore: () => void; 
+    observerRef: React.RefObject<HTMLDivElement>; 
+  }) => {
+    if (!hasMore) return null;
+
+    return (
+      <div ref={observerRef} className="py-4 flex justify-center">
+        {isLoading ? (
+          <LoadingSpinner text="Loading more..." />
+        ) : (
+          <Button
+            variant="outline"
+            onClick={onLoadMore}
+            className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-600 dark:text-gray-300 border-slate-200 dark:border-gray-700 hover:bg-slate-100 dark:hover:bg-gray-700"
+          >
+            Load More
+          </Button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -191,22 +334,31 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
           {/* Main Content */}
           <div className="lg:col-span-8">
             {postToDisplay ? (
-              <PostCard
-                key={postToDisplay.id}
-                post={postToDisplay}
-                onLike={toggleLike}
-                onBookmark={toggleBookmark}
-                onShare={sharePost}
-                onComment={() => togglePostExpanded(postToDisplay.id)}
-                isExpanded={isPostExpanded(postToDisplay.id)}
-                comments={getPostComments(postToDisplay.id)}
-                isLoadingComments={isLoadingPostComments(postToDisplay.id)}
-                newComment={getNewCommentContent(postToDisplay.id)}
-                onCommentChange={(content) => updateNewComment(postToDisplay.id, content)}
-                onSubmitComment={() => handleCommentSubmit(postToDisplay.id)}
-                currentUser={currentUser}
-                onPostView={trackPostView}
-              />
+              <div className="space-y-6">
+                <Button
+                  variant="ghost"
+                  onClick={() => navigate('/social')}
+                  className="mb-4 text-slate-600 dark:text-gray-300"
+                >
+                  ← Back to Feed
+                </Button>
+                <PostCard
+                  key={postToDisplay.id}
+                  post={postToDisplay}
+                  onLike={toggleLike}
+                  onBookmark={toggleBookmark}
+                  onShare={sharePost}
+                  onComment={() => togglePostExpanded(postToDisplay.id)}
+                  isExpanded={isPostExpanded(postToDisplay.id)}
+                  comments={getPostComments(postToDisplay.id)}
+                  isLoadingComments={isLoadingPostComments(postToDisplay.id)}
+                  newComment={getNewCommentContent(postToDisplay.id)}
+                  onCommentChange={(content) => updateNewComment(postToDisplay.id, content)}
+                  onSubmitComment={() => handleCommentSubmit(postToDisplay.id)}
+                  currentUser={currentUser}
+                  onPostView={trackPostView}
+                />
+              </div>
             ) : (
               <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="w-full ">
                 <div className="flex items-center justify-between mb-6">
@@ -301,18 +453,21 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                       isUploading={isUploading}
                       currentUser={currentUser}
                     />
-                    {isLoading ? (
-                      <div className="flex justify-center py-8">
-                        <RefreshCw className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
-                      </div>
+
+                    {isLoading && posts.length === 0 ? (
+                      <LoadingSpinner text="Loading your feed..." />
                     ) : (
                       <div className="space-y-6">
-                        <Button onClick={() => setShowPostDialog(true)} className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800">
-                          Create your first post
+                        <Button 
+                          onClick={() => setShowPostDialog(true)} 
+                          className="w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 py-3"
+                        >
+                          What's on your mind?
                         </Button>
-                        {filteredPosts.map((post) => (
+                        
+                        {filteredPosts.map((post, index) => (
                           <PostCard
-                            key={post.id}
+                            key={`${post.id}-${index}`}
                             post={post}
                             onLike={toggleLike}
                             onBookmark={toggleBookmark}
@@ -329,6 +484,15 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                             onClick={() => handlePostClick(post.id)}
                           />
                         ))}
+
+                        {/* Infinite scroll trigger for feed */}
+                        <LoadMoreTrigger
+                          hasMore={hasMorePosts}
+                          isLoading={isLoadingMorePosts}
+                          onLoadMore={loadMorePosts}
+                          observerRef={feedObserverRef}
+                        />
+
                         {filteredPosts.length === 0 && !isLoading && (
                           <div className="text-center py-12 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg border border-slate-200 dark:border-gray-700">
                             <div className="max-w-md mx-auto">
@@ -369,23 +533,39 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                 </TabsContent>
 
                 <TabsContent value="trending" className="mt-0">
-                  <TrendingPosts
-                    posts={trendingPosts}
-                    isLoading={isLoading}
-                    onLike={toggleLike}
-                    onBookmark={toggleBookmark}
-                    onShare={sharePost}
-                    onComment={togglePostExpanded}
-                    isPostExpanded={isPostExpanded}
-                    getPostComments={getPostComments}
-                    isLoadingPostComments={isLoadingPostComments}
-                    getNewCommentContent={getNewCommentContent}
-                    onCommentChange={updateNewComment}
-                    onSubmitComment={handleCommentSubmit}
-                    currentUser={currentUser}
-                    onPostView={trackPostView}
-                    onClick={handlePostClick}
-                  />
+                  <div className="space-y-6">
+                    {isLoading && trendingPosts.length === 0 ? (
+                      <LoadingSpinner text="Loading trending posts..." />
+                    ) : (
+                      <>
+                        <TrendingPosts
+                          posts={filteredTrendingPosts}
+                          isLoading={false}
+                          onLike={toggleLike}
+                          onBookmark={toggleBookmark}
+                          onShare={sharePost}
+                          onComment={togglePostExpanded}
+                          isPostExpanded={isPostExpanded}
+                          getPostComments={getPostComments}
+                          isLoadingPostComments={isLoadingPostComments}
+                          getNewCommentContent={getNewCommentContent}
+                          onCommentChange={updateNewComment}
+                          onSubmitComment={handleCommentSubmit}
+                          currentUser={currentUser}
+                          onPostView={trackPostView}
+                          onClick={handlePostClick}
+                        />
+                        
+                        {/* Infinite scroll trigger for trending */}
+                        <LoadMoreTrigger
+                          hasMore={hasMoreTrendingPosts}
+                          isLoading={isLoadingMorePosts}
+                          onLoadMore={loadMoreTrendingPosts}
+                          observerRef={trendingObserverRef}
+                        />
+                      </>
+                    )}
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="groups" className="mt-0">
@@ -394,31 +574,43 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                     isLoading={isLoadingGroups}
                     onJoinGroup={joinGroup}
                     currentUser={currentUser}
+                    // hasMore={hasMoreGroups}
+                    // onLoadMore={loadMoreGroups}
                   />
                 </TabsContent>
 
                 <TabsContent value="profile" className="mt-0">
-                  <UserProfile
-                    user={currentUser}
-                    isOwnProfile={true}
-                    onEditProfile={updateProfile}
-                    posts={userPosts}
-                    isLoadingPosts={isLoadingUserPosts}
-                    onLike={toggleLike}
-                    onBookmark={toggleBookmark}
-                    onShare={sharePost}
-                    onComment={togglePostExpanded}
-                    isPostExpanded={isPostExpanded}
-                    getPostComments={getPostComments}
-                    isLoadingPostComments={isLoadingPostComments}
-                    getNewCommentContent={getNewCommentContent}
-                    onCommentChange={updateNewComment}
-                    onSubmitComment={handleCommentSubmit}
-                    currentUser={currentUser}
-                    refetchPosts={refetchUserPosts}
-                    onPostView={trackPostView}
-                    onClick={handlePostClick}
-                  />
+                  <div className="space-y-6">
+                    <UserProfile
+                      user={currentUser}
+                      isOwnProfile={true}
+                      onEditProfile={updateProfile}
+                      posts={userPosts}
+                      isLoadingPosts={isLoadingUserPosts}
+                      onLike={toggleLike}
+                      onBookmark={toggleBookmark}
+                      onShare={sharePost}
+                      onComment={togglePostExpanded}
+                      isPostExpanded={isPostExpanded}
+                      getPostComments={getPostComments}
+                      isLoadingPostComments={isLoadingPostComments}
+                      getNewCommentContent={getNewCommentContent}
+                      onCommentChange={updateNewComment}
+                      onSubmitComment={handleCommentSubmit}
+                      currentUser={currentUser}
+                      refetchPosts={refetchUserPosts}
+                      onPostView={trackPostView}
+                      onClick={handlePostClick}
+                    />
+                    
+                    {/* Infinite scroll trigger for user posts */}
+                    <LoadMoreTrigger
+                      hasMore={hasMoreUserPosts}
+                      isLoading={isLoadingUserPosts}
+                      onLoadMore={loadMoreUserPosts}
+                      observerRef={profileObserverRef}
+                    />
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="notifications" className="mt-0">
