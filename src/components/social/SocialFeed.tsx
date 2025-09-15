@@ -55,8 +55,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const feedObserverRef = useRef<HTMLDivElement>(null);
   const trendingObserverRef = useRef<HTMLDivElement>(null);
   const profileObserverRef = useRef<HTMLDivElement>(null);
+  const feedContainerRef = useRef<HTMLDivElement>(null); // New ref for feed container
 
-  // Custom hooks - Enhanced version with lazy loading
+  // Custom hooks
   const {
     posts,
     setPosts,
@@ -221,7 +222,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
       setSelectedFiles([]);
       setShowPostDialog(false);
       refetchUserPosts();
-      refetchPosts(); // Also refresh main feed
+      // Instead of refetching all posts, rely on useSocialActions to update posts state
+      // Scroll to top to show new post
+      if (feedContainerRef.current) {
+        feedContainerRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
       toast.success('Post created successfully!');
     }
   };
@@ -248,7 +253,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     return !showPostDialog;
   };
 
-  // Enhanced follow user handler
   const handleFollowUser = async (userId: string) => {
     await followUser(userId);
     refetchSuggestedUsers();
@@ -318,7 +322,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
           <Button
             variant="outline"
             onClick={onLoadMore}
-            className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-600 dark:text-gray-300 border-slate-200 dark:border-gray-700 hover:bg-slate-100 dark:hover:bg-gray-700"
+            className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm"
           >
             Load More
           </Button>
@@ -328,117 +332,110 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   };
 
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="container mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Main Content */}
+          {/* Main content */}
           <div className="lg:col-span-8">
-            {postToDisplay ? (
-              <div className="space-y-6">
-                <Button
-                  variant="ghost"
-                  onClick={() => navigate('/social')}
-                  className="mb-4 text-slate-600 dark:text-gray-300"
+            {/* Search and filters */}
+            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-4 mb-6 border border-slate-200 dark:border-gray-700 sticky top-4 z-10">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-gray-400" />
+                  <Input
+                    placeholder="Search posts, users, or hashtags..."
+                    className="pl-10 bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
+                  <SelectTrigger className="w-[180px] bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest</SelectItem>
+                    <SelectItem value="popular">Popular</SelectItem>
+                    <SelectItem value="trending">Trending</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
+                  <SelectTrigger className="w-[180px] bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
+                    <SelectValue placeholder="Filter by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="following">Following</SelectItem>
+                    <SelectItem value="groups">Groups</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  variant="outline" 
+                  onClick={handleRefresh}
+                  className="bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
                 >
-                  ← Back to Feed
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
                 </Button>
-                <PostCard
-                  key={postToDisplay.id}
-                  post={postToDisplay}
-                  onLike={toggleLike}
-                  onBookmark={toggleBookmark}
-                  onShare={sharePost}
-                  onComment={() => togglePostExpanded(postToDisplay.id)}
-                  isExpanded={isPostExpanded(postToDisplay.id)}
-                  comments={getPostComments(postToDisplay.id)}
-                  isLoadingComments={isLoadingPostComments(postToDisplay.id)}
-                  newComment={getNewCommentContent(postToDisplay.id)}
-                  onCommentChange={(content) => updateNewComment(postToDisplay.id, content)}
-                  onSubmitComment={() => handleCommentSubmit(postToDisplay.id)}
-                  currentUser={currentUser}
-                  onPostView={trackPostView}
-                />
+              </div>
+            </div>
+
+            {/* Tabs */}
+            {routePostId ? (
+              // Single post view if postId is in URL
+              <div>
+                {postToDisplay ? (
+                  <PostCard
+                    post={postToDisplay}
+                    onLike={toggleLike}
+                    onBookmark={toggleBookmark}
+                    onShare={sharePost}
+                    onComment={() => togglePostExpanded(postToDisplay.id)}
+                    isExpanded={true} // Always expanded for single view
+                    comments={getPostComments(postToDisplay.id)}
+                    isLoadingComments={isLoadingPostComments(postToDisplay.id)}
+                    newComment={getNewCommentContent(postToDisplay.id)}
+                    onCommentChange={(content) => updateNewComment(postToDisplay.id, content)}
+                    onSubmitComment={() => handleCommentSubmit(postToDisplay.id)}
+                    currentUser={currentUser}
+                    onPostView={trackPostView}
+                    onClick={() => {}}
+                  />
+                ) : (
+                  <div className="text-center py-12">Post not found</div>
+                )}
               </div>
             ) : (
-              <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="w-full ">
-                <div className="flex items-center justify-between mb-6">
-                  <TabsList className="grid w-full max-w-md grid-cols-5 dark:bg-gray-900 backdrop-blur-sm">
-                    <TabsTrigger value="feed" className="text-xs text-slate-600 dark:text-gray-200 ">Feed</TabsTrigger>
-                    <TabsTrigger value="trending" className="text-xs text-slate-600 dark:text-gray-200">Trending</TabsTrigger>
-                    <TabsTrigger value="groups" className="text-xs text-slate-600 dark:text-gray-200">Groups</TabsTrigger>
-                    <TabsTrigger value="profile" className="text-xs text-slate-600 dark:text-gray-200">Profile</TabsTrigger>
-                    <TabsTrigger value="notifications" className="text-xs text-slate-600 dark:text-gray-200">Notifications</TabsTrigger>
-                  </TabsList>
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="space-y-6">
+                <TabsList className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-1 border border-slate-200 dark:border-gray-700 grid grid-cols-5">
+                  <TabsTrigger value="feed" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
+                    <SortDesc className="h-4 w-4 mr-2" />
+                    Feed
+                  </TabsTrigger>
+                  <TabsTrigger value="trending" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    Trending
+                  </TabsTrigger>
+                  <TabsTrigger value="groups" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
+                    <Users className="h-4 w-4 mr-2" />
+                    Groups
+                  </TabsTrigger>
+                  <TabsTrigger value="profile" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
+                    <User className="h-4 w-4 mr-2" />
+                    Profile
+                  </TabsTrigger>
+                  <TabsTrigger value="notifications" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 relative">
+                    <Bell className="h-4 w-4 mr-2" />
+                    Notifications
+                    {unreadCount > 0 && (
+                      <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 transform translate-x-1/2 -translate-y-1/2">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleRefresh}
-                      disabled={isLoading || isLoadingGroups || isLoadingUserPosts}
-                      className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-600 dark:text-gray-300 border-slate-200 dark:border-gray-700"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${isLoading || isLoadingGroups || isLoadingUserPosts ? 'animate-spin' : ''}`} />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-600 dark:text-gray-300 border-slate-200 dark:border-gray-700"
-                      onClick={() => setActiveTab('notifications')}
-                    >
-                      <Bell className="h-4 w-4" />
-                      {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                          {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Search and Filters */}
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 dark:text-gray-400 h-4 w-4" />
-                    <Input
-                      placeholder="Search posts, users, hashtags..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-700"
-                    />
-                  </div>
-                  <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
-                    <SelectTrigger className="w-32 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-700">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-gray-800 border-slate-200 dark:border-gray-700">
-                      <SelectItem value="newest">
-                        <div className="flex items-center gap-2">
-                          <SortDesc className="h-3 w-3 text-slate-600 dark:text-gray-300" />
-                          Newest
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="trending">
-                        <div className="flex items-center gap-2">
-                          <TrendingUp className="h-3 w-3 text-slate-600 dark:text-gray-300" />
-                          Trending
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
-                    <SelectTrigger className="w-32 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-700">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-gray-800 border-slate-200 dark:border-gray-700">
-                      <SelectItem value="all">All Posts</SelectItem>
-                      <SelectItem value="following">Following</SelectItem>
-                      <SelectItem value="groups">Groups</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <TabsContent value="feed" className="mt-0">
+                <TabsContent value="feed" className="mt-0" ref={feedContainerRef}>
                   <div className="space-y-6">
                     <CreatePostDialog
                       isOpen={showPostDialog}
@@ -574,8 +571,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                     isLoading={isLoadingGroups}
                     onJoinGroup={joinGroup}
                     currentUser={currentUser}
-                    // hasMore={hasMoreGroups}
-                    // onLoadMore={loadMoreGroups}
                   />
                 </TabsContent>
 
@@ -626,7 +621,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
             )}
           </div>
 
-          {/* Sidebar - Enhanced with new props */}
+          {/* Sidebar */}
           <div className="lg:col-span-4">
             <div className="sticky top-6">
               <TrendingSidebar

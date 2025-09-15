@@ -1,3 +1,4 @@
+// Updated useSocialNotifications.ts
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { toast } from 'sonner';
@@ -6,10 +7,62 @@ import { DEFAULT_LIMITS } from '../utils/socialConstants';
 export const useSocialNotifications = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchNotifications();
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+    getUser();
   }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetchNotifications();
+
+    const subscription = supabase
+      .channel('user_notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'social_notifications',
+          filter: `user_id=eq.${userId}`
+        },
+        async (payload) => {
+          try {
+            const { data: notificationData, error } = await supabase
+              .from('social_notifications')
+              .select(`
+                *,
+                actor:social_users!social_notifications_actor_id_fkey(*),
+                post:social_posts(*)
+              `)
+              .eq('id', payload.new.id)
+              .single();
+
+            if (error) throw error;
+
+            if (notificationData) {
+              setNotifications(prev => [notificationData, ...prev]);
+              setUnreadCount(prev => prev + 1);
+              toast.info('You have a new notification!');
+            }
+          } catch (error) {
+            console.error('Error fetching notification details:', error);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [userId]);
 
   const fetchNotifications = async () => {
     try {
@@ -40,9 +93,9 @@ export const useSocialNotifications = () => {
         .eq('id', notificationId);
 
       if (!error) {
-        setNotifications(prev => 
-          prev.map(notif => 
-            notif.id === notificationId 
+        setNotifications(prev =>
+          prev.map(notif =>
+            notif.id === notificationId
               ? { ...notif, is_read: true }
               : notif
           )
@@ -66,7 +119,7 @@ export const useSocialNotifications = () => {
         .eq('is_read', false);
 
       if (!error) {
-        setNotifications(prev => 
+        setNotifications(prev =>
           prev.map(notif => ({ ...notif, is_read: true }))
         );
         setUnreadCount(0);
