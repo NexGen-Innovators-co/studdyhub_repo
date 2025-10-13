@@ -23,7 +23,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, on
               Cancel
             </Button>
             <Button onClick={onConfirm} className="bg-red-600 text-white shadow-md hover:bg-red-700 font-sans">
-              Delete
+              Confirm
             </Button>
           </div>
         </CardContent>

@@ -135,14 +135,6 @@ export const Header: React.FC<HeaderProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
-                className="p-1.5 sm:p-2 flex-shrink-0 relative dark:hover:bg-slate-700"
-              >
-                <Bell className="h-4 w-4 text-slate-600 dark:text-white" />
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
                 onClick={handleLogoutClick}
                 className="p-1.5 sm:p-2 flex-shrink-0 dark:hover:bg-slate-700 text-slate-600 dark:text-white"
               >
@@ -170,12 +162,12 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <ConfirmationModal
-        isOpen={showLogoutConfirm}
-        onClose={() => setShowLogoutConfirm(false)}
-        onConfirm={handleConfirmLogout}
-        title="Sign Out"
-        message="Are you sure you want to sign out? You will be redirected to the login page."
-      />
+          isOpen={showLogoutConfirm}
+          onClose={() => setShowLogoutConfirm(false)}
+          onConfirm={handleConfirmLogout}
+          title="Sign Out"
+          message="Are you sure you want to sign out? You will be redirected to the login page."
+        />
     </header>
   );
 };

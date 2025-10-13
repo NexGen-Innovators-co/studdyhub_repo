@@ -214,12 +214,18 @@ export interface SocialPostWithDetails extends SocialPost {
     views_count?: number;
 }
 
+
 export interface SocialGroupWithDetails extends SocialGroup {
-    creator: SocialUser;
-    members: SocialGroupMember[];
-    is_member?: boolean;
-    member_role?: 'admin' | 'moderator' | 'member';
+
+    creator: SocialUserWithDetails;
+  
+    is_member: boolean;
+  
+    member_role: 'admin' | 'moderator' | 'member' | null;
+  
+    member_status: 'active' | 'pending' | null;
 }
+
 
 export interface SocialCommentWithDetails extends SocialComment {
     author: SocialUser;
@@ -231,6 +237,11 @@ export interface SocialCommentWithDetails extends SocialComment {
 export interface SocialUserWithDetails extends SocialUser {
     is_following?: boolean;
     is_followed_by?: boolean;
+}
+export interface CreateGroupData {
+    name: string;
+    description: string;
+    privacy: 'public' | 'private';
 }
 
 // Database table names
@@ -257,3 +268,7 @@ export const SOCIAL_TABLES = {
     SHARES: 'social_shares',
     REPORTS: 'social_reports',
 } as const; 
+
+// Social Privacy types
+export type Privacy = SocialPost['privacy'];
+export type GroupPrivacy = SocialGroup['privacy'];

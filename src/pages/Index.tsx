@@ -255,11 +255,8 @@ const Index = () => {
 
   // Determine header visibility based on current path
   const headerClass = useMemo(() => {
-    const isNotesTab = location.pathname.startsWith('/notes');
-    return isNotesTab
-      ? 'hidden lg:block'
-      : "flex items-center sm:hidden justify-between w-full p-0 sm:p-0 shadow-none bg-transparent border-none";
-  }, [location.pathname]);
+    return "flex items-center sm:hidden justify-between w-full p-0 sm:p-0 shadow-none bg-transparent border-none";
+    }, [location.pathname]);
 
   // Loading states
   if (authLoading) {
