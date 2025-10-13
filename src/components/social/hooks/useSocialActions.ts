@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
-import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails, SocialGroup } from '../../../integrations/supabase/socialTypes';
+import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails, SocialGroup, CreateGroupData, GroupPrivacy } from '../../../integrations/supabase/socialTypes';
 import { toast } from 'sonner';
 import { extractHashtags, generateShareText } from '../utils/postUtils';
 import { Privacy } from '../types/social';
 import { v4 as uuidv4 } from 'uuid';
+
 
 export const useSocialActions = (
   currentUser: SocialUserWithDetails | null,
   posts: SocialPostWithDetails[],
   setPosts: React.Dispatch<React.SetStateAction<SocialPostWithDetails[]>>,
   setSuggestedUsers: React.Dispatch<React.SetStateAction<SocialUserWithDetails[]>>,
+  groups: SocialGroupWithDetails[],
   setGroups: React.Dispatch<React.SetStateAction<SocialGroupWithDetails[]>>,
   setCurrentUser: React.Dispatch<React.SetStateAction<SocialUserWithDetails | null>>
 ) => {
@@ -26,10 +28,14 @@ export const useSocialActions = (
 
       const { data, error } = await supabase.storage
         .from('social-media')
-        .upload(fileName, file);
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
       if (error) throw error;
 
+      // Construct public URL
       const { data: { publicUrl } } = supabase.storage
         .from('social-media')
         .getPublicUrl(fileName);
@@ -37,10 +43,152 @@ export const useSocialActions = (
       return publicUrl;
     } catch (error) {
       console.error('Error uploading file:', error);
+      toast.error('File upload failed.');
       return null;
     }
   };
 
+  // --- Group Actions ---
+
+  const createGroup = async (groupData: CreateGroupData): Promise<SocialGroupWithDetails | null> => {
+    if (!currentUser) {
+      toast.error('You must be logged in to create a group.');
+      return null;
+    }
+
+    try {
+      // 1. Insert the new group
+      const { data: newGroupData, error: groupError } = await supabase
+        .from('social_groups')
+        .insert({
+          created_by: currentUser.id,
+          name: groupData.name,
+          description: groupData.description,
+          privacy: groupData.privacy,
+          category: 'general', // Default category
+          avatar_url: `https://placehold.co/100x100/1e40af/ffffff?text=${groupData.name.charAt(0)}` // Placeholder avatar
+        })
+        .select()
+        .single();
+
+      if (groupError) throw groupError;
+
+      const newGroup = newGroupData as SocialGroup;
+
+      // 2. Automatically make the creator an admin member
+      const { error: memberError } = await supabase
+        .from('social_group_members')
+        .insert({
+          group_id: newGroup.id,
+          user_id: currentUser.id,
+          role: 'admin',
+          });
+
+      if (memberError) throw memberError;
+
+      toast.success(`Group "${newGroup.name}" created successfully!`);
+
+      // 3. Update the local state
+      const newGroupWithDetails: SocialGroupWithDetails = {
+        ...newGroup,
+        creator: currentUser, // Use current user details
+        is_member: true,
+        member_role: 'admin',
+        member_status: 'active'
+      };
+
+      setGroups(prev => [newGroupWithDetails, ...prev]);
+      return newGroupWithDetails;
+
+    } catch (error) {
+      console.error('Error creating group:', error);
+      toast.error('Failed to create group. Please try again.');
+      return null;
+    }
+  };
+
+  const joinGroup = async (groupId: string, privacy: GroupPrivacy): Promise<boolean> => {
+    if (!currentUser) {
+      toast.error('You must be logged in to join a group.');
+      return false;
+    }
+
+    try {
+      const status = privacy === 'public' ? 'active' : 'pending'; // Auto-join public, request for private
+
+      const { error } = await supabase
+        .from('social_group_members')
+        .insert({
+          group_id: groupId,
+          user_id: currentUser.id,
+          role: 'member',
+          status: status
+        });
+
+      if (error) throw error;
+
+      // Update the local state for the specific group
+      setGroups(prev => prev.map(g => g.id === groupId ? {
+        ...g,
+        is_member: status === 'active',
+        member_status: status,
+        member_role: 'member',
+        members_count: status === 'active' ? g.members_count + 1 : g.members_count,
+      } : g));
+
+      if (status === 'active') {
+        toast.success('Successfully joined the group!');
+      } else {
+        toast.info('Request to join sent. Waiting for admin approval.');
+      }
+      return true;
+
+    } catch (error) {
+      console.error('Error joining group:', error);
+      toast.error('Failed to join group. You might already have a pending request.');
+      return false;
+    }
+  };
+
+  const leaveGroup = async (groupId: string): Promise<boolean> => {
+    if (!currentUser) {
+      toast.error('You must be logged in to leave a group.');
+      return false;
+    }
+
+    try {
+      // Delete the membership record
+      const { error } = await supabase
+        .from('social_group_members')
+        .delete()
+        .eq('group_id', groupId)
+        .eq('user_id', currentUser.id);
+
+      if (error) throw error;
+
+      // Update the local state for the specific group
+      setGroups(prev => prev.map(g => g.id === groupId ? {
+        ...g,
+        is_member: false,
+        member_status: null,
+        member_role: null,
+        members_count: g.member_status === 'active' ? g.members_count - 1 : g.members_count,
+      } : g));
+
+      toast.info('You have left the group.');
+      return true;
+
+    } catch (error) {
+      console.error('Error leaving group:', error);
+      toast.error('Failed to leave group. Please try again.');
+      return false;
+    }
+  };
+
+  const isGroupMember = (groupId: string): boolean => {
+    const group = groups.find(g => g.id === groupId);
+    return group?.is_member ?? false;
+  }
   const updateProfile = async (
     updates: {
       display_name?: string;
@@ -205,47 +353,47 @@ export const useSocialActions = (
     }
   };
 
-  const joinGroup = async (groupId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+  // const joinGroup = async (groupId: string) => {
+  //   try {
+  //     const { data: { user } } = await supabase.auth.getUser();
+  //     if (!user) throw new Error('Not authenticated');
 
-      const { data: newMember, error } = await supabase
-        .from('social_group_members')
-        .insert({
-          group_id: groupId,
-          user_id: user.id,
-          role: 'member'
-        })
-        .select()
-        .single();
+  //     const { data: newMember, error } = await supabase
+  //       .from('social_group_members')
+  //       .insert({
+  //         group_id: groupId,
+  //         user_id: user.id,
+  //         role: 'member'
+  //       })
+  //       .select()
+  //       .single();
 
-      if (error) throw error;
+  //     if (error) throw error;
 
-      setGroups(prev => prev.map(group => {
-        if (group.id === groupId) {
-          return {
-            ...group,
-            is_member: true,
-            members_count: group.members_count + 1,
-            members: [...group.members, {
-              id: newMember.id || uuidv4(),
-              group_id: groupId,
-              user_id: user.id,
-              role: 'member',
-              joined_at: new Date().toISOString()
-            }]
-          };
-        }
-        return group;
-      }));
+  //     setGroups(prev => prev.map(group => {
+  //       if (group.id === groupId) {
+  //         return {
+  //           ...group,
+  //           is_member: true,
+  //           members_count: group.members_count + 1,
+  //           members: [...group.members, {
+  //             id: newMember.id || uuidv4(),
+  //             group_id: groupId,
+  //             user_id: user.id,
+  //             role: 'member',
+  //             joined_at: new Date().toISOString()
+  //           }]
+  //         };
+  //       }
+  //       return group;
+  //     }));
 
-      toast.success('Successfully joined group!');
-    } catch (error) {
-      console.error('Error joining group:', error);
-      toast.error('Failed to join group');
-    }
-  };
+  //     toast.success('Successfully joined group!');
+  //   } catch (error) {
+  //     console.error('Error joining group:', error);
+  //     toast.error('Failed to join group');
+  //   }
+  // };
 
   const toggleLike = async (postId: string, isLiked: boolean) => {
     try {
@@ -388,7 +536,10 @@ export const useSocialActions = (
     toggleBookmark,
     sharePost,
     followUser,
-    joinGroup,
     isUploading,
+    createGroup,
+    joinGroup,
+    leaveGroup,
+    isGroupMember,
   };
 };

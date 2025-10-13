@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, memo } from 'react';
+import React, { useEffect, useRef, useCallback, memo, useState } from 'react';
 import { Card, CardContent, CardHeader } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
@@ -22,15 +22,27 @@ interface PostCardWithViewTrackingProps extends PostCardProps {
 const MediaDisplay = memo(({ media }: { media: any[] }) => {
   if (!media || media.length === 0) return null;
 
+  // Determine grid-cols based on the number of visible items (max 4)
+  const visibleMedia = media.slice(0, 4);
+  let gridClass = 'grid-cols-2'; // Default for 2, 3, or 4 items
+  if (visibleMedia.length === 1) {
+    gridClass = 'grid-cols-1'; // Use full width for a single item
+  } else if (visibleMedia.length === 2) {
+    gridClass = 'grid-cols-2';
+  } else if (visibleMedia.length === 3 || visibleMedia.length === 4) {
+    gridClass = 'grid-cols-2';
+  }
+
   return (
-    <div className="grid grid-cols-2 gap-2 mb-4 rounded-lg overflow-hidden">
-      {media.slice(0, 4).map((mediaItem, index) => (
+    <div className={`grid ${gridClass} gap-2 mb-4 rounded-lg overflow-hidden`}>
+      {visibleMedia.map((mediaItem, index) => (
         <div key={mediaItem.id} className="relative group">
           {mediaItem.type === 'image' && (
             <img
+              // Adjust h-40 to h-auto and a max-height for single image to be more flexible
               src={mediaItem.url}
               alt={mediaItem.filename}
-              className="w-full h-40 object-cover hover:scale-105 transition-transform cursor-pointer"
+              className="w-full h-auto max-h-96 object-contain hover:scale-105 transition-transform cursor-pointer bg-black" // Added bg-black for better visibility of object-contain
               loading="lazy"
               onClick={() => {
                 window.open(mediaItem.url, '_blank', 'noopener,noreferrer');
@@ -40,7 +52,7 @@ const MediaDisplay = memo(({ media }: { media: any[] }) => {
           {mediaItem.type === 'video' && (
             <video
               src={mediaItem.url}
-              className="w-full h-40 object-cover"
+              className="w-full h-auto max-h-96 object-contain bg-black"
               controls
               preload="metadata"
             />
@@ -57,8 +69,8 @@ const MediaDisplay = memo(({ media }: { media: any[] }) => {
             </div>
           )}
 
-          {/* Overlay for additional media */}
-          {index === 3 && media.length > 4 && (
+          {/* Overlay for additional media - now only appears on the last visible grid item if there's more */}
+          {index === visibleMedia.length - 1 && media.length > 4 && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-semibold">
               +{media.length - 4} more
             </div>
@@ -107,6 +119,11 @@ const EngagementStats = memo(({ post }: { post: any }) => (
 
 EngagementStats.displayName = 'EngagementStats';
 
+// Define a constant for max lines before truncation
+const MAX_LINES = 6;
+// Simple heuristic to estimate if content will exceed max lines (adjust as needed)
+const TRUNCATION_LENGTH = 300; 
+
 export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(({
   post,
   onLike,
@@ -126,6 +143,21 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(({
   const cardRef = useRef<HTMLDivElement>(null);
   const hasTriggeredView = useRef(false);
   const intersectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // State to manage the "View More" functionality
+  const [isContentExpanded, setIsContentExpanded] = useState(false);
+  
+  // Check if content is long enough to require "View More"
+  const isContentLong = post.content && post.content.length > TRUNCATION_LENGTH;
+  
+  // Class for truncation logic: line-clamp uses the plugin, whitespace-pre-wrap respects newlines.
+  const contentClass = isContentExpanded 
+    ? 'whitespace-pre-wrap' 
+    : `line-clamp-${MAX_LINES}`; 
+
+  // Base classes for text styling and crucial break-words for mobile safety
+  const baseTextClasses = "text-slate-800 dark:text-gray-200 leading-relaxed break-words"; 
+
 
   // Optimized intersection observer with debouncing
   useEffect(() => {
@@ -268,11 +300,39 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(({
       </CardHeader>
 
       <CardContent>
-        {/* Post Content */}
-        <div className="mb-4">
-          <p className="whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-gray-200">
+        {/* Post Content - Added break-words and conditional overflow-hidden for mobile safety */}
+        <div className={`mb-4 ${!isContentExpanded && isContentLong ? 'h-full overflow-hidden' : ''}`}> 
+          <p className={`${baseTextClasses} ${contentClass}`}>
             {post.content}
           </p>
+          
+          {/* View More/Show Less buttons */}
+          {isContentLong && !isContentExpanded && (
+            <Button
+              variant="link"
+              size="sm"
+              className="px-0 h-auto text-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsContentExpanded(true);
+              }}
+            >
+              View More
+            </Button>
+          )}
+          {isContentLong && isContentExpanded && (
+            <Button
+              variant="link"
+              size="sm"
+              className="px-0 h-auto text-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsContentExpanded(false);
+              }}
+            >
+              Show Less
+            </Button>
+          )}
         </div>
 
         {/* Media display */}

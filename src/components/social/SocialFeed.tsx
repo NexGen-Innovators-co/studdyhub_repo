@@ -8,7 +8,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
-  Search, RefreshCw, Bell, TrendingUp, Users, User, SortDesc, Loader2
+  Search, RefreshCw, Bell, TrendingUp, Users, User, SortDesc, Loader2, ChevronDown, X
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -45,6 +45,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const [sortBy, setSortBy] = useState<SortBy>('newest');
   const [filterBy, setFilterBy] = useState<FilterBy>('all');
   const [showPostDialog, setShowPostDialog] = useState(false);
+  const [showFilters, setShowFilters] = useState(false); // For mobile filter toggle
 
   // Post creation state
   const [newPostContent, setNewPostContent] = useState('');
@@ -55,7 +56,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const feedObserverRef = useRef<HTMLDivElement>(null);
   const trendingObserverRef = useRef<HTMLDivElement>(null);
   const profileObserverRef = useRef<HTMLDivElement>(null);
-  const feedContainerRef = useRef<HTMLDivElement>(null); // New ref for feed container
+  const feedContainerRef = useRef<HTMLDivElement>(null);
 
   // Custom hooks
   const {
@@ -101,9 +102,19 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     toggleBookmark,
     sharePost,
     followUser,
-    joinGroup,
     isUploading,
-  } = useSocialActions(currentUser, posts, setPosts, setSuggestedUsers, setGroups, setCurrentUser);
+    createGroup,
+    joinGroup,
+    leaveGroup,
+  } = useSocialActions(
+    currentUser,
+    posts,
+    setPosts,
+    setSuggestedUsers,
+    groups,
+    setGroups,
+    setCurrentUser
+  );
 
   const {
     fetchComments,
@@ -222,8 +233,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
       setSelectedFiles([]);
       setShowPostDialog(false);
       refetchUserPosts();
-      // Instead of refetching all posts, rely on useSocialActions to update posts state
-      // Scroll to top to show new post
       if (feedContainerRef.current) {
         feedContainerRef.current.scrollIntoView({ behavior: 'smooth' });
       }
@@ -286,6 +295,53 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const handlePostClick = (postId: string) => {
     navigate(`/social/post/${postId}`);
   };
+  
+  // NEW GROUP HANDLERS
+  const handleCreateGroup = (data: any) => createGroup(data);
+  const handleJoinGroup = (groupId: string, privacy: 'public' | 'private') => joinGroup(groupId, privacy);
+  const handleLeaveGroup = (groupId: string) => leaveGroup(groupId);
+  // Function to insert inline suggestions at intervals
+  const getPostsWithInlineSuggestions = (postsList: any[]) => {
+    const result: any[] = [];
+    const usersPerSuggestion = 3; // Show 3 users per suggestion card
+    let userIndex = 0;
+    let hashtagIndex = 0;
+
+    postsList.forEach((post, index) => {
+      result.push({ type: 'post', data: post, key: `post-${post.id}-${index}` });
+
+      // Insert "People You May Know" every 4 posts
+      if ((index + 1) % 4 === 0 && suggestedUsers.length > userIndex) {
+        const usersToShow = suggestedUsers.slice(userIndex, userIndex + usersPerSuggestion);
+        if (usersToShow.length > 0) {
+          result.push({ 
+            type: 'suggested-users', 
+            data: usersToShow, 
+            key: `suggested-users-${index}` 
+          });
+          userIndex += usersPerSuggestion;
+        }
+      }
+
+      // Insert "Trending Topics" every 7 posts
+      if ((index + 1) % 7 === 0 && trendingHashtags.length > hashtagIndex) {
+        const hashtagsToShow = trendingHashtags.slice(hashtagIndex, hashtagIndex + 5);
+        if (hashtagsToShow.length > 0) {
+          result.push({ 
+            type: 'trending-topics', 
+            data: hashtagsToShow, 
+            key: `trending-topics-${index}` 
+          });
+          hashtagIndex += 5;
+        }
+      }
+    });
+
+    return result;
+  };
+
+  const postsWithSuggestions = getPostsWithInlineSuggestions(filteredPosts);
+  const trendingWithSuggestions = getPostsWithInlineSuggestions(filteredTrendingPosts);
 
   // If postId is present, display only that post
   const postToDisplay = routePostId
@@ -331,15 +387,90 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     );
   };
 
+  // Inline Suggested Users Component
+  const InlineSuggestedUsers = ({ users }: { users: any[] }) => (
+    <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg p-4 mb-6 border border-slate-200 dark:border-gray-700 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-slate-800 dark:text-gray-200 flex items-center gap-2">
+          <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          People You May Know
+        </h3>
+      </div>
+      <div className="space-y-3">
+        {users.map((user) => (
+          <div key={user.id} className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
+                {user.display_name?.charAt(0).toUpperCase() || 'U'}
+              </div>
+              <div>
+                <p className="font-medium text-sm text-slate-800 dark:text-gray-200">
+                  {user.display_name}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-gray-400">
+                  @{user.username}
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleFollowUser(user.id)}
+              className="text-xs"
+            >
+              Follow
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Inline Trending Topics Component
+  const InlineTrendingTopics = ({ hashtags }: { hashtags: any[] }) => (
+    <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-4 mb-6 border border-blue-200 dark:border-gray-600 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-slate-800 dark:text-gray-200 flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+          Trending Right Now
+        </h3>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {hashtags.map((hashtag, idx) => (
+          <div
+            key={hashtag.id}
+            className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-3 cursor-pointer hover:bg-white/80 dark:hover:bg-gray-800/80 transition-colors"
+            onClick={() => toast.info(`Filtering by hashtag #${hashtag.name}`)}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm text-slate-800 dark:text-gray-200">
+                  #{hashtag.name}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-gray-400">
+                  {hashtag.posts_count} posts
+                </p>
+              </div>
+              <span className="text-xs font-bold text-purple-600 dark:text-purple-400">
+                #{idx + 1}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
           {/* Main content */}
           <div className="lg:col-span-8">
-            {/* Search and filters */}
-            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-4 mb-6 border border-slate-200 dark:border-gray-700 sticky top-4 z-10">
-              <div className="flex flex-col md:flex-row gap-4">
+            {/* Search and filters - Non-sticky, scrolls naturally */}
+            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 border border-slate-200 dark:border-gray-700">
+              <div className="flex flex-col gap-3">
+                {/* Search bar */}
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-gray-400" />
                   <Input
@@ -349,34 +480,83 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
-                <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
-                  <SelectTrigger className="w-[180px] bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="newest">Newest</SelectItem>
-                    <SelectItem value="popular">Popular</SelectItem>
-                    <SelectItem value="trending">Trending</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
-                  <SelectTrigger className="w-[180px] bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
-                    <SelectValue placeholder="Filter by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="following">Following</SelectItem>
-                    <SelectItem value="groups">Groups</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button 
-                  variant="outline" 
-                  onClick={handleRefresh}
-                  className="bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
+
+                {/* Mobile filter toggle */}
+                <div className="flex items-center gap-2 lg:hidden">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex-1 bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
+                  >
+                    {showFilters ? <X className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
+                    Filters & Sort
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleRefresh}
+                    className="bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Desktop filters - always visible */}
+                <div className="hidden lg:flex gap-4">
+                  <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
+                    <SelectTrigger className="w-[180px] bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">Newest</SelectItem>
+                      <SelectItem value="popular">Popular</SelectItem>
+                      <SelectItem value="trending">Trending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
+                    <SelectTrigger className="w-[180px] bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
+                      <SelectValue placeholder="Filter by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="following">Following</SelectItem>
+                      <SelectItem value="groups">Groups</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleRefresh}
+                    className="bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+
+                {/* Mobile filters - collapsible */}
+                {showFilters && (
+                  <div className="lg:hidden flex flex-col gap-3 pt-2 border-t border-slate-200 dark:border-gray-700">
+                    <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
+                      <SelectTrigger className="w-full bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="newest">Newest</SelectItem>
+                        <SelectItem value="popular">Popular</SelectItem>
+                        <SelectItem value="trending">Trending</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
+                      <SelectTrigger className="w-full bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
+                        <SelectValue placeholder="Filter by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="following">Following</SelectItem>
+                        <SelectItem value="groups">Groups</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -391,7 +571,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                     onBookmark={toggleBookmark}
                     onShare={sharePost}
                     onComment={() => togglePostExpanded(postToDisplay.id)}
-                    isExpanded={true} // Always expanded for single view
+                    isExpanded={true}
                     comments={getPostComments(postToDisplay.id)}
                     isLoadingComments={isLoadingPostComments(postToDisplay.id)}
                     newComment={getNewCommentContent(postToDisplay.id)}
@@ -406,27 +586,27 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                 )}
               </div>
             ) : (
-              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="space-y-6">
-                <TabsList className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-1 border border-slate-200 dark:border-gray-700 grid grid-cols-5">
-                  <TabsTrigger value="feed" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                    <SortDesc className="h-4 w-4 mr-2" />
-                    Feed
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="space-y-4 sm:space-y-6">
+                <TabsList className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-1 border border-slate-200 dark:border-gray-700 grid grid-cols-5 w-full overflow-x-auto">
+                  <TabsTrigger value="feed" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 text-xs sm:text-sm px-1 sm:px-3">
+                    <SortDesc className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Feed</span>
                   </TabsTrigger>
-                  <TabsTrigger value="trending" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                    <TrendingUp className="h-4 w-4 mr-2" />
-                    Trending
+                  <TabsTrigger value="trending" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 text-xs sm:text-sm px-1 sm:px-3">
+                    <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Trending</span>
                   </TabsTrigger>
-                  <TabsTrigger value="groups" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                    <Users className="h-4 w-4 mr-2" />
-                    Groups
+                  <TabsTrigger value="groups" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 text-xs sm:text-sm px-1 sm:px-3">
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Groups</span>
                   </TabsTrigger>
-                  <TabsTrigger value="profile" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                    <User className="h-4 w-4 mr-2" />
-                    Profile
+                  <TabsTrigger value="profile" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 text-xs sm:text-sm px-1 sm:px-3">
+                    <User className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Profile</span>
                   </TabsTrigger>
-                  <TabsTrigger value="notifications" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 relative">
-                    <Bell className="h-4 w-4 mr-2" />
-                    Notifications
+                  <TabsTrigger value="notifications" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 relative text-xs sm:text-sm px-1 sm:px-3">
+                    <Bell className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Notifications</span>
                     {unreadCount > 0 && (
                       <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 transform translate-x-1/2 -translate-y-1/2">
                         {unreadCount}
@@ -436,7 +616,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                 </TabsList>
 
                 <TabsContent value="feed" className="mt-0" ref={feedContainerRef}>
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     <CreatePostDialog
                       isOpen={showPostDialog}
                       onOpenChange={handlePostDialogChange}
@@ -454,7 +634,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                     {isLoading && posts.length === 0 ? (
                       <LoadingSpinner text="Loading your feed..." />
                     ) : (
-                      <div className="space-y-6">
+                      <div className="space-y-4 sm:space-y-6">
                         <Button 
                           onClick={() => setShowPostDialog(true)} 
                           className="w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 py-3"
@@ -462,25 +642,35 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                           What's on your mind?
                         </Button>
                         
-                        {filteredPosts.map((post, index) => (
-                          <PostCard
-                            key={`${post.id}-${index}`}
-                            post={post}
-                            onLike={toggleLike}
-                            onBookmark={toggleBookmark}
-                            onShare={sharePost}
-                            onComment={() => togglePostExpanded(post.id)}
-                            isExpanded={isPostExpanded(post.id)}
-                            comments={getPostComments(post.id)}
-                            isLoadingComments={isLoadingPostComments(post.id)}
-                            newComment={getNewCommentContent(post.id)}
-                            onCommentChange={(content) => updateNewComment(post.id, content)}
-                            onSubmitComment={() => handleCommentSubmit(post.id)}
-                            currentUser={currentUser}
-                            onPostView={trackPostView}
-                            onClick={() => handlePostClick(post.id)}
-                          />
-                        ))}
+                        {/* Render posts with inline suggestions */}
+                        {postsWithSuggestions.map((item) => {
+                          if (item.type === 'post') {
+                            return (
+                              <PostCard
+                                key={item.key}
+                                post={item.data}
+                                onLike={toggleLike}
+                                onBookmark={toggleBookmark}
+                                onShare={sharePost}
+                                onComment={() => togglePostExpanded(item.data.id)}
+                                isExpanded={isPostExpanded(item.data.id)}
+                                comments={getPostComments(item.data.id)}
+                                isLoadingComments={isLoadingPostComments(item.data.id)}
+                                newComment={getNewCommentContent(item.data.id)}
+                                onCommentChange={(content) => updateNewComment(item.data.id, content)}
+                                onSubmitComment={() => handleCommentSubmit(item.data.id)}
+                                currentUser={currentUser}
+                                onPostView={trackPostView}
+                                onClick={() => handlePostClick(item.data.id)}
+                              />
+                            );
+                          } else if (item.type === 'suggested-users') {
+                            return <InlineSuggestedUsers key={item.key} users={item.data} />;
+                          } else if (item.type === 'trending-topics') {
+                            return <InlineTrendingTopics key={item.key} hashtags={item.data} />;
+                          }
+                          return null;
+                        })}
 
                         {/* Infinite scroll trigger for feed */}
                         <LoadMoreTrigger
@@ -492,7 +682,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
 
                         {filteredPosts.length === 0 && !isLoading && (
                           <div className="text-center py-12 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg border border-slate-200 dark:border-gray-700">
-                            <div className="max-w-md mx-auto">
+                            <div className="max-w-md mx-auto px-4">
                               {searchQuery ? (
                                 <>
                                   <Search className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
@@ -530,28 +720,40 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                 </TabsContent>
 
                 <TabsContent value="trending" className="mt-0">
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     {isLoading && trendingPosts.length === 0 ? (
                       <LoadingSpinner text="Loading trending posts..." />
                     ) : (
                       <>
-                        <TrendingPosts
-                          posts={filteredTrendingPosts}
-                          isLoading={false}
-                          onLike={toggleLike}
-                          onBookmark={toggleBookmark}
-                          onShare={sharePost}
-                          onComment={togglePostExpanded}
-                          isPostExpanded={isPostExpanded}
-                          getPostComments={getPostComments}
-                          isLoadingPostComments={isLoadingPostComments}
-                          getNewCommentContent={getNewCommentContent}
-                          onCommentChange={updateNewComment}
-                          onSubmitComment={handleCommentSubmit}
-                          currentUser={currentUser}
-                          onPostView={trackPostView}
-                          onClick={handlePostClick}
-                        />
+                        {/* Render trending posts with inline suggestions */}
+                        {trendingWithSuggestions.map((item) => {
+                          if (item.type === 'post') {
+                            return (
+                              <PostCard
+                                key={item.key}
+                                post={item.data}
+                                onLike={toggleLike}
+                                onBookmark={toggleBookmark}
+                                onShare={sharePost}
+                                onComment={() => togglePostExpanded(item.data.id)}
+                                isExpanded={isPostExpanded(item.data.id)}
+                                comments={getPostComments(item.data.id)}
+                                isLoadingComments={isLoadingPostComments(item.data.id)}
+                                newComment={getNewCommentContent(item.data.id)}
+                                onCommentChange={(content) => updateNewComment(item.data.id, content)}
+                                onSubmitComment={() => handleCommentSubmit(item.data.id)}
+                                currentUser={currentUser}
+                                onPostView={trackPostView}
+                                onClick={() => handlePostClick(item.data.id)}
+                              />
+                            );
+                          } else if (item.type === 'suggested-users') {
+                            return <InlineSuggestedUsers key={item.key} users={item.data} />;
+                          } else if (item.type === 'trending-topics') {
+                            return <InlineTrendingTopics key={item.key} hashtags={item.data} />;
+                          }
+                          return null;
+                        })}
                         
                         {/* Infinite scroll trigger for trending */}
                         <LoadMoreTrigger
@@ -571,11 +773,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                     isLoading={isLoadingGroups}
                     onJoinGroup={joinGroup}
                     currentUser={currentUser}
-                  />
+                    onCreateGroup={handleCreateGroup}
+                    onLeaveGroup={handleLeaveGroup}
+                     />
                 </TabsContent>
 
                 <TabsContent value="profile" className="mt-0">
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     <UserProfile
                       user={currentUser}
                       isOwnProfile={true}
@@ -621,8 +825,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
             )}
           </div>
 
-          {/* Sidebar */}
-          <div className="lg:col-span-4">
+          {/* Sidebar - Hidden on mobile, visible on desktop */}
+          <div className="hidden lg:block lg:col-span-4">
             <div className="sticky top-6">
               <TrendingSidebar
                 hashtags={trendingHashtags}

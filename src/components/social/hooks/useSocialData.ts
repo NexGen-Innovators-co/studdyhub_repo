@@ -20,13 +20,14 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const [isLoadingUserPosts, setIsLoadingUserPosts] = useState(true);
   const [isLoadingSuggestedUsers, setIsLoadingSuggestedUsers] = useState(false);
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
-
+  const [isLoadingMoreGroups, setIsLoadingMoreGroups] = useState(false);
   // Pagination states
   const [postsOffset, setPostsOffset] = useState(0);
   const [trendingPostsOffset, setTrendingPostsOffset] = useState(0);
   const [userPostsOffset, setUserPostsOffset] = useState(0);
   const [suggestedUsersOffset, setSuggestedUsersOffset] = useState(0);
   const [groupsOffset, setGroupsOffset] = useState(0);
+  const groupPageRef = useRef(0);
 
   // Has more states
   const [hasMorePosts, setHasMorePosts] = useState(true);
@@ -34,7 +35,9 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const [hasMoreUserPosts, setHasMoreUserPosts] = useState(true);
   const [hasMoreSuggestedUsers, setHasMoreSuggestedUsers] = useState(true);
   const [hasMoreGroups, setHasMoreGroups] = useState(true);
-
+// Constants
+const POST_LIMIT = DEFAULT_LIMITS.POSTS_PER_PAGE;
+const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
   // Refs for cleanup
   const subscriptionsRef = useRef<any[]>([]);
   const currentUserIdRef = useRef<string | null>(null);
@@ -692,60 +695,69 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     }
   }, [hasMoreUserPosts, isLoadingUserPosts, userPostsOffset]);
 
-  const fetchGroups = useCallback(async (reset: boolean = false) => {
+  
+  // --- Fetch Groups ---
+  const fetchGroups = useCallback(async (reset = true) => {
+    const user = currentUser;
+    if (!user) return;
+
+    if (reset) {
+      groupPageRef.current = 0;
+      setGroups([]);
+      setHasMoreGroups(true);
+    }
+    if (!hasMoreGroups && !reset) return;
+
+    const start = groupPageRef.current * GROUP_LIMIT;
+    const end = start + GROUP_LIMIT - 1;
+
     try {
-      if (!reset && (!hasMoreGroups || isLoadingGroups)) return;
+      if (!reset) setIsLoadingMoreGroups(true);
 
-      setIsLoadingGroups(reset);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      const currentOffset = reset ? 0 : groupsOffset;
-
-      let query = supabase
+      // Fetch groups and check membership status in one query
+      let { data, error, count } = await supabase
         .from('social_groups')
         .select(`
           *,
-          creator:social_users(*),
-          members:social_group_members(*)
-        `)
-        .eq('privacy', 'public');
+          creator:social_users!social_groups_creator_id_fkey(*),
+          member_status:social_group_members!inner(user_id, role, status)
+        `, { count: 'exact' })
+        // Only fetch public groups or groups where the current user is a member
+        .or(`privacy.eq.public,member_status.user_id.eq.${user.id}`)
+        .range(start, end)
+        .order('created_at', { ascending: false });
 
-      const { data: groupsData, error: groupsError } = await query
-        .range(currentOffset, currentOffset + DEFAULT_LIMITS.GROUPS_PER_PAGE - 1);
+      if (error) throw error;
 
-      if (groupsError) throw groupsError;
-      if (!groupsData || groupsData.length === 0) {
-        setHasMoreGroups(false);
-        return;
-      }
+      const newGroups = (data as any[]).map(group => {
+        const memberInfo = group.member_status.find((m: any) => m.user_id === user.id);
 
-      const transformedGroups = groupsData.map(group => {
-        const isMember = user ? group.members.some((m: any) => m.user_id === user.id) : false;
         return {
           ...group,
-          is_member: isMember,
-          member_role: isMember ? group.members.find((m: any) => m.user_id === user.id)?.role : undefined
-        };
+          creator: group.creator,
+          is_member: !!memberInfo && memberInfo.status === 'active',
+          member_role: memberInfo?.role || null,
+          member_status: memberInfo?.status || null,
+        } as SocialGroupWithDetails;
       });
 
-      if (reset) {
-        setGroups(transformedGroups);
-        setGroupsOffset(transformedGroups.length);
-      } else {
-        setGroups(prev => [...prev, ...transformedGroups]);
-        setGroupsOffset(prev => prev + transformedGroups.length);
-      }
+      setGroups(prev => reset ? newGroups : [...prev, ...newGroups]);
+      groupPageRef.current += 1;
 
-      if (transformedGroups.length < DEFAULT_LIMITS.GROUPS_PER_PAGE) {
+      if (newGroups.length < GROUP_LIMIT) {
         setHasMoreGroups(false);
       }
+
     } catch (error) {
       console.error('Error fetching groups:', error);
-      toast.error('Failed to load groups');
+      setHasMoreGroups(false);
+      toast.error('Failed to load groups.');
     } finally {
       setIsLoadingGroups(false);
+      setIsLoadingMoreGroups(false);
     }
-  }, [hasMoreGroups, isLoadingGroups, groupsOffset]);
+  }, [currentUser, hasMoreGroups]); // Depend on currentUser to ensure group status is correct
+
 
   const fetchTrendingHashtags = async () => {
     try {
