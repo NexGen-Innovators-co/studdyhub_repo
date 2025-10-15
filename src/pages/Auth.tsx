@@ -500,7 +500,7 @@ const Auth = () => {
 
             <CardContent className="p-6 sm:p-8">
               <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-gray-800/50">
+                <TabsList className="grid w-full h-full grid-cols-3 bg-gray-800/50">
                   <TabsTrigger value="signin">Sign In</TabsTrigger>
                   <TabsTrigger value="signup">Sign Up</TabsTrigger>
                   <TabsTrigger value="forgot">Forgot Password</TabsTrigger>
