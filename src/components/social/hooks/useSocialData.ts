@@ -378,7 +378,9 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
 
       return {
         ...postData,
-        media: postData.media || [],
+        privacy: postData.privacy as "public" | "followers" | "private",
+        media: (postData.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
+        group: postData.group ? { ...postData.group, privacy: postData.group.privacy as "public" | "private" } : undefined,
         hashtags: hashtagData?.map(h => h.hashtag).filter(Boolean) || [],
         tags: tagData?.map(t => t.tag).filter(Boolean) || [],
         is_liked: isLiked,
@@ -486,6 +488,7 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
 
         return {
           ...post,
+          privacy: post.privacy as "public" | "followers" | "private",
           media: post.media || [],
           hashtags: postHashtags,
           tags: postTags,
@@ -573,9 +576,17 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
         const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
         const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
 
+      const transformedPosts = postsData.map(post => {
+        const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
+        const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
+        const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
+        const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
+
         return {
           ...post,
-          media: post.media || [],
+          privacy: post.privacy as "public" | "followers" | "private",
+          media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
+          group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
           hashtags: postHashtags,
           tags: postTags,
           is_liked: isLiked,
@@ -668,7 +679,9 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
 
         return {
           ...post,
-          media: post.media || [],
+          privacy: post.privacy as "public" | "followers" | "private",
+          media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
+          group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
           hashtags: postHashtags,
           tags: postTags,
           is_liked: isLiked,
