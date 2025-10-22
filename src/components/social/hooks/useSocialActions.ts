@@ -283,7 +283,7 @@ export const useSocialActions = (
           .eq('id', groupId)
           .single();
         if (error) throw error;
-        groupData = data;
+        groupData = { ...data, privacy: data.privacy as "public" | "private" };
       }
   
       // Step 3: Upload media
@@ -331,6 +331,7 @@ export const useSocialActions = (
       // Step 6: Construct the SocialPostWithDetails object
       const transformedPost: SocialPostWithDetails = {
         ...newPost,
+        privacy: newPost.privacy as "public" | "followers" | "private",
         author: authorData,
         group: groupData || undefined,
         media: [], // Media will be empty initially; you can fetch it separately if needed

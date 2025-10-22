@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
+import { DocumentFolder, FolderTreeNode } from '../types/Folder';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -42,6 +43,7 @@ interface DataLoadingState {
   documents: boolean;
   quizzes: boolean;
   profile: boolean;
+  folders: boolean;
 }
 
 interface DataPaginationState {
@@ -50,6 +52,7 @@ interface DataPaginationState {
   scheduleItems: { hasMore: boolean; offset: number; total: number };
   documents: { hasMore: boolean; offset: number; total: number };
   quizzes: { hasMore: boolean; offset: number; total: number };
+  folders: { hasMore: boolean; offset: number; total: number };
 }
 
 interface LoadingPhase {
@@ -74,6 +77,8 @@ export const useAppData = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [lastUserId, setLastUserId] = useState<string | null>(null);
+  const [folders, setFolders] = useState<DocumentFolder[]>([]);
+  const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
 
   // Enhanced loading state tracking
   const [dataLoaded, setDataLoaded] = useState<Set<keyof DataLoadingState>>(new Set());
@@ -83,7 +88,8 @@ export const useAppData = () => {
     scheduleItems: false,
     documents: false,
     quizzes: false,
-    profile: false
+    profile: false,
+    folders: false
   });
 
   // Progressive loading state
@@ -98,7 +104,8 @@ export const useAppData = () => {
     recordings: { hasMore: true, offset: 0, total: 0 },
     scheduleItems: { hasMore: true, offset: 0, total: 0 },
     documents: { hasMore: true, offset: 0, total: 0 },
-    quizzes: { hasMore: true, offset: 0, total: 0 }
+    quizzes: { hasMore: true, offset: 0, total: 0 },
+    folders: { hasMore: false, offset: 0, total: 0 }
   });
 
   // Real-time subscription refs
