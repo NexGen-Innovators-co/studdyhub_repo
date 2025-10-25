@@ -299,322 +299,468 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setIsGeneratingAI(false);
     }
   };
+// Add this enhanced error handling to your handleFileSelect function
+// Replace your handleFileSelect and handleDocumentProcessingAndNoteUpdate functions
+// in NoteEditor.tsx with these fixed versions
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    ("handleFileSelect triggered!");
-    const file = event.target.files?.[0];
-    if (!file || !userProfile) {
-      if (!userProfile) toast.error("Cannot upload: User profile is missing.");
-      return;
-    }
-
-    const allowedDocumentTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
-    const allowedAudioTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm'];
-
-    if (allowedAudioTypes.includes(file.type)) {
-      handleAudioFileSelect(event);
-      return;
-    }
-
-    if (!allowedDocumentTypes.includes(file.type)) {
-      toast.error('Unsupported file type. Please upload a PDF, TXT, Word document, or an audio file.');
-      if (event.target) event.target.value = '';
-      return;
-    }
-
-    setIsUploading(true);
-    setSelectedFile(file);
-    setUploadedDocumentPublicUrl(null);
-    const toastId = toast.loading('Uploading document...');
-
-    try {
-      const filePath = `${userProfile.id}/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(filePath, file);
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
-      const { data: urlData } = supabase.storage
-        .from('documents')
-        .getPublicUrl(filePath);
-
-      if (!urlData?.publicUrl) {
-        throw new Error("Could not get public URL for the uploaded file.");
-      }
-      setUploadedDocumentPublicUrl(urlData.publicUrl);
-
-      await handleDocumentProcessingAndNoteUpdate(file, urlData.publicUrl, file.type, toastId.toString());
-
-    } catch (error) {
-      let errorMessage = 'An unknown error occurred during document upload.';
-      if (error instanceof FunctionsHttpError) {
-        errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
-        if (error.message.includes("The model is overloaded")) {
-          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-        if (error.message.includes("The model is overloaded")) {
-          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
-        }
-      }
-      toast.error(errorMessage, { id: toastId });
-      //console.error('Error during upload process:', error);
-    } finally {
-      setIsUploading(false);
-      if (event.target) event.target.value = '';
-    }
-  };
-
-  const handleDocumentProcessingAndNoteUpdate = async (file: File, fileUrl: string, fileType: string, toastId: string, selectedSection: string | null = null) => {
+const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  console.log("🚀 handleFileSelect triggered!");
+  const file = event.target.files?.[0];
+  
+  if (!file || !userProfile) {
     if (!userProfile) {
-      toast.error("User profile not found. Cannot process document.");
-      return;
+      console.error("❌ User profile is missing");
+      toast.error("Cannot upload: User profile is missing.");
     }
+    return;
+  }
 
-    setIsGeneratingAI(true);
-    toast.loading('Extracting text from document...', { id: toastId });
+  console.log("📄 File selected:", {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    userId: userProfile.id
+  });
 
-    let documentRecordId: string | null = null;
+  const allowedDocumentTypes = [
+    'application/pdf',
+    'text/plain',
+    'text/markdown',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword'
+  ];
+  const allowedAudioTypes = [
+    'audio/mpeg',
+    'audio/wav',
+    'audio/mp4',
+    'audio/x-m4a',
+    'audio/webm'
+  ];
 
-    try {
-      if (note.id && note.document_id) {
-        documentRecordId = note.document_id;
-        (`Updating existing document record with ID: ${documentRecordId}`);
-        const { error: updateDocError } = await supabase
-          .from('documents')
-          .update({
-            title: file.name,
-            file_name: file.name,
-            file_url: fileUrl,
-            file_type: fileType,
-            file_size: file.size,
-            processing_status: 'pending',
-            processing_error: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', documentRecordId)
-          .eq('user_id', userProfile.id);
+  // Route to audio handler if audio file
+  if (allowedAudioTypes.includes(file.type)) {
+    console.log("🎵 Routing to audio file handler");
+    handleAudioFileSelect(event);
+    return;
+  }
 
-        if (updateDocError) throw new Error(updateDocError.message || 'Failed to update existing document record.');
+  // Validate document type
+  if (!allowedDocumentTypes.includes(file.type)) {
+    console.error("❌ Unsupported file type:", file.type);
+    toast.error('Unsupported file type. Please upload a PDF, TXT, Word document, or an audio file.');
+    if (event.target) event.target.value = '';
+    return;
+  }
 
-      } else {
-        ('Creating new document record.');
-        const { data: newDocument, error: createDocError } = await supabase
-          .from('documents')
-          .insert({
-            user_id: userProfile.id,
-            title: file.name,
-            file_name: file.name,
-            file_url: fileUrl,
-            file_type: fileType,
-            file_size: file.size,
-            type: 'text',
-            processing_status: 'pending',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .select('id')
-          .single();
+  setIsUploading(true);
+  setSelectedFile(file);
+  setUploadedDocumentPublicUrl(null);
+  
+  // Use unique toast ID based on timestamp
+  const toastId = `upload-${Date.now()}`;
+  toast.loading('Uploading document...', { id: toastId });
 
-        if (createDocError || !newDocument) throw new Error(createDocError?.message || 'Failed to create new document record.');
-        documentRecordId = newDocument.id;
+  try {
+    // Step 1: Upload to Storage
+    console.log("📤 Step 1: Uploading to storage...");
+    const filePath = `${userProfile.id}/${Date.now()}_${file.name}`;
+    console.log("📍 Storage path:", filePath);
+    
+    const { error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(filePath, file);
+    
+    if (uploadError) {
+      console.error("❌ Storage upload error:", uploadError);
+      throw new Error(`Upload failed: ${uploadError.message}`);
+    }
+    
+    console.log("✅ Storage upload successful");
 
-        onNoteUpdate({ ...note, document_id: documentRecordId });
+    // Step 2: Get Public URL
+    console.log("🔗 Step 2: Getting public URL...");
+    const { data: urlData } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath);
+
+    if (!urlData?.publicUrl) {
+      console.error("❌ Failed to get public URL");
+      throw new Error("Could not get public URL for the uploaded file.");
+    }
+    
+    console.log("✅ Public URL obtained:", urlData.publicUrl);
+    setUploadedDocumentPublicUrl(urlData.publicUrl);
+
+    // Step 3: Process Document
+    console.log("⚙️ Step 3: Starting document processing...");
+    await handleDocumentProcessingAndNoteUpdate(
+      file,
+      urlData.publicUrl,
+      file.type,
+      toastId // Pass the unique toast ID
+    );
+
+  } catch (error) {
+    console.error("❌ Upload process failed:", error);
+    
+    let errorMessage = 'An unknown error occurred during document upload.';
+    
+    if (error instanceof FunctionsHttpError) {
+      console.error("Edge Function Error:", {
+        status: error.context.status,
+        statusText: error.context.statusText,
+        message: error.message
+      });
+      errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
+      
+      if (error.message.includes("The model is overloaded")) {
+        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
       }
-
-      if (!documentRecordId) {
-        throw new Error("Document record ID could not be determined.");
+    } else if (error instanceof Error) {
+      console.error("JavaScript Error:", error.message, error.stack);
+      errorMessage = error.message;
+      
+      if (error.message.includes("The model is overloaded")) {
+        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
       }
+    }
+    
+    toast.error(errorMessage, { id: toastId });
+  } finally {
+    setIsUploading(false);
+    if (event.target) event.target.value = '';
+  }
+};
 
-      const { data: extractionData, error: extractionError } = await supabase.functions.invoke('gemini-document-extractor', {
-        body: {
-          documentId: documentRecordId,
+const handleDocumentProcessingAndNoteUpdate = async (
+  file: File,
+  fileUrl: string,
+  fileType: string,
+  toastId: string, // Receive the unique toast ID
+  selectedSection: string | null = null
+) => {
+  if (!userProfile) {
+    console.error("❌ User profile not found in processing step");
+    toast.error("User profile not found. Cannot process document.", { id: toastId });
+    return;
+  }
+
+  console.log("🔧 Starting document processing:", {
+    fileName: file.name,
+    fileUrl,
+    fileType,
+    userId: userProfile.id,
+    noteId: note.id,
+    documentId: note.document_id
+  });
+
+  setIsGeneratingAI(true);
+  
+  // Update the existing toast instead of creating new ones
+  toast.loading('Extracting text from document...', { id: toastId });
+
+  let documentRecordId: string | null = null;
+
+  try {
+    // Step 1: Create/Update Document Record
+    if (note.id && note.document_id) {
+      console.log("🔄 Updating existing document record:", note.document_id);
+      documentRecordId = note.document_id;
+      
+      const { error: updateDocError } = await supabase
+        .from('documents')
+        .update({
+          title: file.name,
+          file_name: file.name,
           file_url: fileUrl,
           file_type: fileType,
-          userId: userProfile.id,
-        }
-      });
+          file_size: file.size,
+          processing_status: 'pending',
+          processing_error: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', documentRecordId)
+        .eq('user_id', userProfile.id);
 
-      if (extractionError) throw extractionError;
-      const extractedContent = extractionData.content_extracted;
-      setExtractedContent(extractedContent);
-
-      toast.loading('Analyzing document structure...', { id: toastId });
-      const { data: structureData, error: structureError } = await supabase.functions.invoke('analyze-document-structure', {
-        body: { documentContent: extractedContent }
-      });
-
-      if (structureError) throw structureError;
-
-      if (structureData && structureData.sections && structureData.sections.length > 0) {
-        setDocumentSections(structureData.sections);
-        setDocumentIdForDialog(documentRecordId);
-        setIsSectionDialogOpen(true);
-        toast.dismiss(toastId);
-      } else {
-        await generateAIContentForNote(
-          note,
-          userProfile,
-          null,
-          toastId,
-          documentRecordId
-        );
+      if (updateDocError) {
+        console.error("❌ Document update failed:", updateDocError);
+        throw new Error(updateDocError.message || 'Failed to update existing document record.');
       }
+      
+      console.log("✅ Document record updated");
+    } else {
+      console.log("➕ Creating new document record");
+      
+      const { data: newDocument, error: createDocError } = await supabase
+        .from('documents')
+        .insert({
+          user_id: userProfile.id,
+          title: file.name,
+          file_name: file.name,
+          file_url: fileUrl,
+          file_type: fileType,
+          file_size: file.size,
+          type: 'text',
+          processing_status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
 
-    } catch (error) {
-      let errorMessage = 'An unknown error occurred during document processing.';
-      if (error instanceof FunctionsHttpError) {
-        errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
-        if (error.message.includes("The model is overloaded")) {
-          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-        if (error.message.includes("The model is overloaded")) {
-          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
-        }
+      if (createDocError || !newDocument) {
+        console.error("❌ Document creation failed:", createDocError);
+        throw new Error(createDocError?.message || 'Failed to create new document record.');
       }
-      toast.error(errorMessage, { id: toastId });
-      //console.error('Error during document processing and note update:', error);
-      if (documentRecordId) {
-        await supabase
-          .from('documents')
-          .update({
-            processing_status: 'failed',
-            processing_error: errorMessage,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', documentRecordId);
-      }
-    } finally {
-      setIsGeneratingAI(false);
-    }
-  };
+      
+      documentRecordId = newDocument.id;
+      console.log("✅ Document record created:", documentRecordId);
 
-  const generateAIContentForNote = async (
-    targetNote: Note,
-    user: UserProfile,
-    selectedSection: string | null,
-    toastId: string,
-    documentIdForGeneration: string | null
-  ) => {
-    setIsGeneratingAI(true);
-    toast.loading('Generating AI note content...', { id: toastId });
-
-    try {
-
-      const requestBody = {
-        documentId: documentIdForGeneration,
-        userProfile: user,
-        selectedSection: selectedSection,
-      };
-
-
-      const { data: aiGeneratedNote, error: generationError } = await supabase.functions.invoke('generate-note-from-document', {
-        body: requestBody,
-      });
-
-      if (generationError) throw new Error(generationError.message || 'Failed to generate note content.');
-
-      const updatedNote: Note = {
-        ...targetNote,
-        title: aiGeneratedNote.title || targetNote.title,
-        content: aiGeneratedNote.content,
-        aiSummary: aiGeneratedNote.aiSummary,
-        updatedAt: new Date(),
-        document_id: documentIdForGeneration,
-      };
-
-      if (!targetNote.id) {
-        const { data: newNoteData, error: createNoteError } = await supabase
-          .from('notes')
-          .insert({
-            title: updatedNote.title,
-            content: updatedNote.content,
-            category: updatedNote.category,
-            tags: updatedNote.tags,
-            user_id: user.id,
-            ai_summary: updatedNote.aiSummary,
-            document_id: updatedNote.document_id,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (createNoteError) throw createNoteError;
-        onNoteUpdate({
-          ...updatedNote,
-          id: newNoteData.id,
-          createdAt: new Date(newNoteData.created_at),
-          updatedAt: new Date(newNoteData.updated_at),
-        });
-        toast.success('New note generated from document!', { id: toastId });
-      } else {
-        const { error: updateNoteError } = await supabase
-          .from('notes')
-          .update({
-            title: updatedNote.title,
-            content: updatedNote.content,
-            ai_summary: updatedNote.aiSummary,
-            updated_at: new Date().toISOString(),
-            document_id: updatedNote.document_id,
-          })
-          .eq('id', updatedNote.id)
-          .eq('user_id', user.id);
-
-        if (updateNoteError) throw updateNoteError;
-        onNoteUpdate(updatedNote);
-        toast.success('Note updated from document!', { id: toastId });
-      }
-
-      setContent(updatedNote.content);
-      setDraftContent(updatedNote.content);
-      setTitle(updatedNote.title);
-
-    } catch (error) {
-      let errorMessage = 'An unknown error occurred.';
-      if (error instanceof FunctionsHttpError) {
-        errorMessage = `AI generation failed: ${error.context.statusText}. Check function logs.`;
-        if (error.message.includes("The model is overloaded")) {
-          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-        if (error.message.includes("The model is overloaded")) {
-          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
-        }
-      }
-      toast.error(errorMessage, { id: toastId });
-      //console.error('Error during AI note generation:', error);
-    } finally {
-      setIsGeneratingAI(false);
-      setIsSectionDialogOpen(false);
-      setDocumentSections([]);
-      setSelectedFile(null);
-      setExtractedContent(null);
-      setUploadedDocumentPublicUrl(null);
-    }
-  };
-
-  const handleSectionSelect = async (section: string | null, documentIdFromDialog: string) => {
-    if (!selectedFile || !extractedContent || !userProfile || !uploadedDocumentPublicUrl || !documentIdFromDialog) {
-      toast.error("Missing file, extracted content, user profile, uploaded document URL, or document ID to generate note.");
-      return;
+      onNoteUpdate({ ...note, document_id: documentRecordId });
     }
 
-    const toastId = toast.loading(`Generating note from ${section ? `section: ${section}` : 'full document'}...`);
+    if (!documentRecordId) {
+      throw new Error("Document record ID could not be determined.");
+    }
 
-    await generateAIContentForNote(
-      note,
-      userProfile,
-      section,
-      toastId as string,
-      documentIdFromDialog
+    // Step 2: Extract Content via Edge Function
+    console.log("📋 Calling gemini-document-extractor edge function...");
+    const extractionPayload = {
+      documentId: documentRecordId,
+      file_url: fileUrl,
+      file_type: fileType,
+      userId: userProfile.id,
+    };
+    console.log("Extraction payload:", extractionPayload);
+
+    const { data: extractionData, error: extractionError } = await supabase.functions.invoke(
+      'gemini-document-extractor',
+      { body: extractionPayload }
     );
-  };
 
+    if (extractionError) {
+      console.error("❌ Extraction error:", extractionError);
+      throw extractionError;
+    }
+    
+    console.log("✅ Content extracted, length:", extractionData.content_extracted?.length || 0);
+    const extractedContent = extractionData.content_extracted;
+    setExtractedContent(extractedContent);
+
+    // Step 3: Analyze Structure
+    console.log("🔍 Analyzing document structure...");
+    
+    // Update the same toast
+    toast.loading('Analyzing document structure...', { id: toastId });
+
+    const { data: structureData, error: structureError } = await supabase.functions.invoke(
+      'analyze-document-structure',
+      { body: { documentContent: extractedContent } }
+    );
+
+    if (structureError) {
+      console.error("❌ Structure analysis error:", structureError);
+      throw structureError;
+    }
+
+    console.log("✅ Structure analyzed, sections found:", structureData.sections?.length || 0);
+
+    // Step 4: Handle Section Selection or Generate Note
+    if (structureData && structureData.sections && structureData.sections.length > 0) {
+      console.log("📑 Multiple sections found, showing selection dialog");
+      setDocumentSections(structureData.sections);
+      setDocumentIdForDialog(documentRecordId);
+      setIsSectionDialogOpen(true);
+      
+      // Dismiss the loading toast when showing dialog
+      toast.dismiss(toastId);
+    } else {
+      console.log("📝 No sections found, generating full note");
+      await generateAIContentForNote(
+        note,
+        userProfile,
+        null,
+        toastId, // Pass the same toast ID
+        documentRecordId
+      );
+    }
+
+  } catch (error) {
+    console.error("❌ Document processing failed:", error);
+    
+    let errorMessage = 'An unknown error occurred during document processing.';
+    
+    if (error instanceof FunctionsHttpError) {
+      console.error("Edge Function Error Details:", {
+        status: error.context.status,
+        statusText: error.context.statusText,
+        message: error.message
+      });
+      errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
+      
+      if (error.message.includes("The model is overloaded")) {
+        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+      }
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+      
+      if (error.message.includes("The model is overloaded")) {
+        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+      }
+    }
+    
+    toast.error(errorMessage, { id: toastId });
+    
+    // Update document status to failed
+    if (documentRecordId) {
+      console.log("⚠️ Updating document status to failed");
+      await supabase
+        .from('documents')
+        .update({
+          processing_status: 'failed',
+          processing_error: errorMessage,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', documentRecordId);
+    }
+  } finally {
+    setIsGeneratingAI(false);
+  }
+};
+
+// Also update generateAIContentForNote to use the toast ID properly
+const generateAIContentForNote = async (
+  targetNote: Note,
+  user: UserProfile,
+  selectedSection: string | null,
+  toastId: string, // Receive the toast ID
+  documentIdForGeneration: string | null
+) => {
+  setIsGeneratingAI(true);
+  
+  // Update the existing toast
+  toast.loading('Generating AI note content...', { id: toastId });
+
+  try {
+    const requestBody = {
+      documentId: documentIdForGeneration,
+      userProfile: user,
+      selectedSection: selectedSection,
+    };
+
+    const { data: aiGeneratedNote, error: generationError } = await supabase.functions.invoke(
+      'generate-note-from-document',
+      { body: requestBody }
+    );
+
+    if (generationError) throw new Error(generationError.message || 'Failed to generate note content.');
+
+    const updatedNote: Note = {
+      ...targetNote,
+      title: aiGeneratedNote.title || targetNote.title,
+      content: aiGeneratedNote.content,
+      aiSummary: aiGeneratedNote.aiSummary,
+      updatedAt: new Date(),
+      document_id: documentIdForGeneration,
+    };
+
+    if (!targetNote.id) {
+      const { data: newNoteData, error: createNoteError } = await supabase
+        .from('notes')
+        .insert({
+          title: updatedNote.title,
+          content: updatedNote.content,
+          category: updatedNote.category,
+          tags: updatedNote.tags,
+          user_id: user.id,
+          ai_summary: updatedNote.aiSummary,
+          document_id: updatedNote.document_id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (createNoteError) throw createNoteError;
+      
+      onNoteUpdate({
+        ...updatedNote,
+        id: newNoteData.id,
+        createdAt: new Date(newNoteData.created_at),
+        updatedAt: new Date(newNoteData.updated_at),
+      });
+      
+      toast.success('New note generated from document!', { id: toastId });
+    } else {
+      const { error: updateNoteError } = await supabase
+        .from('notes')
+        .update({
+          title: updatedNote.title,
+          content: updatedNote.content,
+          ai_summary: updatedNote.aiSummary,
+          updated_at: new Date().toISOString(),
+          document_id: updatedNote.document_id,
+        })
+        .eq('id', updatedNote.id)
+        .eq('user_id', user.id);
+
+      if (updateNoteError) throw updateNoteError;
+      
+      onNoteUpdate(updatedNote);
+      toast.success('Note updated from document!', { id: toastId });
+    }
+
+    setContent(updatedNote.content);
+    setDraftContent(updatedNote.content);
+    setTitle(updatedNote.title);
+
+  } catch (error) {
+    let errorMessage = 'An unknown error occurred.';
+    
+    if (error instanceof FunctionsHttpError) {
+      errorMessage = `AI generation failed: ${error.context.statusText}. Check function logs.`;
+      
+      if (error.message.includes("The model is overloaded")) {
+        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+      }
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+      
+      if (error.message.includes("The model is overloaded")) {
+        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+      }
+    }
+    
+    toast.error(errorMessage, { id: toastId });
+  } finally {
+    setIsGeneratingAI(false);
+    setIsSectionDialogOpen(false);
+    setDocumentSections([]);
+    setSelectedFile(null);
+    setExtractedContent(null);
+    setUploadedDocumentPublicUrl(null);
+  }
+};
+
+// Also update handleSectionSelect to pass toast ID correctly
+const handleSectionSelect = async (section: string | null, documentIdFromDialog: string) => {
+  if (!selectedFile || !extractedContent || !userProfile || !uploadedDocumentPublicUrl || !documentIdFromDialog) {
+    toast.error("Missing file, extracted content, user profile, uploaded document URL, or document ID to generate note.");
+    return;
+  }
+
+  // Create a unique toast ID for section generation
+  const toastId = `section-${Date.now()}`;
+  toast.loading(`Generating note from ${section ? `section: ${section}` : 'full document'}...`, { id: toastId });
+
+  await generateAIContentForNote(
+    note,
+    userProfile,
+    section,
+    toastId, // Pass the unique toast ID
+    documentIdFromDialog
+  );
+};
   const handleTextToSpeech = () => {
     if (!('speechSynthesis' in window)) {
       toast.error("Text-to-speech is not supported in this browser.");
@@ -873,8 +1019,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         .from('documents')
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
-
+      if (uploadError){
+         throw uploadError;
+         
+      }
       const { data: publicUrlData } = supabase.storage
         .from('documents')
         .getPublicUrl(filePath);
@@ -890,7 +1038,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       });
       setIsAudioOptionsVisible(true);
       toast.success('Audio file uploaded. Processing options available.', { id: toastId });
-
+      setIsProcessingAudio(false);
     } catch (error) {
       let errorMessage = 'An error occurred during audio file upload.';
       if (error instanceof Error) {
@@ -901,6 +1049,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setIsProcessingAudio(false);
     } finally {
       if (event.target) event.target.value = '';
+      setIsProcessingAudio(false);
     }
   };
 
