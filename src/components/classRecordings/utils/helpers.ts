@@ -5,7 +5,7 @@ export const generateId = (): string => {
     return crypto.randomUUID();
   }
   // Fallback for older environments
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
@@ -16,7 +16,7 @@ export const formatDate = (date: Date): string => {
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  
+
   if (days === 0) {
     const hours = Math.floor(diff / (1000 * 60 * 60));
     if (hours === 0) {
@@ -48,7 +48,7 @@ export const getCategoryIcon = (category: string): string => {
 export const getCategoryColor = (category: string): string => {
   const colors: { [key: string]: string } = {
     general: 'bg-blue-100 text-blue-700',
-    math: 'bg-purple-100 text-purple-700',
+    math: 'bg-blue-100 text-blue-700',
     science: 'bg-green-100 text-green-700',
     history: 'bg-orange-100 text-orange-700',
     language: 'bg-pink-100 text-pink-700',

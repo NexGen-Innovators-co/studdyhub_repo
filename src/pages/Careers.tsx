@@ -123,7 +123,7 @@ const Careers: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-start gap-4">
-                            <Sparkles className="h-8 w-8 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-1" />
+                            <Sparkles className="h-8 w-8 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-1" />
                             <div>
                                 <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Collaborative Culture</h3>
                                 <p className="text-gray-700 dark:text-gray-300">Join a diverse and passionate team that values creativity and teamwork.</p>

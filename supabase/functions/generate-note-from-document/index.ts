@@ -103,7 +103,7 @@ When applicable, use the following tools to create visual aids:
     {
       "type": "bar",
       "data": {
-        "labels": ["Red", "Blue", "Yellow", "Green", "Purple", "Orange"],
+        "labels": ["Red", "Blue", "Yellow", "Green", "blue", "Orange"],
         "datasets": [{
           "label": "# of Votes",
           "data": [12, 19, 3, 5, 2, 3],

@@ -103,7 +103,7 @@ export const AudioOptionsSection: React.FC<AudioOptionsSectionProps> = ({
           size="sm"
           onClick={handleGenerateNoteFromAudio}
           disabled={isGeneratingAudioNote || isGeneratingAudioSummary || isTranslatingAudio || isProcessingAudio || !userProfile}
-          className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:from-blue-700 hover:to-purple-700"
+          className="bg-gradient-to-r from-blue-600 to-blue-600 text-white shadow-md hover:from-blue-700 hover:to-blue-700"
         >
           {isGeneratingAudioNote ? (
             <Brain className="h-4 w-4 mr-2 animate-pulse" />

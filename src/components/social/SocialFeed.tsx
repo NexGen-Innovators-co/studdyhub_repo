@@ -31,6 +31,7 @@ import { NotificationsSection } from './components/NotificationsSection';
 // Import types
 import { SortBy, FilterBy, Privacy } from './types/social';
 import { SocialPostWithDetails, SocialUserWithDetails } from '../../integrations/supabase/socialTypes';
+import { GroupDetailPage } from './components/GroupDetail';
 
 interface SocialFeedProps {
   userProfile: any;
@@ -93,6 +94,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     loadMoreUserPosts,
     loadMoreGroups,
     loadMoreSuggestedUsers,
+    isLoadingMoreGroups
   } = useSocialData(userProfile, sortBy, filterBy);
 
   const {
@@ -138,7 +140,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const { trackPostView, cleanup } = useSocialPostViews(setPosts, setTrendingPosts, setUserPosts);
 
   const navigate = useNavigate();
-  const { tab: routeTab, postId: routePostId } = useParams<{ tab?: string; postId?: string }>();
+  const { tab: routeTab, postId: routePostId, groupId: routeGroupId } = useParams<{ tab?: string; postId?: string; groupId?: string }>();
 
   // Setup intersection observers for infinite scroll
   useEffect(() => {
@@ -220,10 +222,12 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   }, [cleanup]);
 
   useEffect(() => {
-    if (initialActiveTab) {
+    if (routeTab) {
+      setActiveTab(routeTab as any);
+    } else if (initialActiveTab) {
       setActiveTab(initialActiveTab as any);
     }
-  }, [initialActiveTab]);
+  }, [routeTab, initialActiveTab]);
 
   // Handler functions
   const handleCreatePost = async () => {
@@ -295,7 +299,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const handlePostClick = (postId: string) => {
     navigate(`/social/post/${postId}`);
   };
-  
+
   // NEW GROUP HANDLERS
   const handleCreateGroup = (data: any) => createGroup(data);
   const handleJoinGroup = (groupId: string, privacy: 'public' | 'private') => joinGroup(groupId, privacy);
@@ -314,10 +318,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
       if ((index + 1) % 4 === 0 && suggestedUsers.length > userIndex) {
         const usersToShow = suggestedUsers.slice(userIndex, userIndex + usersPerSuggestion);
         if (usersToShow.length > 0) {
-          result.push({ 
-            type: 'suggested-users', 
-            data: usersToShow, 
-            key: `suggested-users-${index}` 
+          result.push({
+            type: 'suggested-users',
+            data: usersToShow,
+            key: `suggested-users-${index}`
           });
           userIndex += usersPerSuggestion;
         }
@@ -327,10 +331,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
       if ((index + 1) % 7 === 0 && trendingHashtags.length > hashtagIndex) {
         const hashtagsToShow = trendingHashtags.slice(hashtagIndex, hashtagIndex + 5);
         if (hashtagsToShow.length > 0) {
-          result.push({ 
-            type: 'trending-topics', 
-            data: hashtagsToShow, 
-            key: `trending-topics-${index}` 
+          result.push({
+            type: 'trending-topics',
+            data: hashtagsToShow,
+            key: `trending-topics-${index}`
           });
           hashtagIndex += 5;
         }
@@ -357,16 +361,16 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   );
 
   // Load more trigger component
-  const LoadMoreTrigger = ({ 
-    hasMore, 
-    isLoading, 
-    onLoadMore, 
-    observerRef 
-  }: { 
-    hasMore: boolean; 
-    isLoading: boolean; 
-    onLoadMore: () => void; 
-    observerRef: React.RefObject<HTMLDivElement>; 
+  const LoadMoreTrigger = ({
+    hasMore,
+    isLoading,
+    onLoadMore,
+    observerRef
+  }: {
+    hasMore: boolean;
+    isLoading: boolean;
+    onLoadMore: () => void;
+    observerRef: React.RefObject<HTMLDivElement>;
   }) => {
     if (!hasMore) return null;
 
@@ -400,7 +404,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
         {users.map((user) => (
           <div key={user.id} className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center text-white font-semibold">
                 {user.display_name?.charAt(0).toUpperCase() || 'U'}
               </div>
               <div>
@@ -428,165 +432,152 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
 
   // Inline Trending Topics Component
   const InlineTrendingTopics = ({ hashtags }: { hashtags: any[] }) => (
-    <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-4 mb-6 border border-blue-200 dark:border-gray-600 shadow-sm">
+    <div className="bg-gradient-to-br from-blue-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-4 mb-6 border border-blue-200 dark:border-gray-600 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-slate-800 dark:text-gray-200 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+          <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           Trending Right Now
         </h3>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {hashtags.map((hashtag, idx) => (
-          <div
-            key={hashtag.id}
-            className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-3 cursor-pointer hover:bg-white/80 dark:hover:bg-gray-800/80 transition-colors"
-            onClick={() => toast.info(`Filtering by hashtag #${hashtag.name}`)}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-sm text-slate-800 dark:text-gray-200">
-                  #{hashtag.name}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-gray-400">
-                  {hashtag.posts_count} posts
-                </p>
-              </div>
-              <span className="text-xs font-bold text-purple-600 dark:text-purple-400">
-                #{idx + 1}
-              </span>
-            </div>
+        {hashtags.map((hashtag) => (
+          <div key={hashtag.name} className="p-3 bg-white/50 dark:bg-gray-900/50 rounded-md flex justify-between items-center">
+            <span className="font-medium">#{hashtag.name}</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{hashtag.count} posts</span>
           </div>
         ))}
       </div>
     </div>
   );
 
+  // Conditional render for GroupDetailPage (moved after all hooks)
+  if (routeGroupId) {
+    return (
+      <GroupDetailPage
+        currentUser={currentUser}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
-          {/* Main content */}
-          <div className="lg:col-span-8">
-            {/* Search and filters - Non-sticky, scrolls naturally */}
-            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 border border-slate-200 dark:border-gray-700">
-              <div className="flex flex-col gap-3">
-                {/* Search bar */}
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-gray-400" />
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-8 xl:col-span-8">
+            {/* Search and Filter Bar */}
+            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-4 mb-6 border border-slate-200 dark:border-gray-700">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="flex-1 w-full flex items-center gap-2">
                   <Input
-                    placeholder="Search posts, users, or hashtags..."
-                    className="pl-10 bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
+                    placeholder="Search posts, people, hashtags..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    className="flex-1"
                   />
-                </div>
-
-                {/* Mobile filter toggle */}
-                <div className="flex items-center gap-2 lg:hidden">
                   <Button
-                    variant="outline"
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="flex-1 bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSearchQuery('')}
+                    className={searchQuery ? '' : 'hidden'}
                   >
-                    {showFilters ? <X className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
-                    Filters & Sort
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={handleRefresh}
-                    className="bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
-                  >
-                    <RefreshCw className="h-4 w-4" />
+                    <X className="h-4 w-4" />
                   </Button>
                 </div>
 
-                {/* Desktop filters - always visible */}
-                <div className="hidden lg:flex gap-4">
+                {/* Desktop Filters */}
+                <div className="hidden sm:flex items-center gap-2">
                   <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
-                    <SelectTrigger className="w-[180px] bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
+                    <SelectTrigger className="w-[120px]">
                       <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="newest">Newest</SelectItem>
+                      <SelectItem value="oldest">Oldest</SelectItem>
                       <SelectItem value="popular">Popular</SelectItem>
-                      <SelectItem value="trending">Trending</SelectItem>
                     </SelectContent>
                   </Select>
+
                   <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
-                    <SelectTrigger className="w-[180px] bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
-                      <SelectValue placeholder="Filter by" />
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue placeholder="Filter" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All</SelectItem>
                       <SelectItem value="following">Following</SelectItem>
-                      <SelectItem value="groups">Groups</SelectItem>
+                      <SelectItem value="media">Media</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button 
-                    variant="outline" 
-                    onClick={handleRefresh}
-                    className="bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600"
-                  >
+
+                  <Button variant="ghost" size="icon" onClick={handleRefresh}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Mobile Filter Toggle */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="sm:hidden"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Mobile Filters */}
+              {showFilters && (
+                <div className="mt-4 flex flex-col sm:hidden gap-4">
+                  <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">Newest</SelectItem>
+                      <SelectItem value="oldest">Oldest</SelectItem>
+                      <SelectItem value="popular">Popular</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="following">Following</SelectItem>
+                      <SelectItem value="media">Media</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button variant="outline" onClick={handleRefresh}>
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Refresh
                   </Button>
                 </div>
-
-                {/* Mobile filters - collapsible */}
-                {showFilters && (
-                  <div className="lg:hidden flex flex-col gap-3 pt-2 border-t border-slate-200 dark:border-gray-700">
-                    <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
-                      <SelectTrigger className="w-full bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
-                        <SelectValue placeholder="Sort by" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="newest">Newest</SelectItem>
-                        <SelectItem value="popular">Popular</SelectItem>
-                        <SelectItem value="trending">Trending</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
-                      <SelectTrigger className="w-full bg-white/50 dark:bg-gray-700/50 border-slate-200 dark:border-gray-600">
-                        <SelectValue placeholder="Filter by" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="following">Following</SelectItem>
-                        <SelectItem value="groups">Groups</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Tabs */}
-            {routePostId ? (
-              // Single post view if postId is in URL
-              <div>
-                {postToDisplay ? (
-                  <PostCard
-                    post={postToDisplay}
-                    onLike={toggleLike}
-                    onBookmark={toggleBookmark}
-                    onShare={sharePost}
-                    onComment={() => togglePostExpanded(postToDisplay.id)}
-                    isExpanded={true}
-                    comments={getPostComments(postToDisplay.id)}
-                    isLoadingComments={isLoadingPostComments(postToDisplay.id)}
-                    newComment={getNewCommentContent(postToDisplay.id)}
-                    onCommentChange={(content) => updateNewComment(postToDisplay.id, content)}
-                    onSubmitComment={() => handleCommentSubmit(postToDisplay.id)}
-                    currentUser={currentUser}
-                    onPostView={trackPostView}
-                    onClick={() => {}}
-                  />
-                ) : (
-                  <div className="text-center py-12">Post not found</div>
-                )}
+            {routePostId && postToDisplay ? (
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-4 border border-slate-200 dark:border-gray-700">
+                <PostCard
+                  post={postToDisplay}
+                  onLike={toggleLike}
+                  onBookmark={toggleBookmark}
+                  onShare={sharePost}
+                  onComment={() => togglePostExpanded(postToDisplay.id)}
+                  isExpanded={isPostExpanded(postToDisplay.id)}
+                  comments={getPostComments(postToDisplay.id)}
+                  isLoadingComments={isLoadingPostComments(postToDisplay.id)}
+                  newComment={getNewCommentContent(postToDisplay.id)}
+                  onCommentChange={(content) => updateNewComment(postToDisplay.id, content)}
+                  onSubmitComment={() => handleCommentSubmit(postToDisplay.id)}
+                  currentUser={currentUser}
+                  onPostView={trackPostView}
+                  onClick={() => { }}
+                />
               </div>
             ) : (
-              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="space-y-4 sm:space-y-6">
+              <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value as any); navigate(`/social/${value}`); }} className="space-y-4 sm:space-y-6">
                 <TabsList className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-1 border border-slate-200 dark:border-gray-700 grid grid-cols-5 w-full overflow-x-auto">
                   <TabsTrigger value="feed" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 text-xs sm:text-sm px-1 sm:px-3">
                     <SortDesc className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
@@ -635,13 +626,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                       <LoadingSpinner text="Loading your feed..." />
                     ) : (
                       <div className="space-y-4 sm:space-y-6">
-                        <Button 
-                          onClick={() => setShowPostDialog(true)} 
+                        <Button
+                          onClick={() => setShowPostDialog(true)}
                           className="w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 py-3"
                         >
                           What's on your mind?
                         </Button>
-                        
+
                         {/* Render posts with inline suggestions */}
                         {postsWithSuggestions.map((item) => {
                           if (item.type === 'post') {
@@ -754,7 +745,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                           }
                           return null;
                         })}
-                        
+
                         {/* Infinite scroll trigger for trending */}
                         <LoadMoreTrigger
                           hasMore={hasMoreTrendingPosts}
@@ -772,10 +763,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                     groups={groups}
                     isLoading={isLoadingGroups}
                     onJoinGroup={joinGroup}
-                    currentUser={currentUser}
+                    onLeaveGroup={leaveGroup}
                     onCreateGroup={handleCreateGroup}
-                    onLeaveGroup={handleLeaveGroup}
-                     />
+                    currentUser={currentUser}
+                    hasMore={hasMoreGroups}
+                    onLoadMore={loadMoreGroups}
+                    isLoadingMore={isLoadingMoreGroups}
+                    onRefresh={refetchGroups}
+                  />
                 </TabsContent>
 
                 <TabsContent value="profile" className="mt-0">
@@ -801,7 +796,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                       onPostView={trackPostView}
                       onClick={handlePostClick}
                     />
-                    
+
                     {/* Infinite scroll trigger for user posts */}
                     <LoadMoreTrigger
                       hasMore={hasMoreUserPosts}

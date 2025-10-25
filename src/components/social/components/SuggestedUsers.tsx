@@ -61,7 +61,7 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
 
   const handleFollowUser = async (userId: string, displayName: string) => {
     setFollowingUsers(prev => new Set(prev).add(userId));
-    
+
     try {
       await onFollowUser(userId);
       toast.success(`Now following ${displayName}!`);
@@ -86,7 +86,7 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
   const getRecommendationColor = (reason: string) => {
     switch (reason) {
       case 'Verified': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'Popular': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+      case 'Popular': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'Active Creator': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
       case 'Similar Interests': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';

@@ -127,7 +127,7 @@ const ResetPassword = () => {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [isValidToken, setIsValidToken] = useState<boolean | null>(null);
   const [isCheckingToken, setIsCheckingToken] = useState(true);
-  
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -266,15 +266,15 @@ const ResetPassword = () => {
       }
 
       toast.success('Password updated successfully! You can now sign in with your new password.');
-      
+
       // Sign out to clear the recovery session
       await supabase.auth.signOut();
-      
+
       // Redirect to auth page with sign in tab
       navigate('/auth', { replace: true });
     } catch (error: any) {
       console.error('Password reset error:', error);
-      
+
       if (error.message.includes('same as the old password')) {
         toast.error('New password must be different from your current password.');
       } else if (error.message.includes('weak password')) {
@@ -310,7 +310,7 @@ const ResetPassword = () => {
       <div className="min-h-screen flex flex-col font-inter relative overflow-hidden
         bg-gray-950 bg-[url('/herobackgroundimg.png')] bg-cover bg-center bg-fixed
         before:content-[''] before:absolute before:inset-0 before:bg-gradient-to-br before:from-transparent before:via-gray-950/70 before:to-gray-950/90 before:z-0 text-white">
-        
+
         <div className="flex flex-grow items-center justify-center p-4 sm:p-6 lg:p-8 relative z-10">
           <Card className="w-full max-w-md mx-auto bg-gray-900/95 backdrop-blur-sm shadow-2xl rounded-xl overflow-hidden border border-red-700/50">
             <CardHeader className="text-center space-y-4 p-6 sm:p-8 pb-4">
@@ -362,7 +362,7 @@ const ResetPassword = () => {
     <div className="min-h-screen flex flex-col font-inter relative overflow-hidden
       bg-gray-950 bg-[url('/herobackgroundimg.png')] bg-cover bg-center bg-fixed
       before:content-[''] before:absolute before:inset-0 before:bg-gradient-to-br before:from-transparent before:via-gray-950/70 before:to-gray-950/90 before:z-0 text-white">
-      
+
       <div className="flex flex-grow items-center justify-center p-4 sm:p-6 lg:p-8 relative z-10">
         <Card className="w-full max-w-md mx-auto bg-gray-900/95 backdrop-blur-sm shadow-2xl rounded-xl overflow-hidden border border-gray-700/50 transition-all duration-300 hover:shadow-3xl">
           <CardHeader className="text-center space-y-4 p-6 sm:p-8 pb-4 bg-gradient-to-b from-gray-900/95 to-gray-900/90">
@@ -373,7 +373,7 @@ const ResetPassword = () => {
                 className="h-9 w-9 sm:h-11 sm:w-11 object-contain"
                 fallbackSrc="/favicon.ico"
               />
-              <h1 className="text-3xl sm:text-4xl font-extrabold text-white bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white bg-gradient-to-r from-blue-400 to-blue-400 bg-clip-text text-transparent">
                 studdyhub AI
               </h1>
             </div>

@@ -252,7 +252,7 @@ const LandingPage: React.FC = () => {
       icon: Globe, // Changed from Brain to Globe for diversity
       title: "Personalized Learning Paths",
       description: "Customize AI responses to match your unique learning style (visual, auditory, kinesthetic, reading/writing).",
-      color: "bg-purple-600",
+      color: "bg-blue-600",
       bgColor: "bg-white",
       darkBgColor: "dark:bg-gray-800"
     }

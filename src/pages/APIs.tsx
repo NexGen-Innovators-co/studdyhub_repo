@@ -93,7 +93,7 @@ const APIPage: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-start gap-4">
-                            <Code className="h-8 w-8 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-1" />
+                            <Code className="h-8 w-8 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-1" />
                             <div>
                                 <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Code Generation (Diagrams)</h3>
                                 <p className="text-gray-700 dark:text-gray-300">Generate Mermaid, DOT, Chart.js, and Three.js code programmatically.</p>

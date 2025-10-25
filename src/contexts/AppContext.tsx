@@ -19,6 +19,7 @@ import { Message, ChatSession, FileData, MessagePart } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { appReducer, initialAppState, AppState, AppAction } from './appReducer';
+import { DocumentFolder, FolderTreeNode } from '@/types/Folder';
 
 // Context interface
 interface AppContextType extends AppState {
@@ -100,6 +101,10 @@ interface AppContextType extends AppState {
   loadMoreSchedule: () => void;
   loadMoreQuizzes: () => void;
   addDocument: (document: AppDocument) => void; // Add this function
+  folders: DocumentFolder[];
+  folderTree: FolderTreeNode[];
+  setFolders: (folders: DocumentFolder[] | ((prev: DocumentFolder[]) => DocumentFolder[])) => void;
+  loadFolders: (userId: string, isInitial?: boolean) => Promise<void>;
   updateDocument: (document: AppDocument) => void; // Add this function
 }
 
@@ -154,6 +159,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadMoreDocuments,
     loadMoreSchedule,
     loadMoreQuizzes,
+    folders,
+    folderTree,
+    setFolders,
+    loadFolders,
   } = appData;
   const addDocument = useCallback((document: AppDocument) => {
     setDocuments(prev => [document, ...prev]);
@@ -188,6 +197,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveNote,
     setActiveTab,
     setIsAILoading,
+    folders,
+    setFolders,
   });
 
   // Theme management
@@ -880,7 +891,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadMoreQuizzes,
     addDocument, // Add to context
     updateDocument, // Add to context
-
+    folders,
+    folderTree,
+    setFolders,
+    loadFolders,
   };
 
   return (

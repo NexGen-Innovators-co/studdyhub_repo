@@ -35,7 +35,7 @@ const CHART_COLORS = {
     accent: '#f59e0b',
     danger: '#ef4444',
     info: '#06b6d4',
-    purple: '#8b5cf6'
+    blue: '#8b5cf6'
 };
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -215,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             className={`hover:shadow-md transition-all duration-200 cursor-pointer border-l-4 ${color === 'blue' ? 'border-l-blue-500 hover:bg-blue-50' :
                 color === 'green' ? 'border-l-green-500 hover:bg-green-50' :
                     color === 'yellow' ? 'border-l-yellow-500 hover:bg-yellow-50' :
-                        color === 'purple' ? 'border-l-purple-500 hover:bg-purple-50' :
+                        color === 'blue' ? 'border-l-blue-500 hover:bg-blue-50' :
                             'border-l-gray-500 hover:bg-gray-50'
                 }`}
             onClick={onClick}
@@ -236,7 +236,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div className={`p-3 rounded-full ${color === 'blue' ? 'bg-blue-100 text-blue-600' :
                         color === 'green' ? 'bg-green-100 text-green-600' :
                             color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
-                                color === 'purple' ? 'bg-purple-100 text-purple-600' :
+                                color === 'blue' ? 'bg-blue-100 text-blue-600' :
                                     'bg-gray-100 text-gray-600'
                         }`}>
                         <Icon className="h-6 w-6" />
@@ -253,7 +253,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div className={`p-2 rounded-lg ${color === 'blue' ? 'bg-blue-100 text-blue-600' :
                         color === 'green' ? 'bg-green-100 text-green-600' :
                             color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
-                                color === 'purple' ? 'bg-purple-100 text-purple-600' :
+                                color === 'blue' ? 'bg-blue-100 text-blue-600' :
                                     'bg-gray-100 text-gray-600'
                         }`}>
                         <Icon className="h-5 w-5" />
@@ -325,7 +325,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     title="AI Conversations"
                     value={animatedCounts.messages}
                     icon={MessageCircle}
-                    color="purple"
+                    color="blue"
                     onClick={() => onNavigateToTab('chat')}
                 />
             </div>
@@ -366,7 +366,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                             description="Plan your study time"
                             icon={Calendar}
                             onClick={() => onCreateNew('schedule')}
-                            color="purple"
+                            color="blue"
                         />
                     </div>
                 </CardContent>
@@ -551,7 +551,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     </div>
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <MessageCircle className="h-4 w-4 text-purple-500" />
+                                            <MessageCircle className="h-4 w-4 text-blue-500" />
                                             <span className="text-sm">AI Interactions</span>
                                         </div>
                                         <Badge variant="secondary" className="text-xs">{analytics.filteredMessages.length}</Badge>
@@ -674,12 +674,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                             )}
 
                             {recordings.length > 0 && notes.length > 0 && (
-                                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                     <div className="flex items-start gap-2">
-                                        <Zap className="h-4 w-4 text-purple-600 mt-0.5" />
+                                        <Zap className="h-4 w-4 text-blue-600 mt-0.5" />
                                         <div>
-                                            <p className="text-sm font-medium text-purple-800 dark:text-purple-200">Great Progress!</p>
-                                            <p className="text-xs text-purple-600 dark:text-purple-300 mt-1">
+                                            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Great Progress!</p>
+                                            <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
                                                 You're actively using multiple learning methods. Keep it up!
                                             </p>
                                         </div>
@@ -752,7 +752,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <p className="text-sm text-gray-600 dark:text-gray-400">Day Streak</p>
                 </div>
                 <div className="space-y-1">
-                    <p className="text-2xl font-bold text-purple-600">{chatMessages.filter(m => m.role === 'user').length}</p>
+                    <p className="text-2xl font-bold text-blue-600">{chatMessages.filter(m => m.role === 'user').length}</p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">Questions Asked</p>
                 </div>
                 <div className="space-y-1">

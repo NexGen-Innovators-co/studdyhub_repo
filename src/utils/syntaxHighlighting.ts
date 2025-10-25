@@ -103,7 +103,7 @@ export const highlightCode = (code: string, language: string) => {
   try {
     const result = lowlight.highlight(language, code);
     const highlighted = toHtml(result);
-    
+
     // Add line numbers and better formatting
     const lines = highlighted.split('\n');
     const numberedLines = lines.map((line, index) => {
@@ -113,7 +113,7 @@ export const highlightCode = (code: string, language: string) => {
         <span class="line-content">${line || ' '}</span>
       </span>`;
     }).join('\n');
-    
+
     return `<div class="code-block-wrapper" style="font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace; font-size: 14px; line-height: 1.5; background: #1f2937; color: #e5e7eb; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; border: 1px solid #374151;">${numberedLines}</div>`;
   } catch (error) {
     console.warn('Syntax highlighting failed:', error);
@@ -124,7 +124,7 @@ export const highlightCode = (code: string, language: string) => {
 // Define a mapping of highlight.js classes to Tailwind CSS color classes for dark theme
 export const syntaxColorMap: { [key: string]: string } = {
   'hljs-comment': 'text-gray-400',
-  'hljs-keyword': 'text-purple-300',
+  'hljs-keyword': 'text-blue-300',
   'hljs-built_in': 'text-cyan-300',
   'hljs-string': 'text-green-300',
   'hljs-variable': 'text-blue-200',
@@ -134,7 +134,7 @@ export const syntaxColorMap: { [key: string]: string } = {
   'hljs-params': 'text-yellow-200',
   'hljs-tag': 'text-pink-300',
   'hljs-attr': 'text-cyan-300',
-  'hljs-selector-tag': 'text-purple-300',
+  'hljs-selector-tag': 'text-blue-300',
   'hljs-selector-id': 'text-orange-300',
   'hljs-selector-class': 'text-green-300',
   'hljs-regexp': 'text-pink-300',

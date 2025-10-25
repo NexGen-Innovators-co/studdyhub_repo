@@ -476,7 +476,7 @@ ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
             </Badge>
           )}
           {effectiveDiagramType === 'slides' && slides.length > 0 && (
-            <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 font-claude">
+            <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 font-claude">
               Slide {currentSlideIndex + 1} / {slides.length}
             </Badge>
           )}

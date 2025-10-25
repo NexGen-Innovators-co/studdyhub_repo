@@ -38,7 +38,7 @@ Chart.register(...registerables); // Register Chart.js components globally
 // Define a mapping of highlight.js classes to Tailwind CSS color classes for dark theme
 const syntaxColorMap: { [key: string]: string } = {
   'hljs-comment': 'text-gray-400', // Lighter grey for comments in dark mode
-  'hljs-keyword': 'text-purple-300', // Lighter purple for keywords
+  'hljs-keyword': 'text-blue-300', // Lighter blue for keywords
   'hljs-built_in': 'text-cyan-300', // Lighter cyan for built-in functions/types
   'hljs-string': 'text-green-300', // Lighter green for strings
   'hljs-variable': 'text-blue-200', // Lighter blue for variables
@@ -48,7 +48,7 @@ const syntaxColorMap: { [key: string]: string } = {
   'hljs-params': 'text-yellow-200', // Lighter yellow for function parameters
   'hljs-tag': 'text-pink-300', // Lighter pink for HTML/XML tags
   'hljs-attr': 'text-cyan-300', // Lighter cyan for HTML/XML attributes
-  'hljs-selector-tag': 'text-purple-300', // Lighter purple for CSS selectors
+  'hljs-selector-tag': 'text-blue-300', // Lighter blue for CSS selectors
   'hljs-selector-id': 'text-orange-300', // Lighter orange for CSS IDs
   'hljs-selector-class': 'text-green-300', // Lighter green for CSS classes
   'hljs-regexp': 'text-pink-300', // Lighter pink for regular expressions
@@ -85,7 +85,7 @@ const toHtml = (result: any) => {
       // Map highlight.js classes to inline styles for guaranteed rendering
       const styleMap: { [key: string]: string } = {
         'hljs-comment': 'color: #9ca3af; font-style: italic;', // gray-400
-        'hljs-keyword': 'color: #c084fc; font-weight: 600;', // purple-300
+        'hljs-keyword': 'color: #c084fc; font-weight: 600;', // blue-300
         'hljs-string': 'color: #86efac;', // green-300
         'hljs-number': 'color: #fdba74;', // orange-200
         'hljs-built_in': 'color: #93c5fd; font-weight: 500;', // blue-300
@@ -99,7 +99,7 @@ const toHtml = (result: any) => {
         'hljs-literal': 'color: #fdba74;', // orange-200
         'hljs-meta': 'color: #7dd3fc;', // sky-300
         'hljs-title': 'color: #86efac;', // green-300
-        'hljs-selector-tag': 'color: #c084fc;', // purple-300
+        'hljs-selector-tag': 'color: #c084fc;', // blue-300
         'hljs-selector-class': 'color: #86efac;', // green-300
         'hljs-selector-id': 'color: #fca5a5;', // red-300
         'hljs-regexp': 'color: #f472b6;', // pink-300
@@ -116,7 +116,7 @@ const toHtml = (result: any) => {
         'hljs-addition': 'color: #4ade80; background-color: #064e3b;', // green-400, bg-green-950
         'hljs-meta-keyword': 'color: #7dd3fc; font-weight: 600;', // sky-300
         'hljs-meta-string': 'color: #38bdf8;', // sky-400
-        'hljs-subst': 'color: #c084fc;', // purple-300
+        'hljs-subst': 'color: #c084fc;', // blue-300
         'hljs-section': 'color: #86efac;', // green-300
         'hljs-boolean': 'color: #fdba74;', // orange-200
       };
@@ -427,7 +427,7 @@ export const CodeRenderer: React.FC<CodeRendererProps> = memo(({ inline, classNa
   }
 
   return (
-    <code className="bg-purple-900 text-purple-300 px-2 py-1 rounded-md font-mono text-sm border border-purple-700">
+    <code className="bg-blue-900 text-blue-300 px-2 py-1 rounded-md font-mono text-sm border border-blue-700">
       {children}
     </code>
   );

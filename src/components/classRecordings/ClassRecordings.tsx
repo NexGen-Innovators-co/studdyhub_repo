@@ -146,7 +146,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 dark:bg-gray-800 dark:border-gray-700">
               <CardHeader className="p-4 sm:pb-4">
                 <CardTitle className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                  <Lightbulb className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" /> Upload Audio
+                  <Lightbulb className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" /> Upload Audio
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -157,7 +157,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 dark:bg-gray-800 dark:border-gray-700">
               <CardHeader className="p-4 sm:pb-4">
                 <CardTitle className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                  <Mic className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" /> Record New Class
+                  <Mic className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" /> Record New Class
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -167,7 +167,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
           </div>
 
           <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-6 sm:mt-10 mb-4 flex items-center gap-2">
-            <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" /> All Class Recordings
+            <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" /> All Class Recordings
           </h3>
           <div className="grid gap-4">
             {Array.isArray(recordings) && recordings.length > 0 ? (

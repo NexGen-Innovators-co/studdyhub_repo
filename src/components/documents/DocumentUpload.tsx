@@ -6,7 +6,7 @@ import {
   FileVideo, FileAudio, Archive, Code, Play, Pause, Volume2, FileBarChart,
   ChevronDown, ChevronRight, Grid, List, SortAsc, SortDesc,
   Maximize2, X, Copy, Share, Edit, Trash2, MoreHorizontal,
-  FileSpreadsheet, File, Zap, Clock, Users
+  FileSpreadsheet, File, Zap, Clock, Users, Folder, Plus
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -16,17 +16,20 @@ import { supabase } from '../../integrations/supabase/client';
 import { Document } from '../../types/Document';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppContext } from '../../contexts/AppContext';
-
+import { FolderTree } from './FolderTree';
+import { CreateFolderDialog, RenameFolderDialog } from './FolderDialog';
+import { FolderSelector } from './FolderSelector';
+import { DocumentFolder, CreateFolderInput, UpdateFolderInput } from '../../types/Folder';
 interface DocumentUploadProps {
   documents: Document[];
-  onDocumentUploaded: (document: Document) => void;
+  // onDocumentUploaded: (document: Document) => void;
   onDocumentDeleted: (documentId: string) => void;
   onDocumentUpdated: (document: Document) => void;
 }
 
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   documents,
-  onDocumentUploaded,
+  // onDocumentUploaded,
   onDocumentDeleted,
   onDocumentUpdated
 }) => {
@@ -49,9 +52,18 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [showFilters, setShowFilters] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { loadMoreDocuments, dataPagination } = useAppContext();
+  const { loadMoreDocuments, dataPagination, folders, folderTree, appOperations, loadDataIfNeeded } = useAppContext();
   const lastDocumentRef = useRef<HTMLDivElement>(null);
 
+  // Folder state
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
+  const [renameFolderDialogOpen, setRenameFolderDialogOpen] = useState(false);
+  const [folderToRename, setFolderToRename] = useState<DocumentFolder | null>(null);
+  const [parentFolderForNew, setParentFolderForNew] = useState<string | null>(null);
+  const [uploadFolderSelectorOpen, setUploadFolderSelectorOpen] = useState(false);
+  const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | null>(null);
   // Utility functions
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -100,7 +112,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const getCategoryColor = (category: string) => {
     switch (category) {
       case 'image': return 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-500/20 border-green-200 dark:border-green-500/20';
-      case 'video': return 'text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-500/20 border-purple-200 dark:border-purple-500/20';
+      case 'video': return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/20';
       case 'audio': return 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-500/20 border-pink-200 dark:border-pink-500/20';
       case 'document': return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/20';
       case 'spreadsheet': return 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/20';
@@ -266,7 +278,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Simulate progress for better UX
     const progressInterval = setInterval(() => {
       setUploadProgress(prev => {
         if (prev >= 90) return prev;
@@ -321,18 +332,27 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       setUploadProgress(100);
 
       if (result.documents && result.documents.length > 0) {
-        result.documents.forEach((doc: Document) => {
-          onDocumentUploaded(doc);
-        });
-        toast.success(`Successfully uploaded and processed "${selectedFile.name}"!`, {
-          action: {
-            label: 'View',
-            onClick: () => {
-              const uploadedDoc = result.documents[0];
-              openPreview(uploadedDoc);
-            }
-          }
-        });
+        const uploadedDoc = result.documents[0];
+
+        // Add document to folder if selected
+        if (uploadTargetFolderId) {
+          await appOperations.addDocumentToFolder(uploadedDoc.id, uploadTargetFolderId);
+        }
+
+        // IMPORTANT: Refresh documents to get the latest data with folder_ids
+        // This ensures the document count is updated correctly
+        if (user?.id) {
+          await loadDataIfNeeded('documents');
+        }
+
+        toast.success(
+          uploadTargetFolderId
+            ? `Document uploaded and added to folder!`
+            : `Successfully uploaded and processed "${selectedFile.name}"!`
+        );
+
+        // Reset upload target folder
+        setUploadTargetFolderId(null);
       } else {
         toast.warning('File processed but no documents were returned.');
       }
@@ -350,7 +370,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       setUploadProgress(0);
     }
   };
-
   const triggerAnalysis = async (doc: Document): Promise<void> => {
     if (!user?.id) {
       toast.error('User not authenticated.');
@@ -568,6 +587,106 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     [loadMoreDocuments, dataPagination.documents.isLoading, dataPagination.documents.hasMore]
   );
 
+  // Get folders from context
+  // const { folders, folderTree, appOperations } = useAppContext();
+
+  // Calculate document counts per folder
+  const documentCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+
+    documents.forEach(doc => {
+      if (doc.folder_ids) {
+        doc.folder_ids.forEach(folderId => {
+          counts[folderId] = (counts[folderId] || 0) + 1;
+        });
+      }
+    });
+
+    return counts;
+  }, [documents]);
+
+  // Toggle folder expansion
+  const handleToggleExpand = useCallback((folderId: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Folder CRUD operations
+  const handleCreateFolder = useCallback(async (parentId: string | null) => {
+    setParentFolderForNew(parentId);
+    setCreateFolderDialogOpen(true);
+  }, []);
+
+  const handleCreateFolderSubmit = useCallback(async (input: CreateFolderInput) => {
+    const result = await appOperations.createFolder(input);
+    if (result) {
+      // Refresh folders
+      if (user?.id) {
+        await loadDataIfNeeded('folders');
+      }
+    }
+  }, [appOperations, user, loadDataIfNeeded]);
+
+  const handleRenameFolder = useCallback((folder: DocumentFolder) => {
+    setFolderToRename(folder);
+    setRenameFolderDialogOpen(true);
+  }, []);
+
+  const handleRenameFolderSubmit = useCallback(async (folderId: string, input: UpdateFolderInput) => {
+    const success = await appOperations.updateFolder(folderId, input);
+    if (success && user?.id) {
+      await loadDataIfNeeded('folders');
+    }
+  }, [appOperations, user, loadDataIfNeeded]);
+
+  const handleDeleteFolder = useCallback(async (folderId: string) => {
+    if (!window.confirm('Are you sure you want to delete this folder? Documents will not be deleted.')) {
+      return;
+    }
+
+    const success = await appOperations.deleteFolder(folderId);
+    if (success) {
+      if (selectedFolderId === folderId) {
+        setSelectedFolderId(null);
+      }
+      if (user?.id) {
+        await loadDataIfNeeded('folders');
+      }
+    }
+  }, [appOperations, selectedFolderId, user, loadDataIfNeeded]);
+  const handleMoveFolder = useCallback((folderId: string) => {
+    toast.info('Move folder feature coming soon!');
+  }, []);
+  // Filter documents by selected folder
+  const filteredDocumentsByFolder = useMemo(() => {
+    if (!selectedFolderId) {
+      return filteredAndSortedDocuments;
+    }
+    // Get all documents in this folder and subfolders
+    const getFolderAndSubfolderIds = (folderId: string): string[] => {
+      const ids = [folderId];
+      const folder = folders.find(f => f.id === folderId);
+      if (folder) {
+        const children = folders.filter(f => f.parent_folder_id === folderId);
+        children.forEach(child => {
+          ids.push(...getFolderAndSubfolderIds(child.id));
+        });
+      }
+      return ids;
+    };
+    const relevantFolderIds = getFolderAndSubfolderIds(selectedFolderId);
+    return filteredAndSortedDocuments.filter(doc =>
+      doc.folder_ids?.some(id => relevantFolderIds.includes(id))
+    );
+  }, [selectedFolderId, filteredAndSortedDocuments, folders]);
+
   return (
     <div className="min-h-screen p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
@@ -577,7 +696,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             <Zap className="h-4 w-4" />
             AI-Powered Document Processing
           </div>
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent mb-4">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-300 bg-clip-text text-transparent mb-4">
             Smart Document Upload
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
@@ -601,507 +720,615 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           </div>
         </div>
 
-        {/* Enhanced Upload Area */}
-        <Card className="overflow-hidden border-0 shadow-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
-          <CardContent className="p-0">
-            <div
-              className={`relative border-2 border-dashed rounded-lg transition-all duration-500 ${dragActive
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 scale-[1.02] shadow-lg'
-                : selectedFile
-                  ? 'border-green-400 bg-green-50 dark:bg-green-500/10 shadow-lg'
-                  : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                } cursor-pointer p-8 md:p-12 ${isUploading ? 'pointer-events-none opacity-75' : ''}`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              onClick={() => !isUploading && fileInputRef.current?.click()}
-            >
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.ico,.heic,.heif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.ods,.odp,.csv,.md,.html,.xml,.json,.js,.ts,.css,.py,.java,.c,.cpp,.cs,.php,.rb,.go,.rs,.sql,.zip,.rar,.7z,.tar,.gz,.mp3,.wav,.ogg,.m4a,.webm,.flac,.mp4,.avi,.mov,.wmv,.webm,.mkv"
-                disabled={isUploading}
-              />
+        {/* Main Content Area */}
+        <div className="grid grid-cols-12 gap-6">
+          {/* Left Sidebar - Folder Tree */}
+          <div className="col-span-12 lg:col-span-3">
+            <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm sticky top-6">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-semibold">Folders</CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleCreateFolder(null)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <FolderTree
+                  folderTree={folderTree}
+                  selectedFolderId={selectedFolderId}
+                  onFolderSelect={setSelectedFolderId}
+                  onCreateFolder={handleCreateFolder}
+                  onRenameFolder={handleRenameFolder}
+                  onDeleteFolder={handleDeleteFolder}
+                  onMoveFolder={handleMoveFolder}
+                  expandedFolders={expandedFolders}
+                  onToggleExpand={handleToggleExpand}
+                  documentCounts={documentCounts}
+                />
+              </CardContent>
+            </Card>
+          </div>
 
-              <div className="text-center">
-                <div className={`inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full ${selectedFile
-                  ? 'bg-green-100 dark:bg-green-500/20 animate-pulse'
-                  : 'bg-blue-100 dark:bg-blue-500/20'
-                  } mb-4 transition-all duration-300 ${isUploading ? 'animate-bounce' : ''}`}>
-                  {isUploading ? (
-                    <Loader2 className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400 animate-spin" />
-                  ) : selectedFile ? (
-                    React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
-                      className: "h-8 w-8 md:h-10 md:w-10 text-green-600 dark:text-green-400"
-                    })
-                  ) : (
-                    <UploadCloud className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400" />
-                  )}
+          {/* Main Content - Documents */}
+          <div className="col-span-12 lg:col-span-9">
+            {/* Enhanced Upload Area - Keep your existing upload card here */}
+            <Card className="overflow-hidden border-0 shadow-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
+              <CardContent className="p-0">
+                <div
+                  className={`relative border-2 border-dashed rounded-lg transition-all duration-500 ${dragActive
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 scale-[1.02] shadow-lg'
+                    : selectedFile
+                      ? 'border-green-400 bg-green-50 dark:bg-green-500/10 shadow-lg'
+                      : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                    } cursor-pointer p-8 md:p-12 ${isUploading ? 'pointer-events-none opacity-75' : ''}`}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => !isUploading && fileInputRef.current?.click()}
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                    accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.ico,.heic,.heif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.ods,.odp,.csv,.md,.html,.xml,.json,.js,.ts,.css,.py,.java,.c,.cpp,.cs,.php,.rb,.go,.rs,.sql,.zip,.rar,.7z,.tar,.gz,.mp3,.wav,.ogg,.m4a,.webm,.flac,.mp4,.avi,.mov,.wmv,.webm,.mkv"
+                    disabled={isUploading}
+                  />
+
+                  <div className="text-center">
+                    <div className={`inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full ${selectedFile
+                      ? 'bg-green-100 dark:bg-green-500/20 animate-pulse'
+                      : 'bg-blue-100 dark:bg-blue-500/20'
+                      } mb-4 transition-all duration-300 ${isUploading ? 'animate-bounce' : ''}`}>
+                      {isUploading ? (
+                        <Loader2 className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400 animate-spin" />
+                      ) : selectedFile ? (
+                        React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
+                          className: "h-8 w-8 md:h-10 md:w-10 text-green-600 dark:text-green-400"
+                        })
+                      ) : (
+                        <UploadCloud className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400" />
+                      )}
+                    </div>
+
+                    {isUploading ? (
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200 mb-2">
+                            Processing your file...
+                          </h3>
+                          <p className="text-slate-600 dark:text-slate-400">
+                            AI is analyzing and extracting content from "{selectedFile?.name}"
+                          </p>
+                        </div>
+                        <div className="w-full max-w-md mx-auto bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                          <div
+                            className="bg-gradient-to-r from-blue-500 to-blue-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{Math.round(uploadProgress)}% complete</p>
+                      </div>
+                    ) : selectedFile ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-center gap-3 text-green-700 dark:text-green-300">
+                          {React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
+                            className: "h-6 w-6"
+                          })}
+                          <span className="text-lg font-semibold">{selectedFile.name}</span>
+                        </div>
+                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(selectedFile.type))}`}>
+                          {getFileCategory(selectedFile.type).toUpperCase()}
+                        </div>
+                        <div className="flex items-center justify-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+                          <span className="flex items-center gap-1">
+                            <HardDrive className="h-4 w-4" />
+                            {formatFileSize(selectedFile.size)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <FileText className="h-4 w-4" />
+                            {selectedFile.type.split('/')[1]?.toUpperCase()}
+                          </span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedFile(null);
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                          }}
+                          disabled={isUploading}
+                          className="mt-4 text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:border-red-300"
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Remove File
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200">
+                          Drop your files here, or <span className="text-blue-600 dark:text-blue-400 underline">browse</span>
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                          Supports documents, images, videos, audio files, and code up to 200MB
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
+                          {[
+                            { category: 'document', label: 'Documents', icon: FileText },
+                            { category: 'image', label: 'Images', icon: Image },
+                            { category: 'video', label: 'Videos', icon: FileVideo },
+                            { category: 'code', label: 'Code', icon: Code }
+                          ].map(({ category, label, icon: Icon }) => (
+                            <div key={category} className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-700/50">
+                              <Icon className="h-6 w-6 text-slate-600 dark:text-slate-400" />
+                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {isUploading ? (
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200 mb-2">
-                        Processing your file...
-                      </h3>
-                      <p className="text-slate-600 dark:text-slate-400">
-                        AI is analyzing and extracting content from "{selectedFile?.name}"
-                      </p>
-                    </div>
-                    <div className="w-full max-w-md mx-auto bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                      <div
-                        className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">{Math.round(uploadProgress)}% complete</p>
+                {selectedFile && !isUploading && (
+                  <div className="p-6 bg-slate-50 dark:bg-slate-700/50 border-t">
+                    <Button
+                      onClick={handleUpload}
+                      disabled={!selectedFile || isUploading || !user?.id}
+                      className="w-full py-3 text-base font-semibold bg-gradient-to-r from-blue-600 via-blue-400 to-blue-200 hover:from-blue-700 hover:via-green-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <UploadCloud className="h-5 w-5 mr-2" />
+                      Upload & Analyze with AI
+                    </Button>
                   </div>
-                ) : selectedFile ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-center gap-3 text-green-700 dark:text-green-300">
-                      {React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
-                        className: "h-6 w-6"
-                      })}
-                      <span className="text-lg font-semibold">{selectedFile.name}</span>
-                    </div>
-                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(selectedFile.type))}`}>
-                      {getFileCategory(selectedFile.type).toUpperCase()}
-                    </div>
-                    <div className="flex items-center justify-center gap-4 text-sm text-slate-600 dark:text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <HardDrive className="h-4 w-4" />
-                        {formatFileSize(selectedFile.size)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <FileText className="h-4 w-4" />
-                        {selectedFile.type.split('/')[1]?.toUpperCase()}
-                      </span>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Add Folder Selection for Upload */}
+            {selectedFile && !isUploading && (
+              <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Folder className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          Save to folder (optional)
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {uploadTargetFolderId
+                            ? folders.find(f => f.id === uploadTargetFolderId)?.name || 'Root'
+                            : 'Root / No folder'}
+                        </p>
+                      </div>
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                      }}
-                      disabled={isUploading}
-                      className="mt-4 text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:border-red-300"
+                      onClick={() => setUploadFolderSelectorOpen(true)}
                     >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Remove File
+                      Choose Folder
                     </Button>
                   </div>
-                ) : (
-                  <div className="space-y-6">
-                    <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200">
-                      Drop your files here, or <span className="text-blue-600 dark:text-blue-400 underline">browse</span>
-                    </h3>
-                    <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-                      Supports documents, images, videos, audio files, and code up to 200MB
-                    </p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
-                      {[
-                        { category: 'document', label: 'Documents', icon: FileText },
-                        { category: 'image', label: 'Images', icon: Image },
-                        { category: 'video', label: 'Videos', icon: FileVideo },
-                        { category: 'code', label: 'Code', icon: Code }
-                      ].map(({ category, label, icon: Icon }) => (
-                        <div key={category} className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-700/50">
-                          <Icon className="h-6 w-6 text-slate-600 dark:text-slate-400" />
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
-                        </div>
-                      ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Enhanced Controls and Filters - Keep your existing controls */}
+            <div className="mb-8">
+              <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm">
+                <CardContent className="p-6">
+                  <div className="flex flex-col lg:flex-row gap-4">
+                    {/* Search */}
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        type="text"
+                        placeholder="Search files by name or content..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 bg-white dark:bg-slate-700"
+                      />
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm"
+                      >
+                        <option value="all">All Types</option>
+                        <option value="image">Images ({documentStats.image})</option>
+                        <option value="document">Documents ({documentStats.document})</option>
+                        <option value="video">Videos ({documentStats.video})</option>
+                        <option value="audio">Audio ({documentStats.audio})</option>
+                        <option value="code">Code ({documentStats.code})</option>
+                        <option value="archive">Archives ({documentStats.archive})</option>
+                      </select>
+
+                      <select
+                        value={selectedStatus}
+                        onChange={(e) => setSelectedStatus(e.target.value)}
+                        className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm"
+                      >
+                        <option value="all">All Status</option>
+                        <option value="completed">Completed ({documentStats.completed})</option>
+                        <option value="pending">Pending ({documentStats.pending})</option>
+                        <option value="failed">Failed ({documentStats.failed})</option>
+                      </select>
+
+                      <select
+                        value={`${sortBy}-${sortOrder}`}
+                        onChange={(e) => {
+                          const [newSortBy, newSortOrder] = e.target.value.split('-');
+                          setSortBy(newSortBy);
+                          setSortOrder(newSortOrder);
+                        }}
+                        className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm"
+                      >
+                        <option value="date-desc">Latest First</option>
+                        <option value="date-asc">Oldest First</option>
+                        <option value="name-asc">Name A-Z</option>
+                        <option value="name-desc">Name Z-A</option>
+                        <option value="size-desc">Largest First</option>
+                        <option value="size-asc">Smallest First</option>
+                      </select>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                        className="px-3"
+                      >
+                        {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
+                      </Button>
                     </div>
                   </div>
-                )}
-              </div>
+                </CardContent>
+              </Card>
             </div>
 
-            {selectedFile && !isUploading && (
-              <div className="p-6 bg-slate-50 dark:bg-slate-700/50 border-t">
-                <Button
-                  onClick={handleUpload}
-                  disabled={!selectedFile || isUploading || !user?.id}
-                  className="w-full py-3 text-base font-semibold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <UploadCloud className="h-5 w-5 mr-2" />
-                  Upload & Analyze with AI
-                </Button>
+            {/* Documents Display - Update to use filteredDocumentsByFolder */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-200">
+                  {selectedFolderId
+                    ? `${folders.find(f => f.id === selectedFolderId)?.name || 'Folder'} (${filteredDocumentsByFolder.length})`
+                    : `Your Files (${filteredDocumentsByFolder.length})`}
+                </h2>
               </div>
-            )}
-          </CardContent>
-        </Card>
 
-        {/* Enhanced Controls and Filters */}
-        <div className="mb-8">
-          <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm">
-            <CardContent className="p-6">
-              <div className="flex flex-col lg:flex-row gap-4">
-                {/* Search */}
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search files by name or content..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-white dark:bg-slate-700"
-                  />
-                </div>
-
-                {/* Filters */}
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="image">Images ({documentStats.image})</option>
-                    <option value="document">Documents ({documentStats.document})</option>
-                    <option value="video">Videos ({documentStats.video})</option>
-                    <option value="audio">Audio ({documentStats.audio})</option>
-                    <option value="code">Code ({documentStats.code})</option>
-                    <option value="archive">Archives ({documentStats.archive})</option>
-                  </select>
-
-                  <select
-                    value={selectedStatus}
-                    onChange={(e) => setSelectedStatus(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="completed">Completed ({documentStats.completed})</option>
-                    <option value="pending">Pending ({documentStats.pending})</option>
-                    <option value="failed">Failed ({documentStats.failed})</option>
-                  </select>
-
-                  <select
-                    value={`${sortBy}-${sortOrder}`}
-                    onChange={(e) => {
-                      const [newSortBy, newSortOrder] = e.target.value.split('-');
-                      setSortBy(newSortBy);
-                      setSortOrder(newSortOrder);
-                    }}
-                    className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm"
-                  >
-                    <option value="date-desc">Latest First</option>
-                    <option value="date-asc">Oldest First</option>
-                    <option value="name-asc">Name A-Z</option>
-                    <option value="name-desc">Name Z-A</option>
-                    <option value="size-desc">Largest First</option>
-                    <option value="size-asc">Smallest First</option>
-                  </select>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                    className="px-3"
-                  >
-                    {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Documents Display */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-200">
-              Your Files ({filteredAndSortedDocuments.length})
-            </h2>
-          </div>
-
-          {filteredAndSortedDocuments.length === 0 ? (
-            <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
-              <CardContent className="p-12 text-center">
-                <div className="w-24 h-24 mx-auto mb-6 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                  {searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all' ? (
-                    <Search className="h-12 w-12 text-slate-400 dark:text-slate-500" />
-                  ) : (
-                    <FileText className="h-12 w-12 text-slate-400 dark:text-slate-500" />
-                  )}
-                </div>
-                <h3 className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">
-                  {searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all'
-                    ? 'No files match your filters'
-                    : 'No files uploaded yet'
-                  }
-                </h3>
-                <p className="text-slate-500 dark:text-slate-500 mb-4">
-                  {searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all'
-                    ? 'Try adjusting your search terms or filters'
-                    : 'Upload your first document or image to get started with AI analysis'
-                  }
-                </p>
-                {searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all' ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setSelectedCategory('all');
-                      setSelectedStatus('all');
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                ) : null}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className={viewMode === 'grid'
-              ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
-              : "space-y-4"
-            }>
-              {filteredAndSortedDocuments.map((doc, index) => {
-                const isLastDocument = index === filteredAndSortedDocuments.length - 1;
-                return (
-                  <Card
-                    key={doc.id}
-                    ref={isLastDocument ? lastDocumentElementRef : null}
-                    className={`group border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
-                      }`}
-                  >
-                    <CardContent className="p-0">
-                      {viewMode === 'grid' ? (
-                        <>
-                          {/* Grid View */}
-                          <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800">
-                            {doc.type === 'image' && doc.file_url ? (
-                              <img
-                                src={doc.file_url}
-                                alt={doc.title}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error';
-                                  e.currentTarget.alt = 'Image failed to load';
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                {React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
-                                  className: "h-16 w-16 text-slate-400 dark:text-slate-500"
-                                })}
-                              </div>
-                            )}
-
-                            {/* Status Badge */}
-                            <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
-                              {getStatusIcon(doc.processing_status as string)}
-                              <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
-                            </div>
-
-                            {/* Category Badge */}
-                            <div className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
-                              {getFileCategory(doc.file_type).toUpperCase()}
-                            </div>
-
-                            {/* Processing Overlay */}
-                            {isDocumentProcessing(doc.id) && (
-                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
-                                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                                    Processing...
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="p-6 space-y-4">
-                            <div>
-                              <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2 line-clamp-2">
-                                {doc.title}
-                              </h3>
-                              <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
-                                <span className="flex items-center gap-1">
-                                  <Calendar className="h-4 w-4" />
-                                  {formatDate(doc.created_at)}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <HardDrive className="h-4 w-4" />
-                                  {formatFileSize(doc.file_size)}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 min-h-[80px]">
-                              <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
-                                {doc.content_extracted || 'No content extracted yet...'}
-                              </p>
-                            </div>
-
-                            {doc.processing_status === 'failed' && doc.processing_error && (
-                              <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-3">
-                                <p className="text-sm text-red-600 dark:text-red-400">
-                                  <span className="font-medium">Error:</span> {(doc.processing_error as string)}
-                                </p>
-                              </div>
-                            )}
-
-                            <div className="flex gap-2 pt-2">
-                              {doc.processing_status === 'failed' && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => triggerAnalysis(doc)}
-                                  disabled={isUploading || isDocumentProcessing(doc.id)}
-                                  className="flex-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10 border-blue-200 dark:border-blue-500/20"
-                                >
-                                  {isDocumentProcessing(doc.id) ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                      Processing...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <RefreshCw className="h-4 w-4 mr-2" />
-                                      Retry
-                                    </>
-                                  )}
-                                </Button>
-                              )}
-
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openPreview(doc)}
-                                className="flex-1 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Preview
-                              </Button>
-
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
-                                disabled={isUploading || isDocumentProcessing(doc.id)}
-                                className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Delete
-                              </Button>
-                            </div>
-                          </div>
-                        </>
+              {filteredDocumentsByFolder.length === 0 ? (
+                <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
+                  <CardContent className="p-12 text-center">
+                    <div className="w-24 h-24 mx-auto mb-6 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
+                      {selectedFolderId ? (
+                        <Folder className="h-12 w-12 text-slate-400 dark:text-slate-500" />
+                      ) : searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all' ? (
+                        <Search className="h-12 w-12 text-slate-400 dark:text-slate-500" />
                       ) : (
-                        <>
-                          {/* List View */}
-                          <div className="flex items-center p-6 gap-4">
-                            <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center relative">
-                              {doc.type === 'image' && doc.file_url ? (
-                                <img
-                                  src={doc.file_url}
-                                  alt={doc.title}
-                                  className="w-full h-full object-cover rounded-lg"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                  }}
-                                />
-                              ) : (
-                                React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
-                                  className: "h-8 w-8 text-slate-400 dark:text-slate-500"
-                                })
-                              )}
-                            </div>
+                        <FileText className="h-12 w-12 text-slate-400 dark:text-slate-500" />
+                      )}
+                    </div>
+                    <h3 className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">
+                      {selectedFolderId
+                        ? 'No files in this folder'
+                        : searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all'
+                          ? 'No files match your filters'
+                          : 'No files uploaded yet'}
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-500 mb-4">
+                      {selectedFolderId
+                        ? 'Upload files or move existing files to this folder'
+                        : searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all'
+                          ? 'Try adjusting your search terms or filters'
+                          : 'Upload your first document or image to get started with AI analysis'}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className={viewMode === 'grid'
+                  ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+                  : "space-y-4"
+                }>
+                  {filteredDocumentsByFolder.map((doc, index) => {
+                    const isLastDocument = index === filteredDocumentsByFolder.length - 1;
+                    return (
+                      <Card
+                        key={doc.id}
+                        ref={isLastDocument ? lastDocumentElementRef : null}
+                        className={`group border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
+                          }`}
+                      >
+                        {/* Your existing document card content */}
+                        {/* Add folder badges to show which folders the document is in */}
+                        <CardContent className="p-0">
+                          {viewMode === 'grid' ? (
+                            <>
+                              {/* Grid View */}
+                              <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800">
+                                {getFileCategory(doc.file_type) === 'image' && doc.file_url ? (
+                                  <img
+                                    src={doc.file_url}
+                                    alt={doc.title}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error';
+                                      e.currentTarget.alt = 'Image failed to load';
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    {React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
+                                      className: "h-16 w-16 text-slate-400 dark:text-slate-500"
+                                    })}
+                                  </div>
+                                )}
 
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                {/* Status Badge */}
+                                <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
+                                  {getStatusIcon(doc.processing_status as string)}
+                                  <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                                </div>
+
+                                {/* Category Badge */}
+                                <div className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
+                                  {getFileCategory(doc.file_type).toUpperCase()}
+                                </div>
+
+                                {/* Processing Overlay */}
+                                {isDocumentProcessing(doc.id) && (
+                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                    <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
+                                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                                        Processing...
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="p-6 space-y-4">
+                                <div>
+                                  <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2 line-clamp-2">
                                     {doc.title}
                                   </h3>
-                                  <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
-                                      {getFileCategory(doc.file_type).toUpperCase()}
-                                    </div>
+                                  <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
                                     <span className="flex items-center gap-1">
-                                      <Calendar className="h-3 w-3" />
+                                      <Calendar className="h-4 w-4" />
                                       {formatDate(doc.created_at)}
                                     </span>
                                     <span className="flex items-center gap-1">
-                                      <HardDrive className="h-3 w-3" />
+                                      <HardDrive className="h-4 w-4" />
                                       {formatFileSize(doc.file_size)}
                                     </span>
                                   </div>
-                                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
+                                </div>
+
+                                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 min-h-[80px]">
+                                  <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
                                     {doc.content_extracted || 'No content extracted yet...'}
                                   </p>
                                 </div>
 
-                                <div className="flex items-center gap-2 ml-4">
-                                  <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
-                                    {getStatusIcon(doc.processing_status as string)}
-                                    <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                                {doc.processing_status === 'failed' && doc.processing_error && (
+                                  <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-3">
+                                    <p className="text-sm text-red-600 dark:text-red-400">
+                                      <span className="font-medium">Error:</span> {(doc.processing_error as string)}
+                                    </p>
                                   </div>
+                                )}
 
-                                  <div className="flex gap-1">
-                                    {doc.processing_status === 'failed' && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => triggerAnalysis(doc)}
-                                        disabled={isUploading || isDocumentProcessing(doc.id)}
-                                        className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
-                                      >
-                                        <RefreshCw className="h-4 w-4" />
-                                      </Button>
-                                    )}
-
+                                <div className="flex gap-2 pt-2">
+                                  {doc.processing_status === 'failed' && (
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => openPreview(doc)}
-                                      className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                      onClick={() => triggerAnalysis(doc)}
                                       disabled={isUploading || isDocumentProcessing(doc.id)}
-                                      className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                                      className="flex-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10 border-blue-200 dark:border-blue-500/20"
                                     >
-                                      <Trash2 className="h-4 w-4" />
+                                      {isDocumentProcessing(doc.id) ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                          Processing...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <RefreshCw className="h-4 w-4 mr-2" />
+                                          Retry
+                                        </>
+                                      )}
                                     </Button>
+                                  )}
+
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openPreview(doc)}
+                                    className="flex-1 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
+                                  >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    Preview
+                                  </Button>
+
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                    disabled={isUploading}
+                                    className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Delete
+                                  </Button>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              {/* List View */}
+                              <div className="flex items-center p-6 gap-4">
+                                <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center relative">
+                                  {getFileCategory(doc.file_type) === 'image' && doc.file_url ? (
+                                    <img
+                                      src={doc.file_url}
+                                      alt={doc.title}
+                                      className="w-full h-full object-cover rounded-lg"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                      }}
+                                    />
+                                  ) : (
+                                    React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
+                                      className: "h-8 w-8 text-slate-400 dark:text-slate-500"
+                                    })
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                        {doc.title}
+                                      </h3>
+                                      <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
+                                          {getFileCategory(doc.file_type).toUpperCase()}
+                                        </div>
+                                        <span className="flex items-center gap-1">
+                                          <Calendar className="h-3 w-3" />
+                                          {formatDate(doc.created_at)}
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                          <HardDrive className="h-3 w-3" />
+                                          {formatFileSize(doc.file_size)}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
+                                        {doc.content_extracted || 'No content extracted yet...'}
+                                      </p>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 ml-4">
+                                      <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
+                                        {getStatusIcon(doc.processing_status as string)}
+                                        <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                                      </div>
+
+                                      <div className="flex gap-1">
+                                        {doc.processing_status === 'failed' && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => triggerAnalysis(doc)}
+                                            disabled={isUploading || isDocumentProcessing(doc.id)}
+                                            className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
+                                          >
+                                            <RefreshCw className="h-4 w-4" />
+                                          </Button>
+                                        )}
+
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => openPreview(doc)}
+                                          className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
+                                        >
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                          disabled={isUploading || isDocumentProcessing(doc.id)}
+                                          className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
+                            </>
+                          )}
+
+                          {/* Add this in the document info section */}
+                          {doc.folder_ids && doc.folder_ids.length > 0 && (
+                            <div className="px-6 pb-4">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs text-slate-500 dark:text-slate-400">In:</span>
+                                {doc.folder_ids.map(folderId => {
+                                  const folder = folders.find(f => f.id === folderId);
+                                  return folder ? (
+                                    <div
+                                      key={folderId}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-slate-100 dark:bg-slate-700 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600"
+                                      onClick={() => setSelectedFolderId(folderId)}
+                                    >
+                                      <Folder className="h-3 w-3" style={{ color: folder.color }} />
+                                      {folder.name}
+                                    </div>
+                                  ) : null;
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        </>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-          {dataPagination.documents.isLoading && (
-            <div className="flex justify-center items-center py-4">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-600 dark:text-blue-400 mr-3" />
-              <p className="text-slate-600 dark:text-slate-400">Loading more documents...</p>
-            </div>
-          )}
-          {dataPagination.documents.hasMore ? null : (
-            <div className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400">
-              No more documents to load.
-            </div>
-          )}
+          </div>
         </div>
 
+        {/* Dialogs */}
+        <CreateFolderDialog
+          open={createFolderDialogOpen}
+          onOpenChange={setCreateFolderDialogOpen}
+          onCreateFolder={handleCreateFolderSubmit}
+          parentFolderId={parentFolderForNew}
+          parentFolderName={
+            parentFolderForNew
+              ? folders.find(f => f.id === parentFolderForNew)?.name
+              : undefined
+          }
+        />
+
+        <RenameFolderDialog
+          open={renameFolderDialogOpen}
+          onOpenChange={setRenameFolderDialogOpen}
+          folder={folderToRename}
+          onRenameFolder={handleRenameFolderSubmit}
+        />
+
+        <FolderSelector
+          open={uploadFolderSelectorOpen}
+          onOpenChange={setUploadFolderSelectorOpen}
+          folderTree={folderTree}
+          selectedFolderId={uploadTargetFolderId}
+          onSelect={setUploadTargetFolderId}
+          title="Select Folder for Upload"
+          description="Choose where to save this document"
+          allowRoot={true}
+        />
+
+        {/* Your existing preview dialog */}
         {/* Enhanced Preview Dialog */}
         {previewOpen && selectedDocument && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1150,7 +1377,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                     File Preview
                   </h3>
                   <div className="aspect-video bg-white dark:bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden">
-                    {selectedDocument.type === 'image' && selectedDocument.file_url ? (
+                    {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
                       <img
                         src={selectedDocument.file_url}
                         alt={selectedDocument.title}
@@ -1289,13 +1516,17 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             </div>
           </div>
         )}
-        {dataPagination.documents.hasMore && (
+        {dataPagination.documents.isLoading && (
           <div className="flex justify-center items-center py-4">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600 dark:text-blue-400 mr-3" />
             <p className="text-slate-600 dark:text-slate-400">Loading more documents...</p>
           </div>
         )}
-        
+        {dataPagination.documents.hasMore ? null : (
+          <div className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400">
+            No more documents to load.
+          </div>
+        )}
       </div>
     </div>
   );

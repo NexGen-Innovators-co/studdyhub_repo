@@ -69,3 +69,18 @@ export const validateHashtag = (hashtag: string): boolean => {
   const hashtagRegex = /^[a-zA-Z0-9_]+$/;
   return hashtag.length > 0 && hashtag.length <= 50 && hashtagRegex.test(hashtag);
 };
+
+export const getCategoryEmoji = (category: string): string => {
+  const emojiMap: { [key: string]: string } = {
+    general: '🌐',
+    technology: '💻',
+    gaming: '🎮',
+    music: '🎵',
+    art: '🎨',
+    sports: '⚽',
+    education: '📚',
+    food: '🍽️',
+    travel: '✈️'
+  };
+  return emojiMap[category.toLowerCase()] || '🌐';
+};

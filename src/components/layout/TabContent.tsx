@@ -25,6 +25,7 @@ interface ChatSession {
 }
 
 interface TabContentProps {
+  socialGroupId?: string; // Added
   activeTab: 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social';
   activeSocialTab?: string;
   socialPostId?: string;
@@ -72,7 +73,7 @@ interface TabContentProps {
     }>
   ) => Promise<void>;
 
-  onDocumentUploaded: (document: Document) => Promise<void>;
+  // onDocumentUploaded: (document: Document) => Promise<void>;
   onDocumentDeleted: (documentId: string) => Promise<void>;
   onDocumentUpdated: (document: Document) => void;
   onProfileUpdate: (profile: UserProfile) => Promise<void>;
@@ -268,10 +269,10 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
   const documentsProps = useMemo(() => ({
     documents: props.documents,
-    onDocumentUploaded: props.onDocumentUploaded,
+    // onDocumentUploaded: props.onDocumentUploaded,
     onDocumentDeleted: props.onDocumentDeleted,
     onDocumentUpdated: props.onDocumentUpdated,
-  }), [props.documents, props.onDocumentUploaded, props.onDocumentDeleted, props.onDocumentUpdated]);
+  }), [props.documents, props.onDocumentDeleted, props.onDocumentUpdated]);
 
   const notesHistoryProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -398,7 +399,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       return (
         <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>
-            <SocialFeed userProfile={props.userProfile} activeTab={activeSocialTab} postId={socialPostId} />
+          <SocialFeed userProfile={props.userProfile} activeTab={props.activeSocialTab} postId={props.socialPostId} />
           </ErrorBoundary>
         </div>
       );
