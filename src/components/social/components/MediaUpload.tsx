@@ -87,7 +87,7 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          className="text-purple-600 hover:bg-purple-50"
+          className="text-blue-600 hover:bg-blue-50"
           onClick={() => fileInputRef.current?.click()}
         >
           <FileText className="h-4 w-4 mr-1" />

@@ -312,9 +312,9 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-gray-800 dark:to-gray-800">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-blue-50 dark:from-gray-800 dark:to-gray-800">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-r from-blue-600 to-blue-600 text-white text-sm">
             {actionConfig.icon}
           </div>
           <div>
@@ -352,7 +352,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
               variant="ghost"
               onClick={handleRegenerate}
               disabled={isLoading}
-              className="h-8 w-8 p-0 hover:bg-purple-100 dark:hover:bg-gray-700"
+              className="h-8 w-8 p-0 hover:bg-blue-100 dark:hover:bg-gray-700"
               title="Regenerate (Ctrl+R)"
             >
               <RotateCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -402,7 +402,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
                 <button
                   key={suggestion.id}
                   onClick={() => handleSmartSuggestion(suggestion)}
-                  className="p-2 text-left border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-purple-50 dark:hover:bg-gray-800 transition-colors"
+                  className="p-2 text-left border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm">{suggestion.icon}</span>
@@ -458,7 +458,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
                 value={customInstruction}
                 onChange={(e) => setCustomInstruction(e.target.value)}
                 placeholder={actionConfig.placeholder}
-                className="text-sm resize-none border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="text-sm resize-none border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 rows={3}
                 onKeyDown={handleKeydown}
                 maxLength={1000}
@@ -506,7 +506,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
             size="sm"
             onClick={handleGenerate}
             disabled={isLoading}
-            className="h-8 text-xs bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-8 text-xs bg-gradient-to-r from-blue-600 to-blue-600 hover:from-blue-700 hover:to-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <>

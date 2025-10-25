@@ -3,12 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { SocialUserWithDetails, SocialPostWithDetails } from '../../../integrations/supabase/socialTypes';
+import { SocialUserWithDetails, SocialPostWithDetails, SocialGroupWithDetails } from '../../../integrations/supabase/socialTypes';
 import { EditProfileModal } from './EditProfileModal';
 import { SocialCommentWithDetails } from '../../../integrations/supabase/socialTypes';
 import { PostCard } from './PostCard';
-import { RefreshCw, User, Calendar, MapPin, Link as LinkIcon, Heart, MessageCircle, Bookmark, Eye } from 'lucide-react';
+import { RefreshCw, User, Calendar, Heart, MessageCircle, Bookmark, Eye, Users, Globe, Lock } from 'lucide-react';
 import { formatEngagementCount, getTimeAgo } from '../utils/postUtils';
+import { useNavigate } from 'react-router-dom';
 
 export interface UserProfileProps {
   user: SocialUserWithDetails | null;
@@ -39,6 +40,9 @@ export interface UserProfileProps {
   hasMorePosts?: boolean;
   onLoadMorePosts?: () => void;
   isLoadingMorePosts?: boolean;
+  userGroups?: SocialGroupWithDetails[];
+  onDeletePost?: (postId: string) => Promise<boolean>;
+  onEditPost?: (postId: string, content: string) => Promise<boolean>;
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({
@@ -64,10 +68,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   hasMorePosts = false,
   onLoadMorePosts,
   isLoadingMorePosts = false,
+  userGroups = [],
+  onDeletePost,
+  onEditPost,
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'bookmarks'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'bookmarks' | 'groups'>('posts');
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   // Setup intersection observer for infinite scroll
   useEffect(() => {
@@ -108,6 +116,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const totalComments = posts.reduce((sum, post) => sum + post.comments_count, 0);
   const totalViews = posts.reduce((sum, post) => sum + post.views_count, 0);
 
+  const getCategoryEmoji = (category: string) => {
+    const emojiMap: Record<string, string> = {
+      study: '📚',
+      project: '💻',
+      discussion: '💬',
+      'exam-prep': '📝',
+      research: '🔬',
+      other: '🎯'
+    };
+    return emojiMap[category] || '🎯';
+  };
+
   return (
     <div className="space-y-6">
       {/* Profile Header */}
@@ -138,7 +158,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     </div>
                   )}
                   {user.is_contributor && (
-                    <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                       Contributor
                     </Badge>
                   )}
@@ -163,25 +183,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
           {/* Profile Metadata */}
           <div className="flex flex-wrap gap-4 text-sm text-slate-500 dark:text-gray-400 mb-4">
-            {/* {user.location && (
-              <div className="flex items-center gap-1">
-                <MapPin className="h-4 w-4" />
-                <span>{user.location}</span>
-              </div>
-            )}
-            {user.website && (
-              <div className="flex items-center gap-1">
-                <LinkIcon className="h-4 w-4" />
-                <a 
-                  href={user.website} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-500 hover:underline"
-                >
-                  {user.website}
-                </a>
-              </div>
-            )} */}
             <div className="flex items-center gap-1">
               <Calendar className="h-4 w-4" />
               <span>Joined {getTimeAgo(user.created_at)}</span>
@@ -207,7 +208,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           )}
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="text-center">
               <p className="text-2xl font-bold text-slate-800 dark:text-gray-200">
                 {formatEngagementCount(posts.length)}
@@ -230,7 +231,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               <p className="text-2xl font-bold text-slate-800 dark:text-gray-200">
                 {formatEngagementCount(totalLikes)}
               </p>
-              <p className="text-sm font-medium text-slate-600 dark:text-gray-300">Likes Received</p>
+              <p className="text-sm font-medium text-slate-600 dark:text-gray-300">Likes</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-slate-800 dark:text-gray-200">
+                {formatEngagementCount(userGroups.length)}
+              </p>
+              <p className="text-sm font-medium text-slate-600 dark:text-gray-300">Groups</p>
             </div>
           </div>
 
@@ -248,14 +255,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         </CardContent>
       </Card>
 
-      {/* Posts Section */}
+      {/* Content Section with Tabs */}
       <Card className="bg-white dark:bg-gray-800 shadow-md">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <CardTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">
-                {isOwnProfile ? 'My Posts' : `${user.display_name}'s Posts`}
-              </CardTitle>
+            <div className="flex items-center space-x-4 overflow-x-auto">
               <div className="flex border rounded-lg bg-slate-100 dark:bg-gray-700">
                 <Button
                   variant={activeTab === 'posts' ? 'default' : 'ghost'}
@@ -287,17 +291,28 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     </Button>
                   </>
                 )}
+                <Button
+                  variant={activeTab === 'groups' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveTab('groups')}
+                  className="text-xs"
+                >
+                  <Users className="h-3 w-3 mr-1" />
+                  Groups ({userGroups.length})
+                </Button>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refetchPosts}
-              disabled={isLoadingPosts}
-              className="bg-white dark:bg-gray-800 hover:bg-slate-50 dark:hover:bg-gray-700"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoadingPosts ? 'animate-spin' : ''}`} />
-            </Button>
+            {activeTab === 'posts' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refetchPosts}
+                disabled={isLoadingPosts}
+                className="bg-white dark:bg-gray-800 hover:bg-slate-50 dark:hover:bg-gray-700"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoadingPosts ? 'animate-spin' : ''}`} />
+              </Button>
+            )}
           </div>
         </CardHeader>
 
@@ -341,6 +356,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       currentUser={currentUser}
                       onPostView={onPostView}
                       onClick={onClick}
+                      onDeletePost={isOwnProfile ? onDeletePost : undefined}
+                      onEditPost={isOwnProfile ? onEditPost : undefined}
                     />
                   ))}
 
@@ -400,6 +417,86 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               <p className="text-slate-600 dark:text-gray-300">
                 Posts you've bookmarked will appear here.
               </p>
+            </div>
+          )}
+
+          {/* Groups Tab */}
+          {activeTab === 'groups' && (
+            <div>
+              {userGroups.length === 0 ? (
+                <div className="text-center py-12">
+                  <Users className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">
+                    {isOwnProfile ? "You haven't joined any groups yet" : `${user.display_name} hasn't joined any groups yet`}
+                  </h3>
+                  <p className="text-slate-600 dark:text-gray-300 mb-4">
+                    {isOwnProfile ? "Join study groups to collaborate with others!" : ""}
+                  </p>
+                  {isOwnProfile && (
+                    <Button
+                      onClick={() => navigate('/social/groups')}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Browse Groups
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {userGroups.map((group) => (
+                    <Card
+                      key={group.id}
+                      onClick={() => navigate(`/social/group/${group.id}`)}
+                      className="hover:shadow-lg transition-all cursor-pointer group"
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3 mb-3">
+                          <Avatar className="h-12 w-12 flex-shrink-0 border-2 border-blue-500 dark:border-blue-400">
+                            <AvatarImage src={group.avatar_url} alt={group.name} />
+                            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-lg font-bold">
+                              {getCategoryEmoji(group.category)} {group.name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-slate-800 dark:text-white line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              {group.name}
+                            </h3>
+                            <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-gray-400 mt-1">
+                              {group.privacy === 'public' ? (
+                                <Globe className="h-3 w-3" />
+                              ) : (
+                                <Lock className="h-3 w-3" />
+                              )}
+                              <span>{group.privacy}</span>
+                              {group.member_role && (
+                                <>
+                                  <span>•</span>
+                                  <Badge variant="secondary" className="text-xs px-1 py-0">
+                                    {group.member_role}
+                                  </Badge>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-gray-300 line-clamp-2 mb-3">
+                          {group.description}
+                        </p>
+                        <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            {formatEngagementCount(group.members_count)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MessageCircle className="h-3 w-3" />
+                            {formatEngagementCount(group.posts_count)}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </CardContent>

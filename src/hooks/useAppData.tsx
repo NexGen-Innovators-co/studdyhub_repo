@@ -116,6 +116,8 @@ export const useAppData = () => {
   const scheduleChannelRef = useRef<any>(null);
   const profileChannelRef = useRef<any>(null);
   const quizzesChannelRef = useRef<any>(null);
+  const foldersChannelRef = useRef<any>(null);
+  const folderItemsChannelRef = useRef<any>(null);
 
   // Loading queue and batch processing
   const loadingQueueRef = useRef<Set<keyof DataLoadingState>>(new Set());
@@ -166,14 +168,16 @@ export const useAppData = () => {
       scheduleItems: false,
       documents: false,
       quizzes: false,
-      profile: false
+      profile: false,
+      folders: false
     });
     setDataPagination({
       notes: { hasMore: true, offset: 0, total: 0 },
       recordings: { hasMore: true, offset: 0, total: 0 },
       scheduleItems: { hasMore: true, offset: 0, total: 0 },
       documents: { hasMore: true, offset: 0, total: 0 },
-      quizzes: { hasMore: true, offset: 0, total: 0 }
+      quizzes: { hasMore: true, offset: 0, total: 0 },
+      folders: { hasMore: false, offset: 0, total: 0 }
     });
     setLoadingPhase({ phase: 'initial', progress: 0 });
     setLoading(false);
@@ -195,10 +199,11 @@ export const useAppData = () => {
 
       setLoadingPhase({ phase: 'core', progress: 30 });
 
-      // Phase 2: Core content (notes + documents - needed for most interactions)
+      // Phase 2: Core content (notes + documents + folders)
       await Promise.all([
         loadNotesPage(user.id, true),
-        loadDocumentsPage(user.id, true)
+        loadDocumentsPage(user.id, true),
+        loadFolders(user.id, true), // ADD THIS
       ]);
 
       setLoadingPhase({ phase: 'secondary', progress: 60 });
@@ -232,7 +237,78 @@ export const useAppData = () => {
       setLoadingPhase({ phase: 'complete', progress: 100 });
     }
   }, []);
+  const loadFolders = useCallback(async (userId: string, isInitial = false) => {
+    if (dataLoading.folders) return;
 
+    setDataLoading(prev => ({ ...prev, folders: true }));
+
+    try {
+      const { data, error } = await supabase
+        .from('document_folders')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const formattedFolders: DocumentFolder[] = data.map(folder => ({
+          id: folder.id,
+          user_id: folder.user_id,
+          name: folder.name,
+          parent_folder_id: folder.parent_folder_id,
+          color: folder.color || '#3B82F6',
+          description: folder.description,
+          created_at: folder.created_at,
+          updated_at: folder.updated_at,
+          isExpanded: false,
+        }));
+
+        setFolders(formattedFolders);
+
+        const tree = buildFolderTree(formattedFolders);
+        setFolderTree(tree);
+      }
+
+      setDataLoaded(prev => new Set([...prev, 'folders']));
+    } catch (error) {
+      console.error('Error loading folders:', error);
+    } finally {
+      setDataLoading(prev => ({ ...prev, folders: false }));
+    }
+  }, [dataLoading.folders]);
+
+  const buildFolderTree = useCallback((folders: DocumentFolder[]): FolderTreeNode[] => {
+    const folderMap = new Map<string, FolderTreeNode>();
+    const rootFolders: FolderTreeNode[] = [];
+
+    folders.forEach(folder => {
+      folderMap.set(folder.id, {
+        ...folder,
+        children: [],
+        documents: [],
+        path: [],
+        level: 0,
+      });
+    });
+
+    folders.forEach(folder => {
+      const node = folderMap.get(folder.id)!;
+
+      if (folder.parent_folder_id) {
+        const parent = folderMap.get(folder.parent_folder_id);
+        if (parent) {
+          parent.children.push(node);
+          node.path = [...parent.path, parent.id];
+          node.level = parent.level + 1;
+        }
+      } else {
+        rootFolders.push(node);
+      }
+    });
+
+    return rootFolders;
+  }, []);
   // Optimized user profile loading with better error handling
   const loadUserProfile = useCallback(async (user: any) => {
     if (dataLoaded.has('profile')) return;
@@ -400,18 +476,20 @@ export const useAppData = () => {
 
   // Enhanced documents loading for chat dependency
   const loadDocumentsPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.documents) return;
-    if (!isInitial && !dataPagination.documents.hasMore) return;
+    if (dataLoading.documents || !dataPagination.documents.hasMore) return;
 
     setDataLoading(prev => ({ ...prev, documents: true }));
 
     try {
-      const limit = isInitial ? INITIAL_LOAD_LIMITS.documents : LOAD_MORE_LIMITS.documents;
       const offset = isInitial ? 0 : dataPagination.documents.offset;
+      const limit = isInitial ? INITIAL_LOAD_LIMITS.documents : LOAD_MORE_LIMITS.documents;
 
-      const { data, error, count } = await supabase
+      const { data, count, error } = await supabase
         .from('documents')
-        .select('*', { count: 'exact' })
+        .select(`
+          *,
+          folder_items:document_folder_items!document_folder_items_document_id_fkey (folder_id)
+        `, { count: 'exact' })
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -419,45 +497,47 @@ export const useAppData = () => {
       if (error) throw error;
 
       if (data) {
-        const formattedDocuments = data.map(doc => ({
+        const formattedDocuments: Document[] = data.map(doc => ({
           id: doc.id,
-          title: doc.title || 'Untitled Document',
-          user_id: doc.user_id,
-          file_name: doc.file_name || '',
-          file_type: doc.file_type || '',
-          file_url: doc.file_url || '',
+          title: doc.title,
+          file_name: doc.file_name,
+          file_type: doc.file_type,
           file_size: doc.file_size || 0,
-          content_extracted: doc.content_extracted || null,
-          type: doc.type as Document['type'],
-          processing_status: String(doc.processing_status) || null,
-          processing_error: String(doc.processing_error) || null,
-          created_at: new Date(doc.created_at).toISOString(),
-          updated_at: new Date(doc.updated_at).toISOString()
+          file_url: doc.file_url,
+          content_extracted: doc.content_extracted || '',
+          user_id: doc.user_id,
+          type: doc.type,
+          processing_status: doc.processing_status || 'pending',
+          processing_error: doc.processing_error || null,
+          created_at: doc.created_at || new Date().toISOString(),
+          updated_at: doc.updated_at || new Date().toISOString(),
+          folder_ids: doc.folder_items?.map(item => item.folder_id) || [],
         }));
 
-        if (isInitial) {
-          setDocuments(formattedDocuments);
-        } else {
-          setDocuments(prev => [...prev, ...formattedDocuments]);
-        }
+        setDocuments(prev => isInitial ? formattedDocuments : [...prev, ...formattedDocuments]);
 
-        const newOffset = offset + formattedDocuments.length;
-        const hasMore = count ? newOffset < count : formattedDocuments.length === limit;
+        const newOffset = offset + data.length;
+        const hasMore = count ? newOffset < count : data.length === limit;
 
         setDataPagination(prev => ({
           ...prev,
-          documents: { hasMore, offset: newOffset, total: count || 0 }
+          documents: {
+            hasMore,
+            offset: newOffset,
+            total: count || 0
+          }
         }));
-      }
 
-      setDataLoaded(prev => new Set([...prev, 'documents']));
+        if (isInitial || !dataLoaded.has('documents')) {
+          setDataLoaded(prev => new Set([...prev, 'documents']));
+        }
+      }
     } catch (error) {
-      //console.error('Error loading documents:', error);
-      toast.error('Failed to load documents');
+      console.error('Error loading documents:', error);
     } finally {
       setDataLoading(prev => ({ ...prev, documents: false }));
     }
-  }, [dataLoading.documents, dataPagination.documents]);
+  }, [dataLoaded, dataLoading.documents, dataPagination.documents]);
 
   // Optimized recordings loading
   const loadRecordingsPage = useCallback(async (userId: string, isInitial = false) => {
@@ -690,6 +770,9 @@ export const useAppData = () => {
           loadUserProfile(currentUser);
         }
         break;
+      case 'folders':
+        loadFolders(currentUser.id, true);
+        break;
     }
   }, [currentUser, dataLoaded, dataLoading, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile]);
 
@@ -757,7 +840,7 @@ export const useAppData = () => {
     // Clean up existing listeners
     [documentChannelRef, chatMessageChannelRef, notesChannelRef,
       recordingsChannelRef, scheduleChannelRef, profileChannelRef,
-      quizzesChannelRef].forEach(channelRef => {
+      quizzesChannelRef, foldersChannelRef, folderItemsChannelRef].forEach(channelRef => {
         if (channelRef.current) {
           supabase.removeChannel(channelRef.current);
           channelRef.current = null;
@@ -774,7 +857,9 @@ export const useAppData = () => {
       setupRecordingsListener(user),
       setupScheduleListener(user),
       setupProfileListener(user),
-      setupQuizzesListener(user)
+      setupQuizzesListener(user),
+      setupFoldersListener(user),
+      setupFolderItemsListener(user)
     ]);
   }, []);
 
@@ -786,9 +871,16 @@ export const useAppData = () => {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'documents', filter: `user_id=eq.${user.id}` },
-          (payload) => {
+          async (payload) => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const newDoc = payload.new as any;
+              
+              // Fetch folder_ids for this document
+              const { data: folderItems } = await supabase
+                .from('document_folder_items')
+                .select('folder_id')
+                .eq('document_id', newDoc.id);
+  
               const formattedDoc: Document = {
                 id: newDoc.id,
                 title: newDoc.title,
@@ -803,8 +895,9 @@ export const useAppData = () => {
                 processing_error: String(newDoc.processing_error) || null,
                 created_at: new Date(newDoc.created_at).toISOString(),
                 updated_at: new Date(newDoc.updated_at).toISOString(),
+                folder_ids: folderItems?.map(item => item.folder_id) || [], // ADD THIS
               };
-
+  
               setDocuments(prevDocs => {
                 const existingIndex = prevDocs.findIndex(doc => doc.id === formattedDoc.id);
                 if (existingIndex > -1) {
@@ -815,7 +908,7 @@ export const useAppData = () => {
                   return [formattedDoc, ...prevDocs];
                 }
               });
-
+  
               if (formattedDoc.processing_status === 'completed') {
                 toast.success(`Document "${formattedDoc.title}" processed successfully!`);
               } else if (formattedDoc.processing_status === 'failed') {
@@ -828,13 +921,12 @@ export const useAppData = () => {
           }
         )
         .subscribe();
-
+  
       documentChannelRef.current = channel;
     } catch (error) {
       console.error('Error setting up document listener:', error);
     }
   }, []);
-
   const setupChatMessageListener = async (user: any) => {
     try {
       const channel = supabase
@@ -1142,6 +1234,111 @@ export const useAppData = () => {
     }
   }, []);
 
+  const setupFoldersListener = useCallback(async (user: any) => {
+    try {
+      const channel = supabase
+        .channel(`folders_${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'document_folders', filter: `user_id=eq.${user.id}` },
+          (payload) => {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newFolder = payload.new as any;
+              const formattedFolder: DocumentFolder = {
+                id: newFolder.id,
+                user_id: newFolder.user_id,
+                name: newFolder.name,
+                parent_folder_id: newFolder.parent_folder_id,
+                color: newFolder.color || '#3B82F6',
+                description: newFolder.description,
+                created_at: newFolder.created_at,
+                updated_at: newFolder.updated_at,
+                isExpanded: false,
+              };
+
+              setFolders(prevFolders => {
+                let updatedFolders;
+                const existingIndex = prevFolders.findIndex(folder => folder.id === formattedFolder.id);
+                if (existingIndex > -1) {
+                  updatedFolders = [...prevFolders];
+                  updatedFolders[existingIndex] = formattedFolder;
+                } else {
+                  updatedFolders = [formattedFolder, ...prevFolders];
+                }
+                const tree = buildFolderTree(updatedFolders);
+                setFolderTree(tree);
+                return updatedFolders;
+              });
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setFolders(prevFolders => {
+                const updatedFolders = prevFolders.filter(folder => folder.id !== deletedId);
+                const tree = buildFolderTree(updatedFolders);
+                setFolderTree(tree);
+                return updatedFolders;
+              });
+            }
+          }
+        )
+        .subscribe();
+
+      foldersChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up folders listener:', error);
+    }
+  }, [buildFolderTree]);
+
+  const setupFolderItemsListener = useCallback(async (user: any) => {
+    try {
+      const channel = supabase
+        .channel(`folder_items_${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'document_folder_items' },
+          (payload) => {
+            const { eventType, new: newItem, old: oldItem } = payload;
+            if (eventType === 'INSERT') {
+              const { document_id, folder_id } = newItem as any;
+              setDocuments(prevDocs => prevDocs.map(doc => {
+                if (doc.id === document_id) {
+                  const newFolderIds = [...new Set([...(doc.folder_ids || []), folder_id])];
+                  return { ...doc, folder_ids: newFolderIds };
+                }
+                return doc;
+              }));
+            } else if (eventType === 'DELETE') {
+              const { document_id, folder_id } = oldItem as any;
+              setDocuments(prevDocs => prevDocs.map(doc => {
+                if (doc.id === document_id) {
+                  const newFolderIds = (doc.folder_ids || []).filter(id => id !== folder_id);
+                  return { ...doc, folder_ids: newFolderIds };
+                }
+                return doc;
+              }));
+            } else if (eventType === 'UPDATE') {
+              const { document_id, folder_id: new_folder_id } = newItem as any;
+              const { folder_id: old_folder_id } = oldItem as any;
+              if (new_folder_id !== old_folder_id) {
+                setDocuments(prevDocs => prevDocs.map(doc => {
+                  if (doc.id === document_id) {
+                    let newFolderIds = (doc.folder_ids || []).filter(id => id !== old_folder_id);
+                    newFolderIds = [...new Set([...newFolderIds, new_folder_id])];
+                    return { ...doc, folder_ids: newFolderIds };
+                  }
+                  return doc;
+                }));
+              }
+            }
+          }
+        )
+        .subscribe();
+
+      folderItemsChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up folder items listener:', error);
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1153,7 +1350,7 @@ export const useAppData = () => {
       // Clear channels
       [documentChannelRef, chatMessageChannelRef, notesChannelRef,
         recordingsChannelRef, scheduleChannelRef, profileChannelRef,
-        quizzesChannelRef].forEach(channelRef => {
+        quizzesChannelRef, foldersChannelRef, folderItemsChannelRef].forEach(channelRef => {
           if (channelRef.current) {
             supabase.removeChannel(channelRef.current);
             channelRef.current = null;
@@ -1230,5 +1427,9 @@ export const useAppData = () => {
     loadMoreDocuments,
     loadMoreSchedule,
     loadMoreQuizzes,
+    folders,
+    folderTree,
+    setFolders,
+    loadFolders,
   };
 };

@@ -127,7 +127,7 @@ const Contact: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex items-start gap-4">
-                                <MapPin className="h-8 w-8 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                                <MapPin className="h-8 w-8 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                                 <div>
                                     <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Our Office</h3>
                                     <p className="text-gray-700 dark:text-gray-300">123 AI Learning Lane, Suite 400</p>

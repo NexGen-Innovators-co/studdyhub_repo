@@ -11,7 +11,7 @@ export const calculateRecommendationScore = (
   let score = 0;
 
   // Factor 1: Common interests (highest weight)
-  const commonInterests = candidate.interests?.filter(interest => 
+  const commonInterests = candidate.interests?.filter(interest =>
     currentUserInterests.includes(interest)
   ) || [];
   score += commonInterests.length * RECOMMENDATION_WEIGHTS.COMMON_INTERESTS;
@@ -32,14 +32,14 @@ export const calculateRecommendationScore = (
 
   // Factor 4: Follower count (moderate weight - popular but not overwhelming)
   const followerBonus = Math.min(
-    (candidate.followers_count || 0) / 100, 
+    (candidate.followers_count || 0) / 100,
     RECOMMENDATION_WEIGHTS.FOLLOWER_COUNT_BONUS
   );
   score += followerBonus;
 
   // Factor 5: Post activity (users who create content)
   const postBonus = Math.min(
-    (candidate.posts_count || 0) / 10, 
+    (candidate.posts_count || 0) / 10,
     RECOMMENDATION_WEIGHTS.POST_ACTIVITY_BONUS
   );
   score += postBonus;
@@ -69,10 +69,10 @@ export const calculateRecommendationScore = (
  */
 export const getCategoriesForInterests = (interests: string[]): string[] => {
   const categories = new Set<string>();
-  
+
   interests.forEach(interest => {
     const lowerInterest = interest.toLowerCase();
-    
+
     Object.entries(INTEREST_CATEGORIES).forEach(([category, keywords]) => {
       if (keywords.some(keyword => lowerInterest.includes(keyword))) {
         categories.add(category);
@@ -91,16 +91,16 @@ export const getRecommendationReason = (
   currentUserInterests: string[] = []
 ): string => {
   if (user.is_verified) return 'Verified';
-  
-  const commonInterests = user.interests?.filter(interest => 
+
+  const commonInterests = user.interests?.filter(interest =>
     currentUserInterests.includes(interest)
   ) || [];
-  
+
   if (commonInterests.length > 0) return 'Similar Interests';
   if ((user.followers_count || 0) > 1000) return 'Popular';
   if ((user.posts_count || 0) > 50) return 'Active Creator';
   if (user.is_contributor) return 'Contributor';
-  
+
   return 'New Member';
 };
 
@@ -123,7 +123,7 @@ export const formatEngagementCount = (count: number): string => {
 export const getRecommendationBadgeColor = (reason: string): string => {
   const colorMap: Record<string, string> = {
     'Verified': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    'Popular': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+    'Popular': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
     'Active Creator': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
     'Similar Interests': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
     'Contributor': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
@@ -138,11 +138,11 @@ export const getRecommendationBadgeColor = (reason: string): string => {
  */
 export const shouldRefreshSuggestions = (lastRefresh: Date | null): boolean => {
   if (!lastRefresh) return true;
-  
+
   const now = new Date();
   const timeDiff = now.getTime() - lastRefresh.getTime();
   const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
-  
+
   return timeDiff > oneHour;
 };
 

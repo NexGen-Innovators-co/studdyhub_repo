@@ -9,9 +9,10 @@ export interface Document {
   title: string;
   updated_at: string;
   user_id: string;
-  type: "text" | "image" | "audio";
+  type: string;
   processing_error: string | null; // Changed to 'string | null'
   processing_status: string; // Changed to 'string'
+  folder_ids?: string[];
 }
 
 export interface UserProfile {

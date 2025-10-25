@@ -512,7 +512,7 @@ export const MessageList = memo(({
                                         toast.info('File is still processing, please wait.');
                                         return;
                                     }
-                                    if (!attachment.error) {
+                                    if (attachment.error) {
                                         console.log(attachment.error);
                                         toast.error('Cannot preview file due to processing error.');
                                         return;
@@ -548,7 +548,7 @@ export const MessageList = memo(({
                                         <Loader2 className="h-2 w-2 animate-spin text-white" />
                                     </div>
                                 )}
-                                {!attachment.error && (
+                                {attachment.error && (
                                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
                                         <X className="h-2 w-2 text-white" />
                                     </div>

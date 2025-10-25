@@ -23,7 +23,7 @@ const downloadSvg = (svgString: string, filename: string = 'mermaid-diagram') =>
   URL.revokeObjectURL(url);
 };
 
-// Function to download SVG as PNG without canvas taint issues
+// Function to download SVG as PNG
 const downloadSvgAsPng = (svgString: string, filename: string = 'mermaid-diagram') => {
   try {
     const parser = new DOMParser();
@@ -47,7 +47,7 @@ const downloadSvgAsPng = (svgString: string, filename: string = 'mermaid-diagram
     canvas.width = width * 2;
     canvas.height = height * 2;
     ctx!.scale(2, 2);
-    ctx!.fillStyle = '#1f2937'; // Dark background
+    ctx!.fillStyle = '#1f2937';
     ctx!.fillRect(0, 0, width, height);
 
     const img = new Image();
@@ -67,17 +67,17 @@ const downloadSvgAsPng = (svgString: string, filename: string = 'mermaid-diagram
           }
         }, 'image/png');
       } catch (error) {
-        downloadSvg(svgString, filename); // Fallback to SVG download
+        downloadSvg(svgString, filename);
       }
     };
 
     img.onerror = () => {
-      downloadSvg(svgString, filename); // Fallback to SVG download
+      downloadSvg(svgString, filename);
     };
 
     img.src = svgDataUrl;
   } catch (error) {
-    downloadSvg(svgString, filename); // Fallback to SVG download
+    downloadSvg(svgString, filename);
   }
 };
 
@@ -89,11 +89,12 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
   const [copied, setCopied] = useState(false);
   const [isMermaidLoaded, setIsMermaidLoaded] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
-  const [shouldRender, setShouldRender] = useState(false);
+  const [shouldRender, setShouldRender] = useState(true); // Changed to true by default
   const [lastRenderedChart, setLastRenderedChart] = useState<string>('');
   const [showSourceCode, setShowSourceCode] = useState(false);
   const [sourceCodeCopied, setSourceCodeCopied] = useState(false);
   const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // State for custom zoom and pan
   const [scale, setScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
@@ -102,6 +103,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
   const lastPanPosition = useRef({ x: 0, y: 0 });
   const [initialPinchDistance, setInitialPinchDistance] = useState<number | null>(null);
   const [initialPinchScale, setInitialPinchScale] = useState<number>(1);
+  
   // State for expand/collapse and resizable height
   const [isDiagramExpanded, setIsDiagramExpanded] = useState(true);
   const [componentHeight, setComponentHeight] = useState(300);
@@ -109,7 +111,6 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
   const initialResizeY = useRef(0);
   const initialComponentHeight = useRef(0);
 
-  // Helper function to calculate distance between two touch points
   const getPinchDistance = (touch1: Touch, touch2: Touch) => {
     const dx = touch2.clientX - touch1.clientX;
     const dy = touch2.clientY - touch1.clientY;
@@ -150,28 +151,6 @@ Here's the error message received: "${error}". Please provide only the corrected
     }
   }, [chart, error, onSuggestAiCorrection]);
 
-  const triggerRender = useCallback(() => {
-    if (chart.trim() && !isRendering) {
-      try {
-        // Validate syntax before triggering render
-        const mermaid = (window as any).mermaid;
-        if (!mermaid) {
-          setError("Mermaid library not loaded yet");
-          return;
-        }
-        mermaid.parse(chart);
-        setShouldRender(true);
-        setError(null);
-      } catch (e: any) {
-        const isSyntaxError = e.message.includes('Syntax error') || e.message.includes('Parse error');
-        onMermaidError(chart, isSyntaxError ? 'syntax' : 'rendering');
-        setError(isSyntaxError ? 'Syntax error detected. Check the code or use AI Fix.' : 'Rendering error detected.');
-        setShouldRender(false);
-        setSvg(null);
-      }
-    }
-  }, [chart, isRendering, onMermaidError]);
-
   const cleanupRender = useCallback(() => {
     if (renderTimeoutRef.current) {
       clearTimeout(renderTimeoutRef.current);
@@ -182,176 +161,192 @@ Here's the error message received: "${error}". Please provide only the corrected
   // Load Mermaid script
   useEffect(() => {
     const loadMermaidScript = () => {
-      if (isMermaidLoaded || (window as any).mermaid) {
+      // Check if already loaded
+      if ((window as any).mermaid) {
         setIsMermaidLoaded(true);
         return;
       }
 
-      // Try to load from the same origin first (using the installed package)
-      const script = document.createElement('script');
-      script.src = window.location.origin + '/node_modules/mermaid/dist/mermaid.min.js';
-      script.onload = () => {
-        if ((window as any).mermaid) {
-          setIsMermaidLoaded(true);
-        } else {
-          setError("Mermaid library loaded but not available");
-          setIsMermaidLoaded(false);
-        }
-      };
-      script.onerror = () => {
-        // Fallback to CDN if local loading fails
-        const cdnScript = document.createElement('script');
-        cdnScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.9.0/dist/mermaid.min.js';
-        cdnScript.onload = () => {
+      // Check if script is already being loaded
+      const existingScript = document.querySelector('script[src*="mermaid"]');
+      if (existingScript) {
+        // Wait for existing script to load
+        const checkMermaid = setInterval(() => {
           if ((window as any).mermaid) {
+            clearInterval(checkMermaid);
             setIsMermaidLoaded(true);
-          } else {
-            setError("Mermaid library loaded but not available");
-            setIsMermaidLoaded(false);
           }
-        };
-        cdnScript.onerror = () => {
-          setError("Failed to load Mermaid library from both local and CDN. Please check your network connection.");
-          setIsMermaidLoaded(false);
-        };
-        document.head.appendChild(cdnScript);
+        }, 100);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+      
+      script.onload = () => {
+        // Poll for mermaid to be available
+        let attempts = 0;
+        const checkMermaid = setInterval(() => {
+          attempts++;
+          if ((window as any).mermaid) {
+            clearInterval(checkMermaid);
+            setIsMermaidLoaded(true);
+          } else if (attempts > 50) { // 5 seconds max wait
+            clearInterval(checkMermaid);
+            setError("Mermaid library loaded but not available");
+          }
+        }, 100);
       };
+      
+      script.onerror = () => {
+        setError("Failed to load Mermaid library. Please check your network connection.");
+        setIsMermaidLoaded(false);
+      };
+      
       document.head.appendChild(script);
     };
 
     loadMermaidScript();
-  }, [isMermaidLoaded]);
+  }, []);
 
-  // Render diagram in iframe
+  // Render diagram
   useEffect(() => {
     const renderDiagram = async () => {
-      if (!isMermaidLoaded || !iframeRef.current || !shouldRender || !chart.trim()) {
+      if (!isMermaidLoaded || !chart.trim() || isRendering) {
+        return;
+      }
+
+      // Don't re-render if already rendered and chart hasn't changed
+      if (svg && chart === lastRenderedChart) {
         return;
       }
 
       cleanupRender();
-
       setIsRendering(true);
       setError(null);
 
       try {
-        const renderPromise = new Promise<any>((resolve, reject) => {
-          renderTimeoutRef.current = setTimeout(() => {
-            reject(new Error("Mermaid rendering timed out after 7 seconds."));
-          }, 7000);
+        const mermaid = (window as any).mermaid;
+        if (!mermaid) {
+          throw new Error("Mermaid library not available");
+        }
 
-          const mermaid = (window as any).mermaid;
-          if (!mermaid) {
-            reject(new Error("Mermaid library not available"));
-            return;
-          }
-
-          // Initialize mermaid with configuration
-          mermaid.initialize({
-            startOnLoad: false,
-            theme: 'base',
-            themeVariables: {
-              primaryColor: '#3b82f6',
-              primaryTextColor: '#e5e7eb',
-              primaryBorderColor: '#2563eb',
-              secondaryColor: '#10b981',
-              tertiaryColor: '#f59e0b',
-              background: '#1f2937',
-              secondaryBackground: '#374151',
-              tertiaryBackground: '#4b5563',
-              mainBkg: '#3b82f6',
-              secondBkg: '#10b981',
-              tertiaryBkg: '#f59e0b',
-              textColor: '#e5e7eb',
-              secondaryTextColor: '#9ca3af',
-              lineColor: '#9ca3af',
-              arrowheadColor: '#e5e7eb',
-              errorBkgColor: '#7f1d1d',
-              errorTextColor: '#f87171',
-              nodeBkg: '#374151',
-              nodeBorder: '#3b82f6',
-              clusterBkg: '#1f2937',
-              clusterBorder: '#4b5563',
-              actorBkg: '#374151',
-              actorBorder: '#3b82f6',
-              actorTextColor: '#e5e7eb',
-              actorLineColor: '#9ca3af',
-              signalColor: '#e5e7eb',
-              signalTextColor: '#e5e7eb',
-              labelBoxBkgColor: '#374151',
-              labelBoxBorderColor: '#4b5563',
-              labelTextColor: '#e5e7eb',
-              loopTextColor: '#e5e7eb',
-              noteBorderColor: '#d97706',
-              noteBkgColor: '#78350f',
-              noteTextColor: '#f59e0b'
-            },
-            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
-            sequence: { useMaxWidth: true, wrap: true },
-            gantt: { useMaxWidth: true, leftPadding: 75, rightPadding: 20, topPadding: 50 },
-            pie: { useMaxWidth: true },
-            xyChart: { useMaxWidth: true },
-            securityLevel: 'strict',
-          });
-
-          mermaid.render(
-            'mermaid-chart-' + Date.now(),
-            chart
-          ).then(result => {
-            if (renderTimeoutRef.current) {
-              clearTimeout(renderTimeoutRef.current);
-              renderTimeoutRef.current = null;
-            }
-            resolve(result);
-          }).catch(err => {
-            if (renderTimeoutRef.current) {
-              clearTimeout(renderTimeoutRef.current);
-              renderTimeoutRef.current = null;
-            }
-            reject(err);
-          });
+        // Initialize mermaid with configuration only once
+        await mermaid.initialize({
+          startOnLoad: false,
+          theme: 'dark',
+          themeVariables: {
+            primaryColor: '#3b82f6',
+            primaryTextColor: '#e5e7eb',
+            primaryBorderColor: '#2563eb',
+            lineColor: '#9ca3af',
+            secondaryColor: '#10b981',
+            tertiaryColor: '#f59e0b',
+          },
+          flowchart: { useMaxWidth: true, htmlLabels: true },
+          sequence: { useMaxWidth: true },
+          gantt: { useMaxWidth: true },
+          securityLevel: 'loose',
+          suppressErrorRendering: false,
         });
 
-        const { svg: generatedSvg, bindFunctions } = await renderPromise;
+        // Create a unique ID for each render
+        const renderId = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        // Render with timeout
+        const renderPromise = new Promise<any>((resolve, reject) => {
+          renderTimeoutRef.current = setTimeout(() => {
+            reject(new Error("Mermaid rendering timed out after 10 seconds."));
+          }, 10000);
+
+          try {
+            mermaid.render(renderId, chart)
+              .then((result: any) => {
+                if (renderTimeoutRef.current) {
+                  clearTimeout(renderTimeoutRef.current);
+                  renderTimeoutRef.current = null;
+                }
+                resolve(result);
+              })
+              .catch((err: any) => {
+                if (renderTimeoutRef.current) {
+                  clearTimeout(renderTimeoutRef.current);
+                  renderTimeoutRef.current = null;
+                }
+                reject(err);
+              });
+          } catch (syncError) {
+            if (renderTimeoutRef.current) {
+              clearTimeout(renderTimeoutRef.current);
+              renderTimeoutRef.current = null;
+            }
+            reject(syncError);
+          }
+        });
+
+        const result = await renderPromise;
+        
+        // Handle different return formats from mermaid.render
+        let generatedSvg = '';
+        if (typeof result === 'string') {
+          generatedSvg = result;
+        } else if (result && result.svg) {
+          generatedSvg = result.svg;
+        } else {
+          console.error('Unexpected mermaid render result:', result);
+          throw new Error("Mermaid returned unexpected result format");
+        }
+        
+        if (!generatedSvg || generatedSvg.trim() === '') {
+          throw new Error("Mermaid rendered empty SVG");
+        }
+
+        console.log('Mermaid SVG generated, length:', generatedSvg.length);
         setSvg(generatedSvg);
         setLastRenderedChart(chart);
 
-        const fullHtml = `
+        // Update iframe with a slight delay to ensure state is updated
+        setTimeout(() => {
+          if (iframeRef.current) {
+            const fullHtml = `
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
     body { 
       margin: 0; 
       display: flex; 
       justify-content: center; 
       align-items: center; 
-      height: 100vh; 
-      background: transparent; 
-      overflow: hidden;
-      user-select: none;
+      min-height: 100vh;
+      width: 100%;
+      background: #1f2937;
+      overflow: auto;
+      padding: 20px;
     }
     .mermaid-container {
-      position: relative;
-      width: 100%;
-      height: 100%;
       display: flex;
       justify-content: center;
       align-items: center;
+      min-height: 100%;
+      width: 100%;
     }
     svg { 
+      display: block;
       max-width: 100%; 
-      max-height: 100%; 
+      height: auto;
       transform: translate(${translateX}px, ${translateY}px) scale(${scale}); 
-      transform-origin: center; 
-      transition: transform 0.1s ease-out;
+      transform-origin: center;
       cursor: grab;
     }
     svg:active {
       cursor: grabbing;
-    }
-    svg * {
-      pointer-events: auto;
     }
   </style>
 </head>
@@ -362,109 +357,68 @@ Here's the error message received: "${error}". Please provide only the corrected
 </body>
 </html>`;
 
-        const iframeDoc = iframeRef.current!.contentDocument || iframeRef.current!.contentWindow?.document;
-        if (iframeDoc) {
-          iframeDoc.open();
-          iframeDoc.write(fullHtml);
-          iframeDoc.close();
-          if (bindFunctions) {
-            bindFunctions(iframeDoc.body);
+            const iframeDoc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
+            if (iframeDoc) {
+              iframeDoc.open();
+              iframeDoc.write(fullHtml);
+              iframeDoc.close();
+              
+              // Log for debugging
+              console.log('Iframe content updated');
+            }
           }
-        }
+        }, 50);
       } catch (e: any) {
-        // Only show errors for actual failures, not minor issues
         const errorMessage = e.message || "An unknown error occurred during rendering.";
-        const isActualError = errorMessage.includes('Syntax error') ||
-          errorMessage.includes('Parse error') ||
-          errorMessage.includes('Failed to load') ||
-          errorMessage.includes('rendered empty SVG') ||
-          errorMessage.includes('Mermaid library not available');
-
-        if (isActualError) {
-          onMermaidError(chart, 'rendering');
-          setError(errorMessage);
-          setSvg(null);
-        } else {
-          // For minor issues, just log and continue
-          console.warn('Mermaid minor issue:', errorMessage);
-          setError(null);
-        }
+        console.error('Mermaid rendering error:', errorMessage, e);
+        onMermaidError(chart, 'rendering');
+        setError(errorMessage);
+        setSvg(null);
       } finally {
         setIsRendering(false);
       }
     };
 
-    if (isMermaidLoaded && shouldRender) {
-      renderDiagram();
+    if (isMermaidLoaded && chart.trim()) {
+      // Add a small delay to ensure mermaid is fully ready
+      const timer = setTimeout(() => {
+        renderDiagram();
+      }, 100);
+      
+      return () => {
+        clearTimeout(timer);
+        cleanupRender();
+      };
     }
 
     return cleanupRender;
-  }, [shouldRender, chart, isMermaidLoaded, onMermaidError, cleanupRender, translateX, translateY, scale]);
+  }, [chart, isMermaidLoaded, onMermaidError, cleanupRender, translateX, translateY, scale, svg, lastRenderedChart, isRendering]);
 
-  // Trigger render on initial mount and when diagramRef changes
-  useEffect(() => {
-    if (!diagramRef.current) return;
-    if (chart.trim() && !error) {
-      triggerRender();
-    }
-
-    const resizeObserver = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        if (entry.contentBoxSize && !isRendering && chart.trim()) {
-          triggerRender();
-        }
-      }
-    });
-
-    resizeObserver.observe(diagramRef.current);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [diagramRef, chart, isRendering, triggerRender, error]);
-
-  // Function to update iframe transform
+  // Update iframe transform
   const updateIframeTransform = useCallback((newTranslateX: number, newTranslateY: number, newScale: number) => {
-    if (iframeRef.current && iframeRef.current.contentDocument) {
-      const svg = iframeRef.current.contentDocument.querySelector('svg');
-      if (svg) {
-        svg.style.transform = `translate(${newTranslateX}px, ${newTranslateY}px) scale(${newScale})`;
+    if (iframeRef.current?.contentDocument) {
+      const svgEl = iframeRef.current.contentDocument.querySelector('svg');
+      if (svgEl) {
+        svgEl.style.transform = `translate(${newTranslateX}px, ${newTranslateY}px) scale(${newScale})`;
       }
     }
   }, []);
 
-  // Custom Zoom and Pan Handlers (Mouse)
+  // Zoom handler
   const handleZoom = useCallback((event: WheelEvent) => {
     event.preventDefault();
     const scaleAmount = 0.1;
     const newScale = event.deltaY < 0 ? scale * (1 + scaleAmount) : scale * (1 - scaleAmount);
     const clampedScale = Math.max(0.1, Math.min(10, newScale));
 
-    const rect = iframeRef.current!.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
-
-    const oldTranslateX = translateX;
-    const oldTranslateY = translateY;
-
-    const newTranslateX = mouseX - ((mouseX - oldTranslateX) * (clampedScale / scale));
-    const newTranslateY = mouseY - ((mouseY - oldTranslateY) * (clampedScale / scale));
-
     setScale(clampedScale);
-    setTranslateX(newTranslateX);
-    setTranslateY(newTranslateY);
-
-    // Update iframe content with new transform
-    updateIframeTransform(newTranslateX, newTranslateY, clampedScale);
+    updateIframeTransform(translateX, translateY, clampedScale);
   }, [scale, translateX, translateY, updateIframeTransform]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLIFrameElement>) => {
     if (event.button === 0) {
       setIsPanning(true);
       lastPanPosition.current = { x: event.clientX, y: event.clientY };
-      if (iframeRef.current) {
-        iframeRef.current.style.cursor = 'grabbing';
-      }
     }
   }, []);
 
@@ -478,121 +432,23 @@ Here's the error message received: "${error}". Please provide only the corrected
       setTranslateX(newTranslateX);
       setTranslateY(newTranslateY);
       lastPanPosition.current = { x: event.clientX, y: event.clientY };
-
-      // Update iframe content with new transform
       updateIframeTransform(newTranslateX, newTranslateY, scale);
     }
   }, [isPanning, scale, translateX, translateY, updateIframeTransform]);
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false);
-    if (iframeRef.current) {
-      iframeRef.current.style.cursor = 'grab';
-    }
   }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    setIsPanning(false);
-    if (iframeRef.current) {
-      iframeRef.current.style.cursor = 'grab';
-    }
-  }, []);
-
-  // Touch Handlers for Panning and Zooming
-  const handleTouchStart = useCallback((event: TouchEvent) => {
-    if (event.touches.length === 1) {
-      // Single touch for panning
-      setIsPanning(true);
-      lastPanPosition.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-    } else if (event.touches.length === 2) {
-      // Two touches for pinch-to-zoom
-      event.preventDefault();
-      const distance = getPinchDistance(event.touches[0], event.touches[1]);
-      setInitialPinchDistance(distance);
-      setInitialPinchScale(scale);
-    }
-  }, [scale]);
-
-  const handleTouchMove = useCallback((event: TouchEvent) => {
-    if (event.touches.length === 1 && isPanning) {
-      // Single touch panning
-      const deltaX = event.touches[0].clientX - lastPanPosition.current.x;
-      const deltaY = event.touches[0].clientY - lastPanPosition.current.y;
-      const newTranslateX = translateX + deltaX;
-      const newTranslateY = translateY + deltaY;
-
-      setTranslateX(newTranslateX);
-      setTranslateY(newTranslateY);
-      lastPanPosition.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-
-      // Update iframe content with new transform
-      updateIframeTransform(newTranslateX, newTranslateY, scale);
-    } else if (event.touches.length === 2) {
-      // Pinch-to-zoom
-      event.preventDefault();
-      const distance = getPinchDistance(event.touches[0], event.touches[1]);
-      if (initialPinchDistance !== null) {
-        const newScale = initialPinchScale * (distance / initialPinchDistance);
-        const clampedScale = Math.max(0.1, Math.min(10, newScale));
-        setScale(clampedScale);
-
-        // Adjust translation to zoom around pinch center
-        const rect = iframeRef.current!.getBoundingClientRect();
-        const pinchCenterX = (event.touches[0].clientX + event.touches[1].clientX) / 2 - rect.left;
-        const pinchCenterY = (event.touches[0].clientY + event.touches[1].clientY) / 2 - rect.top;
-
-        const oldTranslateX = translateX;
-        const oldTranslateY = translateY;
-
-        const newTranslateX = pinchCenterX - ((pinchCenterX - oldTranslateX) * (clampedScale / scale));
-        const newTranslateY = pinchCenterY - ((pinchCenterY - oldTranslateY) * (clampedScale / scale));
-
-        setTranslateX(newTranslateX);
-        setTranslateY(newTranslateY);
-
-        // Update iframe content with new transform
-        updateIframeTransform(newTranslateX, newTranslateY, clampedScale);
-      }
-    }
-  }, [isPanning, scale, initialPinchDistance, initialPinchScale, translateX, translateY, updateIframeTransform]);
-
-  const handleTouchEnd = useCallback(() => {
-    setIsPanning(false);
-    setInitialPinchDistance(null);
-    setInitialPinchScale(1);
-  }, []);
-
-  // Attach touch event listeners with passive: false
-  useEffect(() => {
-    const element = iframeRef.current;
-    if (!element) return;
-
-    element.addEventListener('touchstart', handleTouchStart, { passive: false });
-    element.addEventListener('touchmove', handleTouchMove, { passive: false });
-    element.addEventListener('touchend', handleTouchEnd, { passive: false });
-    element.addEventListener('touchcancel', handleTouchEnd, { passive: false });
-    element.addEventListener('wheel', handleZoom, { passive: false });
-
-    return () => {
-      element.removeEventListener('touchstart', handleTouchStart);
-      element.removeEventListener('touchmove', handleTouchMove);
-      element.removeEventListener('touchend', handleTouchEnd);
-      element.removeEventListener('touchcancel', handleTouchEnd);
-      element.removeEventListener('wheel', handleZoom);
-    };
-  }, [handleTouchStart, handleTouchMove, handleTouchEnd, handleZoom]);
 
   const handleZoomIn = useCallback(() => {
     const newScale = Math.min(10, scale * 1.2);
     setScale(newScale);
-
     updateIframeTransform(translateX, translateY, newScale);
   }, [scale, translateX, translateY, updateIframeTransform]);
 
   const handleZoomOut = useCallback(() => {
     const newScale = Math.max(0.1, scale / 1.2);
     setScale(newScale);
-
     updateIframeTransform(translateX, translateY, newScale);
   }, [scale, translateX, translateY, updateIframeTransform]);
 
@@ -600,105 +456,51 @@ Here's the error message received: "${error}". Please provide only the corrected
     setScale(1);
     setTranslateX(0);
     setTranslateY(0);
-
     updateIframeTransform(0, 0, 1);
   }, [updateIframeTransform]);
 
-  // Resize Handlers
+  // Resize handlers
   const handleResizeMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     isResizing.current = true;
     initialResizeY.current = event.clientY;
     initialComponentHeight.current = componentHeight;
     document.body.style.cursor = 'ns-resize';
+    
+    const handleResizeMouseMove = (e: MouseEvent) => {
+      if (isResizing.current) {
+        const deltaY = e.clientY - initialResizeY.current;
+        const newHeight = Math.max(200, initialComponentHeight.current + deltaY);
+        setComponentHeight(newHeight);
+      }
+    };
+
+    const handleResizeMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = 'default';
+      document.removeEventListener('mousemove', handleResizeMouseMove);
+      document.removeEventListener('mouseup', handleResizeMouseUp);
+    };
+
     document.addEventListener('mousemove', handleResizeMouseMove);
     document.addEventListener('mouseup', handleResizeMouseUp);
   }, [componentHeight]);
 
-  const handleResizeMouseMove = useCallback((event: MouseEvent) => {
-    if (isResizing.current) {
-      const deltaY = event.clientY - initialResizeY.current;
-      const newHeight = Math.max(200, initialComponentHeight.current + deltaY);
-      setComponentHeight(newHeight);
-    }
-  }, []);
-
-  const handleResizeMouseUp = useCallback(() => {
-    isResizing.current = false;
-    document.body.style.cursor = 'default';
-    document.removeEventListener('mousemove', handleResizeMouseMove);
-    document.removeEventListener('mouseup', handleResizeMouseUp);
-  }, [handleResizeMouseMove]);
-
-  // Function to bind events to iframe content
-  const bindIframeEvents = useCallback(() => {
-    if (iframeRef.current && iframeRef.current.contentDocument) {
-      const svg = iframeRef.current.contentDocument.querySelector('svg');
-      if (svg) {
-        // Add event listeners to the SVG element for better control
-        svg.addEventListener('wheel', (e) => {
-          e.preventDefault();
-          const wheelEvent = new WheelEvent('wheel', {
-            deltaY: e.deltaY,
-            clientX: e.clientX,
-            clientY: e.clientY
-          });
-          handleZoom(wheelEvent as any);
-        }, { passive: false });
-
-        // Add mouse events for panning
-        svg.addEventListener('mousedown', (e) => {
-          if (e.button === 0) {
-            const mouseEvent = new MouseEvent('mousedown', {
-              button: e.button,
-              clientX: e.clientX,
-              clientY: e.clientY
-            });
-            handleMouseDown(mouseEvent as any);
-          }
-        });
-
-        svg.addEventListener('mousemove', (e) => {
-          const mouseEvent = new MouseEvent('mousemove', {
-            clientX: e.clientX,
-            clientY: e.clientY
-          });
-          handleMouseMove(mouseEvent as any);
-        });
-
-        svg.addEventListener('mouseup', () => {
-          handleMouseUp();
-        });
-
-        svg.addEventListener('mouseleave', () => {
-          handleMouseLeave();
-        });
-      }
-    }
-  }, [handleZoom, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave]);
-
-  // Bind events when iframe loads
+  // Attach wheel event
   useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
+    const element = iframeRef.current;
+    if (!element) return;
 
-    const handleIframeLoad = () => {
-      setTimeout(() => {
-        bindIframeEvents();
-      }, 100);
-    };
-
-    iframe.addEventListener('load', handleIframeLoad);
-
+    element.addEventListener('wheel', handleZoom, { passive: false });
     return () => {
-      iframe.removeEventListener('load', handleIframeLoad);
+      element.removeEventListener('wheel', handleZoom);
     };
-  }, [bindIframeEvents]);
+  }, [handleZoom]);
 
   if (!isMermaidLoaded) {
     return (
       <div className="my-4 p-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center h-40">
         <Loader2 className="h-6 w-6 animate-spin text-blue-500 dark:text-blue-400 mr-2" />
-        <span className="text-gray-600 dark:text-gray-300">Loading diagram library...</span>
+        <span className="text-gray-600 dark:text-gray-300">Loading Mermaid library...</span>
       </div>
     );
   }
@@ -717,8 +519,8 @@ Here's the error message received: "${error}". Please provide only the corrected
       <div className="my-4 p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-            <Info className="h-4 w-4" />
-            <span className="text-sm font-medium">Diagram Issue</span>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+            <span className="text-sm font-medium">Diagram Rendering Error</span>
           </div>
           <div className="flex gap-2">
             {onSuggestAiCorrection && (
@@ -731,63 +533,12 @@ Here's the error message received: "${error}". Please provide only the corrected
                 AI Fix
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={triggerRender}
-              disabled={!!error && chart === lastRenderedChart}
-              className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 h-7 px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Play className="h-3 w-3 mr-1" />
-              Try Again
-            </Button>
           </div>
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{error}</p>
-      </div>
-    );
-  }
-
-  if (!svg || chart !== lastRenderedChart) {
-    return (
-      <div className="my-4 p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-              Mermaid Diagram
-            </span>
-            {chart !== lastRenderedChart && svg && (
-              <div className="flex items-center gap-1 text-xs bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 px-2 py-1 rounded">
-                <AlertTriangle className="h-3 w-3" />
-                <span className="hidden sm:inline">Changes detected</span>
-              </div>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={copyCode}
-            className="h-6 w-6 p-0 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
-          >
-            {copied ? <Check className="h-3 w-3 text-green-500 dark:text-green-400" /> : <Copy className="h-3 w-3" />}
-          </Button>
-        </div>
-        <div className="flex items-center justify-center h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-800">
-          <div className="text-center px-4">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-              {!svg ? 'Click to render your Mermaid diagram' : 'Click to update diagram with changes'}
-            </p>
-            <Button
-              onClick={triggerRender}
-              disabled={!chart.trim()}
-              className="bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Play className="h-4 w-4 mr-2" />
-              {!svg ? 'Render Diagram' : 'Update Diagram'}
-            </Button>
-          </div>
-        </div>
-        <div ref={diagramRef} style={{ display: 'none' }} />
+        <p className="text-xs text-red-500 dark:text-red-400 mb-2">{error}</p>
+        <pre className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 p-2 rounded overflow-x-auto">
+          {chart}
+        </pre>
       </div>
     );
   }
@@ -805,7 +556,7 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={handleZoomIn}
-            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
             title="Zoom In"
           >
             <ZoomIn className="h-3 w-3" />
@@ -814,7 +565,7 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={handleZoomOut}
-            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
             title="Zoom Out"
           >
             <ZoomOut className="h-3 w-3" />
@@ -823,8 +574,8 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={handleResetView}
-            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
-            title="Reset Zoom"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
+            title="Reset View"
           >
             <Maximize className="h-3 w-3" />
           </Button>
@@ -832,80 +583,52 @@ Here's the error message received: "${error}". Please provide only the corrected
             variant="ghost"
             size="sm"
             onClick={() => setShowSourceCode(!showSourceCode)}
-            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
-            title="Toggle source code"
+            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
           >
-            {showSourceCode ? <EyeOff className="h-3 w-3 sm:mr-1" /> : <Eye className="h-3 w-3 sm:mr-1" />}
-            <span className="hidden sm:inline">{showSourceCode ? 'Hide' : 'Show'} Code</span>
+            {showSourceCode ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={copyCode}
-            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
-            title="Copy source code"
-          >
-            {copied ? <Check className="h-3 w-3 sm:mr-1 text-green-500 dark:text-green-400" /> : <Copy className="h-3 w-3 sm:mr-1" />}
-            <span className="hidden sm:inline">Copy</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => svg && downloadSvg(svg)}
-            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
-            title="Download as SVG"
-          >
-            <Download className="h-3 w-3 sm:mr-1" />
-            <span className="hidden sm:inline">SVG</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => svg && downloadSvgAsPng(svg)}
-            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
-            title="Download as PNG"
-          >
-            <Download className="h-3 w-3 sm:mr-1" />
-            <span className="hidden sm:inline">PNG</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={triggerRender}
             className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
-            title="Re-render diagram"
           >
-            <Play className="h-3 w-3" />
+            {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsDiagramExpanded(!isDiagramExpanded)}
-            className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 whitespace-nowrap"
-            title={isDiagramExpanded ? 'Collapse Diagram' : 'Expand Diagram'}
-          >
-            {isDiagramExpanded ? <ChevronUp className="h-3 w-3 sm:mr-1" /> : <ChevronDown className="h-3 w-3 sm:mr-1" />}
-            <span className="hidden sm:inline">{isDiagramExpanded ? 'Collapse' : 'Expand'}</span>
-          </Button>
+          {svg && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => downloadSvg(svg)}
+                className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
+              >
+                <Download className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsDiagramExpanded(!isDiagramExpanded)}
+                className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
+              >
+                {isDiagramExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {showSourceCode && (
-        <div className="mb-4 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-            <div className="flex items-center gap-2">
-              <Code className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Source Code
-              </span>
-            </div>
+        <div className="mb-4 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">SOURCE CODE</span>
             <Button
               variant="ghost"
               size="sm"
               onClick={copySourceCode}
-              className="h-6 w-6 p-0 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 self-end sm:self-auto"
+              className="h-6 w-6 p-0"
             >
-              {sourceCodeCopied ? <Check className="h-3 w-3 text-green-500 dark:text-green-400" /> : <Copy className="h-3 w-3 text-gray-600 dark:text-gray-400" />}
+              {sourceCodeCopied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
             </Button>
           </div>
           <pre className="text-sm text-gray-600 dark:text-gray-300 overflow-x-auto">
@@ -914,66 +637,44 @@ Here's the error message received: "${error}". Please provide only the corrected
         </div>
       )}
 
-      {error && (
-        <div className="my-4 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
-            <span className="text-red-700 dark:text-red-300 font-medium">Rendering Error</span>
-          </div>
-          <p className="text-red-600 dark:text-red-400 text-sm mb-3">{error}</p>
-          <div className="flex gap-2">
-            <Button
-              onClick={triggerRender}
-              variant="outline"
-              size="sm"
-              className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Retry
-            </Button>
-            {onSuggestAiCorrection && (
-              <Button
-                onClick={handleAiFixClick}
-                variant="outline"
-                size="sm"
-                className="text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700"
-              >
-                <Wrench className="h-4 w-4 mr-2" />
-                AI Fix
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {isDiagramExpanded && (
-        <div
-          className="bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-2 overflow-hidden relative"
-          style={{ height: `${componentHeight}px` }}
-          ref={diagramRef}
-        >
-          <div className="absolute top-2 left-2 z-10 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs px-2 py-1 rounded border border-blue-200 dark:border-blue-800">
-            <span className="hidden sm:inline">Use mouse wheel to zoom, drag to pan</span>
-            <span className="sm:hidden">Pinch to zoom, drag to pan</span>
-          </div>
-          <iframe
-            ref={iframeRef}
-            className="w-full h-full border-0 rounded-lg"
-            sandbox="allow-same-origin"
-            title="Mermaid Diagram"
-            style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
-          />
+      {isDiagramExpanded && svg && (
+        <>
+          {/* Iframe rendering */}
           <div
-            className="absolute bottom-0 left-0 right-0 h-3 flex items-center justify-center cursor-ns-resize text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-            onMouseDown={handleResizeMouseDown}
+            className="bg-gray-800 rounded-lg border border-gray-700 p-2 overflow-hidden relative"
+            style={{ height: `${componentHeight}px`, minHeight: '300px' }}
+            ref={diagramRef}
           >
-            <GripVertical className="h-4 w-4" />
+            <div className="absolute top-2 left-2 z-10 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs px-2 py-1 rounded border border-blue-200 dark:border-blue-800">
+              <span className="hidden sm:inline">Use mouse wheel to zoom, drag to pan</span>
+              <span className="sm:hidden">Pinch to zoom, drag to pan</span>
+            </div>
+            <iframe
+              ref={iframeRef}
+              className="w-full h-full border-0 rounded-lg bg-gray-800"
+              sandbox="allow-same-origin allow-scripts"
+              title="Mermaid Diagram"
+              style={{ cursor: isPanning ? 'grabbing' : 'grab', display: 'block' }}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+            />
+            <div
+              className="absolute bottom-0 left-0 right-0 h-3 flex items-center justify-center cursor-ns-resize text-gray-400 hover:text-gray-300 bg-gray-800/50"
+              onMouseDown={handleResizeMouseDown}
+            >
+              <GripVertical className="h-4 w-4" />
+            </div>
           </div>
-        </div>
+          
+          {/* Fallback: Direct SVG rendering (hidden, for debugging) */}
+          <div 
+            className="hidden mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700 overflow-auto"
+            style={{ maxHeight: '400px' }}
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        </>
       )}
     </div>
   );

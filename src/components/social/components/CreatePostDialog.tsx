@@ -1,3 +1,4 @@
+// Fixed CreatePostDialog.tsx
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/dialog';
 import { Button } from '../../ui/button';
@@ -20,6 +21,7 @@ interface CreatePostDialogProps {
   onSubmit: () => void;
   isUploading: boolean;
   currentUser: SocialUserWithDetails | null;
+  groupId?: string; // Optional since not always in group context
 }
 
 export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
@@ -34,6 +36,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
   onSubmit,
   isUploading,
   currentUser,
+  groupId
 }) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {

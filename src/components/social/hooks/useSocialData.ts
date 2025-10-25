@@ -21,6 +21,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const [isLoadingSuggestedUsers, setIsLoadingSuggestedUsers] = useState(false);
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
   const [isLoadingMoreGroups, setIsLoadingMoreGroups] = useState(false);
+  
   // Pagination states
   const [postsOffset, setPostsOffset] = useState(0);
   const [trendingPostsOffset, setTrendingPostsOffset] = useState(0);
@@ -35,33 +36,38 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const [hasMoreUserPosts, setHasMoreUserPosts] = useState(true);
   const [hasMoreSuggestedUsers, setHasMoreSuggestedUsers] = useState(true);
   const [hasMoreGroups, setHasMoreGroups] = useState(true);
-// Constants
-const POST_LIMIT = DEFAULT_LIMITS.POSTS_PER_PAGE;
-const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
+
+  // Constants
+  const POST_LIMIT = DEFAULT_LIMITS.POSTS_PER_PAGE;
+  const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
+  
   // Refs for cleanup
   const subscriptionsRef = useRef<any[]>([]);
   const currentUserIdRef = useRef<string | null>(null);
-
+  const isInitializedRef = useRef(false);
 
   // Initialize user and setup realtime listeners
   useEffect(() => {
     initializeSocialUser();
     return () => {
-      // Cleanup all subscriptions
       subscriptionsRef.current.forEach(subscription => {
         subscription?.unsubscribe();
       });
     };
   }, []);
 
-  // Fetch initial data when filters change
+  // Fetch initial data when user is loaded OR filters change
   useEffect(() => {
-    resetAndFetchData();
+    if (currentUser && isInitializedRef.current) {
+      resetAndFetchData();
+    }
   }, [sortBy, filterBy]);
 
-  // Setup realtime listeners when user is available
+  // Fetch data when currentUser becomes available for the first time
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !isInitializedRef.current) {
+      isInitializedRef.current = true;
+      resetAndFetchData();
       setupRealtimeListeners();
     }
   }, [currentUser]);
@@ -69,7 +75,11 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
   const initializeSocialUser = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setIsLoading(false);
+        setIsLoadingGroups(false);
+        return;
+      }
 
       currentUserIdRef.current = user.id;
 
@@ -96,42 +106,30 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
         if (createError) {
           console.error('Error creating social user:', createError);
           toast.error('Failed to initialize social profile');
+          setIsLoading(false);
+          setIsLoadingGroups(false);
           return;
         }
         setCurrentUser(newSocialUser);
       } else if (!fetchError && socialUser) {
         setCurrentUser(socialUser);
+      } else {
+        setIsLoading(false);
+        setIsLoadingGroups(false);
       }
     } catch (error) {
       console.error('Error initializing social user:', error);
+      setIsLoading(false);
+      setIsLoadingGroups(false);
     }
   };
 
   const setupRealtimeListeners = () => {
-    // Cleanup existing subscriptions
     subscriptionsRef.current.forEach(subscription => {
       subscription?.unsubscribe();
     });
     subscriptionsRef.current = [];
 
-    // Listen to posts changes
-    // const postsSubscription = supabase
-    //   .channel('social_posts_changes')
-    //   .on(
-    //     'postgres_changes',
-    //     {
-    //       event: '*',
-    //       schema: 'public',
-    //       table: 'social_posts',
-    //       filter: 'privacy=eq.public'
-    //     },
-    //     (payload) => {
-    //       handlePostsRealtimeUpdate(payload);
-    //     }
-    //   )
-    //   .subscribe();
-
-    // Listen to notifications
     if (currentUserIdRef.current) {
       const notificationsSubscription = supabase
         .channel('user_notifications')
@@ -144,7 +142,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
             filter: `user_id=eq.${currentUserIdRef.current}`
           },
           async (payload) => {
-            // Fetch the complete notification data with related information
             try {
               const { data: notificationData, error } = await supabase
                 .from('social_notifications')
@@ -157,14 +154,10 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
                 .single();
 
               if (!error && notificationData) {
-                // Call the callback to update notifications state
                 if (onNotificationReceived) {
                   onNotificationReceived(notificationData);
                 }
-
-                // Show toast notification
-                let message = 'You have a new notification!';
-                toast.info(message);
+                toast.info('You have a new notification!');
               }
             } catch (error) {
               console.error('Error fetching notification details:', error);
@@ -180,9 +173,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       subscriptionsRef.current.push(notificationsSubscription);
     }
 
-    
-
-    // Listen to likes changes
     const likesSubscription = supabase
       .channel('social_likes_changes')
       .on(
@@ -198,7 +188,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       )
       .subscribe();
 
-    // Listen to comments changes
     const commentsSubscription = supabase
       .channel('social_comments_changes')
       .on(
@@ -214,7 +203,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       )
       .subscribe();
 
-    // Listen to follows changes
     if (currentUserIdRef.current) {
       const followsSubscription = supabase
         .channel('social_follows_changes')
@@ -227,7 +215,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
             filter: `follower_id=eq.${currentUserIdRef.current}`
           },
           (payload) => {
-            // Refresh suggested users when follow status changes
             if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
               fetchSuggestedUsers(true);
             }
@@ -238,44 +225,7 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       subscriptionsRef.current.push(followsSubscription);
     }
 
-    subscriptionsRef.current.push( likesSubscription, commentsSubscription);
-  };
-
-  const handlePostsRealtimeUpdate = (payload: any) => {
-    const { eventType, new: newRecord, old: oldRecord } = payload;
-
-    if (eventType === 'INSERT') {
-      // Add new post to the beginning of the list if it matches current filters
-      fetchPostDetails(newRecord.id).then(postDetails => {
-        if (postDetails) {
-          setPosts(prev => [postDetails, ...prev]);
-          // Also update trending posts if it has high engagement
-          if (postDetails.likes_count > 0 || postDetails.comments_count > 0) {
-            setTrendingPosts(prev => [postDetails, ...prev.slice(0, DEFAULT_LIMITS.POSTS_PER_PAGE - 1)]);
-          }
-        }
-      });
-    } else if (eventType === 'UPDATE') {
-      // Update existing post
-      fetchPostDetails(newRecord.id).then(postDetails => {
-        if (postDetails) {
-          const updatePost = (prev: SocialPostWithDetails[]) =>
-            prev.map(post => post.id === postDetails.id ? postDetails : post);
-
-          setPosts(updatePost);
-          setTrendingPosts(updatePost);
-          setUserPosts(updatePost);
-        }
-      });
-    } else if (eventType === 'DELETE') {
-      // Remove deleted post
-      const removePost = (prev: SocialPostWithDetails[]) =>
-        prev.filter(post => post.id !== oldRecord.id);
-
-      setPosts(removePost);
-      setTrendingPosts(removePost);
-      setUserPosts(removePost);
-    }
+    subscriptionsRef.current.push(likesSubscription, commentsSubscription);
   };
 
   const handleLikesRealtimeUpdate = (payload: any) => {
@@ -343,7 +293,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
 
       if (error || !postData) return null;
 
-      // Fetch hashtags and tags
       const { data: hashtagData } = await supabase
         .from('social_post_hashtags')
         .select(`hashtag:social_hashtags(*)`)
@@ -354,7 +303,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
         .select(`tag:social_tags(*)`)
         .eq('post_id', postId);
 
-      // Check user interactions
       let isLiked = false, isBookmarked = false;
       if (currentUserIdRef.current) {
         const [likesResult, bookmarksResult] = await Promise.all([
@@ -393,28 +341,25 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
   };
 
   const resetAndFetchData = () => {
-    // Reset pagination states
     setPostsOffset(0);
     setTrendingPostsOffset(0);
     setUserPostsOffset(0);
     setSuggestedUsersOffset(0);
     setGroupsOffset(0);
+    groupPageRef.current = 0;
 
-    // Reset has more states
     setHasMorePosts(true);
     setHasMoreTrendingPosts(true);
     setHasMoreUserPosts(true);
     setHasMoreSuggestedUsers(true);
     setHasMoreGroups(true);
 
-    // Clear existing data
     setPosts([]);
     setTrendingPosts([]);
     setUserPosts([]);
     setSuggestedUsers([]);
     setGroups([]);
 
-    // Fetch initial data
     fetchPosts(true);
     fetchTrendingPosts(true);
     fetchUserPosts(true);
@@ -485,11 +430,15 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
         const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
         const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
         const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-
+      
         return {
           ...post,
           privacy: post.privacy as "public" | "followers" | "private",
-          media: post.media || [],
+          media: (post.media || []).map((m: any) => ({
+            ...m,
+            type: m.type as "image" | "video" | "document"
+          })),
+          group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
           hashtags: postHashtags,
           tags: postTags,
           is_liked: isLiked,
@@ -520,12 +469,12 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
   const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
     try {
       if (!reset && (!hasMoreTrendingPosts || isLoadingMorePosts)) return;
-
+  
       setIsLoading(reset);
       if (!reset) setIsLoadingMorePosts(true);
-
+  
       const currentOffset = reset ? 0 : trendingPostsOffset;
-
+  
       let query = supabase
         .from('social_posts')
         .select(`
@@ -537,18 +486,18 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
         .eq('privacy', 'public')
         .order('likes_count', { ascending: false })
         .order('comments_count', { ascending: false });
-
+  
       const { data: postsData, error: postsError } = await query
         .range(currentOffset, currentOffset + DEFAULT_LIMITS.POSTS_PER_PAGE - 1);
-
+  
       if (postsError) throw postsError;
       if (!postsData || postsData.length === 0) {
         setHasMoreTrendingPosts(false);
         return;
       }
-
+  
       const postIds = postsData.map(post => post.id);
-
+  
       const [hashtagResult, tagResult, likeResult, bookmarkResult] = await Promise.all([
         supabase
           .from('social_post_hashtags')
@@ -558,34 +507,35 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
           .from('social_post_tags')
           .select(`post_id, tag:social_tags(*)`)
           .in('post_id', postIds),
-        currentUserIdRef.current ? supabase
-          .from('social_likes')
-          .select('post_id')
-          .eq('user_id', currentUserIdRef.current)
-          .in('post_id', postIds) : { data: [] },
-        currentUserIdRef.current ? supabase
-          .from('social_bookmarks')
-          .select('post_id')
-          .eq('user_id', currentUserIdRef.current)
-          .in('post_id', postIds) : { data: [] }
+        currentUserIdRef.current
+          ? supabase
+              .from('social_likes')
+              .select('post_id')
+              .eq('user_id', currentUserIdRef.current)
+              .in('post_id', postIds)
+          : { data: [] },
+        currentUserIdRef.current
+          ? supabase
+              .from('social_bookmarks')
+              .select('post_id')
+              .eq('user_id', currentUserIdRef.current)
+              .in('post_id', postIds)
+          : { data: [] }
       ]);
-
+  
       const transformedPosts = postsData.map(post => {
         const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
         const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
         const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
         const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-
-      const transformedPosts = postsData.map(post => {
-        const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
-        const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
-        const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
-        const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-
+  
         return {
           ...post,
           privacy: post.privacy as "public" | "followers" | "private",
-          media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
+          media: (post.media || []).map((m: any) => ({
+            ...m,
+            type: m.type as "image" | "video" | "document"
+          })),
           group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
           hashtags: postHashtags,
           tags: postTags,
@@ -593,7 +543,7 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
           is_bookmarked: isBookmarked
         };
       });
-
+  
       if (reset) {
         setTrendingPosts(transformedPosts);
         setTrendingPostsOffset(transformedPosts.length);
@@ -601,7 +551,7 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
         setTrendingPosts(prev => [...prev, ...transformedPosts]);
         setTrendingPostsOffset(prev => prev + transformedPosts.length);
       }
-
+  
       if (transformedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
         setHasMoreTrendingPosts(false);
       }
@@ -612,7 +562,7 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       setIsLoading(false);
       setIsLoadingMorePosts(false);
     }
-  }, [hasMoreTrendingPosts, isLoadingMorePosts, trendingPostsOffset]);
+  }, [hasMoreTrendingPosts, isLoadingMorePosts, trendingPostsOffset, currentUserIdRef]);
 
   const fetchUserPosts = useCallback(async (reset: boolean = false) => {
     try {
@@ -623,6 +573,7 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setUserPosts([]);
+        setIsLoadingUserPosts(false);
         return;
       }
 
@@ -645,6 +596,7 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       if (postsError) throw postsError;
       if (!postsData || postsData.length === 0) {
         setHasMoreUserPosts(false);
+        setIsLoadingUserPosts(false);
         return;
       }
 
@@ -708,59 +660,91 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
     }
   }, [hasMoreUserPosts, isLoadingUserPosts, userPostsOffset]);
 
-  
-  // --- Fetch Groups ---
+  // FIXED: Fetch Groups - removed dependency on currentUser, use currentUserIdRef instead
   const fetchGroups = useCallback(async (reset = true) => {
-    const user = currentUser;
-    if (!user) return;
-
+    // Don't fetch if user isn't authenticated
+    if (!currentUserIdRef.current) {
+      setIsLoadingGroups(false);
+      return;
+    }
+  
     if (reset) {
       groupPageRef.current = 0;
       setGroups([]);
       setHasMoreGroups(true);
     }
     if (!hasMoreGroups && !reset) return;
-
+  
     const start = groupPageRef.current * GROUP_LIMIT;
     const end = start + GROUP_LIMIT - 1;
-
+  
     try {
       if (!reset) setIsLoadingMoreGroups(true);
-
-      // Fetch groups and check membership status in one query
-      let { data, error, count } = await supabase
+      else setIsLoadingGroups(true);
+  
+      const { data: publicGroups, error: publicError } = await supabase
         .from('social_groups')
         .select(`
           *,
-          creator:social_users!social_groups_creator_id_fkey(*),
-          member_status:social_group_members!inner(user_id, role, status)
-        `, { count: 'exact' })
-        // Only fetch public groups or groups where the current user is a member
-        .or(`privacy.eq.public,member_status.user_id.eq.${user.id}`)
+          creator:social_users!social_groups_created_by_fkey(*)
+        `)
+        .eq('privacy', 'public')
         .range(start, end)
         .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const newGroups = (data as any[]).map(group => {
-        const memberInfo = group.member_status.find((m: any) => m.user_id === user.id);
-
-        return {
+  
+      if (publicError) throw publicError;
+  
+      const { data: memberGroups, error: memberError } = await supabase
+        .from('social_group_members')
+        .select(`
+          user_id,
+          role,
+          status,
+          group:social_groups!social_group_members_group_id_fkey(
+            *,
+            creator:social_users!social_groups_created_by_fkey(*)
+          )
+        `)
+        .eq('user_id', currentUserIdRef.current)
+        .eq('status', 'active')
+        .range(start, end)
+        .order('joined_at', { ascending: false });
+  
+      if (memberError) throw memberError;
+  
+      const groupsMap = new Map();
+  
+      publicGroups?.forEach(group => {
+        groupsMap.set(group.id, {
+          ...group,
+          is_member: false,
+          member_role: null,
+          member_status: null,
+        });
+      });
+  
+      memberGroups?.forEach(membership => {
+        const group = membership.group;
+        groupsMap.set(group.id, {
           ...group,
           creator: group.creator,
-          is_member: !!memberInfo && memberInfo.status === 'active',
-          member_role: memberInfo?.role || null,
-          member_status: memberInfo?.status || null,
-        } as SocialGroupWithDetails;
+          is_member: true,
+          member_role: membership.role,
+          member_status: membership.status,
+        });
       });
-
+  
+      const newGroups = Array.from(groupsMap.values())
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, GROUP_LIMIT) as SocialGroupWithDetails[];
+  
       setGroups(prev => reset ? newGroups : [...prev, ...newGroups]);
       groupPageRef.current += 1;
-
+  
       if (newGroups.length < GROUP_LIMIT) {
         setHasMoreGroups(false);
       }
-
+  
     } catch (error) {
       console.error('Error fetching groups:', error);
       setHasMoreGroups(false);
@@ -769,8 +753,7 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       setIsLoadingGroups(false);
       setIsLoadingMoreGroups(false);
     }
-  }, [currentUser, hasMoreGroups]); // Depend on currentUser to ensure group status is correct
-
+  }, [hasMoreGroups]); // Removed currentUser dependency
 
   const fetchTrendingHashtags = async () => {
     try {
@@ -810,7 +793,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       const currentOffset = reset ? 0 : suggestedUsersOffset;
       const limit = DEFAULT_LIMITS.SUGGESTED_USERS;
 
-      // Get users the current user is already following
       const { data: followingData } = await supabase
         .from('social_follows')
         .select('following_id')
@@ -819,7 +801,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
       const followingIds = followingData?.map(f => f.following_id) || [];
       const excludeIds = [...followingIds, user.id];
 
-      // Get current user's interests
       const { data: currentUserData } = await supabase
         .from('social_users')
         .select('interests')
@@ -844,17 +825,14 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
         return;
       }
 
-      // Score and rank users
       const scoredUsers = candidateUsers.map(candidate => {
         let score = 0;
 
-        // Common interests
         const commonInterests = candidate.interests?.filter(interest =>
           userInterests.includes(interest)
         ) || [];
         score += commonInterests.length * 10;
 
-        // Recent activity
         const lastActive = new Date(candidate.last_active);
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -862,22 +840,18 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
           score += 5;
         }
 
-        // Follower count
         const followerBonus = Math.min(candidate.followers_count / 100, 5);
         score += followerBonus;
 
-        // Post activity
         const postBonus = Math.min(candidate.posts_count / 10, 3);
         score += postBonus;
 
-        // Profile completeness
         let completenessScore = 0;
         if (candidate.avatar_url) completenessScore += 1;
         if (candidate.bio && candidate.bio !== 'New to the community!') completenessScore += 1;
         if (candidate.interests && candidate.interests.length > 0) completenessScore += 1;
         score += completenessScore;
 
-        // Verified users
         if (candidate.is_verified) score += 2;
 
         return { ...candidate, recommendation_score: score };
@@ -907,7 +881,6 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
     }
   }, [isLoadingSuggestedUsers, hasMoreSuggestedUsers, suggestedUsersOffset, suggestedUsers.length]);
 
-  // Load more functions
   const loadMorePosts = () => {
     if (!isLoadingMorePosts && hasMorePosts) {
       fetchPosts(false);
@@ -957,6 +930,7 @@ const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
     isLoadingUserPosts,
     isLoadingSuggestedUsers,
     isLoadingMorePosts,
+    isLoadingMoreGroups,
     hasMorePosts,
     hasMoreTrendingPosts,
     hasMoreUserPosts,

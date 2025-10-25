@@ -102,6 +102,7 @@ export interface ChatSession {
   document_ids: string[];
   message_count?: number;
   user_id: string;
+  default_folder_id?: string | null;
 }
 export interface MessagePart {
   text?: string;

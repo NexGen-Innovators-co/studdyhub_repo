@@ -1,5 +1,6 @@
+// Modified Index.tsx
 import React, { useEffect, useMemo } from 'react';
-import { useNavigate, useLocation, useParams } from 'react-router-dom'; // Import useParams
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
 import { TabContent } from '../components/layout/TabContent';
@@ -10,7 +11,22 @@ import { LoadingScreen } from '@/components/ui/bookloader';
 const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { tab, postId } = useParams<{ tab?: string; postId?: string }>(); // Get route params
+  const params = useParams();
+
+  // Determine activeSocialTab and socialId based on path and params
+  let activeSocialTab: string | undefined;
+  let socialPostId: string | undefined;
+  let socialGroupId: string | undefined;
+
+  if (location.pathname.startsWith('/social/group')) {
+    activeSocialTab = 'group';
+    socialGroupId = params.groupId;
+  } else if (location.pathname.startsWith('/social/post')) {
+    activeSocialTab = 'post';
+    socialPostId = params.postId;
+  } else {
+    activeSocialTab = params.tab as string | undefined;
+  }
 
   // Get everything from context
   const {
@@ -86,7 +102,7 @@ const Index = () => {
     onNewNote: appOperations.createNewNote,
     isSidebarOpen,
     onToggleSidebar: () => setIsSidebarOpen(prev => !prev),
-    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', // Include 'social'
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', 
     fullName: userProfile?.full_name || '',
     avatarUrl: userProfile?.avatar_url || '',
   }), [
@@ -105,7 +121,7 @@ const Index = () => {
     selectedCategory,
     onCategoryChange: setSelectedCategory,
     noteCount: notes.length,
-    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', // Include 'social'
+    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', 
     onTabChange: (tab: string) => {
       if (tab.startsWith('chat/') && activeChatSessionId) {
         navigate(`/${tab}`);
@@ -155,8 +171,9 @@ const Index = () => {
   const tabContentProps = useMemo(() => ({
     activeTab: currentActiveTab as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social',
     // Social Tab Routing
-    activeSocialTab: tab,
-    socialPostId: postId,
+    activeSocialTab,
+    socialPostId,
+    socialGroupId, // Added
     filteredNotes,
     activeNote,
     recordings: recordings ?? [],
@@ -176,7 +193,7 @@ const Index = () => {
     onUpdateScheduleItem: appOperations.updateScheduleItem,
     onDeleteScheduleItem: appOperations.deleteScheduleItem,
     onSendMessage: handleSubmitMessage,
-    onDocumentUploaded: appOperations.handleDocumentUploaded,
+    // onDocumentUploaded: appOperations.handleDocumentUploaded,
     onDocumentUpdated: appOperations.updateDocument,
     onDocumentDeleted: appOperations.handleDocumentDeleted,
     onProfileUpdate: appOperations.handleProfileUpdate,
@@ -218,8 +235,9 @@ const Index = () => {
     handleReplaceOptimisticMessage,
   }), [
     currentActiveTab,
-    tab, // Pass social tab
-    postId, // Pass post ID
+    activeSocialTab,
+    socialPostId,
+    socialGroupId, // Added
     filteredNotes,
     activeNote,
     recordings,
@@ -255,8 +273,9 @@ const Index = () => {
 
   // Determine header visibility based on current path
   const headerClass = useMemo(() => {
-    return "flex items-center sm:hidden justify-between w-full p-0 sm:p-0 shadow-none bg-transparent border-none";
-    }, [location.pathname]);
+    const isNotesTab = currentActiveTab === 'notes';
+    return `flex items-center ${isNotesTab ? '' : 'sm:hidden'} justify-between w-full p-0 sm:p-0 shadow-none bg-transparent border-none`;
+  }, [currentActiveTab]);
 
   // Loading states
   if (authLoading) {

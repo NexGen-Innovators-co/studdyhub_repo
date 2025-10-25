@@ -567,7 +567,7 @@ const LoadingScreen = ({
           <div
             className={`h-full transition-all duration-500 ease-out ${progress === 100
               ? 'bg-green-500'
-              : 'bg-gradient-to-r from-blue-500 to-purple-600'
+              : 'bg-gradient-to-r from-blue-500 to-blue-600'
               }`}
             style={{
               width: `${progress}%`,

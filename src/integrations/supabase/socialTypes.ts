@@ -1,3 +1,4 @@
+// integrations/supabase/socialTypes.ts
 // Social Network Types for Supabase
 // These types extend the existing Database type with social network tables
 
@@ -5,9 +6,9 @@ export interface SocialUser {
     id: string;
     username: string;
     display_name: string;
-    avatar_url: string; // Remove the ? to make it required
-    bio: string; // Remove the ? to make it required
-    interests: string[];
+    avatar_url?: string;
+    bio?: string;
+    interests?: string[];
     is_verified: boolean;
     is_contributor: boolean;
     followers_count: number;
@@ -16,6 +17,7 @@ export interface SocialUser {
     last_active: string;
     created_at: string;
     updated_at: string;
+    email?: string;
 }
 
 export interface SocialPost {
@@ -30,6 +32,7 @@ export interface SocialPost {
     bookmarks_count: number;
     created_at: string;
     updated_at: string;
+    views_count?: number;
 }
 
 export interface SocialMedia {
@@ -56,28 +59,40 @@ export interface SocialTag {
     name: string;
     created_at: string;
 }
+// Add this to your existing socialTypes.ts file
 
+// Update SocialGroup interface
 export interface SocialGroup {
     id: string;
     name: string;
-    description?: string;
-    avatar_url?: string;
-    cover_image_url?: string;
-    category: string;
+    description: string | null;
+    avatar_url: string | null;
+    cover_image_url: string | null;
+    category: string; // ADD THIS LINE
     privacy: 'public' | 'private';
     members_count: number;
     posts_count: number;
     created_by: string;
     created_at: string;
     updated_at: string;
-}
-
+  }
+  
+  // Update CreateGroupData interface
+  export interface CreateGroupData {
+    name: string;
+    description: string;
+    category?: string; // ADD THIS LINE
+    privacy: 'public' | 'private';
+    avatar_url?: string;
+    cover_image_url?: string;
+  }
 export interface SocialGroupMember {
     id: string;
     group_id: string;
     user_id: string;
     role: 'admin' | 'moderator' | 'member';
     joined_at: string;
+    status?: 'active' | 'pending' | 'banned';
 }
 
 export interface SocialComment {
@@ -133,8 +148,8 @@ export interface SocialNotification {
     data?: any;
     is_read: boolean;
     created_at: string;
-    actor_id?: string; // Added
-    post_id?: string; // Added
+    actor_id?: string;
+    post_id?: string;
 }
 
 export interface SocialEvent {
@@ -211,38 +226,26 @@ export interface SocialPostWithDetails extends SocialPost {
     group?: SocialGroup;
     is_liked?: boolean;
     is_bookmarked?: boolean;
-    views_count?: number;
 }
-
 
 export interface SocialGroupWithDetails extends SocialGroup {
-
     creator: SocialUserWithDetails;
-  
     is_member: boolean;
-  
     member_role: 'admin' | 'moderator' | 'member' | null;
-  
-    member_status: 'active' | 'pending' | null;
+    member_status: 'active' | 'pending' | 'banned' | null;
 }
-
 
 export interface SocialCommentWithDetails extends SocialComment {
     author: SocialUser;
     media?: SocialCommentMedia[];
     is_liked?: boolean;
-    post_id: string;
 }
 
 export interface SocialUserWithDetails extends SocialUser {
     is_following?: boolean;
     is_followed_by?: boolean;
 }
-export interface CreateGroupData {
-    name: string;
-    description: string;
-    privacy: 'public' | 'private';
-}
+
 
 // Database table names
 export const SOCIAL_TABLES = {
@@ -267,7 +270,7 @@ export const SOCIAL_TABLES = {
     CHAT_MESSAGE_MEDIA: 'social_chat_message_media',
     SHARES: 'social_shares',
     REPORTS: 'social_reports',
-} as const; 
+} as const;
 
 // Social Privacy types
 export type Privacy = SocialPost['privacy'];

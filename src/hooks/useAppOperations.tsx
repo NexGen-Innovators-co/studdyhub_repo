@@ -5,6 +5,7 @@ import { Document, UserProfile } from '../types/Document';
 import { generateId } from '../components/classRecordings/utils/helpers';
 import { toast } from 'sonner';
 import { supabase } from '../integrations/supabase/client';
+import { CreateFolderInput, DocumentFolder, UpdateFolderInput } from '@/types/Folder';
 
 interface UseAppOperationsProps {
   notes: Note[];
@@ -25,6 +26,9 @@ interface UseAppOperationsProps {
   setIsAILoading: (loading: boolean) => void;
   isRealtimeConnected?: boolean;
   refreshData?: () => void;
+  folders: DocumentFolder[];
+  setFolders: (folders: DocumentFolder[] | ((prev: DocumentFolder[]) => DocumentFolder[])) => void;
+
 }
 
 export const useAppOperations = ({
@@ -259,7 +263,113 @@ export const useAppOperations = ({
       if (!isRealtimeConnected) refreshData();
     }
   }, [isRealtimeConnected, refreshData, setRecordings]);
-
+  const createFolder = useCallback(async (input: CreateFolderInput) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+  
+      const { data, error } = await supabase
+        .from('document_folders')
+        .insert({
+          user_id: user.id,
+          name: input.name,
+          parent_folder_id: input.parent_folder_id || null,
+          color: input.color || '#3B82F6',
+          description: input.description || null,
+        })
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      toast.success(`Folder "${input.name}" created successfully`);
+      return data;
+    } catch (error: any) {
+      console.error('Error creating folder:', error);
+      toast.error(`Failed to create folder: ${error.message}`);
+      return null;
+    }
+  }, []);
+  
+  const updateFolder = useCallback(async (folderId: string, input: UpdateFolderInput) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+  
+      const { error } = await supabase
+        .from('document_folders')
+        .update(input)
+        .eq('id', folderId)
+        .eq('user_id', user.id);
+  
+      if (error) throw error;
+  
+      toast.success('Folder updated successfully');
+      return true;
+    } catch (error: any) {
+      console.error('Error updating folder:', error);
+      toast.error(`Failed to update folder: ${error.message}`);
+      return false;
+    }
+  }, []);
+  
+  const deleteFolder = useCallback(async (folderId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+  
+      const { error } = await supabase
+        .from('document_folders')
+        .delete()
+        .eq('id', folderId)
+        .eq('user_id', user.id);
+  
+      if (error) throw error;
+  
+      toast.success('Folder deleted successfully');
+      return true;
+    } catch (error: any) {
+      console.error('Error deleting folder:', error);
+      toast.error(`Failed to delete folder: ${error.message}`);
+      return false;
+    }
+  }, []);
+  
+  const addDocumentToFolder = useCallback(async (documentId: string, folderId: string) => {
+    try {
+      const { error } = await supabase
+        .from('document_folder_items')
+        .insert({ folder_id: folderId, document_id: documentId });
+  
+      if (error) throw error;
+  
+      toast.success('Document added to folder');
+      return true;
+    } catch (error: any) {
+      console.error('Error adding document to folder:', error);
+      toast.error(`Failed to add document to folder: ${error.message}`);
+      return false;
+    }
+  }, []);
+  
+  const removeDocumentFromFolder = useCallback(async (documentId: string, folderId: string) => {
+    try {
+      const { error } = await supabase
+        .from('document_folder_items')
+        .delete()
+        .eq('folder_id', folderId)
+        .eq('document_id', documentId);
+  
+      if (error) throw error;
+  
+      toast.success('Document removed from folder');
+      return true;
+    } catch (error: any) {
+      console.error('Error removing document from folder:', error);
+      toast.error(`Failed to remove document from folder: ${error.message}`);
+      return false;
+    }
+  }, []);
   // const addRecording = useCallback(async (recording: ClassRecording) => {
   //   try {
   //     // Recording is already inserted by ClassRecordings.tsx; only update local state
@@ -581,5 +691,10 @@ export const useAppOperations = ({
     updateDocument,
     handleDocumentDeleted,
     handleProfileUpdate,
+    createFolder,
+    updateFolder,
+    deleteFolder,
+    addDocumentToFolder,
+    removeDocumentFromFolder,
   };
 };

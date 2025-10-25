@@ -2075,7 +2075,7 @@ The application uses the following data structures:
 - Decision nodes: Use amber/warning colors
 - Success/Complete: Use emerald/success colors
 - Error/Alert: Use red/error colors
-- Data/Storage: Use purple/violet tones
+- Data/Storage: Use blue/violet tones
 
 **Enhanced Template:**
 \`\`\`mermaid
@@ -2530,7 +2530,7 @@ starsMaterial.dispose();
             <div class="glassmorphism rounded-2xl p-8 md:p-12 animate-fade-in-up">
                 <div class="gradient-border mb-8 animate-scale-in">
                     <div class="gradient-border-inner text-center">
-                        <h1 class="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-studdy-blue to-purple-600 bg-clip-text text-transparent">
+                        <h1 class="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-studdy-blue to-blue-600 bg-clip-text text-transparent">
                             Welcome to StuddyHub AI
                         </h1>
                         <p class="text-xl md:text-2xl ${currentTheme === 'dark' ? 'text-slate-300' : 'text-slate-600'} mb-8 leading-relaxed">
@@ -2567,8 +2567,8 @@ starsMaterial.dispose();
                     </div>
                     
                     <div class="glassmorphism rounded-xl p-6 hover:scale-105 transition-all duration-300 animate-slide-in-right delay-400">
-                        <div class="w-12 h-12 ${currentTheme === 'dark' ? 'bg-purple-500/20' : 'bg-purple-100'} rounded-lg flex items-center justify-center mb-4 mx-auto">
-                            <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="w-12 h-12 ${currentTheme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'} rounded-lg flex items-center justify-center mb-4 mx-auto">
+                            <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path>
                             </svg>
                         </div>

@@ -57,7 +57,7 @@ export const RecordingSidePanel: React.FC<RecordingSidePanelProps> = ({
         <div className="p-4 border-b border-slate-200/50 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-gray-800 dark:to-gray-700 dark:border-gray-700/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
                 <div className="w-3 h-3 bg-white rounded-full" />
               </div>
               <div>

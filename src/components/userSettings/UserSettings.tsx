@@ -250,7 +250,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 {/* Avatar Section */}
                 <div className="flex flex-col items-center">
                   <div className="relative group">
-                    <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-blue-500 bg-gradient-to-br from-blue-400 to-purple-500">
+                    <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-blue-500 bg-gradient-to-br from-blue-400 to-blue-500">
                       {avatarPreview ? (
                         <img src={avatarPreview} alt="Avatar Preview" className="w-full h-full object-cover" />
                       ) : avatarUrl && typeof avatarUrl === 'string' ? (

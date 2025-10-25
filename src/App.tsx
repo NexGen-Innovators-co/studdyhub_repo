@@ -1,3 +1,4 @@
+// Modified App.tsx
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="/social" element={<Index />} />
               <Route path="/social/:tab" element={<Index />} />
               <Route path="/social/post/:postId" element={<Index />} />
+              <Route path="/social/group/:groupId" element={<Index />} /> {/* Added route for group */}
               <Route path="/settings" element={<Index />} />
 
               {/* Catch-all for NotFound */}

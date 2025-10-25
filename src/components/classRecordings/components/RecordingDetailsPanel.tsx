@@ -165,7 +165,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
       <div className="p-4 sm:p-6 border-b border-slate-200/50 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 dark:border-gray-700/50">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
               <AudioWaveform className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
             <div>
@@ -259,7 +259,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={onCopyAudioUrl}
-                    className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-blue-900/50 transition-colors"
+                    className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/50 transition-colors"
                     disabled={!recording.audioUrl}
                   >
                     <Copy className="h-4 w-4 mr-2" /> Copy URL
@@ -452,7 +452,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
               <Button
                 onClick={() => onReprocessAudio(recording)}
                 variant="outline"
-                className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800 transition-colors py-2.5"
+                className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800 transition-colors py-2.5"
                 disabled={!recording.audioUrl}
               >
                 <RefreshCw className="h-4 w-4 mr-2" />

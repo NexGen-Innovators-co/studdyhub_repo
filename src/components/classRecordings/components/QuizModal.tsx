@@ -66,7 +66,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               </p>
               <Button
                 onClick={onExitQuizMode}
-                className="w-full max-w-xs bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+                className="w-full max-w-xs bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700"
               >
                 Exit Quiz
               </Button>
@@ -150,7 +150,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 </Button>
                 <Button
                   onClick={onNextQuestion}
-                  className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600"
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-500 text-white hover:from-blue-600 hover:to-blue-600"
                 >
                   {isLastQuestion ? 'Submit Quiz' : 'Next Question'} <ArrowRight className="h-4 w-4" />
                 </Button>

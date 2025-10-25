@@ -172,7 +172,7 @@ const UserGuidePage: React.FC = () => {
 
                     <section ref={sectionRefs.coreFeatures} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
                         <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-3">
-                            <Book className="h-8 w-8 text-purple-600 dark:text-purple-400" /> 3. Core Features
+                            <Book className="h-8 w-8 text-blue-600 dark:text-blue-400" /> 3. Core Features
                         </h2>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
