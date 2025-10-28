@@ -109,7 +109,7 @@ interface AppContextType extends AppState {
 }
 
 // Create context
-const AppContext = createContext<AppContextType | undefined>(undefined);
+export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Constants
 const MAX_HISTORY_MESSAGES = 1000;
@@ -163,6 +163,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     folderTree,
     setFolders,
     loadFolders,
+    loadSpecificDocuments,
+    loadSpecificNotes,
   } = appData;
   const addDocument = useCallback((document: AppDocument) => {
     setDocuments(prev => [document, ...prev]);
@@ -297,9 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return context;
   }, []);
-
-  // Chat session management
-  const loadChatSessions = useCallback(async () => {
+    const loadChatSessions = useCallback(async () => {
     try {
       if (!user) return;
 
@@ -340,7 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       payload: CHAT_SESSIONS_PER_PAGE
     });
   }, []);
-
+  
   const createNewChatSession = useCallback(async (): Promise<string | null> => {
     try {
       if (!user) {
@@ -484,6 +484,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         session_id: msg.session_id,
         has_been_displayed: msg.has_been_displayed || false,
       }));
+      loadSpecificDocuments(user.id, fetchedMessages.flatMap(m => m.attachedDocumentIds || []));
+      loadSpecificNotes(user.id, fetchedMessages.flatMap(m => m.attachedNoteIds || []));
 
       setChatMessages(prevAllMessages => {
         const otherSessionMessages = prevAllMessages.filter(m => m.session_id !== sessionId);
@@ -902,13 +904,4 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {children}
     </AppContext.Provider>
   );
-}
-
-// Custom hook to use the context
-export function useAppContext() {
-  const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error('useAppContext must be used within an AppProvider');
-  }
-  return context;
 }

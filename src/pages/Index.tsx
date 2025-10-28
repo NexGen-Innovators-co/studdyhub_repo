@@ -4,8 +4,8 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
 import { TabContent } from '../components/layout/TabContent';
-import { useAppContext } from '../contexts/AppContext';
-import { useMessageHandlers } from '../hooks/useAppContext';
+import { useAppContext } from '../hooks/useAppContext';
+import { useMessageHandlers } from '../hooks/useMessageHandlers';
 import { LoadingScreen } from '@/components/ui/bookloader';
 
 const Index = () => {

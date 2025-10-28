@@ -1166,7 +1166,7 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
 
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-950 rounded-lg shadow-sm">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-950 rounded-lg shadow-sm overflow-y-auto">
       <NoteEditorHeader
         title={title}
         setTitle={setTitle}

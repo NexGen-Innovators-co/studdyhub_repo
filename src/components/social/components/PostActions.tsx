@@ -17,10 +17,10 @@ export const PostActions: React.FC<PostActionsProps> = ({
           variant="ghost"
           size="sm"
           onClick={() => onLike(post.id, post.is_liked || false)}
-          className={`${post.is_liked ? 'text-red-500 ' : ''} hover:bg-red-50 dark:hover:bg-red-10 0 dark:text-red-600 dark hover:text-red-500 transition-colors`}
+          className={`${post.is_liked ? 'text-red-500 ' : ''} hover:bg-red-50 dark:hover:bg-red-100 dark:text-red-600 dark:hover:text-red-500 transition-colors`}
         >
           <Heart className={`h-4 w-4 mr-1 ${post.is_liked ? 'fill-current' : ''}`} />
-          Like
+          <span className="hidden sm:inline">Like</span>
         </Button>
 
         <Button
@@ -30,7 +30,7 @@ export const PostActions: React.FC<PostActionsProps> = ({
           className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-100 dark:hover:text-blue-500 transition-colors"
         >
           <MessageCircle className="h-4 w-4 mr-1" />
-          Comment
+          <span className="hidden sm:inline">Comment</span>
         </Button>
 
         <Button
@@ -40,7 +40,7 @@ export const PostActions: React.FC<PostActionsProps> = ({
           className="hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-100 dark:hover:text-green-500 transition-colors"
         >
           <Share2 className="h-4 w-4 mr-1" />
-          Share
+          <span className="hidden sm:inline">Share</span>
         </Button>
       </div>
 

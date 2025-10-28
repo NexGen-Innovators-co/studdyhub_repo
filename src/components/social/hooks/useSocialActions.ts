@@ -529,18 +529,164 @@ export const useSocialActions = (
       throw error; // Re-throw so the UI can handle the error
     }
   };
+// Add these functions to useSocialActions.ts
 
-  return {
-    createPost,
-    updateProfile,
-    toggleLike,
-    toggleBookmark,
-    sharePost,
-    followUser,
-    isUploading,
-    createGroup,
-    joinGroup,
-    leaveGroup,
-    isGroupMember,
-  };
+// Add to the existing useSocialActions hook
+
+const deletePost = async (postId: string): Promise<boolean> => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // Get the post to verify ownership
+    const { data: post, error: fetchError } = await supabase
+      .from('social_posts')
+      .select('author_id')
+      .eq('id', postId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (post.author_id !== user.id) {
+      toast.error('You can only delete your own posts');
+      return false;
+    }
+
+    // Delete associated data first
+    await Promise.all([
+      supabase.from('social_likes').delete().eq('post_id', postId),
+      supabase.from('social_comments').delete().eq('post_id', postId),
+      supabase.from('social_bookmarks').delete().eq('post_id', postId),
+      supabase.from('social_media').delete().eq('post_id', postId),
+      supabase.from('social_post_hashtags').delete().eq('post_id', postId),
+      supabase.from('social_post_tags').delete().eq('post_id', postId),
+      supabase.from('social_notifications').delete().eq('post_id', postId),
+    ]);
+
+    // Delete the post
+    const { error: deleteError } = await supabase
+      .from('social_posts')
+      .delete()
+      .eq('id', postId);
+
+    if (deleteError) throw deleteError;
+
+    // Update local state
+    setPosts(prev => prev.filter(p => p.id !== postId));
+
+    // Update user's posts count
+    if (currentUser) {
+      await supabase
+        .from('social_users')
+        .update({ posts_count: Math.max(0, (currentUser.posts_count || 0) - 1) })
+        .eq('id', user.id);
+
+      setCurrentUser(prev => prev ? {
+        ...prev,
+        posts_count: Math.max(0, prev.posts_count - 1)
+      } : prev);
+    }
+
+    toast.success('Post deleted successfully');
+    return true;
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    toast.error('Failed to delete post');
+    return false;
+  }
 };
+
+const editPost = async (postId: string, newContent: string): Promise<boolean> => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    if (!newContent.trim()) {
+      toast.error('Post content cannot be empty');
+      return false;
+    }
+
+    // Get the post to verify ownership
+    const { data: post, error: fetchError } = await supabase
+      .from('social_posts')
+      .select('author_id, content')
+      .eq('id', postId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (post.author_id !== user.id) {
+      toast.error('You can only edit your own posts');
+      return false;
+    }
+
+    // Update the post
+    const { error: updateError } = await supabase
+      .from('social_posts')
+      .update({
+        content: newContent.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', postId);
+
+    if (updateError) throw updateError;
+
+    // Update local state
+    setPosts(prev => prev.map(p => 
+      p.id === postId 
+        ? { ...p, content: newContent.trim(), updated_at: new Date().toISOString() }
+        : p
+    ));
+
+    // Handle hashtags
+    const oldHashtags = extractHashtags(post.content);
+    const newHashtags = extractHashtags(newContent);
+
+    // Remove old hashtag associations
+    if (oldHashtags.length > 0) {
+      await supabase
+        .from('social_post_hashtags')
+        .delete()
+        .eq('post_id', postId);
+    }
+
+    // Add new hashtag associations
+    for (const tag of newHashtags) {
+      const { data: hashtag, error: hashtagError } = await supabase
+        .from('social_hashtags')
+        .upsert({ name: tag }, { onConflict: 'name' })
+        .select()
+        .single();
+
+      if (!hashtagError && hashtag) {
+        await supabase.from('social_post_hashtags').insert({
+          post_id: postId,
+          hashtag_id: hashtag.id,
+          created_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    toast.success('Post updated successfully');
+    return true;
+  } catch (error) {
+    console.error('Error editing post:', error);
+    toast.error('Failed to update post');
+    return false;
+  }
+};
+
+// Add these to the return statement:
+return {
+  createPost,
+  updateProfile,
+  toggleLike,
+  toggleBookmark,
+  sharePost,
+  followUser,
+  isUploading,
+  createGroup,
+  joinGroup,
+  leaveGroup,
+  isGroupMember,
+  deletePost, // ADD THIS
+  editPost,   // ADD THIS
+}}

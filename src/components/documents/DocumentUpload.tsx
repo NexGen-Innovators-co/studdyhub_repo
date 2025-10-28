@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
 import { Document } from '../../types/Document';
 import { useAuth } from '../../hooks/useAuth';
-import { useAppContext } from '../../contexts/AppContext';
+import { useAppContext } from '../../hooks/useAppContext';
 import { FolderTree } from './FolderTree';
 import { CreateFolderDialog, RenameFolderDialog } from './FolderDialog';
 import { FolderSelector } from './FolderSelector';

@@ -4,7 +4,9 @@ import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails } 
 import { toast } from 'sonner';
 import { SortBy, FilterBy } from '../types/social';
 import { DEFAULT_LIMITS } from '../utils/socialConstants';
-
+export type SuggestedUser = SocialUserWithDetails & {
+  recommendation_score?: number;   // <-- only present when we query with the RPC
+};
 export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: FilterBy, onNotificationReceived?: (notification: any) => void) => {
   const [posts, setPosts] = useState<SocialPostWithDetails[]>([]);
   const [trendingPosts, setTrendingPosts] = useState<SocialPostWithDetails[]>([]);
@@ -12,7 +14,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const [groups, setGroups] = useState<SocialGroupWithDetails[]>([]);
   const [currentUser, setCurrentUser] = useState<SocialUserWithDetails | null>(null);
   const [trendingHashtags, setTrendingHashtags] = useState<any[]>([]);
-  const [suggestedUsers, setSuggestedUsers] = useState<SocialUserWithDetails[]>([]);
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
 
   // Loading states
   const [isLoading, setIsLoading] = useState(true);
@@ -21,7 +23,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const [isLoadingSuggestedUsers, setIsLoadingSuggestedUsers] = useState(false);
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
   const [isLoadingMoreGroups, setIsLoadingMoreGroups] = useState(false);
-  
+
   // Pagination states
   const [postsOffset, setPostsOffset] = useState(0);
   const [trendingPostsOffset, setTrendingPostsOffset] = useState(0);
@@ -37,10 +39,17 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const [hasMoreSuggestedUsers, setHasMoreSuggestedUsers] = useState(true);
   const [hasMoreGroups, setHasMoreGroups] = useState(true);
 
+  // Add to state declarations (near the top of the hook):
+  const [likedPosts, setLikedPosts] = useState<SocialPostWithDetails[]>([]);
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<SocialPostWithDetails[]>([]);
+  const [isLoadingLikedPosts, setIsLoadingLikedPosts] = useState(false);
+  const [isLoadingBookmarkedPosts, setIsLoadingBookmarkedPosts] = useState(false);
+
+
   // Constants
   const POST_LIMIT = DEFAULT_LIMITS.POSTS_PER_PAGE;
   const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
-  
+
   // Refs for cleanup
   const subscriptionsRef = useRef<any[]>([]);
   const currentUserIdRef = useRef<string | null>(null);
@@ -66,11 +75,12 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   // Fetch data when currentUser becomes available for the first time
   useEffect(() => {
     if (currentUser && !isInitializedRef.current) {
-      isInitializedRef.current = true;
-      resetAndFetchData();
-      setupRealtimeListeners();
+    isInitializedRef.current = true;
+    // **CRITICAL: Call resetAndFetchData after isInitializedRef is true**
+    resetAndFetchData();
+    setupRealtimeListeners();
     }
-  }, [currentUser]);
+    }, [currentUser]);
 
   const initializeSocialUser = async () => {
     try {
@@ -430,7 +440,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
         const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
         const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
         const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-      
+
         return {
           ...post,
           privacy: post.privacy as "public" | "followers" | "private",
@@ -469,12 +479,12 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
     try {
       if (!reset && (!hasMoreTrendingPosts || isLoadingMorePosts)) return;
-  
+
       setIsLoading(reset);
       if (!reset) setIsLoadingMorePosts(true);
-  
+
       const currentOffset = reset ? 0 : trendingPostsOffset;
-  
+
       let query = supabase
         .from('social_posts')
         .select(`
@@ -486,18 +496,18 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
         .eq('privacy', 'public')
         .order('likes_count', { ascending: false })
         .order('comments_count', { ascending: false });
-  
+
       const { data: postsData, error: postsError } = await query
         .range(currentOffset, currentOffset + DEFAULT_LIMITS.POSTS_PER_PAGE - 1);
-  
+
       if (postsError) throw postsError;
       if (!postsData || postsData.length === 0) {
         setHasMoreTrendingPosts(false);
         return;
       }
-  
+
       const postIds = postsData.map(post => post.id);
-  
+
       const [hashtagResult, tagResult, likeResult, bookmarkResult] = await Promise.all([
         supabase
           .from('social_post_hashtags')
@@ -509,26 +519,26 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
           .in('post_id', postIds),
         currentUserIdRef.current
           ? supabase
-              .from('social_likes')
-              .select('post_id')
-              .eq('user_id', currentUserIdRef.current)
-              .in('post_id', postIds)
+            .from('social_likes')
+            .select('post_id')
+            .eq('user_id', currentUserIdRef.current)
+            .in('post_id', postIds)
           : { data: [] },
         currentUserIdRef.current
           ? supabase
-              .from('social_bookmarks')
-              .select('post_id')
-              .eq('user_id', currentUserIdRef.current)
-              .in('post_id', postIds)
+            .from('social_bookmarks')
+            .select('post_id')
+            .eq('user_id', currentUserIdRef.current)
+            .in('post_id', postIds)
           : { data: [] }
       ]);
-  
+
       const transformedPosts = postsData.map(post => {
         const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
         const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
         const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
         const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-  
+
         return {
           ...post,
           privacy: post.privacy as "public" | "followers" | "private",
@@ -543,7 +553,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
           is_bookmarked: isBookmarked
         };
       });
-  
+
       if (reset) {
         setTrendingPosts(transformedPosts);
         setTrendingPostsOffset(transformedPosts.length);
@@ -551,7 +561,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
         setTrendingPosts(prev => [...prev, ...transformedPosts]);
         setTrendingPostsOffset(prev => prev + transformedPosts.length);
       }
-  
+
       if (transformedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
         setHasMoreTrendingPosts(false);
       }
@@ -667,21 +677,21 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
       setIsLoadingGroups(false);
       return;
     }
-  
+
     if (reset) {
       groupPageRef.current = 0;
       setGroups([]);
       setHasMoreGroups(true);
     }
     if (!hasMoreGroups && !reset) return;
-  
+
     const start = groupPageRef.current * GROUP_LIMIT;
     const end = start + GROUP_LIMIT - 1;
-  
+
     try {
       if (!reset) setIsLoadingMoreGroups(true);
       else setIsLoadingGroups(true);
-  
+
       const { data: publicGroups, error: publicError } = await supabase
         .from('social_groups')
         .select(`
@@ -691,9 +701,9 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
         .eq('privacy', 'public')
         .range(start, end)
         .order('created_at', { ascending: false });
-  
+
       if (publicError) throw publicError;
-  
+
       const { data: memberGroups, error: memberError } = await supabase
         .from('social_group_members')
         .select(`
@@ -709,11 +719,11 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
         .eq('status', 'active')
         .range(start, end)
         .order('joined_at', { ascending: false });
-  
+
       if (memberError) throw memberError;
-  
+
       const groupsMap = new Map();
-  
+
       publicGroups?.forEach(group => {
         groupsMap.set(group.id, {
           ...group,
@@ -722,7 +732,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
           member_status: null,
         });
       });
-  
+
       memberGroups?.forEach(membership => {
         const group = membership.group;
         groupsMap.set(group.id, {
@@ -733,18 +743,18 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
           member_status: membership.status,
         });
       });
-  
+
       const newGroups = Array.from(groupsMap.values())
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, GROUP_LIMIT) as SocialGroupWithDetails[];
-  
+
       setGroups(prev => reset ? newGroups : [...prev, ...newGroups]);
       groupPageRef.current += 1;
-  
+
       if (newGroups.length < GROUP_LIMIT) {
         setHasMoreGroups(false);
       }
-  
+
     } catch (error) {
       console.error('Error fetching groups:', error);
       setHasMoreGroups(false);
@@ -770,116 +780,252 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
       console.error('Error fetching trending hashtags:', error);
     }
   };
-
-  const fetchSuggestedUsers = useCallback(async (reset: boolean = false) => {
+  // Add these fetch functions:
+  const fetchLikedPosts = useCallback(async () => {
     try {
-      if (reset) {
-        setIsLoadingSuggestedUsers(true);
-        setSuggestedUsersOffset(0);
-        setSuggestedUsers([]);
-        setHasMoreSuggestedUsers(true);
-      } else if (isLoadingSuggestedUsers || !hasMoreSuggestedUsers) {
-        return;
-      } else {
-        setIsLoadingSuggestedUsers(true);
-      }
+      setIsLoadingLikedPosts(true);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setIsLoadingSuggestedUsers(false);
+        setLikedPosts([]);
         return;
       }
 
-      const currentOffset = reset ? 0 : suggestedUsersOffset;
-      const limit = DEFAULT_LIMITS.SUGGESTED_USERS;
+      // Get all liked post IDs
+      const { data: likesData, error: likesError } = await supabase
+        .from('social_likes')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
-      const { data: followingData } = await supabase
-        .from('social_follows')
-        .select('following_id')
-        .eq('follower_id', user.id);
-
-      const followingIds = followingData?.map(f => f.following_id) || [];
-      const excludeIds = [...followingIds, user.id];
-
-      const { data: currentUserData } = await supabase
-        .from('social_users')
-        .select('interests')
-        .eq('id', user.id)
-        .single();
-
-      const userInterests = currentUserData?.interests || [];
-
-      let query = supabase
-        .from('social_users')
-        .select('*')
-        .not('id', 'in', `(${excludeIds.join(',')})`)
-        .range(currentOffset, currentOffset + limit - 1);
-
-      const { data: candidateUsers, error } = await query;
-
-      if (error) throw error;
-
-      if (!candidateUsers || candidateUsers.length === 0) {
-        setHasMoreSuggestedUsers(false);
-        setIsLoadingSuggestedUsers(false);
+      if (likesError) throw likesError;
+      if (!likesData || likesData.length === 0) {
+        setLikedPosts([]);
         return;
       }
 
-      const scoredUsers = candidateUsers.map(candidate => {
-        let score = 0;
+      const postIds = likesData.map(like => like.post_id);
 
-        const commonInterests = candidate.interests?.filter(interest =>
-          userInterests.includes(interest)
-        ) || [];
-        score += commonInterests.length * 10;
+      // Fetch full post details
+      const { data: postsData, error: postsError } = await supabase
+        .from('social_posts')
+        .select(`
+        *,
+        author:social_users(*),
+        group:social_groups(*),
+        media:social_media(*)
+      `)
+        .in('id', postIds);
 
-        const lastActive = new Date(candidate.last_active);
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        if (lastActive > thirtyDaysAgo) {
-          score += 5;
-        }
+      if (postsError) throw postsError;
+      if (!postsData) {
+        setLikedPosts([]);
+        return;
+      }
 
-        const followerBonus = Math.min(candidate.followers_count / 100, 5);
-        score += followerBonus;
+      // Fetch hashtags and tags
+      const [hashtagResult, tagResult] = await Promise.all([
+        supabase
+          .from('social_post_hashtags')
+          .select(`post_id, hashtag:social_hashtags(*)`)
+          .in('post_id', postIds),
+        supabase
+          .from('social_post_tags')
+          .select(`post_id, tag:social_tags(*)`)
+          .in('post_id', postIds)
+      ]);
 
-        const postBonus = Math.min(candidate.posts_count / 10, 3);
-        score += postBonus;
+      // Transform posts
+      const transformedPosts = postsData.map(post => {
+        const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
+        const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
 
-        let completenessScore = 0;
-        if (candidate.avatar_url) completenessScore += 1;
-        if (candidate.bio && candidate.bio !== 'New to the community!') completenessScore += 1;
-        if (candidate.interests && candidate.interests.length > 0) completenessScore += 1;
-        score += completenessScore;
-
-        if (candidate.is_verified) score += 2;
-
-        return { ...candidate, recommendation_score: score };
+        return {
+          ...post,
+          privacy: post.privacy as "public" | "followers" | "private",
+          media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
+          group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
+          hashtags: postHashtags,
+          tags: postTags,
+          is_liked: true, // Always true for liked posts
+          is_bookmarked: false // Will need to check if also bookmarked
+        };
       });
 
-      const sortedUsers = scoredUsers.sort((a, b) => b.recommendation_score - a.recommendation_score);
-
-      if (reset) {
-        setSuggestedUsers(sortedUsers);
-      } else {
-        setSuggestedUsers(prev => [...prev, ...sortedUsers]);
-      }
-
-      setSuggestedUsersOffset(currentOffset + candidateUsers.length);
-
-      if (candidateUsers.length < limit) {
-        setHasMoreSuggestedUsers(false);
-      }
-
+      setLikedPosts(transformedPosts);
     } catch (error) {
-      console.error('Error fetching suggested users:', error);
-      if (reset || suggestedUsers.length === 0) {
-        toast.error('Failed to load suggested users');
-      }
+      console.error('Error fetching liked posts:', error);
+      toast.error('Failed to load liked posts');
     } finally {
-      setIsLoadingSuggestedUsers(false);
+      setIsLoadingLikedPosts(false);
     }
-  }, [isLoadingSuggestedUsers, hasMoreSuggestedUsers, suggestedUsersOffset, suggestedUsers.length]);
+  }, []);
+
+  const fetchBookmarkedPosts = useCallback(async () => {
+    try {
+      setIsLoadingBookmarkedPosts(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setBookmarkedPosts([]);
+        return;
+      }
+
+      // Get all bookmarked post IDs
+      const { data: bookmarksData, error: bookmarksError } = await supabase
+        .from('social_bookmarks')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (bookmarksError) throw bookmarksError;
+      if (!bookmarksData || bookmarksData.length === 0) {
+        setBookmarkedPosts([]);
+        return;
+      }
+
+      const postIds = bookmarksData.map(bookmark => bookmark.post_id);
+
+      // Fetch full post details
+      const { data: postsData, error: postsError } = await supabase
+        .from('social_posts')
+        .select(`
+        *,
+        author:social_users(*),
+        group:social_groups(*),
+        media:social_media(*)
+      `)
+        .in('id', postIds);
+
+      if (postsError) throw postsError;
+      if (!postsData) {
+        setBookmarkedPosts([]);
+        return;
+      }
+
+      // Fetch hashtags and tags
+      const [hashtagResult, tagResult] = await Promise.all([
+        supabase
+          .from('social_post_hashtags')
+          .select(`post_id, hashtag:social_hashtags(*)`)
+          .in('post_id', postIds),
+        supabase
+          .from('social_post_tags')
+          .select(`post_id, tag:social_tags(*)`)
+          .in('post_id', postIds)
+      ]);
+
+      // Transform posts
+      const transformedPosts = postsData.map(post => {
+        const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
+        const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
+
+        return {
+          ...post,
+          privacy: post.privacy as "public" | "followers" | "private",
+          media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
+          group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
+          hashtags: postHashtags,
+          tags: postTags,
+          is_liked: false, // Will need to check if also liked
+          is_bookmarked: true // Always true for bookmarked posts
+        };
+      });
+
+      setBookmarkedPosts(transformedPosts);
+    } catch (error) {
+      console.error('Error fetching bookmarked posts:', error);
+      toast.error('Failed to load bookmarked posts');
+    } finally {
+      setIsLoadingBookmarkedPosts(false);
+    }
+  }, []);
+
+  const fetchSuggestedUsers = useCallback(
+    async (reset: boolean = false) => {
+      try {
+        if (reset) {
+          setIsLoadingSuggestedUsers(true);
+          setSuggestedUsersOffset(0);
+          setSuggestedUsers([]);
+          setHasMoreSuggestedUsers(true);
+        } else if (isLoadingSuggestedUsers || !hasMoreSuggestedUsers) {
+          return;
+        } else {
+          setIsLoadingSuggestedUsers(true);
+        }
+  
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setIsLoadingSuggestedUsers(false);
+          return;
+        }
+  
+        const currentOffset = reset ? 0 : suggestedUsersOffset;
+        const limit = DEFAULT_LIMITS.SUGGESTED_USERS;
+  
+        // --------------------------------------------------------------
+        // 1. Get the IDs we already follow (and ourselves)
+        // --------------------------------------------------------------
+        const { data: followingData } = await supabase
+          .from('social_follows')
+          .select('following_id')
+          .eq('follower_id', user.id);
+  
+        const followingIds = followingData?.map(f => f.following_id) ?? [];
+        const excludeIds = [...followingIds, user.id];
+  
+        // --------------------------------------------------------------
+        // 2. Call the RPC that does **all** the scoring + ordering
+        // --------------------------------------------------------------
+         const { data, error } = await supabase
+          .rpc('get_suggested_users', {
+            p_user_id: user.id,
+            p_exclude_ids: excludeIds,
+            p_limit: limit,
+            p_offset: currentOffset,
+          });
+  
+        const scoredUsers = data as SuggestedUser[] | null;
+  
+        if (error) throw error;
+  
+        if (!scoredUsers || scoredUsers.length === 0) {
+          setHasMoreSuggestedUsers(false);
+          setIsLoadingSuggestedUsers(false);
+          return;
+        }
+  
+        // --------------------------------------------------------------
+        // 3. Update state – **no sorting needed**
+        // --------------------------------------------------------------
+        if (reset) {
+          setSuggestedUsers(scoredUsers);
+        } else {
+          setSuggestedUsers(prev => [...prev, ...scoredUsers]);
+        }
+  
+        setSuggestedUsersOffset(currentOffset + scoredUsers.length);
+  
+        if (scoredUsers.length < limit) {
+          setHasMoreSuggestedUsers(false);
+        }
+      } catch (err) {
+        console.error('Error fetching suggested users:', err);
+        if (reset || suggestedUsers.length === 0) {
+          toast.error('Failed to load suggested users');
+        }
+      } finally {
+        setIsLoadingSuggestedUsers(false);
+      }
+    },
+    [
+      isLoadingSuggestedUsers,
+      hasMoreSuggestedUsers,
+      suggestedUsersOffset,
+      suggestedUsers.length,
+    ]
+  );
 
   const loadMorePosts = () => {
     if (!isLoadingMorePosts && hasMorePosts) {
@@ -946,5 +1092,11 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     loadMoreUserPosts,
     loadMoreGroups,
     loadMoreSuggestedUsers,
+    likedPosts,
+    bookmarkedPosts,
+    isLoadingLikedPosts,
+    isLoadingBookmarkedPosts,
+    refetchLikedPosts: fetchLikedPosts,
+    refetchBookmarkedPosts: fetchBookmarkedPosts,
   };
 };

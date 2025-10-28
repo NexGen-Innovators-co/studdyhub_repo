@@ -1,6 +1,7 @@
-// components/NoteContentArea.tsx
+// components/NoteContentArea.tsx - FIXED VERSION
 import React, { useEffect, useRef, memo, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -21,7 +22,9 @@ import {
   Type,
   Maximize2,
   Minimize2,
-  SplitSquareHorizontal
+  SplitSquareHorizontal,
+  ChevronDown,
+  FileDown
 } from 'lucide-react';
 
 // Component imports
@@ -66,13 +69,13 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fontSize, setFontSize] = useState(16);
   const [viewMode, setViewMode] = useState<'preview' | 'split' | 'editor'>('preview');
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
 
   // Typing animation hook
   const { startTypingAnimation, stopTypingAnimation, currentTypingPosition, isTypingActive } = useTypingAnimation({
     textareaRef,
     setContent,
     onTypingComplete: () => {
-      // console.log('Typing animation completed');
       setTypingComplete(true);
       setIsTypingAI(false);
       isTypingInProgressRef.current = false;
@@ -115,7 +118,7 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
     }
   }, [content]);
 
-  const handleDownload = useCallback(() => {
+  const handleDownloadMarkdown = useCallback(() => {
     const blob = new Blob([content], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -125,7 +128,173 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast.success('Note downloaded!');
+    toast.success('Note downloaded as Markdown!');
+    setShowDownloadMenu(false);
+  }, [content, title]);
+
+  const handleDownloadHTML = useCallback(() => {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>${title}</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+              line-height: 1.6; 
+              max-width: 800px; 
+              margin: 40px auto; 
+              padding: 20px; 
+              color: #24292e;
+            }
+            h1, h2, h3, h4, h5, h6 { 
+              margin-top: 24px; 
+              margin-bottom: 16px; 
+              font-weight: 600;
+              line-height: 1.25;
+            }
+            h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+            h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+            p { margin-bottom: 16px; }
+            code { 
+              background: #f6f8fa; 
+              padding: 2px 6px; 
+              border-radius: 3px; 
+              font-family: 'Courier New', Consolas, monospace;
+              font-size: 0.9em;
+            }
+            pre { 
+              background: #f6f8fa; 
+              padding: 16px; 
+              border-radius: 6px; 
+              overflow-x: auto;
+              margin: 16px 0;
+            }
+            pre code {
+              background: none;
+              padding: 0;
+            }
+            blockquote { 
+              border-left: 4px solid #dfe2e5; 
+              padding-left: 16px; 
+              margin: 0 0 16px 0; 
+              color: #6a737d; 
+            }
+            table {
+              border-collapse: collapse;
+              width: 100%;
+              margin: 16px 0;
+            }
+            th, td {
+              border: 1px solid #dfe2e5;
+              padding: 8px 12px;
+              text-align: left;
+            }
+            th {
+              background: #f6f8fa;
+              font-weight: 600;
+            }
+            a { color: #0366d6; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+            img { max-width: 100%; height: auto; }
+            ul, ol { margin-bottom: 16px; padding-left: 2em; }
+            li { margin-bottom: 8px; }
+          </style>
+        </head>
+        <body>
+          <h1>${title}</h1>
+          <div id="content"></div>
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script>
+            marked.setOptions({
+              breaks: true,
+              gfm: true
+            });
+            document.getElementById('content').innerHTML = marked.parse(${JSON.stringify(content)});
+          </script>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('Note downloaded as HTML!');
+    setShowDownloadMenu(false);
+  }, [content, title]);
+
+  const handleDownloadPDF = useCallback(() => {
+    const previewElement = document.getElementById('note-preview-content');
+    if (!previewElement) {
+      toast.error('Could not find preview content to generate PDF');
+      return;
+    }
+
+    if (typeof window.html2pdf === 'undefined') {
+      toast.error('PDF generation library not loaded. Please refresh the page and try again.');
+      return;
+    }
+
+    toast.loading('Generating PDF...', { id: 'pdf-download' });
+
+    window.html2pdf()
+      .from(previewElement)
+      .set({
+        margin: [15, 15, 15, 15],
+        filename: `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true,
+          letterRendering: true,
+          logging: false
+        },
+        jsPDF: { 
+          unit: 'mm', 
+          format: 'a4', 
+          orientation: 'portrait' 
+        },
+      })
+      .save()
+      .then(() => {
+        toast.success('Note downloaded as PDF!', { id: 'pdf-download' });
+        setShowDownloadMenu(false);
+      })
+      .catch((error: Error) => {
+        toast.error('Failed to generate PDF: ' + error.message, { id: 'pdf-download' });
+        console.error('PDF generation error:', error);
+      });
+  }, [content, title]);
+
+  const handleDownloadText = useCallback(() => {
+    // Convert markdown to plain text by removing markdown syntax
+    const plainText = content
+      .replace(/#{1,6}\s/g, '') // Remove headers
+      .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold
+      .replace(/\*([^*]+)\*/g, '$1') // Remove italics
+      .replace(/`([^`]+)`/g, '$1') // Remove inline code
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Remove links, keep text
+      .replace(/^[-*+]\s/gm, '') // Remove list markers
+      .replace(/^\d+\.\s/gm, ''); // Remove numbered list markers
+
+    const blob = new Blob([plainText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('Note downloaded as Text!');
+    setShowDownloadMenu(false);
   }, [content, title]);
 
   const handleShare = useCallback(async () => {
@@ -136,7 +305,6 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
           text: content,
         });
       } catch (error) {
-        // User cancelled or error occurred
         handleCopyContent();
       }
     } else {
@@ -145,38 +313,127 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
   }, [content, title, handleCopyContent]);
 
   const handlePrint = useCallback(() => {
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${title}</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
-            h1, h2, h3, h4, h5, h6 { margin-top: 24px; margin-bottom: 16px; }
-            p { margin-bottom: 16px; }
-            code { background: #f6f8fa; padding: 2px 4px; border-radius: 3px; }
-            pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow-x: auto; }
-            blockquote { border-left: 4px solid #dfe2e5; padding-left: 16px; margin: 0 0 16px 0; color: #6a737d; }
-          </style>
-        </head>
-        <body>
-          <h1>${title}</h1>
-          <div id="content"></div>
-          <script type="module">
-            import { marked } from 'https://cdn.skypack.dev/marked';
-            const content = ${JSON.stringify(content)};
-            document.getElementById('content').innerHTML = marked(content);
-            window.print();
-          </script>
-        </body>
-      </html>
-    `;
+    // Create a temporary div to render the markdown
+    const printDiv = document.createElement('div');
+    printDiv.style.display = 'none';
+    document.body.appendChild(printDiv);
 
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-    }
+    // Render the markdown content using React
+    const root = createRoot(printDiv);
+    root.render(
+      <div style={{ 
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        lineHeight: '1.6',
+        maxWidth: '800px',
+        margin: '0 auto',
+        padding: '20px'
+      }}>
+        <h1>{title}</h1>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeRaw]}
+          components={commonMarkdownComponents}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+    );
+
+    // Wait for render to complete
+    setTimeout(() => {
+      const printContent = printDiv.innerHTML;
+      
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>${title}</title>
+              <style>
+                body { 
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                  line-height: 1.6; 
+                  max-width: 800px; 
+                  margin: 0 auto; 
+                  padding: 20px; 
+                }
+                h1, h2, h3, h4, h5, h6 { 
+                  margin-top: 24px; 
+                  margin-bottom: 16px; 
+                  font-weight: 600;
+                }
+                p { margin-bottom: 16px; }
+                code { 
+                  background: #f6f8fa; 
+                  padding: 2px 4px; 
+                  border-radius: 3px; 
+                  font-family: 'Courier New', monospace;
+                }
+                pre { 
+                  background: #f6f8fa; 
+                  padding: 16px; 
+                  border-radius: 6px; 
+                  overflow-x: auto; 
+                }
+                pre code {
+                  background: none;
+                  padding: 0;
+                }
+                blockquote { 
+                  border-left: 4px solid #dfe2e5; 
+                  padding-left: 16px; 
+                  margin: 0 0 16px 0; 
+                  color: #6a737d; 
+                }
+                table {
+                  border-collapse: collapse;
+                  width: 100%;
+                  margin: 16px 0;
+                }
+                th, td {
+                  border: 1px solid #dfe2e5;
+                  padding: 8px 12px;
+                  text-align: left;
+                }
+                th {
+                  background: #f6f8fa;
+                  font-weight: 600;
+                }
+                img {
+                  max-width: 100%;
+                  height: auto;
+                }
+                @media print {
+                  body { margin: 0; padding: 10mm; }
+                  h1 { page-break-before: avoid; }
+                  pre, blockquote { page-break-inside: avoid; }
+                }
+              </style>
+            </head>
+            <body>
+              ${printContent}
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        
+        // Wait for content to load, then print
+        printWindow.onload = () => {
+          printWindow.focus();
+          printWindow.print();
+          
+          // Clean up after printing
+          printWindow.onafterprint = () => {
+            printWindow.close();
+          };
+        };
+      }
+
+      // Clean up the temporary div
+      root.unmount();
+      document.body.removeChild(printDiv);
+    }, 100);
   }, [content, title]);
 
   const adjustFontSize = useCallback((delta: number) => {
@@ -185,9 +442,7 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
 
   // Detect AI-worthy content and show suggestions
   const detectAISuggestions = useCallback((text: string, cursorPosition: number) => {
-    // Don't show suggestions while AI is typing
     if (isTypingInProgressRef.current || isTypingActive) return;
-
     if (!text.trim()) return;
 
     const start = Math.max(0, cursorPosition - 50);
@@ -220,26 +475,16 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
     const newContent = e.target.value;
     const cursorPosition = e.target.selectionStart;
 
-    // If AI is currently typing and user tries to type, interrupt the typing
-    // if (isTypingInProgressRef.current || (isTypingActive && !typingComplete)) {
-    //   console.log('User interrupted AI typing, declining changes');
-    //   handleDeclineAI();
-    //   return;
-    // }
-
     setContent(newContent);
 
-    // Only detect suggestions if content is growing and cursor is in a reasonable position
     if (newContent.length > content.length && cursorPosition > 10) {
       detectAISuggestions(newContent, cursorPosition);
     }
-  }, [content.length, isTypingActive, typingComplete, setContent, detectAISuggestions]);
+  }, [content.length, setContent, detectAISuggestions]);
 
   // Handle context menu for text selection AI
   const handleContextMenu = useCallback((event: React.MouseEvent<HTMLTextAreaElement>) => {
     if (!textareaRef.current || !isEditing) return;
-
-    // Don't show context menu while AI is typing
     if (isTypingInProgressRef.current || isTypingActive) return;
 
     event.preventDefault();
@@ -283,48 +528,6 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
     }
   }, [isEditing, isTypingActive]);
 
-  // Handler for accepting AI suggestion
-  // const handleAcceptAI = useCallback(() => {
-  //   console.log('Accepting AI suggestion');
-
-  //   // Reset all AI-related states
-  //   setIsTypingAI(false);
-  //   setTypingComplete(false);
-  //   setOriginalContentBeforeAI('');
-  //   setInlineSelectionStart(null);
-  //   setInlineSelectionEnd(null);
-  //   setIsGeneratingAIInline(false);
-  //   isTypingInProgressRef.current = false;
-  //   generatedContentBufferRef.current = '';
-
-  //   toast.dismiss('inline-ai-gen');
-  //   toast.success('AI suggestion accepted!');
-  // }, [typingComplete, inlineSelectionStart, content, currentTypingPosition, setContent, stopTypingAnimation]);
-
-  // Handler for declining AI suggestion
-  // const handleDeclineAI = useCallback(() => {
-  //   console.log('Declining AI suggestion');
-
-  //   // Stop any ongoing typing animation
-  //   stopTypingAnimation();
-
-  //   // Restore original content
-  //   setContent(originalContentBeforeAI);
-
-  //   // Reset all AI-related states
-  //   setIsTypingAI(false);
-  //   setTypingComplete(false);
-  //   setOriginalContentBeforeAI('');
-  //   setInlineSelectionStart(null);
-  //   setInlineSelectionEnd(null);
-  //   setIsGeneratingAIInline(false);
-  //   isTypingInProgressRef.current = false;
-  //   generatedContentBufferRef.current = '';
-
-  //   toast.dismiss('inline-ai-gen');
-  //   toast.info('AI suggestion declined');
-  // }, [originalContentBeforeAI, setContent, stopTypingAnimation]);
-
   // AI generation handler
   const handleAIGenerate = async (selectedText: string, actionType: string, customInstruction: string): Promise<void> => {
     if (!userProfile) {
@@ -332,24 +535,19 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
       return;
     }
 
-    // Don't start new generation if already in progress
     if (isGeneratingAIInline || isTypingInProgressRef.current) {
-      // console.log('AI generation already in progress, skipping');
       return;
     }
 
-    // console.log('Starting AI generation');
     setIsEditorVisible(false);
     setIsGeneratingAIInline(true);
     isTypingInProgressRef.current = true;
 
-    // Show persistent loading toast
     toast.loading('Generating AI content...', {
       id: 'inline-ai-gen',
-      duration: Infinity // Keep showing until manually dismissed
+      duration: Infinity
     });
 
-    // Store original content for potential rollback
     setOriginalContentBeforeAI(content);
 
     try {
@@ -365,27 +563,19 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
         throw new Error('Generated content is empty');
       }
 
-      // console.log('AI content generated, length:', generatedContent.length);
-
-      // Store generated content in buffer
       generatedContentBufferRef.current = generatedContent;
 
-      // Calculate insertion position
       const start = inlineSelectionStart !== null ? inlineSelectionStart : content.length;
       const end = inlineSelectionEnd !== null ? inlineSelectionEnd : content.length;
 
-      // Remove selected text and prepare for typing animation
       const contentWithoutSelection = content.substring(0, start) + content.substring(end);
       setContent(contentWithoutSelection);
 
-      // Update states for typing animation
       setIsTypingAI(true);
       setTypingComplete(false);
       setIsGeneratingAIInline(false);
 
-      // Start typing animation after a short delay
       setTimeout(() => {
-        // console.log('Starting typing animation at position:', start);
         startTypingAnimation(generatedContent, start);
       }, 200);
 
@@ -393,7 +583,6 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
       console.error('AI generation error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate content with AI.';
 
-      // Reset states on error
       setContent(originalContentBeforeAI);
       setIsTypingAI(false);
       setTypingComplete(false);
@@ -449,24 +638,25 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
     };
   }, [stopTypingAnimation]);
 
-  // Click outside to hide suggestions
+  // Click outside to hide suggestions and download menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
         setShowAISuggestions(false);
+        setShowDownloadMenu(false);
       }
     };
 
-    if (showAISuggestions) {
+    if (showAISuggestions || showDownloadMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showAISuggestions]);
+  }, [showAISuggestions, showDownloadMenu]);
 
-  // Render enhanced toolbar (only when not editing or when user wants quick actions)
+  // Render enhanced toolbar
   const renderEnhancedToolbar = () => (
     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-wrap gap-2">
       <div className="flex items-center gap-2 flex-wrap">
@@ -518,16 +708,61 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
           <span className="hidden sm:inline">Copy</span>
         </Button>
 
-        <Button
-          onClick={handleDownload}
-          variant="ghost"
-          size="sm"
-          className="flex items-center gap-2"
-          disabled={!content.trim() || isTypingInProgressRef.current}
-        >
-          <Download className="w-4 h-4" />
-          <span className="hidden sm:inline">Download</span>
-        </Button>
+        {/* Download Dropdown */}
+        <div className="relative">
+          <Button
+            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+            variant="ghost"
+            size="sm"
+            className="flex items-center gap-2"
+            disabled={!content.trim() || isTypingInProgressRef.current}
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Download</span>
+            <ChevronDown className="w-3 h-3" />
+          </Button>
+          
+          {showDownloadMenu && (
+            <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-50">
+              <Button
+                onClick={handleDownloadMarkdown}
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Markdown (.md)
+              </Button>
+              <Button
+                onClick={handleDownloadHTML}
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                HTML (.html)
+              </Button>
+              <Button
+                onClick={handleDownloadPDF}
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <FileDown className="w-4 h-4 mr-2" />
+                PDF (.pdf)
+              </Button>
+              <Button
+                onClick={handleDownloadText}
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <Type className="w-4 h-4 mr-2" />
+                Plain Text (.txt)
+              </Button>
+            </div>
+          )}
+        </div>
 
         <Button
           onClick={handleShare}
@@ -567,7 +802,6 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
   // Main content based on editing state and view mode
   const renderContent = () => {
     if (!isEditing) {
-      // Preview-only mode (default)
       return (
         <div
           ref={previewRef}
@@ -599,7 +833,6 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
         </div>
       );
     } else {
-      // Editing mode with split view or editor only
       if (viewMode === 'editor') {
         return (
           <div className="flex-1 p-4 min-h-0">
@@ -617,7 +850,6 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
       } else {
         return (
           <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 min-h-0">
-            {/* Editor */}
             <div className="flex flex-col lg:w-1/2">
               <Textarea
                 ref={textareaRef}
@@ -630,7 +862,6 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
               />
             </div>
 
-            {/* Live Preview */}
             <div className="lg:w-1/2 flex flex-col">
               <div className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
                 <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
@@ -641,7 +872,7 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
                   </h3>
                 </div>
                 <div
-                  className="p-4 overflow-y-scroll h-full  modern-scrollbar flex-1"
+                  className="p-4 overflow-y-scroll h-full modern-scrollbar flex-1"
                   style={{ fontSize: `${fontSize}px` }}
                   id="note-preview-content"
                 >
@@ -681,22 +912,10 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
         : 'flex-1 min-h-0'
         }`}
     >
-      {/* Enhanced Toolbar - Only show when not editing or when user needs quick actions */}
       {(!isEditing || isFullscreen) && renderEnhancedToolbar()}
 
-      {/* Main Content */}
       {renderContent()}
 
-      {/* AI Typing Overlay */}
-      {/* <AITypingOverlay
-        isTypingAI={isTypingActive || isGeneratingAIInline}
-        typingComplete={typingComplete}
-        isGeneratingAIInline={isGeneratingAIInline}
-        onAccept={handleAcceptAI}
-        onDecline={handleDeclineAI}
-      /> */}
-
-      {/* Inline AI Editor Portal */}
       {isEditorVisible && createPortal(
         <InlineAIEditor
           position={editorPosition}
@@ -712,7 +931,6 @@ export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
         document.body
       )}
 
-      {/* AI Suggestions Portal */}
       <AISuggestionsPopup
         isVisible={showAISuggestions && !isTypingInProgressRef.current}
         position={aiSuggestionsPosition}

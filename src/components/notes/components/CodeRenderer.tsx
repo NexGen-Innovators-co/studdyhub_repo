@@ -427,7 +427,7 @@ export const CodeRenderer: React.FC<CodeRendererProps> = memo(({ inline, classNa
   }
 
   return (
-    <code className="bg-blue-900 text-blue-300 px-2 py-1 rounded-md font-mono text-sm border border-blue-700">
+    <code className=" text-blue-600 px-2 py-1  font-mono text-sm  ">
       {children}
     </code>
   );

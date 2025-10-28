@@ -16,7 +16,6 @@ import { Message } from '../../types/Class';
 import BookPagesAnimation from '../ui/bookloader';
 import { throttle } from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
-import { useAppContext } from '../../contexts/AppContext';
 
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
@@ -844,7 +843,10 @@ const AIChat: React.FC<AIChatProps> = ({
     cleanedContent = cleanedContent.replace(/\n\s*\n/g, '\n').replace(/\s+/g, ' ').trim();
     return cleanedContent;
   }, []);
-
+  useEffect(() => {
+    console.log('[AiChat] documents prop updated, syncing mergedDocuments', documents.length);
+    setMergedDocuments(documents);
+  }, [documents]);
   useEffect(() => {
     if (
       !isPhone() ||
@@ -1448,13 +1450,27 @@ ${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
 
 // Custom equality function for React.memo
 const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
+  if (prevProps.isLoading === nextProps.isLoading &&
+    prevProps.isSubmittingUserMessage === nextProps.isSubmittingUserMessage &&
+    prevProps.isLoadingSessionMessages === nextProps.isLoadingSessionMessages &&
+    prevProps.activeChatSessionId === nextProps.activeChatSessionId &&
+    prevProps.messages === nextProps.messages &&
+    prevProps.selectedDocumentIds === nextProps.selectedDocumentIds &&
+    prevProps.documents === nextProps.documents) {
+    console.log('AIChat props unchanged, skipping re-render');
+  }
+  else {
+    console.log('AIChat props changed, re-rendering');
+  }
   return (
     prevProps.isLoading === nextProps.isLoading &&
     prevProps.isSubmittingUserMessage === nextProps.isSubmittingUserMessage &&
     prevProps.isLoadingSessionMessages === nextProps.isLoadingSessionMessages &&
     prevProps.activeChatSessionId === nextProps.activeChatSessionId &&
     prevProps.messages === nextProps.messages &&
-    prevProps.selectedDocumentIds === nextProps.selectedDocumentIds
+    prevProps.selectedDocumentIds === nextProps.selectedDocumentIds &&
+    prevProps.documents === nextProps.documents
+    
   );
 };
 
