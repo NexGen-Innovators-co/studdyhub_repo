@@ -43,6 +43,14 @@ export interface UserProfileProps {
   userGroups?: SocialGroupWithDetails[];
   onDeletePost?: (postId: string) => Promise<boolean>;
   onEditPost?: (postId: string, content: string) => Promise<boolean>;
+  likedPosts?: SocialPostWithDetails[];
+  bookmarkedPosts?: SocialPostWithDetails[];
+  isLoadingLikedPosts?: boolean;
+  isLoadingBookmarkedPosts?: boolean;
+  onRefreshLikedPosts?: () => void;
+  onRefreshBookmarkedPosts?: () => void;
+
+
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({
@@ -71,6 +79,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   userGroups = [],
   onDeletePost,
   onEditPost,
+  likedPosts = [],
+  bookmarkedPosts = [],
+  isLoadingLikedPosts = false,
+  isLoadingBookmarkedPosts = false,
+  onRefreshLikedPosts,
+  onRefreshBookmarkedPosts,
+
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'bookmarks' | 'groups'>('posts');
@@ -99,6 +114,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       observer.disconnect();
     };
   }, [hasMorePosts, isLoadingMorePosts, onLoadMorePosts]);
+  // Add this useEffect in UserProfile component, after the existing useEffect for intersection observer:
+
+  useEffect(() => {
+    // Fetch data when switching to liked or bookmarked tabs
+    if (activeTab === 'likes' && isOwnProfile && onRefreshLikedPosts) {
+      onRefreshLikedPosts();
+    } else if (activeTab === 'bookmarks' && isOwnProfile && onRefreshBookmarkedPosts) {
+      onRefreshBookmarkedPosts();
+    }
+  }, [activeTab, isOwnProfile, onRefreshLikedPosts, onRefreshBookmarkedPosts]);
 
   if (!user) {
     return (
@@ -328,14 +353,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   </div>
                 </div>
               ) : posts.length === 0 ? (
-                <div className="text-center py-12">
-                  <User className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
-                  <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">
-                    {isOwnProfile ? "You haven't posted anything yet" : `${user.display_name} hasn't posted anything yet`}
+                <div className="text-center py-12 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-800 dark:to-gray-900 rounded-xl border-2 border-dashed border-slate-300 dark:border-gray-600">
+                  <User className="h-16 w-16 mx-auto mb-4 text-slate-400 dark:text-gray-500" />
+                  <h3 className="text-xl font-semibold text-slate-800 dark:text-gray-200 mb-2">
+                    {isOwnProfile ? "No posts yet" : `${user.display_name} hasn't posted anything yet`}
                   </h3>
-                  <p className="text-slate-600 dark:text-gray-300">
+                  <p className="text-slate-600 dark:text-gray-300 mb-4">
                     {isOwnProfile ? "Share your first thought with the community!" : "Check back later for new posts."}
                   </p>
+                  {isOwnProfile && (
+                    <Button
+                      onClick={() => navigate('/social')}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Create Your First Post
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -361,7 +394,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     />
                   ))}
 
-                  {/* Infinite scroll trigger */}
                   {hasMorePosts && (
                     <div ref={loadMoreRef} className="py-4 flex justify-center">
                       {isLoadingMorePosts ? (
@@ -373,7 +405,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         <Button
                           variant="outline"
                           onClick={onLoadMorePosts}
-                          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-600 dark:text-gray-300 border-slate-200 dark:border-gray-700"
+                          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm"
                         >
                           Load More Posts
                         </Button>
@@ -381,7 +413,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     </div>
                   )}
 
-                  {/* End of posts indicator */}
                   {!hasMorePosts && posts.length > 3 && (
                     <div className="text-center py-4 border-t border-slate-200 dark:border-gray-700">
                       <p className="text-sm text-slate-400 dark:text-gray-500">
@@ -396,27 +427,104 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
           {/* Liked Posts Tab */}
           {activeTab === 'likes' && isOwnProfile && (
-            <div className="text-center py-12">
-              <Heart className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">
-                Liked Posts
-              </h3>
-              <p className="text-slate-600 dark:text-gray-300">
-                Posts you've liked will appear here.
-              </p>
+            <div>
+              {isLoadingLikedPosts ? (
+                <div className="flex justify-center py-8">
+                  <div className="flex flex-col items-center space-y-3">
+                    <RefreshCw className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+                    <p className="text-sm text-slate-500 dark:text-gray-400">Loading liked posts...</p>
+                  </div>
+                </div>
+              ) : !likedPosts || likedPosts.length === 0 ? (
+                <div className="text-center py-12 bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 rounded-xl border-2 border-dashed border-red-200 dark:border-red-800">
+                  <Heart className="h-16 w-16 mx-auto mb-4 text-red-400 dark:text-red-500" />
+                  <h3 className="text-xl font-semibold text-slate-800 dark:text-gray-200 mb-2">
+                    No Liked Posts Yet
+                  </h3>
+                  <p className="text-slate-600 dark:text-gray-300 mb-4">
+                    Posts you like will appear here. Start exploring!
+                  </p>
+                  <Button
+                    onClick={() => navigate('/social')}
+                    className="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white"
+                  >
+                    Explore Posts
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {likedPosts.map((post, index) => (
+                    <PostCard
+                      key={`liked-${post.id}-${index}`}
+                      post={post}
+                      onLike={onLike}
+                      onBookmark={onBookmark}
+                      onShare={onShare}
+                      onComment={() => onComment(post.id)}
+                      isExpanded={isPostExpanded(post.id)}
+                      comments={getPostComments(post.id)}
+                      isLoadingComments={isLoadingPostComments(post.id)}
+                      newComment={getNewCommentContent(post.id)}
+                      onCommentChange={(content) => onCommentChange(post.id, content)}
+                      onSubmitComment={() => onSubmitComment(post.id)}
+                      currentUser={currentUser}
+                      onPostView={onPostView}
+                      onClick={onClick}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
-
           {/* Bookmarked Posts Tab */}
           {activeTab === 'bookmarks' && isOwnProfile && (
-            <div className="text-center py-12">
-              <Bookmark className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">
-                Saved Posts
-              </h3>
-              <p className="text-slate-600 dark:text-gray-300">
-                Posts you've bookmarked will appear here.
-              </p>
+            <div>
+              {isLoadingBookmarkedPosts ? (
+                <div className="flex justify-center py-8">
+                  <div className="flex flex-col items-center space-y-3">
+                    <RefreshCw className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+                    <p className="text-sm text-slate-500 dark:text-gray-400">Loading bookmarked posts...</p>
+                  </div>
+                </div>
+              ) : !bookmarkedPosts || bookmarkedPosts.length === 0 ? (
+                <div className="text-center py-12 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border-2 border-dashed border-blue-200 dark:border-blue-800">
+                  <Bookmark className="h-16 w-16 mx-auto mb-4 text-blue-400 dark:text-blue-500" />
+                  <h3 className="text-xl font-semibold text-slate-800 dark:text-gray-200 mb-2">
+                    No Saved Posts Yet
+                  </h3>
+                  <p className="text-slate-600 dark:text-gray-300 mb-4">
+                    Save posts to read them later. They'll appear here!
+                  </p>
+                  <Button
+                    onClick={() => navigate('/social')}
+                    className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white"
+                  >
+                    Browse Posts
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {bookmarkedPosts.map((post, index) => (
+                    <PostCard
+                      key={`bookmarked-${post.id}-${index}`}
+                      post={post}
+                      onLike={onLike}
+                      onBookmark={onBookmark}
+                      onShare={onShare}
+                      onComment={() => onComment(post.id)}
+                      isExpanded={isPostExpanded(post.id)}
+                      comments={getPostComments(post.id)}
+                      isLoadingComments={isLoadingPostComments(post.id)}
+                      newComment={getNewCommentContent(post.id)}
+                      onCommentChange={(content) => onCommentChange(post.id, content)}
+                      onSubmitComment={() => onSubmitComment(post.id)}
+                      currentUser={currentUser}
+                      onPostView={onPostView}
+                      onClick={onClick}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

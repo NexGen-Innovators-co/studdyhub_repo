@@ -1847,6 +1847,29 @@ export type Database = {
       }
     }
     Functions: {
+      get_suggested_users: {
+        Args: {
+          p_user_id: string
+          p_exclude_ids: string[]
+          p_limit: number
+          p_offset: number
+        }
+        Returns: {
+          id: string
+          username: string
+          display_name: string
+          avatar_url: string | null
+          bio: string | null
+          interests: string[] | null
+          followers_count: number | null
+          following_count: number | null
+          posts_count: number | null
+          is_verified: boolean | null
+          last_active: string | null
+          created_at: string | null
+          recommendation_score: number
+        }[]
+      }
       generate_unique_username: { Args: { p_email: string }; Returns: string }
       get_folder_documents_recursive: {
         Args: { p_folder_id: string; p_user_id: string }

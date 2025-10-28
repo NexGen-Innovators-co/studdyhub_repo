@@ -35,7 +35,7 @@ export const TrendingSidebar: React.FC<EnhancedTrendingSidebarProps> = ({
               Trending Topics
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 srcollbar-thin max-h-80 overflow-y-auto">
             {hashtags.map((hashtag, index) => (
               <div
                 key={hashtag.id}

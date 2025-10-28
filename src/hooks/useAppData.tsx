@@ -1209,7 +1209,7 @@ export const useAppData = () => {
                 userId: newQuiz.user_id,
                 createdAt: newQuiz.created_at
               };
-
+              console.log('[useAppData] Realtime quiz update received:', formattedQuiz);
               setQuizzes(prevQuizzes => {
                 const existingIndex = prevQuizzes.findIndex(quiz => quiz.id === formattedQuiz.id);
                 if (existingIndex > -1) {
@@ -1338,7 +1338,76 @@ export const useAppData = () => {
       console.error('Error setting up folder items listener:', error);
     }
   }, []);
-
+  const loadSpecificDocuments = useCallback(async (userId: string, ids: string[]) => {
+    if (!ids.length) return;
+    console.log(`Loading specific documents: ${ids.join(', ')}`);
+    setDataLoading(prev => ({ ...prev, documents: true }));
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', userId)
+        .in('id', ids);
+      if (error) throw error;
+      setDocuments(prev => {
+        const newDocs = data || [];
+        const uniqueMap = new Map<string, Document>([
+          ...prev.map(d => [d.id, d] as [string, Document]),
+          ...newDocs.map(d => [d.id, d] as [string, Document])
+        ]);
+        return Array.from(uniqueMap.values());
+      });
+      console.log(`Loaded ${data?.length || 0} specific documents`);
+    } catch (error) {
+      console.error('Error loading specific documents:', error);
+      toast.error('Failed to load required documents');
+    } finally {
+      setDataLoading(prev => ({ ...prev, documents: false }));
+    }
+  }, []);
+  
+  const loadSpecificNotes = useCallback(async (userId: string, ids: string[]) => {
+    if (!ids.length) return;
+    console.log(`Loading specific notes: ${ids.join(', ')}`);
+    setDataLoading(prev => ({ ...prev, notes: true }));
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('user_id', userId)
+        .in('id', ids)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+  
+      // Transform Supabase data to match Note type
+      const transformedNotes: Note[] = (data || []).map((item: any) => ({
+        id: item.id,
+        document_id: item.document_id,
+        title: item.title,
+        content: item.content,
+        category: item.category,
+        aiSummary: item.ai_summary,
+        tags: item.tags,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        user_id: item.user_id,
+      }));
+  
+      setNotes(prev => {
+        const uniqueMap = new Map<string, Note>([
+          ...prev.map(n => [n.id, n] as [string, Note]),
+          ...transformedNotes.map(n => [n.id, n] as [string, Note]),
+        ]);
+        return Array.from(uniqueMap.values());
+      });
+      console.log(`Loaded ${transformedNotes.length} specific notes`);
+    } catch (error) {
+      console.error('Error loading specific notes:', error);
+      toast.error('Failed to load required notes');
+    } finally {
+      setDataLoading(prev => ({ ...prev, notes: false }));
+    }
+  }, []);
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1431,5 +1500,7 @@ export const useAppData = () => {
     folderTree,
     setFolders,
     loadFolders,
+    loadSpecificDocuments,
+    loadSpecificNotes,
   };
 };

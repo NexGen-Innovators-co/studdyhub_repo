@@ -388,16 +388,16 @@ export const MessageList = memo(({
             toast.error(`Failed to update diagram code: ${error.message || 'Unknown error'}`);
         }
     }, [onDiagramCodeUpdate]);
-
+    
     const renderAttachments = useCallback((message: Message) => {
         const attachedFiles = parseAttachedFiles(message);
         const attachedDocumentTitles = message.attachedDocumentIds?.map(id => {
             const doc = mergedDocuments.find(d => d.id === id);
-            return { id, name: doc ? doc.title : 'Unknown Document', type: 'document' as const, doc, processing_status: doc?.processing_status, processing_error: doc?.processing_error }; // Include the entire document object
+            return { id, name: doc ? doc.title : 'loading document...', type: 'document' as const, doc, processing_status: doc?.processing_status, processing_error: doc?.processing_error }; // Include the entire document object
         }) || [];
         const attachedNoteTitles = message.attachedNoteIds?.map(id => {
             const note = mergedDocuments.find(d => d.id === id);
-            return { id, name: note ? note.title : 'Unknown Note', type: 'note' as const };
+            return { id, name: note ? note.title : 'loading Note...', type: 'note' as const };
         }) || [];
 
         const hasAttachments = attachedFiles.length > 0 || attachedDocumentTitles.length > 0 || attachedNoteTitles.length > 0;
@@ -511,13 +511,7 @@ export const MessageList = memo(({
                                     if (attachment.processing) {
                                         toast.info('File is still processing, please wait.');
                                         return;
-                                    }
-                                    if (attachment.error) {
-                                        console.log(attachment.error);
-                                        toast.error('Cannot preview file due to processing error.');
-                                        return;
-                                    }
-                                    attachment.onClick();
+                                    }attachment.onClick();
                                 }}
                                 title={attachment.name}
                             >
@@ -548,12 +542,6 @@ export const MessageList = memo(({
                                         <Loader2 className="h-2 w-2 animate-spin text-white" />
                                     </div>
                                 )}
-                                {attachment.error && (
-                                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                                        <X className="h-2 w-2 text-white" />
-                                    </div>
-                                )}
-
                                 {/* Full name tooltip on hover */}
                                 <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
                                     {attachment.name}
@@ -565,7 +553,9 @@ export const MessageList = memo(({
             </div>
         );
     }, [mergedDocuments, handleFilePreview, handleViewAttachedFile, getFileIcon]);
-
+    useEffect(() => {
+        console.log(`[RenderTrack] MessageList re-rendered. Props: messages=${messages.length}, mergedDocuments=${mergedDocuments.length}`);
+      }, [messages, mergedDocuments]); // Key props
     const renderMessage = useCallback((message: Message, index: number) => {
         const isUserMessage = message.role === 'user';
         const isLastMessage = index === messages.length - 1;
@@ -799,5 +789,41 @@ export const MessageList = memo(({
         </div>
     )
 });
+const arePropsEqual = (prevProps: MessageListProps, nextProps: MessageListProps) => {
+    const documentsChanged = prevProps.mergedDocuments !== nextProps.mergedDocuments;
+    
+    const messagesChanged = prevProps.messages !== nextProps.messages;
+  
+    if (documentsChanged) {
+      console.log('[MessageList] Props changed: mergedDocuments updated');
+    }
+    if (messagesChanged) {
+      console.log('[MessageList] Props changed: messages updated');
+    }
+  
+    const isEqual = (
+      prevProps.isLoading === nextProps.isLoading &&
+      prevProps.isLoadingSessionMessages === nextProps.isLoadingSessionMessages &&
+      prevProps.isLoadingOlderMessages === nextProps.isLoadingOlderMessages &&
+      prevProps.hasMoreMessages === nextProps.hasMoreMessages &&
+      prevProps.messages === nextProps.messages &&
+      prevProps.mergedDocuments === nextProps.mergedDocuments &&
+      prevProps.expandedMessages === nextProps.expandedMessages &&
+      prevProps.isSpeaking === nextProps.isSpeaking &&
+      prevProps.speakingMessageId === nextProps.speakingMessageId &&
+      prevProps.isPaused === nextProps.isPaused &&
+      prevProps.isDiagramPanelOpen === nextProps.isDiagramPanelOpen &&
+      prevProps.enableTypingAnimation === nextProps.enableTypingAnimation &&
+      prevProps.autoTypeInPanel === nextProps.autoTypeInPanel
+    );
+  
+    if (isEqual) {
+      console.log('[MessageList] Props unchanged, skipping re-render');
+    } else {
+      console.log('[MessageList] Props changed, re-rendering');
+    }
+  
+    return isEqual;
+  };
 
-export default memo(MessageList);
+export default memo(MessageList,arePropsEqual);

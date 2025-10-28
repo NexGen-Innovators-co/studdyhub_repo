@@ -82,7 +82,7 @@ export interface MediaUploadProps {
 
 export interface HashtagBadgeProps {
   hashtag: { name: string };
-  onClick?: () => void;
+  onClick?: (e) => void;
 }
 
 export type SortBy = 'newest' | 'popular' | 'trending';

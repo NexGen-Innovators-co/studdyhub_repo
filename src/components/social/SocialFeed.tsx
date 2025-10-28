@@ -94,7 +94,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     loadMoreUserPosts,
     loadMoreGroups,
     loadMoreSuggestedUsers,
-    isLoadingMoreGroups
+    isLoadingMoreGroups,
+    // ADD THESE:
+    likedPosts,
+    bookmarkedPosts,
+    isLoadingLikedPosts,
+    isLoadingBookmarkedPosts,
+    refetchLikedPosts,
+    refetchBookmarkedPosts,
   } = useSocialData(userProfile, sortBy, filterBy);
 
   const {
@@ -108,6 +115,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     createGroup,
     joinGroup,
     leaveGroup,
+    deletePost,  // ADD THIS
+    editPost,
   } = useSocialActions(
     currentUser,
     posts,
@@ -115,7 +124,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     setSuggestedUsers,
     groups,
     setGroups,
-    setCurrentUser
+    setCurrentUser,
   );
 
   const {
@@ -305,6 +314,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const handleJoinGroup = (groupId: string, privacy: 'public' | 'private') => joinGroup(groupId, privacy);
   const handleLeaveGroup = (groupId: string) => leaveGroup(groupId);
   // Function to insert inline suggestions at intervals
+  const getSortedSuggestedUsers = (users: (SocialUserWithDetails & { recommendation_score?: number })[]) => {
+    return [...users].sort((a, b) => {
+      const scoreA = a.recommendation_score === undefined ? -1 : a.recommendation_score;
+      const scoreB = b.recommendation_score === undefined ? -1 : b.recommendation_score;
+      return scoreB - scoreA;
+    });
+  };
+  const sortedSuggestedUsers = React.useMemo(() => {
+    return getSortedSuggestedUsers(suggestedUsers);
+  }, [suggestedUsers]);
+
   const getPostsWithInlineSuggestions = (postsList: any[]) => {
     const result: any[] = [];
     const usersPerSuggestion = 3; // Show 3 users per suggestion card
@@ -315,8 +335,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
       result.push({ type: 'post', data: post, key: `post-${post.id}-${index}` });
 
       // Insert "People You May Know" every 4 posts
-      if ((index + 1) % 4 === 0 && suggestedUsers.length > userIndex) {
-        const usersToShow = suggestedUsers.slice(userIndex, userIndex + usersPerSuggestion);
+      if ((index + 1) % 4 === 0 && sortedSuggestedUsers.length > userIndex) {
+        const usersToShow = sortedSuggestedUsers.slice(userIndex, userIndex + usersPerSuggestion);
         if (usersToShow.length > 0) {
           result.push({
             type: 'suggested-users',
@@ -390,7 +410,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
       </div>
     );
   };
-
+  
   // Inline Suggested Users Component
   const InlineSuggestedUsers = ({ users }: { users: any[] }) => (
     <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg p-4 mb-6 border border-slate-200 dark:border-gray-700 shadow-sm">
@@ -574,6 +594,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                   currentUser={currentUser}
                   onPostView={trackPostView}
                   onClick={() => { }}
+                  onDeletePost={deletePost}  // ADD THIS
+                  onEditPost={editPost}      // ADD THIS
                 />
               </div>
             ) : (
@@ -653,7 +675,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                                 currentUser={currentUser}
                                 onPostView={trackPostView}
                                 onClick={() => handlePostClick(item.data.id)}
+                                onDeletePost={deletePost}  // ADD THIS
+                                onEditPost={editPost}      // ADD THIS
                               />
+
                             );
                           } else if (item.type === 'suggested-users') {
                             return <InlineSuggestedUsers key={item.key} users={item.data} />;
@@ -736,6 +761,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                                 currentUser={currentUser}
                                 onPostView={trackPostView}
                                 onClick={() => handlePostClick(item.data.id)}
+                                onDeletePost={deletePost}  // ADD THIS
+                                onEditPost={editPost}      // ADD THIS
                               />
                             );
                           } else if (item.type === 'suggested-users') {
@@ -795,9 +822,20 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                       refetchPosts={refetchUserPosts}
                       onPostView={trackPostView}
                       onClick={handlePostClick}
+                      hasMorePosts={hasMoreUserPosts}
+                      onLoadMorePosts={loadMoreUserPosts}
+                      isLoadingMorePosts={isLoadingUserPosts}
+                      userGroups={groups.filter(g => g.is_member)}
+                      likedPosts={likedPosts}
+                      bookmarkedPosts={bookmarkedPosts}
+                      isLoadingLikedPosts={isLoadingLikedPosts}
+                      isLoadingBookmarkedPosts={isLoadingBookmarkedPosts}
+                      onRefreshLikedPosts={refetchLikedPosts}
+                      onRefreshBookmarkedPosts={refetchBookmarkedPosts}
+                      onDeletePost={deletePost}
+                      onEditPost={editPost}
                     />
 
-                    {/* Infinite scroll trigger for user posts */}
                     <LoadMoreTrigger
                       hasMore={hasMoreUserPosts}
                       isLoading={isLoadingUserPosts}
@@ -806,7 +844,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                     />
                   </div>
                 </TabsContent>
-
                 <TabsContent value="notifications" className="mt-0">
                   <NotificationsSection
                     notifications={notifications}
@@ -825,7 +862,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
             <div className="sticky top-6">
               <TrendingSidebar
                 hashtags={trendingHashtags}
-                suggestedUsers={suggestedUsers}
+                suggestedUsers={sortedSuggestedUsers}
                 onFollowUser={handleFollowUser}
                 isLoadingSuggestedUsers={isLoadingSuggestedUsers}
                 hasMoreSuggestedUsers={hasMoreSuggestedUsers}

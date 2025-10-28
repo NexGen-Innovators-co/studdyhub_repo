@@ -35,7 +35,7 @@ export const NotesList: React.FC<NotesListProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full dark:bg-gray-900">
+    <div className="flex flex-col h-full  bg-white dark:bg-gray-900">
       {/* Mobile Header with Close Button */}
       <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-gray-800">
         <div className="flex items-center justify-between">
