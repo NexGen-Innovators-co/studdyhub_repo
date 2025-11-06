@@ -55,6 +55,7 @@ export interface Message {
   isUpdating?: boolean;
   attachedDocumentIds?: string[];
   attachedNoteIds?: string[];
+  isLoading?: boolean;
   image_url?: string; // Legacy image URL
   image_mime_type?: string; // Legacy image MIME type
   files_metadata?: string | Array<{ // Use string | array to handle both JSON string and array

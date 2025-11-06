@@ -142,11 +142,11 @@ export const useAppData = () => {
   // Progressive data loading when user changes
   useEffect(() => {
     if (currentUser?.id && currentUser.id !== lastUserId) {
-      // console.log('User changed, starting progressive data loading...');
+      // ////console.log('User changed, starting progressive data loading...');
       setLastUserId(currentUser.id);
       startProgressiveDataLoading(currentUser);
     } else if (!currentUser && lastUserId !== null) {
-      // console.log('User logged out, clearing data...');
+      // //console.log('User logged out, clearing data...');
       setLastUserId(null);
       clearAllData();
     }
@@ -229,7 +229,7 @@ export const useAppData = () => {
       // UI is ready after core data
       setLoading(false);
 
-      // console.log('Core user data loaded successfully, UI ready');
+      // //console.log('Core user data loaded successfully, UI ready');
     } catch (error) {
       console.error('Error loading core user data:', error);
       toast.error('Failed to load some data. Please refresh to try again.');
@@ -852,7 +852,7 @@ export const useAppData = () => {
     // Set up all listeners in parallel for better performance
     await Promise.all([
       setupDocumentListener(user),
-      setupChatMessageListener(user),
+      // setupChatMessageListener(user),
       setupNotesListener(user),
       setupRecordingsListener(user),
       setupScheduleListener(user),
@@ -874,13 +874,13 @@ export const useAppData = () => {
           async (payload) => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const newDoc = payload.new as any;
-              
+
               // Fetch folder_ids for this document
               const { data: folderItems } = await supabase
                 .from('document_folder_items')
                 .select('folder_id')
                 .eq('document_id', newDoc.id);
-  
+
               const formattedDoc: Document = {
                 id: newDoc.id,
                 title: newDoc.title,
@@ -897,7 +897,7 @@ export const useAppData = () => {
                 updated_at: new Date(newDoc.updated_at).toISOString(),
                 folder_ids: folderItems?.map(item => item.folder_id) || [], // ADD THIS
               };
-  
+
               setDocuments(prevDocs => {
                 const existingIndex = prevDocs.findIndex(doc => doc.id === formattedDoc.id);
                 if (existingIndex > -1) {
@@ -908,7 +908,7 @@ export const useAppData = () => {
                   return [formattedDoc, ...prevDocs];
                 }
               });
-  
+
               if (formattedDoc.processing_status === 'completed') {
                 toast.success(`Document "${formattedDoc.title}" processed successfully!`);
               } else if (formattedDoc.processing_status === 'failed') {
@@ -921,90 +921,90 @@ export const useAppData = () => {
           }
         )
         .subscribe();
-  
+
       documentChannelRef.current = channel;
     } catch (error) {
       console.error('Error setting up document listener:', error);
     }
   }, []);
-  const setupChatMessageListener = async (user: any) => {
-    try {
-      const channel = supabase
-        .channel(`chat_messages_${user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'chat_messages',
-            filter: `user_id=eq.${user.id}`
-          },
-          (payload) => {
-            const formatMessage = (msg: any): Partial<Message> => ({
-              id: msg.id,
-              content: msg.content,
-              role: msg.role as 'user' | 'assistant',
-              timestamp: msg.timestamp,
-              isError: msg.is_error,
-              attachedDocumentIds: msg.attached_document_ids,
-              attachedNoteIds: msg.attached_note_ids,
-              image_url: msg.image_url,
-              image_mime_type: msg.image_mime_type,
-              session_id: msg.session_id,
-              has_been_displayed: msg.has_been_displayed
-            });
+  // const setupChatMessageListener = async (user: any) => {
+  //   try {
+  //     const channel = supabase
+  //       .channel(`chat_messages_${user.id}`)
+  //       .on(
+  //         'postgres_changes',
+  //         {
+  //           event: '*',
+  //           schema: 'public',
+  //           table: 'chat_messages',
+  //           filter: `user_id=eq.${user.id}`
+  //         },
+  //         (payload) => {
+  //           const formatMessage = (msg: any): Partial<Message> => ({
+  //             id: msg.id,
+  //             content: msg.content,
+  //             role: msg.role as 'user' | 'assistant',
+  //             timestamp: msg.timestamp,
+  //             isError: msg.is_error,
+  //             attachedDocumentIds: msg.attached_document_ids,
+  //             attachedNoteIds: msg.attached_note_ids,
+  //             image_url: msg.image_url,
+  //             image_mime_type: msg.image_mime_type,
+  //             session_id: msg.session_id,
+  //             has_been_displayed: msg.has_been_displayed
+  //           });
 
-            if (payload.eventType === 'INSERT') {
-              const newMessage = formatMessage(payload.new) as Message;
-              console.log('[useAppData] New message received via realtime:', newMessage);
+  //           if (payload.eventType === 'INSERT') {
+  //             const newMessage = formatMessage(payload.new) as Message;
+  //             //console.log('[useAppData] New message received via realtime:', newMessage);
 
-              setChatMessages(prevMessages => {
-                const exists = prevMessages.some(msg => msg.id === newMessage.id);
-                if (exists) {
-                  console.log('[useAppData] Message already exists, updating if needed');
-                  return prevMessages.map(msg =>
-                    msg.id === newMessage.id
-                      ? { ...msg, ...newMessage }
-                      : msg
-                  );
-                }
+  //             setChatMessages(prevMessages => {
+  //               const exists = prevMessages.some(msg => msg.id === newMessage.id);
+  //               if (exists) {
+  //                 //console.log('[useAppData] Message already exists, updating if needed');
+  //                 return prevMessages.map(msg =>
+  //                   msg.id === newMessage.id
+  //                     ? { ...msg, ...newMessage }
+  //                     : msg
+  //                 );
+  //               }
 
-                console.log('[useAppData] Adding new message to state');
-                const updatedMessages = [...prevMessages, newMessage];
-                updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-                return updatedMessages;
-              });
+  //               //console.log('[useAppData] Adding new message to state');
+  //               const updatedMessages = [...prevMessages, newMessage];
+  //               updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  //               return updatedMessages;
+  //             });
 
-              // Note: replaceOptimisticMessage should be passed from parent component if needed
-            } else if (payload.eventType === 'UPDATE') {
-              const updated = payload.new as any;
-              setChatMessages(prev => {
-                return prev.map(m => {
-                  if (m.id !== updated.id) return m;
-                  console.log('[useAppData] Message updated via realtime:', updated);
-                  // Preserve existing content if incoming payload has null/undefined content
-                  const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
-                  return {
-                    ...m,
-                    ...updated,
-                    content: preservedContent,
-                  };
-                });
-              });
-            } else if (payload.eventType === 'DELETE') {
-              setChatMessages(prevMessages =>
-                prevMessages.filter(msg => msg.id !== payload.old.id)
-              );
-            }
-          }
-        )
-        .subscribe();
+  //             // Note: replaceOptimisticMessage should be passed from parent component if needed
+  //           } else if (payload.eventType === 'UPDATE') {
+  //             const updated = payload.new as any;
+  //             setChatMessages(prev => {
+  //               return prev.map(m => {
+  //                 if (m.id !== updated.id) return m;
+  //                 //console.log('[useAppData] Message updated via realtime:', updated);
+  //                 // Preserve existing content if incoming payload has null/undefined content
+  //                 const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
+  //                 return {
+  //                   ...m,
+  //                   ...updated,
+  //                   content: preservedContent,
+  //                 };
+  //               });
+  //             });
+  //           } else if (payload.eventType === 'DELETE') {
+  //             setChatMessages(prevMessages =>
+  //               prevMessages.filter(msg => msg.id !== payload.old.id)
+  //             );
+  //           }
+  //         }
+  //       )
+  //       .subscribe();
 
-      chatMessageChannelRef.current = channel;
-    } catch (error) {
-      console.error('Error setting up chat message listener:', error);
-    }
-  }
+  //     chatMessageChannelRef.current = channel;
+  //   } catch (error) {
+  //     console.error('Error setting up chat message listener:', error);
+  //   }
+  // }
 
 
   const setupNotesListener = useCallback(async (user: any) => {
@@ -1209,7 +1209,7 @@ export const useAppData = () => {
                 userId: newQuiz.user_id,
                 createdAt: newQuiz.created_at
               };
-              console.log('[useAppData] Realtime quiz update received:', formattedQuiz);
+              //console.log('[useAppData] Realtime quiz update received:', formattedQuiz);
               setQuizzes(prevQuizzes => {
                 const existingIndex = prevQuizzes.findIndex(quiz => quiz.id === formattedQuiz.id);
                 if (existingIndex > -1) {
@@ -1340,7 +1340,7 @@ export const useAppData = () => {
   }, []);
   const loadSpecificDocuments = useCallback(async (userId: string, ids: string[]) => {
     if (!ids.length) return;
-    console.log(`Loading specific documents: ${ids.join(', ')}`);
+    //console.log(`Loading specific documents: ${ids.join(', ')}`);
     setDataLoading(prev => ({ ...prev, documents: true }));
     try {
       const { data, error } = await supabase
@@ -1357,7 +1357,7 @@ export const useAppData = () => {
         ]);
         return Array.from(uniqueMap.values());
       });
-      console.log(`Loaded ${data?.length || 0} specific documents`);
+      //console.log(`Loaded ${data?.length || 0} specific documents`);
     } catch (error) {
       console.error('Error loading specific documents:', error);
       toast.error('Failed to load required documents');
@@ -1365,10 +1365,10 @@ export const useAppData = () => {
       setDataLoading(prev => ({ ...prev, documents: false }));
     }
   }, []);
-  
+
   const loadSpecificNotes = useCallback(async (userId: string, ids: string[]) => {
     if (!ids.length) return;
-    console.log(`Loading specific notes: ${ids.join(', ')}`);
+    //console.log(`Loading specific notes: ${ids.join(', ')}`);
     setDataLoading(prev => ({ ...prev, notes: true }));
     try {
       const { data, error } = await supabase
@@ -1378,7 +1378,7 @@ export const useAppData = () => {
         .in('id', ids)
         .order('updated_at', { ascending: false });
       if (error) throw error;
-  
+
       // Transform Supabase data to match Note type
       const transformedNotes: Note[] = (data || []).map((item: any) => ({
         id: item.id,
@@ -1392,7 +1392,7 @@ export const useAppData = () => {
         updatedAt: item.updated_at,
         user_id: item.user_id,
       }));
-  
+
       setNotes(prev => {
         const uniqueMap = new Map<string, Note>([
           ...prev.map(n => [n.id, n] as [string, Note]),
@@ -1400,7 +1400,7 @@ export const useAppData = () => {
         ]);
         return Array.from(uniqueMap.values());
       });
-      console.log(`Loaded ${transformedNotes.length} specific notes`);
+      //console.log(`Loaded ${transformedNotes.length} specific notes`);
     } catch (error) {
       console.error('Error loading specific notes:', error);
       toast.error('Failed to load required notes');
@@ -1409,24 +1409,24 @@ export const useAppData = () => {
     }
   }, []);
   // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Clear timeouts
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-      }
+  // useEffect(() => {
+  //   return () => {
+  //     // Clear timeouts
+  //     if (loadingTimeoutRef.current) {
+  //       clearTimeout(loadingTimeoutRef.current);
+  //     }
 
-      // Clear channels
-      [documentChannelRef, chatMessageChannelRef, notesChannelRef,
-        recordingsChannelRef, scheduleChannelRef, profileChannelRef,
-        quizzesChannelRef, foldersChannelRef, folderItemsChannelRef].forEach(channelRef => {
-          if (channelRef.current) {
-            supabase.removeChannel(channelRef.current);
-            channelRef.current = null;
-          }
-        });
-    };
-  }, []);
+  //     // Clear channels
+  //     [documentChannelRef, chatMessageChannelRef, notesChannelRef,
+  //       recordingsChannelRef, scheduleChannelRef, profileChannelRef,
+  //       quizzesChannelRef, foldersChannelRef, folderItemsChannelRef].forEach(channelRef => {
+  //         if (channelRef.current) {
+  //           supabase.removeChannel(channelRef.current);
+  //           channelRef.current = null;
+  //         }
+  //       });
+  //   };
+  // }, []);
 
   // Computed values
   const filteredNotes = notes.filter(note => {

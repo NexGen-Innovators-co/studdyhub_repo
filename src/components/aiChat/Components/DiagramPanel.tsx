@@ -124,7 +124,7 @@ export const DiagramPanel = memo(({
   }, []);
 
   const handleNodeClick = useCallback((nodeId: string) => {
-    console.log(`Node ${nodeId} clicked`);
+    //console.log(`Node ${nodeId} clicked`);
     toast.success(`Node ${nodeId} clicked`);
   }, []);
 

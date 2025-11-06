@@ -44,7 +44,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
   return (
     <Dialog open={!!quizMode} onOpenChange={onExitQuizMode}>
-      <DialogContent className="sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl">
+      <DialogContent className="sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl w-full max-w-[90vw]">
         <DialogHeader className="border-b pb-4 mb-4 dark:border-gray-700">
           <DialogTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
             <Lightbulb className="h-6 w-6 text-yellow-500" /> {quiz.title || 'Generated Quiz'}
@@ -58,7 +58,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
         <div className="relative">
           {showResults ? (
-            <div className="text-center py-8">
+            <div className="text-center py-8 max-h-[70vh] overflow-y-auto modern-scrollbar">
               <Trophy className="h-20 w-20 text-yellow-500 mx-auto mb-6 animate-bounce" />
               <h3 className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 mb-4">Quiz Completed!</h3>
               <p className="text-xl text-gray-700 dark:text-gray-300 mb-6">
@@ -66,7 +66,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               </p>
               <Button
                 onClick={onExitQuizMode}
-                className="w-full max-w-xs bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700"
+                className="w-full sm:w-auto max-w-xs bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700"
               >
                 Exit Quiz
               </Button>
@@ -124,12 +124,12 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                       <Button
                         key={optionIndex}
                         variant="outline"
-                        className={`w-full justify-start text-left py-3 px-4 rounded-md transition-colors duration-200
-                          ${selectedAnswer === optionIndex
+                        className={`w-full flex items-center justify-start text-left py-3 px-4 rounded-md transition-colors duration-200 whitespace-pre-wrap
+${selectedAnswer === optionIndex
                             ? 'bg-blue-100 border-blue-500 text-blue-800 dark:bg-blue-900 dark:border-blue-500 dark:text-blue-200'
                             : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600'
                           }
-                        `}
+`}
                         onClick={() => onAnswerSelect(currentQuestionIndex, optionIndex)}
                       >
                         {option}
@@ -139,18 +139,18 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 </CardContent>
               </Card>
 
-              <div className="flex justify-between mt-6">
+              <div className="flex flex-col sm:flex-row justify-between mt-6 gap-2">
                 <Button
                   onClick={onPreviousQuestion}
                   disabled={isFirstQuestion}
                   variant="outline"
-                  className="flex items-center gap-2 text-gray-600 border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+                  className="flex items-center gap-2 text-gray-600 border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700 w-full sm:w-auto"
                 >
                   <ArrowLeft className="h-4 w-4" /> Previous
                 </Button>
                 <Button
                   onClick={onNextQuestion}
-                  className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-500 text-white hover:from-blue-600 hover:to-blue-600"
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-500 text-white hover:from-blue-600 hover:to-blue-600 w-full sm:w-auto"
                 >
                   {isLastQuestion ? 'Submit Quiz' : 'Next Question'} <ArrowRight className="h-4 w-4" />
                 </Button>

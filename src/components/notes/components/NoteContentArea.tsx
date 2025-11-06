@@ -1,943 +1,880 @@
-// components/NoteContentArea.tsx - FIXED VERSION
-import React, { useEffect, useRef, memo, useState, useCallback, useMemo } from 'react';
+// src/components/notes/components/NoteContentArea.tsx
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
-import { createRoot } from 'react-dom/client';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
-import { Textarea } from '../../ui/textarea';
-import { Button } from '../../ui/button';
 import { toast } from 'sonner';
 import { Chart, registerables } from 'chart.js';
+import mermaid from 'mermaid';
 import {
-  Edit3,
-  Eye,
-  Copy,
-  Download,
-  Share2,
-  Printer,
-  FileText,
-  ZoomIn,
-  ZoomOut,
-  Type,
-  Maximize2,
-  Minimize2,
-  SplitSquareHorizontal,
+  Bold,
+  Italic,
+  List,
+  ListOrdered,
+  Quote,
+  Code,
+  Heading1,
+  Heading2,
+  Heading3,
+  Image as ImageIcon,
+  Table as TableIcon,
+  Strikethrough,
+  Sparkles,
+  Undo,
+  Redo,
+  Brain,
+  XCircle,
+  RotateCw,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Link as LinkIcon,
+  Underline as UnderlineIcon,
   ChevronDown,
-  FileDown
 } from 'lucide-react';
 
-// Component imports
-import { InlineAIEditor } from './InlineAIEditor';
-import { AITypingOverlay } from './AITypingOverlay';
-import { AISuggestionsPopup } from './AISuggestionsPopup';
-import { commonMarkdownComponents } from './MarkdownComponent';
-
-// Type imports
-import { UserProfile } from '../../../types';
-import { AISuggestion, AI_SUGGESTIONS } from '../../../constants/aiSuggestions';
-
-// Utility imports
-import { getTextareaCaretCoordinates } from '../utils/textareaUtils';
+import { generateFlashcardsFromNote } from '../services/FlashCardServices';
 import { generateInlineContent } from '../../../services/aiServices';
-import { useTypingAnimation } from './TypingAnimation';
+import { FlashcardDeck } from './FlashcardDeck';
+import { InlineAIEditor } from './InlineAIEditor';
+import { Note, UserProfile } from '../../../types';
+
+/* ---------- Tiptap ---------- */
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
+import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import TextAlign from '@tiptap/extension-text-align';
+
+/* ---------- Syntax Highlighting ---------- */
+import { lowlight } from 'lowlight';                     // default export only
+import javascript from 'highlight.js/lib/languages/javascript';
+import python from 'highlight.js/lib/languages/python';
+import java from 'highlight.js/lib/languages/java';
+import cpp from 'highlight.js/lib/languages/cpp';
+import sql from 'highlight.js/lib/languages/sql';
+import xml from 'highlight.js/lib/languages/xml';
+import bash from 'highlight.js/lib/languages/bash';
+import typescript from 'highlight.js/lib/languages/typescript';
+import json from 'highlight.js/lib/languages/json';
+import css from 'highlight.js/lib/languages/css';
+
+/* lowlight is already an instance – just register the languages */
+lowlight.registerLanguage('javascript', javascript as any);
+lowlight.registerLanguage('python', python as any);
+lowlight.registerLanguage('java', java as any);
+lowlight.registerLanguage('cpp', cpp as any);
+lowlight.registerLanguage('sql', sql as any);
+lowlight.registerLanguage('xml', xml as any);
+lowlight.registerLanguage('bash', bash as any);
+lowlight.registerLanguage('typescript', typescript as any);
+lowlight.registerLanguage('json', json as any);
+lowlight.registerLanguage('css', css as any);
+/* ---------- Markdown to HTML ---------- */
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import remarkRehype from 'remark-rehype';
+import rehypeStringify from 'rehype-stringify';
+import TurndownService from 'turndown';
+import * as gfm from 'turndown-plugin-gfm';
 
 Chart.register(...registerables);
+mermaid.initialize({ startOnLoad: false });
 
+const mdProcessor = unified()
+  .use(remarkParse)
+  .use(remarkGfm)
+  .use(remarkRehype)
+  .use(rehypeStringify);
+
+const turndown = new TurndownService({ headingStyle: 'atx' });
+turndown.use(gfm.gfm);
+
+/* ---------- Custom Tiptap Nodes for Visuals ---------- */
+// Add this to your NoteContentArea.tsx file
+// Replace the custom node definitions with these enhanced versions
+
+import { Node, mergeAttributes } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import { DiagramWrapper } from './DiagramWrapper';
+
+/** Chart.js node with proper parsing from code blocks */
+const ChartJsNode = Node.create({
+  name: 'chartjs',
+  group: 'block',
+  atom: true,
+
+  addAttributes() {
+    return {
+      config: {
+        default: '{}',
+        parseHTML: element => element.getAttribute('data-config') || '{}',
+        renderHTML: attributes => ({
+          'data-config': attributes.config,
+        }),
+      }
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-chartjs]',
+        getAttrs: (dom) => {
+          if (typeof dom === 'string') return {};
+          const element = dom as HTMLElement;
+          return {
+            config: element.getAttribute('data-config') || '{}'
+          };
+        }
+      },
+      // Parse from code blocks with language="chartjs"
+      {
+        tag: 'pre',
+        preserveWhitespace: 'full',
+        getAttrs: (dom) => {
+          if (typeof dom === 'string') return false;
+          const element = dom as HTMLElement;
+          const code = element.querySelector('code[class*="language-chartjs"]');
+          if (!code) return false;
+
+          return {
+            config: code.textContent || '{}'
+          };
+        }
+      }
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, {
+      'data-chartjs': '',
+      'data-config': HTMLAttributes.config
+    })];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(DiagramWrapper);
+  },
+});
+
+/** Mermaid node with proper parsing from code blocks */
+const MermaidNode = Node.create({
+  name: 'mermaid',
+  group: 'block',
+  atom: true,
+
+  addAttributes() {
+    return {
+      code: {
+        default: '',
+        parseHTML: element => element.getAttribute('data-code') || '',
+        renderHTML: attributes => ({
+          'data-code': attributes.code,
+        }),
+      }
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-mermaid]',
+        getAttrs: (dom) => {
+          if (typeof dom === 'string') return {};
+          const element = dom as HTMLElement;
+          return {
+            code: element.getAttribute('data-code') || ''
+          };
+        }
+      },
+      // Parse from code blocks with language="mermaid"
+      {
+        tag: 'pre',
+        preserveWhitespace: 'full',
+        getAttrs: (dom) => {
+          if (typeof dom === 'string') return false;
+          const element = dom as HTMLElement;
+          const code = element.querySelector('code[class*="language-mermaid"]');
+          if (!code) return false;
+
+          return {
+            code: code.textContent || ''
+          };
+        }
+      }
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, {
+      'data-mermaid': '',
+      'data-code': HTMLAttributes.code
+    })];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(DiagramWrapper);
+  },
+});
+
+/** Graphviz (DOT) node with proper parsing from code blocks */
+const DotNode = Node.create({
+  name: 'dot',
+  group: 'block',
+  atom: true,
+
+  addAttributes() {
+    return {
+      code: {
+        default: '',
+        parseHTML: element => element.getAttribute('data-code') || '',
+        renderHTML: attributes => ({
+          'data-code': attributes.code,
+        }),
+      }
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-dot]',
+        getAttrs: (dom) => {
+          if (typeof dom === 'string') return {};
+          const element = dom as HTMLElement;
+          return {
+            code: element.getAttribute('data-code') || ''
+          };
+        }
+      },
+      // Parse from code blocks with language="dot" or "graphviz"
+      {
+        tag: 'pre',
+        preserveWhitespace: 'full',
+        getAttrs: (dom) => {
+          if (typeof dom === 'string') return false;
+          const element = dom as HTMLElement;
+          const code = element.querySelector('code[class*="language-dot"], code[class*="language-graphviz"]');
+          if (!code) return false;
+
+          return {
+            code: code.textContent || ''
+          };
+        }
+      }
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, {
+      'data-dot': '',
+      'data-code': HTMLAttributes.code
+    })];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(DiagramWrapper);
+  },
+});
+
+export { ChartJsNode, MermaidNode, DotNode };
+/* ---------- Component ---------- */
 interface NoteContentAreaProps {
   content: string;
-  setContent: (content: string) => void;
-  isEditing: boolean;
+  setContent: (md: string) => void;
+  note: Note;
   userProfile: UserProfile | null;
-  title?: string;
+  title: string;
 }
 
-export const NoteContentArea: React.FC<NoteContentAreaProps> = ({
-  content,
-  setContent,
-  isEditing,
-  userProfile,
-  title = 'Untitled Note',
-}) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
-  const generatedContentBufferRef = useRef<string>('');
-  const isTypingInProgressRef = useRef<boolean>(false);
+export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
+  ({ content, setContent, note, userProfile, title }, ref) => {
+    const initialHtml = content
+      ? mdProcessor.processSync(content).toString()
+      : '';
 
-  // View state
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [fontSize, setFontSize] = useState(16);
-  const [viewMode, setViewMode] = useState<'preview' | 'split' | 'editor'>('preview');
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
-
-  // Typing animation hook
-  const { startTypingAnimation, stopTypingAnimation, currentTypingPosition, isTypingActive } = useTypingAnimation({
-    textareaRef,
-    setContent,
-    onTypingComplete: () => {
-      setTypingComplete(true);
-      setIsTypingAI(false);
-      isTypingInProgressRef.current = false;
-      toast.dismiss('inline-ai-gen');
-      toast.success('AI content generated successfully!');
-    },
-  });
-
-  // State for Inline AI Editor
-  const [editorPosition, setEditorPosition] = useState({ top: 0, left: 0 });
-  const [isEditorVisible, setIsEditorVisible] = useState(false);
-  const [selectedTextForAI, setSelectedTextForAI] = useState('');
-  const [actionTypeForAI, setActionTypeForAI] = useState('');
-  const [isGeneratingAIInline, setIsGeneratingAIInline] = useState(false);
-  const [inlineSelectionStart, setInlineSelectionStart] = useState<number | null>(null);
-  const [inlineSelectionEnd, setInlineSelectionEnd] = useState<number | null>(null);
-
-  // States for AI typing
-  const [isTypingAI, setIsTypingAI] = useState(false);
-  const [originalContentBeforeAI, setOriginalContentBeforeAI] = useState('');
-  const [typingComplete, setTypingComplete] = useState(false);
-
-  // AI Suggestions state
-  const [showAISuggestions, setShowAISuggestions] = useState(false);
-  const [aiSuggestionsPosition, setAISuggestionsPosition] = useState({ top: 0, left: 0 });
-  const [suggestedActions, setSuggestedActions] = useState<AISuggestion[]>([]);
-
-  // Update view mode based on isEditing prop
-  useEffect(() => {
-    setViewMode(isEditing ? 'split' : 'preview');
-  }, [isEditing]);
-
-  // Action handlers
-  const handleCopyContent = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      toast.success('Content copied to clipboard!');
-    } catch (error) {
-      toast.error('Failed to copy content');
-    }
-  }, [content]);
-
-  const handleDownloadMarkdown = useCallback(() => {
-    const blob = new Blob([content], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success('Note downloaded as Markdown!');
-    setShowDownloadMenu(false);
-  }, [content, title]);
-
-  const handleDownloadHTML = useCallback(() => {
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>${title}</title>
-          <style>
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-              line-height: 1.6; 
-              max-width: 800px; 
-              margin: 40px auto; 
-              padding: 20px; 
-              color: #24292e;
-            }
-            h1, h2, h3, h4, h5, h6 { 
-              margin-top: 24px; 
-              margin-bottom: 16px; 
-              font-weight: 600;
-              line-height: 1.25;
-            }
-            h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-            h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-            p { margin-bottom: 16px; }
-            code { 
-              background: #f6f8fa; 
-              padding: 2px 6px; 
-              border-radius: 3px; 
-              font-family: 'Courier New', Consolas, monospace;
-              font-size: 0.9em;
-            }
-            pre { 
-              background: #f6f8fa; 
-              padding: 16px; 
-              border-radius: 6px; 
-              overflow-x: auto;
-              margin: 16px 0;
-            }
-            pre code {
-              background: none;
-              padding: 0;
-            }
-            blockquote { 
-              border-left: 4px solid #dfe2e5; 
-              padding-left: 16px; 
-              margin: 0 0 16px 0; 
-              color: #6a737d; 
-            }
-            table {
-              border-collapse: collapse;
-              width: 100%;
-              margin: 16px 0;
-            }
-            th, td {
-              border: 1px solid #dfe2e5;
-              padding: 8px 12px;
-              text-align: left;
-            }
-            th {
-              background: #f6f8fa;
-              font-weight: 600;
-            }
-            a { color: #0366d6; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-            img { max-width: 100%; height: auto; }
-            ul, ol { margin-bottom: 16px; padding-left: 2em; }
-            li { margin-bottom: 8px; }
-          </style>
-        </head>
-        <body>
-          <h1>${title}</h1>
-          <div id="content"></div>
-          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-          <script>
-            marked.setOptions({
-              breaks: true,
-              gfm: true
-            });
-            document.getElementById('content').innerHTML = marked.parse(${JSON.stringify(content)});
-          </script>
-        </body>
-      </html>
-    `;
-
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success('Note downloaded as HTML!');
-    setShowDownloadMenu(false);
-  }, [content, title]);
-
-  const handleDownloadPDF = useCallback(() => {
-    const previewElement = document.getElementById('note-preview-content');
-    if (!previewElement) {
-      toast.error('Could not find preview content to generate PDF');
-      return;
-    }
-
-    if (typeof window.html2pdf === 'undefined') {
-      toast.error('PDF generation library not loaded. Please refresh the page and try again.');
-      return;
-    }
-
-    toast.loading('Generating PDF...', { id: 'pdf-download' });
-
-    window.html2pdf()
-      .from(previewElement)
-      .set({
-        margin: [15, 15, 15, 15],
-        filename: `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { 
-          scale: 2, 
-          useCORS: true,
-          letterRendering: true,
-          logging: false
+    const editor = useEditor({
+      extensions: [
+        StarterKit.configure({ codeBlock: false }),
+        CodeBlockLowlight.configure({
+          lowlight,
+          defaultLanguage: 'javascript',
+        }),
+        Link.configure({ openOnClick: false, autolink: true }),
+        Underline,
+        Placeholder.configure({ placeholder: 'Start writing your note...' }),
+        Image,
+        Table.configure({ resizable: true }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        TextAlign.configure({ types: ['heading', 'paragraph'] }),
+        ChartJsNode,
+        MermaidNode,
+        DotNode,
+      ],
+      content: initialHtml,
+      onUpdate: ({ editor }) => {
+        const html = editor.getHTML();
+        const markdown = turndown.turndown(html);
+        setContent(markdown);
+      },
+      editorProps: {
+        attributes: {
+          class:
+            'prose prose-sm sm:prose lg:prose-lg dark:prose-invert focus:outline-none min-h-full p-6 max-w-none',
         },
-        jsPDF: { 
-          unit: 'mm', 
-          format: 'a4', 
-          orientation: 'portrait' 
-        },
-      })
-      .save()
-      .then(() => {
-        toast.success('Note downloaded as PDF!', { id: 'pdf-download' });
-        setShowDownloadMenu(false);
-      })
-      .catch((error: Error) => {
-        toast.error('Failed to generate PDF: ' + error.message, { id: 'pdf-download' });
-        console.error('PDF generation error:', error);
-      });
-  }, [content, title]);
-
-  const handleDownloadText = useCallback(() => {
-    // Convert markdown to plain text by removing markdown syntax
-    const plainText = content
-      .replace(/#{1,6}\s/g, '') // Remove headers
-      .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold
-      .replace(/\*([^*]+)\*/g, '$1') // Remove italics
-      .replace(/`([^`]+)`/g, '$1') // Remove inline code
-      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Remove links, keep text
-      .replace(/^[-*+]\s/gm, '') // Remove list markers
-      .replace(/^\d+\.\s/gm, ''); // Remove numbered list markers
-
-    const blob = new Blob([plainText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success('Note downloaded as Text!');
-    setShowDownloadMenu(false);
-  }, [content, title]);
-
-  const handleShare = useCallback(async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: title,
-          text: content,
-        });
-      } catch (error) {
-        handleCopyContent();
-      }
-    } else {
-      handleCopyContent();
-    }
-  }, [content, title, handleCopyContent]);
-
-  const handlePrint = useCallback(() => {
-    // Create a temporary div to render the markdown
-    const printDiv = document.createElement('div');
-    printDiv.style.display = 'none';
-    document.body.appendChild(printDiv);
-
-    // Render the markdown content using React
-    const root = createRoot(printDiv);
-    root.render(
-      <div style={{ 
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        lineHeight: '1.6',
-        maxWidth: '800px',
-        margin: '0 auto',
-        padding: '20px'
-      }}>
-        <h1>{title}</h1>
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeRaw]}
-          components={commonMarkdownComponents}
-        >
-          {content}
-        </ReactMarkdown>
-      </div>
-    );
-
-    // Wait for render to complete
-    setTimeout(() => {
-      const printContent = printDiv.innerHTML;
-      
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>${title}</title>
-              <style>
-                body { 
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                  line-height: 1.6; 
-                  max-width: 800px; 
-                  margin: 0 auto; 
-                  padding: 20px; 
-                }
-                h1, h2, h3, h4, h5, h6 { 
-                  margin-top: 24px; 
-                  margin-bottom: 16px; 
-                  font-weight: 600;
-                }
-                p { margin-bottom: 16px; }
-                code { 
-                  background: #f6f8fa; 
-                  padding: 2px 4px; 
-                  border-radius: 3px; 
-                  font-family: 'Courier New', monospace;
-                }
-                pre { 
-                  background: #f6f8fa; 
-                  padding: 16px; 
-                  border-radius: 6px; 
-                  overflow-x: auto; 
-                }
-                pre code {
-                  background: none;
-                  padding: 0;
-                }
-                blockquote { 
-                  border-left: 4px solid #dfe2e5; 
-                  padding-left: 16px; 
-                  margin: 0 0 16px 0; 
-                  color: #6a737d; 
-                }
-                table {
-                  border-collapse: collapse;
-                  width: 100%;
-                  margin: 16px 0;
-                }
-                th, td {
-                  border: 1px solid #dfe2e5;
-                  padding: 8px 12px;
-                  text-align: left;
-                }
-                th {
-                  background: #f6f8fa;
-                  font-weight: 600;
-                }
-                img {
-                  max-width: 100%;
-                  height: auto;
-                }
-                @media print {
-                  body { margin: 0; padding: 10mm; }
-                  h1 { page-break-before: avoid; }
-                  pre, blockquote { page-break-inside: avoid; }
-                }
-              </style>
-            </head>
-            <body>
-              ${printContent}
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        
-        // Wait for content to load, then print
-        printWindow.onload = () => {
-          printWindow.focus();
-          printWindow.print();
-          
-          // Clean up after printing
-          printWindow.onafterprint = () => {
-            printWindow.close();
-          };
-        };
-      }
-
-      // Clean up the temporary div
-      root.unmount();
-      document.body.removeChild(printDiv);
-    }, 100);
-  }, [content, title]);
-
-  const adjustFontSize = useCallback((delta: number) => {
-    setFontSize(prev => Math.max(12, Math.min(24, prev + delta)));
-  }, []);
-
-  // Detect AI-worthy content and show suggestions
-  const detectAISuggestions = useCallback((text: string, cursorPosition: number) => {
-    if (isTypingInProgressRef.current || isTypingActive) return;
-    if (!text.trim()) return;
-
-    const start = Math.max(0, cursorPosition - 50);
-    const end = Math.min(text.length, cursorPosition + 50);
-    const context = text.substring(start, end);
-
-    const matchingSuggestions = AI_SUGGESTIONS
-      .filter(suggestion => suggestion.trigger.test(context))
-      .sort((a, b) => a.priority - b.priority)
-      .slice(0, 3);
-
-    if (matchingSuggestions.length > 0 && textareaRef.current) {
-      const textarea = textareaRef.current;
-      const textareaRect = textarea.getBoundingClientRect();
-      const coords = getTextareaCaretCoordinates(textarea, cursorPosition);
-
-      setSuggestedActions(matchingSuggestions);
-      setAISuggestionsPosition({
-        top: textareaRect.top + coords.top + coords.height + 5,
-        left: textareaRect.left + coords.left,
-      });
-      setShowAISuggestions(true);
-
-      setTimeout(() => setShowAISuggestions(false), 5000);
-    }
-  }, [isTypingActive]);
-
-  // Handle textarea input changes
-  const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newContent = e.target.value;
-    const cursorPosition = e.target.selectionStart;
-
-    setContent(newContent);
-
-    if (newContent.length > content.length && cursorPosition > 10) {
-      detectAISuggestions(newContent, cursorPosition);
-    }
-  }, [content.length, setContent, detectAISuggestions]);
-
-  // Handle context menu for text selection AI
-  const handleContextMenu = useCallback((event: React.MouseEvent<HTMLTextAreaElement>) => {
-    if (!textareaRef.current || !isEditing) return;
-    if (isTypingInProgressRef.current || isTypingActive) return;
-
-    event.preventDefault();
-
-    const textarea = textareaRef.current;
-    const selectedTextValue = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
-
-    if (selectedTextValue.length > 0) {
-      const textareaRect = textarea.getBoundingClientRect();
-      const selectionStartPos = textarea.selectionStart;
-      const selectionEndPos = textarea.selectionEnd;
-
-      const startCoords = getTextareaCaretCoordinates(textarea, selectionStartPos);
-      const endCoords = getTextareaCaretCoordinates(textarea, selectionEndPos);
-
-      let top = textareaRect.top + startCoords.top - 60;
-      let left = textareaRect.left + (startCoords.left + endCoords.left) / 2;
-
-      if (top < textareaRect.top + 10) {
-        top = textareaRect.top + startCoords.top + startCoords.height + 10;
-      }
-
-      if (top + 200 > textareaRect.bottom - 10) {
-        top = textareaRect.bottom - 210;
-      }
-
-      if (top < 10) {
-        top = 10;
-      }
-
-      setEditorPosition({ top, left });
-      setSelectedTextForAI(selectedTextValue);
-      setActionTypeForAI('improve');
-      setIsGeneratingAIInline(false);
-      setInlineSelectionStart(selectionStartPos);
-      setInlineSelectionEnd(selectionEndPos);
-      setIsEditorVisible(true);
-      setShowAISuggestions(false);
-    } else {
-      setIsEditorVisible(false);
-    }
-  }, [isEditing, isTypingActive]);
-
-  // AI generation handler
-  const handleAIGenerate = async (selectedText: string, actionType: string, customInstruction: string): Promise<void> => {
-    if (!userProfile) {
-      toast.error('User profile not found. Cannot generate content.');
-      return;
-    }
-
-    if (isGeneratingAIInline || isTypingInProgressRef.current) {
-      return;
-    }
-
-    setIsEditorVisible(false);
-    setIsGeneratingAIInline(true);
-    isTypingInProgressRef.current = true;
-
-    toast.loading('Generating AI content...', {
-      id: 'inline-ai-gen',
-      duration: Infinity
+      },
     });
 
-    setOriginalContentBeforeAI(content);
+    useImperativeHandle(ref, () => ({
+      getCurrentMarkdown: () => {
+        if (!editor) return '';
+        const html = editor.getHTML();
+        return turndown.turndown(html);
+      },
+      getInnerHTML: () => {
+        return editor?.getHTML() || '';
+      },
+    }));
 
-    try {
-      const generatedContent = await generateInlineContent(
-        selectedText,
-        content,
-        userProfile,
-        actionType,
-        customInstruction
-      );
-
-      if (!generatedContent || generatedContent.trim().length === 0) {
-        throw new Error('Generated content is empty');
+    useEffect(() => {
+      if (!editor) return;
+      const currentMd = turndown.turndown(editor.getHTML());
+      if (content !== currentMd) {
+        const html = mdProcessor.processSync(content).toString();
+        editor.commands.setContent(html, false);
       }
+    }, [content, editor]);
 
-      generatedContentBufferRef.current = generatedContent;
+    /* ---------- Inline AI ---------- */
+    const [showAI, setShowAI] = useState(false);
+    const [aiPos, setAiPos] = useState({ top: 0, left: 0 });
+    const [selectedText, setSelectedText] = useState('');
+    const [generatedText, setGeneratedText] = useState('');
+    const [actionType, setActionType] = useState('');
+    const [isTyping, setIsTyping] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-      const start = inlineSelectionStart !== null ? inlineSelectionStart : content.length;
-      const end = inlineSelectionEnd !== null ? inlineSelectionEnd : content.length;
-
-      const contentWithoutSelection = content.substring(0, start) + content.substring(end);
-      setContent(contentWithoutSelection);
-
-      setIsTypingAI(true);
-      setTypingComplete(false);
-      setIsGeneratingAIInline(false);
-
-      setTimeout(() => {
-        startTypingAnimation(generatedContent, start);
-      }, 200);
-
-    } catch (error) {
-      console.error('AI generation error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to generate content with AI.';
-
-      setContent(originalContentBeforeAI);
-      setIsTypingAI(false);
-      setTypingComplete(false);
-      setOriginalContentBeforeAI('');
-      setIsGeneratingAIInline(false);
-      isTypingInProgressRef.current = false;
-      generatedContentBufferRef.current = '';
-
-      toast.dismiss('inline-ai-gen');
-      toast.error(errorMessage);
-    }
-  };
-
-  // Handle AI suggestion click
-  const handleAISuggestionClick = useCallback((suggestion: AISuggestion) => {
-    if (!textareaRef.current || isTypingInProgressRef.current) return;
-
-    const textarea = textareaRef.current;
-    const cursorPos = textarea.selectionStart;
-
-    const contextStart = Math.max(0, cursorPos - 100);
-    const contextEnd = Math.min(content.length, cursorPos + 100);
-    const contextText = content.substring(contextStart, contextEnd);
-
-    setSelectedTextForAI(contextText);
-    setActionTypeForAI(suggestion.actionType);
-    setInlineSelectionStart(contextStart);
-    setInlineSelectionEnd(contextEnd);
-    setShowAISuggestions(false);
-
-    handleAIGenerate(contextText, suggestion.actionType, '');
-  }, [content, handleAIGenerate]);
-
-  // Event listeners
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.addEventListener('contextmenu', handleContextMenu as any);
-    }
-
-    return () => {
-      if (textarea) {
-        textarea.removeEventListener('contextmenu', handleContextMenu as any);
+    const startAI = () => {
+      if (!editor) return;
+      const { from, to } = editor.state.selection;
+      if (from === to) {
+        toast.info('Select some text first');
+        return;
       }
-    };
-  }, [handleContextMenu]);
+      const text = editor.state.doc.textBetween(from, to, ' ');
+      setSelectedText(text);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopTypingAnimation();
-      isTypingInProgressRef.current = false;
+      const coords = editor.view.coordsAtPos(from);
+      setAiPos({ top: coords.bottom + 10, left: coords.left });
+      setShowAI(true);
     };
-  }, [stopTypingAnimation]);
 
-  // Click outside to hide suggestions and download menu
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setShowAISuggestions(false);
-        setShowDownloadMenu(false);
+    const runAI = async (action: string, custom?: string) => {
+      setIsLoading(true);
+      setError(null);
+      setGeneratedText('');
+      try {
+        const result = await generateInlineContent(
+          selectedText,
+          content,
+          userProfile!,
+          action,
+          custom
+        );
+        setGeneratedText(result);
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    if (showAISuggestions || showDownloadMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+    // ✅ Fix 2: Convert AI Markdown responses before inserting
+    const acceptAI = () => {
+      if (!editor) return;
+      const htmlFromMd = mdProcessor.processSync(generatedText).toString();
+      editor.chain().focus().insertContent(htmlFromMd, { parseOptions: { preserveWhitespace: true } }).run();
+      setShowAI(false);
     };
-  }, [showAISuggestions, showDownloadMenu]);
 
-  // Render enhanced toolbar
-  const renderEnhancedToolbar = () => (
-    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-wrap gap-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        {isEditing && (
-          <Button
-            onClick={() => setViewMode(viewMode === 'split' ? 'editor' : 'split')}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2"
-            disabled={isTypingInProgressRef.current}
-          >
-            <SplitSquareHorizontal className="w-4 h-4" />
-            {viewMode === 'split' ? 'Editor Only' : 'Split View'}
-          </Button>
+    /* ---------- Flashcards ---------- */
+    const [showMenu, setShowMenu] = useState(false);
+    const [cardCount, setCardCount] = useState(10);
+    const [generating, setGenerating] = useState(false);
+    const [showDeck, setShowDeck] = useState(false);
+    const [savedCards, setSavedCards] = useState<any[]>([]);
+
+    const generate = async () => {
+      setGenerating(true);
+      try {
+        const res = await generateFlashcardsFromNote({
+          noteContent: content,
+          noteId: note.id,
+          userProfile: userProfile!,
+          numberOfCards: cardCount,
+        });
+        setSavedCards(res.flashcards);
+        setShowDeck(true);
+        toast.success(`Generated ${res.flashcards.length} cards`);
+      } catch {
+        toast.error('Failed to generate flashcards');
+      } finally {
+        setGenerating(false);
+        setShowMenu(false);
+      }
+    };
+
+    const insertDiagram = (type: 'chartjs' | 'mermaid' | 'dot') => {
+      if (!editor) return;
+
+      const defaults = {
+        chartjs: JSON.stringify({
+          type: 'bar',
+          data: {
+            labels: ['Red', 'Blue', 'Yellow'],
+            datasets: [{
+              label: '# of Votes',
+              data: [12, 19, 3],
+              backgroundColor: ['rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)', 'rgba(255, 206, 86, 0.2)']
+            }]
+          }
+        }, null, 2),
+        mermaid: 'flowchart TD\n    A[Start] --> B{Decision}\n    B -->|Yes| C[Result 1]\n    B -->|No| D[Result 2]',
+        dot: 'digraph G {\n    A -> B\n    B -> C\n    A -> C\n}'
+      };
+
+      if (type === 'chartjs') {
+        editor.chain().focus().insertContent({ type: 'chartjs', attrs: { config: defaults.chartjs } }).run();
+      } else {
+        editor.chain().focus().insertContent({ type, attrs: { code: defaults[type] } }).run();
+      }
+    };
+
+    // ✅ Universal Diagram Rendering & AI Markdown Processing Fix
+    // Applies to Mermaid, Chart.js, and Graphviz (DOT) diagrams
+    // Ensures diagrams render automatically when Markdown or AI content is inserted
+
+    // --- Add this inside NoteContentArea.tsx ---
+
+    // ✅ Fix 1: Auto-render diagrams from Markdown
+    useEffect(() => {
+      if (!editor) return;
+
+      const html = editor.getHTML();
+      const container = document.createElement('div');
+      container.innerHTML = html;
+
+      // 1️⃣ Convert Mermaid code blocks to custom nodes
+      const mermaidBlocks = container.querySelectorAll('pre code.language-mermaid');
+      mermaidBlocks.forEach((block) => {
+        const code = block.textContent || '';
+        const div = document.createElement('div');
+        div.setAttribute('data-mermaid', '');
+        div.setAttribute('data-code', code);
+        block.parentElement?.replaceWith(div);
+      });
+
+      // 2️⃣ Convert Chart.js code blocks to custom nodes
+      const chartBlocks = container.querySelectorAll('pre code.language-chartjs');
+      chartBlocks.forEach((block) => {
+        const config = block.textContent || '{}';
+        const div = document.createElement('div');
+        div.setAttribute('data-chartjs', '');
+        div.setAttribute('data-config', config);
+        block.parentElement?.replaceWith(div);
+      });
+
+      // 3️⃣ Convert DOT/Graphviz code blocks to custom nodes
+      const dotBlocks = container.querySelectorAll('pre code.language-dot, pre code.language-graphviz');
+      dotBlocks.forEach((block) => {
+        const code = block.textContent || '';
+        const div = document.createElement('div');
+        div.setAttribute('data-dot', '');
+        div.setAttribute('data-code', code);
+        block.parentElement?.replaceWith(div);
+      });
+
+      // If any conversion occurred, re-set content in editor
+      if (mermaidBlocks.length + chartBlocks.length + dotBlocks.length > 0) {
+        // Defer content reset to prevent flushSync warning
+        Promise.resolve().then(() => {
+          if (editor?.commands) {
+            editor.commands.setContent(container.innerHTML, false);
+          }
+        });
+      }
+
+    }, [editor, content]);
+
+
+
+    // ✅ Fix 3: Reactive rendering for any unrendered diagrams
+    useEffect(() => {
+      const renderAllDiagrams = async () => {
+        // Mermaid
+        // ✅ Safe Mermaid rendering with graceful error handling
+        const mermaidDivs = document.querySelectorAll('div[data-mermaid]');
+        for (const div of mermaidDivs) {
+          const code = div.getAttribute('data-code');
+          if (!code) continue;
+
+          try {
+            const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const { svg } = await mermaid.render(id, code);
+            div.innerHTML = svg;
+            div.classList.remove('mermaid-error');
+          } catch (err: any) {
+            //console.warn('Mermaid render error:', err);
+
+            // Render friendly error message instead of bomb
+            div.innerHTML = `
+      <div style="
+        border: 1px solid #ef4444;
+        background: rgba(239,68,68,0.1);
+        color: #ef4444;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        font-family: system-ui, sans-serif;
+      ">
+        <strong>⚠️ Mermaid Diagram Error</strong><br>
+        ${err.message ? err.message.replace(/</g, '&lt;').replace(/>/g, '&gt;') : 'Invalid Mermaid syntax.'}
+      </div>
+    `;
+            div.classList.add('mermaid-error');
+          }
+        }
+
+
+        // Chart.js
+        const chartDivs = document.querySelectorAll('div[data-chartjs]');
+        for (const div of chartDivs) {
+          const configText = div.getAttribute('data-config');
+          if (!configText) continue;
+          try {
+            const config = JSON.parse(configText);
+            const canvas = document.createElement('canvas');
+            div.innerHTML = '';
+            div.appendChild(canvas);
+            new Chart(canvas, config);
+          } catch (err) {
+            //console.warn('Chart.js render error:', err);
+          }
+        }
+
+        // Graphviz (DOT)
+        const dotDivs = document.querySelectorAll('div[data-dot]');
+        for (const div of dotDivs) {
+          const code = div.getAttribute('data-code');
+          if (!code) continue;
+          try {
+            if (!(window as any).Viz) {
+              const script = document.createElement('script');
+              script.src = 'https://cdn.jsdelivr.net/npm/viz.js@2.1.2/viz.js';
+              script.async = true;
+              await new Promise((resolve) => {
+                script.onload = resolve;
+                document.head.appendChild(script);
+              });
+              const renderScript = document.createElement('script');
+              renderScript.src = 'https://cdn.jsdelivr.net/npm/viz.js@2.1.2/full.render.js';
+              renderScript.async = true;
+              await new Promise((resolve) => {
+                renderScript.onload = resolve;
+                document.head.appendChild(renderScript);
+              });
+            }
+            const viz = new (window as any).Viz();
+            const svg = await viz.renderSVGElement(code);
+            div.innerHTML = '';
+            div.appendChild(svg);
+          } catch (err) {
+            //console.warn('DOT render error:', err);
+          }
+        }
+      };
+
+      renderAllDiagrams();
+    }, [editor?.getHTML()]);
+
+
+    return (
+      <div className="flex flex-col flex-1 bg-white dark:bg-gray-900">
+        {/* Add custom styles for code highlighting */}
+        <style>{`
+          .ProseMirror pre {
+            background:rgb(240, 245, 247);
+            color:rgb(41, 40, 40);
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+          }
+
+          .dark .ProseMirror pre {
+            background: #0d1117;
+            
+          }
+
+          
+
+          .dark .ProseMirror code {
+            background: #0d1117;
+            color:rgb(199, 199, 199);
+          }
+
+          /* Syntax highlighting colors */
+          .hljs-comment { color: #6a9955; }
+          .hljs-keyword { color: #569cd6; }
+          .hljs-string { color: #ce9178; }
+          .hljs-number { color: #b5cea8; }
+          .hljs-function { color: #dcdcaa; }
+          .hljs-class { color: #4ec9b0; }
+          .hljs-variable { color: #9cdcfe; }
+          .hljs-operator { color: #d4d4d4; }
+          .hljs-punctuation { color: #d4d4d4; }
+          .hljs-attr { color: #9cdcfe; }
+          .hljs-title { color: #dcdcaa; }
+          .hljs-built_in { color: #4ec9b0; }
+          .hljs-literal { color: #569cd6; }
+          .hljs-tag { color: #569cd6; }
+          .hljs-name { color: #4ec9b0; }
+          .hljs-attribute { color: #9cdcfe; }
+
+          /* Better table styling */
+          .ProseMirror table {
+            border-collapse: collapse;
+            margin: 1rem 0;
+            width: 100%;
+          }
+
+          .ProseMirror td,
+          .ProseMirror th {
+            border: 1px solid #d1d5db;
+            padding: 0.5rem;
+            text-align: left;
+          }
+
+          .dark .ProseMirror td,
+          .dark .ProseMirror th {
+            border-color: #374151;
+          }
+
+          .ProseMirror th {
+            background: #f3f4f6;
+            font-weight: 600;
+          }
+
+          .dark .ProseMirror th {
+            background: #1f2937;
+          }
+          .mermaid-error {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid #ef4444;
+            color: #ef4444;
+          }
+          .dark .mermaid-error {
+            background: rgba(239,68,68,0.2);
+            border-color: #f87171;
+            color: #fca5a5;
+          }
+
+        `}</style>
+
+        {/* ---------- Toolbar ---------- */}
+        <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2 flex max-w-[100vw] gap-1 items-center overflow-x-auto">
+          <button onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded disabled:opacity-30" title="Undo"><Undo className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded disabled:opacity-30" title="Redo"><Redo className="w-4 h-4" /></button>
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+
+          <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('bold') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="Bold"><Bold className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('italic') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="Italic"><Italic className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('underline') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="Underline"><UnderlineIcon className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().toggleStrike().run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('strike') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="Strike"><Strikethrough className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().toggleCode().run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('code') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="Inline Code"><Code className="w-4 h-4" /></button>
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+
+          <button onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('heading', { level: 1 }) ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="H1"><Heading1 className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('heading', { level: 2 }) ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="H2"><Heading2 className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('heading', { level: 3 }) ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="H3"><Heading3 className="w-4 h-4" /></button>
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+
+          <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('bulletList') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="Bullet List"><List className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('orderedList') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="Numbered List"><ListOrdered className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('blockquote') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="Quote"><Quote className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${editor.isActive('codeBlock') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : ''}`} title="Code Block"><Code className="w-4 h-4" /></button>
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+
+          <button onClick={() => editor.chain().focus().setTextAlign('left').run()} className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Left"><AlignLeft className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().setTextAlign('center').run()} className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Center"><AlignCenter className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().setTextAlign('right').run()} className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Right"><AlignRight className="w-4 h-4" /></button>
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+
+          <button
+            onClick={() => {
+              const url = prompt('Enter link URL:');
+              if (url) editor.chain().focus().setLink({ href: url }).run();
+            }}
+            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+            title="Link"
+          ><LinkIcon className="w-4 h-4" /></button>
+          <button
+            onClick={() => {
+              const url = prompt('Enter image URL:');
+              if (url) editor.chain().focus().setImage({ src: url }).run();
+            }}
+            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+            title="Image"
+          ><ImageIcon className="w-4 h-4" /></button>
+          <button onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Table"><TableIcon className="w-4 h-4" /></button>
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+
+          {/* Diagram dropdown */}
+          <div className="relative group">
+            <button className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-1" title="Insert Diagram">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-1 hidden group-hover:block z-10 min-w-[160px]">
+              <button onClick={() => insertDiagram('chartjs')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Chart.js</button>
+              <button onClick={() => insertDiagram('mermaid')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Mermaid</button>
+              <button onClick={() => insertDiagram('dot')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Graphviz</button>
+            </div>
+          </div>
+
+          <button onClick={startAI} className="p-2 rounded hover:bg-gradient-to-r hover:from-purple-500 hover:to-blue-500 hover:text-white" title="AI Edit"><Sparkles className="w-4 h-4" /></button>
+
+          <div className="ml-auto">
+            <button
+              onClick={() => setShowMenu(v => !v)}
+              className="px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-medium"
+            >
+              <Brain className="w-4 h-4" />
+              Flashcards
+              {savedCards.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded-full text-xs font-semibold">{savedCards.length}</span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ---------- Editor ---------- */}
+        <div className="flex-1 overflow-auto max-h-[80vh] relative bg-white dark:bg-gray-900">
+          <EditorContent editor={editor} className="h-full" />
+        </div>
+
+        {/* ---------- Status Bar ---------- */}
+        <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 text-xs text-gray-600 dark:text-gray-400 flex justify-between bg-gray-50 dark:bg-gray-800">
+          <span>
+            {content.length} chars • {content.split(/\s+/).filter(Boolean).length} words
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              Ready
+            </span>
+            • Tiptap • Markdown • AI • Diagrams
+          </span>
+        </div>
+
+        {/* ---------- Inline AI Portal ---------- */}
+        {showAI && createPortal(
+          <InlineAIEditor
+            originalText={content}
+            selectedText={selectedText}
+            generatedText={generatedText}
+            actionType={actionType}
+            isTyping={isTyping}
+            isLoading={isLoading}
+            error={error ?? ''}
+            position={aiPos}
+            isVisible={showAI}
+            onGenerate={runAI}
+            onAccept={acceptAI}
+            onReject={() => setShowAI(false)}
+            onClearError={() => setError(null)}
+          />,
+          document.body
         )}
 
-        <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded">
-          <Button
-            onClick={() => adjustFontSize(-2)}
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            disabled={isTypingInProgressRef.current}
-          >
-            <ZoomOut className="w-3 h-3" />
-          </Button>
-          <span className="px-2 text-xs text-gray-600 dark:text-gray-400">{fontSize}px</span>
-          <Button
-            onClick={() => adjustFontSize(2)}
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            disabled={isTypingInProgressRef.current}
-          >
-            <ZoomIn className="w-3 h-3" />
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        <Button
-          onClick={handleCopyContent}
-          variant="ghost"
-          size="sm"
-          className="flex items-center gap-2"
-          disabled={!content.trim() || isTypingInProgressRef.current}
-        >
-          <Copy className="w-4 h-4" />
-          <span className="hidden sm:inline">Copy</span>
-        </Button>
-
-        {/* Download Dropdown */}
-        <div className="relative">
-          <Button
-            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-            variant="ghost"
-            size="sm"
-            className="flex items-center gap-2"
-            disabled={!content.trim() || isTypingInProgressRef.current}
-          >
-            <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Download</span>
-            <ChevronDown className="w-3 h-3" />
-          </Button>
-          
-          {showDownloadMenu && (
-            <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-50">
-              <Button
-                onClick={handleDownloadMarkdown}
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <FileText className="w-4 h-4 mr-2" />
-                Markdown (.md)
-              </Button>
-              <Button
-                onClick={handleDownloadHTML}
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <FileText className="w-4 h-4 mr-2" />
-                HTML (.html)
-              </Button>
-              <Button
-                onClick={handleDownloadPDF}
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <FileDown className="w-4 h-4 mr-2" />
-                PDF (.pdf)
-              </Button>
-              <Button
-                onClick={handleDownloadText}
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <Type className="w-4 h-4 mr-2" />
-                Plain Text (.txt)
-              </Button>
+        {/* ---------- Flashcard Menu ---------- */}
+        {showMenu && (
+          <div className="absolute right-4 top-16 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate Flashcards</label>
+              <button onClick={() => setShowMenu(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><XCircle className="w-4 h-4 text-gray-500" /></button>
             </div>
-          )}
-        </div>
 
-        <Button
-          onClick={handleShare}
-          variant="ghost"
-          size="sm"
-          className="flex items-center gap-2"
-          disabled={!content.trim() || isTypingInProgressRef.current}
-        >
-          <Share2 className="w-4 h-4" />
-          <span className="hidden sm:inline">Share</span>
-        </Button>
-
-        <Button
-          onClick={handlePrint}
-          variant="ghost"
-          size="sm"
-          className="flex items-center gap-2"
-          disabled={!content.trim() || isTypingInProgressRef.current}
-        >
-          <Printer className="w-4 h-4" />
-          <span className="hidden sm:inline">Print</span>
-        </Button>
-
-        <Button
-          onClick={() => setIsFullscreen(!isFullscreen)}
-          variant="ghost"
-          size="sm"
-          className="flex items-center gap-2"
-          disabled={isTypingInProgressRef.current}
-        >
-          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-        </Button>
-      </div>
-    </div>
-  );
-
-  // Main content based on editing state and view mode
-  const renderContent = () => {
-    if (!isEditing) {
-      return (
-        <div
-          ref={previewRef}
-          className="flex-1 overflow-y-auto modern-scrollbar"
-          style={{ fontSize: `${fontSize}px` }}
-          id="note-preview-content"
-        >
-          {content.trim() ? (
-            <div className="p-6">
-              <div className="prose prose-lg prose-slate dark:prose-invert max-w-none">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
-                  components={commonMarkdownComponents}
-                >
-                  {content}
-                </ReactMarkdown>
-              </div>
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={cardCount}
+                onChange={e => setCardCount(Math.min(50, Math.max(1, +e.target.value)))}
+                className="w-20 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none"
+              />
+              <span className="text-sm text-gray-600 dark:text-gray-400">flashcards</span>
             </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center p-12">
-              <div className="text-center">
-                <div className="text-gray-400 dark:text-gray-500 text-6xl mb-4">📝</div>
-                <p className="text-gray-500 dark:text-gray-400 text-xl mb-2">This note is empty</p>
-                <p className="text-gray-400 dark:text-gray-500 mb-4">Click edit in the header to start writing</p>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    } else {
-      if (viewMode === 'editor') {
-        return (
-          <div className="flex-1 p-4 min-h-0">
-            <Textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleContentChange}
-              placeholder="Start typing your note... (Right-click on selected text for AI assistance)"
-              className="w-full h-full resize-none border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 focus:border-blue-500 dark:focus:border-blue-400 transition-colors duration-200 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono leading-relaxed"
-              style={{ fontSize: `${fontSize}px`, minHeight: '400px' }}
-              disabled={isTypingInProgressRef.current}
+
+            <button
+              onClick={generate}
+              disabled={generating}
+              className="w-full mb-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed text-white rounded-lg flex items-center justify-center gap-2 font-medium transition-all"
+            >
+              {generating ? (
+                <>
+                  <RotateCw className="w-4 h-4 animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Generate {cardCount} Cards
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => { setShowDeck(p => !p); setShowMenu(false); }}
+              className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+            >
+              {showDeck ? 'Hide' : 'Show'} Flashcards
+            </button>
+          </div>
+        )}
+
+        {/* ---------- Flashcard Deck ---------- */}
+        {showDeck && (
+          <div className="mt-6 border-t pt-6 pb-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <FlashcardDeck
+              noteId={note.id}
+              userId={userProfile?.id ?? ''}
+              onGenerate={generate}
             />
           </div>
-        );
-      } else {
-        return (
-          <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 min-h-0">
-            <div className="flex flex-col lg:w-1/2">
-              <Textarea
-                ref={textareaRef}
-                value={content}
-                onChange={handleContentChange}
-                placeholder="Start typing your note... (Right-click on selected text for AI assistance)"
-                className="flex-1 resize-none border-2 border-dashed border-gray-300 modern-scrollbar dark:border-gray-600 rounded-lg p-4 focus:border-blue-500 dark:focus:border-blue-400 transition-colors duration-200 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono leading-relaxed"
-                style={{ fontSize: `${fontSize}px`, minHeight: '400px' }}
-                disabled={isTypingInProgressRef.current}
-              />
-            </div>
+        )}
+      </div>
+    );
+  }
+);
 
-            <div className="lg:w-1/2 flex flex-col">
-              <div className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
-                <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Live Preview
-                    {isGeneratingAIInline && <span className="text-blue-600 dark:text-blue-400 ml-2">(Generating...)</span>}
-                    {isTypingActive && !typingComplete && <span className="text-green-600 dark:text-green-400 ml-2">(AI Typing...)</span>}
-                  </h3>
-                </div>
-                <div
-                  className="p-4 overflow-y-scroll h-full modern-scrollbar flex-1"
-                  style={{ fontSize: `${fontSize}px` }}
-                  id="note-preview-content"
-                >
-                  {content.trim() ? (
-                    <div className="prose prose-slate dark:prose-invert max-w-none">
-                      {isTypingActive && !typingComplete ? (
-                        <pre className="whitespace-pre-wrap font-sans text-gray-700 dark:text-gray-200 leading-relaxed">
-                          {content}
-                        </pre>
-                      ) : (
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
-                          components={commonMarkdownComponents}
-                        >
-                          {content}
-                        </ReactMarkdown>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-gray-400 dark:text-gray-500 italic">Preview will appear here as you type...</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      }
-    }
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      className={`flex flex-col bg-white dark:bg-gray-900 ${isFullscreen
-        ? 'fixed inset-0 z-50'
-        : 'flex-1 min-h-0'
-        }`}
-    >
-      {(!isEditing || isFullscreen) && renderEnhancedToolbar()}
-
-      {renderContent()}
-
-      {isEditorVisible && createPortal(
-        <InlineAIEditor
-          position={editorPosition}
-          selectedText={selectedTextForAI}
-          actionType={actionTypeForAI}
-          onGenerate={handleAIGenerate}
-          originalText={content}
-          onAccept={() => { }}
-          onReject={() => setIsEditorVisible(false)}
-          isVisible={isEditorVisible}
-          isLoading={isGeneratingAIInline}
-        />,
-        document.body
-      )}
-
-      <AISuggestionsPopup
-        isVisible={showAISuggestions && !isTypingInProgressRef.current}
-        position={aiSuggestionsPosition}
-        suggestions={suggestedActions}
-        onSuggestionClick={handleAISuggestionClick}
-        onClose={() => setShowAISuggestions(false)}
-      />
-    </div>
-  );
-};
+NoteContentArea.displayName = 'NoteContentArea';

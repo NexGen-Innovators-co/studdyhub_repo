@@ -1,5 +1,5 @@
 // src/components/DocumentUpload.tsx
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect, lazy, Suspense } from 'react';
 import {
   UploadCloud, FileText, Image, Loader2, Check, XCircle, AlertTriangle,
   RefreshCw, Eye, Download, Calendar, HardDrive, Search, Filter,
@@ -16,20 +16,87 @@ import { supabase } from '../../integrations/supabase/client';
 import { Document } from '../../types/Document';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppContext } from '../../hooks/useAppContext';
-import { FolderTree } from './FolderTree';
-import { CreateFolderDialog, RenameFolderDialog } from './FolderDialog';
-import { FolderSelector } from './FolderSelector';
 import { DocumentFolder, CreateFolderInput, UpdateFolderInput } from '../../types/Folder';
+import { Skeleton } from '../ui/skeleton';
 interface DocumentUploadProps {
   documents: Document[];
-  // onDocumentUploaded: (document: Document) => void;
   onDocumentDeleted: (documentId: string) => void;
   onDocumentUpdated: (document: Document) => void;
 }
+/* -------------------------------------------------------------------------- */
+/* Lazy-loaded heavy components (code-splitted) */
+/* -------------------------------------------------------------------------- */
+const LazyFolderTree = lazy(() =>
+  import('./FolderTree').then((m) => ({ default: m.FolderTree }))
+);
+const LazyCreateFolderDialog = lazy(() =>
+  import('./FolderDialog').then((m) => ({ default: m.CreateFolderDialog }))
+);
+const LazyRenameFolderDialog = lazy(() =>
+  import('./FolderDialog').then((m) => ({ default: m.RenameFolderDialog }))
+);
+const LazyFolderSelector = lazy(() =>
+  import('./FolderSelector').then((m) => ({ default: m.FolderSelector }))
+);
+
+/* -------------------------------------------------------------------------- */
+/* Skeletons (shown while lazy chunks load) */
+/* -------------------------------------------------------------------------- */
+const DocumentCardSkeleton = () => (
+  <Card className="animate-pulse">
+    <CardHeader className="pb-3">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-5 w-3/4" />
+        <Skeleton className="h-6 w-6 rounded-full" />
+      </div>
+    </CardHeader>
+    <CardContent className="space-y-3">
+      <Skeleton className="h-4 w-1/2" />
+      <Skeleton className="h-4 w-1/3" />
+      <div className="flex gap-2">
+        <Skeleton className="h-8 w-20" />
+        <Skeleton className="h-8 w-20" />
+      </div>
+    </CardContent>
+  </Card>
+);
+
+const FolderTreeSkeleton = () => (
+  <Card>
+    <CardHeader>
+      <Skeleton className="h-6 w-32" />
+    </CardHeader>
+    <CardContent>
+      <div className="space-y-3">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="flex items-center gap-2 pl-4">
+            <Skeleton className="h-4 w-4" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+);
+
+const DocumentGridSkeleton = () => (
+  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+    {[...Array(6)].map((_, i) => (
+      <DocumentCardSkeleton key={i} />
+    ))}
+  </div>
+);
+
+const DocumentListSkeleton = () => (
+  <div className="space-y-4">
+    {[...Array(6)].map((_, i) => (
+      <DocumentCardSkeleton key={i} />
+    ))}
+  </div>
+);
 
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   documents,
-  // onDocumentUploaded,
   onDocumentDeleted,
   onDocumentUpdated
 }) => {
@@ -52,8 +119,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [showFilters, setShowFilters] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { loadMoreDocuments, dataPagination, folders, folderTree, appOperations, loadDataIfNeeded } = useAppContext();
-  const lastDocumentRef = useRef<HTMLDivElement>(null);
+  const { loadMoreDocuments, dataPagination, folders, folderTree, appOperations, loadDataIfNeeded, dataLoading } = useAppContext();
 
   // Folder state
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -64,6 +130,206 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [parentFolderForNew, setParentFolderForNew] = useState<string | null>(null);
   const [uploadFolderSelectorOpen, setUploadFolderSelectorOpen] = useState(false);
   const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | null>(null);
+
+
+  // 2. Lazy load folder dialogs
+  const LazyMoveDocumentDialog = lazy(() =>
+    import('./MoveDocumentDialog').then((m) => ({ default: m.MoveDocumentDialog }))
+  );
+
+  const LazyMoveFolderDialog = lazy(() =>
+    import('./MoveFolderDialog').then((m) => ({ default: m.MoveFolderDialog }))
+  );
+
+  // 3. Add state for move operations in DocumentUpload component:
+  const [moveDocumentDialogOpen, setMoveDocumentDialogOpen] = useState(false);
+  const [documentToMove, setDocumentToMove] = useState<Document | null>(null);
+  const [moveFolderDialogOpen, setMoveFolderDialogOpen] = useState(false);
+  const [folderToMove, setFolderToMove] = useState<DocumentFolder | null>(null);
+
+  // 4. Add handler to open move dialog for documents:
+  const handleMoveDocument = useCallback((document: Document) => {
+    setDocumentToMove(document);
+    setMoveDocumentDialogOpen(true);
+  }, []);
+
+  // 5. Add handler to move document to folder:
+  const handleMoveDocumentSubmit = useCallback(async (documentId: string, targetFolderId: string | null) => {
+    try {
+      if (!user?.id) return;
+
+      // Get current folder_ids
+      const document = documents.find(d => d.id === documentId);
+      if (!document) return;
+
+      let newFolderIds: string[] = [];
+
+      if (targetFolderId) {
+        // Moving to a folder - replace all folder associations with just this one
+        newFolderIds = [targetFolderId];
+      } else {
+        // Moving to root - clear all folder associations
+        newFolderIds = [];
+      }
+
+      // Insert new folder relationship
+      if (targetFolderId) {
+        const { error } = await supabase.from('document_folder_items').insert([
+          { folder_id: targetFolderId, document_id: documentId, }
+        ]);
+        if (error) {
+          console.error('Error moving document:', error);
+          toast.error('Failed to move document');
+          return;
+        }
+      }
+
+
+
+
+      // Update local state
+      const updatedDocument = { ...document, folder_ids: newFolderIds };
+      onDocumentUpdated(updatedDocument);
+
+      // Refresh documents to update counts
+      // await loadDataIfNeeded('documents');
+
+      toast.success('Document moved successfully!');
+    } catch (error: any) {
+      console.error('Error moving document:', error);
+      toast.error(`Failed to move document: ${error.message}`);
+    }
+  }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
+
+  // 6. Add handler to add document to folder (without removing from others):
+  const handleAddDocumentToFolder = useCallback(async (documentId: string, folderId: string) => {
+    try {
+      if (!user?.id) return;
+
+      const document = documents.find(d => d.id === documentId);
+      if (!document) return;
+
+      const currentFolderIds = document.folder_ids || [];
+
+      // Check if already in folder
+      if (currentFolderIds.includes(folderId)) {
+        toast.info('Document is already in this folder');
+        return;
+      }
+
+      // Add folder to existing folders
+      const newFolderIds = [...currentFolderIds, folderId];
+
+      const { error } = await supabase
+        .from('documents')
+        .update({ folder_ids: newFolderIds })
+        .eq('id', documentId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error adding document to folder:', error);
+        toast.error('Failed to add document to folder');
+        return;
+      }
+
+      const updatedDocument = { ...document, folder_ids: newFolderIds };
+      onDocumentUpdated(updatedDocument);
+
+      await loadDataIfNeeded('documents');
+
+      toast.success('Document added to folder!');
+    } catch (error: any) {
+      console.error('Error adding document to folder:', error);
+      toast.error(`Failed to add document to folder: ${error.message}`);
+    }
+  }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
+
+  // 7. Add handler to remove document from folder:
+  const handleRemoveDocumentFromFolder = useCallback(async (documentId: string, folderId: string) => {
+    try {
+      if (!user?.id) return;
+
+      const document = documents.find(d => d.id === documentId);
+      if (!document) return;
+
+      const currentFolderIds = document.folder_ids || [];
+      const newFolderIds = currentFolderIds.filter(id => id !== folderId);
+
+      const { error } = await supabase
+        .from('documents')
+        .update({ folder_ids: newFolderIds })
+        .eq('id', documentId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error removing document from folder:', error);
+        toast.error('Failed to remove document from folder');
+        return;
+      }
+
+      const updatedDocument = { ...document, folder_ids: newFolderIds };
+      onDocumentUpdated(updatedDocument);
+
+      await loadDataIfNeeded('documents');
+
+      toast.success('Document removed from folder!');
+    } catch (error: any) {
+      console.error('Error removing document from folder:', error);
+      toast.error(`Failed to remove document from folder: ${error.message}`);
+    }
+  }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
+
+  // 8. Update handleMoveFolder implementation:
+  const handleMoveFolder = useCallback((folderId: string) => {
+    const folder = folders.find(f => f.id === folderId);
+    if (folder) {
+      setFolderToMove(folder);
+      setMoveFolderDialogOpen(true);
+    }
+  }, [folders]);
+
+  // 9. Add handler to move folder to another folder:
+  const handleMoveFolderSubmit = useCallback(async (folderId: string, targetParentId: string | null) => {
+    try {
+      if (!user?.id) return;
+
+      const folder = folders.find(f => f.id === folderId);
+      if (!folder) return;
+
+      // Prevent moving folder into itself or its descendants
+      const isDescendant = (checkId: string, ancestorId: string): boolean => {
+        const descendants = folders.filter(f => f.parent_folder_id === ancestorId);
+        if (descendants.some(d => d.id === checkId)) return true;
+        return descendants.some(d => isDescendant(checkId, d.id));
+      };
+
+      if (targetParentId && (targetParentId === folderId || isDescendant(targetParentId, folderId))) {
+        toast.error('Cannot move folder into itself or its descendants');
+        return;
+      }
+
+      // Update database
+      const { error } = await supabase
+        .from('document_folders')
+        .update({ parent_folder_id: targetParentId })
+        .eq('id', folderId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error moving folder:', error);
+        toast.error('Failed to move folder');
+        return;
+      }
+
+      // Refresh folders
+      await loadDataIfNeeded('folders');
+
+      toast.success('Folder moved successfully!');
+    } catch (error: any) {
+      console.error('Error moving folder:', error);
+      toast.error(`Failed to move folder: ${error.message}`);
+    }
+  }, [folders, user, loadDataIfNeeded]);
   // Utility functions
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -362,7 +628,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       if (fileInputRef.current) fileInputRef.current.value = '';
 
     } catch (error: any) {
-      console.error('Processing error:', error);
+
       toast.error(`Failed to process file: ${error.message}`);
     } finally {
       clearInterval(progressInterval);
@@ -571,24 +837,52 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
   };
 
+  // OBSERVER
   const observer = useRef<IntersectionObserver | null>(null);
-
   const lastDocumentElementRef = useCallback(
-    (node: HTMLDivElement) => {
-      if (dataPagination.documents.isLoading) return;
-      if (observer.current) observer.current.disconnect();
-      observer.current = new IntersectionObserver(entries => {
-        if (entries[0].isIntersecting && dataPagination.documents.hasMore) {
-          loadMoreDocuments();
-        }
-      });
-      if (node) observer.current.observe(node);
+    (node: HTMLDivElement | null) => {
+      // 1. If we are already fetching do nothing (prevents duplicate calls)
+
+      if (dataLoading) {
+
+        return;
+      }
+
+      // 2. Clean previous observer
+      if (observer.current) {
+
+        observer.current.disconnect();
+      }
+
+      // 3. Create new observer
+      observer.current = new IntersectionObserver(
+        (entries) => {
+
+          if (
+            entries[0].isIntersecting && // element is visible
+            dataPagination.documents.hasMore && // there is more data
+            !dataLoading // NOT already loading
+          ) {
+
+            loadMoreDocuments(); // trigger load-more
+          }
+        },
+        { threshold: 0.1 } // fire a bit before the bottom
+      );
+
+      // 4. Observe the node
+      if (node) {
+
+        observer.current.observe(node);
+      }
     },
-    [loadMoreDocuments, dataPagination.documents.isLoading, dataPagination.documents.hasMore]
+    [
+      loadMoreDocuments,
+      dataPagination.documents.hasMore,
+      dataLoading,
+    ]
   );
 
-  // Get folders from context
-  // const { folders, folderTree, appOperations } = useAppContext();
 
   // Calculate document counts per folder
   const documentCounts = useMemo(() => {
@@ -661,9 +955,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       }
     }
   }, [appOperations, selectedFolderId, user, loadDataIfNeeded]);
-  const handleMoveFolder = useCallback((folderId: string) => {
-    toast.info('Move folder feature coming soon!');
-  }, []);
+
+
+
   // Filter documents by selected folder
   const filteredDocumentsByFolder = useMemo(() => {
     if (!selectedFolderId) {
@@ -739,18 +1033,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 </div>
               </CardHeader>
               <CardContent>
-                <FolderTree
-                  folderTree={folderTree}
-                  selectedFolderId={selectedFolderId}
-                  onFolderSelect={setSelectedFolderId}
-                  onCreateFolder={handleCreateFolder}
-                  onRenameFolder={handleRenameFolder}
-                  onDeleteFolder={handleDeleteFolder}
-                  onMoveFolder={handleMoveFolder}
-                  expandedFolders={expandedFolders}
-                  onToggleExpand={handleToggleExpand}
-                  documentCounts={documentCounts}
-                />
+                <Suspense fallback={<FolderTreeSkeleton />}>
+                  <LazyFolderTree
+                    folderTree={folderTree}
+                    selectedFolderId={selectedFolderId}
+                    onFolderSelect={setSelectedFolderId}
+                    onCreateFolder={handleCreateFolder}
+                    onRenameFolder={handleRenameFolder}
+                    onDeleteFolder={handleDeleteFolder}
+                    onMoveFolder={handleMoveFolder}
+                    expandedFolders={expandedFolders}
+                    onToggleExpand={handleToggleExpand}
+                    documentCounts={documentCounts}
+                  />
+                </Suspense>
               </CardContent>
             </Card>
           </div>
@@ -906,7 +1202,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400">
                           {uploadTargetFolderId
-                            ? folders.find(f => f.id === uploadTargetFolderId)?.name || 'Root'
+                            ? folders.find((f) => f.id === uploadTargetFolderId)?.name || 'Root'
                             : 'Root / No folder'}
                         </p>
                       </div>
@@ -922,7 +1218,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 </CardContent>
               </Card>
             )}
-
             {/* Enhanced Controls and Filters - Keep your existing controls */}
             <div className="mb-8">
               <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm">
@@ -1008,7 +1303,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 </h2>
               </div>
 
-              {filteredDocumentsByFolder.length === 0 ? (
+              {filteredDocumentsByFolder.length === 0 && !dataLoading ? (
                 <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
                   <CardContent className="p-12 text-center">
                     <div className="w-24 h-24 mx-auto mb-6 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
@@ -1037,492 +1332,561 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   </CardContent>
                 </Card>
               ) : (
-                <div className={viewMode === 'grid'
-                  ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
-                  : "space-y-4"
-                }>
-                  {filteredDocumentsByFolder.map((doc, index) => {
-                    const isLastDocument = index === filteredDocumentsByFolder.length - 1;
-                    return (
-                      <Card
-                        key={doc.id}
-                        ref={isLastDocument ? lastDocumentElementRef : null}
-                        className={`group border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
-                          }`}
-                      >
-                        {/* Your existing document card content */}
-                        {/* Add folder badges to show which folders the document is in */}
-                        <CardContent className="p-0">
-                          {viewMode === 'grid' ? (
-                            <>
-                              {/* Grid View */}
-                              <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800">
-                                {getFileCategory(doc.file_type) === 'image' && doc.file_url ? (
-                                  <img
-                                    src={doc.file_url}
-                                    alt={doc.title}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error';
-                                      e.currentTarget.alt = 'Image failed to load';
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    {React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
-                                      className: "h-16 w-16 text-slate-400 dark:text-slate-500"
-                                    })}
-                                  </div>
-                                )}
-
-                                {/* Status Badge */}
-                                <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
-                                  {getStatusIcon(doc.processing_status as string)}
-                                  <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
-                                </div>
-
-                                {/* Category Badge */}
-                                <div className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
-                                  {getFileCategory(doc.file_type).toUpperCase()}
-                                </div>
-
-                                {/* Processing Overlay */}
-                                {isDocumentProcessing(doc.id) && (
-                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                    <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
-                                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                                        Processing...
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="p-6 space-y-4">
-                                <div>
-                                  <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2 line-clamp-2">
-                                    {doc.title}
-                                  </h3>
-                                  <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
-                                    <span className="flex items-center gap-1">
-                                      <Calendar className="h-4 w-4" />
-                                      {formatDate(doc.created_at)}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                      <HardDrive className="h-4 w-4" />
-                                      {formatFileSize(doc.file_size)}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 min-h-[80px]">
-                                  <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
-                                    {doc.content_extracted || 'No content extracted yet...'}
-                                  </p>
-                                </div>
-
-                                {doc.processing_status === 'failed' && doc.processing_error && (
-                                  <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-3">
-                                    <p className="text-sm text-red-600 dark:text-red-400">
-                                      <span className="font-medium">Error:</span> {(doc.processing_error as string)}
-                                    </p>
-                                  </div>
-                                )}
-
-                                <div className="flex gap-2 pt-2">
-                                  {doc.processing_status === 'failed' && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => triggerAnalysis(doc)}
-                                      disabled={isUploading || isDocumentProcessing(doc.id)}
-                                      className="flex-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10 border-blue-200 dark:border-blue-500/20"
-                                    >
-                                      {isDocumentProcessing(doc.id) ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                          Processing...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <RefreshCw className="h-4 w-4 mr-2" />
-                                          Retry
-                                        </>
-                                      )}
-                                    </Button>
-                                  )}
-
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => openPreview(doc)}
-                                    className="flex-1 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
-                                  >
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    Preview
-                                  </Button>
-
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
-                                    disabled={isUploading}
-                                    className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    Delete
-                                  </Button>
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              {/* List View */}
-                              <div className="flex items-center p-6 gap-4">
-                                <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center relative">
+                <Suspense
+                  fallback={
+                    viewMode === 'grid' ? <DocumentGridSkeleton /> : <DocumentListSkeleton />
+                  }
+                >
+                  <div
+                    className={
+                      viewMode === 'grid'
+                        ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'
+                        : 'space-y-4'
+                    }
+                  >
+                    {filteredDocumentsByFolder.map((doc, idx) => {
+                      const isLast = idx === filteredDocumentsByFolder.length - 1;
+                      return (
+                        <Card
+                          key={doc.id}
+                          ref={isLast ? lastDocumentElementRef : null}
+                          className={`group border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
+                            }`}
+                        >
+                          {/* Add folder badges to show which folders the document is in */}
+                          <CardContent className="p-0">
+                            {viewMode === 'grid' ? (
+                              <>
+                                {/* Grid View */}
+                                <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800">
                                   {getFileCategory(doc.file_type) === 'image' && doc.file_url ? (
                                     <img
                                       src={doc.file_url}
                                       alt={doc.title}
-                                      className="w-full h-full object-cover rounded-lg"
+                                      className="w-full h-full object-cover"
                                       onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
+                                        e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error';
+                                        e.currentTarget.alt = 'Image failed to load';
                                       }}
                                     />
                                   ) : (
-                                    React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
-                                      className: "h-8 w-8 text-slate-400 dark:text-slate-500"
-                                    })
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      {React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
+                                        className: "h-16 w-16 text-slate-400 dark:text-slate-500"
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {/* Status Badge */}
+                                  <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
+                                    {getStatusIcon(doc.processing_status as string)}
+                                    <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                                  </div>
+
+                                  {/* Category Badge */}
+                                  <div className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
+                                    {getFileCategory(doc.file_type).toUpperCase()}
+                                  </div>
+
+                                  {/* Processing Overlay */}
+                                  {isDocumentProcessing(doc.id) && (
+                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                      <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
+                                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                                          Processing...
+                                        </span>
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
 
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1 min-w-0">
-                                      <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 truncate">
-                                        {doc.title}
-                                      </h3>
-                                      <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
-                                          {getFileCategory(doc.file_type).toUpperCase()}
-                                        </div>
-                                        <span className="flex items-center gap-1">
-                                          <Calendar className="h-3 w-3" />
-                                          {formatDate(doc.created_at)}
-                                        </span>
-                                        <span className="flex items-center gap-1">
-                                          <HardDrive className="h-3 w-3" />
-                                          {formatFileSize(doc.file_size)}
-                                        </span>
-                                      </div>
-                                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
-                                        {doc.content_extracted || 'No content extracted yet...'}
+                                <div className="p-6 space-y-4">
+                                  <div>
+                                    <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2 line-clamp-2">
+                                      {doc.title}
+                                    </h3>
+                                    <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
+                                      <span className="flex items-center gap-1">
+                                        <Calendar className="h-4 w-4" />
+                                        {formatDate(doc.created_at)}
+                                      </span>
+                                      <span className="flex items-center gap-1">
+                                        <HardDrive className="h-4 w-4" />
+                                        {formatFileSize(doc.file_size)}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 min-h-[80px]">
+                                    <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
+                                      {doc.content_extracted || 'No content extracted yet...'}
+                                    </p>
+                                  </div>
+
+                                  {doc.processing_status === 'failed' && doc.processing_error && (
+                                    <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-3">
+                                      <p className="text-sm text-red-600 dark:text-red-400">
+                                        <span className="font-medium">Error:</span> {(doc.processing_error as string)}
                                       </p>
                                     </div>
+                                  )}
 
-                                    <div className="flex items-center gap-2 ml-4">
-                                      <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
-                                        {getStatusIcon(doc.processing_status as string)}
-                                        <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                                  <div className="flex gap-2 pt-2">
+                                    {doc.processing_status === 'failed' && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => triggerAnalysis(doc)}
+                                        disabled={isUploading || isDocumentProcessing(doc.id)}
+                                        className="flex-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10 border-blue-200 dark:border-blue-500/20"
+                                      >
+                                        {isDocumentProcessing(doc.id) ? (
+                                          <>
+                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                            Processing...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <RefreshCw className="h-4 w-4 mr-2" />
+                                            Retry
+                                          </>
+                                        )}
+                                      </Button>
+                                    )}
+
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openPreview(doc)}
+                                      className="flex-1 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
+                                    >
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      Preview
+                                    </Button>
+
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                      disabled={isUploading}
+                                      className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Delete
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleMoveDocument(doc)}
+                                      className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
+                                    >
+                                      <Folder className="h-4 w-4 mr-2" />
+                                      Move
+                                    </Button>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {/* List View */}
+                                <div className="flex items-center p-6 gap-4">
+                                  <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center relative">
+                                    {getFileCategory(doc.file_type) === 'image' && doc.file_url ? (
+                                      <img
+                                        src={doc.file_url}
+                                        alt={doc.title}
+                                        className="w-full h-full object-cover rounded-lg"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                        }}
+                                      />
+                                    ) : (
+                                      React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
+                                        className: "h-8 w-8 text-slate-400 dark:text-slate-500"
+                                      })
+                                    )}
+                                  </div>
+
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1 min-w-0">
+                                        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                          {doc.title}
+                                        </h3>
+                                        <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
+                                            {getFileCategory(doc.file_type).toUpperCase()}
+                                          </div>
+                                          <span className="flex items-center gap-1">
+                                            <Calendar className="h-3 w-3" />
+                                            {formatDate(doc.created_at)}
+                                          </span>
+                                          <span className="flex items-center gap-1">
+                                            <HardDrive className="h-3 w-3" />
+                                            {formatFileSize(doc.file_size)}
+                                          </span>
+                                        </div>
+                                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
+                                          {doc.content_extracted || 'No content extracted yet...'}
+                                        </p>
                                       </div>
 
-                                      <div className="flex gap-1">
-                                        {doc.processing_status === 'failed' && (
+                                      <div className="flex items-center gap-2 ml-4">
+                                        <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
+                                          {getStatusIcon(doc.processing_status as string)}
+                                          <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                                        </div>
+
+                                        <div className="flex gap-1">
+                                          {doc.processing_status === 'failed' && (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => triggerAnalysis(doc)}
+                                              disabled={isUploading || isDocumentProcessing(doc.id)}
+                                              className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
+                                            >
+                                              <RefreshCw className="h-4 w-4" />
+                                            </Button>
+                                          )}
+
                                           <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => triggerAnalysis(doc)}
-                                            disabled={isUploading || isDocumentProcessing(doc.id)}
-                                            className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
+                                            onClick={() => openPreview(doc)}
+                                            className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
                                           >
-                                            <RefreshCw className="h-4 w-4" />
+                                            <Eye className="h-4 w-4" />
                                           </Button>
-                                        )}
 
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => openPreview(doc)}
-                                          className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
-                                        >
-                                          <Eye className="h-4 w-4" />
-                                        </Button>
-
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
-                                          disabled={isUploading || isDocumentProcessing(doc.id)}
-                                          className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                            disabled={isUploading || isDocumentProcessing(doc.id)}
+                                            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleMoveDocument(doc)}
+                                            className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
+                                          >
+                                            <Folder className="h-4 w-4 mr-2" />
+                                            Move
+                                          </Button>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
                                 </div>
-                              </div>
-                            </>
-                          )}
+                              </>
+                            )}
 
-                          {/* Add this in the document info section */}
-                          {doc.folder_ids && doc.folder_ids.length > 0 && (
-                            <div className="px-6 pb-4">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs text-slate-500 dark:text-slate-400">In:</span>
-                                {doc.folder_ids.map(folderId => {
-                                  const folder = folders.find(f => f.id === folderId);
-                                  return folder ? (
-                                    <div
-                                      key={folderId}
-                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-slate-100 dark:bg-slate-700 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600"
-                                      onClick={() => setSelectedFolderId(folderId)}
-                                    >
-                                      <Folder className="h-3 w-3" style={{ color: folder.color }} />
-                                      {folder.name}
-                                    </div>
-                                  ) : null;
-                                })}
+                            {/* Add this in the document info section */}
+                            {doc.folder_ids && doc.folder_ids.length > 0 && (
+                              <div className="px-6 pb-4">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">In:</span>
+                                  {doc.folder_ids.map(folderId => {
+                                    const folder = folders.find(f => f.id === folderId);
+                                    return folder ? (
+                                      <div
+                                        key={folderId}
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-slate-100 dark:bg-slate-700 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600"
+                                        onClick={() => setSelectedFolderId(folderId)}
+                                      >
+                                        <Folder className="h-3 w-3" style={{ color: folder.color }} />
+                                        {folder.name}
+                                      </div>
+                                    ) : null;
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </Suspense>
               )}
             </div>
           </div>
         </div>
 
-        {/* Dialogs */}
-        <CreateFolderDialog
-          open={createFolderDialogOpen}
-          onOpenChange={setCreateFolderDialogOpen}
-          onCreateFolder={handleCreateFolderSubmit}
-          parentFolderId={parentFolderForNew}
-          parentFolderName={
-            parentFolderForNew
-              ? folders.find(f => f.id === parentFolderForNew)?.name
-              : undefined
-          }
-        />
+        <Suspense fallback={null}>
+          <LazyCreateFolderDialog
+            open={createFolderDialogOpen}
+            onOpenChange={setCreateFolderDialogOpen}
+            onCreateFolder={handleCreateFolderSubmit}
+            parentFolderId={parentFolderForNew}
+            parentFolderName={
+              parentFolderForNew
+                ? folders.find((f) => f.id === parentFolderForNew)?.name
+                : undefined
+            }
+          />
+        </Suspense>
 
-        <RenameFolderDialog
-          open={renameFolderDialogOpen}
-          onOpenChange={setRenameFolderDialogOpen}
-          folder={folderToRename}
-          onRenameFolder={handleRenameFolderSubmit}
-        />
+        <Suspense fallback={null}>
+          <LazyRenameFolderDialog
+            open={renameFolderDialogOpen}
+            onOpenChange={setRenameFolderDialogOpen}
+            folder={folderToRename}
+            onRenameFolder={handleRenameFolderSubmit}
+          />
+        </Suspense>
 
-        <FolderSelector
-          open={uploadFolderSelectorOpen}
-          onOpenChange={setUploadFolderSelectorOpen}
-          folderTree={folderTree}
-          selectedFolderId={uploadTargetFolderId}
-          onSelect={setUploadTargetFolderId}
-          title="Select Folder for Upload"
-          description="Choose where to save this document"
-          allowRoot={true}
-        />
+        <Suspense fallback={null}>
+          <LazyFolderSelector
+            open={uploadFolderSelectorOpen}
+            onOpenChange={setUploadFolderSelectorOpen}
+            folderTree={folderTree}
+            selectedFolderId={uploadTargetFolderId}
+            onSelect={setUploadTargetFolderId}
+            title="Select Folder for Upload"
+            description="Choose where to save this document"
+            allowRoot
+          />
+        </Suspense>
+        <Suspense fallback={null}>
+          <LazyMoveDocumentDialog
+            open={moveDocumentDialogOpen}
+            onOpenChange={setMoveDocumentDialogOpen}
+            document={documentToMove}
+            folderTree={folderTree}
+            onMoveDocument={handleMoveDocumentSubmit}
+          />
+        </Suspense>
 
-        {/* Your existing preview dialog */}
+        {/* Move Folder Dialog */}
+        <Suspense fallback={null}>
+          <LazyMoveFolderDialog
+            open={moveFolderDialogOpen}
+            onOpenChange={setMoveFolderDialogOpen}
+            folder={folderToMove}
+            folderTree={folderTree}
+            onMoveFolder={handleMoveFolderSubmit}
+            onCreateFolder={handleCreateFolder}
+            onDeleteFolder={handleDeleteFolder}
+            onRenameFolder={handleRenameFolder}
+            expandedFolders={expandedFolders}
+            onToggleExpand={handleToggleExpand}
+          />
+        </Suspense>
+
         {/* Enhanced Preview Dialog */}
         {previewOpen && selectedDocument && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-              <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-start justify-between">
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">
-                    {selectedDocument.title}
-                  </h2>
-                  <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
-                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(selectedDocument.file_type))}`}>
-                      {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
-                        className: "h-3 w-3"
-                      })}
-                      {getFileCategory(selectedDocument.file_type).toUpperCase()}
-                    </div>
-                    <span className="flex items-center gap-1">
-                      <HardDrive className="h-4 w-4" />
-                      {formatFileSize(selectedDocument.file_size)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      {formatDate(selectedDocument.created_at)}
-                    </span>
-                    <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(selectedDocument.processing_status as string)}`}>
-                      {getStatusIcon(selectedDocument.processing_status as string)}
-                      <span className="capitalize">{(selectedDocument.processing_status as string)}</span>
+          <Suspense fallback={null}>
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+                <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-start justify-between">
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                      {selectedDocument.title}
+                    </h2>
+                    <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+                      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(selectedDocument.file_type))}`}>
+                        {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
+                          className: "h-3 w-3"
+                        })}
+                        {getFileCategory(selectedDocument.file_type).toUpperCase()}
+                      </div>
+                      <span className="flex items-center gap-1">
+                        <HardDrive className="h-4 w-4" />
+                        {formatFileSize(selectedDocument.file_size)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-4 w-4" />
+                        {formatDate(selectedDocument.created_at)}
+                      </span>
+                      <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(selectedDocument.processing_status as string)}`}>
+                        {getStatusIcon(selectedDocument.processing_status as string)}
+                        <span className="capitalize">{(selectedDocument.processing_status as string)}</span>
+                      </div>
                     </div>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewOpen(false)}
+                    className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPreviewOpen(false)}
-                  className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
 
-              <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)] space-y-6">
-                {/* File Preview */}
-                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6">
-                  <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
-                    <Eye className="h-5 w-5" />
-                    File Preview
-                  </h3>
-                  <div className="aspect-video bg-white dark:bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden">
-                    {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
-                      <img
-                        src={selectedDocument.file_url}
-                        alt={selectedDocument.title}
-                        className="max-w-full max-h-full object-contain rounded-lg"
-                      />
-                    ) : (
-                      <div className="text-center space-y-3">
-                        {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
-                          className: "h-20 w-20 mx-auto text-slate-400 dark:text-slate-500"
-                        })}
-                        <div>
-                          <p className="text-lg font-medium text-slate-600 dark:text-slate-400">
-                            {selectedDocument.title}
-                          </p>
-                          <p className="text-sm text-slate-500 dark:text-slate-500">
-                            Preview not available for this file type
-                          </p>
+                <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)] space-y-6">
+                  {/* File Preview */}
+                  <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6">
+                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                      <Eye className="h-5 w-5" />
+                      File Preview
+                    </h3>
+                    <div className="aspect-video bg-white dark:bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden">
+                      {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
+                        <img
+                          src={selectedDocument.file_url}
+                          alt={selectedDocument.title}
+                          className="max-w-full max-h-full object-contain rounded-lg"
+                        />
+                      ) : (
+                        <div className="text-center space-y-3">
+                          {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
+                            className: "h-20 w-20 mx-auto text-slate-400 dark:text-slate-500"
+                          })}
+                          <div>
+                            <p className="text-lg font-medium text-slate-600 dark:text-slate-400">
+                              {selectedDocument.title}
+                            </p>
+                            <p className="text-sm text-slate-500 dark:text-slate-500">
+                              Preview not available for this file type
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(selectedDocument.file_url, '_blank')}
+                            className="mt-3"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Open File
+                          </Button>
                         </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Extracted Content */}
+                  <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <Zap className="h-5 w-5" />
+                        AI-Extracted Content
+                      </h3>
+                      {selectedDocument.content_extracted && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.open(selectedDocument.file_url, '_blank')}
-                          className="mt-3"
+                          onClick={() => copyToClipboard(selectedDocument.content_extracted!)}
+                          className="text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                         >
-                          <Download className="h-4 w-4 mr-2" />
-                          Open File
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copy
                         </Button>
-                      </div>
-                    )}
+                      )}
+                    </div>
+                    <div className="bg-white dark:bg-slate-700 rounded-lg p-4 min-h-[120px] max-h-60 overflow-y-auto">
+                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                        {selectedDocument.content_extracted || 'No content has been extracted from this file yet.'}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                {/* Extracted Content */}
-                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      <Zap className="h-5 w-5" />
-                      AI-Extracted Content
-                    </h3>
-                    {selectedDocument.content_extracted && (
+                  {/* Error Information */}
+                  {selectedDocument.processing_status === 'failed' && selectedDocument.processing_error && (
+                    <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl p-6">
+                      <h3 className="font-semibold text-red-800 dark:text-red-200 mb-3 flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5" />
+                        Processing Error
+                      </h3>
+                      <p className="text-sm text-red-700 dark:text-red-300 mb-4">
+                        {selectedDocument.processing_error as string}
+                      </p>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => copyToClipboard(selectedDocument.content_extracted!)}
-                        className="text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                        onClick={() => {
+                          setPreviewOpen(false);
+                          triggerAnalysis(selectedDocument);
+                        }}
+                        disabled={isDocumentProcessing(selectedDocument.id)}
+                        className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-300"
                       >
-                        <Copy className="h-4 w-4 mr-1" />
-                        Copy
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Retry Analysis
                       </Button>
-                    )}
-                  </div>
-                  <div className="bg-white dark:bg-slate-700 rounded-lg p-4 min-h-[120px] max-h-60 overflow-y-auto">
-                    <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                      {selectedDocument.content_extracted || 'No content has been extracted from this file yet.'}
-                    </p>
-                  </div>
-                </div>
+                    </div>
+                  )}
 
-                {/* Error Information */}
-                {selectedDocument.processing_status === 'failed' && selectedDocument.processing_error && (
-                  <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl p-6">
-                    <h3 className="font-semibold text-red-800 dark:text-red-200 mb-3 flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5" />
-                      Processing Error
-                    </h3>
-                    <p className="text-sm text-red-700 dark:text-red-300 mb-4">
-                      {selectedDocument.processing_error as string}
-                    </p>
+                  {/* Actions */}
+                  <div className="flex flex-wrap gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
                     <Button
                       variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setPreviewOpen(false);
-                        triggerAnalysis(selectedDocument);
-                      }}
-                      disabled={isDocumentProcessing(selectedDocument.id)}
-                      className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-300"
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Retry Analysis
-                    </Button>
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex flex-wrap gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <Button
-                    variant="outline"
-                    onClick={() => window.open(selectedDocument.file_url, '_blank')}
-                    className="flex-1 sm:flex-none"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({
-                          title: selectedDocument.title,
-                          url: selectedDocument.file_url
-                        });
-                      } else {
-                        copyToClipboard(selectedDocument.file_url);
-                      }
-                    }}
-                    className="flex-1 sm:flex-none"
-                  >
-                    <Share className="h-4 w-4 mr-2" />
-                    Share
-                  </Button>
-                  {selectedDocument.content_extracted && (
-                    <Button
-                      variant="outline"
-                      onClick={() => copyToClipboard(selectedDocument.content_extracted!)}
+                      onClick={() => window.open(selectedDocument.file_url, '_blank')}
                       className="flex-1 sm:flex-none"
                     >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy Content
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
                     </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setPreviewOpen(false);
-                      handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
-                    }}
-                    disabled={isUploading || isDocumentProcessing(selectedDocument.id)}
-                    className="flex-1 sm:flex-none text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (navigator.share) {
+                          navigator.share({
+                            title: selectedDocument.title,
+                            url: selectedDocument.file_url
+                          });
+                        } else {
+                          copyToClipboard(selectedDocument.file_url);
+                        }
+                      }}
+                      className="flex-1 sm:flex-none"
+                    >
+                      <Share className="h-4 w-4 mr-2" />
+                      Share
+                    </Button>
+                    {selectedDocument.content_extracted && (
+                      <Button
+                        variant="outline"
+                        onClick={() => copyToClipboard(selectedDocument.content_extracted!)}
+                        className="flex-1 sm:flex-none"
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy Content
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setPreviewOpen(false);
+                        handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
+                      }}
+                      disabled={isUploading || isDocumentProcessing(selectedDocument.id)}
+                      className="flex-1 sm:flex-none text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
+          </Suspense>
+        )}
+        {dataLoading && (
+          <div className="mt-6">
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <DocumentCardSkeleton key={`loadmore-${i}`} />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {[...Array(6)].map((_, i) => (
+                  <DocumentCardSkeleton key={`loadmore-${i}`} />
+                ))}
+              </div>
+            )}
           </div>
         )}
-        {dataPagination.documents.isLoading && (
-          <div className="flex justify-center items-center py-4">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-600 dark:text-blue-400 mr-3" />
-            <p className="text-slate-600 dark:text-slate-400">Loading more documents...</p>
-          </div>
-        )}
-        {dataPagination.documents.hasMore ? null : (
+
+        {!dataPagination.documents.hasMore && filteredAndSortedDocuments.length > 0 && (
           <div className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400">
             No more documents to load.
           </div>

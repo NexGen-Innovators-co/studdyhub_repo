@@ -193,7 +193,6 @@ const Index = () => {
     onUpdateScheduleItem: appOperations.updateScheduleItem,
     onDeleteScheduleItem: appOperations.deleteScheduleItem,
     onSendMessage: handleSubmitMessage,
-    // onDocumentUploaded: appOperations.handleDocumentUploaded,
     onDocumentUpdated: appOperations.updateDocument,
     onDocumentDeleted: appOperations.handleDocumentDeleted,
     onProfileUpdate: appOperations.handleProfileUpdate,
@@ -221,7 +220,7 @@ const Index = () => {
     onReprocessAudio: audioProcessing.triggerAudioProcessing,
     onDeleteRecording: appOperations.deleteRecording,
     onGenerateNote: audioProcessing.handleGenerateNoteFromAudio,
-    // Dashboard specific props
+    // Dashboard specific props - only what's needed
     onNavigateToTab: handleNavigateToTab,
     onCreateNew: handleCreateNew,
     // Infinite scroll controls
@@ -274,7 +273,7 @@ const Index = () => {
   // Determine header visibility based on current path
   const headerClass = useMemo(() => {
     const isNotesTab = currentActiveTab === 'notes';
-    return `flex items-center ${isNotesTab ? '' : 'sm:hidden'} justify-between w-full p-0 sm:p-0 shadow-none bg-transparent border-none`;
+    return `flex items-center ${isNotesTab ? '' : ''} justify-between w-full p-0 sm:p-0 shadow-none bg-white dark:bg-gray-600 border-none`;
   }, [currentActiveTab]);
 
   // Loading states
@@ -291,13 +290,15 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="h-screen flex flex-col  bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
       <div className={headerClass}>
         <Header {...headerProps} />
       </div>
-      <div className="flex-1 flex overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700">
+      <div className="flex-1 flex ">
         <Sidebar {...sidebarProps} />
-        <TabContent {...tabContentProps} />
+        <div className=" max-h-[95vh] w-full  bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar " >
+        <TabContent {...tabContentProps}/>
+        </div>
       </div>
     </div>
   );

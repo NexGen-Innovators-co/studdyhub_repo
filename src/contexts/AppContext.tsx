@@ -299,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return context;
   }, []);
-    const loadChatSessions = useCallback(async () => {
+  const loadChatSessions = useCallback(async () => {
     try {
       if (!user) return;
 
@@ -340,7 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       payload: CHAT_SESSIONS_PER_PAGE
     });
   }, []);
-  
+
   const createNewChatSession = useCallback(async (): Promise<string | null> => {
     try {
       if (!user) {
@@ -628,7 +628,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // This would call the message submission handler
       // For now, we'll just show a placeholder implementation
-      console.log('Regenerating response for:', lastUserMessageContent);
+      ////console.log('Regenerating response for:', lastUserMessageContent);
     } catch (error) {
       console.error('Error regenerating response:', error);
       toast.error('Failed to regenerate response');
@@ -673,7 +673,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // This would call the message submission handler
       // For now, we'll just show a placeholder implementation
-      console.log('Retrying failed message:', originalUserMessageContent);
+      //console.log('Retrying failed message:', originalUserMessageContent);
     } catch (error) {
       console.error('Error retrying message:', error);
       toast.error('Failed to retry message');

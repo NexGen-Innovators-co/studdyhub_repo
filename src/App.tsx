@@ -1,10 +1,10 @@
-// Modified App.tsx
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
+import { AdminAuthProvider } from "./hooks/useAdminAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -20,11 +20,29 @@ import Careers from "./pages/Careers";
 import APIPage from "./pages/APIs";
 import DocumentationPage from "./pages/DocumentationPage";
 import UserGuidePage from "./pages/UserGuide";
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { AppProvider } from "./contexts/AppContext";
+import { AdminLayout } from "./components/admin/AdminLayout";
+
+// Lazy load admin components
+const AdminDashboard = lazy(() => import("./components/admin/adminDashboard"));
+const UserManagement = lazy(() => import("./components/admin/UserManagement"));
+const AdminManagement = lazy(() => import("./components/admin/AdminManagement"));
+const ContentModeration = lazy(() => import("./components/admin/ContentModeration"));
+const SystemSettings = lazy(() => import("./components/admin/SystemSettings"));
+const ActivityLogs = lazy(() => import("./components/admin/ActivityLogs"));
 
 const queryClient = new QueryClient();
+
+const Fallback = () => (
+  <div className="flex items-center justify-center min-h-screen bg-gray-950">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+      <p className="text-gray-400">Loading...</p>
+    </div>
+  </div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -33,45 +51,57 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AuthProvider> {/* AuthProvider wraps AppProvider */}
-          <AppProvider>
-            <Routes>
-              {/* Public Landing Page Route */}
-              <Route path="/" element={<LandingPage />} />
+        <AuthProvider>
+          <AdminAuthProvider>
+            <AppProvider>
+              <Suspense fallback={<Fallback />}>
+                <Routes>
+                  {/* ==== PUBLIC ROUTES ==== */}
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                  <Route path="/about-us" element={<AboutUs />} />
+                  <Route path="/contact" element={<Contact />} />
+                  <Route path="/blogs" element={<Blog />} />
+                  <Route path="/integrations" element={<Integrations />} />
+                  <Route path="/terms-of-service" element={<TermsOfService />} />
+                  <Route path="/careers" element={<Careers />} />
+                  <Route path="/api" element={<APIPage />} />
+                  <Route path="/documentation-page" element={<DocumentationPage />} />
+                  <Route path="/user-guide-page" element={<UserGuidePage />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* Public Routes */}
-              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="/about-us" element={<AboutUs />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="/blogs" element={<Blog />} />
-              <Route path="/integrations" element={<Integrations />} />
-              <Route path="/terms-of-service" element={<TermsOfService />} />
-              <Route path="/careers" element={<Careers />} />
-              <Route path="/api" element={<APIPage />} />
-              <Route path="/documentation-page" element={<DocumentationPage />} />
-              <Route path="/user-guide-page" element={<UserGuidePage />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
+                  {/* ==== AUTHENTICATED APP ROUTES ==== */}
+                  <Route path="/dashboard" element={<Index />} />
+                  <Route path="/notes" element={<Index />} />
+                  <Route path="/note" element={<Index />} />
+                  <Route path="/recordings" element={<Index />} />
+                  <Route path="/schedule" element={<Index />} />
+                  <Route path="/chat" element={<Index />} />
+                  <Route path="/chat/:sessionId" element={<Index />} />
+                  <Route path="/documents" element={<Index />} />
+                  <Route path="/social" element={<Index />} />
+                  <Route path="/social/:tab" element={<Index />} />
+                  <Route path="/social/post/:postId" element={<Index />} />
+                  <Route path="/social/group/:groupId" element={<Index />} />
+                  <Route path="/settings" element={<Index />} />
 
-              {/* Authenticated Application Routes */}
-              <Route path="/dashboard" element={<Index />} />
-              <Route path="/notes" element={<Index />} />
-              <Route path="/note" element={<Index />} />
-              <Route path="/recordings" element={<Index />} />
-              <Route path="/schedule" element={<Index />} />
-              <Route path="/chat" element={<Index />} />
-              <Route path="/chat/:sessionId" element={<Index />} />
-              <Route path="/documents" element={<Index />} />
-              <Route path="/social" element={<Index />} />
-              <Route path="/social/:tab" element={<Index />} />
-              <Route path="/social/post/:postId" element={<Index />} />
-              <Route path="/social/group/:groupId" element={<Index />} /> {/* Added route for group */}
-              <Route path="/settings" element={<Index />} />
+                  {/* ==== ADMIN ROUTES - Protected by AdminLayout ==== */}
+                  <Route element={<AdminLayout />}>
+                    <Route path="/admin" element={<AdminDashboard />} />
+                    <Route path="/admin/users" element={<UserManagement />} />
+                    <Route path="/admin/admins" element={<AdminManagement />} />
+                    <Route path="/admin/moderation" element={<ContentModeration />} />
+                    <Route path="/admin/settings" element={<SystemSettings />} />
+                    <Route path="/admin/logs" element={<ActivityLogs />} />
+                  </Route>
 
-              {/* Catch-all for NotFound */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AppProvider>
+                  {/* ==== 404 NOT FOUND ==== */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </AppProvider>
+          </AdminAuthProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

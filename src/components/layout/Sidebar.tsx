@@ -886,21 +886,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Mobile Backdrop */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
-          onClick={handleToggleSidebar}
-        />
-      )}
       <div
         className={`bg-white border-r h-full border-slate-200 transition-transform duration-300 ease-in-out ${
           isOpen
             ? 'translate-x-0 w-72 md:w-64'
             : '-translate-x-full md:translate-x-0 md:w-14 md:hover:w-64'
-        } fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg lg:shadow-none lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden dark:bg-gray-900 dark:border-gray-600`}
+        } fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative md:translate-x-0 md:w-16 lg:shadow-none lg:translate-x-0 lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden dark:bg-gray-900 dark:border-gray-600 overflow-y-scroll modern-scrollbar`}
       >
-        <div className="p-6 sm:p-4 flex-1 overflow-y-auto modern-scrollbar">
+        <div className="p-6 sm:p-4 flex-1">
           {/* Toggle Button for Mobile */}
           <div className="flex justify-end mb-4 md:hidden">
             <Button
@@ -968,7 +961,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   isOpen
                     ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
                     : 'max-h-0 overflow-hidden'
-                } lg:group-hover:max-h-[50vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar lg:max-h-0 lg:overflow-hidden`}
+                } lg:group-hover:max-h-[31vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar lg:max-h-0 lg:overflow-hidden`}
               >
                 <ChatSessionsList {...chatSessionsListProps} />
                 {hasMoreChatSessions && (

@@ -1,4 +1,4 @@
-// components/InlineAIEditor.tsx
+// components/InlineAIEditor.tsx - UPDATED WITH TYPING ANIMATION
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '../../ui/button';
 import { Check, X, RotateCcw, Loader2, Edit3, Sparkles, ChevronDown, ChevronUp, AlertCircle, Lightbulb } from 'lucide-react';
@@ -17,6 +17,8 @@ interface InlineAIEditorProps {
   isLoading: boolean;
   error?: string | null;
   onClearError?: () => void;
+  generatedText?: string;
+  isTyping?: boolean;
 }
 
 // Smart suggestions interface
@@ -162,18 +164,27 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
   isVisible,
   isLoading,
   error,
-  onClearError
+  onClearError,
+  generatedText = '',
+  isTyping = false
 }) => {
   // State management
   const [customInstruction, setCustomInstruction] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [hasGenerated, setHasGenerated] = useState(false);
   const [showSmartSuggestions, setShowSmartSuggestions] = useState(false);
   const [currentActionType, setCurrentActionType] = useState(actionType);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Show preview when generated text is available
+  useEffect(() => {
+    if (generatedText) {
+      setShowPreview(true);
+    }
+  }, [generatedText]);
 
   // Memoized action config
   const actionConfig = useMemo(() =>
@@ -190,7 +201,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
     const text = selectedText.toLowerCase();
     return SMART_SUGGESTIONS.filter(suggestion =>
       suggestion.keywords.some(keyword => text.includes(keyword.toLowerCase()))
-    ).slice(0, 4); // Limit to 4 suggestions
+    ).slice(0, 4);
   }, [selectedText]);
 
   // Auto-focus management
@@ -210,18 +221,16 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const editorWidth = 500;
-    const editorHeight = showSmartSuggestions ? 400 : 300;
+    const editorHeight = showSmartSuggestions ? 500 : 400;
 
     let { top, left } = position;
 
-    // Adjust horizontal position
     if (left + editorWidth / 2 > viewportWidth) {
       left = viewportWidth - editorWidth / 2 - 20;
     } else if (left - editorWidth / 2 < 0) {
       left = editorWidth / 2 + 20;
     }
 
-    // Adjust vertical position
     if (top + editorHeight > viewportHeight) {
       top = Math.max(20, viewportHeight - editorHeight - 20);
     }
@@ -235,8 +244,8 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
 
     try {
       if (onClearError) onClearError();
+      setShowPreview(false);
       await onGenerate(selectedText, currentActionType, customInstruction);
-      setHasGenerated(true);
     } catch (err) {
       console.error('Generation failed:', err);
     }
@@ -244,20 +253,18 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
 
   const handleAccept = useCallback(() => {
     onAccept();
-    // Reset state
     setCustomInstruction('');
     setShowCustomInput(false);
-    setHasGenerated(false);
+    setShowPreview(false);
     setShowSmartSuggestions(false);
     if (onClearError) onClearError();
   }, [onAccept, onClearError]);
 
   const handleReject = useCallback(() => {
     onReject();
-    // Reset state
     setCustomInstruction('');
     setShowCustomInput(false);
-    setHasGenerated(false);
+    setShowPreview(false);
     setShowSmartSuggestions(false);
     if (onClearError) onClearError();
   }, [onReject, onClearError]);
@@ -271,7 +278,6 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
   const handleSmartSuggestion = useCallback((suggestion: SmartSuggestion) => {
     setCurrentActionType(suggestion.actionType);
     setShowSmartSuggestions(false);
-    // Optionally auto-generate or just set up the UI
   }, []);
 
   const handleKeydown = useCallback((e: React.KeyboardEvent) => {
@@ -294,7 +300,6 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
     setShowSmartSuggestions(prev => !prev);
   }, []);
 
-  // Don't render if not visible
   if (!isVisible) return null;
 
   const truncatedText = selectedText.length > 100
@@ -322,9 +327,15 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
               <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                 AI {actionConfig.label}
               </span>
-              {hasGenerated && (
+              {showPreview && !isTyping && (
                 <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">
                   Generated
+                </span>
+              )}
+              {isTyping && (
+                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Typing...
                 </span>
               )}
             </div>
@@ -335,7 +346,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
         </div>
 
         <div className="flex items-center gap-1">
-          {smartSuggestions.length > 0 && (
+          {smartSuggestions.length > 0 && !showPreview && (
             <Button
               size="sm"
               variant="ghost"
@@ -346,7 +357,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
               <Lightbulb className="h-4 w-4 text-yellow-600" />
             </Button>
           )}
-          {hasGenerated && (
+          {showPreview && !isTyping && (
             <Button
               size="sm"
               variant="ghost"
@@ -390,8 +401,42 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
           </div>
         )}
 
+        {/* Generated Text Preview with Typing Animation */}
+        {showPreview && generatedText && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                <Sparkles className="h-3 w-3 text-blue-500" />
+                {isTyping ? 'AI is typing...' : 'Generated Text'}
+              </div>
+              {isTyping && (
+                <div className="flex gap-1">
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              )}
+            </div>
+            <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 rounded-lg border border-blue-200 dark:border-gray-700 max-h-64 overflow-y-auto">
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                  {generatedText}
+                  {isTyping && (
+                    <span className="inline-block w-0.5 h-4 bg-blue-500 ml-0.5 animate-pulse"></span>
+                  )}
+                </p>
+              </div>
+            </div>
+            {!isTyping && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 text-right">
+                {generatedText.length} characters
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Smart Suggestions */}
-        {showSmartSuggestions && smartSuggestions.length > 0 && (
+        {!showPreview && showSmartSuggestions && smartSuggestions.length > 0 && (
           <div className="space-y-2">
             <div className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
               <Lightbulb className="h-3 w-3" />
@@ -419,67 +464,84 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
           </div>
         )}
 
-        {/* Selected text preview */}
-        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-            Selected Text:
-          </div>
-          <div className="text-sm text-gray-800 dark:text-gray-200 font-mono leading-relaxed">
-            "{truncatedText}"
-          </div>
-          {selectedText.length > 100 && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {selectedText.length} characters selected
+        {/* Selected text preview - Only show if no preview */}
+        {!showPreview && (
+          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+              Selected Text:
             </div>
-          )}
-        </div>
-
-        {/* Custom instruction section */}
-        <div className="space-y-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={toggleCustomInput}
-            className="h-8 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 px-2"
-          >
-            <Edit3 className="h-3 w-3 mr-2" />
-            Custom Instructions
-            {showCustomInput ? (
-              <ChevronUp className="h-3 w-3 ml-1" />
-            ) : (
-              <ChevronDown className="h-3 w-3 ml-1" />
+            <div className="text-sm text-gray-800 dark:text-gray-200 font-mono leading-relaxed">
+              "{truncatedText}"
+            </div>
+            {selectedText.length > 100 && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {selectedText.length} characters selected
+              </div>
             )}
-          </Button>
+          </div>
+        )}
 
-          {showCustomInput && (
-            <div className="space-y-2">
-              <Textarea
-                ref={textareaRef}
-                value={customInstruction}
-                onChange={(e) => setCustomInstruction(e.target.value)}
-                placeholder={actionConfig.placeholder}
-                className="text-sm resize-none border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                rows={3}
-                onKeyDown={handleKeydown}
-                maxLength={1000}
-              />
-              {customInstruction.length > 800 && (
-                <div className="text-xs text-amber-600 dark:text-amber-400">
-                  {1000 - customInstruction.length} characters remaining
-                </div>
+        {/* Custom instruction section - Only show if no preview */}
+        {!showPreview && (
+          <div className="space-y-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={toggleCustomInput}
+              className="h-8 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 px-2"
+            >
+              <Edit3 className="h-3 w-3 mr-2" />
+              Custom Instructions
+              {showCustomInput ? (
+                <ChevronUp className="h-3 w-3 ml-1" />
+              ) : (
+                <ChevronDown className="h-3 w-3 ml-1" />
               )}
-            </div>
-          )}
-        </div>
+            </Button>
+
+            {showCustomInput && (
+              <div className="space-y-2">
+                <Textarea
+                  ref={textareaRef}
+                  value={customInstruction}
+                  onChange={(e) => setCustomInstruction(e.target.value)}
+                  placeholder={actionConfig.placeholder}
+                  className="text-sm resize-none border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                  onKeyDown={handleKeydown}
+                  maxLength={1000}
+                />
+                {customInstruction.length > 800 && (
+                  <div className="text-xs text-amber-600 dark:text-amber-400">
+                    {1000 - customInstruction.length} characters remaining
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
       <div className="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          Press <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs font-mono">Ctrl+Enter</kbd> to generate
-        </div>
+        {!showPreview && (
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            Press <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs font-mono">Ctrl+Enter</kbd> to generate
+          </div>
+        )}
+        {showPreview && !isTyping && (
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            Review and accept or regenerate
+          </div>
+        )}
+        {isTyping && (
+          <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Generating response...
+          </div>
+        )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto">
           <Button
             size="sm"
             variant="outline"
@@ -490,7 +552,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
             Cancel
           </Button>
 
-          {hasGenerated && (
+          {showPreview && !isTyping && (
             <Button
               size="sm"
               variant="outline"
@@ -502,24 +564,26 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
             </Button>
           )}
 
-          <Button
-            size="sm"
-            onClick={handleGenerate}
-            disabled={isLoading}
-            className="h-8 text-xs bg-gradient-to-r from-blue-600 to-blue-600 hover:from-blue-700 hover:to-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-3 w-3 mr-1" />
-                {hasGenerated ? 'Regenerate' : 'Generate'}
-              </>
-            )}
-          </Button>
+          {!showPreview && (
+            <Button
+              size="sm"
+              onClick={handleGenerate}
+              disabled={isLoading}
+              className="h-8 text-xs bg-gradient-to-r from-blue-600 to-blue-600 hover:from-blue-700 hover:to-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  Generate
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </div>

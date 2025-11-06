@@ -42,8 +42,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   isNotesHistoryOpen
 }) => {
   const [title, setTitle] = useState(note.title);
-  const [content, setContent] = useState(note.content); // This is the debounced content
-  const [draftContent, setDraftContent] = useState(note.content); // This updates instantly from textarea
+  const [content, setContent] = useState(note.content); // Markdown
   const [category, setCategory] = useState<NoteCategory>(note.category);
   const [tags, setTags] = useState(note.tags.join(', '));
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
@@ -51,7 +50,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [isEditing, setIsEditing] = useState(true);
   const [documentSections, setDocumentSections] = useState<string[]>([]);
   const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -81,21 +79,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [uploadedDocumentPublicUrl, setUploadedDocumentPublicUrl] = useState<string | null>(null);
   const [documentIdForDialog, setDocumentIdForDialog] = useState<string | null>(null);
 
-  // Debounce effect for content
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setContent(draftContent);
-    }, 500); // Debounce for 500ms
+  const contentAreaRef = useRef<any>(null);
 
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [draftContent]);
-
+  // Reset on note change
   useEffect(() => {
     setTitle(note.title);
     setContent(note.content);
-    setDraftContent(note.content); // Reset draftContent when note changes
     setCategory(note.category);
     setTags(note.tags.join(', '));
 
@@ -105,14 +94,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setIsAudioOptionsVisible(false);
     setAudioProcessingJobId(null);
 
-    // Ensure speech is cancelled when note changes
     if ('speechSynthesis' in window && speechSynthesis.speaking) {
       speechSynthesis.cancel();
     }
     setIsSpeaking(false);
 
     return () => {
-      // Cleanup: cancel speech and pause audio on component unmount or note change
       if ('speechSynthesis' in window) speechSynthesis.cancel();
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
@@ -140,7 +127,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
       } else {
         // If no voices are immediately available, try again after a short delay
-        // This helps with async loading of voices on some browsers/platforms
         setTimeout(populateVoiceList, 500);
       }
     };
@@ -151,7 +137,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = populateVoiceList;
     }
-  }, [selectedVoiceURI]); // Add selectedVoiceURI to dependency array to re-evaluate if it changes externally
+  }, [selectedVoiceURI]);
 
   // Polling effect for audio processing job
   useEffect(() => {
@@ -178,7 +164,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           if (audioResult.status === 'completed') {
             toast.success('Audio processing completed!');
             setContent(audioResult.transcript || 'No transcription available.');
-            setDraftContent(audioResult.transcript || 'No transcription available.');
+
             onNoteUpdate({
               ...note,
               content: audioResult.transcript || '',
@@ -212,7 +198,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           errorMessage = error.message;
         }
         toast.error(errorMessage, { id: 'audio-job-status' });
-        //console.error('Polling error:', error);
         setAudioProcessingJobId(null);
         setIsProcessingAudio(false);
         setIsGeneratingAudioNote(false);
@@ -224,33 +209,31 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     };
 
     if (audioProcessingJobId) {
-      pollInterval = setInterval(pollJobStatus, 5000);
       pollJobStatus();
-    } else {
-      if (pollInterval) clearInterval(pollInterval);
-      toast.dismiss('audio-job-status');
+      pollInterval = setInterval(pollJobStatus, 5000);
     }
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);
-      toast.dismiss('audio-job-status');
     };
-  }, [audioProcessingJobId, userProfile, note, onNoteUpdate, setDraftContent]);
+  }, [audioProcessingJobId, userProfile, note, onNoteUpdate]);
 
   const handleSave = () => {
+    const currentMarkdown = contentAreaRef.current?.getCurrentMarkdown() || content;
+
     const updatedNote: Note = {
       ...note,
       title: title || 'Untitled Note',
-      content,
+      content: currentMarkdown,
       category,
-      tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
-      updatedAt: new Date()
+      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      updatedAt: new Date(),
+      aiSummary:note.aiSummary
     };
 
     onNoteUpdate(updatedNote);
-    toast.success('Note saved successfully!');
+    toast.success('Note saved!');
   };
-
   const regenerateNoteFromDocument = async () => {
     if (!note.document_id) {
       toast.error('This note is not linked to a source document and cannot be regenerated.');
@@ -278,7 +261,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       onNoteUpdate(newNote);
       setContent(newNote.content);
-      setDraftContent(newNote.content);
       toast.success('Note regenerated successfully!', { id: toastId });
     } catch (error) {
       let errorMessage = 'Failed to regenerate note.';
@@ -299,468 +281,308 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setIsGeneratingAI(false);
     }
   };
-// Add this enhanced error handling to your handleFileSelect function
-// Replace your handleFileSelect and handleDocumentProcessingAndNoteUpdate functions
-// in NoteEditor.tsx with these fixed versions
 
-const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-  console.log("🚀 handleFileSelect triggered!");
-  const file = event.target.files?.[0];
-  
-  if (!file || !userProfile) {
-    if (!userProfile) {
-      console.error("❌ User profile is missing");
-      toast.error("Cannot upload: User profile is missing.");
-    }
-    return;
-  }
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    //console.log("🚀 handleFileSelect triggered!");
+    const file = event.target.files?.[0];
 
-  console.log("📄 File selected:", {
-    name: file.name,
-    type: file.type,
-    size: file.size,
-    userId: userProfile.id
-  });
-
-  const allowedDocumentTypes = [
-    'application/pdf',
-    'text/plain',
-    'text/markdown',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/msword'
-  ];
-  const allowedAudioTypes = [
-    'audio/mpeg',
-    'audio/wav',
-    'audio/mp4',
-    'audio/x-m4a',
-    'audio/webm'
-  ];
-
-  // Route to audio handler if audio file
-  if (allowedAudioTypes.includes(file.type)) {
-    console.log("🎵 Routing to audio file handler");
-    handleAudioFileSelect(event);
-    return;
-  }
-
-  // Validate document type
-  if (!allowedDocumentTypes.includes(file.type)) {
-    console.error("❌ Unsupported file type:", file.type);
-    toast.error('Unsupported file type. Please upload a PDF, TXT, Word document, or an audio file.');
-    if (event.target) event.target.value = '';
-    return;
-  }
-
-  setIsUploading(true);
-  setSelectedFile(file);
-  setUploadedDocumentPublicUrl(null);
-  
-  // Use unique toast ID based on timestamp
-  const toastId = `upload-${Date.now()}`;
-  toast.loading('Uploading document...', { id: toastId });
-
-  try {
-    // Step 1: Upload to Storage
-    console.log("📤 Step 1: Uploading to storage...");
-    const filePath = `${userProfile.id}/${Date.now()}_${file.name}`;
-    console.log("📍 Storage path:", filePath);
-    
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file);
-    
-    if (uploadError) {
-      console.error("❌ Storage upload error:", uploadError);
-      throw new Error(`Upload failed: ${uploadError.message}`);
-    }
-    
-    console.log("✅ Storage upload successful");
-
-    // Step 2: Get Public URL
-    console.log("🔗 Step 2: Getting public URL...");
-    const { data: urlData } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath);
-
-    if (!urlData?.publicUrl) {
-      console.error("❌ Failed to get public URL");
-      throw new Error("Could not get public URL for the uploaded file.");
-    }
-    
-    console.log("✅ Public URL obtained:", urlData.publicUrl);
-    setUploadedDocumentPublicUrl(urlData.publicUrl);
-
-    // Step 3: Process Document
-    console.log("⚙️ Step 3: Starting document processing...");
-    await handleDocumentProcessingAndNoteUpdate(
-      file,
-      urlData.publicUrl,
-      file.type,
-      toastId // Pass the unique toast ID
-    );
-
-  } catch (error) {
-    console.error("❌ Upload process failed:", error);
-    
-    let errorMessage = 'An unknown error occurred during document upload.';
-    
-    if (error instanceof FunctionsHttpError) {
-      console.error("Edge Function Error:", {
-        status: error.context.status,
-        statusText: error.context.statusText,
-        message: error.message
-      });
-      errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
-      
-      if (error.message.includes("The model is overloaded")) {
-        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+    if (!file || !userProfile) {
+      if (!userProfile) {
+        //console.error("❌ User profile is missing");
+        toast.error("Cannot upload: User profile is missing.");
       }
-    } else if (error instanceof Error) {
-      console.error("JavaScript Error:", error.message, error.stack);
-      errorMessage = error.message;
-      
-      if (error.message.includes("The model is overloaded")) {
-        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+      return;
+    }
+
+    // console.log("📄 File selected:", {
+    //   name: file.name,
+    //   type: file.type,
+    //   size: file.size,
+    //   userId: userProfile.id
+    // });
+
+    const allowedDocumentTypes = [
+      'application/pdf',
+      'text/plain',
+      'text/markdown',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword'
+    ];
+    const allowedAudioTypes = [
+      'audio/mpeg',
+      'audio/wav',
+      'audio/mp4',
+      'audio/x-m4a',
+      'audio/webm'
+    ];
+
+    // Route to audio handler if audio file
+    if (allowedAudioTypes.includes(file.type)) {
+      //console.log("🎵 Routing to audio file handler");
+      handleAudioFileSelect(event);
+      return;
+    }
+
+    // Validate document type
+    if (!allowedDocumentTypes.includes(file.type)) {
+      //console.error("❌ Unsupported file type:", file.type);
+      toast.error('Unsupported file type. Please upload a PDF, TXT, Word document, or an audio file.');
+      if (event.target) event.target.value = '';
+      return;
+    }
+
+    setIsUploading(true);
+    setSelectedFile(file);
+
+    // Use unique toast ID based on timestamp
+    const toastId = `upload-${Date.now()}`;
+    toast.loading('Processing document...', { id: toastId });
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result.toString().split(',')[1];
+        const fileData = {
+          name: file.name,
+          mimeType: file.type,
+          data: base64,
+          size: file.size
+        };
+
+        const { data, error } = await supabase.functions.invoke('document-processor', {
+          body: {
+            userId: userProfile.id,
+            files: [fileData]
+          }
+        });
+
+        if (error) {
+          throw new Error(`Extraction failed: ${error.message}`);
+        }
+
+        const processedDoc = data.documents[0];
+        if (processedDoc.processing_status === 'failed') {
+          throw new Error(processedDoc.processing_error || 'Processing failed');
+        }
+
+        const documentId = processedDoc.id;
+        const extracted = processedDoc.content_extracted;
+
+        setExtractedContent(extracted);
+        setDocumentIdForDialog(documentId);
+        setUploadedDocumentPublicUrl(processedDoc.file_url);
+
+        toast.loading('Analyzing document structure...', { id: toastId });
+
+        const { data: structureData, error: structureError } = await supabase.functions.invoke(
+          'analyze-document-structure',
+          { body: { documentContent: extracted } }
+        );
+
+        if (structureError) {
+          throw structureError;
+        }
+
+        if (structureData.sections && structureData.sections.length > 0) {
+          setDocumentSections(structureData.sections);
+          setIsSectionDialogOpen(true);
+          toast.dismiss(toastId);
+        } else {
+          await generateAIContentForNote(note, userProfile, null, toastId, documentId);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      let errorMessage = 'An unknown error occurred during document processing.';
+      if (error instanceof FunctionsHttpError) {
+        errorMessage = `Function error (${error.context.status}): ${error.context.statusText}.`;
+        if (error.message.includes("The model is overloaded")) {
+          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+        if (error.message.includes("The model is overloaded")) {
+          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+        }
       }
+      toast.error(errorMessage, { id: toastId });
+      //console.error('Error processing document:', error);
+    } finally {
+      setIsUploading(false);
+      if (event.target) event.target.value = '';
     }
-    
-    toast.error(errorMessage, { id: toastId });
-  } finally {
-    setIsUploading(false);
-    if (event.target) event.target.value = '';
-  }
-};
+  };
 
-const handleDocumentProcessingAndNoteUpdate = async (
-  file: File,
-  fileUrl: string,
-  fileType: string,
-  toastId: string, // Receive the unique toast ID
-  selectedSection: string | null = null
-) => {
-  if (!userProfile) {
-    console.error("❌ User profile not found in processing step");
-    toast.error("User profile not found. Cannot process document.", { id: toastId });
-    return;
-  }
+  const generateAIContentForNote = async (
+    targetNote: Note,
+    user: UserProfile,
+    selectedSection: string | null,
+    toastId: string, // Receive the toast ID
+    documentIdForGeneration: string | null
+  ) => {
+    setIsGeneratingAI(true);
 
-  console.log("🔧 Starting document processing:", {
-    fileName: file.name,
-    fileUrl,
-    fileType,
-    userId: userProfile.id,
-    noteId: note.id,
-    documentId: note.document_id
-  });
+    // Update the existing toast
+    toast.loading('Generating AI note content...', { id: toastId });
 
-  setIsGeneratingAI(true);
-  
-  // Update the existing toast instead of creating new ones
-  toast.loading('Extracting text from document...', { id: toastId });
+    try {
+      const requestBody = {
+        documentId: documentIdForGeneration,
+        userProfile: user,
+        selectedSection: selectedSection,
+      };
 
-  let documentRecordId: string | null = null;
-
-  try {
-    // Step 1: Create/Update Document Record
-    if (note.id && note.document_id) {
-      console.log("🔄 Updating existing document record:", note.document_id);
-      documentRecordId = note.document_id;
-      
-      const { error: updateDocError } = await supabase
-        .from('documents')
-        .update({
-          title: file.name,
-          file_name: file.name,
-          file_url: fileUrl,
-          file_type: fileType,
-          file_size: file.size,
-          processing_status: 'pending',
-          processing_error: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', documentRecordId)
-        .eq('user_id', userProfile.id);
-
-      if (updateDocError) {
-        console.error("❌ Document update failed:", updateDocError);
-        throw new Error(updateDocError.message || 'Failed to update existing document record.');
-      }
-      
-      console.log("✅ Document record updated");
-    } else {
-      console.log("➕ Creating new document record");
-      
-      const { data: newDocument, error: createDocError } = await supabase
-        .from('documents')
-        .insert({
-          user_id: userProfile.id,
-          title: file.name,
-          file_name: file.name,
-          file_url: fileUrl,
-          file_type: fileType,
-          file_size: file.size,
-          type: 'text',
-          processing_status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select('id')
-        .single();
-
-      if (createDocError || !newDocument) {
-        console.error("❌ Document creation failed:", createDocError);
-        throw new Error(createDocError?.message || 'Failed to create new document record.');
-      }
-      
-      documentRecordId = newDocument.id;
-      console.log("✅ Document record created:", documentRecordId);
-
-      onNoteUpdate({ ...note, document_id: documentRecordId });
-    }
-
-    if (!documentRecordId) {
-      throw new Error("Document record ID could not be determined.");
-    }
-
-    // Step 2: Extract Content via Edge Function
-    console.log("📋 Calling gemini-document-extractor edge function...");
-    const extractionPayload = {
-      documentId: documentRecordId,
-      file_url: fileUrl,
-      file_type: fileType,
-      userId: userProfile.id,
-    };
-    console.log("Extraction payload:", extractionPayload);
-
-    const { data: extractionData, error: extractionError } = await supabase.functions.invoke(
-      'gemini-document-extractor',
-      { body: extractionPayload }
-    );
-
-    if (extractionError) {
-      console.error("❌ Extraction error:", extractionError);
-      throw extractionError;
-    }
-    
-    console.log("✅ Content extracted, length:", extractionData.content_extracted?.length || 0);
-    const extractedContent = extractionData.content_extracted;
-    setExtractedContent(extractedContent);
-
-    // Step 3: Analyze Structure
-    console.log("🔍 Analyzing document structure...");
-    
-    // Update the same toast
-    toast.loading('Analyzing document structure...', { id: toastId });
-
-    const { data: structureData, error: structureError } = await supabase.functions.invoke(
-      'analyze-document-structure',
-      { body: { documentContent: extractedContent } }
-    );
-
-    if (structureError) {
-      console.error("❌ Structure analysis error:", structureError);
-      throw structureError;
-    }
-
-    console.log("✅ Structure analyzed, sections found:", structureData.sections?.length || 0);
-
-    // Step 4: Handle Section Selection or Generate Note
-    if (structureData && structureData.sections && structureData.sections.length > 0) {
-      console.log("📑 Multiple sections found, showing selection dialog");
-      setDocumentSections(structureData.sections);
-      setDocumentIdForDialog(documentRecordId);
-      setIsSectionDialogOpen(true);
-      
-      // Dismiss the loading toast when showing dialog
-      toast.dismiss(toastId);
-    } else {
-      console.log("📝 No sections found, generating full note");
-      await generateAIContentForNote(
-        note,
-        userProfile,
-        null,
-        toastId, // Pass the same toast ID
-        documentRecordId
+      const { data: aiGeneratedNote, error: generationError } = await supabase.functions.invoke(
+        'generate-note-from-document',
+        { body: requestBody }
       );
-    }
 
-  } catch (error) {
-    console.error("❌ Document processing failed:", error);
-    
-    let errorMessage = 'An unknown error occurred during document processing.';
-    
-    if (error instanceof FunctionsHttpError) {
-      console.error("Edge Function Error Details:", {
-        status: error.context.status,
-        statusText: error.context.statusText,
-        message: error.message
-      });
-      errorMessage = `Function error (${error.context.status}): ${error.context.statusText}. Check function logs.`;
-      
-      if (error.message.includes("The model is overloaded")) {
-        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+      if (generationError) throw new Error(generationError.message || 'Failed to generate note content.');
+
+      const updatedNote: Note = {
+        ...targetNote,
+        title: aiGeneratedNote.title || targetNote.title,
+        content: aiGeneratedNote.content,
+        aiSummary: aiGeneratedNote.aiSummary,
+        updatedAt: new Date(),
+        document_id: documentIdForGeneration,
+      };
+
+      if (!targetNote.id) {
+        const { data: newNoteData, error: createNoteError } = await supabase
+          .from('notes')
+          .insert({
+            title: updatedNote.title,
+            content: updatedNote.content,
+            category: updatedNote.category,
+            tags: updatedNote.tags,
+            user_id: user.id,
+            ai_summary: updatedNote.aiSummary,
+            document_id: updatedNote.document_id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (createNoteError) throw createNoteError;
+
+        onNoteUpdate({
+          ...updatedNote,
+          id: newNoteData.id,
+          createdAt: new Date(newNoteData.created_at),
+          updatedAt: new Date(newNoteData.updated_at),
+        });
+
+        toast.success('New note generated from document!', { id: toastId });
+      } else {
+        const { error: updateNoteError } = await supabase
+          .from('notes')
+          .update({
+            title: updatedNote.title,
+            content: updatedNote.content,
+            ai_summary: updatedNote.aiSummary,
+            updated_at: new Date().toISOString(),
+            document_id: updatedNote.document_id,
+          })
+          .eq('id', updatedNote.id)
+          .eq('user_id', user.id);
+
+        if (updateNoteError) throw updateNoteError;
+
+        onNoteUpdate(updatedNote);
+        toast.success('Note updated from document!', { id: toastId });
       }
-    } else if (error instanceof Error) {
-      errorMessage = error.message;
-      
-      if (error.message.includes("The model is overloaded")) {
-        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+
+      setContent(updatedNote.content);
+      setTitle(updatedNote.title);
+
+    } catch (error) {
+      let errorMessage = 'An unknown error occurred.';
+
+      if (error instanceof FunctionsHttpError) {
+        errorMessage = `AI generation failed: ${error.context.statusText}. Check function logs.`;
+
+        if (error.message.includes("The model is overloaded")) {
+          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+
+        if (error.message.includes("The model is overloaded")) {
+          errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+        }
       }
+
+      toast.error(errorMessage, { id: toastId });
+    } finally {
+      setIsGeneratingAI(false);
+      setIsSectionDialogOpen(false);
+      setDocumentSections([]);
+      setSelectedFile(null);
+      setExtractedContent(null);
+      setUploadedDocumentPublicUrl(null);
     }
-    
-    toast.error(errorMessage, { id: toastId });
-    
-    // Update document status to failed
-    if (documentRecordId) {
-      console.log("⚠️ Updating document status to failed");
-      await supabase
-        .from('documents')
-        .update({
-          processing_status: 'failed',
-          processing_error: errorMessage,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', documentRecordId);
+  };
+
+  // Also update handleSectionSelect to pass toast ID correctly
+  const handleSectionSelect = async (section: string | null, documentIdFromDialog: string) => {
+    if (!userProfile || !documentIdFromDialog) {
+      toast.error("Missing user profile or document ID to generate note.");
+      return;
     }
-  } finally {
-    setIsGeneratingAI(false);
-  }
-};
 
-// Also update generateAIContentForNote to use the toast ID properly
-const generateAIContentForNote = async (
-  targetNote: Note,
-  user: UserProfile,
-  selectedSection: string | null,
-  toastId: string, // Receive the toast ID
-  documentIdForGeneration: string | null
-) => {
-  setIsGeneratingAI(true);
-  
-  // Update the existing toast
-  toast.loading('Generating AI note content...', { id: toastId });
+    // Create a unique toast ID for section generation
+    const toastId = `section-${Date.now()}`;
+    toast.loading(`Generating note from ${section ? `section: ${section}` : 'full document'}...`, { id: toastId });
 
-  try {
-    const requestBody = {
-      documentId: documentIdForGeneration,
-      userProfile: user,
-      selectedSection: selectedSection,
-    };
-
-    const { data: aiGeneratedNote, error: generationError } = await supabase.functions.invoke(
-      'generate-note-from-document',
-      { body: requestBody }
+    await generateAIContentForNote(
+      note,
+      userProfile,
+      section,
+      toastId, // Pass the unique toast ID
+      documentIdFromDialog
     );
+  };
+  const processMarkdownForSpeech = (markdownContent: string): string => {
+    let processedText = markdownContent;
 
-    if (generationError) throw new Error(generationError.message || 'Failed to generate note content.');
-
-    const updatedNote: Note = {
-      ...targetNote,
-      title: aiGeneratedNote.title || targetNote.title,
-      content: aiGeneratedNote.content,
-      aiSummary: aiGeneratedNote.aiSummary,
-      updatedAt: new Date(),
-      document_id: documentIdForGeneration,
-    };
-
-    if (!targetNote.id) {
-      const { data: newNoteData, error: createNoteError } = await supabase
-        .from('notes')
-        .insert({
-          title: updatedNote.title,
-          content: updatedNote.content,
-          category: updatedNote.category,
-          tags: updatedNote.tags,
-          user_id: user.id,
-          ai_summary: updatedNote.aiSummary,
-          document_id: updatedNote.document_id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (createNoteError) throw createNoteError;
-      
-      onNoteUpdate({
-        ...updatedNote,
-        id: newNoteData.id,
-        createdAt: new Date(newNoteData.created_at),
-        updatedAt: new Date(newNoteData.updated_at),
-      });
-      
-      toast.success('New note generated from document!', { id: toastId });
-    } else {
-      const { error: updateNoteError } = await supabase
-        .from('notes')
-        .update({
-          title: updatedNote.title,
-          content: updatedNote.content,
-          ai_summary: updatedNote.aiSummary,
-          updated_at: new Date().toISOString(),
-          document_id: updatedNote.document_id,
-        })
-        .eq('id', updatedNote.id)
-        .eq('user_id', user.id);
-
-      if (updateNoteError) throw updateNoteError;
-      
-      onNoteUpdate(updatedNote);
-      toast.success('Note updated from document!', { id: toastId });
-    }
-
-    setContent(updatedNote.content);
-    setDraftContent(updatedNote.content);
-    setTitle(updatedNote.title);
-
-  } catch (error) {
-    let errorMessage = 'An unknown error occurred.';
-    
-    if (error instanceof FunctionsHttpError) {
-      errorMessage = `AI generation failed: ${error.context.statusText}. Check function logs.`;
-      
-      if (error.message.includes("The model is overloaded")) {
-        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
+    // Replace code blocks with descriptive text
+    const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+    processedText = processedText.replace(codeBlockRegex, (match, lang, code) => {
+      const lowerLang = lang ? lang.toLowerCase() : '';
+      if (lowerLang === 'mermaid') {
+        return '(A Mermaid diagram is present here.)';
+      } else if (lowerLang === 'dot') {
+        return '(A DOT graph is present here.)';
+      } else if (lowerLang === 'chartjs') {
+        return '(A Chart.js graph is present here.)';
+      } else if (lang) {
+        return `(A ${lang} code block is present here.)`;
+      } else {
+        return '(A code block is present here.)';
       }
-    } else if (error instanceof Error) {
-      errorMessage = error.message;
-      
-      if (error.message.includes("The model is overloaded")) {
-        errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
-      }
-    }
-    
-    toast.error(errorMessage, { id: toastId });
-  } finally {
-    setIsGeneratingAI(false);
-    setIsSectionDialogOpen(false);
-    setDocumentSections([]);
-    setSelectedFile(null);
-    setExtractedContent(null);
-    setUploadedDocumentPublicUrl(null);
-  }
-};
+    });
 
-// Also update handleSectionSelect to pass toast ID correctly
-const handleSectionSelect = async (section: string | null, documentIdFromDialog: string) => {
-  if (!selectedFile || !extractedContent || !userProfile || !uploadedDocumentPublicUrl || !documentIdFromDialog) {
-    toast.error("Missing file, extracted content, user profile, uploaded document URL, or document ID to generate note.");
-    return;
-  }
+    // Remove other markdown formatting
+    processedText = processedText
+      .replace(/#{1,6}\s/g, '') // Remove ATX headings
+      .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, '$1$2') // Remove bold
+      .replace(/\*([^*]+)\*|_([^_]+)_/g, '$1$2') // Remove italics
+      .replace(/`([^`]+)`/g, '$1') // Remove inline code
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Remove links, keep text
+      .replace(/!\[([^\]]+)\]\([^\)]+\)/g, '(Image: $1)') // Replace images with alt text
+      .replace(/^- /gm, '') // Remove list item markers
+      .replace(/^\d+\. /gm, '') // Remove numbered list markers
+      .replace(/>\s/g, '') // Remove blockquote markers
+      .replace(/\|/g, ' ') // Replace table separators
+      .replace(/---/g, ' ') // Replace horizontal rules
+      .replace(/(\r\n|\n|\r)/gm, " ") // Replace newlines with spaces
+      .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
+      .trim();
 
-  // Create a unique toast ID for section generation
-  const toastId = `section-${Date.now()}`;
-  toast.loading(`Generating note from ${section ? `section: ${section}` : 'full document'}...`, { id: toastId });
-
-  await generateAIContentForNote(
-    note,
-    userProfile,
-    section,
-    toastId, // Pass the unique toast ID
-    documentIdFromDialog
-  );
-};
+    return processedText;
+  };
   const handleTextToSpeech = () => {
     if (!('speechSynthesis' in window)) {
       toast.error("Text-to-speech is not supported in this browser.");
@@ -781,45 +603,7 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
       return;
     }
 
-    const processMarkdownForSpeech = (markdownContent: string): string => {
-      let processedText = markdownContent;
 
-      // Replace code blocks with descriptive text
-      const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
-      processedText = processedText.replace(codeBlockRegex, (match, lang, code) => {
-        const lowerLang = lang ? lang.toLowerCase() : '';
-        if (lowerLang === 'mermaid') {
-          return '(A Mermaid diagram is present here.)';
-        } else if (lowerLang === 'dot') {
-          return '(A DOT graph is present here.)';
-        } else if (lowerLang === 'chartjs') {
-          return '(A Chart.js graph is present here.)';
-        } else if (lang) {
-          return `(A ${lang} code block is present here.)`;
-        } else {
-          return '(A code block is present here.)';
-        }
-      });
-
-      // Remove other markdown formatting
-      processedText = processedText
-        .replace(/#{1,6}\s/g, '') // Remove ATX headings
-        .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, '$1$2') // Remove bold
-        .replace(/\*([^*]+)\*|_([^_]+)_/g, '$1$2') // Remove italics
-        .replace(/`([^`]+)`/g, '$1') // Remove inline code
-        .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Remove links, keep text
-        .replace(/!\[([^\]]+)\]\([^\)]+\)/g, '(Image: $1)') // Replace images with alt text
-        .replace(/^- /gm, '') // Remove list item markers
-        .replace(/^\d+\. /gm, '') // Remove numbered list markers
-        .replace(/>\s/g, '') // Remove blockquote markers
-        .replace(/\|/g, ' ') // Replace table separators
-        .replace(/---/g, ' ') // Replace horizontal rules
-        .replace(/(\r\n|\n|\r)/gm, " ") // Replace newlines with spaces
-        .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
-        .trim();
-
-      return processedText;
-    };
 
     const textToRead = processMarkdownForSpeech(content);
     if (!textToRead) {
@@ -992,6 +776,61 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
     }
   };
 
+  const handleDownloadHTML = () => {
+    if (!content.trim()) {
+      toast.info("There's no content to download.");
+      return;
+    }
+    const htmlContent = contentAreaRef.current?.getInnerHTML() || '';
+    const fileName = `${title || 'untitled-note'}.html`;
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast.success('Note downloaded as HTML!');
+  };
+
+  const handleDownloadTXT = () => {
+    if (!content.trim()) {
+      toast.info("There's no content to download.");
+      return;
+    }
+    const plainText = processMarkdownForSpeech(content);
+    const fileName = `${title || 'untitled-note'}.txt`;
+    const blob = new Blob([plainText], { type: 'text/plain;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast.success('Note downloaded as Text!');
+  };
+
+  const handleDownloadWord = () => {
+    if (!content.trim()) {
+      toast.info("There's no content to download.");
+      return;
+    }
+    const htmlContent = contentAreaRef.current?.getInnerHTML() || '';
+    const wordContent = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${title}</title></head><body>${htmlContent}</body></html>`;
+    const fileName = `${title || 'untitled-note'}.doc`;
+    const blob = new Blob(['\ufeff', wordContent], { type: 'application/msword' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast.success('Note downloaded as Word!');
+  };
+
   const handleAudioFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     ("handleAudioFileSelect triggered!");
     toast.info("Audio file selected, starting upload...");
@@ -1019,9 +858,9 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
         .from('documents')
         .upload(filePath, file);
 
-      if (uploadError){
-         throw uploadError;
-         
+      if (uploadError) {
+        throw uploadError;
+
       }
       const { data: publicUrlData } = supabase.storage
         .from('documents')
@@ -1052,6 +891,9 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
       setIsProcessingAudio(false);
     }
   };
+  const handleAudioPlayerPlay = () => setIsPlayingAudio(true);
+  const handleAudioPlayerPause = () => setIsPlayingAudio(false);
+  const handleAudioPlayerEnded = () => setIsPlayingAudio(false);
 
   const handleProcessAudio = async (
     action: 'transcribe' | 'summarize' | 'translate',
@@ -1065,7 +907,6 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
 
     let audioDocumentId = documentId;
     if (!audioDocumentId) {
-      // If no documentId is provided, create a new document record for the audio file
       try {
         const { data: newDocument, error: createDocError } = await supabase
           .from('documents')
@@ -1086,14 +927,13 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
         if (createDocError || !newDocument) throw new Error(createDocError?.message || 'Failed to create new document record for audio.');
         audioDocumentId = newDocument.id;
         onNoteUpdate({ ...note, document_id: audioDocumentId });
-        setDocumentIdForDialog(audioDocumentId); // Keep track of the document ID
+        setDocumentIdForDialog(audioDocumentId);
       } catch (error) {
         let errorMessage = 'Failed to create document record for audio.';
         if (error instanceof Error) {
           errorMessage = error.message;
         }
         toast.error(errorMessage);
-        //console.error(errorMessage, error);
         setIsProcessingAudio(false);
         return;
       }
@@ -1152,7 +992,6 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
         errorMessage = error.message;
       }
       toast.error(errorMessage, { id: toastId });
-      //console.error(`Error starting audio ${action}:`, error);
       setIsProcessingAudio(false);
       setIsGeneratingAudioNote(false);
       setIsGeneratingAudioSummary(false);
@@ -1160,13 +999,8 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
     }
   };
 
-  const handleAudioPlayerPlay = () => setIsPlayingAudio(true);
-  const handleAudioPlayerPause = () => setIsPlayingAudio(false);
-  const handleAudioPlayerEnded = () => setIsPlayingAudio(false);
-
-
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-950 rounded-lg shadow-sm overflow-y-auto">
+    <div className="flex flex-col max-h-[95vh] bg-white dark:bg-gray-950 rounded-lg shadow-sm ">
       <NoteEditorHeader
         title={title}
         setTitle={setTitle}
@@ -1182,12 +1016,13 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
         handleViewOriginalDocument={handleViewOriginalDocument}
         handleDownloadNote={handleDownloadNote}
         handleDownloadPdf={handleDownloadPdf}
+        handleDownloadHTML={handleDownloadHTML}
+        handleDownloadTXT={handleDownloadTXT}
+        handleDownloadWord={handleDownloadWord}
         handleCopyNoteContent={handleCopyNoteContent}
         handleTextToSpeech={handleTextToSpeech}
         isSpeaking={isSpeaking}
         handleSave={handleSave}
-        isEditing={isEditing}
-        setIsEditing={setIsEditing}
         selectedVoiceURI={selectedVoiceURI}
         setSelectedVoiceURI={setSelectedVoiceURI}
         voices={voices}
@@ -1222,13 +1057,14 @@ const handleSectionSelect = async (section: string | null, documentIdFromDialog:
         userProfile={userProfile}
       />
 
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-y-auto lg:overflow-hidden">
         <NoteContentArea
-          content={draftContent}
-          setContent={setDraftContent}
-          isEditing={isEditing}
+          ref={contentAreaRef}
+          content={content}
+          setContent={setContent}
           userProfile={userProfile}
-
+          title={title}
+          note={note}
         />
 
         {note.aiSummary && (

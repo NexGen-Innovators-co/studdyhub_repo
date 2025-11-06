@@ -5,26 +5,30 @@ import { AlertTriangle, Check, Copy, Loader2 } from 'lucide-react';
 import { Button } from '../../ui/button';
 
 // Import languages for syntax highlighting
+/* ---------- Syntax Highlighting ---------- */
+import { lowlight } from 'lowlight';                     // default export only
 import javascript from 'highlight.js/lib/languages/javascript';
-import python from 'highlight.js/lib/languages/python';
-import java from 'highlight.js/lib/languages/java';
-import cpp from 'highlight.js/lib/languages/cpp';
-import sql from 'highlight.js/lib/languages/sql';
-import xml from 'highlight.js/lib/languages/xml';
-import bash from 'highlight.js/lib/languages/bash';
-import json from 'highlight.js/lib/languages/typescript'; // Using typescript for JSON highlighting
+import python    from 'highlight.js/lib/languages/python';
+import java      from 'highlight.js/lib/languages/java';
+import cpp       from 'highlight.js/lib/languages/cpp';
+import sql       from 'highlight.js/lib/languages/sql';
+import xml       from 'highlight.js/lib/languages/xml';
+import bash      from 'highlight.js/lib/languages/bash';
+import typescript from 'highlight.js/lib/languages/typescript';
+import json      from 'highlight.js/lib/languages/json';
+import css       from 'highlight.js/lib/languages/css';
 
-// Create lowlight instance and register languages
-import { lowlight } from 'lowlight';
-import { LanguageFn } from 'highlight.js';
-lowlight.registerLanguage('javascript', javascript as LanguageFn);
-lowlight.registerLanguage('python', python as LanguageFn);
-lowlight.registerLanguage('java', java as LanguageFn);
-lowlight.registerLanguage('cpp', cpp as LanguageFn);
-lowlight.registerLanguage('sql', sql as LanguageFn);
-lowlight.registerLanguage('xml', xml as LanguageFn);
-lowlight.registerLanguage('bash', bash as LanguageFn);
-lowlight.registerLanguage('json', json as LanguageFn);
+/* lowlight is already an instance – just register the languages */
+lowlight.registerLanguage('javascript', javascript as any);
+lowlight.registerLanguage('python',    python    as any);
+lowlight.registerLanguage('java',      java      as any);
+lowlight.registerLanguage('cpp',       cpp       as any);
+lowlight.registerLanguage('sql',       sql       as any);
+lowlight.registerLanguage('xml',       xml       as any);
+lowlight.registerLanguage('bash',      bash      as any);
+lowlight.registerLanguage('typescript', typescript as any);
+lowlight.registerLanguage('json',      json      as any);
+lowlight.registerLanguage('css',       css       as any);
 
 // Direct import for Graphviz
 import { Graphviz } from '@hpcc-js/wasm';

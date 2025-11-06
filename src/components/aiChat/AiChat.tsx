@@ -108,6 +108,9 @@ interface AIChatProps {
   ) => Promise<void>;
   onMessageUpdate: (message: Message) => void;
   onReplaceOptimisticMessage: (optimisticId: string, newMessage: Message) => void;
+  onLoadMoreDocuments: () => void; // Add this prop
+  hasMoreDocuments: boolean; // Add this prop
+  isLoadingDocuments: boolean; // Add this prop
 }
 
 const getFileType = (file: File): 'image' | 'document' | 'other' => {
@@ -218,7 +221,10 @@ const AIChat: React.FC<AIChatProps> = ({
   learningPreferences,
   onSendMessageToBackend,
   onMessageUpdate,
-  onReplaceOptimisticMessage
+  onReplaceOptimisticMessage,
+  onLoadMoreDocuments,
+  hasMoreDocuments,
+  isLoadingDocuments,
 
 }) => {
   const [inputMessage, setInputMessage] = useState('');
@@ -262,7 +268,7 @@ const AIChat: React.FC<AIChatProps> = ({
   const [autoTypeInPanel, setAutoTypeInPanel] = useState(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const generateOptimisticId = () => `optimistic-ai-${uuidv4()}`;
-
+  const [isAiTyping, setIsAiTyping] = useState(false);
   // **New State Variables for Drag and Drop:**
   const [isDragging, setIsDragging] = useState(false);
   const [dragCounter, setDragCounter] = useState(0);
@@ -282,12 +288,16 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, []);
 
-  // Handle textarea change
-  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInputMessage(e.target.value);
-    // Call resize directly instead of throttling
-    requestAnimationFrame(resizeTextarea);
-  }, [resizeTextarea]);
+
+  // const throttledResizeTextarea = useCallback(throttle(() => {
+  //   if (textareaRef.current) {
+  //     textareaRef.current.style.height = 'auto';
+  //     textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+  //   }
+  // }, 100), []); // Adjust the interval as needed
+  // useEffect(() => {
+  //   throttledResizeTextarea();
+  // }, [inputMessage, throttledResizeTextarea]);
 
   // **Drag and Drop Event Handlers:**
   const handleDragEnter = useCallback((e: DragEvent) => {
@@ -382,19 +392,28 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-
+    setIsAiTyping(true);
     // Prevent multiple sends
     if (isCurrentlySending) {
+      //console.log('[AiChat] Already sending, preventing duplicate send');
       return;
     }
 
-    setIsCurrentlySending(true); // Set sending flag
+    // Check if there are any optimistic messages still pending
+    const hasPendingOptimistic = messages.some(msg => msg.id.startsWith('optimistic-'));
+    if (hasPendingOptimistic) {
+      //console.log('[AiChat] Waiting for previous message to complete');
+      toast.info('Please wait for the previous message to complete');
+      return;
+    }
+
+    setIsCurrentlySending(true);
     setIsLoading(true);
 
     if (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) {
       toast.error('Please enter a message, attach files, or select documents/notes.');
       setIsLoading(false);
-      setIsCurrentlySending(false); // Clear sending flag
+      setIsCurrentlySending(false);
       return;
     }
 
@@ -482,17 +501,20 @@ const AIChat: React.FC<AIChatProps> = ({
 
       onSendMessageToBackend(inputMessage.trim(), documentIds, noteIds, filesForBackend);
 
-      setInputMessage('');
-      setAttachedFiles([]);
+
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (cameraInputRef.current) cameraInputRef.current.value = '';
 
+
       // **Disable the send button after sending the message:**
       setIsLastAiMessageDisplayed(false);
+      setInputMessage('');
+      setAttachedFiles([]);
+      setExpandedMessages(new Set());
     } catch (error: any) {
       console.error("Error sending message:", error);
       let errorMessage = 'Failed to send message.';
-      if (error.message.includes('Content size exceeds limit')) {
+      if (error.message.includes('Too Many Requests')) {
         errorMessage = 'Message or context too large. Some older messages or document content was truncated.';
       } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = 'Network error: Unable to connect to the server. Please check your internet connection.';
@@ -505,7 +527,17 @@ const AIChat: React.FC<AIChatProps> = ({
       } else if (error.message) {
         errorMessage = error.message;
       }
+      else if (error.message.includes('Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details')) {
+        errorMessage = 'Resource exhausted: The service is currently overloaded. Please try again later.';
+      }
       toast.error(`Error: ${errorMessage}`);
+      setInputMessage('');
+      setAttachedFiles([]);
+      setExpandedMessages(new Set());
+      setIsCurrentlySending(false);
+      setIsAiTyping(false);
+      isSubmittingUserMessage = false;
+
     } finally {
       setIsLoading(false);
       setIsCurrentlySending(false); // Always clear the sending flag
@@ -523,6 +555,14 @@ const AIChat: React.FC<AIChatProps> = ({
       return;
     }
 
+    // Skip marking optimistic messages as displayed
+    if (messageId.startsWith('optimistic-')) {
+      //console.log('[AiChat] Skipping display marking for optimistic message:', messageId);
+      return;
+    }
+
+    console.log('[AiChat] Marking message as displayed:', messageId);
+
     try {
       const { error } = await supabase
         .from('chat_messages')
@@ -533,20 +573,44 @@ const AIChat: React.FC<AIChatProps> = ({
 
       if (error) {
         console.error('Error marking message as displayed:', error);
-        toast.error(`Failed to mark message as displayed: ${error.message}`);
-      } else {
-        onMessageUpdate({ ...messages.find(msg => msg.id === messageId)!, has_been_displayed: true });
-
-        // **Check if the message is the last AI message and enable the send button:**
-        if (messages.length > 0 && messages[messages.length - 1].id === messageId && messages[messages.length - 1].role === 'assistant') {
-          setIsLastAiMessageDisplayed(true);
-        }
+        // Don't show toast for this error - it's not critical for UX
+        return;
       }
+
+      //console.log('[AiChat] Successfully marked message as displayed:', messageId);
+
+      // Update local state
+      onMessageUpdate({
+        ...messages.find(msg => msg.id === messageId)!,
+        has_been_displayed: true
+      });
+
+      // **Check if the message is the last AI message and enable the send button:**
+      if (messages.length > 0 &&
+        messages[messages.length - 1].id === messageId &&
+        messages[messages.length - 1].role === 'assistant') {
+        setIsLastAiMessageDisplayed(true);
+      }
+      setMergedDocuments(mergedDocuments => {
+        return mergedDocuments.map(doc => {
+          if (selectedDocumentIds.includes(doc.id)) {
+            return { ...doc, last_used_at: new Date().toISOString() };
+          }
+          return doc;
+        })
+      })
+      setExpandedMessages(new Set());
+      setIsLoading(false);
+      isSubmittingUserMessage = false;
+      setIsAiTyping(false);
+      setAttachedFiles([]);
+      setInputMessage('');
     } catch (error) {
       console.error('Unexpected error marking message as displayed:', error);
-      toast.error('An unexpected error occurred while updating message status.');
+      // Don't show toast - not critical for UX
     }
   }, [userProfile?.id, activeChatSessionId, messages, onMessageUpdate]);
+
 
   const handleBlockDetected = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
     if (autoTypeInPanel && isFirstBlock) {
@@ -782,22 +846,29 @@ const AIChat: React.FC<AIChatProps> = ({
   const handleScroll = useCallback(async () => {
     const chatContainer = chatContainerRef.current;
     if (!chatContainer) return;
-    const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 100;
-    setShowScrollToBottomButton(!isAtBottom && scrollHeight > clientHeight);
+    const { scrollTop } = chatContainer;
 
-    const scrollThreshold = 200;
-    if (scrollTop < scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
+    const scrollThreshold = 100; // Adjust as needed
+    if (scrollTop <= scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
       setIsLoadingOlderMessages(true);
-      const oldScrollHeight = scrollHeight;
-      await onLoadOlderMessages();
-      setTimeout(() => {
-        if (chatContainerRef.current) {
-          const newScrollHeight = chatContainerRef.current.scrollHeight;
-          chatContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
-        }
-      }, 0);
-      setIsLoadingOlderMessages(false);
+      try {
+        const oldScrollHeight = chatContainer.scrollHeight;
+        await onLoadOlderMessages();
+
+        // Wait for the new messages to render
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            const newScrollHeight = chatContainerRef.current.scrollHeight;
+            // Restore the scroll position to maintain the user's view
+            chatContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
+          }
+          setIsLoadingOlderMessages(false);
+        }, 0);
+      } catch (error) {
+        console.error("Error loading older messages:", error);
+        toast.error("Failed to load older messages.");
+        setIsLoadingOlderMessages(false);
+      }
     }
   }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages]);
 
@@ -810,7 +881,11 @@ const AIChat: React.FC<AIChatProps> = ({
       };
     }
   }, [handleScroll]);
-
+  useEffect(() => {
+    // This effect will run whenever attachedFiles, selectedDocumentIds, or mergedDocuments change
+    // console.log('Context changed, re-rendering badges');
+    // No need to explicitly set state here, just ensure a re-render is triggered
+    }, [attachedFiles, selectedDocumentIds, mergedDocuments]);
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
     if (!chatContainer) return;
@@ -825,13 +900,21 @@ const AIChat: React.FC<AIChatProps> = ({
           prevSessionIdRef.current = activeChatSessionId;
         }, 0);
       }
-    } else {
-      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200;
-      if (isNearBottom) {
-        scrollToBottom('smooth');
-      }
+      setInputMessage('');
+      setAttachedFiles([]);
+      setExpandedMessages(new Set());
+      setIsCurrentlySending(false);
+      setIsAiTyping(false);
+      isSubmittingUserMessage = false;
+      scrollToBottom('auto');
     }
+    // else {
+    //   const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+    //   const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200;
+    //   if (isNearBottom) {
+    //     scrollToBottom('smooth');
+    //   }
+    // }
   }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom]);
 
   const stripCodeBlocks = useCallback((content: string): string => {
@@ -843,10 +926,10 @@ const AIChat: React.FC<AIChatProps> = ({
     cleanedContent = cleanedContent.replace(/\n\s*\n/g, '\n').replace(/\s+/g, ' ').trim();
     return cleanedContent;
   }, []);
-  useEffect(() => {
-    console.log('[AiChat] documents prop updated, syncing mergedDocuments', documents.length);
-    setMergedDocuments(documents);
-  }, [documents]);
+  // useEffect(() => {
+  //   //console.log('[AiChat] documents prop updated, syncing mergedDocuments', documents.length);
+  //   setMergedDocuments(mergedDocuments);
+  // }, [mergedDocuments]);
   useEffect(() => {
     if (
       !isPhone() ||
@@ -955,6 +1038,8 @@ const AIChat: React.FC<AIChatProps> = ({
     setAttachedFiles([]);
   }, []);
 
+
+  // In handleDocumentUpdatedLocally:
   const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
     setMergedDocuments(prevDocs => {
       const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
@@ -1124,7 +1209,7 @@ const AIChat: React.FC<AIChatProps> = ({
     </div>
   ), [attachedFiles, selectedImageDocuments, selectedDocumentTitles, selectedNoteTitles, handleRemoveAllFiles, onSelectionChange, documents, notes, selectedDocumentIds]);
 
-  const displayMessages = useMemo(() => messages, [messages]);
+  // const displayMessages = useMemo(() => messages, [messages]);
 
   function handleDiagramCodeUpdate(messageId: string, newCode: string): Promise<void> {
     toast.info('Diagram code updated. You can regenerate the response to see changes.');
@@ -1135,7 +1220,7 @@ const AIChat: React.FC<AIChatProps> = ({
     <>
       <div
         ref={dropZoneRef}
-        className={`flex flex-col h-full border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+        className={`flex flex-col h-[93vh] border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''
           }`}
       >
         {/* **Drag and Drop Overlay:** */}
@@ -1252,7 +1337,11 @@ ${isDiagramPanelOpen
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
-                onChange={handleTextareaChange}
+                onChange={(e) => {
+                  e.preventDefault();
+                  setInputMessage(e.target.value);
+                  // throttledResizeTextarea();
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -1261,7 +1350,7 @@ ${isDiagramPanelOpen
                 }}
                 placeholder="What do you want to know? (You can also drag and drop files here)"
                 className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300 font-claude"
-                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping} // Added isAiTyping
                 rows={1}
               />
               <div className="flex items-center gap-2 mt-2 justify-between">
@@ -1292,7 +1381,8 @@ ${isDiagramPanelOpen
                       isGeneratingImage ||
                       isUpdatingDocuments ||
                       !recognitionRef.current ||
-                      micPermissionStatus === 'checking'
+                      micPermissionStatus === 'checking' ||
+                      isAiTyping
                     }
                   >
                     <Mic className={`h-5 w-5 ${isRecognizing ? 'animate-pulse' : ''}`} />
@@ -1322,7 +1412,7 @@ ${isDiagramPanelOpen
                     onClick={() => cameraInputRef.current?.click()}
                     className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
                     title="Take Picture"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
                   >
                     <Camera className="h-5 w-5" />
                   </Button>
@@ -1341,7 +1431,7 @@ ${isDiagramPanelOpen
                     onClick={() => fileInputRef.current?.click()}
                     className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
                     title="Upload Files"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
                   >
                     <Paperclip className="h-5 w-5" />
                   </Button>
@@ -1352,7 +1442,7 @@ ${isDiagramPanelOpen
                     onClick={() => setShowDocumentSelector(true)}
                     className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
                     title="Select Documents/Notes for Context"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments}
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
                   >
                     {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
                   </Button>
@@ -1374,14 +1464,21 @@ ${isDiagramPanelOpen
                     isGeneratingImage ||
                     isUpdatingDocuments ||
                     (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) ||
-                    // **Disable the button until the last AI message is displayed:**
                     !isLastAiMessageDisplayed ||
-                    isCurrentlySending // NEW: Disable while sending
+                    isCurrentlySending ||
+                    isAiTyping || // Added isAiTyping
+                    messages.some(msg => msg.id.startsWith('optimistic-'))
                   }
                   className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                  title="Send Message"
+                  title={
+                    isAiTyping
+                      ? 'AI is typing...'
+                      : messages.some(msg => msg.id.startsWith('optimistic-'))
+                        ? 'Waiting for response...'
+                        : 'Send Message'
+                  }
                 >
-                  {isSubmittingUserMessage || isCurrentlySending ? ( // Show loader if submitting or sending
+                  {isSubmittingUserMessage || isCurrentlySending || isAiTyping ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
@@ -1401,8 +1498,12 @@ ${isDiagramPanelOpen
                 setShowDocumentSelector(false);
                 setIsUpdatingDocuments(false);
               }}
+              onLoadMoreDocuments={onLoadMoreDocuments}
+              hasMoreDocuments={hasMoreDocuments}
+              isLoadingDocuments={isLoadingDocuments}
               onDocumentUpdated={handleDocumentUpdatedLocally}
               activeChatSessionId={activeChatSessionId}
+
             />
           )}
           <ConfirmationModal
@@ -1457,10 +1558,10 @@ const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
     prevProps.messages === nextProps.messages &&
     prevProps.selectedDocumentIds === nextProps.selectedDocumentIds &&
     prevProps.documents === nextProps.documents) {
-    console.log('AIChat props unchanged, skipping re-render');
+    //console.log('AIChat props unchanged, skipping re-render');
   }
   else {
-    console.log('AIChat props changed, re-rendering');
+    //console.log('AIChat props changed, re-rendering');
   }
   return (
     prevProps.isLoading === nextProps.isLoading &&
@@ -1470,7 +1571,7 @@ const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
     prevProps.messages === nextProps.messages &&
     prevProps.selectedDocumentIds === nextProps.selectedDocumentIds &&
     prevProps.documents === nextProps.documents
-    
+
   );
 };
 

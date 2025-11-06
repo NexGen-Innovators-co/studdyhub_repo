@@ -37,7 +37,7 @@ export const GroupChat: React.FC<GroupChatProps> = ({ groupId, currentUser }) =>
 
         if (error) throw error;
 
-        console.log('Fetched messages:', data);
+        //console.log('Fetched messages:', data);
         setMessages((data as ChatMessageWithSender[]) || []);
       } catch (error) {
         console.error('Error fetching messages:', error);
@@ -123,9 +123,8 @@ export const GroupChat: React.FC<GroupChatProps> = ({ groupId, currentUser }) =>
               className={`flex ${msg.sender_id === currentUser?.id ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[70%] flex flex-col ${
-                  msg.sender_id === currentUser?.id ? 'items-end' : 'items-start'
-                }`}
+                className={`max-w-[70%] flex flex-col ${msg.sender_id === currentUser?.id ? 'items-end' : 'items-start'
+                  }`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Avatar className="h-6 w-6">

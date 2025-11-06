@@ -23,7 +23,7 @@ import {
 import { DocumentFolder, FolderTreeNode } from '../../types/Folder';
 import { cn } from '../../lib/utils';
 
-interface FolderTreeProps {
+export interface FolderTreeProps {
   folderTree: FolderTreeNode[];
   selectedFolderId: string | null;
   onFolderSelect: (folderId: string | null) => void;
