@@ -204,8 +204,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                             codeTagProps={{
                                 className: 'font-mono text-gray-800 dark:text-gray-100',
                             }}
-                            wrapLongLines
-                        >
+                             >
                             {codeContent}
                         </SyntaxHighlighter>
                     </div>

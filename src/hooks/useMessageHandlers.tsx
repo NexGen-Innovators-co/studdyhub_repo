@@ -5,6 +5,7 @@ import { useAppContext } from '../hooks/useAppContext';
 import { Message, FileData, MessagePart } from '../types/Class';
 import { Document as AppDocument } from '../types/Document';
 import { Note } from '../types/Note';
+import { v4 as uuidv4 } from 'uuid';
 
 export const useMessageHandlers = () => {
   const {
@@ -146,7 +147,7 @@ export const useMessageHandlers = () => {
         (attachedFiles || []).map(async (file) => {
           return new Promise<FileData>((resolve) => {
             setTimeout(() => {
-              console.log(`Processing file: ${file.name}`);
+              //console.log(`Processing file: ${file.name}`);
               resolve(file);
             }, 200);
           });
@@ -184,10 +185,45 @@ export const useMessageHandlers = () => {
             msgParts.push({ text: `\n\nPrevious Context:\n${historicalContext}` });
           }
         }
-        if (msg.image_url && msg.image_mime_type) {
-          // Handle historical image if needed
-        }
         chatHistoryForAI.push({ role: msg.role, parts: msgParts });
+      });
+
+      // Create optimistic user message
+      const optimisticUserMessageId = `optimistic-user-${uuidv4()}`;
+      const optimisticUserMessage: Message = {
+        id: optimisticUserMessageId,
+        content: messageContent || '[Files attached]',
+        role: 'user',
+        timestamp: new Date().toISOString(),
+        isError: false,
+        attachedDocumentIds: finalAttachedDocumentIds,
+        attachedNoteIds: finalAttachedNoteIds,
+        session_id: currentSessionId,
+        has_been_displayed: true,
+        image_url: imageUrl,
+        image_mime_type: imageMimeType,
+        files_metadata: processedFiles.length > 0 ? JSON.stringify(processedFiles) : undefined,
+      };
+
+      // Create optimistic AI message with special loading flag
+      const optimisticAiMessageId = `optimistic-ai-${uuidv4()}`;
+      const optimisticAiMessage: Message = {
+        id: optimisticAiMessageId,
+        content: '', // Empty content to trigger loading animation
+        role: 'assistant',
+        timestamp: new Date().toISOString(),
+        isError: false,
+        attachedDocumentIds: [],
+        attachedNoteIds: [],
+        session_id: currentSessionId,
+        has_been_displayed: false,
+        isLoading: true, // Add loading flag
+      };
+
+      // Add optimistic messages to UI immediately
+      setChatMessages(prev => {
+        const filtered = prev.filter(msg => msg.id !== aiMessageIdToUpdate);
+        return [...filtered, optimisticUserMessage, optimisticAiMessage];
       });
 
       // Update file processing progress
@@ -222,13 +258,60 @@ export const useMessageHandlers = () => {
       });
 
       if (error) {
-        console.error('Edge function error:', error);
+        //console.error('Edge function error:', error);
         throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
       }
 
       if (!data || !data.response) {
         throw new Error('Empty response from AI service');
       }
+
+      //console.log('[handleSubmitMessage] Backend response:', data);
+
+      // **Replace optimistic messages with real messages from response**
+      // Backend should return userMessageId and aiMessageId
+      const realUserMessage: Message = {
+        id: data.userMessageId || optimisticUserMessageId,
+        content: messageContent || '[Files attached]',
+        role: 'user',
+        timestamp: data.timestamp || new Date().toISOString(),
+        isError: false,
+        attachedDocumentIds: finalAttachedDocumentIds,
+        attachedNoteIds: finalAttachedNoteIds,
+        session_id: currentSessionId,
+        has_been_displayed: true,
+        image_url: imageUrl,
+        image_mime_type: imageMimeType,
+        files_metadata: processedFiles.length > 0 ? JSON.stringify(processedFiles) : undefined,
+      };
+
+      const realAiMessage: Message = {
+        id: data.aiMessageId || optimisticAiMessageId,
+        content: data.response,
+        role: 'assistant',
+        timestamp: data.timestamp || new Date().toISOString(),
+        isError: false,
+        attachedDocumentIds: [],
+        attachedNoteIds: [],
+        session_id: currentSessionId,
+        has_been_displayed: false,
+      };
+
+      // console.log('[handleSubmitMessage] Replacing optimistic messages with real IDs:', {
+      //   userMessageId: realUserMessage.id,
+      //   aiMessageId: realAiMessage.id
+      // });
+
+      // Update UI with real messages
+      setChatMessages(prev => {
+        // Remove optimistic messages
+        const withoutOptimistic = prev.filter(msg => 
+          msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
+        );
+        
+        // Add real messages
+        return [...withoutOptimistic, realUserMessage, realAiMessage];
+      });
 
       // Update the session with the new title if provided
       if (data.title) {
@@ -259,7 +342,13 @@ export const useMessageHandlers = () => {
       }
 
     } catch (error: any) {
-      console.error('Error in handleSubmitMessage:', error);
+      //console.error('Error in handleSubmitMessage:', error);
+      
+      // Remove optimistic messages on error
+      setChatMessages(prev => {
+        return prev.filter(msg => !msg.id.startsWith('optimistic-'));
+      });
+      
       let errorMessage = 'Failed to send message';
       if (error.message?.includes('content size exceeds')) {
         errorMessage = 'Message too large. Please reduce file sizes or message length.';
@@ -298,6 +387,7 @@ export const useMessageHandlers = () => {
     userProfile,
     dispatch,
     selectedDocumentIds,
+    setChatMessages,
   ]);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
@@ -307,6 +397,7 @@ export const useMessageHandlers = () => {
         return;
       }
 
+      // Optimistically remove from UI
       setChatMessages(prevMessages => 
         (prevMessages || []).filter(msg => msg.id !== messageId)
       );
@@ -320,14 +411,14 @@ export const useMessageHandlers = () => {
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('Error deleting message from DB:', error);
+        //console.error('Error deleting message from DB:', error);
         toast.error('Failed to delete message from database.');
-        // Note: Could reload messages here if needed
+        // Could reload messages here to restore state
       } else {
         toast.success('Message deleted successfully.');
       }
     } catch (error: any) {
-      console.error('Error in handleDeleteMessage:', error);
+      //console.error('Error in handleDeleteMessage:', error);
       toast.error(`Error deleting message: ${error.message || 'Unknown error'}`);
     }
   }, [user, activeChatSessionId, setChatMessages]);
@@ -353,10 +444,11 @@ export const useMessageHandlers = () => {
       return;
     }
 
+    // Mark message as updating in UI
     setChatMessages(prevAllMessages =>
       (prevAllMessages || []).map(msg =>
         msg.id === lastAssistantMessage.id 
-          ? { ...msg, isUpdating: true, isError: false } 
+          ? { ...msg, content: 'Regenerating...', isError: false } 
           : msg
       )
     );
@@ -375,13 +467,13 @@ export const useMessageHandlers = () => {
         undefined,
       );
     } catch (error) {
-      console.error('Error regenerating response:', error);
+      //console.error('Error regenerating response:', error);
       toast.error('Failed to regenerate response');
 
       setChatMessages(prevAllMessages =>
         (prevAllMessages || []).map(msg =>
           msg.id === lastAssistantMessage.id 
-            ? { ...msg, isUpdating: false, isError: true } 
+            ? { ...msg, isError: true } 
             : msg
         )
       );
@@ -405,10 +497,11 @@ export const useMessageHandlers = () => {
       return;
     }
 
+    // Mark message as retrying in UI
     setChatMessages(prevAllMessages =>
       (prevAllMessages || []).map(msg =>
         msg.id === failedAiMessageId 
-          ? { ...msg, isUpdating: true, isError: false } 
+          ? { ...msg, content: 'Retrying...', isError: false } 
           : msg
       )
     );
@@ -427,13 +520,13 @@ export const useMessageHandlers = () => {
         undefined,
       );
     } catch (error) {
-      console.error('Error retrying message:', error);
+      //console.error('Error retrying message:', error);
       toast.error('Failed to retry message');
 
       setChatMessages(prevAllMessages =>
         (prevAllMessages || []).map(msg =>
           msg.id === failedAiMessageId 
-            ? { ...msg, isUpdating: false, isError: true } 
+            ? { ...msg, isError: true } 
             : msg
         )
       );

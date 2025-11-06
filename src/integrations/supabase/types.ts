@@ -543,6 +543,7 @@ export type Database = {
           type: string
           updated_at: string
           user_id: string
+          folder_ids: string[] | null
         }
         Insert: {
           content_extracted?: string | null
@@ -563,6 +564,7 @@ export type Database = {
           type?: string
           updated_at?: string
           user_id: string
+          folder_ids?: string[] | null
         }
         Update: {
           content_extracted?: string | null
@@ -583,6 +585,7 @@ export type Database = {
           type?: string
           updated_at?: string
           user_id?: string
+          folder_ids?: string[] | null
         }
         Relationships: []
       }
@@ -638,6 +641,75 @@ export type Database = {
             columns: ["document_id"]
             isOneToOne: false
             referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flashcards: {
+        Row: {
+          id: string
+          user_id: string
+          note_id: string | null
+          front: string
+          back: string
+          category: string | null
+          difficulty: string | null
+          hint: string | null
+          review_count: number
+          last_reviewed_at: string | null
+          next_review_at: string | null
+          ease_factor: number | null
+          interval_days: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          note_id?: string | null
+          front: string
+          back: string
+          category?: string | null
+          difficulty?: string | null
+          hint?: string | null
+          review_count?: number
+          last_reviewed_at?: string | null
+          next_review_at?: string | null
+          ease_factor?: number | null
+          interval_days?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          note_id?: string | null
+          front?: string
+          back?: string
+          category?: string | null
+          difficulty?: string | null
+          hint?: string | null
+          review_count?: number
+          last_reviewed_at?: string | null
+          next_review_at?: string | null
+          ease_factor?: number | null
+          interval_days?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flashcards_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
             referencedColumns: ["id"]
           },
         ]
@@ -1845,6 +1917,42 @@ export type Database = {
         }
         Relationships: []
       }
+      flashcard_stats: {
+        Row: {
+          user_id: string | null
+          note_id: string | null
+          total_cards: number | null
+          easy_cards: number | null
+          medium_cards: number | null
+          hard_cards: number | null
+          due_for_review: number | null
+          avg_reviews: number | null
+          last_study_session: string | null
+        }
+        Insert: {
+          user_id?: never
+          note_id?: never
+          total_cards?: never
+          easy_cards?: never
+          medium_cards?: never
+          hard_cards?: never
+          due_for_review?: never
+          avg_reviews?: never
+          last_study_session?: never
+        }
+        Update: {
+          user_id?: never
+          note_id?: never
+          total_cards?: never
+          easy_cards?: never
+          medium_cards?: never
+          hard_cards?: never
+          due_for_review?: never
+          avg_reviews?: never
+          last_study_session?: never
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_suggested_users: {
@@ -1898,6 +2006,30 @@ export type Database = {
           _target_type?: string
         }
         Returns: string
+      }
+      get_due_flashcards: {
+        Args: {
+          p_user_id: string
+          p_limit?: number
+        }
+        Returns: {
+          id: string
+          front: string
+          back: string
+          category: string | null
+          difficulty: string | null
+          hint: string | null
+          review_count: number
+          ease_factor: number | null
+        }[]
+      }
+      review_flashcard: {
+        Args: {
+          p_flashcard_id: string
+          p_user_id: string
+          p_quality: number
+        }
+        Returns: undefined
       }
     }
     Enums: {

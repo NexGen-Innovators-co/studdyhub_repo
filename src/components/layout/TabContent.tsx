@@ -105,7 +105,7 @@ interface TabContentProps {
   isLoadingRecordings: boolean;
   onLoadMoreRecordings: () => void;
   handleReplaceOptimisticMessage: (tempId: string, newMessage: Message) => void;
-  // userProfile: any;
+
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -234,7 +234,10 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       );
     },
     onMessageUpdate: props.onMessageUpdate,
-    onReplaceOptimisticMessage: props.handleReplaceOptimisticMessage
+    onReplaceOptimisticMessage: props.handleReplaceOptimisticMessage,
+    onLoadMoreDocuments: props.onLoadMoreDocuments,
+    hasMoreDocuments: props.hasMoreDocuments,
+    isLoadingDocuments: props.isLoadingDocuments
 
   }),
     [
@@ -265,6 +268,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       userProfile?.learning_style,
       userProfile?.learning_preferences,
       props.onMessageUpdate,
+      props.hasMoreDocuments,
+      props.onLoadMoreDocuments,
+      props.isLoadingDocuments
     ]);
 
   const documentsProps = useMemo(() => ({
@@ -315,7 +321,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     case 'notes':
       return (
-        <div className="flex flex-1 min-h-0 relative">
+        <div className="flex flex-1 min-h-0 relative flex-row">
           {isNotesHistoryOpen && (
             <div
               className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -323,7 +329,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             />
           )}
 
-          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'} fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-80 bg-transparent border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none`}>
+          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'} fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto bg-transparent border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none`}>
             <NotesList
               {...notesHistoryProps}
               isOpen={isNotesHistoryOpen}
@@ -399,7 +405,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       return (
         <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>
-          <SocialFeed userProfile={props.userProfile} activeTab={props.activeSocialTab} postId={props.socialPostId} />
+            <SocialFeed userProfile={props.userProfile} activeTab={props.activeSocialTab} postId={props.socialPostId} />
           </ErrorBoundary>
         </div>
       );

@@ -27,11 +27,11 @@ export const ThreeJsRenderer = memo(({ codeContent, canvasRef, onInvalidCode, on
         }
 
         sceneInitializedRef.current = true;
-        console.log("[ThreeJSRenderer] Initializing Three.js scene.");
+        //console.log("[ThreeJSRenderer] Initializing Three.js scene.");
 
         // Cleanup previous scene
         if (cleanupRef.current) {
-            console.log("[ThreeJSRenderer] Cleaning up previous scene.");
+            //console.log("[ThreeJSRenderer] Cleaning up previous scene.");
             cleanupRef.current();
             cleanupRef.current = null;
         }
@@ -177,11 +177,11 @@ export const ThreeJsRenderer = memo(({ codeContent, canvasRef, onInvalidCode, on
 
             onSceneReady(scene, renderer, cleanup);
             onInvalidCode(null);
-            console.log("[ThreeJSRenderer] Scene initialized successfully.");
+            //console.log("[ThreeJSRenderer] Scene initialized successfully.");
 
             // Return cleanup function
             return () => {
-                console.log("[ThreeJSRenderer] Cleaning up on unmount.");
+                //console.log("[ThreeJSRenderer] Cleaning up on unmount.");
                 if (animationFrameIdRef.current) {
                     cancelAnimationFrame(animationFrameIdRef.current);
                     animationFrameIdRef.current = null;

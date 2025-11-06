@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { AlertTriangle, Copy, Check, Loader2, Maximize2, X, RefreshCw, ChevronDown, ChevronUp, Image, FileText, BookOpen, StickyNote, Sparkles } from 'lucide-react';
 import { Button } from '../../ui/button';
 import ReactMarkdown from 'react-markdown';
@@ -68,7 +68,7 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   const { displayedText, isTyping } = useTypingAnimation({
     text: content,
     messageId,
-    wordsPerSecond: 30,
+    wordsPerSecond: 10,
     enabled: enableTyping && !isUserMessage && isLastMessage,
     onComplete: onTypingComplete,
     isAlreadyComplete: isAlreadyTyped,

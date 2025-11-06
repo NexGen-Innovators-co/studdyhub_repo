@@ -19,6 +19,9 @@
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
+/* globals.css or in a <style> tag */
+.preserve-3d { transform-style: preserve-3d; }
+.backface-hidden { backface-visibility: hidden; }
 
 @keyframes logo-spin {
   from {
@@ -195,3 +198,4 @@
     padding: 0.125rem;
   }
 }
+/* Enhanced Editor Styles for NoteMind */

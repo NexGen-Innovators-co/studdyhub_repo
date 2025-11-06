@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../../ui/button';
 import { Checkbox } from '../../ui/checkbox';
@@ -19,6 +19,9 @@ interface DocumentSelectorProps {
   onClose: () => void;
   onDocumentUpdated: (updatedDocument: Document) => void;
   activeChatSessionId: string | null;
+  onLoadMoreDocuments: () => void; // Add this prop
+  hasMoreDocuments: boolean; // Add this prop
+  isLoadingDocuments: boolean; // Add this prop
 }
 
 export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
@@ -30,11 +33,14 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   onClose,
   onDocumentUpdated,
   activeChatSessionId,
+  onLoadMoreDocuments,
+  hasMoreDocuments,
+  isLoadingDocuments,
 }) => {
   const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(selectedDocumentIds);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Sync localSelectedIds with selectedDocumentIds when the modal opens or selectedDocumentIds changes
     setLocalSelectedIds(selectedDocumentIds);
   }, [selectedDocumentIds, isOpen]);
 
@@ -58,7 +64,6 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
         }
         toast.success('Chat session documents updated.');
       }
-      // Only update parent state after successful Supabase update (or for new sessions)
       onSelectionChange(localSelectedIds);
       onClose();
     } catch (error: any) {
@@ -67,10 +72,32 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   };
 
   const handleCancel = () => {
-    // Reset local selections to parent state
     setLocalSelectedIds(selectedDocumentIds);
     onClose();
   };
+
+  const handleScroll = useCallback(() => {
+    if (isLoadingDocuments || !hasMoreDocuments || !scrollAreaRef.current) {
+    
+      console.log('null')
+      return
+    }
+
+    const scrollArea = scrollAreaRef.current;
+    if (scrollArea.scrollHeight - scrollArea.scrollTop - scrollArea.clientHeight < 50) {
+      onLoadMoreDocuments();
+    }
+  }, [isLoadingDocuments, hasMoreDocuments, onLoadMoreDocuments]);
+
+  useEffect(() => {
+    const scrollArea = scrollAreaRef.current;
+    if (scrollArea) {
+      scrollArea.addEventListener('scroll', handleScroll);
+      return () => {
+        scrollArea.removeEventListener('scroll', handleScroll);
+      };
+    }
+  }, [handleScroll]);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleCancel}>
@@ -86,7 +113,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
             <X className="h-5 w-5" />
           </Button>
         </DialogHeader>
-        <ScrollArea className="max-h-[60vh] pr-4">
+        <ScrollArea ref={scrollAreaRef} className="max-h-[60vh] pr-4">
           <div className="space-y-4 mt-4">
             {documents.length > 0 && (
               <div>
@@ -130,10 +157,22 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
                 ))}
               </div>
             )}
-            {documents.length === 0 && notes.length === 0 && (
+            {isLoadingDocuments && (
+              <div className="text-center py-2 text-slate-500 dark:text-gray-400">
+                Loading more documents...
+              </div>
+            )}
+            {!isLoadingDocuments && documents.length === 0 && notes.length === 0 && (
               <p className="text-base md:text-lg text-slate-500 dark:text-gray-400 text-center py-4">
                 No documents or notes available.
               </p>
+            )}
+            {!isLoadingDocuments && hasMoreDocuments && (
+              <div className="text-center py-2">
+                <Button variant="outline" onClick={onLoadMoreDocuments} disabled={isLoadingDocuments}>
+                  Load More
+                </Button>
+              </div>
             )}
           </div>
         </ScrollArea>

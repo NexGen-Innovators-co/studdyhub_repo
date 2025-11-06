@@ -35,7 +35,11 @@ export const NotesList: React.FC<NotesListProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full  bg-white dark:bg-gray-900">
+    <div className={`flex flex-col  ${
+          isOpen
+            ? 'translate-x-0 w-72 md:w-64 h-screen'
+            : 'h-0 lg:h-[95vh] lg:translate-x-0'
+        }   bg-white dark:bg-gray-900 `}>
       {/* Mobile Header with Close Button */}
       <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-gray-800">
         <div className="flex items-center justify-between">
@@ -57,7 +61,7 @@ export const NotesList: React.FC<NotesListProps> = ({
       </div>
 
       {/* Notes List */}
-      <div className="flex-1 overflow-y-auto modern-scrollbar">
+      <div className={`flex-wrap flex-1 overflow-y-auto modern-scrollbar`}>
         <div className="divide-y divide-slate-100 dark:divide-gray-800">
           {notes.length === 0 ? (
             <div className="p-6 sm:p-8 text-center text-slate-400 dark:text-gray-500">

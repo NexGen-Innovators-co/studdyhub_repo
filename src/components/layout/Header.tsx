@@ -84,13 +84,13 @@ export const Header: React.FC<HeaderProps> = ({
   }, [handleSignOut]);
 
   return (
-    <header className="flex items-center bg-transparent justify-between border-0 shadow-none gap-2 p-2 sm:gap-4 flex-1 min-w-0">
+    <header className="flex items-center border-slate-200 dark:bg-slate-900 justify-between dark:border-slate-600 border-b-2 shadow-none gap-2 p-1 sm:gap-4 flex-1 min-w-0">
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         <Button
           variant="ghost"
           size="sm"
           onClick={onToggleSidebar}
-          className="lg:hidden p-1.5 sm:p-2 flex-shrink-0 dark:hover:bg-slate-700"
+          className="lg:hidden md:hidden p-1.5 sm:p-2 flex-shrink-0 dark:hover:bg-slate-700"
         >
           <Menu className="h-4 w-4 text-slate-600 dark:text-white" />
         </Button>

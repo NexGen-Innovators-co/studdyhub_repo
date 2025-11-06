@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useState, useRef, useEffect } from 'react';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User, File, Download, Check, Paperclip } from 'lucide-react';
+import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User, File, Download, Check, Paperclip, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
@@ -208,7 +208,7 @@ const parseAttachedFiles = (message: Message): AttachedFile[] => {
                 : message.files_metadata;
             const metadataArray = Array.isArray(metadata) ? metadata : [metadata];
             files = metadataArray.map((file: any) => {
-                console.log('Parsing file metadata:', file); // Add this line
+                //console.log('Parsing file metadata:', file); // Add this line
                 return {
                     id: file.id,
                     name: file.name || 'Unknown file',
@@ -388,7 +388,7 @@ export const MessageList = memo(({
             toast.error(`Failed to update diagram code: ${error.message || 'Unknown error'}`);
         }
     }, [onDiagramCodeUpdate]);
-    
+
     const renderAttachments = useCallback((message: Message) => {
         const attachedFiles = parseAttachedFiles(message);
         const attachedDocumentTitles = message.attachedDocumentIds?.map(id => {
@@ -456,7 +456,7 @@ export const MessageList = memo(({
                                             return;
                                         }
                                         if (!attachment.error) {
-                                            console.log(attachment.error);
+                                            //console.log(attachment.error);
                                             toast.error('Cannot preview file due to processing error.');
                                             return;
                                         }
@@ -511,7 +511,7 @@ export const MessageList = memo(({
                                     if (attachment.processing) {
                                         toast.info('File is still processing, please wait.');
                                         return;
-                                    }attachment.onClick();
+                                    } attachment.onClick();
                                 }}
                                 title={attachment.name}
                             >
@@ -553,9 +553,8 @@ export const MessageList = memo(({
             </div>
         );
     }, [mergedDocuments, handleFilePreview, handleViewAttachedFile, getFileIcon]);
-    useEffect(() => {
-        console.log(`[RenderTrack] MessageList re-rendered. Props: messages=${messages.length}, mergedDocuments=${mergedDocuments.length}`);
-      }, [messages, mergedDocuments]); // Key props
+
+    // MessageList.tsx
     const renderMessage = useCallback((message: Message, index: number) => {
         const isUserMessage = message.role === 'user';
         const isLastMessage = index === messages.length - 1;
@@ -564,75 +563,113 @@ export const MessageList = memo(({
         const showDateHeader = lastDateRef.current !== messageDate;
         lastDateRef.current = messageDate;
 
-        const contentToRender = isUserMessage ? (
-            <>
-                {renderAttachments(message)}
-                <div className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 p-2 sm:p-3 rounded-lg border border-blue-200 dark:border-blue-800 max-w-full font-claude leading-relaxed break-words whitespace-pre-wrap overflow-auto">
-                    {message.content.length > 200 && !isMessageExpanded ? (
-                        <>
-                            <span>{message.content.substring(0, 200)}...</span>
-                            <Button
-                                variant="link"
-                                size="sm"
-                                onClick={() => onToggleUserMessageExpansion(message.content)}
-                                className="text-blue-600 p-0 h-auto mt-1 flex justify-end dark:text-blue-400 font-claude underline text-xs sm:text-sm"
-                            >
-                                View More
-                            </Button>
-                        </>
-                    ) : (
-                        <>
-                            {message.content}
-                            {message.content.length > 200 && isMessageExpanded && (
+        let contentToRender;
+
+        if (isUserMessage) {
+            contentToRender = (
+                <>
+                    {renderAttachments(message)}
+                    <div className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 p-2 sm:p-3 rounded-lg border border-blue-200 dark:border-blue-800 max-w-full font-claude leading-relaxed break-words whitespace-pre-wrap overflow-auto">
+                        {message.content.length > 200 && !isMessageExpanded ? (
+                            <>
+                                <span>{message.content.substring(0, 200)}...</span>
                                 <Button
                                     variant="link"
                                     size="sm"
                                     onClick={() => onToggleUserMessageExpansion(message.content)}
                                     className="text-blue-600 p-0 h-auto mt-1 flex justify-end dark:text-blue-400 font-claude underline text-xs sm:text-sm"
                                 >
-                                    View Less
+                                    View More
                                 </Button>
+                            </>
+                        ) : (
+                            <>
+                                {message.content}
+                                {message.content.length > 200 && isMessageExpanded && (
+                                    <Button
+                                        variant="link"
+                                        size="sm"
+                                        onClick={() => onToggleUserMessageExpansion(message.content)}
+                                        className="text-blue-600 p-0 h-auto mt-1 flex justify-end dark:text-blue-400 font-claude underline text-xs sm:text-sm"
+                                    >
+                                        View Less
+                                    </Button>
+                                )}
+                            </>
+                        )}
+                        {message.id.startsWith('optimistic-') && !message.content && (
+                            <div className="flex items-center gap-2 mt-2 text-xs text-blue-600 dark:text-blue-400 font-claude">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <span>Sending...</span>
+                            </div>
+                        )}
+                    </div>
+                </>
+            );
+        } else {
+            contentToRender = (
+                <>
+                    {message.isLoading || (message.id.startsWith('optimistic-ai-') && !message.content) ? (
+                        <div className="flex items-center gap-3 my-4">
+                            <BookPagesAnimation size="md" showText={true} text='Generating response' />
+                        </div>
+                    ) : (
+                        <>
+                            {/* **Conditional Error Display** */}
+                            {message.isError ? (
+                                <div className="p-3 rounded-lg border border-red-400 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-claude text-sm sm:text-base">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <AlertTriangle className="h-4 w-4" />
+                                        <span className="font-semibold">Error:</span>
+                                    </div>
+                                    <p className="leading-relaxed">There was a problem generating this response</p>
+                                    {/* **Retry Button** */}
+                                    {isLastMessage && (
+                                        <div className="mt-3 flex justify-end">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => onRetryClick(messages[index - 2]?.content, message.content || '')} // Replace with a retry function if available
+                                                className="text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/50"
+                                            >
+                                                Retry
+                                            </Button>
+                                        </div>)
+                                    }
+                                </div>
+                            ) : (
+                                <MemoizedMarkdownRenderer
+                                    content={message.content}
+                                    messageId={message.id}
+                                    isUserMessage={false}
+                                    onMermaidError={onMermaidError}
+                                    onSuggestAiCorrection={onSuggestAiCorrection}
+                                    onViewDiagram={onViewContent}
+                                    onToggleUserMessageExpansion={onToggleUserMessageExpansion}
+                                    expandedMessages={expandedMessages}
+                                    enableTyping={enableTypingAnimation && !isLoading}
+                                    isLastMessage={isLastMessage}
+                                    onTypingComplete={onMarkMessageDisplayed}
+                                    isAlreadyTyped={message.has_been_displayed}
+                                    autoTypeInPanel={autoTypeInPanel}
+                                    onBlockDetected={onBlockDetected}
+                                    onBlockUpdate={onBlockUpdate}
+                                    onBlockEnd={onBlockEnd}
+                                    isDiagramPanelOpen={isDiagramPanelOpen}
+                                    onDiagramCodeUpdate={handleDiagramCodeUpdate}
+                                />
+                            )}
+                            {message.id.startsWith('optimistic-ai-') && message.content.length < 10 && (
+                                <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 font-claude">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span>Processing response...</span>
+                                </div>
                             )}
                         </>
                     )}
-                    {message.id.startsWith('optimistic-') && !message.content && (
-                        <div className="flex items-center gap-2 mt-2 text-xs text-blue-600 dark:text-blue-400 font-claude">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            <span>Sending...</span>
-                        </div>
-                    )}
-                </div>
-            </>
-        ) : (
-            <>
-                <MemoizedMarkdownRenderer
-                    content={message.content}
-                    messageId={message.id}
-                    isUserMessage={false}
-                    onMermaidError={onMermaidError}
-                    onSuggestAiCorrection={onSuggestAiCorrection}
-                    onViewDiagram={onViewContent}
-                    onToggleUserMessageExpansion={onToggleUserMessageExpansion}
-                    expandedMessages={expandedMessages}
-                    enableTyping={enableTypingAnimation && !isLoading}
-                    isLastMessage={isLastMessage}
-                    onTypingComplete={onMarkMessageDisplayed}
-                    isAlreadyTyped={message.has_been_displayed}
-                    autoTypeInPanel={autoTypeInPanel}
-                    onBlockDetected={onBlockDetected}
-                    onBlockUpdate={onBlockUpdate}
-                    onBlockEnd={onBlockEnd}
-                    isDiagramPanelOpen={isDiagramPanelOpen}
-                    onDiagramCodeUpdate={handleDiagramCodeUpdate}
-                />
-                {message.id.startsWith('optimistic-ai-') && message.content.length < 10 && (
-                    <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 font-claude">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        <span>Processing response...</span>
-                    </div>
-                )}
-            </>
-        );
+                </>
+            );
+        }
 
         return (
             <React.Fragment key={message.id}>
@@ -678,7 +715,7 @@ export const MessageList = memo(({
                                 <Square className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                         </>
-                    ) : message.role === 'assistant' && !isSpeaking ? (
+                    ) : message.role === 'assistant' && !isSpeaking && !message.isLoading && !(message.id.startsWith('optimistic-ai-') && !message.content) ? (
                         <>
                             <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
 
@@ -693,7 +730,7 @@ export const MessageList = memo(({
                             </Button>
                         </>
                     ) : (
-                        message.role === 'assistant' && <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
+                        message.role === 'assistant' && !message.isLoading && <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
                     )}
                     {message.role === 'user' && (
                         <div className="hidden sm:flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 order-2 flex-shrink-0">
@@ -710,33 +747,48 @@ export const MessageList = memo(({
                                 {contentToRender}
                             </div>
                         )}
-                        <div className={cn('flex gap-1 px-2 sm:px-4 pb-2 sm:pb-3', isUserMessage ? 'justify-end' : 'justify-start')}>
-                            <span className={cn('text-xs font-claude', isUserMessage ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-gray-400')}>
-                                {formatTime(message.timestamp)}
-                            </span>
-                            <div className="flex gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                {message.role === 'assistant' && (
-                                    <>
-                                        {isLastMessage && !isLoading && (
+
+                        {/* Only show actions if not loading */}
+                        {!message.isLoading && !(message.id.startsWith('optimistic-ai-') && !message.content) && (
+                            <div className={cn('flex gap-1 px-2 sm:px-4 pb-2 sm:pb-3', isUserMessage ? 'justify-end' : 'justify-start')}>
+                                <span className={cn('text-xs font-claude', isUserMessage ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-gray-400')}>
+                                    {formatTime(message.timestamp)}
+                                </span>
+                                <div className="flex gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {message.role === 'assistant' && (
+                                        <>
+                                            {isLastMessage && !isLoading && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => onRegenerateClick(messages[index - 1]?.content || '')}
+                                                    className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
+                                                    title="Regenerate response"
+                                                >
+                                                    <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
+                                                </Button>
+                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                onClick={() => onRegenerateClick(messages[index - 1]?.content || '')}
-                                                className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
-                                                title="Regenerate response"
+                                                onClick={() => copy(message.content)}
+                                                className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
+                                                title="Copy message"
                                             >
-                                                <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
+                                                {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
                                             </Button>
-                                        )}
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => copy(message.content)}
-                                            className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-green-400 dark:hover:bg-gray-700"
-                                            title="Copy message"
-                                        >
-                                            {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
-                                        </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => onDeleteClick(message.id)}
+                                                className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
+                                                title="Delete message"
+                                            >
+                                                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                                            </Button>
+                                        </>
+                                    )}
+                                    {isUserMessage && (
                                         <Button
                                             variant="ghost"
                                             size="icon"
@@ -744,30 +796,17 @@ export const MessageList = memo(({
                                             className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
                                             title="Delete message"
                                         >
-                                            <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                                            <X className="h-3 w-3 sm:h-4 sm:w-4" />
                                         </Button>
-
-                                    </>
-                                )}
-                                {isUserMessage && (
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => onDeleteClick(message.id)}
-                                        className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                                        title="Delete message"
-                                    >
-                                        <X className="h-3 w-3 sm:h-4 sm:w-4" />
-                                    </Button>
-                                )}
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             </React.Fragment>
         );
     }, [formatDate, formatTime, onToggleUserMessageExpansion, expandedMessages, onMermaidError, onSuggestAiCorrection, onViewContent, enableTypingAnimation, isLoading, onMarkMessageDisplayed, autoTypeInPanel, onBlockDetected, onBlockUpdate, onBlockEnd, isDiagramPanelOpen, handleDiagramCodeUpdate, onRegenerateClick, copy, onDeleteClick, isSpeaking, speakingMessageId, isPaused, resumeSpeech, pauseSpeech, stopSpeech, speakMessage, renderAttachments, messages]);
-
     return (
         <div
             className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8 bg-transparent px-2 sm:px-4 md:px-0"
@@ -791,39 +830,39 @@ export const MessageList = memo(({
 });
 const arePropsEqual = (prevProps: MessageListProps, nextProps: MessageListProps) => {
     const documentsChanged = prevProps.mergedDocuments !== nextProps.mergedDocuments;
-    
+
     const messagesChanged = prevProps.messages !== nextProps.messages;
-  
+
     if (documentsChanged) {
-      console.log('[MessageList] Props changed: mergedDocuments updated');
+        //console.log('[MessageList] Props changed: mergedDocuments updated');
     }
     if (messagesChanged) {
-      console.log('[MessageList] Props changed: messages updated');
+        //console.log('[MessageList] Props changed: messages updated');
     }
-  
-    const isEqual = (
-      prevProps.isLoading === nextProps.isLoading &&
-      prevProps.isLoadingSessionMessages === nextProps.isLoadingSessionMessages &&
-      prevProps.isLoadingOlderMessages === nextProps.isLoadingOlderMessages &&
-      prevProps.hasMoreMessages === nextProps.hasMoreMessages &&
-      prevProps.messages === nextProps.messages &&
-      prevProps.mergedDocuments === nextProps.mergedDocuments &&
-      prevProps.expandedMessages === nextProps.expandedMessages &&
-      prevProps.isSpeaking === nextProps.isSpeaking &&
-      prevProps.speakingMessageId === nextProps.speakingMessageId &&
-      prevProps.isPaused === nextProps.isPaused &&
-      prevProps.isDiagramPanelOpen === nextProps.isDiagramPanelOpen &&
-      prevProps.enableTypingAnimation === nextProps.enableTypingAnimation &&
-      prevProps.autoTypeInPanel === nextProps.autoTypeInPanel
-    );
-  
-    if (isEqual) {
-      console.log('[MessageList] Props unchanged, skipping re-render');
-    } else {
-      console.log('[MessageList] Props changed, re-rendering');
-    }
-  
-    return isEqual;
-  };
 
-export default memo(MessageList,arePropsEqual);
+    const isEqual = (
+        prevProps.isLoading === nextProps.isLoading &&
+        prevProps.isLoadingSessionMessages === nextProps.isLoadingSessionMessages &&
+        prevProps.isLoadingOlderMessages === nextProps.isLoadingOlderMessages &&
+        prevProps.hasMoreMessages === nextProps.hasMoreMessages &&
+        prevProps.messages === nextProps.messages &&
+        prevProps.mergedDocuments === nextProps.mergedDocuments &&
+        prevProps.expandedMessages === nextProps.expandedMessages &&
+        prevProps.isSpeaking === nextProps.isSpeaking &&
+        prevProps.speakingMessageId === nextProps.speakingMessageId &&
+        prevProps.isPaused === nextProps.isPaused &&
+        prevProps.isDiagramPanelOpen === nextProps.isDiagramPanelOpen &&
+        prevProps.enableTypingAnimation === nextProps.enableTypingAnimation &&
+        prevProps.autoTypeInPanel === nextProps.autoTypeInPanel
+    );
+
+    if (isEqual) {
+        //console.log('[MessageList] Props unchanged, skipping re-render');
+    } else {
+        //console.log('[MessageList] Props changed, re-rendering');
+    }
+
+    return isEqual;
+};
+
+export default memo(MessageList, arePropsEqual);

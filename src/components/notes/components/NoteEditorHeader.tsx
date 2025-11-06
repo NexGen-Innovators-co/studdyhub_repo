@@ -1,10 +1,11 @@
-// components/NoteEditorHeader.tsx
+// components/NoteEditorHeader.tsx - UPDATED WITHOUT EDIT MODE TOGGLE
 import React from 'react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../ui/dropdown-menu';
 import { NoteCategory, UserProfile } from '../../../types';
-import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle, Menu, FileText, ChevronDown, ChevronUp, Download, Copy, FileDown, Mic, Play, Pause, XCircle, Check, AlertTriangle, Loader2, TypeOutline, Edit3, Eye } from 'lucide-react';
+import { Sparkles, Hash, Save, Brain, RefreshCw, UploadCloud, Volume2, StopCircle, Menu, FileText, ChevronDown, ChevronUp, Download, Copy, FileDown, Mic } from 'lucide-react';
 
 interface NoteEditorHeaderProps {
   title: string;
@@ -21,12 +22,13 @@ interface NoteEditorHeaderProps {
   handleViewOriginalDocument: () => void;
   handleDownloadNote: () => void;
   handleDownloadPdf: () => void;
+  handleDownloadHTML: () => void;
+  handleDownloadTXT: () => void;
+  handleDownloadWord: () => void;
   handleCopyNoteContent: () => void;
   handleTextToSpeech: () => void;
   isSpeaking: boolean;
   handleSave: () => void;
-  isEditing: boolean;
-  setIsEditing: (isEditing: boolean) => void;
   selectedVoiceURI: string | null;
   setSelectedVoiceURI: (uri: string) => void;
   voices: SpeechSynthesisVoice[];
@@ -54,12 +56,13 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
   handleViewOriginalDocument,
   handleDownloadNote,
   handleDownloadPdf,
+  handleDownloadHTML,
+  handleDownloadTXT,
+  handleDownloadWord,
   handleCopyNoteContent,
   handleTextToSpeech,
   isSpeaking,
   handleSave,
-  isEditing,
-  setIsEditing,
   selectedVoiceURI,
   setSelectedVoiceURI,
   voices,
@@ -79,14 +82,15 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
   };
 
   return (
-    <div className="p-3 sm:p-4 border-b border-slate-200 dark:bg-gray-900 dark:border-gray-800">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+    <div className="p-1 sm:p-2 border-b border-slate-200 dark:bg-gray-900 dark:border-gray-800">
+      <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         {onToggleNotesHistory && (
           <Button
             variant="ghost"
             size="sm"
             onClick={onToggleNotesHistory}
             className="lg:hidden h-8 w-8 p-0 mr-2 text-slate-600 hover:bg-slate-50 dark:text-gray-400 dark:hover:bg-gray-800"
+            title={window.innerWidth > 768 ? "Toggle Notes History" : undefined}
           >
             {isNotesHistoryOpen ? <FileText className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>
@@ -97,24 +101,24 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
           placeholder="Note title..."
           className="text-2xl font-bold border-none p-0 shadow-none focus-visible:ring-0 bg-transparent flex-1 min-w-0 text-slate-800 dark:text-gray-100"
         />
-        
+
         {/* Desktop Header Toggle Button */}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setIsDesktopHeaderExpanded(!isDesktopHeaderExpanded)}
           className="hidden lg:flex items-center h-8 px-2 text-slate-600 hover:bg-slate-50 dark:text-gray-400 dark:hover:bg-gray-800"
-          title={isDesktopHeaderExpanded ? "Collapse header" : "Expand header"}
+          title={window.innerWidth > 768 ? (isDesktopHeaderExpanded ? "Collapse header" : "Expand header") : undefined}
         >
           {isDesktopHeaderExpanded ? (
             <>
               <ChevronUp className="h-4 w-4 mr-1" />
-              <span className="text-sm">Hide options</span>
+              <span className="text-sm hidden sm:inline">Hide options</span>
             </>
           ) : (
             <>
               <ChevronDown className="h-4 w-4 mr-1" />
-              <span className="text-sm">Show options</span>
+              <span className="text-sm hidden sm:inline">Show options</span>
             </>
           )}
         </Button>
@@ -125,38 +129,40 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
             <label
               htmlFor="document-upload-input"
               className={`
-                inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-3
-                border border-input bg-background hover:bg-accent hover:text-accent-foreground
-                text-slate-600 border-slate-200 hover:bg-slate-50
-                dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100
-                ${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
+inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-3
+border border-input bg-background hover:bg-accent hover:text-accent-foreground
+text-slate-600 border-slate-200 hover:bg-slate-50
+dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100
+${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
+`}
+              title={window.innerWidth > 768 ? "Upload Document & Generate Note" : undefined}
             >
               {isUploading ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
               ) : (
                 <UploadCloud className="h-4 w-4 mr-2" />
               )}
-              {isUploading ? 'Processing...' : 'Upload Doc & Generate'}
+              <span className="hidden sm:inline">{isUploading ? 'Processing...' : 'Upload Doc & Generate'}</span>
             </label>
             <input type="file" id="document-upload-input" ref={fileInputRef} onChange={handleFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept=".pdf,.txt,.doc,.docx,audio/*" />
 
             <label
               htmlFor="audio-upload-input"
               className={`
-                inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-3
-                border border-input bg-background hover:bg-accent hover:text-accent-foreground
-                text-slate-600 border-slate-200 hover:bg-slate-50
-                dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100
-                ${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
+inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-3
+border border-input bg-background hover:bg-accent hover:text-accent-foreground
+text-slate-600 border-slate-200 hover:bg-slate-50
+dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100
+${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
+`}
+              title={window.innerWidth > 768 ? "Upload Audio" : undefined}
             >
               {isProcessingAudio ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
               ) : (
                 <Mic className="h-4 w-4 mr-2" />
               )}
-              {isProcessingAudio ? 'Uploading Audio...' : 'Upload Audio'}
+              <span className="hidden sm:inline">{isProcessingAudio ? 'Uploading Audio...' : 'Upload Audio'}</span>
             </label>
             <input type="file" id="audio-upload-input" ref={audioInputRef} onChange={handleAudioFileSelect} style={{ position: 'absolute', left: '-9999px' }} accept="audio/*" />
 
@@ -166,13 +172,14 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
               onClick={regenerateNoteFromDocument}
               disabled={isUploading || isGeneratingAI || isProcessingAudio || !documentId}
               className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+              title={window.innerWidth > 768 ? "Regenerate Note" : undefined}
             >
               {isGeneratingAI ? (
                 <Brain className="h-4 w-4 mr-2 animate-pulse" />
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              {isGeneratingAI ? 'Generating...' : 'Regenerate Note'}
+              <span className="hidden sm:inline">{isGeneratingAI ? 'Generating...' : 'Regenerate Note'}</span>
             </Button>
 
             <Button
@@ -181,13 +188,14 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
               onClick={handleViewOriginalDocument}
               disabled={!documentId || isProcessingAudio}
               className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+              title={window.innerWidth > 768 ? "View Original Document" : undefined}
             >
               {isProcessingAudio ? (
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <FileText className="h-4 w-4 mr-2" />
               )}
-              View Original Document
+              <span className="hidden sm:inline">View Original Document</span>
             </Button>
 
             <Button
@@ -196,37 +204,41 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
               onClick={handleTextToSpeech}
               disabled={isUploading || isGeneratingAI || isProcessingAudio}
               className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+              title={window.innerWidth > 768 ? (isSpeaking ? "Stop Reading" : "Read Aloud") : undefined}
             >
               {isSpeaking ? (
                 <StopCircle className="h-4 w-4 mr-2 animate-pulse text-red-500" />
               ) : (
                 <Volume2 className="h-4 w-4 mr-2" />
               )}
-              {isSpeaking ? 'Stop' : 'Read Aloud'}
+              <span className="hidden sm:inline">{isSpeaking ? 'Stop' : 'Read Aloud'}</span>
             </Button>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsEditing(!isEditing)}
-              className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-            >
-              {isEditing ? (
-                <>
-                  <Eye className="h-4 w-4 mr-2" />
-                  Preview Mode
-                </>
-              ) : (
-                <>
-                  <Edit3 className="h-4 w-4 mr-2" />
-                  Edit Mode
-                </>
-              )}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Export</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={handleDownloadNote}>Markdown</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadPdf}>PDF</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadHTML}>HTML</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadTXT}>Text</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadWord}>Word</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleCopyNoteContent}>Copy Content</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            <Button onClick={handleSave} size="sm" className="bg-blue-500 text-white shadow-md hover:bg-blue-600">
+            <Button onClick={handleSave} size="sm" className="bg-blue-500 text-white shadow-md hover:bg-blue-600"
+              title={window.innerWidth > 768 ? "Save Note" : undefined}>
               <Save className="h-4 w-4 mr-2" />
-              Save
+              <span className="hidden sm:inline">Save</span>
             </Button>
           </div>
         )}
@@ -238,19 +250,21 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
             size="sm"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+            title={window.innerWidth > 768 ? "More Options" : undefined}
           >
             <Menu className="h-4 w-4" />
             <span className="ml-2">More</span>
           </Button>
           {isMobileMenuOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-10 flex flex-col py-2 dark:bg-gray-800 dark:border-gray-700">
+            <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-10  flex flex-col py-2 dark:bg-gray-800 dark:border-gray-700">
               <label
                 htmlFor="document-upload-input-mobile"
                 className={`
-                  inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2
-                  text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700
-                  ${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
+inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2
+text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700
+${(isUploading || isGeneratingAI || isProcessingAudio || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
+`}
+                title={window.innerWidth > 768 ? "Upload Document & Generate Note" : undefined}
               >
                 {isUploading ? (
                   <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -264,10 +278,11 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
               <label
                 htmlFor="audio-upload-input-mobile"
                 className={`
-                  inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2
-                  text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700
-                  ${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
+inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2
+text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700
+${(isProcessingAudio || isUploading || isGeneratingAI || !userProfile) ? 'opacity-50 cursor-not-allowed' : ''}
+`}
+                title={window.innerWidth > 768 ? "Upload Audio" : undefined}
               >
                 {isProcessingAudio ? (
                   <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -283,6 +298,7 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
                 className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                 onClick={() => { regenerateNoteFromDocument(); handleMobileMenuClose(); }}
                 disabled={isUploading || isGeneratingAI || isProcessingAudio || !documentId}
+                title={window.innerWidth > 768 ? "Regenerate Note" : undefined}
               >
                 {isGeneratingAI ? (
                   <Brain className="h-4 w-4 mr-2 animate-pulse" />
@@ -296,6 +312,7 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
                 className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                 onClick={() => { handleViewOriginalDocument(); handleMobileMenuClose(); }}
                 disabled={!documentId || isProcessingAudio}
+                title={window.innerWidth > 768 ? "View Original Document" : undefined}
               >
                 {isProcessingAudio ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -307,35 +324,9 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
               <Button
                 variant="ghost"
                 className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                onClick={() => { handleDownloadNote(); handleMobileMenuClose(); }}
-                disabled={!title.trim()}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Download Markdown
-              </Button>
-              <Button
-                variant="ghost"
-                className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                onClick={() => { handleDownloadPdf(); handleMobileMenuClose(); }}
-                disabled={!title.trim()}
-              >
-                <FileDown className="h-4 w-4 mr-2" />
-                Download PDF
-              </Button>
-              <Button
-                variant="ghost"
-                className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                onClick={() => { handleCopyNoteContent(); handleMobileMenuClose(); }}
-                disabled={!title.trim()}
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Copy Content
-              </Button>
-              <Button
-                variant="ghost"
-                className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
                 onClick={() => { handleTextToSpeech(); handleMobileMenuClose(); }}
                 disabled={isUploading || isGeneratingAI || isProcessingAudio}
+                title={window.innerWidth > 768 ? (isSpeaking ? "Stop Reading" : "Read Aloud") : undefined}
               >
                 {isSpeaking ? (
                   <StopCircle className="h-4 w-4 mr-2 animate-pulse text-red-500" />
@@ -348,25 +339,69 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
               <Button
                 variant="ghost"
                 className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                onClick={() => { setIsEditing(!isEditing); handleMobileMenuClose(); }}
+                onClick={() => { handleDownloadNote(); handleMobileMenuClose(); }}
+                disabled={!title.trim()}
+                title={window.innerWidth > 768 ? "Download Markdown" : undefined}
               >
-                {isEditing ? (
-                  <>
-                    <Eye className="h-4 w-4 mr-2" />
-                    Preview Mode
-                  </>
-                ) : (
-                  <>
-                    <Edit3 className="h-4 w-4 mr-2" />
-                    Edit Mode
-                  </>
-                )}
+                <Download className="h-4 w-4 mr-2" />
+                Download Markdown
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                onClick={() => { handleDownloadPdf(); handleMobileMenuClose(); }}
+                disabled={!title.trim()}
+                title={window.innerWidth > 768 ? "Download PDF" : undefined}
+              >
+                <FileDown className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                onClick={() => { handleDownloadHTML(); handleMobileMenuClose(); }}
+                disabled={!title.trim()}
+                title={window.innerWidth > 768 ? "Download HTML" : undefined}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download HTML
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                onClick={() => { handleDownloadTXT(); handleMobileMenuClose(); }}
+                disabled={!title.trim()}
+                title={window.innerWidth > 768 ? "Download Text" : undefined}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Text
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                onClick={() => { handleDownloadWord(); handleMobileMenuClose(); }}
+                disabled={!title.trim()}
+                title={window.innerWidth > 768 ? "Download Word" : undefined}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Word
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start px-4 py-2 text-slate-600 hover:bg-slate-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                onClick={() => { handleCopyNoteContent(); handleMobileMenuClose(); }}
+                disabled={!title.trim()}
+                title={window.innerWidth > 768 ? "Copy Content" : undefined}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copy Content
               </Button>
 
               <Button
                 variant="ghost"
                 className="justify-start px-4 py-2 bg-blue-500 text-white shadow-md hover:bg-blue-600"
                 onClick={() => { handleSave(); handleMobileMenuClose(); }}
+                title={window.innerWidth > 768 ? "Save Note" : undefined}
               >
                 <Save className="h-4 w-4 mr-2" />
                 Save

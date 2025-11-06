@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface UseTypingAnimationProps {
@@ -46,6 +47,8 @@ export const useTypingAnimation = ({
   const detectedBlocksRef = useRef<Set<string>>(new Set());
   const blocksRef = useRef<CodeBlock[]>([]); // Ref to store detected blocks
   const wordsPerChunkRef = useRef(Math.max(1, Math.floor(wordsPerSecond / 5))); // Store wordsPerChunk in ref
+  const animationFrameRef = useRef<number>(); // Store animation frame ID
+  const lastUpdateTimeRef = useRef<number>(0);
 
   // Memoize the detectBlocks function
   const detectBlocks = useRef(
@@ -135,14 +138,24 @@ export const useTypingAnimation = ({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
 
-    const typeNextChunk = () => {
+    const typeNextChunk = (timestamp: number) => {
+      animationFrameRef.current = requestAnimationFrame(typeNextChunk);
+
+      if (!lastUpdateTimeRef.current) {
+        lastUpdateTimeRef.current = timestamp;
+      }
+      const progress = timestamp - lastUpdateTimeRef.current;
+
       if (indexRef.current >= words.length) {
         setIsTyping(false);
         setCurrentBlock(null);
         setBlockText('');
-        // console.log("Typing complete! Calling onComplete for message ID:", messageId); // ADD THIS LINE
         onComplete?.(messageId);
+        cancelAnimationFrame(animationFrameRef.current);
         return;
       }
 
@@ -191,7 +204,7 @@ export const useTypingAnimation = ({
           indexRef.current = i;
           setCurrentBlock(null); // Clear current block after processing
           setBlockText(''); // Clear blockText
-          timeoutRef.current = window.setTimeout(typeNextChunk, 50); // Move quickly past the block
+          lastUpdateTimeRef.current = timestamp;
           return; // Skip remaining word processing for this iteration
         }
       }
@@ -231,14 +244,19 @@ export const useTypingAnimation = ({
       const actualWordsInChunk = chunkWords.filter(word => word?.trim().length > 0).length;
       const delay = actualWordsInChunk > 0 ? (1000 / wordsPerSecond) * actualWordsInChunk : 50;
 
-      timeoutRef.current = window.setTimeout(typeNextChunk, delay);
+      if (progress > delay) {
+        lastUpdateTimeRef.current = timestamp;
+      }
     };
 
-    timeoutRef.current = window.setTimeout(typeNextChunk, 200);
+    animationFrameRef.current = requestAnimationFrame(typeNextChunk);
 
     return () => {
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
     };
   }, [text, messageId, wordsPerSecond, enabled, onComplete, isAlreadyComplete, onBlockDetected, onBlockUpdate, onBlockEnd, autoTypeInPanel, detectBlocks]);
