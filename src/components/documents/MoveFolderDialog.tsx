@@ -13,8 +13,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { FolderTree, FolderTreeProps } from './FolderTree';
 import { DocumentFolder, FolderTreeNode } from '../../types/Folder';
-import { on } from 'events';
-import { D } from 'node_modules/framer-motion/dist/types.d-Cjd591yU';
 
 interface MoveFolderDialogProps {
     // Existing props
