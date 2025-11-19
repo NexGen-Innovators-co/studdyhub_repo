@@ -1,27 +1,9 @@
-import React, { useEffect, useRef, useCallback, memo, useState } from 'react';
-import { Card, CardContent, CardHeader } from '../../ui/card';
+import React, { useRef, useCallback, memo, useState, useEffect } from 'react';
+import { Card, CardContent } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Textarea } from '../../ui/textarea';
 import { Badge } from '../../ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../../ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../../ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,32 +13,29 @@ import {
 } from '../../ui/dropdown-menu';
 import {
   MoreHorizontal,
-  Award,
-  Target,
-  UsersIcon,
-  Lock,
-  Globe,
-  Eye,
-  FileText,
-  Share,
+  Heart,
+  MessageCircle,
+  Share2,
+  Bookmark,
+  Trash2,
+  Edit,
   Flag,
   ExternalLink,
-  Edit,
-  Trash2,
+  PlayCircle,
+  X,
   Copy,
   Check,
-  Loader2,
-  AlertCircle,
-  X,
-  Image as ImageIcon,
-  Film,
+  Eye,
+  Volume2,
+  VolumeX,
+  Play,
+  Pause
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PostCardProps } from '../types/social';
-import { PostActions } from './PostActions';
 import { CommentSection } from './CommentSection';
-import { HashtagBadge } from './HashtagBadge';
-import { getTimeAgo, formatEngagementCount } from '../utils/postUtils';
+import { getTimeAgo } from '../utils/postUtils';
+import { Dialog, DialogContent } from '../../ui/dialog';
 
 interface PostCardWithViewTrackingProps extends PostCardProps {
   onPostView?: (postId: string) => void;
@@ -64,125 +43,249 @@ interface PostCardWithViewTrackingProps extends PostCardProps {
   onEditPost?: (postId: string, content: string) => Promise<boolean>;
 }
 
-const MAX_LINES = 6;
-const TRUNCATION_LENGTH = 300;
-const MAX_CONTENT_LENGTH = 5000;
+// Global state for video playback
+let currentPlayingVideo: HTMLVideoElement | null = null;
+let globalMuted = true;
 
-// Enhanced Media Display Component
-const MediaDisplay = memo(({ media, onRemove, isEditing }: { 
-  media: any[]; 
-  onRemove?: (index: number) => void;
-  isEditing?: boolean;
-}) => {
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+// --- IMPROVED MEDIA DISPLAY WITH TIKTOK-STYLE VIDEO PLAYBACK ---
+const MediaDisplay = memo(({ media }: { media: any[] }) => {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [videoStates, setVideoStates] = useState<Record<number, {
+    isPlaying: boolean;
+    isMuted: boolean;
+    progress: number;
+  }>>({});
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  useEffect(() => {
+    // Setup intersection observer for auto-play
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const videoEl = entry.target as HTMLVideoElement;
+          const index = parseInt(videoEl.dataset.index || '0');
+
+          if (entry.isIntersecting && entry.intersectionRatio > 0.7) {
+            // Auto-play when 70% visible
+            handlePlay(index, videoEl);
+          } else if (!entry.isIntersecting || entry.intersectionRatio < 0.3) {
+            // Pause when less than 30% visible
+            handlePause(index, videoEl);
+          }
+        });
+      },
+      { threshold: [0.3, 0.7] }
+    );
+
+    // Observe all videos
+    videoRefs.current.forEach((video) => {
+      observerRef.current?.observe(video);
+    });
+
+    return () => {
+      observerRef.current?.disconnect();
+      // Cleanup playing video
+      if (currentPlayingVideo && containerRef.current?.contains(currentPlayingVideo)) {
+        currentPlayingVideo.pause();
+        currentPlayingVideo = null;
+      }
+    };
+  }, []);
+
+  const handlePlay = async (index: number, videoEl: HTMLVideoElement) => {
+    try {
+      // Pause currently playing video
+      if (currentPlayingVideo && currentPlayingVideo !== videoEl) {
+        currentPlayingVideo.pause();
+      }
+
+      await videoEl.play();
+      currentPlayingVideo = videoEl;
+      setVideoStates(prev => ({
+        ...prev,
+        [index]: { ...prev[index], isPlaying: true }
+      }));
+    } catch (err) {
+      console.log('Autoplay prevented:', err);
+    }
+  };
+
+  const handlePause = (index: number, videoEl: HTMLVideoElement) => {
+    videoEl.pause();
+    if (currentPlayingVideo === videoEl) {
+      currentPlayingVideo = null;
+    }
+    setVideoStates(prev => ({
+      ...prev,
+      [index]: { ...prev[index], isPlaying: false }
+    }));
+  };
+
+  const togglePlayPause = (index: number) => {
+    const video = videoRefs.current.get(index);
+    if (!video) return;
+
+    if (video.paused) {
+      handlePlay(index, video);
+    } else {
+      handlePause(index, video);
+    }
+  };
+
+  const toggleMute = (index: number) => {
+    const video = videoRefs.current.get(index);
+    if (!video) return;
+
+    const newMutedState = !video.muted;
+    video.muted = newMutedState;
+    globalMuted = newMutedState;
+
+    setVideoStates(prev => ({
+      ...prev,
+      [index]: { ...prev[index], isMuted: newMutedState }
+    }));
+  };
+
+  const handleVideoProgress = (index: number, video: HTMLVideoElement) => {
+    const progress = (video.currentTime / video.duration) * 100;
+    setVideoStates(prev => ({
+      ...prev,
+      [index]: { ...prev[index], progress }
+    }));
+  };
 
   if (!media || media.length === 0) return null;
 
-  const visibleMedia = media.slice(0, 4);
-  let gridClass = 'grid-cols-2';
-  if (visibleMedia.length === 1) gridClass = 'grid-cols-1';
+  const displayMedia = media.slice(0, 4);
+  const remaining = media.length - 4;
+
+  const gridConfig = {
+    1: 'grid-cols-1',
+    2: 'grid-cols-2',
+    3: 'grid-cols-2',
+    4: 'grid-cols-2',
+  }[displayMedia.length] || 'grid-cols-2';
 
   return (
     <>
-      <div className={`grid ${gridClass} gap-2 mb-4 rounded-lg overflow-hidden`}>
-        {visibleMedia.map((mediaItem, index) => (
-          <div key={mediaItem.id || index} className="relative group">
-            {/* Remove button for editing mode */}
-            {isEditing && onRemove && (
-              <button
-                onClick={() => onRemove(index)}
-                className="absolute top-2 right-2 z-10 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-all"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+      <div
+        ref={containerRef}
+        className={`grid ${gridConfig} gap-1.5 mt-3 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800`}
+      >
+        {displayMedia.map((item, index) => {
+          const isVideo = item.type === 'video';
+          const isThirdOfThree = displayMedia.length === 3 && index === 2;
+          const state = videoStates[index] || { isPlaying: false, isMuted: globalMuted, progress: 0 };
 
-            {mediaItem.type === 'image' && (
-              <div className="relative overflow-hidden rounded-lg bg-black">
-                <img
-                  src={mediaItem.url}
-                  alt={mediaItem.filename || 'Post image'}
-                  className="w-full h-auto max-h-96 object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
-                  loading="lazy"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isEditing) setFullscreenImage(mediaItem.url);
-                  }}
-                />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
-                <div className="absolute bottom-2 right-2 bg-black/50 backdrop-blur-sm px-2 py-1 rounded text-xs text-white flex items-center gap-1">
-                  <ImageIcon className="h-3 w-3" />
-                  Image
-                </div>
-              </div>
-            )}
+          return (
+            <div
+              key={index}
+              className={`relative bg-slate-100 dark:bg-slate-900 group overflow-hidden
+                ${isThirdOfThree ? 'col-span-2' : ''} 
+                ${displayMedia.length === 1 ? 'max-h-[600px]' : 'aspect-square'}
+              `}
+              onClick={() => !isVideo && setFullscreenImage(item.url)}
+            >
+              {isVideo ? (
+                <div className="relative w-full h-full">
+                  <video
+                    ref={(el) => {
+                      if (el) videoRefs.current.set(index, el);
+                    }}
+                    data-index={index}
+                    src={item.url}
+                    className="w-full h-full object-cover"
+                    playsInline
+                    loop
+                    muted={globalMuted}
+                    preload="metadata"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePlayPause(index);
+                    }}
+                    onTimeUpdate={(e) => handleVideoProgress(index, e.currentTarget)}
+                    onEnded={(e) => {
+                      const v = e.currentTarget;
+                      v.currentTime = 0;
+                      v.play();
+                    }}
+                  />
 
-            {mediaItem.type === 'video' && (
-              <div className="relative rounded-lg overflow-hidden">
-                <video
-                  src={mediaItem.url}
-                  className="w-full h-auto max-h-96 object-cover rounded-lg"
-                  controls
-                  preload="metadata"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <div className="absolute bottom-2 right-2 bg-black/50 backdrop-blur-sm px-2 py-1 rounded text-xs text-white flex items-center gap-1">
-                  <Film className="h-3 w-3" />
-                  Video
-                </div>
-              </div>
-            )}
+                  {/* Video Controls Overlay */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    {/* Play/Pause Overlay */}
+                    {!state.isPlaying && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <div className="pointer-events-auto cursor-pointer bg-white/90 rounded-full p-4 hover:bg-white transition-colors">
+                          <Play className="h-8 w-8 text-slate-900" />
+                        </div>
+                      </div>
+                    )}
 
-            {mediaItem.type === 'document' && (
-              <div
-                className="w-full h-40 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-800 dark:to-gray-900 rounded-lg flex items-center justify-center hover:from-slate-100 hover:to-slate-200 dark:hover:from-gray-700 dark:hover:to-gray-800 cursor-pointer transition-all group border-2 border-slate-200 dark:border-gray-700"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!isEditing) window.open(mediaItem.url, '_blank', 'noopener,noreferrer');
-                }}
-              >
-                <div className="text-center px-4">
-                  <FileText className="h-10 w-10 mx-auto mb-3 text-blue-500 group-hover:scale-110 transition-transform" />
-                  <p className="text-sm font-medium truncate max-w-[200px] text-slate-700 dark:text-gray-300">
-                    {mediaItem.filename}
-                  </p>
-                  <div className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground">
-                    <ExternalLink className="h-3 w-3" />
-                    <span>Open Document</span>
+                    {/* Bottom Controls */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
+                      {/* Progress Bar */}
+                      <div className="w-full h-0.5 bg-white/30 rounded-full mb-2">
+                        <div
+                          className="h-full bg-white rounded-full transition-all duration-100"
+                          style={{ width: `${state.progress}%` }}
+                        />
+                      </div>
+
+                      {/* Mute Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMute(index);
+                        }}
+                        className="pointer-events-auto bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
+                      >
+                        {state.isMuted ? (
+                          <VolumeX className="h-4 w-4 text-white" />
+                        ) : (
+                          <Volume2 className="h-4 w-4 text-white" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              ) : (
+                <img
+                  src={item.url}
+                  alt="Post content"
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer"
+                  loading="lazy"
+                />
+              )}
 
-            {index === visibleMedia.length - 1 && media.length > 4 && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-semibold text-lg backdrop-blur-sm rounded-lg">
-                +{media.length - 4} more
-              </div>
-            )}
-          </div>
-        ))}
+              {index === 3 && remaining > 0 && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-bold text-xl backdrop-blur-[2px]">
+                  +{remaining}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Fullscreen Image Viewer */}
+      {/* Lightbox */}
       {fullscreenImage && (
         <Dialog open={!!fullscreenImage} onOpenChange={() => setFullscreenImage(null)}>
-          <DialogContent className="max-w-7xl w-full h-[90vh] p-0" onClick={(e) => e.stopPropagation()}>
-            <div className="relative w-full h-full flex items-center justify-center bg-black">
+          <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none">
+            <div className="relative w-full h-full flex items-center justify-center p-4">
               <img
                 src={fullscreenImage}
-                alt="Full size"
-                className="max-w-full max-h-full object-contain"
-                onClick={(e) => e.stopPropagation()}
+                alt="Fullscreen"
+                className="max-w-full max-h-[90vh] object-contain"
               />
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFullscreenImage(null);
-                }}
+                className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full"
+                onClick={() => setFullscreenImage(null)}
               >
                 <X className="h-6 w-6" />
               </Button>
@@ -193,538 +296,345 @@ const MediaDisplay = memo(({ media, onRemove, isEditing }: {
     </>
   );
 });
-
 MediaDisplay.displayName = 'MediaDisplay';
 
-// Hashtags Display Component
-const HashtagDisplay = memo(({ hashtags }: { hashtags: any[] }) => {
-  if (!hashtags || hashtags.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap gap-2 mb-4">
-      {hashtags.map((hashtag, index) => (
-        <HashtagBadge
-          key={`${hashtag.id}-${index}`}
-          hashtag={hashtag}
-          onClick={(e) => {
-            e.stopPropagation();
-            toast.info(`Filtering by hashtag #${hashtag.name}`);
-          }}
-        />
-      ))}
+// Action Button
+const ActionButton = ({ icon: Icon, label, count, active, activeColor, onClick }: any) => (
+  <button
+    onClick={(e) => { e.stopPropagation(); onClick(); }}
+    className={`flex items-center space-x-1.5 group transition-colors duration-200 ${active ? activeColor : 'text-slate-500 dark:text-slate-400 hover:text-blue-500'
+      }`}
+  >
+    <div className={`p-2 rounded-full transition-colors ${active ? 'bg-opacity-10' : 'group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20'
+      } ${active ? activeColor.replace('text-', 'bg-') : ''}`}>
+      <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
     </div>
-  );
-});
+    <span className={`text-sm font-medium ${active ? '' : 'group-hover:text-blue-500'}`}>
+      {count > 0 ? count : label}
+    </span>
+  </button>
+);
 
-HashtagDisplay.displayName = 'HashtagDisplay';
-
-// Engagement Stats Component
-const EngagementStats = memo(({ post }: { post: any }) => (
-  <div className="flex items-center justify-between py-3 border-t border-b border-slate-100 dark:border-gray-700 mb-3">
-    <div className="flex items-center space-x-6 text-sm text-muted-foreground">
-      <button className="hover:text-red-500 transition-colors cursor-pointer">
-        <span className="font-medium">{formatEngagementCount(post.likes_count)}</span> {post.likes_count === 1 ? 'like' : 'likes'}
-      </button>
-      <button className="hover:text-blue-500 transition-colors cursor-pointer">
-        <span className="font-medium">{formatEngagementCount(post.comments_count)}</span> {post.comments_count === 1 ? 'comment' : 'comments'}
-      </button>
-      <button className="hover:text-green-500 transition-colors cursor-pointer">
-        <span className="font-medium">{formatEngagementCount(post.shares_count)}</span> {post.shares_count === 1 ? 'share' : 'shares'}
-      </button>
-    </div>
-    <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-      <Eye className="h-3 w-3" />
-      <span>{formatEngagementCount(post.views_count)}</span>
-    </div>
-  </div>
-));
-
-EngagementStats.displayName = 'EngagementStats';
-
-// Main PostCard Component
+// --- MAIN POSTCARD COMPONENT ---
 export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
-  ({
-    post,
-    onLike,
-    onBookmark,
-    onShare,
-    onComment,
-    isExpanded,
-    comments,
-    isLoadingComments,
-    newComment,
-    onCommentChange,
-    onSubmitComment,
-    currentUser,
-    onPostView,
-    onClick,
-    onDeletePost,
-    onEditPost,
-  }) => {
-    const cardRef = useRef<HTMLDivElement>(null);
-    const hasTriggeredView = useRef(false);
-    const intersectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  (props) => {
+    const {
+      post,
+      onLike,
+      onBookmark,
+      onShare,
+      onComment,
+      isExpanded,
+      comments,
+      isLoadingComments,
+      newComment,
+      onCommentChange,
+      onSubmitComment,
+      currentUser,
+      onClick,
+      onDeletePost,
+      onEditPost,
+      onPostView,
+    } = props;
 
-    // State management
     const [isContentExpanded, setIsContentExpanded] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [editContent, setEditContent] = useState(post.content || '');
     const [isEditing, setIsEditing] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [copySuccess, setCopySuccess] = useState(false);
-
-    const isContentLong = post.content && post.content.length > TRUNCATION_LENGTH;
+    const [editContent, setEditContent] = useState(post.content || '');
     const isOwnPost = currentUser?.id === post.author_id;
-    const isEdited = post.updated_at && post.updated_at !== post.created_at;
+    const isLongContent = post.content && post.content.length > 280;
 
-    // View tracking with Intersection Observer
-    useEffect(() => {
-      if (!onPostView || hasTriggeredView.current || !cardRef.current) return;
+    const handleLike = () => onLike(post.id, post.is_liked || false);
+    const handleBookmark = () => onBookmark(post.id, post.is_bookmarked || false);
+    const handleCopyLink = () => {
+      navigator.clipboard.writeText(`${window.location.origin}/social/post/${post.id}`);
+      toast.success("Link copied!");
+    };
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (
-              entry.isIntersecting &&
-              entry.intersectionRatio > 0.5 &&
-              !hasTriggeredView.current
-            ) {
-              if (intersectionTimeoutRef.current) {
-                clearTimeout(intersectionTimeoutRef.current);
-              }
+    // Share modal state
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-              intersectionTimeoutRef.current = setTimeout(() => {
-                if (entry.isIntersecting && !hasTriggeredView.current) {
-                  hasTriggeredView.current = true;
-                  onPostView(post.id);
-                }
-              }, 1000);
-            } else if (!entry.isIntersecting && intersectionTimeoutRef.current) {
-              clearTimeout(intersectionTimeoutRef.current);
-              intersectionTimeoutRef.current = null;
-            }
-          });
-        },
-        {
-          threshold: 0.5,
-          rootMargin: '0px 0px -100px 0px',
+    // Share helpers
+    const shareUrl = `${window.location.origin}/social/post/${post.id}`;
+    const shareText = (post.content || '').slice(0, 300);
+
+    const shareNative = async () => {
+      setIsShareModalOpen(false);
+      if ((navigator as any).share) {
+        try {
+          await (navigator as any).share({ title: post.author?.display_name || 'Post', text: shareText, url: shareUrl });
+          toast.success('Shared');
+          await onShare?.(post);
+          return;
+        } catch (err: any) {
+          const name = err?.name;
+          if (name === 'AbortError' || name === 'NotAllowedError') {
+            toast.info('Share cancelled');
+            return;
+          }
+          console.warn('Native share error', err);
         }
-      );
-
-      observer.observe(cardRef.current);
-
-      return () => {
-        observer.disconnect();
-        if (intersectionTimeoutRef.current) {
-          clearTimeout(intersectionTimeoutRef.current);
-        }
-      };
-    }, [post.id, onPostView]);
-
-    // Card click handler
-    const handleCardClick = useCallback(
-      (e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-        if (target.closest('button, a, input, textarea, [role="menuitem"]')) return;
-
-        if (onClick) {
-          onClick(post.id);
-        }
-      },
-      [onClick, post.id]
-    );
-
-    // Share handler
-    const handleShare = useCallback(() => {
-      onShare(post);
-    }, [onShare, post]);
-
-    // Copy link handler
-    const handleCopyLink = useCallback(async (e: React.MouseEvent) => {
-      e.stopPropagation();
-      try {
-        const url = `${window.location.origin}/social/post/${post.id}`;
-        await navigator.clipboard.writeText(url);
-        setCopySuccess(true);
-        toast.success('Link copied to clipboard!');
-        setTimeout(() => setCopySuccess(false), 2000);
-      } catch (error) {
-        toast.error('Failed to copy link');
       }
-    }, [post.id]);
+      toast.error('Native share not available');
+    };
 
-    // Delete handler
-    const handleDelete = useCallback(async () => {
-      if (!onDeletePost) return;
+    const shareWhatsApp = async () => {
+      setIsShareModalOpen(false);
+      const encoded = encodeURIComponent(`${shareText}\n\n${shareUrl}`);
+      const ua = navigator.userAgent || '';
+      const isMobile = /Android|iPhone|iPad|iPod|Windows Phone/i.test(ua);
+      const waUrl = isMobile ? `whatsapp://send?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+      window.open(waUrl, '_blank');
+      await onShare?.(post);
+    };
 
-      setIsDeleting(true);
+    const shareFacebook = async () => {
+      setIsShareModalOpen(false);
+      const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`;
+      window.open(fbUrl, '_blank');
+      await onShare?.(post);
+    };
+
+    const shareTwitter = async () => {
+      setIsShareModalOpen(false);
+      const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+      window.open(twitterUrl, '_blank');
+      await onShare?.(post);
+    };
+
+    const shareCopyLink = async () => {
+      setIsShareModalOpen(false);
       try {
-        const success = await onDeletePost(post.id);
-        if (success) {
-          setIsDeleteDialogOpen(false);
-        }
-      } catch (error) {
-        console.error('Delete error:', error);
-      } finally {
-        setIsDeleting(false);
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success('Link copied to clipboard');
+        await onShare?.(post);
+      } catch {
+        toast.error('Unable to copy link');
       }
-    }, [onDeletePost, post.id]);
+    };
 
-    // Edit handler
-    const handleEdit = useCallback(async () => {
-      if (!onEditPost || !editContent.trim() || editContent === post.content) return;
+    const handleShare = (e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      setIsShareModalOpen(true);
+    };
 
-      if (editContent.length > MAX_CONTENT_LENGTH) {
-        toast.error(`Post content cannot exceed ${MAX_CONTENT_LENGTH} characters`);
-        return;
-      }
-
-      setIsEditing(true);
-      try {
-        const success = await onEditPost(post.id, editContent);
-        if (success) {
-          setIsEditModalOpen(false);
-        }
-      } catch (error) {
-        console.error('Edit error:', error);
-      } finally {
+    const handleSaveEdit = async () => {
+      if (onEditPost && editContent.trim()) {
+        await onEditPost(post.id, editContent);
         setIsEditing(false);
       }
-    }, [onEditPost, post.id, editContent, post.content]);
+    }
 
-    // Report handler
-    const handleReport = useCallback((e: React.MouseEvent) => {
-      e.stopPropagation();
-      toast.info('Report feature coming soon');
-    }, []);
+    // ref + local view tracking
+    const cardRef = React.useRef<HTMLDivElement | null>(null);
+    const [hasTrackedView, setHasTrackedView] = useState(false);
+    const [localViews, setLocalViews] = useState<number>(post.views_count ?? 0);
 
-    // Open edit modal
-    const openEditModal = useCallback((e: React.MouseEvent) => {
-      e.stopPropagation();
-      setEditContent(post.content || '');
-      setIsEditModalOpen(true);
-    }, [post.content]);
+    // observe visibility and report view once per mounted Card
+    React.useEffect(() => {
+      if (!cardRef.current || !onPostView) return;
+      const el = cardRef.current;
+      const obs = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && !hasTrackedView) {
+            try {
+              onPostView(post.id);
+            } catch (e) {
+              // ignore
+            }
+            setHasTrackedView(true);
+            setLocalViews((v) => v + 1);
+          }
+        },
+        { threshold: 0.6 }
+      );
+      obs.observe(el);
+      return () => obs.disconnect();
+    }, [post.id, onPostView, hasTrackedView]);
 
-    return (
-      <>
-        <Card
-          ref={cardRef}
-          className="mb-6 hover:shadow-xl bg-white dark:bg-gray-900 transition-all duration-300 cursor-pointer group border border-slate-200 dark:border-gray-700 hover:border-slate-300 dark:hover:border-gray-600"
-          onClick={handleCardClick}
-        >
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              {/* Author Info */}
-              <div className="flex items-center space-x-3">
-                <Avatar className="ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
-                  <AvatarImage src={post.author?.avatar_url} />
-                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white font-semibold">
-                    {post.author?.display_name?.charAt(0).toUpperCase() || 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-slate-800 dark:text-gray-200">
-                      {post.author?.display_name}
-                    </p>
-                    {post.author?.is_verified && (
-                      <Award className="h-4 w-4 text-blue-500" />
-                    )}
-                    {post.author?.is_contributor && (
-                      <Target className="h-4 w-4 text-purple-500"  />
-                    )}
-                    {isOwnPost && (
-                      <Badge variant="secondary" className="text-xs">You</Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    return ( 
+      <Card
+        className="mb-4 border-none shadow-sm hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden max-w-[680px] mx-auto"
+        ref={cardRef}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (!target.closest('button, a, input, textarea, video, [role="menuitem"]') && onClick) {
+            onClick(post.id);
+          }
+        }}
+      >
+        <CardContent className="p-4">
+          <div className="flex gap-3">
+            {/* Avatar Column */}
+            <div className="flex-shrink-0">
+              <Avatar className="h-10 w-10 ring-2 ring-white dark:ring-slate-900 shadow-sm cursor-pointer hover:opacity-90">
+                <AvatarImage src={post.author?.avatar_url} />
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                  {post.author?.display_name?.[0]}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+
+            {/* Content Column */}
+            <div className="flex-1 min-w-0">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-1">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-0 sm:gap-2">
+                  <span className="font-bold text-slate-900 dark:text-slate-100 text-base hover:underline cursor-pointer">
+                    {post.author?.display_name}
+                  </span>
+                  <div className="flex items-center text-slate-500 text-sm gap-2">
                     <span>@{post.author?.username}</span>
-                    <span>•</span>
-                    <span>{getTimeAgo(post.created_at)}</span>
-                    {isEdited && (
+                    <span className="text-slate-300 dark:text-slate-700">•</span>
+                    <span className="hover:underline cursor-pointer">{getTimeAgo(post.created_at)}</span>
+                  </div>
+                </div>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 -mt-1 -mr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100 dark:border-slate-800">
+                    <DropdownMenuItem onClick={handleCopyLink}><Copy className="mr-2 h-4 w-4" /> Copy Link</DropdownMenuItem>
+                    {isOwnPost && (
                       <>
-                        <span>•</span>
-                        <span className="text-xs italic">(edited)</span>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setIsEditing(true)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onDeletePost?.(post.id)} className="text-red-600"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
                       </>
                     )}
-                    <div className="flex items-center gap-1">
-                      {post.privacy === 'followers' && (
-                        <UsersIcon className="h-3 w-3"  />
+                    {!isOwnPost && (
+                      <DropdownMenuItem onClick={() => toast.info("Reported")}><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Post Body */}
+              {isEditing ? (
+                <div className="mb-3 space-y-2" onClick={e => e.stopPropagation()}>
+                  <Textarea
+                    value={editContent}
+                    onChange={e => setEditContent(e.target.value)}
+                    className="min-h-[100px]"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
+                    <Button size="sm" onClick={handleSaveEdit}>Save</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words">
+                  {isLongContent && !isContentExpanded ? (
+                    <>
+                      {post.content.slice(0, 280)}...
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setIsContentExpanded(true); }}
+                        className="text-blue-600 hover:underline ml-1 font-medium"
+                      >
+                        Show more
+                      </button>
+                    </>
+                  ) : (
+                    post.content
+                  )}
+                </div>
+              )}
+
+              {/* Hashtags */}
+              {post.hashtags && post.hashtags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {post.hashtags.map((tag: any, i: number) => (
+                    <span key={i} className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer">#{tag.name}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* Media */}
+              <div onClick={e => e.stopPropagation()}>
+                <MediaDisplay media={post.media} />
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex items-center justify-between mt-4 pt-2 -ml-2">
+                <ActionButton
+                  icon={Heart}
+                  count={post.likes_count}
+                  active={post.is_liked}
+                  activeColor="text-pink-600"
+                  onClick={handleLike}
+                />
+
+                <ActionButton
+                  icon={MessageCircle}
+                  count={post.comments_count}
+                  onClick={onComment}
+                />
+
+                <ActionButton
+                  icon={Share2}
+                  label="Share"
+                  count={post.shares_count}
+                  onClick={handleShare}
+                />
+
+                <ActionButton
+                  icon={Bookmark}
+                  label=""
+                  active={post.is_bookmarked}
+                  activeColor="text-blue-600"
+                  onClick={handleBookmark}
+                />
+
+                {/* Views indicator */}
+                <div className="ml-3 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+                  <Eye className="h-4 w-4" />
+                  <span className="font-medium text-xs">{localViews}</span>
+                </div>
+              </div>
+
+              {/* Share Modal */}
+              <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen} >
+                <DialogContent className="max-w-sm w-[95vw] p-0 bg-transparent border-none">
+                  <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-4 space-y-3">
+                    <h3 className="text-lg font-semibold">Share post</h3>
+                    <p className="text-sm text-slate-500">Choose where you'd like to share this post</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {(navigator as any).share && (
+                        <Button onClick={shareNative} className="justify-start">🔤 Share via device</Button>
                       )}
-                      {post.privacy === 'private' && (
-                        <Lock className="h-3 w-3" />
-                      )}
-                      {post.privacy === 'public' && (
-                        <Globe className="h-3 w-3" />
-                      )}
+                      <Button onClick={shareWhatsApp} className="justify-start">📱 WhatsApp</Button>
+                      <Button onClick={shareFacebook} className="justify-start">👍 Facebook</Button>
+                      <Button onClick={shareTwitter} className="justify-start">🦅 Twitter</Button>
+                      <Button variant="outline" onClick={shareCopyLink} className="justify-start">🔗 Copy link</Button>
+                      <div className="flex justify-end pt-2">
+                        <Button variant="ghost" onClick={() => setIsShareModalOpen(false)}>Cancel</Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Actions Dropdown Menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0 hover:bg-slate-100 dark:hover:bg-gray-700"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56" onClick={(e) => e.stopPropagation()}>
-                  {/* Copy Link */}
-                  <DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
-                    {copySuccess ? (
-                      <>
-                        <Check className="h-4 w-4 mr-2 text-green-500" />
-                        <span className="text-green-500">Link copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-4 w-4 mr-2" />
-                        <span>Copy link to post</span>
-                      </>
-                    )}
-                  </DropdownMenuItem>
-                  
-                  {/* Share */}
-                  <DropdownMenuItem 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleShare();
-                    }}
-                    className="cursor-pointer"
-                  >
-                    <Share className="h-4 w-4 mr-2" />
-                    <span>Share post</span>
-                  </DropdownMenuItem>
-
-                  {/* Owner Actions */}
-                  {isOwnPost && (onEditPost || onDeletePost) && (
-                    <DropdownMenuSeparator />
-                  )}
-
-                  {isOwnPost && onEditPost && (
-                    <DropdownMenuItem 
-                      onClick={openEditModal}
-                      className="cursor-pointer"
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      <span>Edit post</span>
-                    </DropdownMenuItem>
-                  )}
-
-                  {isOwnPost && onDeletePost && (
-                    <DropdownMenuItem 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsDeleteDialogOpen(true);
-                      }}
-                      className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400 focus:bg-red-50 dark:focus:bg-red-900/20"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      <span>Delete post</span>
-                    </DropdownMenuItem>
-                  )}
-
-                  {/* Report (for non-owners) */}
-                  {!isOwnPost && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        onClick={handleReport} 
-                        className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
-                      >
-                        <Flag className="h-4 w-4 mr-2" />
-                        <span>Report post</span>
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </DialogContent>
+              </Dialog>
             </div>
-          </CardHeader>
-  
-          <CardContent>
-            {/* Post Content */}
-            <div className={!isContentExpanded && isContentLong ? 'relative' : ''}>
-              <p className={`text-slate-800 dark:text-gray-200 leading-relaxed break-words  mb-4 ${
-                !isContentExpanded && isContentLong ? `line-clamp-${MAX_LINES}` : 'whitespace-pre-wrap'
-              }`}>
-                {post.content}
-              </p>
+          </div>
 
-              {isContentLong && (
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="px-0 h-auto text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsContentExpanded(!isContentExpanded);
-                  }}
-                >
-                  {isContentExpanded ? '← Show less' : 'View more →'}
-                </Button>
-              )}
-            </div>
-
-            {/* Media Display */}
-            <MediaDisplay media={post.media} />
-
-            {/* Hashtags */}
-            <HashtagDisplay hashtags={post.hashtags} />
-
-            {/* Engagement Stats */}
-            <EngagementStats post={post} />
-
-            {/* Action Buttons */}
-            <div onClick={(e) => e.stopPropagation()}>
-              <PostActions
-                post={post}
-                onLike={onLike}
-                onComment={onComment}
-                onShare={handleShare}
-                onBookmark={onBookmark}
+          {/* Comments */}
+          {isExpanded && (
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-200">
+              <CommentSection
+                postId={post.id}
+                comments={comments}
+                isLoading={isLoadingComments}
+                newComment={newComment}
+                onCommentChange={onCommentChange}
+                onSubmitComment={onSubmitComment}
+                currentUser={currentUser}
               />
             </div>
-
-            {/* Comments Section */}
-            {isExpanded && (
-              <div onClick={(e) => e.stopPropagation()}>
-                <CommentSection
-                  postId={post.id}
-                  comments={comments}
-                  isLoading={isLoadingComments}
-                  newComment={newComment}
-                  onCommentChange={onCommentChange}
-                  onSubmitComment={onSubmitComment}
-                  currentUser={currentUser}
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Edit Modal */}
-        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <DialogContent className="sm:max-w-[600px]" onClick={(e) => e.stopPropagation()}>
-            <DialogHeader>
-              <DialogTitle>Edit Post</DialogTitle>
-              <DialogDescription>
-                Make changes to your post. Your edits will be visible to everyone who can see this post.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <Textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                placeholder="What's on your mind?"
-                className="min-h-[150px] resize-y"
-                onClick={(e) => e.stopPropagation()}
-                maxLength={MAX_CONTENT_LENGTH}
-              />
-              <div className="flex items-center justify-between text-sm">
-                <span className={`${
-                  editContent.length > MAX_CONTENT_LENGTH * 0.9 
-                    ? 'text-orange-500 font-medium' 
-                    : 'text-muted-foreground'
-                }`}>
-                  {editContent.length} / {MAX_CONTENT_LENGTH} characters
-                </span>
-                {editContent !== post.content && (
-                  <span className="text-blue-500 text-xs">• Changes detected</span>
-                )}
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsEditModalOpen(false);
-                  setEditContent(post.content || '');
-                }}
-                disabled={isEditing}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleEdit}
-                disabled={!editContent.trim() || editContent === post.content || isEditing || editContent.length > MAX_CONTENT_LENGTH}
-              >
-                {isEditing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  'Save changes'
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-            <AlertDialogHeader>
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
-                  <AlertCircle className="h-5 w-5 text-red-500" />
-                </div>
-                <AlertDialogTitle>Delete Post</AlertDialogTitle>
-              </div>
-              <AlertDialogDescription className="space-y-2">
-                <p>Are you sure you want to delete this post? This action cannot be undone.</p>
-                <div className="mt-3 p-3 bg-slate-50 dark:bg-gray-800 rounded-lg border border-slate-200 dark:border-gray-700">
-                  <p className="text-xs text-slate-600 dark:text-gray-400">
-                    <strong>What will be deleted:</strong>
-                  </p>
-                  <ul className="text-xs text-slate-600 dark:text-gray-400 list-disc list-inside mt-1 space-y-1">
-                    <li>Post content and media</li>
-                    <li>All comments ({post.comments_count})</li>
-                    <li>All likes ({post.likes_count})</li>
-                    <li>All bookmarks</li>
-                  </ul>
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={(e) => e.stopPropagation()} disabled={isDeleting}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete();
-                }}
-                disabled={isDeleting}
-                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Post
-                  </>
-                )}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </>
+          )}
+        </CardContent>
+      </Card>
     );
   }
 );
-
 PostCard.displayName = 'PostCard';

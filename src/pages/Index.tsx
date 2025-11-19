@@ -1,5 +1,4 @@
-// Modified Index.tsx
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
@@ -18,14 +17,15 @@ const Index = () => {
   let socialPostId: string | undefined;
   let socialGroupId: string | undefined;
 
-  if (location.pathname.startsWith('/social/group')) {
+  if (location.pathname.startsWith('/social/group/')) {
     activeSocialTab = 'group';
     socialGroupId = params.groupId;
-  } else if (location.pathname.startsWith('/social/post')) {
+  } else if (location.pathname.startsWith('/social/post/')) {
     activeSocialTab = 'post';
     socialPostId = params.postId;
   } else {
-    activeSocialTab = params.tab as string | undefined;
+    // This will handle /social, /social/feed, /social/trending, etc.
+    activeSocialTab = params.tab as string | undefined; 
   }
 
   // Get everything from context
@@ -96,6 +96,7 @@ const Index = () => {
   }, [user, authLoading, navigate]);
 
   // Memoized props to prevent unnecessary re-renders
+  const [socialSearchQuery, setSocialSearchQuery] = useState('');
   const headerProps = useMemo(() => ({
     searchQuery,
     onSearchChange: setSearchQuery,
@@ -105,6 +106,16 @@ const Index = () => {
     activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', 
     fullName: userProfile?.full_name || '',
     avatarUrl: userProfile?.avatar_url || '',
+    // --- START: Added Social Routing Props to Header ---
+    activeSocialTab,
+    socialPostId,
+    socialGroupId,
+    // Social header helpers required by HeaderProps
+    socialSearchQuery,
+    onSocialSearchChange: (q: string) => setSocialSearchQuery(q),
+    // navigate with query flag so SocialFeed can open the dialog
+    onOpenCreatePostDialog: () => navigate('/social?openCreate=true'),
+    // --- END: Added Social Routing Props to Header ---
   }), [
     searchQuery,
     setSearchQuery,
@@ -112,7 +123,15 @@ const Index = () => {
     isSidebarOpen,
     setIsSidebarOpen,
     currentActiveTab,
-    userProfile
+    userProfile,
+    // --- START: Added Social Routing Props to Header Dependencies ---
+    activeSocialTab,
+    socialPostId,
+    socialGroupId,
+    socialSearchQuery,
+    setSocialSearchQuery,
+    navigate,
+    // --- END: Added Social Routing Props to Header Dependencies ---
   ]);
 
   const sidebarProps = useMemo(() => ({
@@ -122,13 +141,19 @@ const Index = () => {
     onCategoryChange: setSelectedCategory,
     noteCount: notes.length,
     activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', 
+    activeSocialTab: activeSocialTab || 'feed',
     onTabChange: (tab: string) => {
       if (tab.startsWith('chat/') && activeChatSessionId) {
         navigate(`/${tab}`);
       } else if (tab === 'chat' && activeChatSessionId) {
         navigate(`/chat/${activeChatSessionId}`);
       } else {
-        navigate(`/${tab}`);
+        // Handle social routing (e.g., /social/feed, /social/trending)
+        if (tab === 'social' || tab.startsWith('social/')) {
+          navigate(`/${tab}`);
+        } else {
+          navigate(`/${tab}`);
+        }
       }
       setIsSidebarOpen(false);
     },
@@ -154,6 +179,7 @@ const Index = () => {
     setSelectedCategory,
     notes.length,
     currentActiveTab,
+    activeSocialTab,
     navigate,
     chatSessions,
     activeChatSessionId,
@@ -290,13 +316,13 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col  bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
+    <div className="h-screen flex flex-col  bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
       <div className={headerClass}>
         <Header {...headerProps} />
       </div>
       <div className="flex-1 flex ">
         <Sidebar {...sidebarProps} />
-        <div className=" max-h-[95vh] w-full  bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar " >
+        <div className=" max-h-[95vh] w-full  bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar " >
         <TabContent {...tabContentProps}/>
         </div>
       </div>

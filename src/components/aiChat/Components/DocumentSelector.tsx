@@ -101,7 +101,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleCancel}>
-      <DialogContent className="sm:max-w-[600px] font-sans">
+      <DialogContent className="sm:max-w-[600px] font-sans" title='Select Documents and Notes'>
         <DialogHeader>
           <DialogTitle className="text-xl md:text-2xl text-slate-800 dark:text-gray-200">Select Documents and Notes</DialogTitle>
           <Button

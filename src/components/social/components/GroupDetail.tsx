@@ -23,6 +23,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent } from '../../ui/dialog';
 
 // Import the components we'll enhance
 import { GroupChat } from './GroupChat';
@@ -38,7 +39,7 @@ interface GroupDetailPageProps {
 export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser }) => {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
-  
+
   const [group, setGroup] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCheckingMembership, setIsCheckingMembership] = useState(true);
@@ -47,6 +48,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
   const [isMember, setIsMember] = useState(false);
   const [memberRole, setMemberRole] = useState<'admin' | 'moderator' | 'member' | null>(null);
   const [memberStatus, setMemberStatus] = useState<'active' | 'pending' | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   useEffect(() => {
     if (groupId && currentUser) {
@@ -150,14 +152,61 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
     }
   };
 
-  const handleShareGroup = async () => {
-    const shareUrl = `${window.location.origin}/social/group/${groupId}`;
+  const shareUrl = `${window.location.origin}/social/group/${groupId}`;
+  const shareText = `Join ${group?.name}! ${group?.description?.slice(0, 200) || ''}`;
+
+  const shareNative = async () => {
+    setIsShareModalOpen(false);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: group?.name, text: shareText, url: shareUrl });
+        toast.success('Shared');
+        return;
+      } catch (err: any) {
+        const name = err?.name;
+        if (name === 'AbortError' || name === 'NotAllowedError') {
+          toast.info('Share cancelled');
+          return;
+        }
+        console.warn('Native share error', err);
+      }
+    }
+    toast.error('Native share not available');
+  };
+
+  const shareWhatsApp = async () => {
+    setIsShareModalOpen(false);
+    const encoded = encodeURIComponent(`${shareText}\n\n${shareUrl}`);
+    const ua = navigator.userAgent || '';
+    const isMobile = /Android|iPhone|iPad|iPod|Windows Phone/i.test(ua);
+    const waUrl = isMobile ? `whatsapp://send?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+    window.open(waUrl, '_blank');
+  };
+
+  const shareFacebook = async () => {
+    setIsShareModalOpen(false);
+    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`;
+    window.open(fbUrl, '_blank');
+  };
+
+  const shareTwitter = async () => {
+    setIsShareModalOpen(false);
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+    window.open(twitterUrl, '_blank');
+  };
+
+  const shareCopyLink = async () => {
+    setIsShareModalOpen(false);
     try {
       await navigator.clipboard.writeText(shareUrl);
-      toast.success('Group link copied to clipboard!');
-    } catch (error) {
-      toast.error('Failed to copy link');
+      toast.success('Link copied to clipboard');
+    } catch {
+      toast.error('Unable to copy link');
     }
+  };
+
+  const handleShareGroup = () => {
+    setIsShareModalOpen(true);
   };
 
   const toggleNotifications = async () => {
@@ -391,16 +440,16 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
             </TabsContent>
 
             <TabsContent value="events">
-              <GroupEvents 
-                groupId={groupId!} 
+              <GroupEvents
+                groupId={groupId!}
                 currentUser={currentUser}
                 canManage={canManageGroup}
               />
             </TabsContent>
 
             <TabsContent value="members">
-              <GroupMembers 
-                groupId={groupId!} 
+              <GroupMembers
+                groupId={groupId!}
                 currentUser={currentUser}
                 currentGroup={group}
                 onLeaveGroup={LeaveGroup}
@@ -409,8 +458,8 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
 
             {canManageGroup && (
               <TabsContent value="settings">
-                <GroupSettings 
-                  groupId={groupId!} 
+                <GroupSettings
+                  groupId={groupId!}
                   group={group}
                   currentUser={currentUser}
                   onGroupUpdate={fetchGroupDetails}
@@ -420,6 +469,28 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
           </div>
         </Tabs>
       </div>
+
+      {/* Share Modal */}
+      <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen}>
+        <DialogContent className="max-w-sm w-[95vw] p-0 bg-transparent border-none">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-4 space-y-3">
+            <h3 className="text-lg font-semibold">Share group</h3>
+            <p className="text-sm text-slate-500">Choose where you'd like to share this group</p>
+            <div className="grid grid-cols-1 gap-2">
+              {navigator.share && (
+                <Button onClick={shareNative} className="justify-start">🔤 Share via device</Button>
+              )}
+              <Button onClick={shareWhatsApp} className="justify-start">📱 WhatsApp</Button>
+              <Button onClick={shareFacebook} className="justify-start">👍 Facebook</Button>
+              <Button onClick={shareTwitter} className="justify-start">🦅 Twitter</Button>
+              <Button variant="outline" onClick={shareCopyLink} className="justify-start">🔗 Copy link</Button>
+              <div className="flex justify-end pt-2">
+                <Button variant="ghost" onClick={() => setIsShareModalOpen(false)}>Cancel</Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
