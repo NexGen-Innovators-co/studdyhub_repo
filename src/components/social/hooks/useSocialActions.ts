@@ -82,16 +82,32 @@ export const useSocialActions = (
           group_id: newGroup.id,
           user_id: currentUser.id,
           role: 'admin',
-          });
+        });
 
       if (memberError) throw memberError;
 
       toast.success(`Group "${newGroup.name}" created successfully!`);
+      if (memberError) throw memberError;
 
-      // 3. Update the local state
+      // Update members_count on server
+      const { count, error: countError } = await supabase
+        .from('social_group_members')
+        .select('count', { count: 'exact' })
+        .eq('group_id', newGroup.id);
+      
+      
+      await supabase
+        .from('social_groups')
+        .update({ members_count: count })
+        .eq('id', newGroup.id);
+      
+      toast.success(`Group "${newGroup.name}" created successfully!`);
+      
+      // Update local state with members_count
       const newGroupWithDetails: SocialGroupWithDetails = {
         ...newGroup,
-        creator: currentUser, // Use current user details
+        members_count: count,  // Set the accurate count
+        creator: currentUser,
         is_member: true,
         member_role: 'admin',
         member_status: 'active'
@@ -125,7 +141,22 @@ export const useSocialActions = (
           status: status
         });
 
-      if (error) throw error;
+        if (error) throw error;
+
+        // If active, update members_count on server
+        if (status === 'active') {
+          const { count, error: countError } = await supabase
+            .from('social_group_members')
+            .select('count', { count: 'exact' })
+            .eq('group_id', groupId);
+        
+          if (countError) throw countError;
+        
+          await supabase
+            .from('social_groups')
+            .update({ members_count: count })
+            .eq('id', groupId);
+        }
 
       // Update the local state for the specific group
       setGroups(prev => prev.map(g => g.id === groupId ? {
@@ -164,8 +195,23 @@ export const useSocialActions = (
         .eq('group_id', groupId)
         .eq('user_id', currentUser.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
+        // If was active, update members_count on server
+        const group = groups.find(group => group.id === groupId);
+        if (group?.member_status === 'active') {  // Ensure group is fetched and check member_status
+          const { count, error: countError } = await supabase
+            .from('social_group_members')
+            .select('count', { count: 'exact' })
+            .eq('group_id', groupId);
+        
+          if (countError) throw countError;
+        
+          await supabase
+            .from('social_groups')
+            .update({ members_count: count })
+            .eq('id', groupId);
+        }
       // Update the local state for the specific group
       setGroups(prev => prev.map(g => g.id === groupId ? {
         ...g,
@@ -239,12 +285,12 @@ export const useSocialActions = (
 
   const createPost = async (content: string, privacy: Privacy, selectedFiles: File[], groupId?: string) => {
     if (!content.trim()) return;
-  
+
     try {
       setIsUploading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-  
+
       // Step 1: Insert the post
       const { data: newPost, error: postError } = await supabase
         .from('social_posts')
@@ -263,18 +309,18 @@ export const useSocialActions = (
         })
         .select()
         .single();
-  
+
       if (postError || !newPost) throw postError || new Error('Failed to create post');
-  
+
       // Step 2: Fetch related data (author, group, media)
       const { data: authorData, error: authorError } = await supabase
         .from('social_users')
         .select('*')
         .eq('id', user.id)
         .single();
-  
+
       if (authorError || !authorData) throw authorError || new Error('Failed to fetch author');
-  
+
       let groupData: SocialGroup | null = null;
       if (groupId) {
         const { data, error } = await supabase
@@ -285,7 +331,7 @@ export const useSocialActions = (
         if (error) throw error;
         groupData = { ...data, privacy: data.privacy as "public" | "private" };
       }
-  
+
       // Step 3: Upload media
       const mediaPromises = selectedFiles.map(async (file) => {
         const url = await uploadFile(file);
@@ -301,9 +347,9 @@ export const useSocialActions = (
           });
         }
       });
-  
+
       await Promise.all(mediaPromises.filter(Boolean));
-  
+
       // Step 4: Handle hashtags
       const hashtags = extractHashtags(content);
       for (const tag of hashtags) {
@@ -312,7 +358,7 @@ export const useSocialActions = (
           .upsert({ name: tag }, { onConflict: 'name' })
           .select()
           .single();
-  
+
         if (!hashtagError && hashtag) {
           await supabase.from('social_post_hashtags').insert({
             post_id: newPost.id,
@@ -321,13 +367,13 @@ export const useSocialActions = (
           });
         }
       }
-  
+
       // Step 5: Update user's posts count
       await supabase
         .from('social_users')
         .update({ posts_count: (currentUser?.posts_count || 0) + 1 })
         .eq('id', user.id);
-  
+
       // Step 6: Construct the SocialPostWithDetails object
       const transformedPost: SocialPostWithDetails = {
         ...newPost,
@@ -341,7 +387,7 @@ export const useSocialActions = (
         is_bookmarked: false,
         views_count: 0,
       };
-  
+
       setPosts((prev) => [transformedPost, ...prev]);
       toast.success('Post created successfully!');
       return true;
@@ -396,6 +442,8 @@ export const useSocialActions = (
   //   }
   // };
 
+  // fileName: useSocialActions.ts
+
   const toggleLike = async (postId: string, isLiked: boolean) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -424,7 +472,6 @@ export const useSocialActions = (
         if (post.id === postId) {
           return {
             ...post,
-            likes_count: isLiked ? post.likes_count - 1 : post.likes_count + 1,
             is_liked: !isLiked
           };
         }
@@ -465,21 +512,23 @@ export const useSocialActions = (
 
   const sharePost = async (post: SocialPostWithDetails) => {
     try {
-      const shareText = generateShareText(post);
-      await navigator.clipboard.writeText(shareText);
-
+      // Only update share counters on the server/local state here.
+      // Native sharing is handled by the UI (PostCard) to ensure it's performed under a user gesture.
       await supabase
         .from('social_posts')
-        .update({ shares_count: post.shares_count + 1 })
+        .update({ shares_count: (post.shares_count || 0) + 1 })
         .eq('id', post.id);
 
       setPosts(prev => prev.map(p =>
-        p.id === post.id ? { ...p, shares_count: p.shares_count + 1 } : p
+        p.id === post.id ? { ...p, shares_count: (p.shares_count || 0) + 1 } : p
       ));
 
-      toast.success('Post link copied to clipboard!');
+      toast.success('Share recorded');
+      return true;
     } catch (error) {
-      toast.error('Failed to share post');
+      toast.error('Failed to record share');
+      console.error('Error recording share:', error);
+      return false;
     }
   };
 
@@ -514,7 +563,7 @@ export const useSocialActions = (
 
       // Remove from suggested users list
       setSuggestedUsers(prev => prev.filter(u => u.id !== userId));
-      
+
       // Update current user's following count
       if (currentUser) {
         setCurrentUser(prev => prev ? {
@@ -529,164 +578,165 @@ export const useSocialActions = (
       throw error; // Re-throw so the UI can handle the error
     }
   };
-// Add these functions to useSocialActions.ts
+  // Add these functions to useSocialActions.ts
 
-// Add to the existing useSocialActions hook
+  // Add to the existing useSocialActions hook
 
-const deletePost = async (postId: string): Promise<boolean> => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+  const deletePost = async (postId: string): Promise<boolean> => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
 
-    // Get the post to verify ownership
-    const { data: post, error: fetchError } = await supabase
-      .from('social_posts')
-      .select('author_id')
-      .eq('id', postId)
-      .single();
-
-    if (fetchError) throw fetchError;
-    if (post.author_id !== user.id) {
-      toast.error('You can only delete your own posts');
-      return false;
-    }
-
-    // Delete associated data first
-    await Promise.all([
-      supabase.from('social_likes').delete().eq('post_id', postId),
-      supabase.from('social_comments').delete().eq('post_id', postId),
-      supabase.from('social_bookmarks').delete().eq('post_id', postId),
-      supabase.from('social_media').delete().eq('post_id', postId),
-      supabase.from('social_post_hashtags').delete().eq('post_id', postId),
-      supabase.from('social_post_tags').delete().eq('post_id', postId),
-      supabase.from('social_notifications').delete().eq('post_id', postId),
-    ]);
-
-    // Delete the post
-    const { error: deleteError } = await supabase
-      .from('social_posts')
-      .delete()
-      .eq('id', postId);
-
-    if (deleteError) throw deleteError;
-
-    // Update local state
-    setPosts(prev => prev.filter(p => p.id !== postId));
-
-    // Update user's posts count
-    if (currentUser) {
-      await supabase
-        .from('social_users')
-        .update({ posts_count: Math.max(0, (currentUser.posts_count || 0) - 1) })
-        .eq('id', user.id);
-
-      setCurrentUser(prev => prev ? {
-        ...prev,
-        posts_count: Math.max(0, prev.posts_count - 1)
-      } : prev);
-    }
-
-    toast.success('Post deleted successfully');
-    return true;
-  } catch (error) {
-    console.error('Error deleting post:', error);
-    toast.error('Failed to delete post');
-    return false;
-  }
-};
-
-const editPost = async (postId: string, newContent: string): Promise<boolean> => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    if (!newContent.trim()) {
-      toast.error('Post content cannot be empty');
-      return false;
-    }
-
-    // Get the post to verify ownership
-    const { data: post, error: fetchError } = await supabase
-      .from('social_posts')
-      .select('author_id, content')
-      .eq('id', postId)
-      .single();
-
-    if (fetchError) throw fetchError;
-    if (post.author_id !== user.id) {
-      toast.error('You can only edit your own posts');
-      return false;
-    }
-
-    // Update the post
-    const { error: updateError } = await supabase
-      .from('social_posts')
-      .update({
-        content: newContent.trim(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', postId);
-
-    if (updateError) throw updateError;
-
-    // Update local state
-    setPosts(prev => prev.map(p => 
-      p.id === postId 
-        ? { ...p, content: newContent.trim(), updated_at: new Date().toISOString() }
-        : p
-    ));
-
-    // Handle hashtags
-    const oldHashtags = extractHashtags(post.content);
-    const newHashtags = extractHashtags(newContent);
-
-    // Remove old hashtag associations
-    if (oldHashtags.length > 0) {
-      await supabase
-        .from('social_post_hashtags')
-        .delete()
-        .eq('post_id', postId);
-    }
-
-    // Add new hashtag associations
-    for (const tag of newHashtags) {
-      const { data: hashtag, error: hashtagError } = await supabase
-        .from('social_hashtags')
-        .upsert({ name: tag }, { onConflict: 'name' })
-        .select()
+      // Get the post to verify ownership
+      const { data: post, error: fetchError } = await supabase
+        .from('social_posts')
+        .select('author_id')
+        .eq('id', postId)
         .single();
 
-      if (!hashtagError && hashtag) {
-        await supabase.from('social_post_hashtags').insert({
-          post_id: postId,
-          hashtag_id: hashtag.id,
-          created_at: new Date().toISOString(),
-        });
+      if (fetchError) throw fetchError;
+      if (post.author_id !== user.id) {
+        toast.error('You can only delete your own posts');
+        return false;
       }
+
+      // Delete associated data first
+      await Promise.all([
+        supabase.from('social_likes').delete().eq('post_id', postId),
+        supabase.from('social_comments').delete().eq('post_id', postId),
+        supabase.from('social_bookmarks').delete().eq('post_id', postId),
+        supabase.from('social_media').delete().eq('post_id', postId),
+        supabase.from('social_post_hashtags').delete().eq('post_id', postId),
+        supabase.from('social_post_tags').delete().eq('post_id', postId),
+        supabase.from('social_notifications').delete().eq('post_id', postId),
+      ]);
+
+      // Delete the post
+      const { error: deleteError } = await supabase
+        .from('social_posts')
+        .delete()
+        .eq('id', postId);
+
+      if (deleteError) throw deleteError;
+
+      // Update local state
+      setPosts(prev => prev.filter(p => p.id !== postId));
+
+      // Update user's posts count
+      if (currentUser) {
+        await supabase
+          .from('social_users')
+          .update({ posts_count: Math.max(0, (currentUser.posts_count || 0) - 1) })
+          .eq('id', user.id);
+
+        setCurrentUser(prev => prev ? {
+          ...prev,
+          posts_count: Math.max(0, prev.posts_count - 1)
+        } : prev);
+      }
+
+      toast.success('Post deleted successfully');
+      return true;
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      toast.error('Failed to delete post');
+      return false;
     }
+  };
 
-    toast.success('Post updated successfully');
-    return true;
-  } catch (error) {
-    console.error('Error editing post:', error);
-    toast.error('Failed to update post');
-    return false;
+  const editPost = async (postId: string, newContent: string): Promise<boolean> => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      if (!newContent.trim()) {
+        toast.error('Post content cannot be empty');
+        return false;
+      }
+
+      // Get the post to verify ownership
+      const { data: post, error: fetchError } = await supabase
+        .from('social_posts')
+        .select('author_id, content')
+        .eq('id', postId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (post.author_id !== user.id) {
+        toast.error('You can only edit your own posts');
+        return false;
+      }
+
+      // Update the post
+      const { error: updateError } = await supabase
+        .from('social_posts')
+        .update({
+          content: newContent.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', postId);
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      setPosts(prev => prev.map(p =>
+        p.id === postId
+          ? { ...p, content: newContent.trim(), updated_at: new Date().toISOString() }
+          : p
+      ));
+
+      // Handle hashtags
+      const oldHashtags = extractHashtags(post.content);
+      const newHashtags = extractHashtags(newContent);
+
+      // Remove old hashtag associations
+      if (oldHashtags.length > 0) {
+        await supabase
+          .from('social_post_hashtags')
+          .delete()
+          .eq('post_id', postId);
+      }
+
+      // Add new hashtag associations
+      for (const tag of newHashtags) {
+        const { data: hashtag, error: hashtagError } = await supabase
+          .from('social_hashtags')
+          .upsert({ name: tag }, { onConflict: 'name' })
+          .select()
+          .single();
+
+        if (!hashtagError && hashtag) {
+          await supabase.from('social_post_hashtags').insert({
+            post_id: postId,
+            hashtag_id: hashtag.id,
+            created_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      toast.success('Post updated successfully');
+      return true;
+    } catch (error) {
+      console.error('Error editing post:', error);
+      toast.error('Failed to update post');
+      return false;
+    }
+  };
+
+  // Add these to the return statement:
+  return {
+    createPost,
+    updateProfile,
+    toggleLike,
+    toggleBookmark,
+    sharePost,
+    followUser,
+    isUploading,
+    createGroup,
+    joinGroup,
+    leaveGroup,
+    isGroupMember,
+    deletePost, // ADD THIS
+    editPost,   // ADD THIS
   }
-};
-
-// Add these to the return statement:
-return {
-  createPost,
-  updateProfile,
-  toggleLike,
-  toggleBookmark,
-  sharePost,
-  followUser,
-  isUploading,
-  createGroup,
-  joinGroup,
-  leaveGroup,
-  isGroupMember,
-  deletePost, // ADD THIS
-  editPost,   // ADD THIS
-}}
+}

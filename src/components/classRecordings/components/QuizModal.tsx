@@ -43,8 +43,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const score = showResults ? calculateScore() : 0; // Changed from onCalculateScore to calculateScore
 
   return (
-    <Dialog open={!!quizMode} onOpenChange={onExitQuizMode}>
-      <DialogContent className="sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl w-full max-w-[90vw]">
+    <Dialog open={!!quizMode} onOpenChange={onExitQuizMode} >
+      <DialogContent className="sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg shadow-xl w-full max-w-[90vw]" title='Quiz'>
         <DialogHeader className="border-b pb-4 mb-4 dark:border-gray-700">
           <DialogTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
             <Lightbulb className="h-6 w-6 text-yellow-500" /> {quiz.title || 'Generated Quiz'}

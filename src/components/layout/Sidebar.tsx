@@ -29,6 +29,9 @@ import {
   Users,
   Bell,
   LogOut,
+  Home,
+  TrendingUp,
+  User
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
@@ -63,6 +66,7 @@ interface SidebarProps {
     | 'dashboard'
     | 'social'
     | string; // Allow string for dynamic chat paths like 'chat/:sessionId'
+  activeSocialTab?: string; // New prop for social sub-navigation
   onTabChange: (
     tab:
       | 'notes'
@@ -148,6 +152,56 @@ const CategoriesList = memo(
               }`}
             >
               {category.name}
+            </span>
+          </Button>
+        );
+      })}
+    </nav>
+  ),
+);
+
+// Memoized SocialNavList component
+const SocialNavList = memo(
+  ({
+    items,
+    activeSocialTab,
+    onTabChange,
+    isOpen,
+  }: {
+    items: { id: string; name: string; icon: any; path: string }[];
+    activeSocialTab: string;
+    onTabChange: (path: string) => void;
+    isOpen: boolean;
+  }) => (
+    <nav className="space-y-1">
+      {items.map((item) => {
+        const Icon = item.icon;
+        const isActive = activeSocialTab === item.id;
+
+        return (
+          <Button
+            key={item.id}
+            variant={isActive ? 'secondary' : 'ghost'}
+            className={`w-full justify-start h-9 text-sm ${
+              isActive
+                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
+            } ${!isOpen && 'px-2'}`}
+            onClick={() => onTabChange(item.path)}
+          >
+            <Icon
+              className={`h-4 w-4 ${
+                isOpen ? 'mr-2' : 'lg:group-hover:mr-2 lg:transition-all lg:duration-300'
+              }`}
+            />
+            <span
+              className={`truncate ${
+                isOpen
+                  ? ''
+                  : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+              }`}
+            >
+              {item.name}
             </span>
           </Button>
         );
@@ -599,6 +653,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCategoryChange,
   noteCount,
   activeTab,
+  activeSocialTab,
   onTabChange,
   chatSessions,
   activeChatSessionId,
@@ -820,6 +875,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     [selectedCategory, onCategoryChange, isOpen],
   );
 
+  const socialNavProps = useMemo(
+    () => ({
+      items: [
+        { id: 'feed', name: 'Home', icon: Home, path: 'social/feed' },
+        { id: 'trending', name: 'Trending', icon: TrendingUp, path: 'social/trending' },
+        { id: 'groups', name: 'Groups', icon: Users, path: 'social/groups' },
+        { id: 'notifications', name: 'Notifications', icon: Bell, path: 'social/notifications' },
+        { id: 'profile', name: 'Profile', icon: User, path: 'social/profile' },
+      ],
+      activeSocialTab: activeSocialTab || 'feed',
+      onTabChange,
+      isOpen,
+    }),
+    [activeSocialTab, onTabChange, isOpen],
+  );
+
   const tabsListProps = useMemo(
     () => ({
       tabs,
@@ -919,6 +990,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="mt-4 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
             <ThemeToggle {...themeToggleProps} />
           </div>
+
+          {/* Social Navigation Section */}
+          {activeTab === 'social' && (
+            <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
+              {isOpen && (
+                <div className="mb-2 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+                   <h2 className="font-semibold text-slate-800 dark:text-gray-200">
+                    Social
+                  </h2>
+                </div>
+              )}
+              <SocialNavList {...socialNavProps} />
+            </div>
+          )}
 
           {/* Chat Sessions Section */}
           {activeTab === 'chat' || activeTab.startsWith('chat/') ? (

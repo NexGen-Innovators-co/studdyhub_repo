@@ -2,14 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   useNavigate,
   useParams,
+  useLocation,
 } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
-  Search, RefreshCw, Bell, TrendingUp, Users, User, SortDesc, Loader2, ChevronDown, X
+  Search, RefreshCw, Bell, TrendingUp, Users, User, Home, Loader2, X, Plus, Sparkles, Settings, LogOut, ArrowUp, ExternalLink
 } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Card, CardContent } from '../ui/card';
 import { toast } from 'sonner';
 
 // Import hooks
@@ -22,16 +24,14 @@ import { useSocialPostViews } from './hooks/useSocialPostViews';
 // Import components
 import { PostCard } from './components/PostCard';
 import { CreatePostDialog } from './components/CreatePostDialog';
-import { TrendingSidebar } from './components/TrendingSidebar';
 import { UserProfile } from './components/UserProfile';
-import { TrendingPosts } from './components/TrendingPosts';
 import { GroupsSection } from './components/GroupsSection';
 import { NotificationsSection } from './components/NotificationsSection';
+import { GroupDetailPage } from './components/GroupDetail';
+import { Dialog, DialogContent } from '../ui/dialog';
 
 // Import types
 import { SortBy, FilterBy, Privacy } from './types/social';
-import { SocialPostWithDetails, SocialUserWithDetails } from '../../integrations/supabase/socialTypes';
-import { GroupDetailPage } from './components/GroupDetail';
 
 interface SocialFeedProps {
   userProfile: any;
@@ -46,18 +46,46 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const [sortBy, setSortBy] = useState<SortBy>('newest');
   const [filterBy, setFilterBy] = useState<FilterBy>('all');
   const [showPostDialog, setShowPostDialog] = useState(false);
-  const [showFilters, setShowFilters] = useState(false); // For mobile filter toggle
+
+  // IMPROVED Pull-to-refresh & scroll-to-top states
+  const [isPulling, setIsPulling] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [canPull, setCanPull] = useState(false);
 
   // Post creation state
   const [newPostContent, setNewPostContent] = useState('');
   const [selectedPrivacy, setSelectedPrivacy] = useState<Privacy>('public');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
-  // Intersection Observer refs for infinite scroll
+  // Refs
   const feedObserverRef = useRef<HTMLDivElement>(null);
   const trendingObserverRef = useRef<HTMLDivElement>(null);
   const profileObserverRef = useRef<HTMLDivElement>(null);
-  const feedContainerRef = useRef<HTMLDivElement>(null);
+  const suggestedObserverRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const firstPostRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const touchStartY = useRef(0);
+  const rafId = useRef<number | null>(null);
+
+  const PULL_THRESHOLD = 80;
+  const MAX_PULL = 120;
+  const SCROLL_THRESHOLD = 5;
+
+  const suggestedStripScrollPositions = useRef<Map<string, number>>(new Map());
+
+  const findScrollParent = (el?: Element | null) => {
+    let node = el as Element | null;
+    while (node && node !== document.body && node !== document.documentElement) {
+      const style = window.getComputedStyle(node);
+      const overflowY = style.overflowY;
+      if (overflowY === 'auto' || overflowY === 'scroll') return node;
+      node = node.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  };
 
   // Custom hooks
   const {
@@ -66,7 +94,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     trendingPosts,
     setTrendingPosts,
     userPosts,
-    setUserPosts,
     groups,
     setGroups,
     currentUser,
@@ -77,12 +104,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     isLoading,
     isLoadingGroups,
     isLoadingUserPosts,
-    isLoadingSuggestedUsers,
     isLoadingMorePosts,
     hasMorePosts,
     hasMoreTrendingPosts,
     hasMoreUserPosts,
-    hasMoreSuggestedUsers,
     hasMoreGroups,
     refetchPosts,
     refetchTrendingPosts,
@@ -93,15 +118,21 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     loadMoreTrendingPosts,
     loadMoreUserPosts,
     loadMoreGroups,
-    loadMoreSuggestedUsers,
     isLoadingMoreGroups,
-    // ADD THESE:
     likedPosts,
     bookmarkedPosts,
     isLoadingLikedPosts,
     isLoadingBookmarkedPosts,
     refetchLikedPosts,
     refetchBookmarkedPosts,
+    setUserPosts,
+    newPostsCount,
+    hasNewPosts,
+    showNewPosts,
+    clearNewPosts,
+    isLoadingSuggestedUsers,
+    hasMoreSuggestedUsers,
+    loadMoreSuggestedUsers,
   } = useSocialData(userProfile, sortBy, filterBy);
 
   const {
@@ -115,7 +146,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     createGroup,
     joinGroup,
     leaveGroup,
-    deletePost,  // ADD THIS
+    deletePost,
     editPost,
   } = useSocialActions(
     currentUser,
@@ -128,7 +159,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   );
 
   const {
-    fetchComments,
     addComment,
     updateNewComment,
     togglePostExpanded,
@@ -149,96 +179,78 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   const { trackPostView, cleanup } = useSocialPostViews(setPosts, setTrendingPosts, setUserPosts);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { tab: routeTab, postId: routePostId, groupId: routeGroupId } = useParams<{ tab?: string; postId?: string; groupId?: string }>();
 
-  // Setup intersection observers for infinite scroll
+  // Sync search & "open create" dialog from URL query params
   useEffect(() => {
-    const observers = [];
+    const params = new URLSearchParams(location.search);
+    const q = params.get('search') || '';
+    if (q !== searchQuery) setSearchQuery(q);
 
-    // Feed observer
-    if (feedObserverRef.current) {
-      const feedObserver = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && hasMorePosts && !isLoadingMorePosts) {
-            loadMorePosts();
-          }
-        },
-        {
-          threshold: 0.1,
-          rootMargin: '200px',
-        }
-      );
-
-      feedObserver.observe(feedObserverRef.current);
-      observers.push(feedObserver);
+    if (params.get('openCreate') === 'true') {
+      setShowPostDialog(true);
+      params.delete('openCreate');
+      const newSearch = params.toString();
+      navigate({ pathname: location.pathname, search: newSearch ? `?${newSearch}` : '' }, { replace: true });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
-    // Trending observer
-    if (trendingObserverRef.current) {
-      const trendingObserver = new IntersectionObserver(
+  // Effects
+  useEffect(() => {
+    const createObserver = (ref: React.RefObject<HTMLDivElement>, hasMore: boolean, isLoading: boolean, loadMore: () => void) => {
+      if (ref.current) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (entries[0].isIntersecting && hasMore && !isLoading) {
+              loadMore();
+            }
+          },
+          { threshold: 0.1, rootMargin: '200px' }
+        );
+        observer.observe(ref.current);
+        return observer;
+      }
+      return null;
+    };
+
+    const feedObserver = createObserver(feedObserverRef, hasMorePosts, isLoadingMorePosts, loadMorePosts);
+    const trendingObserver = createObserver(trendingObserverRef, hasMoreTrendingPosts, isLoadingMorePosts, loadMoreTrendingPosts);
+    const profileObserver = createObserver(profileObserverRef, hasMoreUserPosts, isLoadingUserPosts, loadMoreUserPosts);
+
+    let suggestedObserver: IntersectionObserver | null = null;
+    if (suggestedObserverRef.current) {
+      suggestedObserver = new IntersectionObserver(
         (entries) => {
-          if (entries[0].isIntersecting && hasMoreTrendingPosts && !isLoadingMorePosts) {
-            loadMoreTrendingPosts();
+          if (isPulling || isRefreshing) return;
+          if (entries[0].isIntersecting && hasMoreSuggestedUsers && !isLoadingSuggestedUsers) {
+            loadMoreSuggestedUsers();
           }
         },
-        {
-          threshold: 0.1,
-          rootMargin: '200px',
-        }
+        { threshold: 0.1, rootMargin: '200px' }
       );
-
-      trendingObserver.observe(trendingObserverRef.current);
-      observers.push(trendingObserver);
-    }
-
-    // Profile observer
-    if (profileObserverRef.current) {
-      const profileObserver = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && hasMoreUserPosts && !isLoadingUserPosts) {
-            loadMoreUserPosts();
-          }
-        },
-        {
-          threshold: 0.1,
-          rootMargin: '200px',
-        }
-      );
-
-      profileObserver.observe(profileObserverRef.current);
-      observers.push(profileObserver);
+      suggestedObserver.observe(suggestedObserverRef.current);
     }
 
     return () => {
-      observers.forEach(observer => observer.disconnect());
+      feedObserver?.disconnect();
+      trendingObserver?.disconnect();
+      profileObserver?.disconnect();
+      suggestedObserver?.disconnect();
     };
-  }, [
-    activeTab,
-    hasMorePosts,
-    hasMoreTrendingPosts,
-    hasMoreUserPosts,
-    isLoadingMorePosts,
-    isLoadingUserPosts,
-    loadMorePosts,
-    loadMoreTrendingPosts,
-    loadMoreUserPosts
-  ]);
+  }, [activeTab, hasMorePosts, hasMoreTrendingPosts, hasMoreUserPosts, isLoadingMorePosts, isLoadingUserPosts, hasMoreSuggestedUsers, isLoadingSuggestedUsers, loadMoreSuggestedUsers, isPulling, isRefreshing, loadMorePosts, loadMoreTrendingPosts, loadMoreUserPosts]);
+
+  useEffect(() => cleanup, [cleanup]);
 
   useEffect(() => {
-    return () => {
-      cleanup();
-    };
-  }, [cleanup]);
-
-  useEffect(() => {
-    if (routeTab) {
-      setActiveTab(routeTab as any);
-    } else if (initialActiveTab) {
-      setActiveTab(initialActiveTab as any);
-    }
+    if (routeTab) setActiveTab(routeTab as any);
+    else if (initialActiveTab) setActiveTab(initialActiveTab as any);
   }, [routeTab, initialActiveTab]);
 
-  // Handler functions
+
+
+  // Handlers
   const handleCreatePost = async () => {
     const success = await createPost(newPostContent, selectedPrivacy, selectedFiles);
     if (success) {
@@ -246,393 +258,358 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
       setSelectedFiles([]);
       setShowPostDialog(false);
       refetchUserPosts();
-      if (feedContainerRef.current) {
-        feedContainerRef.current.scrollIntoView({ behavior: 'smooth' });
+      topRef.current?.scrollIntoView({ behavior: 'smooth' });
+      toast.success('Post published!');
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    clearNewPosts();
+    const actions: Record<string, () => Promise<any> | void> = {
+      groups: async () => refetchGroups(),
+      profile: async () => refetchUserPosts(),
+      trending: async () => refetchTrendingPosts(),
+      feed: async () => refetchPosts(),
+      notifications: async () => { /* nothing */ },
+    };
+    try {
+      const act = actions[activeTab] || (() => { });
+      await act();
+      toast.success('Feed updated');
+    } catch (err) {
+      toast.error('Failed to refresh');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const scrollToTop = () => {
+    // Try scrolling the topRef element into view first (works for both document and nested containers)
+    if (topRef.current && typeof topRef.current.scrollIntoView === 'function') {
+      try {
+        topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      } catch {
+        // ignore and fall back
       }
-      toast.success('Post created successfully!');
     }
-  };
 
-  const handleCommentSubmit = (postId: string) => {
-    addComment(postId);
-  };
+    // Determine the scroll container at the time of click (use existing ref or compute)
+    const container = scrollContainerRef.current ?? findScrollParent(topRef.current);
+    if (!container) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
 
-  const handleRefresh = () => {
-    if (activeTab === 'groups') {
-      refetchGroups();
-    } else if (activeTab === 'profile') {
-      refetchUserPosts();
-    } else if (activeTab === 'trending') {
-      refetchTrendingPosts();
+    // If the container is the document (html/body), use window.scrollTo
+    if (
+      container === document.scrollingElement ||
+      container === document.documentElement ||
+      container === document.body
+    ) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    // If it's an element, try element.scrollTo, otherwise set scrollTop
+    const el = container as HTMLElement;
+    if (typeof el.scrollTo === 'function') {
+      el.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      refetchPosts();
+      el.scrollTop = 0;
     }
-    toast.success('Content refreshed!');
   };
 
-  const handlePostDialogChange = () => {
-    setShowPostDialog(!showPostDialog);
-    return !showPostDialog;
-  };
+  // track scroll position to show/hide floating action buttons
+  useEffect(() => {
+    const container = findScrollParent(topRef.current);
+    scrollContainerRef.current = container as unknown as HTMLElement;
 
-  const handleFollowUser = async (userId: string) => {
-    await followUser(userId);
-    refetchSuggestedUsers();
-  };
+    const onScroll = () => {
+      const scTop =
+        container === document.scrollingElement || container === document.documentElement
+          ? window.scrollY || window.pageYOffset
+          : (container as HTMLElement).scrollTop;
+      setShowScrollTop((prev) => {
+        const next = scTop > 300;
+        if (next !== prev) return next;
+        return prev;
+      });
+    };
 
-  // Filter posts based on search query
-  const filteredPosts = posts.filter(post => {
-    if (!searchQuery.trim()) return true;
+    // initial
+    onScroll();
 
+    if (container === document.scrollingElement || container === document.documentElement) {
+      window.addEventListener('scroll', onScroll, { passive: true });
+      return () => window.removeEventListener('scroll', onScroll);
+    } else {
+      (container as HTMLElement).addEventListener('scroll', onScroll, { passive: true });
+      return () => (container as HTMLElement).removeEventListener('scroll', onScroll);
+    }
+  }, []);
+
+  const filterPosts = (postList: any[]) => {
+    if (!searchQuery.trim()) return postList;
     const searchLower = searchQuery.toLowerCase();
-    return (
+    return postList.filter(post =>
       post.content.toLowerCase().includes(searchLower) ||
       post.author?.display_name?.toLowerCase().includes(searchLower) ||
-      post.author?.username?.toLowerCase().includes(searchLower) ||
-      post.hashtags?.some(hashtag => hashtag.name.toLowerCase().includes(searchLower))
+      post.author?.username?.toLowerCase().includes(searchLower)
     );
-  });
-
-  const filteredTrendingPosts = trendingPosts.filter(post => {
-    if (!searchQuery.trim()) return true;
-
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      post.content.toLowerCase().includes(searchLower) ||
-      post.author?.display_name?.toLowerCase().includes(searchLower) ||
-      post.author?.username?.toLowerCase().includes(searchLower) ||
-      post.hashtags?.some(hashtag => hashtag.name.toLowerCase().includes(searchLower))
-    );
-  });
-
-  const handlePostClick = (postId: string) => {
-    navigate(`/social/post/${postId}`);
   };
 
-  // NEW GROUP HANDLERS
-  const handleCreateGroup = (data: any) => createGroup(data);
-  const handleJoinGroup = (groupId: string, privacy: 'public' | 'private') => joinGroup(groupId, privacy);
-  const handleLeaveGroup = (groupId: string) => leaveGroup(groupId);
-  // Function to insert inline suggestions at intervals
-  const getSortedSuggestedUsers = (users: (SocialUserWithDetails & { recommendation_score?: number })[]) => {
-    return [...users].sort((a, b) => {
-      const scoreA = a.recommendation_score === undefined ? -1 : a.recommendation_score;
-      const scoreB = b.recommendation_score === undefined ? -1 : b.recommendation_score;
-      return scoreB - scoreA;
-    });
-  };
-  const sortedSuggestedUsers = React.useMemo(() => {
-    return getSortedSuggestedUsers(suggestedUsers);
+  const uniqueSuggestedUsers = React.useMemo(() => {
+    const map = new Map<string, any>();
+    for (const u of suggestedUsers || []) {
+      if (!map.has(u.id)) map.set(u.id, u);
+    }
+    return Array.from(map.values());
   }, [suggestedUsers]);
 
-  const getPostsWithInlineSuggestions = (postsList: any[]) => {
-    const result: any[] = [];
-    const usersPerSuggestion = 3; // Show 3 users per suggestion card
-    let userIndex = 0;
-    let hashtagIndex = 0;
+  const [modalUser, setModalUser] = useState<any | null>(null);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const openUserModal = (user: any) => {
+    setModalUser(user);
+    setIsUserModalOpen(true);
+  };
 
-    postsList.forEach((post, index) => {
-      result.push({ type: 'post', data: post, key: `post-${post.id}-${index}` });
+  const InFeedSuggestedStrip: React.FC<{
+    users: any[];
+    offset: number;
+    stripId: string;
+    saveScroll: (id: string, pos: number) => void;
+    getSavedScroll: (id: string) => number;
+  }> = ({ users, offset, stripId, saveScroll, getSavedScroll }) => {
+    const [loadingIds, setLoadingIds] = React.useState<Record<string, boolean>>({});
+    const containerRef = React.useRef<HTMLDivElement | null>(null);
 
-      // Insert "People You May Know" every 4 posts
-      if ((index + 1) % 4 === 0 && sortedSuggestedUsers.length > userIndex) {
-        const usersToShow = sortedSuggestedUsers.slice(userIndex, userIndex + usersPerSuggestion);
-        if (usersToShow.length > 0) {
-          result.push({
-            type: 'suggested-users',
-            data: usersToShow,
-            key: `suggested-users-${index}`
-          });
-          userIndex += usersPerSuggestion;
-        }
+    const handleFollow = async (id: string) => {
+      if (loadingIds[id]) return;
+      setLoadingIds(prev => ({ ...prev, [id]: true }));
+      try {
+        await followUser(id);
+        toast.success('Followed');
+      } catch {
+        toast.error('Failed to follow');
+      } finally {
+        setLoadingIds(prev => ({ ...prev, [id]: false }));
       }
+    };
 
-      // Insert "Trending Topics" every 7 posts
-      if ((index + 1) % 7 === 0 && trendingHashtags.length > hashtagIndex) {
-        const hashtagsToShow = trendingHashtags.slice(hashtagIndex, hashtagIndex + 5);
-        if (hashtagsToShow.length > 0) {
-          result.push({
-            type: 'trending-topics',
-            data: hashtagsToShow,
-            key: `trending-topics-${index}`
-          });
-          hashtagIndex += 5;
-        }
+    const list = React.useMemo(() => {
+      if (!users || users.length === 0) return [];
+      const n = users.length;
+      const o = Math.floor(offset % n);
+      return users.slice(o).concat(users.slice(0, o)).slice(0, 12);
+    }, [users, offset]);
+
+    useEffect(() => {
+      const el = containerRef.current;
+      if (!el) return;
+      const saved = getSavedScroll(stripId) || 0;
+      if (saved && Math.abs(el.scrollLeft - saved) > 2) el.scrollLeft = saved;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const onScroll = () => {
+      const pos = containerRef.current?.scrollLeft || 0;
+      saveScroll(stripId, pos);
+    };
+
+    if (!list || list.length === 0) return null;
+
+    return (
+      <div className="py-3 px-2 -mx-2 mx-auto max-w-[680px]">
+        <div className="flex items-center justify-between mb-2 px-2">
+          <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Suggested for you</h4>
+          <button className="text-xs text-slate-500 hover:underline" onClick={() => setActiveTab('trending')}>See all</button>
+        </div>
+
+        <div
+          ref={containerRef}
+          onScroll={onScroll}
+          className="flex space-x-3 overflow-x-auto scrollbar-hide px-2 "
+        >
+          {list.map((u) => (
+            <div key={u.id} className="min-w-[140px] max-w-[180px] bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-3 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="cursor-pointer" onClick={() => openUserModal(u)}>
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={u.avatar_url} />
+                    <AvatarFallback>{u.display_name?.[0]}</AvatarFallback>
+                  </Avatar>
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm truncate">{u.display_name}</div>
+                  <div className="text-xs text-slate-500 truncate">@{u.username}</div>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1 rounded-full text-xs"
+                  onClick={() => handleFollow(u.id)}
+                  disabled={!!loadingIds[u.id]}
+                >
+                  {loadingIds[u.id] ? '...' : 'Follow'}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="ml-2"
+                  onClick={() => openUserModal(u)}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPostsWithStrips = (postList: any[]) => {
+    const items: JSX.Element[] = [];
+    const POSTS_BETWEEN_STRIPS = 6;
+    const filtered = filterPosts(postList);
+    let stripCounter = 0;
+
+    filtered.forEach((post, idx) => {
+      const isFirst = idx === 0;
+      const postElement = isFirst ? (
+        <div key={post.id} ref={firstPostRef} data-first-post>
+          <PostCard
+            post={post}
+            currentUser={currentUser}
+            onLike={toggleLike}
+            onBookmark={toggleBookmark}
+            onShare={sharePost}
+            onComment={() => togglePostExpanded(post.id)}
+            isExpanded={isPostExpanded(post.id)}
+            comments={getPostComments(post.id)}
+            isLoadingComments={isLoadingPostComments(post.id)}
+            newComment={getNewCommentContent(post.id)}
+            onCommentChange={(c) => updateNewComment(post.id, c)}
+            onSubmitComment={() => addComment(post.id)}
+            onPostView={trackPostView}
+            onClick={() => navigate(`/social/post/${post.id}`)}
+            onDeletePost={deletePost}
+            onEditPost={editPost}
+          />
+        </div>
+      ) : (
+        <PostCard
+          key={post.id}
+          post={post}
+          currentUser={currentUser}
+          onLike={toggleLike}
+          onBookmark={toggleBookmark}
+          onShare={sharePost}
+          onComment={() => togglePostExpanded(post.id)}
+          isExpanded={isPostExpanded(post.id)}
+          comments={getPostComments(post.id)}
+          isLoadingComments={isLoadingPostComments(post.id)}
+          newComment={getNewCommentContent(post.id)}
+          onCommentChange={(c) => updateNewComment(post.id, c)}
+          onSubmitComment={() => addComment(post.id)}
+          onPostView={trackPostView}
+          onClick={() => navigate(`/social/post/${post.id}`)}
+          onDeletePost={deletePost}
+          onEditPost={editPost}
+        />
+      );
+
+      items.push(postElement);
+
+      if ((idx + 1) % POSTS_BETWEEN_STRIPS === 0 && uniqueSuggestedUsers.length > 0) {
+        const stripId = `suggest_strip_${stripCounter}`;
+        items.push(
+          <InFeedSuggestedStrip
+            key={stripId}
+            users={uniqueSuggestedUsers}
+            offset={stripCounter}
+            stripId={stripId}
+            saveScroll={(id, pos) => suggestedStripScrollPositions.current.set(id, pos)}
+            getSavedScroll={(id) => suggestedStripScrollPositions.current.get(id) || 0}
+          />
+        );
+        stripCounter++;
       }
     });
 
-    return result;
+    return items;
   };
 
-  const postsWithSuggestions = getPostsWithInlineSuggestions(filteredPosts);
-  const trendingWithSuggestions = getPostsWithInlineSuggestions(filteredTrendingPosts);
+  const LoadingSpinner = () => (
+    <div className="flex flex-col items-center justify-center py-12">
+      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+    </div>
+  );
 
-  // If postId is present, display only that post
+  if (routeGroupId) return <GroupDetailPage currentUser={currentUser} />;
+
   const postToDisplay = routePostId
     ? [...posts, ...trendingPosts, ...userPosts].find((post) => post.id === routePostId)
     : null;
 
-  // Loading component
-  const LoadingSpinner = ({ text = "Loading..." }: { text?: string }) => (
-    <div className="flex flex-col items-center justify-center py-8 space-y-3">
-      <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
-      <p className="text-sm text-slate-500 dark:text-gray-400">{text}</p>
-    </div>
-  );
-
-  // Load more trigger component
-  const LoadMoreTrigger = ({
-    hasMore,
-    isLoading,
-    onLoadMore,
-    observerRef
-  }: {
-    hasMore: boolean;
-    isLoading: boolean;
-    onLoadMore: () => void;
-    observerRef: React.RefObject<HTMLDivElement>;
-  }) => {
-    if (!hasMore) return null;
-
-    return (
-      <div ref={observerRef} className="py-4 flex justify-center">
-        {isLoading ? (
-          <LoadingSpinner text="Loading more..." />
-        ) : (
-          <Button
-            variant="outline"
-            onClick={onLoadMore}
-            className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm"
-          >
-            Load More
-          </Button>
-        )}
-      </div>
-    );
-  };
-  
-  // Inline Suggested Users Component
-  const InlineSuggestedUsers = ({ users }: { users: any[] }) => (
-    <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg p-4 mb-6 border border-slate-200 dark:border-gray-700 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-slate-800 dark:text-gray-200 flex items-center gap-2">
-          <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          People You May Know
-        </h3>
-      </div>
-      <div className="space-y-3">
-        {users.map((user) => (
-          <div key={user.id} className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center text-white font-semibold">
-                {user.display_name?.charAt(0).toUpperCase() || 'U'}
-              </div>
-              <div>
-                <p className="font-medium text-sm text-slate-800 dark:text-gray-200">
-                  {user.display_name}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-gray-400">
-                  @{user.username}
-                </p>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleFollowUser(user.id)}
-              className="text-xs"
-            >
-              Follow
-            </Button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  // Inline Trending Topics Component
-  const InlineTrendingTopics = ({ hashtags }: { hashtags: any[] }) => (
-    <div className="bg-gradient-to-br from-blue-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-4 mb-6 border border-blue-200 dark:border-gray-600 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-slate-800 dark:text-gray-200 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          Trending Right Now
-        </h3>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {hashtags.map((hashtag) => (
-          <div key={hashtag.name} className="p-3 bg-white/50 dark:bg-gray-900/50 rounded-md flex justify-between items-center">
-            <span className="font-medium">#{hashtag.name}</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{hashtag.count} posts</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  // Conditional render for GroupDetailPage (moved after all hooks)
-  if (routeGroupId) {
-    return (
-      <GroupDetailPage
-        currentUser={currentUser}
-      />
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-8 xl:col-span-8">
-            {/* Search and Filter Bar */}
-            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-4 mb-6 border border-slate-200 dark:border-gray-700">
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                <div className="flex-1 w-full flex items-center gap-2">
-                  <Input
-                    placeholder="Search posts, people, hashtags..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setSearchQuery('')}
-                    className={searchQuery ? '' : 'hidden'}
+    <div className="min-h-screen bg-transparent font-sans">
+
+      <div className="max-w-[1440px] mx-auto px-0 sm:px-4 md:px-6">
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8 relative">
+
+          <main className="col-span-1 lg:col-span-9 max-h-[95vh] overflow-y-auto scrollbar-hide pb-20 lg:pb-0">
+            <div ref={topRef} />
+
+            {hasNewPosts && newPostsCount > 0 && (
+              <div className="px-4 mb-4">
+                <div className="max-w-[720px] mx-auto flex items-center justify-center">
+                  <button
+                    onClick={() => {
+                      showNewPosts();
+                      topRef.current?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:shadow-md"
                   >
-                    <X className="h-4 w-4" />
-                  </Button>
+                    View {newPostsCount} new post{newPostsCount > 1 ? 's' : ''}
+                  </button>
                 </div>
-
-                {/* Desktop Filters */}
-                <div className="hidden sm:flex items-center gap-2">
-                  <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue placeholder="Sort by" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="newest">Newest</SelectItem>
-                      <SelectItem value="oldest">Oldest</SelectItem>
-                      <SelectItem value="popular">Popular</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue placeholder="Filter" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="following">Following</SelectItem>
-                      <SelectItem value="media">Media</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Button variant="ghost" size="icon" onClick={handleRefresh}>
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Mobile Filter Toggle */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="sm:hidden"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
               </div>
+            )}
 
-              {/* Mobile Filters */}
-              {showFilters && (
-                <div className="mt-4 flex flex-col sm:hidden gap-4">
-                  <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sort by" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="newest">Newest</SelectItem>
-                      <SelectItem value="oldest">Oldest</SelectItem>
-                      <SelectItem value="popular">Popular</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={filterBy} onValueChange={(value: FilterBy) => setFilterBy(value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Filter" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="following">Following</SelectItem>
-                      <SelectItem value="media">Media</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Button variant="outline" onClick={handleRefresh}>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Refresh
-                  </Button>
+            <div className="px-0 sm:px-4">
+              {routePostId && postToDisplay ? (
+                <div className="mb-6">
+                  <Button variant="ghost" onClick={() => navigate('/social')} className="mb-2 pl-0 hover:pl-2">← Back</Button>
+                  <PostCard
+                    post={postToDisplay}
+                    currentUser={currentUser}
+                    onLike={toggleLike}
+                    onBookmark={toggleBookmark}
+                    onShare={sharePost}
+                    onComment={() => togglePostExpanded(postToDisplay.id)}
+                    isExpanded={true}
+                    comments={getPostComments(postToDisplay.id)}
+                    isLoadingComments={isLoadingPostComments(postToDisplay.id)}
+                    newComment={getNewCommentContent(postToDisplay.id)}
+                    onCommentChange={(c) => updateNewComment(postToDisplay.id, c)}
+                    onSubmitComment={() => addComment(postToDisplay.id)}
+                    onPostView={trackPostView}
+                    onDeletePost={deletePost}
+                    onEditPost={editPost}
+                  />
                 </div>
-              )}
-            </div>
-
-            {routePostId && postToDisplay ? (
-              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-4 border border-slate-200 dark:border-gray-700">
-                <PostCard
-                  post={postToDisplay}
-                  onLike={toggleLike}
-                  onBookmark={toggleBookmark}
-                  onShare={sharePost}
-                  onComment={() => togglePostExpanded(postToDisplay.id)}
-                  isExpanded={isPostExpanded(postToDisplay.id)}
-                  comments={getPostComments(postToDisplay.id)}
-                  isLoadingComments={isLoadingPostComments(postToDisplay.id)}
-                  newComment={getNewCommentContent(postToDisplay.id)}
-                  onCommentChange={(content) => updateNewComment(postToDisplay.id, content)}
-                  onSubmitComment={() => handleCommentSubmit(postToDisplay.id)}
-                  currentUser={currentUser}
-                  onPostView={trackPostView}
-                  onClick={() => { }}
-                  onDeletePost={deletePost}  // ADD THIS
-                  onEditPost={editPost}      // ADD THIS
-                />
-              </div>
-            ) : (
-              <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value as any); navigate(`/social/${value}`); }} className="space-y-4 sm:space-y-6">
-                <TabsList className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-lg p-1 border border-slate-200 dark:border-gray-700 grid grid-cols-5 w-full overflow-x-auto">
-                  <TabsTrigger value="feed" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 text-xs sm:text-sm px-1 sm:px-3">
-                    <SortDesc className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Feed</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="trending" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 text-xs sm:text-sm px-1 sm:px-3">
-                    <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Trending</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="groups" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 text-xs sm:text-sm px-1 sm:px-3">
-                    <Users className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Groups</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="profile" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 text-xs sm:text-sm px-1 sm:px-3">
-                    <User className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Profile</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="notifications" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 relative text-xs sm:text-sm px-1 sm:px-3">
-                    <Bell className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Notifications</span>
-                    {unreadCount > 0 && (
-                      <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 transform translate-x-1/2 -translate-y-1/2">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="feed" className="mt-0" ref={feedContainerRef}>
-                  <div className="space-y-4 sm:space-y-6">
+              ) : (
+                <Tabs value={activeTab} className="space-y-6">
+                  <TabsContent value="feed" className="outline-none space-y-5">
                     <CreatePostDialog
                       isOpen={showPostDialog}
-                      onOpenChange={handlePostDialogChange}
+                      onOpenChange={setShowPostDialog}
                       content={newPostContent}
                       onContentChange={setNewPostContent}
                       privacy={selectedPrivacy}
@@ -644,164 +621,38 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                       currentUser={currentUser}
                     />
 
-                    {isLoading && posts.length === 0 ? (
-                      <LoadingSpinner text="Loading your feed..." />
-                    ) : (
-                      <div className="space-y-4 sm:space-y-6">
-                        <Button
-                          onClick={() => setShowPostDialog(true)}
-                          className="w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 py-3"
-                        >
-                          What's on your mind?
-                        </Button>
-
-                        {/* Render posts with inline suggestions */}
-                        {postsWithSuggestions.map((item) => {
-                          if (item.type === 'post') {
-                            return (
-                              <PostCard
-                                key={item.key}
-                                post={item.data}
-                                onLike={toggleLike}
-                                onBookmark={toggleBookmark}
-                                onShare={sharePost}
-                                onComment={() => togglePostExpanded(item.data.id)}
-                                isExpanded={isPostExpanded(item.data.id)}
-                                comments={getPostComments(item.data.id)}
-                                isLoadingComments={isLoadingPostComments(item.data.id)}
-                                newComment={getNewCommentContent(item.data.id)}
-                                onCommentChange={(content) => updateNewComment(item.data.id, content)}
-                                onSubmitComment={() => handleCommentSubmit(item.data.id)}
-                                currentUser={currentUser}
-                                onPostView={trackPostView}
-                                onClick={() => handlePostClick(item.data.id)}
-                                onDeletePost={deletePost}  // ADD THIS
-                                onEditPost={editPost}      // ADD THIS
-                              />
-
-                            );
-                          } else if (item.type === 'suggested-users') {
-                            return <InlineSuggestedUsers key={item.key} users={item.data} />;
-                          } else if (item.type === 'trending-topics') {
-                            return <InlineTrendingTopics key={item.key} hashtags={item.data} />;
-                          }
-                          return null;
-                        })}
-
-                        {/* Infinite scroll trigger for feed */}
-                        <LoadMoreTrigger
-                          hasMore={hasMorePosts}
-                          isLoading={isLoadingMorePosts}
-                          onLoadMore={loadMorePosts}
-                          observerRef={feedObserverRef}
-                        />
-
-                        {filteredPosts.length === 0 && !isLoading && (
-                          <div className="text-center py-12 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg border border-slate-200 dark:border-gray-700">
-                            <div className="max-w-md mx-auto px-4">
-                              {searchQuery ? (
-                                <>
-                                  <Search className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
-                                  <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">No posts found</h3>
-                                  <p className="text-slate-600 dark:text-gray-300">
-                                    Try adjusting your search terms or filters to find what you're looking for.
-                                  </p>
-                                </>
-                              ) : posts.length === 0 ? (
-                                <>
-                                  <User className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
-                                  <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">Welcome to the community!</h3>
-                                  <p className="text-slate-600 dark:text-gray-300 mb-4">
-                                    Be the first to share something amazing with the community.
-                                  </p>
-                                  <Button onClick={() => setShowPostDialog(true)} className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800">
-                                    Create your first post
-                                  </Button>
-                                </>
-                              ) : (
-                                <>
-                                  <User className="h-12 w-12 mx-auto mb-4 text-slate-500 dark:text-gray-400" />
-                                  <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">No posts match your filters</h3>
-                                  <p className="text-slate-600 dark:text-gray-300">
-                                    Try changing your filter settings to see more posts.
-                                  </p>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="trending" className="mt-0">
-                  <div className="space-y-4 sm:space-y-6">
-                    {isLoading && trendingPosts.length === 0 ? (
-                      <LoadingSpinner text="Loading trending posts..." />
-                    ) : (
+                    {isLoading && posts.length === 0 ? <LoadingSpinner /> : (
                       <>
-                        {/* Render trending posts with inline suggestions */}
-                        {trendingWithSuggestions.map((item) => {
-                          if (item.type === 'post') {
-                            return (
-                              <PostCard
-                                key={item.key}
-                                post={item.data}
-                                onLike={toggleLike}
-                                onBookmark={toggleBookmark}
-                                onShare={sharePost}
-                                onComment={() => togglePostExpanded(item.data.id)}
-                                isExpanded={isPostExpanded(item.data.id)}
-                                comments={getPostComments(item.data.id)}
-                                isLoadingComments={isLoadingPostComments(item.data.id)}
-                                newComment={getNewCommentContent(item.data.id)}
-                                onCommentChange={(content) => updateNewComment(item.data.id, content)}
-                                onSubmitComment={() => handleCommentSubmit(item.data.id)}
-                                currentUser={currentUser}
-                                onPostView={trackPostView}
-                                onClick={() => handlePostClick(item.data.id)}
-                                onDeletePost={deletePost}  // ADD THIS
-                                onEditPost={editPost}      // ADD THIS
-                              />
-                            );
-                          } else if (item.type === 'suggested-users') {
-                            return <InlineSuggestedUsers key={item.key} users={item.data} />;
-                          } else if (item.type === 'trending-topics') {
-                            return <InlineTrendingTopics key={item.key} hashtags={item.data} />;
-                          }
-                          return null;
-                        })}
-
-                        {/* Infinite scroll trigger for trending */}
-                        <LoadMoreTrigger
-                          hasMore={hasMoreTrendingPosts}
-                          isLoading={isLoadingMorePosts}
-                          onLoadMore={loadMoreTrendingPosts}
-                          observerRef={trendingObserverRef}
-                        />
+                        {renderPostsWithStrips(posts)}
+                        {hasMorePosts && <div ref={feedObserverRef} className="h-10" />}
                       </>
                     )}
-                  </div>
-                </TabsContent>
+                  </TabsContent>
 
-                <TabsContent value="groups" className="mt-0">
-                  <GroupsSection
-                    groups={groups}
-                    isLoading={isLoadingGroups}
-                    onJoinGroup={joinGroup}
-                    onLeaveGroup={leaveGroup}
-                    onCreateGroup={handleCreateGroup}
-                    currentUser={currentUser}
-                    hasMore={hasMoreGroups}
-                    onLoadMore={loadMoreGroups}
-                    isLoadingMore={isLoadingMoreGroups}
-                    onRefresh={refetchGroups}
-                  />
-                </TabsContent>
+                  <TabsContent value="trending" className="outline-none space-y-5">
+                    {isLoading && trendingPosts.length === 0 ? <LoadingSpinner /> : (
+                      <>
+                        {renderPostsWithStrips(trendingPosts)}
+                        {hasMoreTrendingPosts && <div ref={trendingObserverRef} className="h-10" />}
+                      </>
+                    )}
+                  </TabsContent>
 
-                <TabsContent value="profile" className="mt-0">
-                  <div className="space-y-4 sm:space-y-6">
+                  <TabsContent value="groups" className="outline-none">
+                    <GroupsSection
+                      groups={groups}
+                      isLoading={isLoadingGroups}
+                      onJoinGroup={joinGroup}
+                      onLeaveGroup={leaveGroup}
+                      onCreateGroup={createGroup}
+                      currentUser={currentUser}
+                      hasMore={hasMoreGroups}
+                      onLoadMore={loadMoreGroups}
+                      isLoadingMore={isLoadingMoreGroups}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="profile" className="outline-none">
                     <UserProfile
                       user={currentUser}
                       isOwnProfile={true}
@@ -817,11 +668,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                       isLoadingPostComments={isLoadingPostComments}
                       getNewCommentContent={getNewCommentContent}
                       onCommentChange={updateNewComment}
-                      onSubmitComment={handleCommentSubmit}
+                      onSubmitComment={addComment}
                       currentUser={currentUser}
                       refetchPosts={refetchUserPosts}
                       onPostView={trackPostView}
-                      onClick={handlePostClick}
+                      onClick={(id) => navigate(`/social/post/${id}`)}
                       hasMorePosts={hasMoreUserPosts}
                       onLoadMorePosts={loadMoreUserPosts}
                       isLoadingMorePosts={isLoadingUserPosts}
@@ -835,44 +686,150 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
                       onDeletePost={deletePost}
                       onEditPost={editPost}
                     />
+                    <div ref={profileObserverRef} className="h-10" />
+                  </TabsContent>
 
-                    <LoadMoreTrigger
-                      hasMore={hasMoreUserPosts}
-                      isLoading={isLoadingUserPosts}
-                      onLoadMore={loadMoreUserPosts}
-                      observerRef={profileObserverRef}
+                  <TabsContent value="notifications" className="outline-none">
+                    <NotificationsSection
+                      notifications={notifications}
+                      unreadCount={unreadCount}
+                      markNotificationAsRead={markNotificationAsRead}
+                      markAllNotificationsAsRead={markAllNotificationsAsRead}
+                      deleteNotification={deleteNotification}
                     />
-                  </div>
-                </TabsContent>
-                <TabsContent value="notifications" className="mt-0">
-                  <NotificationsSection
-                    notifications={notifications}
-                    unreadCount={unreadCount}
-                    markNotificationAsRead={markNotificationAsRead}
-                    markAllNotificationsAsRead={markAllNotificationsAsRead}
-                    deleteNotification={deleteNotification}
-                  />
-                </TabsContent>
-              </Tabs>
-            )}
-          </div>
+                  </TabsContent>
+                </Tabs>
+              )}
+            </div>
+          </main>
+          <div className="hidden lg:block lg:col-span-3 sticky top-0 h-screen pt-6 overflow-y-auto scrollbar-hide pl-8">
+            <div className="space-y-6 w-full max-w-[350px]">
 
-          {/* Sidebar - Hidden on mobile, visible on desktop */}
-          <div className="hidden lg:block lg:col-span-4">
-            <div className="sticky top-6">
-              <TrendingSidebar
-                hashtags={trendingHashtags}
-                suggestedUsers={sortedSuggestedUsers}
-                onFollowUser={handleFollowUser}
-                isLoadingSuggestedUsers={isLoadingSuggestedUsers}
-                hasMoreSuggestedUsers={hasMoreSuggestedUsers}
-                onLoadMoreSuggestedUsers={loadMoreSuggestedUsers}
-                onRefreshSuggestedUsers={refetchSuggestedUsers}
-              />
+              {/* Trending Widget */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-yellow-500" /> Trends for you
+                  </h3>
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {trendingHashtags.slice(0, 5).map((tag, i) => (
+                    <div key={i} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+                      <div className="text-xs text-slate-500 mb-1">Trending</div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200">#{tag.name}</div>
+                      <div className="text-xs text-slate-500 mt-1">{tag.count} posts</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="p-3 text-center">
+                  <Button variant="ghost" className="text-blue-600 text-sm w-full" onClick={() => setActiveTab('trending')}>Show more</Button>
+                </div>
+              </div>
+
+              {/* Suggested Users Widget */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden sticky top-6 z-10">
+                <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-lg">Who to follow</h3>
+                </div>
+                <div className="p-4 space-y-4">
+                  {uniqueSuggestedUsers.map((user) => (
+                    <div key={user.id} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={user.avatar_url} />
+                          <AvatarFallback>{user.display_name?.[0]}</AvatarFallback>
+                        </Avatar>
+                        <div className="truncate">
+                          <p className="font-semibold text-sm truncate">{user.display_name}</p>
+                          <p className="text-xs text-slate-500 truncate">@{user.username}</p>
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => followUser(user.id)} className="h-8 rounded-full px-3 text-xs">Follow</Button>
+                    </div>
+                  ))}
+                  <div ref={suggestedObserverRef} className="h-6" />
+                  {isLoadingSuggestedUsers && <div className="text-center text-sm text-slate-500 py-2">Loading more...</div>}
+                </div>
+              </div>
             </div>
           </div>
+
         </div>
+
+        {/* MOBILE BOTTOM NAV */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-safe z-50">
+          <div className="flex justify-around items-center h-16">
+            <button onClick={() => setActiveTab('feed')} className={`p-2 rounded-full ${activeTab === 'feed' ? 'text-blue-600' : 'text-slate-500'}`}><Home className="h-6 w-6" /></button>
+            <button onClick={() => setActiveTab('trending')} className={`p-2 rounded-full ${activeTab === 'trending' ? 'text-blue-600' : 'text-slate-500'}`}><Search className="h-6 w-6" /></button>
+            <button onClick={() => setShowPostDialog(true)} className="p-3 bg-blue-600 rounded-full text-white shadow-lg -mt-6"><Plus className="h-6 w-6" /></button>
+            <button onClick={() => setActiveTab('notifications')} className={`p-2 rounded-full relative ${activeTab === 'notifications' ? 'text-blue-600' : 'text-slate-500'}`}>
+              <Bell className="h-6 w-6" />
+              {unreadCount > 0 && <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full" />}
+            </button>
+            <button onClick={() => setActiveTab('profile')} className={`p-2 rounded-full ${activeTab === 'profile' ? 'text-blue-600' : 'text-slate-500'}`}><User className="h-6 w-6" /></button>
+          </div>
+        </div>
+
+        {/* Floating Action Buttons: Refresh + Scroll-to-top */}
+
+        <div className="fixed right-6 bottom-24 lg:bottom-8 z-50 flex flex-col items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            className="h-11 w-11 rounded-full bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 shadow-lg hover:shadow-xl transition-transform hover:scale-105 flex items-center justify-center border border-slate-100 dark:border-slate-800"
+            aria-label="Refresh feed"
+            title="Refresh"
+          >
+            <RefreshCw className={`${isRefreshing ? 'animate-spin' : ''} h-5 w-5 text-blue-600`} />
+          </button>
+
+          <button
+            onClick={scrollToTop}
+            className="h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg hover:shadow-xl transition-transform hover:scale-110 flex items-center justify-center"
+            aria-label="Scroll to top"
+            title="Scroll to top"
+          >
+            <ArrowUp className="h-5 w-5" />
+          </button>
+        </div>
+
       </div>
+
+      {/* User profile modal */}
+      <Dialog open={isUserModalOpen} onOpenChange={setIsUserModalOpen}>
+        <DialogContent className="max-w-[680px] w-[95vw] p-0 bg-transparent border-none">
+          {modalUser && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg overflow-hidden">
+              <UserProfile
+                user={modalUser}
+                isOwnProfile={currentUser?.id === modalUser.id}
+                onEditProfile={updateProfile}
+                posts={[]}
+                isLoadingPosts={false}
+                onLike={toggleLike}
+                onBookmark={toggleBookmark}
+                onShare={sharePost}
+                onComment={togglePostExpanded}
+                isPostExpanded={isPostExpanded}
+                getPostComments={getPostComments}
+                isLoadingPostComments={isLoadingPostComments}
+                getNewCommentContent={getNewCommentContent}
+                onCommentChange={updateNewComment}
+                onSubmitComment={addComment}
+                currentUser={currentUser}
+                onPostView={trackPostView}
+                onClick={(id: string) => { setIsUserModalOpen(false); navigate(`/social/post/${id}`); }}
+                likedPosts={likedPosts}
+                bookmarkedPosts={bookmarkedPosts}
+                onRefreshLikedPosts={refetchLikedPosts}
+                onRefreshBookmarkedPosts={refetchBookmarkedPosts}
+                userGroups={groups.filter(g => g.is_member)}
+                onFollow={(id: string) => followUser(id)}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 };

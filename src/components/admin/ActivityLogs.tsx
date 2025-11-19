@@ -396,7 +396,7 @@ const ActivityLogs = () => {
       {/* Details Dialog */}
       {selectedLog && (
         <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
-          <DialogContent className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 max-w-2xl">
+          <DialogContent className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 max-w-2xl" title='Activity Details'>
             <DialogHeader>
               <DialogTitle className="text-gray-900 dark:text-white">Activity Details</DialogTitle>
             </DialogHeader>

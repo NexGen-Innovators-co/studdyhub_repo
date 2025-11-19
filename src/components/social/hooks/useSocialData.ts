@@ -45,6 +45,9 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const [isLoadingLikedPosts, setIsLoadingLikedPosts] = useState(false);
   const [isLoadingBookmarkedPosts, setIsLoadingBookmarkedPosts] = useState(false);
 
+  // Buffer for realtime incoming posts (new since last "view")
+  const [newPostsBuffer, setNewPostsBuffer] = useState<SocialPostWithDetails[]>([]);
+  const [hasNewPosts, setHasNewPosts] = useState(false);
 
   // Constants
   const POST_LIMIT = DEFAULT_LIMITS.POSTS_PER_PAGE;
@@ -182,6 +185,68 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
 
       subscriptionsRef.current.push(notificationsSubscription);
     }
+
+    // POSTS realtime subscription (INSERT / UPDATE / DELETE)
+    const postsSubscription = supabase
+      .channel('social_posts_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'social_posts' },
+        // mark payload as any to avoid TS errors from strict Realtime payload typing
+        async (payload: any) => {
+          try {
+            // normalize event type (supabase sometimes provides eventType)
+            const eventType: string = (payload?.eventType as string) || (payload?.type as string) || '';
+            const newRec = payload?.new as any;
+            const oldRec = payload?.old as any;
+            const postId = newRec?.id || oldRec?.id;
+            if (!postId) return;
+
+            const isInsert = /insert/i.test(eventType);
+            const isUpdate = /update/i.test(eventType);
+            const isDelete = /delete/i.test(eventType);
+
+            if (isInsert) {
+              const postDetails = await fetchPostDetails(postId);
+              if (postDetails) {
+                setNewPostsBuffer(prev => {
+                  if (prev.some(p => p.id === postDetails.id)) return prev;
+                  setHasNewPosts(true);
+                  return [postDetails, ...prev];
+                });
+              }
+            } else if (isUpdate) {
+              const updated = await fetchPostDetails(postId);
+              if (updated) {
+                const updateInList = (prev: SocialPostWithDetails[]) => prev.map(p => p.id === updated.id ? updated : p);
+                setPosts(prev => updateInList(prev));
+                setTrendingPosts(prev => updateInList(prev));
+                setUserPosts(prev => updateInList(prev));
+                setLikedPosts(prev => updateInList(prev));
+                setBookmarkedPosts(prev => updateInList(prev));
+                setNewPostsBuffer(prev => prev.map(p => p.id === updated.id ? updated : p));
+              }
+            } else if (isDelete) {
+              const removeFrom = (prev: SocialPostWithDetails[]) => prev.filter(p => p.id !== postId);
+              setPosts(prev => removeFrom(prev));
+              setTrendingPosts(prev => removeFrom(prev));
+              setUserPosts(prev => removeFrom(prev));
+              setLikedPosts(prev => removeFrom(prev));
+              setBookmarkedPosts(prev => removeFrom(prev));
+              setNewPostsBuffer(prev => {
+                const next = prev.filter(p => p.id !== postId);
+                if (next.length === 0) setHasNewPosts(false);
+                return next;
+              });
+            }
+          } catch (err) {
+            console.error('Realtime posts handler error:', err);
+          }
+        }
+      )
+      .subscribe();
+
+    subscriptionsRef.current.push(postsSubscription);
 
     const likesSubscription = supabase
       .channel('social_likes_changes')
@@ -369,6 +434,9 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     setUserPosts([]);
     setSuggestedUsers([]);
     setGroups([]);
+    // Clear any buffered new posts when resetting
+    setNewPostsBuffer([]);
+    setHasNewPosts(false);
 
     fetchPosts(true);
     fetchTrendingPosts(true);
@@ -1057,6 +1125,26 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     }
   };
 
+  // Promote buffered new posts into the visible feed(s)
+  const showNewPosts = () => {
+    if (!newPostsBuffer || newPostsBuffer.length === 0) return;
+    // Prepend to main posts list
+    setPosts(prev => [...newPostsBuffer, ...prev]);
+    // Also add to other lists where appropriate (best-effort)
+    setTrendingPosts(prev => [...newPostsBuffer.filter(p => !prev.some(x => x.id === p.id)), ...prev]);
+    // if any of the buffered posts belong to the current user, also update userPosts
+    const myPosts = newPostsBuffer.filter(p => p.author?.id === currentUserIdRef.current);
+    if (myPosts.length) setUserPosts(prev => [...myPosts, ...prev]);
+    // Clear buffer
+    setNewPostsBuffer([]);
+    setHasNewPosts(false);
+  };
+
+  const clearNewPosts = () => {
+    setNewPostsBuffer([]);
+    setHasNewPosts(false);
+  };
+
   return {
     posts,
     setPosts,
@@ -1098,5 +1186,10 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     isLoadingBookmarkedPosts,
     refetchLikedPosts: fetchLikedPosts,
     refetchBookmarkedPosts: fetchBookmarkedPosts,
+    // Realtime new-post helpers
+    newPostsCount: newPostsBuffer.length,
+    hasNewPosts,
+    showNewPosts,
+    clearNewPosts,
   };
 };
