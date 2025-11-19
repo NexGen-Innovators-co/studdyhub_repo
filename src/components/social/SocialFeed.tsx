@@ -20,6 +20,7 @@ import { useSocialActions } from './hooks/useSocialActions';
 import { useSocialComments } from './hooks/useSocialComments';
 import { useSocialNotifications } from './hooks/useSocialNotifications';
 import { useSocialPostViews } from './hooks/useSocialPostViews';
+import { useSocialDataContext } from './context/SocialDataContext';
 
 // Import components
 import { PostCard } from './components/PostCard';
@@ -34,12 +35,11 @@ import { Dialog, DialogContent } from '../ui/dialog';
 import { SortBy, FilterBy, Privacy } from './types/social';
 
 interface SocialFeedProps {
-  userProfile: any;
   activeTab?: string;
   postId?: string;
 }
 
-export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: initialActiveTab, postId }) => {
+export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiveTab, postId }) => {
   // State management
   const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications'>(initialActiveTab as any || 'feed');
   const [searchQuery, setSearchQuery] = useState('');
@@ -133,7 +133,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     isLoadingSuggestedUsers,
     hasMoreSuggestedUsers,
     loadMoreSuggestedUsers,
-  } = useSocialData(userProfile, sortBy, filterBy);
+  } =  useSocialDataContext();
 
   const {
     createPost,
@@ -422,7 +422,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
     if (!list || list.length === 0) return null;
 
     return (
-      <div className="py-3 px-2 -mx-2 mx-auto max-w-[680px]">
+      <div className="py-3 px-2 -mx-2 mx-auto max-w-[780px]">
         <div className="flex items-center justify-between mb-2 px-2">
           <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Suggested for you</h4>
           <button className="text-xs text-slate-500 hover:underline" onClick={() => setActiveTab('trending')}>See all</button>
@@ -559,16 +559,16 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
   return (
     <div className="min-h-screen bg-transparent font-sans">
 
-      <div className="max-w-[1440px] mx-auto px-0 sm:px-4 md:px-6">
+      <div className="max-w-[80vw] mx-auto px-0 md:px-6">
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8 relative">
+        <div className="grid grid-cols-1 lg:grid-cols-12  px-0 lg:gap-6 relative">
 
-          <main className="col-span-1 lg:col-span-9 max-h-[95vh] overflow-y-auto scrollbar-hide pb-20 lg:pb-0">
+          <main className="col-span-1 lg:col-span-8 max-h-[95vh] px-0 overflow-y-auto scrollbar-hide pb-20 lg:pb-0">
             <div ref={topRef} />
 
             {hasNewPosts && newPostsCount > 0 && (
-              <div className="px-4 mb-4">
-                <div className="max-w-[720px] mx-auto flex items-center justify-center">
+              <div className="px-1 mb-4">
+                <div className="mx-auto flex items-center justify-center">
                   <button
                     onClick={() => {
                       showNewPosts();
@@ -582,7 +582,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
               </div>
             )}
 
-            <div className="px-0 sm:px-4">
+            <div className="px-0 ">
               {routePostId && postToDisplay ? (
                 <div className="mb-6">
                   <Button variant="ghost" onClick={() => navigate('/social')} className="mb-2 pl-0 hover:pl-2">← Back</Button>
@@ -702,7 +702,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
               )}
             </div>
           </main>
-          <div className="hidden lg:block lg:col-span-3 sticky top-0 h-screen pt-6 overflow-y-auto scrollbar-hide pl-8">
+          <div className="hidden lg:block lg:col-span-4 sticky top-0 h-screen p-0 overflow-y-auto scrollbar-hide ">
             <div className="space-y-6 w-full max-w-[350px]">
 
               {/* Trending Widget */}
@@ -796,7 +796,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ userProfile, activeTab: 
 
       {/* User profile modal */}
       <Dialog open={isUserModalOpen} onOpenChange={setIsUserModalOpen}>
-        <DialogContent className="max-w-[680px] w-[95vw] p-0 bg-transparent border-none">
+        <DialogContent className="max-w-[780px] w-[95vw] p-0 bg-transparent border-none">
           {modalUser && (
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg overflow-hidden">
               <UserProfile

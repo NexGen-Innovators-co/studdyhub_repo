@@ -95,7 +95,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
     : notifications;
 
   return (
-    <Card className="bg-white dark:bg-gray-800 shadow-lg border border-slate-200 dark:border-gray-700">
+    <Card className="bg-white dark:bg-gray-800 shadow-lg border max-w-[780px] mx-auto rounded-xl border-slate-200 dark:border-gray-700">
       <CardHeader className="border-b border-slate-200 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

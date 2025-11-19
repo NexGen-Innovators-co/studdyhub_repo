@@ -62,7 +62,7 @@ export const UserProfile: React.FC<any> = ({
   );
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-500 max-w-[680px] mx-auto">
+    <div className="space-y-4 animate-in fade-in duration-500 max-w-[780px] mx-auto">
 
       {/* 1. Immersive Header Card */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800">
