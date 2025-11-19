@@ -24,6 +24,7 @@ import React, { Suspense, lazy } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { AppProvider } from "./contexts/AppContext";
 import { AdminLayout } from "./components/admin/AdminLayout";
+import { SocialDataProvider } from "./components/social/context/SocialDataContext";
 
 // Lazy load admin components
 const AdminDashboard = lazy(() => import("./components/admin/adminDashboard"));
@@ -43,6 +44,17 @@ const Fallback = () => (
     </div>
   </div>
 );
+
+// Wrapper component for Social routes that provides the SocialDataProvider
+// This gets userProfile from AppContext
+const SocialRoutesWrapper = ({ children }: { children: React.ReactNode }) => {
+  // We'll pass userProfile through context or props
+  return (
+    <SocialDataProvider>
+      {children}
+    </SocialDataProvider>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -71,7 +83,7 @@ const App = () => (
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
 
-                  {/* ==== AUTHENTICATED APP ROUTES ==== */}
+                  {/* ==== AUTHENTICATED APP ROUTES (Non-Social) ==== */}
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="/notes" element={<Index />} />
                   <Route path="/note" element={<Index />} />
@@ -80,11 +92,13 @@ const App = () => (
                   <Route path="/chat" element={<Index />} />
                   <Route path="/chat/:sessionId" element={<Index />} />
                   <Route path="/documents" element={<Index />} />
-                  <Route path="/social" element={<Index />} />
-                  <Route path="/social/:tab" element={<Index />} />
-                  <Route path="/social/post/:postId" element={<Index />} />
-                  <Route path="/social/group/:groupId" element={<Index />} />
                   <Route path="/settings" element={<Index />} />
+
+                  {/* ==== SOCIAL ROUTES - Wrapped with SocialDataProvider ==== */}
+                  <Route path="/social" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
+                  <Route path="/social/:tab" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
+                  <Route path="/social/post/:postId" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
+                  <Route path="/social/group/:groupId" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
 
                   {/* ==== ADMIN ROUTES - Protected by AdminLayout ==== */}
                   <Route element={<AdminLayout />}>

@@ -453,7 +453,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
 
     return ( 
       <Card
-        className="mb-4 border-none shadow-sm hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden max-w-[680px] mx-auto"
+        className="mb-4 border-none shadow-sm hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden max-w-[780px] mx-auto"
         ref={cardRef}
         onClick={(e) => {
           const target = e.target as HTMLElement;
@@ -557,7 +557,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
               </div>
 
               {/* Footer Actions */}
-              <div className="flex items-center justify-between mt-4 pt-2 -ml-2">
+              <div className="flex items-center max-w-[380px] justify-between mt-4 pt-2 -ml-2">
                 <ActionButton
                   icon={Heart}
                   count={post.likes_count}

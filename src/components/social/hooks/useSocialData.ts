@@ -4,27 +4,83 @@ import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails } 
 import { toast } from 'sonner';
 import { SortBy, FilterBy } from '../types/social';
 import { DEFAULT_LIMITS } from '../utils/socialConstants';
-export type SuggestedUser = SocialUserWithDetails & {
-  recommendation_score?: number;   // <-- only present when we query with the RPC
-};
-export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: FilterBy, onNotificationReceived?: (notification: any) => void) => {
-  const [posts, setPosts] = useState<SocialPostWithDetails[]>([]);
-  const [trendingPosts, setTrendingPosts] = useState<SocialPostWithDetails[]>([]);
-  const [userPosts, setUserPosts] = useState<SocialPostWithDetails[]>([]);
-  const [groups, setGroups] = useState<SocialGroupWithDetails[]>([]);
-  const [currentUser, setCurrentUser] = useState<SocialUserWithDetails | null>(null);
-  const [trendingHashtags, setTrendingHashtags] = useState<any[]>([]);
-  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
 
-  // Loading states
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
-  const [isLoadingUserPosts, setIsLoadingUserPosts] = useState(true);
+export type SuggestedUser = SocialUserWithDetails & {
+  recommendation_score?: number;
+};
+
+// Cache keys
+const CACHE_KEYS = {
+  POSTS: 'social_cache_posts',
+  TRENDING: 'social_cache_trending',
+  USER_POSTS: 'social_cache_user_posts',
+  GROUPS: 'social_cache_groups',
+  SUGGESTED: 'social_cache_suggested',
+  HASHTAGS: 'social_cache_hashtags',
+  TIMESTAMP: 'social_cache_timestamp',
+};
+
+// Cache duration in milliseconds (5 minutes)
+const CACHE_DURATION = 5 * 60 * 1000;
+
+// Helper functions for cache management
+const saveToCache = (key: string, data: any) => {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(data));
+    sessionStorage.setItem(CACHE_KEYS.TIMESTAMP, Date.now().toString());
+  } catch (e) {
+    console.warn('Failed to save to cache:', e);
+  }
+};
+
+const loadFromCache = (key: string) => {
+  try {
+    const timestamp = sessionStorage.getItem(CACHE_KEYS.TIMESTAMP);
+    if (timestamp) {
+      const age = Date.now() - parseInt(timestamp);
+      if (age > CACHE_DURATION) {
+        // Cache expired, clear it
+        clearCache();
+        return null;
+      }
+    }
+    const data = sessionStorage.getItem(key);
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    console.warn('Failed to load from cache:', e);
+    return null;
+  }
+};
+
+const clearCache = () => {
+  Object.values(CACHE_KEYS).forEach(key => {
+    sessionStorage.removeItem(key);
+  });
+};
+
+export const useSocialData = (
+  userProfile: any,
+  sortBy: SortBy,
+  filterBy: FilterBy,
+  onNotificationReceived?: (notification: any) => void
+) => {
+  // Initialize state with cached data if available
+  const [posts, setPosts] = useState<SocialPostWithDetails[]>(() => loadFromCache(CACHE_KEYS.POSTS) || []);
+  const [trendingPosts, setTrendingPosts] = useState<SocialPostWithDetails[]>(() => loadFromCache(CACHE_KEYS.TRENDING) || []);
+  const [userPosts, setUserPosts] = useState<SocialPostWithDetails[]>(() => loadFromCache(CACHE_KEYS.USER_POSTS) || []);
+  const [groups, setGroups] = useState<SocialGroupWithDetails[]>(() => loadFromCache(CACHE_KEYS.GROUPS) || []);
+  const [trendingHashtags, setTrendingHashtags] = useState<any[]>(() => loadFromCache(CACHE_KEYS.HASHTAGS) || []);
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>(() => loadFromCache(CACHE_KEYS.SUGGESTED) || []);
+  
+  const [currentUser, setCurrentUser] = useState<SocialUserWithDetails | null>(null);
+
+  // Loading states - start as false if we have cached data
+  const [isLoading, setIsLoading] = useState(() => !loadFromCache(CACHE_KEYS.POSTS));
+  const [isLoadingGroups, setIsLoadingGroups] = useState(() => !loadFromCache(CACHE_KEYS.GROUPS));
+  const [isLoadingUserPosts, setIsLoadingUserPosts] = useState(() => !loadFromCache(CACHE_KEYS.USER_POSTS));
   const [isLoadingSuggestedUsers, setIsLoadingSuggestedUsers] = useState(false);
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
   const [isLoadingMoreGroups, setIsLoadingMoreGroups] = useState(false);
-
-  // Pagination states
   const [postsOffset, setPostsOffset] = useState(0);
   const [trendingPostsOffset, setTrendingPostsOffset] = useState(0);
   const [userPostsOffset, setUserPostsOffset] = useState(0);
@@ -32,31 +88,70 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
   const [groupsOffset, setGroupsOffset] = useState(0);
   const groupPageRef = useRef(0);
 
-  // Has more states
   const [hasMorePosts, setHasMorePosts] = useState(true);
   const [hasMoreTrendingPosts, setHasMoreTrendingPosts] = useState(true);
   const [hasMoreUserPosts, setHasMoreUserPosts] = useState(true);
   const [hasMoreSuggestedUsers, setHasMoreSuggestedUsers] = useState(true);
   const [hasMoreGroups, setHasMoreGroups] = useState(true);
 
-  // Add to state declarations (near the top of the hook):
   const [likedPosts, setLikedPosts] = useState<SocialPostWithDetails[]>([]);
   const [bookmarkedPosts, setBookmarkedPosts] = useState<SocialPostWithDetails[]>([]);
   const [isLoadingLikedPosts, setIsLoadingLikedPosts] = useState(false);
   const [isLoadingBookmarkedPosts, setIsLoadingBookmarkedPosts] = useState(false);
 
-  // Buffer for realtime incoming posts (new since last "view")
   const [newPostsBuffer, setNewPostsBuffer] = useState<SocialPostWithDetails[]>([]);
   const [hasNewPosts, setHasNewPosts] = useState(false);
 
-  // Constants
   const POST_LIMIT = DEFAULT_LIMITS.POSTS_PER_PAGE;
   const GROUP_LIMIT = DEFAULT_LIMITS.GROUPS_PER_PAGE;
 
-  // Refs for cleanup
   const subscriptionsRef = useRef<any[]>([]);
   const currentUserIdRef = useRef<string | null>(null);
   const isInitializedRef = useRef(false);
+  const hasCachedDataRef = useRef(false);
+
+  // Check if we have valid cached data
+  useEffect(() => {
+    const cachedPosts = loadFromCache(CACHE_KEYS.POSTS);
+    hasCachedDataRef.current = cachedPosts && cachedPosts.length > 0;
+  }, []);
+
+  // Save to cache whenever data changes
+  useEffect(() => {
+    if (posts.length > 0) {
+      saveToCache(CACHE_KEYS.POSTS, posts);
+    }
+  }, [posts]);
+
+  useEffect(() => {
+    if (trendingPosts.length > 0) {
+      saveToCache(CACHE_KEYS.TRENDING, trendingPosts);
+    }
+  }, [trendingPosts]);
+
+  useEffect(() => {
+    if (userPosts.length > 0) {
+      saveToCache(CACHE_KEYS.USER_POSTS, userPosts);
+    }
+  }, [userPosts]);
+
+  useEffect(() => {
+    if (groups.length > 0) {
+      saveToCache(CACHE_KEYS.GROUPS, groups);
+    }
+  }, [groups]);
+
+  useEffect(() => {
+    if (suggestedUsers.length > 0) {
+      saveToCache(CACHE_KEYS.SUGGESTED, suggestedUsers);
+    }
+  }, [suggestedUsers]);
+
+  useEffect(() => {
+    if (trendingHashtags.length > 0) {
+      saveToCache(CACHE_KEYS.HASHTAGS, trendingHashtags);
+    }
+  }, [trendingHashtags]);
 
   // Initialize user and setup realtime listeners
   useEffect(() => {
@@ -1144,6 +1239,10 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     setNewPostsBuffer([]);
     setHasNewPosts(false);
   };
+  const forceRefresh = useCallback(() => {
+    clearCache();
+    resetAndFetchData();
+  }, []);
 
   return {
     posts,
@@ -1170,7 +1269,7 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     hasMoreUserPosts,
     hasMoreSuggestedUsers,
     hasMoreGroups,
-    refetchPosts: () => fetchPosts(true),
+    refetchPosts: forceRefresh, // Use force refresh for manual refresh
     refetchTrendingPosts: () => fetchTrendingPosts(true),
     refetchGroups: () => fetchGroups(true),
     refetchUserPosts: () => fetchUserPosts(true),
@@ -1186,10 +1285,10 @@ export const useSocialData = (userProfile: any, sortBy: SortBy, filterBy: Filter
     isLoadingBookmarkedPosts,
     refetchLikedPosts: fetchLikedPosts,
     refetchBookmarkedPosts: fetchBookmarkedPosts,
-    // Realtime new-post helpers
     newPostsCount: newPostsBuffer.length,
     hasNewPosts,
     showNewPosts,
     clearNewPosts,
+    forceRefresh, // Export this for manual cache clearing if needed
   };
 };

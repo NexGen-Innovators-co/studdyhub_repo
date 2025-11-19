@@ -401,14 +401,17 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         </div>
       );
 
-    case 'social':
-      return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-          <ErrorBoundary>
-            <SocialFeed userProfile={props.userProfile} activeTab={props.activeSocialTab} postId={props.socialPostId} />
-          </ErrorBoundary>
-        </div>
-      );
+    // In TabContent.tsx
+case 'social':
+  return (
+    <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
+      <ErrorBoundary>
+        <SocialFeed 
+          activeTab={props.activeSocialTab}
+          postId={props.socialPostId} />
+      </ErrorBoundary>
+    </div>
+  );
 
     default:
       return null;
