@@ -12,7 +12,7 @@ const Index = () => {
   const location = useLocation();
   const params = useParams();
 
-  // Determine activeSocialTab and socialId based on path and params
+  // Social routing
   let activeSocialTab: string | undefined;
   let socialPostId: string | undefined;
   let socialGroupId: string | undefined;
@@ -24,11 +24,10 @@ const Index = () => {
     activeSocialTab = 'post';
     socialPostId = params.postId;
   } else {
-    // This will handle /social, /social/feed, /social/trending, etc.
-    activeSocialTab = params.tab as string | undefined; 
+    activeSocialTab = params.tab as string | undefined;
   }
 
-  // Get everything from context
+  // Context
   const {
     user,
     authLoading,
@@ -38,7 +37,6 @@ const Index = () => {
     isAILoading,
     isSubmittingUserMessage,
     isLoadingSessionMessages,
-    fileProcessingProgress,
     notes,
     recordings,
     scheduleItems,
@@ -63,7 +61,6 @@ const Index = () => {
     deleteChatSession,
     renameChatSession,
     handleLoadMoreChatSessions,
-    loadSessionMessages,
     handleLoadOlderChatMessages,
     handleMessageUpdate,
     handleReplaceOptimisticMessage,
@@ -71,14 +68,15 @@ const Index = () => {
     handleCreateNew,
     appOperations,
     audioProcessing,
-    setNotes,
-    setRecordings,
     setIsSidebarOpen,
     setActiveNote,
     setSearchQuery,
     setSelectedCategory,
-    setActiveTab,
     dispatch,
+    detailedDataLoading,
+    loadMoreDocuments,
+    loadMoreRecordings,
+    loadMoreNotes,
   } = useAppContext();
 
   const {
@@ -88,50 +86,34 @@ const Index = () => {
     handleRetryFailedMessage,
   } = useMessageHandlers();
 
-  // Redirect if not authenticated
+  // Auth redirect
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
     }
   }, [user, authLoading, navigate]);
 
-  // Memoized props to prevent unnecessary re-renders
   const [socialSearchQuery, setSocialSearchQuery] = useState('');
+
   const headerProps = useMemo(() => ({
     searchQuery,
     onSearchChange: setSearchQuery,
     onNewNote: appOperations.createNewNote,
     isSidebarOpen,
     onToggleSidebar: () => setIsSidebarOpen(prev => !prev),
-    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', 
+    activeTab: currentActiveTab as any,
     fullName: userProfile?.full_name || '',
     avatarUrl: userProfile?.avatar_url || '',
-    // --- START: Added Social Routing Props to Header ---
     activeSocialTab,
     socialPostId,
     socialGroupId,
-    // Social header helpers required by HeaderProps
     socialSearchQuery,
     onSocialSearchChange: (q: string) => setSocialSearchQuery(q),
-    // navigate with query flag so SocialFeed can open the dialog
     onOpenCreatePostDialog: () => navigate('/social?openCreate=true'),
-    // --- END: Added Social Routing Props to Header ---
   }), [
-    searchQuery,
-    setSearchQuery,
-    appOperations.createNewNote,
-    isSidebarOpen,
-    setIsSidebarOpen,
-    currentActiveTab,
-    userProfile,
-    // --- START: Added Social Routing Props to Header Dependencies ---
-    activeSocialTab,
-    socialPostId,
-    socialGroupId,
-    socialSearchQuery,
-    setSocialSearchQuery,
-    navigate,
-    // --- END: Added Social Routing Props to Header Dependencies ---
+    searchQuery, appOperations.createNewNote, isSidebarOpen, setIsSidebarOpen,
+    currentActiveTab, userProfile, activeSocialTab, socialPostId,
+    socialGroupId, socialSearchQuery, navigate,
   ]);
 
   const sidebarProps = useMemo(() => ({
@@ -140,20 +122,17 @@ const Index = () => {
     selectedCategory,
     onCategoryChange: setSelectedCategory,
     noteCount: notes.length,
-    activeTab: currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social', 
+    activeTab: currentActiveTab as any,
     activeSocialTab: activeSocialTab || 'feed',
     onTabChange: (tab: string) => {
       if (tab.startsWith('chat/') && activeChatSessionId) {
         navigate(`/${tab}`);
       } else if (tab === 'chat' && activeChatSessionId) {
         navigate(`/chat/${activeChatSessionId}`);
+      } else if (tab === 'social' || tab.startsWith('social/')) {
+        navigate(`/${tab}`);
       } else {
-        // Handle social routing (e.g., /social/feed, /social/trending)
-        if (tab === 'social' || tab.startsWith('social/')) {
-          navigate(`/${tab}`);
-        } else {
-          navigate(`/${tab}`);
-        }
+        navigate(`/${tab}`);
       }
       setIsSidebarOpen(false);
     },
@@ -173,33 +152,19 @@ const Index = () => {
     avatarUrl: userProfile?.avatar_url || '',
     activeChatSessionId,
   }), [
-    isSidebarOpen,
-    setIsSidebarOpen,
-    selectedCategory,
-    setSelectedCategory,
-    notes.length,
-    currentActiveTab,
-    activeSocialTab,
-    navigate,
-    chatSessions,
-    activeChatSessionId,
-    dispatch,
-    createNewChatSession,
-    deleteChatSession,
-    renameChatSession,
-    hasMoreChatSessions,
-    handleLoadMoreChatSessions,
-    currentTheme,
-    handleThemeChange,
-    userProfile,
+    isSidebarOpen, setIsSidebarOpen, selectedCategory, setSelectedCategory,
+    notes.length, currentActiveTab, activeSocialTab, navigate, chatSessions,
+    activeChatSessionId, dispatch, createNewChatSession, deleteChatSession,
+    renameChatSession, hasMoreChatSessions, handleLoadMoreChatSessions,
+    currentTheme, handleThemeChange, userProfile,
   ]);
 
+  // Clean tabContentProps – no duplicates, correct typo, real loading state
   const tabContentProps = useMemo(() => ({
-    activeTab: currentActiveTab as 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social',
-    // Social Tab Routing
+    activeTab: currentActiveTab as any,
     activeSocialTab,
     socialPostId,
-    socialGroupId, // Added
+    socialGroupId,
     filteredNotes,
     activeNote,
     recordings: recordings ?? [],
@@ -215,7 +180,7 @@ const Index = () => {
     onAddRecording: appOperations.addRecording,
     onUpdateRecording: appOperations.updateRecording,
     onGenerateQuiz: appOperations.generateQuiz,
-    onAddScheduleItem: appOperations.addScheduleItem,
+    onAddScheduleItem: appOperations.addScheduleItem,           // Fixed typo
     onUpdateScheduleItem: appOperations.updateScheduleItem,
     onDeleteScheduleItem: appOperations.deleteScheduleItem,
     onSendMessage: handleSubmitMessage,
@@ -246,23 +211,28 @@ const Index = () => {
     onReprocessAudio: audioProcessing.triggerAudioProcessing,
     onDeleteRecording: appOperations.deleteRecording,
     onGenerateNote: audioProcessing.handleGenerateNoteFromAudio,
-    // Dashboard specific props - only what's needed
     onNavigateToTab: handleNavigateToTab,
     onCreateNew: handleCreateNew,
-    // Infinite scroll controls
-    hasMoreDocuments: dataPagination.documents.hasMore,
-    isLoadingDocuments: false,
-    onLoadMoreDocuments: () => { }, // From context
-    hasMoreRecordings: dataPagination.recordings.hasMore,
-    isLoadingRecordings: false,
-    onLoadMoreRecordings: () => { }, // From context
     onMessageUpdate: handleMessageUpdate,
     handleReplaceOptimisticMessage,
+
+    // Infinite scroll – real values from context
+    hasMoreDocuments: dataPagination.documents.hasMore,
+    isLoadingDocuments: detailedDataLoading.documents,
+    onLoadMoreDocuments: loadMoreDocuments,
+
+    hasMoreRecordings: dataPagination.recordings.hasMore,
+    isLoadingRecordings: detailedDataLoading.recordings,
+    onLoadMoreRecordings: loadMoreRecordings,
+
+    hasMoreNotes: dataPagination.notes.hasMore,
+    isLoadingNotes: detailedDataLoading.notes,
+    onLoadMoreNotes: loadMoreNotes,
   }), [
     currentActiveTab,
     activeSocialTab,
     socialPostId,
-    socialGroupId, // Added
+    socialGroupId,
     filteredNotes,
     activeNote,
     recordings,
@@ -293,37 +263,30 @@ const Index = () => {
     handleMessageUpdate,
     handleReplaceOptimisticMessage,
     dataPagination,
-    userProfile,
+    detailedDataLoading,
+    loadMoreDocuments,
+    loadMoreRecordings,
+    loadMoreNotes,
   ]);
 
-  // Determine header visibility based on current path
   const headerClass = useMemo(() => {
     const isNotesTab = currentActiveTab === 'notes';
     return `flex items-center ${isNotesTab ? '' : ''} justify-between w-full p-0 sm:p-0 shadow-none bg-white dark:bg-gray-600 border-none`;
   }, [currentActiveTab]);
 
-  // Loading states
-  if (authLoading) {
-    return <LoadingScreen message="Authenticating..." progress={50} phase='initial' />;
-  }
-
-  if (dataLoading) {
-    return <LoadingScreen message="Loading data..." progress={80} phase='core' />;
-  }
-
-  if (!user) {
-    return null;
-  }
+  if (authLoading) return <LoadingScreen message="Authenticating..." progress={50} phase='initial' />;
+  if (dataLoading) return <LoadingScreen message="Loading data..." progress={80} phase='core' />;
+  if (!user) return null;
 
   return (
-    <div className="h-screen flex flex-col  bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
       <div className={headerClass}>
         <Header {...headerProps} />
       </div>
-      <div className="flex-1 flex ">
+      <div className="flex-1 flex">
         <Sidebar {...sidebarProps} />
-        <div className=" max-h-[95vh] w-full  bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar " >
-        <TabContent {...tabContentProps}/>
+        <div className="max-h-[95vh] w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar">
+          <TabContent {...tabContentProps} />
         </div>
       </div>
     </div>

@@ -20,6 +20,7 @@ import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { appReducer, initialAppState, AppState, AppAction } from './appReducer';
 import { DocumentFolder, FolderTreeNode } from '@/types/Folder';
+import { DataLoadingState } from '../hooks/useAppData';
 
 // Context interface
 interface AppContextType extends AppState {
@@ -105,7 +106,8 @@ interface AppContextType extends AppState {
   folderTree: FolderTreeNode[];
   setFolders: (folders: DocumentFolder[] | ((prev: DocumentFolder[]) => DocumentFolder[])) => void;
   loadFolders: (userId: string, isInitial?: boolean) => Promise<void>;
-  updateDocument: (document: AppDocument) => void; // Add this function
+  updateDocument: (document: AppDocument) => void;
+  detailedDataLoading: DataLoadingState;
 }
 
 // Create context
@@ -897,6 +899,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     folderTree,
     setFolders,
     loadFolders,
+    detailedDataLoading: appData.dataLoading,  // ← USE THIS
   };
 
   return (

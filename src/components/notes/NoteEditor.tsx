@@ -219,7 +219,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   }, [audioProcessingJobId, userProfile, note, onNoteUpdate]);
 
   const handleSave = () => {
-    const currentMarkdown = contentAreaRef.current?.getCurrentMarkdown() || content;
+    const currentMarkdown =  content;
 
     const updatedNote: Note = {
       ...note,
@@ -719,42 +719,288 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     toast.success('Note downloaded as Markdown!');
   };
 
-  const handleDownloadPdf = () => {
-    if (!content.trim()) {
-      toast.info("There's no content to convert to PDF.");
-      return;
-    }
+  // ============================================
+// FILE 1: NoteEditor.tsx
+// Replace the handleDownloadPdf function with this:
+// ============================================
 
-    const previewElement = document.getElementById('note-preview-content');
-    if (previewElement) {
-      toast.loading('Generating PDF...', { id: 'pdf-download' });
-      if (typeof window.html2pdf === 'undefined') {
-        toast.error('PDF generation library not loaded. Please try again later.', { id: 'pdf-download' });
-        //console.error('html2pdf.js is not loaded. Please ensure it is included in your project, e.g., in public/index.html via <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>');
-        return;
+const handleDownloadPdf = () => {
+  if (!content.trim()) {
+    toast.info("There's no content to convert to PDF.");
+    return;
+  }
+
+  // Get the HTML content from the editor
+  const htmlContent = contentAreaRef.current?.getInnerHTML() || '';
+  
+  if (!htmlContent) {
+    toast.error('Could not retrieve note content for PDF generation.');
+    return;
+  }
+
+  toast.loading('Generating PDF...', { id: 'pdf-download' });
+
+  if (typeof window.html2pdf === 'undefined') {
+    toast.error('PDF generation library not loaded. Please try again later.', { id: 'pdf-download' });
+    console.error('html2pdf.js is not loaded. Please ensure it is included in your project.');
+    return;
+  }
+
+  // Create a temporary container for PDF generation
+  const tempContainer = document.createElement('div');
+  tempContainer.style.left = '-9999px';
+  tempContainer.style.width = '210mm'; // A4 width
+  tempContainer.style.padding = '20mm';
+  tempContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  tempContainer.style.fontSize = '12pt';
+  tempContainer.style.lineHeight = '1.6';
+  tempContainer.style.color = '#000';
+  
+  // Add title and content with better styling
+  tempContainer.innerHTML = `
+    <style>
+      /* PDF-specific styles */
+      * {
+        box-sizing: border-box;
       }
+      h1, h2, h3, h4, h5, h6 {
+        color: #000;
+        margin-top: 1em;
+        margin-bottom: 0.5em;
+        font-weight: bold;
+      }
+      h1 { font-size: 24pt; }
+      h2 { font-size: 20pt; }
+      h3 { font-size: 16pt; }
+      p { 
+        margin: 0.5em 0;
+        color: #000;
+      }
+      pre {
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        overflow-x: auto;
+        font-family: 'Courier New', monospace;
+        font-size: 10pt;
+        margin: 1em 0;
+      }
+      code {
+        background: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+        font-size: 10pt;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 1em 0;
+      }
+      th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+      }
+      th {
+        background: #f5f5f5;
+        font-weight: bold;
+      }
+      ul, ol {
+        margin: 0.5em 0;
+        padding-left: 2em;
+      }
+      li {
+        margin: 0.25em 0;
+      }
+      blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 1em;
+        margin: 1em 0;
+        color: #666;
+      }
+      img, svg {
+        max-width: 100%;
+        height: auto;
+        margin: 1em 0;
+      }
+      a {
+        color: #0066cc;
+        text-decoration: underline;
+      }
+    </style>
+    <div style="margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">
+      <h1 style="font-size: 24pt; font-weight: bold; margin: 0 0 10px 0; color: #000;">
+        ${title || 'Untitled Note'}
+      </h1>
+      ${category !== 'general' ? `<p style="color: #666; font-size: 10pt; margin: 5px 0;">Category: ${category}</p>` : ''}
+      ${tags ? `<p style="color: #666; font-size: 10pt; margin: 5px 0;">Tags: ${tags}</p>` : ''}
+    </div>
+    <div style="color: #000;">
+      ${htmlContent}
+    </div>
+  `;
 
-      window.html2pdf()
-        .from(previewElement)
-        .set({
-          margin: [10, 10, 10, 10],
-          filename: `${title || 'untitled-note'}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, logging: true, dpi: 192, letterRendering: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        })
-        .save()
-        .then(() => {
-          toast.success('Note downloaded as PDF!', { id: 'pdf-download' });
-        })
-        .catch((error: any) => {
-          toast.error('Failed to generate PDF.', { id: 'pdf-download' });
-          //console.error('Error generating PDF:', error);
-        });
-    } else {
-      toast.error('Could not find the note preview content to generate PDF.');
-    }
+  document.body.appendChild(tempContainer);
+
+  window.html2pdf()
+    .from(tempContainer)
+    .set({
+      margin: [15, 15, 15, 15],
+      filename: `${(title || 'untitled-note').replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { 
+        scale: 2, 
+        logging: false, 
+        dpi: 192, 
+        letterRendering: true,
+        backgroundColor: '#ffffff',
+        useCORS: true
+      },
+      jsPDF: { 
+        unit: 'mm', 
+        format: 'a4', 
+        orientation: 'portrait',
+        compress: true
+      },
+      pagebreak: { 
+        mode: ['avoid-all', 'css', 'legacy'],
+        before: '.page-break-before',
+        after: '.page-break-after',
+        avoid: ['pre', 'code', 'table', 'img', 'svg']
+      }
+    })
+    .save()
+    .then(() => {
+      toast.success('Note downloaded as PDF!', { id: 'pdf-download' });
+      document.body.removeChild(tempContainer);
+    })
+    .catch((error: any) => {
+      toast.error('Failed to generate PDF.', { id: 'pdf-download' });
+      console.error('Error generating PDF:', error);
+      if (document.body.contains(tempContainer)) {
+        document.body.removeChild(tempContainer);
+      }
+    });
+};
+
+// ============================================
+// FILE 2: ALTERNATIVE APPROACH (if html2pdf is not loaded)
+// Add this as a fallback method in NoteEditor.tsx
+// ============================================
+
+const handleDownloadPdfFallback = () => {
+  if (!content.trim()) {
+    toast.info("There's no content to convert to PDF.");
+    return;
+  }
+
+  // Use browser's print-to-PDF as fallback
+  const htmlContent = contentAreaRef.current?.getInnerHTML() || '';
+  
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    toast.error('Please allow pop-ups to generate PDF');
+    return;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${title || 'Untitled Note'}</title>
+      <style>
+        @page {
+          margin: 2cm;
+          size: A4;
+        }
+        body {
+          font-family: system-ui, -apple-system, sans-serif;
+          font-size: 12pt;
+          line-height: 1.6;
+          color: #000;
+          max-width: 210mm;
+          margin: 0 auto;
+          padding: 20px;
+          background: white;
+        }
+        h1, h2, h3, h4, h5, h6 {
+          color: #000;
+          margin-top: 1em;
+          margin-bottom: 0.5em;
+          font-weight: bold;
+          break-after: avoid;
+        }
+        h1 { font-size: 24pt; }
+        h2 { font-size: 20pt; }
+        h3 { font-size: 16pt; }
+        pre {
+          background: #f5f5f5;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          padding: 10px;
+          overflow-x: auto;
+          font-family: 'Courier New', monospace;
+          font-size: 10pt;
+          margin: 1em 0;
+          break-inside: avoid;
+        }
+        code {
+          background: #f5f5f5;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-family: 'Courier New', monospace;
+          font-size: 10pt;
+        }
+        table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: 1em 0;
+          break-inside: avoid;
+        }
+        th, td {
+          border: 1px solid #ddd;
+          padding: 8px;
+          text-align: left;
+        }
+        th {
+          background: #f5f5f5;
+          font-weight: bold;
+        }
+        img, svg {
+          max-width: 100%;
+          height: auto;
+          break-inside: avoid;
+        }
+        @media print {
+          body {
+            background: white;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div style="margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">
+        <h1>${title || 'Untitled Note'}</h1>
+        ${category !== 'general' ? `<p style="color: #666; font-size: 10pt;">Category: ${category}</p>` : ''}
+        ${tags ? `<p style="color: #666; font-size: 10pt;">Tags: ${tags}</p>` : ''}
+      </div>
+      ${htmlContent}
+    </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+  
+  // Wait for content to load before printing
+  printWindow.onload = () => {
+    setTimeout(() => {
+      printWindow.print();
+      toast.success('Opening print dialog. Choose "Save as PDF" as your printer.');
+    }, 500);
   };
+};
 
   const handleCopyNoteContent = () => {
     if (!content.trim()) {

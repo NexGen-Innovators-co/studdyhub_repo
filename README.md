@@ -1,6 +1,6 @@
-# NoteMind
+# StuddyHub
 
-NoteMind is an advanced note-taking application designed to help users organize, manage, and retrieve their notes efficiently. Built by NexGen-Innovators-co, it combines intuitive user experience with powerful features for productivity and collaboration.
+StuddyHub is an advanced note-taking application designed to help users organize, manage, and retrieve their notes efficiently. Built by NexGen-Innovators-co, it combines intuitive user experience with powerful features for productivity and collaboration.
 
 ## Table of Contents
 
@@ -36,13 +36,13 @@ NoteMind is an advanced note-taking application designed to help users organize,
 
 ## Getting Started
 
-To get a local copy of NoteMind up and running, follow these steps:
+To get a local copy of StuddyHub up and running, follow these steps:
 
 ### Prerequisites
 
 Ensure you have the following installed on your machine:
 
-- Node.js (version X.X.X or later)
+- Node.js (version  or later)
 - npm or yarn
 
 ### Installation
@@ -50,8 +50,8 @@ Ensure you have the following installed on your machine:
 Clone the repository:
 
 ```bash
-git clone https://github.com/NexGen-Innovators-co/NoteMind.git
-cd NoteMind
+git clone https://github.com/NexGen-Innovators-co/studdyhub_repo.git
+cd StuddyHub
 ```
 
 Install dependencies:
@@ -83,10 +83,10 @@ Open your browser and navigate to [http://localhost:3000](http://localhost:3000)
 
 ## Directory Structure
 
-The directory structure of the NoteMind application is organized as follows:
+The directory structure of the StuddyHub application is organized as follows:
 
 ```
-NoteMind/
+StuddyHub/
 ├── .gitignore
 ├── README.md
 ├── api/
@@ -251,7 +251,7 @@ NoteMind/
 
 ## Contributing
 
-We welcome contributions to NoteMind! If you'd like to contribute, please follow these steps:
+We welcome contributions to StuddyHub! If you'd like to contribute, please follow these steps:
 
 1. Fork the repository.
 2. Create a new branch for your feature or bug fix.
@@ -265,4 +265,4 @@ For questions or feedback, please open an issue in the GitHub repository or reac
 
 ---
 
-_Made with ❤️ by NexGen-Innovators-co_
+_Made by NexGen-Innovators-co_

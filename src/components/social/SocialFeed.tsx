@@ -422,7 +422,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
     if (!list || list.length === 0) return null;
 
     return (
-      <div className="py-3 px-2 -mx-2 mx-auto max-w-[780px]">
+      <div className="py-3 px-2 -mx-2 mx-auto max-w-[680px]">
         <div className="flex items-center justify-between mb-2 px-2">
           <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Suggested for you</h4>
           <button className="text-xs text-slate-500 hover:underline" onClick={() => setActiveTab('trending')}>See all</button>
@@ -559,16 +559,57 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
   return (
     <div className="min-h-screen bg-transparent font-sans">
 
-      <div className="max-w-[80vw] mx-auto px-0 md:px-6">
+      <div className="max-w-[1440px] mx-auto px-0 sm:px-4 md:px-6">
 
-        <div className="grid grid-cols-1 lg:grid-cols-12  px-0 lg:gap-6 relative">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8 relative">
 
-          <main className="col-span-1 lg:col-span-8 max-h-[95vh] px-0 overflow-y-auto scrollbar-hide pb-20 lg:pb-0">
+          {/* Left Sidebar like LinkedIn */}
+          <div className="hidden lg:block lg:col-span-3 sticky top-0 h-screen pt-6 overflow-y-auto scrollbar-hide pr-8">
+            <div className="space-y-6 w-full max-w-[350px]">
+              {/* Profile Card */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                <div className="p-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={currentUser?.avatar_url} />
+                      <AvatarFallback>{currentUser?.display_name?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3 className="font-bold text-lg">{currentUser?.display_name}</h3>
+                      <p className="text-sm text-slate-500">@{currentUser?.username}</p>
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-slate-500">Followers</span>
+                      <span className="font-medium">{currentUser?.followers_count || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-sm mb-4">
+                      <span className="text-slate-500">Following</span>
+                      <span className="font-medium">{currentUser?.following_count || 0}</span>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      className="w-full" 
+                      onClick={() => setActiveTab('profile')}
+                    >
+                      View Profile
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional sections if needed */}
+              {/* For example, My Network or Saved Items */}
+            </div>
+          </div>
+
+          <main className="col-span-1 lg:col-span-6 max-h-[95vh] overflow-y-auto scrollbar-hide lg:border-x border-slate-200 dark:border-slate-800 pb-20 lg:pb-0">
             <div ref={topRef} />
 
             {hasNewPosts && newPostsCount > 0 && (
-              <div className="px-1 mb-4">
-                <div className="mx-auto flex items-center justify-center">
+              <div className="px-4 mb-4">
+                <div className="max-w-[720px] mx-auto flex items-center justify-center">
                   <button
                     onClick={() => {
                       showNewPosts();
@@ -585,7 +626,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
             <div className="px-0 ">
               {routePostId && postToDisplay ? (
                 <div className="mb-6">
-                  <Button variant="ghost" onClick={() => navigate('/social')} className="mb-2 pl-0 hover:pl-2">← Back</Button>
+                  <Button variant="ghost" onClick={() => navigate('/social/feed')} className="mb-2 pl-0 hover:pl-2">← Back</Button>
                   <PostCard
                     post={postToDisplay}
                     currentUser={currentUser}
@@ -702,7 +743,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
               )}
             </div>
           </main>
-          <div className="hidden lg:block lg:col-span-4 sticky top-0 h-screen p-0 overflow-y-auto scrollbar-hide ">
+          <div className="hidden lg:block lg:col-span-3 sticky top-0 h-screen pt-6 overflow-y-auto scrollbar-hide pl-8">
             <div className="space-y-6 w-full max-w-[350px]">
 
               {/* Trending Widget */}

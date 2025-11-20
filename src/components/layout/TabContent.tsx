@@ -1,3 +1,4 @@
+// src/components/layout/TabContent.tsx
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { NotesList } from '../notes/components/NotesList';
 import { NoteEditor } from '../notes/NoteEditor';
@@ -105,7 +106,9 @@ interface TabContentProps {
   isLoadingRecordings: boolean;
   onLoadMoreRecordings: () => void;
   handleReplaceOptimisticMessage: (tempId: string, newMessage: Message) => void;
-
+  hasMoreNotes?: boolean;
+  isLoadingNotes?: boolean;
+  onLoadMoreNotes?: () => void;
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -287,7 +290,10 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onNoteDelete: props.onNoteDelete,
     isOpen: isNotesHistoryOpen,
     onClose: onToggleNotesHistory,
-  }), [props.filteredNotes, props.activeNote, props.onNoteSelect, props.onNoteDelete, isNotesHistoryOpen, onToggleNotesHistory]);
+    hasMore: props.hasMoreNotes,
+    isLoadingMore: props.isLoadingNotes,
+    onLoadMore: props.onLoadMoreNotes,
+  }), [props.filteredNotes, props.activeNote, props.onNoteSelect, props.onNoteDelete, isNotesHistoryOpen, onToggleNotesHistory, props.hasMoreNotes, props.isLoadingNotes, props.onLoadMoreNotes]);
 
   const dashboardProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -319,6 +325,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         </div>
       );
 
+    // In TabContent.tsx 
     case 'notes':
       return (
         <div className="flex flex-1 min-h-0 relative flex-row">
@@ -329,7 +336,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             />
           )}
 
-          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'} fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto bg-transparent border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none`}>
+          {/* FIXED: Added overflow-y-auto here and removed h-screen */}
+          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'
+          } fixed lg:relative lg:h-screen inset-y-0 left-0 z-50 lg:z-auto bg-transparent border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none overflow-y-auto modern-scrollbar`}>
             <NotesList
               {...notesHistoryProps}
               isOpen={isNotesHistoryOpen}
@@ -349,7 +358,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
                 <div className="text-center">
-                  <div className="text-4xl sm:text-6xl mb-4"> </div>
+                  <div className="text-4xl sm:text-6xl mb-4">📝</div>
                   <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
                   <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
                 </div>
@@ -358,7 +367,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
           </div>
         </div>
       );
-
     case 'recordings':
       return (
         <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleRecordingsScroll}>
@@ -402,16 +410,16 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       );
 
     // In TabContent.tsx
-case 'social':
-  return (
-    <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-      <ErrorBoundary>
-        <SocialFeed 
-          activeTab={props.activeSocialTab}
-          postId={props.socialPostId} />
-      </ErrorBoundary>
-    </div>
-  );
+    case 'social':
+      return (
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
+          <ErrorBoundary>
+            <SocialFeed
+              activeTab={props.activeSocialTab}
+              postId={props.socialPostId} />
+          </ErrorBoundary>
+        </div>
+      );
 
     default:
       return null;
