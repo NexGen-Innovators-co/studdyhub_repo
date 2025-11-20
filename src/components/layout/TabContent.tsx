@@ -121,7 +121,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   const handleDocumentsScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     if (!props.isLoadingDocuments && props.hasMoreDocuments) {
       const el = e.currentTarget;
-      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {  // was 120 → now 300
         props.onLoadMoreDocuments();
       }
     }
@@ -338,7 +338,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
           {/* FIXED: Added overflow-y-auto here and removed h-screen */}
           <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'
-          } fixed lg:relative lg:h-screen inset-y-0 left-0 z-50 lg:z-auto bg-transparent border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none overflow-y-auto modern-scrollbar`}>
+            } fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto bg-transparent border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none overflow-y-auto modern-scrollbar`}>
             <NotesList
               {...notesHistoryProps}
               isOpen={isNotesHistoryOpen}

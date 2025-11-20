@@ -34,17 +34,25 @@ export const NotesList: React.FC<NotesListProps> = ({
   useEffect(() => {
     if (!hasMore || isLoadingMore || !onLoadMore || !loadMoreRef.current) return;
 
-    observerRef.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) {
-        onLoadMore();
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isLoadingMore) {
+          console.log('Load more triggered!'); // Debug log
+          onLoadMore();
+        }
+      },
+      {
+        root: null, // viewport
+        rootMargin: '100px', // Trigger 100px before reaching bottom
+        threshold: 0.1,
       }
-    }, { threshold: 1.0 });
+    );
 
     observerRef.current.observe(loadMoreRef.current);
 
     return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
+      if (observerRef.current && loadMoreRef.current) {
+        observerRef.current.unobserve(loadMoreRef.current);
       }
     };
   }, [hasMore, isLoadingMore, onLoadMore]);
@@ -64,9 +72,9 @@ export const NotesList: React.FC<NotesListProps> = ({
 
   return (
     <div className={`flex flex-col  ${isOpen
-        ? 'translate-x-0 w-72 md:w-64 h-screen'
-        : 'h-0 lg:h-[95vh] lg:translate-x-0'
-      }   bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-gray-800 transition-all duration-300 ease-in-out`}>
+      ? 'translate-x-0 w-72 md:w-64 lg:w-80 max-h-screen lg:max-h-[95vh] overflow-y-auto shadow-lg lg:shadow-none'
+      : 'h-0 lg:h-[95vh] lg:translate-x-0'
+      }   bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-gray-800`}>
       {/* Mobile Header with Close Button */}
       <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-gray-800">
         <div className="flex items-center justify-between">
@@ -150,15 +158,23 @@ export const NotesList: React.FC<NotesListProps> = ({
               </div>
             ))
           )}
-          {isLoadingMore && (
-            <div className="p-4 text-center text-slate-500 dark:text-gray-400">
-              Loading more notes...
-            </div>
-          )}
-          {hasMore && <div ref={loadMoreRef} className="h-4" />}
-          {!hasMore && notes.length > 0 && (
-            <div className="p-4 text-center text-slate-500 dark:text-gray-400">
-              No more notes
+          {hasMore && (
+            <div
+              ref={loadMoreRef}
+              className="w-full flex justify-center items-center py-12"
+              style={{ minHeight: '100px' }}
+            >
+              <div className="flex flex-col items-center gap-2">
+                {isLoadingMore ? (
+                  <div className="text-sm text-slate-500 dark:text-gray-400 animate-pulse">
+                    Loading more notes...
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 dark:text-gray-600">
+                    Scroll to load more
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
