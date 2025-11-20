@@ -279,8 +279,8 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
   const canManageGroup = memberRole === 'admin' || memberRole === 'moderator';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-4 py-6 max-w-[55vw] animate-in fade-in duration-500">
+    <div className="mb-4  animate-in slide-in-from-top-2 fade-in duration-500  overflow-hidden max-w-[880px] mx-auto">
+      <div className="container mx-auto item-center px-1 py-6 animate-in fade-in duration-500">
         {/* Header Section */}
         <div className="mb-6">
           <Button
