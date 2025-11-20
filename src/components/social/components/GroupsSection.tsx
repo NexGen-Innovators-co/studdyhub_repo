@@ -204,7 +204,7 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
   }, [hasMore, onLoadMore, isLoadingMore]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       {/* Header Action */}
       <div className="flex items-center justify-between bg-gradient-to-r from-blue-600 to-indigo-600 p-6 rounded-2xl text-white shadow-lg">
         <div>

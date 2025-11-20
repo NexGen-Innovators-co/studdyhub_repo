@@ -1,4 +1,5 @@
-import React from 'react';
+// NotesList.tsx
+import React, { useRef, useEffect } from 'react';
 import { Trash2, X } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Note } from '../../../types/Note';
@@ -11,6 +12,9 @@ interface NotesListProps {
   onNoteDelete: (noteId: string) => void;
   isOpen?: boolean;
   onClose?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 export const NotesList: React.FC<NotesListProps> = ({
@@ -19,8 +23,32 @@ export const NotesList: React.FC<NotesListProps> = ({
   onNoteSelect,
   onNoteDelete,
   isOpen,
-  onClose
+  onClose,
+  hasMore,
+  isLoadingMore,
+  onLoadMore
 }) => {
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!hasMore || isLoadingMore || !onLoadMore || !loadMoreRef.current) return;
+
+    observerRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        onLoadMore();
+      }
+    }, { threshold: 1.0 });
+
+    observerRef.current.observe(loadMoreRef.current);
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasMore, isLoadingMore, onLoadMore]);
+
   const truncateContent = (content: string, maxLength: number = 100) => {
     if (content.length <= maxLength) return content;
     return content.substring(0, maxLength) + '...';
@@ -35,11 +63,10 @@ export const NotesList: React.FC<NotesListProps> = ({
   };
 
   return (
-    <div className={`flex flex-col  ${
-          isOpen
-            ? 'translate-x-0 w-72 md:w-64 h-screen'
-            : 'h-0 lg:h-[95vh] lg:translate-x-0'
-        }   bg-white dark:bg-gray-900 `}>
+    <div className={`flex flex-col  ${isOpen
+        ? 'translate-x-0 w-72 md:w-64 h-screen'
+        : 'h-0 lg:h-[95vh] lg:translate-x-0'
+      }   bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-gray-800 transition-all duration-300 ease-in-out`}>
       {/* Mobile Header with Close Button */}
       <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-gray-800">
         <div className="flex items-center justify-between">
@@ -122,6 +149,17 @@ export const NotesList: React.FC<NotesListProps> = ({
                 </div>
               </div>
             ))
+          )}
+          {isLoadingMore && (
+            <div className="p-4 text-center text-slate-500 dark:text-gray-400">
+              Loading more notes...
+            </div>
+          )}
+          {hasMore && <div ref={loadMoreRef} className="h-4" />}
+          {!hasMore && notes.length > 0 && (
+            <div className="p-4 text-center text-slate-500 dark:text-gray-400">
+              No more notes
+            </div>
           )}
         </div>
       </div>

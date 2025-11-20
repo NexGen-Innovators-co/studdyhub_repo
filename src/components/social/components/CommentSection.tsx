@@ -37,7 +37,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                   {comment.author?.display_name?.charAt(0).toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 bg-muted rounded-lg p-3">
+              <div className="flex-1  rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
                   <p className="font-medium text-sm">{comment.author?.display_name}</p>
                   <span className="text-xs text-muted-foreground">

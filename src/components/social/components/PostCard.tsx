@@ -3,7 +3,6 @@ import { Card, CardContent } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Textarea } from '../../ui/textarea';
-import { Badge } from '../../ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +28,10 @@ import {
   Volume2,
   VolumeX,
   Play,
-  Pause
+  Pause,
+  ChevronLeft,
+  ChevronRight,
+  Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PostCardProps } from '../types/social';
@@ -48,8 +50,7 @@ let currentPlayingVideo: HTMLVideoElement | null = null;
 let globalMuted = true;
 
 // --- IMPROVED MEDIA DISPLAY WITH TIKTOK-STYLE VIDEO PLAYBACK ---
-const MediaDisplay = memo(({ media }: { media: any[] }) => {
-  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFullscreen: (index: number) => void }) => {
   const [videoStates, setVideoStates] = useState<Record<number, {
     isPlaying: boolean;
     isMuted: boolean;
@@ -159,141 +160,125 @@ const MediaDisplay = memo(({ media }: { media: any[] }) => {
 
   if (!media || media.length === 0) return null;
 
-  const displayMedia = media.slice(0, 4);
-  const remaining = media.length - 4;
-
-  const gridConfig = {
-    1: 'grid-cols-1',
-    2: 'grid-cols-2',
-    3: 'grid-cols-2',
-    4: 'grid-cols-2',
-  }[displayMedia.length] || 'grid-cols-2';
+  const displayMedia = media.slice(0, 3);
+  const remaining = media.length - 3;
 
   return (
-    <>
-      <div
-        ref={containerRef}
-        className={`grid ${gridConfig} gap-1.5 mt-3 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800`}
-      >
-        {displayMedia.map((item, index) => {
-          const isVideo = item.type === 'video';
-          const isThirdOfThree = displayMedia.length === 3 && index === 2;
-          const state = videoStates[index] || { isPlaying: false, isMuted: globalMuted, progress: 0 };
+    <div
+      ref={containerRef}
+      className={`grid grid-cols-2 gap-1.5 mt-3 overflow-hidden border border-slate-100 dark:border-slate-800`}
+    >
+      {displayMedia.map((item, index) => {
+        const isVideo = item.type === 'video';
+        const length = displayMedia.length;
+        const isSingle = length === 1;
+        const isMulti = length >= 3;
+        const state = videoStates[index] || { isPlaying: false, isMuted: globalMuted, progress: 0 };
 
-          return (
-            <div
-              key={index}
-              className={`relative bg-slate-100 dark:bg-slate-900 group overflow-hidden
-                ${isThirdOfThree ? 'col-span-2' : ''} 
-                ${displayMedia.length === 1 ? 'max-h-[600px]' : 'aspect-square'}
-              `}
-              onClick={() => !isVideo && setFullscreenImage(item.url)}
-            >
-              {isVideo ? (
-                <div className="relative w-full h-full">
-                  <video
-                    ref={(el) => {
-                      if (el) videoRefs.current.set(index, el);
-                    }}
-                    data-index={index}
-                    src={item.url}
-                    className="w-full h-full object-cover"
-                    playsInline
-                    loop
-                    muted={globalMuted}
-                    preload="metadata"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      togglePlayPause(index);
-                    }}
-                    onTimeUpdate={(e) => handleVideoProgress(index, e.currentTarget)}
-                    onEnded={(e) => {
-                      const v = e.currentTarget;
-                      v.currentTime = 0;
-                      v.play();
-                    }}
-                  />
+        let itemClass = `relative bg-slate-100 dark:bg-slate-900 group overflow-hidden`;
+        if (isSingle) {
+          itemClass += ' col-span-2 max-h-[600px]';
+        } else if (isMulti && index === 0) {
+          itemClass += ' row-span-2';
+        } else {
+          itemClass += ' aspect-square';
+        }
 
-                  {/* Video Controls Overlay */}
-                  <div className="absolute inset-0 pointer-events-none">
-                    {/* Play/Pause Overlay */}
-                    {!state.isPlaying && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                        <div className="pointer-events-auto cursor-pointer bg-white/90 rounded-full p-4 hover:bg-white transition-colors">
-                          <Play className="h-8 w-8 text-slate-900" />
-                        </div>
+        const showRemaining = remaining > 0 && index === displayMedia.length - 1;
+
+        return (
+          <div
+            key={index}
+            className={itemClass}
+            onClick={() => {
+              if (showRemaining) {
+                onOpenFullscreen(3);
+              } else if (!isVideo) {
+                onOpenFullscreen(index);
+              }
+            }}
+          >
+            {isVideo ? (
+              <div className="relative w-full h-full">
+                <video
+                  ref={(el) => {
+                    if (el) videoRefs.current.set(index, el);
+                  }}
+                  data-index={index}
+                  src={item.url}
+                  className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
+                  playsInline
+                  loop
+                  muted={globalMuted}
+                  preload="metadata"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlayPause(index);
+                  }}
+                  onTimeUpdate={(e) => handleVideoProgress(index, e.currentTarget)}
+                  onEnded={(e) => {
+                    const v = e.currentTarget;
+                    v.currentTime = 0;
+                    v.play();
+                  }}
+                />
+
+                {/* Video Controls Overlay */}
+                <div className="absolute inset-0 pointer-events-none">
+                  {/* Play/Pause Overlay */}
+                  {!state.isPlaying && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                      <div className="pointer-events-auto cursor-pointer bg-white/90 rounded-full p-4 hover:bg-white transition-colors">
+                        <Play className="h-8 w-8 text-slate-900" />
                       </div>
-                    )}
-
-                    {/* Bottom Controls */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
-                      {/* Progress Bar */}
-                      <div className="w-full h-0.5 bg-white/30 rounded-full mb-2">
-                        <div
-                          className="h-full bg-white rounded-full transition-all duration-100"
-                          style={{ width: `${state.progress}%` }}
-                        />
-                      </div>
-
-                      {/* Mute Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleMute(index);
-                        }}
-                        className="pointer-events-auto bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
-                      >
-                        {state.isMuted ? (
-                          <VolumeX className="h-4 w-4 text-white" />
-                        ) : (
-                          <Volume2 className="h-4 w-4 text-white" />
-                        )}
-                      </button>
                     </div>
+                  )}
+
+                  {/* Bottom Controls */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
+                    {/* Progress Bar */}
+                    <div className="w-full h-0.5 bg-white/30 rounded-full mb-2">
+                      <div
+                        className="h-full bg-white rounded-full transition-all duration-100"
+                        style={{ width: `${state.progress}%` }}
+                      />
+                    </div>
+
+                    {/* Mute Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMute(index);
+                      }}
+                      className="pointer-events-auto bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
+                    >
+                      {state.isMuted ? (
+                        <VolumeX className="h-4 w-4 text-white" />
+                      ) : (
+                        <Volume2 className="h-4 w-4 text-white" />
+                      )}
+                    </button>
                   </div>
                 </div>
-              ) : (
-                <img
-                  src={item.url}
-                  alt="Post content"
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer"
-                  loading="lazy"
-                />
-              )}
-
-              {index === 3 && remaining > 0 && (
-                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-bold text-xl backdrop-blur-[2px]">
-                  +{remaining}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Lightbox */}
-      {fullscreenImage && (
-        <Dialog open={!!fullscreenImage} onOpenChange={() => setFullscreenImage(null)}>
-          <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none">
-            <div className="relative w-full h-full flex items-center justify-center p-4">
+              </div>
+            ) : (
               <img
-                src={fullscreenImage}
-                alt="Fullscreen"
-                className="max-w-full max-h-[90vh] object-contain"
+                src={item.url}
+                alt="Post content"
+                className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 cursor-pointer"
+                loading="lazy"
               />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full"
-                onClick={() => setFullscreenImage(null)}
-              >
-                <X className="h-6 w-6" />
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-    </>
+            )}
+
+            {showRemaining && (
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-bold text-xl backdrop-blur-[2px]">
+                +{remaining}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 });
 MediaDisplay.displayName = 'MediaDisplay';
@@ -340,6 +325,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
     const [isContentExpanded, setIsContentExpanded] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(post.content || '');
+    const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
     const isOwnPost = currentUser?.id === post.author_id;
     const isLongContent = post.content && post.content.length > 280;
 
@@ -424,6 +410,20 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
       }
     }
 
+    const handlePrev = () => {
+      setFullscreenIndex((prev) => {
+        if (prev === null || post.media.length <= 1) return prev;
+        return prev === 0 ? post.media.length - 1 : prev - 1;
+      });
+    };
+
+    const handleNext = () => {
+      setFullscreenIndex((prev) => {
+        if (prev === null || post.media.length <= 1) return prev;
+        return prev === post.media.length - 1 ? 0 : prev + 1;
+      });
+    };
+
     // ref + local view tracking
     const cardRef = React.useRef<HTMLDivElement | null>(null);
     const [hasTrackedView, setHasTrackedView] = useState(false);
@@ -451,9 +451,12 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
       return () => obs.disconnect();
     }, [post.id, onPostView, hasTrackedView]);
 
+    const currentMedia = fullscreenIndex !== null ? post.media[fullscreenIndex] : null;
+    const isFullscreenVideo = currentMedia?.type === 'video';
+
     return ( 
       <Card
-        className="mb-4 border-none shadow-sm hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden max-w-[780px] mx-auto"
+        className="mb-4 border border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-500 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden max-w-[780px] mx-auto"
         ref={cardRef}
         onClick={(e) => {
           const target = e.target as HTMLElement;
@@ -462,58 +465,60 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
           }
         }}
       >
-        <CardContent className="p-4">
+        <CardContent className="p-0">
           <div className="flex gap-3">
-            {/* Avatar Column */}
-            <div className="flex-shrink-0">
-              <Avatar className="h-10 w-10 ring-2 ring-white dark:ring-slate-900 shadow-sm cursor-pointer hover:opacity-90">
-                <AvatarImage src={post.author?.avatar_url} />
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
-                  {post.author?.display_name?.[0]}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-
-            {/* Content Column */}
-            <div className="flex-1 min-w-0">
-              {/* Header */}
-              <div className="flex items-start justify-between mb-1">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-0 sm:gap-2">
-                  <span className="font-bold text-slate-900 dark:text-slate-100 text-base hover:underline cursor-pointer">
-                    {post.author?.display_name}
-                  </span>
-                  <div className="flex items-center text-slate-500 text-sm gap-2">
-                    <span>@{post.author?.username}</span>
-                    <span className="text-slate-300 dark:text-slate-700">•</span>
-                    <span className="hover:underline cursor-pointer">{getTimeAgo(post.created_at)}</span>
-                  </div>
+            <div className="flex-1 min-w-0 ">
+              <div className="p-4 pt-5 flex">
+                {/* Avatar Column */}
+                <div className="flex-shrink-0 ">
+                  <Avatar className="h-10 w-10 ring-2 ring-white dark:ring-slate-900 shadow-sm cursor-pointer hover:opacity-90">
+                    <AvatarImage src={post.author?.avatar_url} />
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                      {post.author?.display_name?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
                 </div>
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2 px-3 flex-1">
+                  <div className="flex flex-col">
+                    <div className="flex items-center">
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-base hover:underline cursor-pointer">
+                        {post.author?.display_name}
+                      </span>
+                      {(post.author as any)?.is_verified && <Check className="h-3.5 w-3.5 text-blue-500 ml-1" />}
+                    </div>
+                    <div className="flex items-center text-slate-500 text-sm gap-1.5">
+                      <span>{(post.author as any)?.followers_count || 0} followers</span>
+                      <span className="text-slate-300 dark:text-slate-700">•</span>
+                      <span className="hover:underline cursor-pointer">{getTimeAgo(post.created_at)}</span>
+                    </div>
+                  </div>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 -mt-1 -mr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100 dark:border-slate-800">
-                    <DropdownMenuItem onClick={handleCopyLink}><Copy className="mr-2 h-4 w-4" /> Copy Link</DropdownMenuItem>
-                    {isOwnPost && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setIsEditing(true)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onDeletePost?.(post.id)} className="text-red-600"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
-                      </>
-                    )}
-                    {!isOwnPost && (
-                      <DropdownMenuItem onClick={() => toast.info("Reported")}><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 -mt-1 -mr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100 dark:border-slate-800">
+                      <DropdownMenuItem onClick={handleCopyLink}><Copy className="mr-2 h-4 w-4" /> Copy Link</DropdownMenuItem>
+                      {isOwnPost && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setIsEditing(true)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onDeletePost?.(post.id)} className="text-red-600"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+                        </>
+                      )}
+                      {!isOwnPost && (
+                        <DropdownMenuItem onClick={() => toast.info("Reported")}><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
-
               {/* Post Body */}
               {isEditing ? (
-                <div className="mb-3 space-y-2" onClick={e => e.stopPropagation()}>
+                <div className="mb-3 space-y-2 px-4" onClick={e => e.stopPropagation()}>
                   <Textarea
                     value={editContent}
                     onChange={e => setEditContent(e.target.value)}
@@ -525,7 +530,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
                   </div>
                 </div>
               ) : (
-                <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words">
+                <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 px-4 whitespace-pre-wrap break-words">
                   {isLongContent && !isContentExpanded ? (
                     <>
                       {post.content.slice(0, 280)}...
@@ -533,7 +538,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
                         onClick={(e) => { e.stopPropagation(); setIsContentExpanded(true); }}
                         className="text-blue-600 hover:underline ml-1 font-medium"
                       >
-                        Show more
+                        More
                       </button>
                     </>
                   ) : (
@@ -544,7 +549,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
 
               {/* Hashtags */}
               {post.hashtags && post.hashtags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-2 mt-2 px-4">
                   {post.hashtags.map((tag: any, i: number) => (
                     <span key={i} className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer">#{tag.name}</span>
                   ))}
@@ -553,11 +558,11 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
 
               {/* Media */}
               <div onClick={e => e.stopPropagation()}>
-                <MediaDisplay media={post.media} />
+                <MediaDisplay media={post.media} onOpenFullscreen={setFullscreenIndex} />
               </div>
 
               {/* Footer Actions */}
-              <div className="flex items-center max-w-[380px] justify-between mt-4 pt-2 -ml-2">
+              <div className="flex items-center border-t border-slate-200 dark:border-slate-800 mt-2 justify-between mt-4 pt-2 p-4 -ml-2">
                 <ActionButton
                   icon={Heart}
                   count={post.likes_count}
@@ -620,7 +625,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
 
           {/* Comments */}
           {isExpanded && (
-            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-200">
+            <div className="mt-4 p-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-200">
               <CommentSection
                 postId={post.id}
                 comments={comments}
@@ -633,6 +638,152 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
             </div>
           )}
         </CardContent>
+
+        {/* Fullscreen Media Viewer */}
+        <Dialog open={fullscreenIndex !== null} onOpenChange={() => setFullscreenIndex(null)}>
+          <DialogContent className="w-[90vw] h-[90vh] max-w-[1200px] max-h-[800px] p-0 bg-transparent border-none">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg overflow-hidden flex flex-col lg:grid lg:grid-cols-5 lg:gap-0 h-full">
+              {/* Media Section */}
+              <div className="relative bg-black flex items-center  justify-center lg:col-span-3 overflow-hidden flex-1 h-full">
+                {currentMedia && (
+                  <>
+                    {isFullscreenVideo ? (
+                      <video
+                        src={currentMedia.url}
+                        className="max-w-full max-h-full object-contain"
+                        controls
+                        autoPlay
+                        loop
+                      />
+                    ) : (
+                      <img
+                        src={currentMedia.url}
+                        alt="Fullscreen media"
+                        className="w-full h-full object-contain"
+                      />
+                    )}
+                  </>
+                )}
+
+                {post.media.length > 1 && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-1/2 left-4 transform -translate-y-1/2 text-white bg-black/50 hover:bg-black/70 rounded-full"
+                      onClick={handlePrev}
+                    >
+                      <ChevronLeft className="h-6 w-6" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-1/2 right-4 transform -translate-y-1/2 text-white bg-black/50 hover:bg-black/70 rounded-full"
+                      onClick={handleNext}
+                    >
+                      <ChevronRight className="h-6 w-6" />
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Content Section */}
+              <div className="p-4 lg:col-span-2 lg:overflow-y-auto flex flex-col border border-slate-200 dark:border-slate-800">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-4">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={post.author?.avatar_url} />
+                    <AvatarFallback>{post.author?.display_name?.[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-slate-900 dark:text-slate-100">{post.author?.display_name}</span>
+                      {(post.author as any)?.is_verified && <Check className="h-3.5 w-3.5 text-blue-500" />}
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      {(post.author as any)?.followers_count || 0} followers · {getTimeAgo(post.created_at)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Post Content */}
+                <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 mb-4">
+                  {post.content}
+                </div>
+
+                {/* Hashtags */}
+                {post.hashtags && post.hashtags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {post.hashtags.map((tag: any, i: number) => (
+                      <span key={i} className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer">#{tag.name}</span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Reposts */}
+                {post.shares_count > 0 && (
+                  <div className="text-sm text-slate-500 mb-4">
+                    {post.shares_count} repost{post.shares_count > 1 ? 's' : ''}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center justify-between mb-4">
+                  <ActionButton
+                    icon={Heart}
+                    label="Like"
+                    active={post.is_liked}
+                    activeColor="text-pink-600"
+                    onClick={handleLike}
+                  />
+
+                  <ActionButton
+                    icon={MessageCircle}
+                    label="Comment"
+                    onClick={onComment}
+                  />
+
+                  <ActionButton
+                    icon={Share2}
+                    label="Share"
+                    onClick={handleShare}
+                  />
+
+                  <ActionButton
+                    icon={Bookmark}
+                    label="Bookmark"
+                    active={post.is_bookmarked}
+                    activeColor="text-blue-600"
+                    onClick={handleBookmark}
+                  />
+                </div>
+
+                {/* Comment Input */}
+                <div className="flex items-center gap-2 mt-auto">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={currentUser?.avatar_url} />
+                    <AvatarFallback>{currentUser?.display_name?.[0]}</AvatarFallback>
+                  </Avatar>
+                  <Textarea 
+                    placeholder="Add a comment..."
+                    value={newComment}
+                    onChange={(e) => onCommentChange(e.target.value)}
+                    className="flex-1 min-h-[40px] resize-none"
+                  />
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={onSubmitComment}
+                    className="text-blue-600"
+                  >
+                    <Send className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
       </Card>
     );
   }

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Loader2, FileText, XCircle, BookOpen, StickyNote, Camera, Paperclip, Image, Mic, ChevronDown, File, Upload } from 'lucide-react';
+import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
 import { UserProfile, Document } from '../../types/Document';
 import { Note } from '../../types/Note';
 import { supabase } from '../../integrations/supabase/client';
@@ -14,53 +13,14 @@ import { MessageList } from './Components/MessageList';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
 import { Message } from '../../types/Class';
 import BookPagesAnimation from '../ui/bookloader';
-import { throttle } from 'lodash';
-import { v4 as uuidv4 } from 'uuid';
+import { useDragAndDrop } from './hooks/useDragAndDrop';
+import { useSpeechRecognition } from './hooks/useSpeechRecognition';
+import { useTextToSpeech } from './hooks/useTextToSpeech';
+import { getFileType, validateFile, stripCodeBlocks, generateOptimisticId } from './utils/helpers';
+import { ContextBadges } from './Components/ContextBadges';
+import { DragOverlay } from './Components/DragOverlay';
 
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onresult: (event: SpeechRecognitionResultEvent) => void;
-  onerror: (event: SpeechRecognitionErrorEvent) => void;
-  onend: () => void;
-}
-
-interface SpeechRecognitionResultEvent {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorEvent {
-  error: string;
-  message?: string;
-}
-
-interface SpeechRecognitionResultList {
-  [index: number]: SpeechRecognitionResult;
-  length: number;
-}
-
-interface SpeechRecognitionResult {
-  [index: number]: SpeechRecognitionAlternative;
-  isFinal: boolean;
-}
-
-interface SpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: { new(): SpeechRecognition };
-    webkitSpeechRecognition: { new(): SpeechRecognition };
-  }
-}
-
-interface AttachedFile {
+export interface AttachedFile {
   file: File;
   preview?: string;
   type: 'image' | 'document' | 'other';
@@ -108,95 +68,10 @@ interface AIChatProps {
   ) => Promise<void>;
   onMessageUpdate: (message: Message) => void;
   onReplaceOptimisticMessage: (optimisticId: string, newMessage: Message) => void;
-  onLoadMoreDocuments: () => void; // Add this prop
-  hasMoreDocuments: boolean; // Add this prop
-  isLoadingDocuments: boolean; // Add this prop
+  onLoadMoreDocuments: () => void;
+  hasMoreDocuments: boolean;
+  isLoadingDocuments: boolean;
 }
-
-const getFileType = (file: File): 'image' | 'document' | 'other' => {
-  const imageTypes = [
-    'image/jpg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'image/bmp',
-    'image/svg+xml',
-    'image/tiff',
-    'image/tif',
-    'image/ico',
-    'image/heic',
-    'image/heif',
-  ];
-  const documentTypes = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'text/plain',
-    'text/csv',
-    'application/json',
-    'application/xml',
-    'text/xml',
-    'text/html',
-    'text/css',
-    'text/javascript',
-    'application/javascript'
-  ];
-
-  if (imageTypes.includes(file.type)) {
-    return 'image';
-  } else if (documentTypes.includes(file.type)) {
-    return 'document';
-  } else {
-    return 'other';
-  }
-};
-
-const getFileIcon = (file: File) => {
-  const type = getFileType(file);
-  switch (type) {
-    case 'image':
-      return <Image className="h-4 w-4" />;
-    case 'document':
-      return <FileText className="h-4 w-4" />;
-    default:
-      return <File className="h-4 w-4" />;
-  }
-};
-
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
-
-const validateFile = (file: File): { isValid: boolean; error?: string } => {
-  const MAX_FILE_SIZE = 25 * 1024 * 1024;
-
-  if (file.size > MAX_FILE_SIZE) {
-    return {
-      isValid: false,
-      error: `File size (${formatFileSize(file.size)}) exceeds the 25MB limit. Please choose a smaller file.`
-    };
-  }
-
-  const problematicExtensions = ['.exe', '.bat', '.cmd', '.scr', '.com', '.pif'];
-  const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-
-  if (problematicExtensions.includes(fileExtension)) {
-    return {
-      isValid: false,
-      error: 'This file type is not supported for security reasons.'
-    };
-  }
-
-  return { isValid: true };
-};
 
 const AIChat: React.FC<AIChatProps> = ({
   messages,
@@ -225,7 +100,6 @@ const AIChat: React.FC<AIChatProps> = ({
   onLoadMoreDocuments,
   hasMoreDocuments,
   isLoadingDocuments,
-
 }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -246,16 +120,12 @@ const AIChat: React.FC<AIChatProps> = ({
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState('');
   const [mergedDocuments, setMergedDocuments] = useState<Document[]>(documents);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
-  const [isPaused, setIsPaused] = useState(false);
-  const speechSynthesisRef = useRef<SpeechSynthesis>(window.speechSynthesis);
-  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const lastSpokenChunkRef = useRef<string>('');
-  const blockAutoSpeakRef = useRef<boolean>(false);
-  const [isRecognizing, setIsRecognizing] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const lastInterimTranscriptRef = useRef<string>('');
+  const prevSessionIdRef = useRef<string | null>(null);
+  const [autoTypeInPanel, setAutoTypeInPanel] = useState(false);
+  const lastProcessedMessageIdRef = useRef<string | null>(null);
+  const [isAiTyping, setIsAiTyping] = useState(false);
+  const [isLastAiMessageDisplayed, setIsLastAiMessageDisplayed] = useState(true);
+  const [isCurrentlySending, setIsCurrentlySending] = useState(false);
   const [panelWidth, setPanelWidth] = useState<number>(() => {
     const storedWidth = localStorage.getItem('diagramPanelWidth');
     return storedWidth ? parseFloat(storedWidth) : 65;
@@ -264,85 +134,8 @@ const AIChat: React.FC<AIChatProps> = ({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isUpdatingDocuments, setIsUpdatingDocuments] = useState(false);
-  const prevSessionIdRef = useRef<string | null>(null);
-  const [autoTypeInPanel, setAutoTypeInPanel] = useState(false);
-  const lastProcessedMessageIdRef = useRef<string | null>(null);
-  const generateOptimisticId = () => `optimistic-ai-${uuidv4()}`;
-  const [isAiTyping, setIsAiTyping] = useState(false);
-  // **New State Variables for Drag and Drop:**
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragCounter, setDragCounter] = useState(0);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  // **New State Variable:**
-  const [isLastAiMessageDisplayed, setIsLastAiMessageDisplayed] = useState(true);
-
-  // NEW: State to track if a message is currently being sent
-  const [isCurrentlySending, setIsCurrentlySending] = useState(false);
-
-  // Throttled textarea resize
-  const resizeTextarea = useCallback(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, []);
-
-
-  // const throttledResizeTextarea = useCallback(throttle(() => {
-  //   if (textareaRef.current) {
-  //     textareaRef.current.style.height = 'auto';
-  //     textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-  //   }
-  // }, 100), []); // Adjust the interval as needed
-  // useEffect(() => {
-  //   throttledResizeTextarea();
-  // }, [inputMessage, throttledResizeTextarea]);
-
-  // **Drag and Drop Event Handlers:**
-  const handleDragEnter = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragCounter(prev => prev + 1);
-
-    if (e.dataTransfer?.items) {
-      const hasFiles = Array.from(e.dataTransfer.items).some(item => item.kind === 'file');
-      if (hasFiles) {
-        setIsDragging(true);
-      }
-    }
-  }, []);
-
-  const handleDragLeave = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragCounter(prev => {
-      const newCount = prev - 1;
-      if (newCount === 0) {
-        setIsDragging(false);
-      }
-      return newCount;
-    });
-  }, []);
-
-  const handleDragOver = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  const handleDrop = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    setDragCounter(0);
-
-    if (!e.dataTransfer?.files) return;
-
-    const files = Array.from(e.dataTransfer.files);
-    processFiles(files);
-  }, []);
-
-  // **Process files function (extracted for reuse):**
   const processFiles = useCallback((files: File[]) => {
     files.forEach(file => {
       const validation = validateFile(file);
@@ -372,37 +165,109 @@ const AIChat: React.FC<AIChatProps> = ({
     });
   }, []);
 
-  // **Set up drag and drop event listeners:**
+  const isDragging = useDragAndDrop(dropZoneRef, processFiles);
+
+  const isPhone = useCallback(() => {
+    const userAgent = navigator.userAgent.toLowerCase();
+    return /mobile|android|iphone|ipad|tablet/i.test(userAgent) && window.innerWidth <= 768;
+  }, []);
+
+  const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
+    if (!("Notification" in window)) {
+      console.warn("Notification API not supported in this browser.");
+      return false;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      return permission === "granted";
+    } catch (error) {
+      console.error("Error requesting notification permission:", error);
+      return false;
+    }
+  }, []);
+
+  const showNotification = useCallback((title: string, options: NotificationOptions) => {
+    if (Notification.permission === "granted") {
+      new Notification(title, options);
+    }
+  }, []);
+
+  const checkMicrophonePermission = useCallback(async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        return permissionStatus.state as 'granted' | 'denied' | 'prompt';
+      }
+      return 'unknown';
+    } catch (error) {
+      console.error('Error checking microphone permission:', error);
+      return 'unknown';
+    }
+  }, []);
+
+  const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
+    const currentStatus = await checkMicrophonePermission();
+    if (currentStatus === 'granted') {
+      return true;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+
+      if (currentStatus === 'prompt' || currentStatus === 'unknown') {
+        showNotification("Microphone Access Granted", {
+          body: "You can now use speech recognition.",
+          icon: "/microphone-icon.png",
+        });
+      }
+
+      return true;
+    } catch (error: any) {
+      console.error('Error requesting microphone permission:', error);
+      toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
+      return false;
+    }
+  }, [showNotification, checkMicrophonePermission]);
+  const resizeTextarea = useCallback(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, []);
+  const { isRecognizing, startRecognition, stopRecognition, micPermissionStatus } = useSpeechRecognition({
+    setInputMessage,
+    resizeTextarea,
+    inputMessage,
+    requestNotificationPermission,
+    requestMicrophonePermission,
+    checkMicrophonePermission,
+  });
+
+  const { isSpeaking, speakingMessageId, isPaused, speakMessage, pauseSpeech, resumeSpeech, stopSpeech } = useTextToSpeech({
+    messages,
+    isLoading,
+    isLoadingSessionMessages,
+    isPhone,
+    stripCodeBlocks,
+  });
+
+  
+
   useEffect(() => {
-    const dropZone = dropZoneRef.current;
-    if (!dropZone) return;
-
-    dropZone.addEventListener('dragenter', handleDragEnter);
-    dropZone.addEventListener('dragleave', handleDragLeave);
-    dropZone.addEventListener('dragover', handleDragOver);
-    dropZone.addEventListener('drop', handleDrop);
-
-    return () => {
-      dropZone.removeEventListener('dragenter', handleDragEnter);
-      dropZone.removeEventListener('dragleave', handleDragLeave);
-      dropZone.removeEventListener('dragover', handleDragOver);
-      dropZone.removeEventListener('drop', handleDrop);
-    };
-  }, [handleDragEnter, handleDragLeave, handleDragOver, handleDrop]);
+    resizeTextarea();
+  }, [inputMessage, resizeTextarea]);
 
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAiTyping(true);
-    // Prevent multiple sends
     if (isCurrentlySending) {
-      //console.log('[AiChat] Already sending, preventing duplicate send');
       return;
     }
 
-    // Check if there are any optimistic messages still pending
     const hasPendingOptimistic = messages.some(msg => msg.id.startsWith('optimistic-'));
     if (hasPendingOptimistic) {
-      //console.log('[AiChat] Waiting for previous message to complete');
       toast.info('Please wait for the previous message to complete');
       return;
     }
@@ -422,7 +287,7 @@ const AIChat: React.FC<AIChatProps> = ({
       if (!userId) {
         toast.error("User ID is missing. Please ensure you are logged in.");
         setIsLoading(false);
-        setIsCurrentlySending(false); // Clear sending flag
+        setIsCurrentlySending(false);
         return;
       }
 
@@ -501,12 +366,9 @@ const AIChat: React.FC<AIChatProps> = ({
 
       onSendMessageToBackend(inputMessage.trim(), documentIds, noteIds, filesForBackend);
 
-
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (cameraInputRef.current) cameraInputRef.current.value = '';
 
-
-      // **Disable the send button after sending the message:**
       setIsLastAiMessageDisplayed(false);
       setInputMessage('');
       setAttachedFiles([]);
@@ -526,8 +388,7 @@ const AIChat: React.FC<AIChatProps> = ({
         errorMessage = 'Server error. Please try again later.';
       } else if (error.message) {
         errorMessage = error.message;
-      }
-      else if (error.message.includes('Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details')) {
+      } else if (error.message.includes('Resource exhausted')) {
         errorMessage = 'Resource exhausted: The service is currently overloaded. Please try again later.';
       }
       toast.error(`Error: ${errorMessage}`);
@@ -536,18 +397,14 @@ const AIChat: React.FC<AIChatProps> = ({
       setExpandedMessages(new Set());
       setIsCurrentlySending(false);
       setIsAiTyping(false);
-      isSubmittingUserMessage = false;
-
+      setIsLastAiMessageDisplayed(true);
+      setIsLoading(false);
+      return;
     } finally {
       setIsLoading(false);
-      setIsCurrentlySending(false); // Always clear the sending flag
+      setIsCurrentlySending(false);
     }
-  }, [inputMessage, attachedFiles, userProfile?.id, activeChatSessionId, selectedDocumentIds, onSendMessageToBackend, isCurrentlySending]);
-
-  const isPhone = useCallback(() => {
-    const userAgent = navigator.userAgent.toLowerCase();
-    return /mobile|android|iphone|ipad|tablet/i.test(userAgent) && window.innerWidth <= 768;
-  }, []);
+  }, [inputMessage, attachedFiles, userProfile?.id, activeChatSessionId, selectedDocumentIds, onSendMessageToBackend, isCurrentlySending, messages]);
 
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {
@@ -555,13 +412,9 @@ const AIChat: React.FC<AIChatProps> = ({
       return;
     }
 
-    // Skip marking optimistic messages as displayed
     if (messageId.startsWith('optimistic-')) {
-      //console.log('[AiChat] Skipping display marking for optimistic message:', messageId);
       return;
     }
-
-    console.log('[AiChat] Marking message as displayed:', messageId);
 
     try {
       const { error } = await supabase
@@ -573,19 +426,14 @@ const AIChat: React.FC<AIChatProps> = ({
 
       if (error) {
         console.error('Error marking message as displayed:', error);
-        // Don't show toast for this error - it's not critical for UX
         return;
       }
 
-      //console.log('[AiChat] Successfully marked message as displayed:', messageId);
-
-      // Update local state
       onMessageUpdate({
         ...messages.find(msg => msg.id === messageId)!,
         has_been_displayed: true
       });
 
-      // **Check if the message is the last AI message and enable the send button:**
       if (messages.length > 0 &&
         messages[messages.length - 1].id === messageId &&
         messages[messages.length - 1].role === 'assistant') {
@@ -607,10 +455,8 @@ const AIChat: React.FC<AIChatProps> = ({
       setInputMessage('');
     } catch (error) {
       console.error('Unexpected error marking message as displayed:', error);
-      // Don't show toast - not critical for UX
     }
   }, [userProfile?.id, activeChatSessionId, messages, onMessageUpdate]);
-
 
   const handleBlockDetected = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
     if (autoTypeInPanel && isFirstBlock) {
@@ -659,186 +505,6 @@ const AIChat: React.FC<AIChatProps> = ({
     toast.info("AI correction prepared in input. Review and send to apply.");
   }, []);
 
-  const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
-    if (!("Notification" in window)) {
-      console.warn("Notification API not supported in this browser.");
-      return false;
-    }
-
-    try {
-      const permission = await Notification.requestPermission();
-      return permission === "granted";
-    } catch (error) {
-      console.error("Error requesting notification permission:", error);
-      return false;
-    }
-  }, []);
-
-  const showNotification = useCallback((title: string, options: NotificationOptions) => {
-    if (Notification.permission === "granted") {
-      new Notification(title, options);
-    }
-  }, []);
-
-  const [micPermissionStatus, setMicPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'checking'>('unknown');
-
-  const checkMicrophonePermission = useCallback(async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
-    try {
-      if (navigator.permissions && navigator.permissions.query) {
-        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        return permissionStatus.state as 'granted' | 'denied' | 'prompt';
-      }
-      return 'unknown';
-    } catch (error) {
-      console.error('Error checking microphone permission:', error);
-      return 'unknown';
-    }
-  }, []);
-
-  const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
-    const currentStatus = await checkMicrophonePermission();
-    if (currentStatus === 'granted') {
-      setMicPermissionStatus('granted');
-      return true;
-    }
-
-    setMicPermissionStatus('checking');
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
-      setMicPermissionStatus('granted');
-
-      if (currentStatus === 'prompt' || currentStatus === 'unknown') {
-        showNotification("Microphone Access Granted", {
-          body: "You can now use speech recognition.",
-          icon: "/microphone-icon.png",
-        });
-      }
-
-      return true;
-    } catch (error: any) {
-      console.error('Error requesting microphone permission:', error);
-      setMicPermissionStatus('denied');
-      toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
-      return false;
-    }
-  }, [showNotification, checkMicrophonePermission]);
-
-  const throttledSetSpeechInput = useCallback(
-    throttle((newMessage: string) => {
-      setInputMessage(newMessage);
-      resizeTextarea();
-    }, 200),
-    [resizeTextarea]
-  );
-
-  useEffect(() => {
-    const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognitionConstructor) {
-      console.warn('SpeechRecognition API not supported in this browser.');
-      return;
-    }
-
-    recognitionRef.current = new SpeechRecognitionConstructor() as SpeechRecognition;
-    recognitionRef.current.continuous = true;
-    recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = 'en-US';
-    (recognitionRef.current as any).maxAlternatives = 1;
-
-    recognitionRef.current.onresult = (event: SpeechRecognitionResultEvent) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript.trim();
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + ' ';
-        } else {
-          interimTranscript = transcript;
-        }
-      }
-
-      const baseMessage = inputMessage.replace(lastInterimTranscriptRef.current, '').trim();
-      if (finalTranscript) {
-        const newMessage = baseMessage + (baseMessage ? ' ' : '') + finalTranscript.trim();
-        lastInterimTranscriptRef.current = '';
-        setInputMessage(newMessage);
-        resizeTextarea();
-      } else if (interimTranscript) {
-        const newMessage = baseMessage + (baseMessage ? ' ' : '') + interimTranscript;
-        lastInterimTranscriptRef.current = interimTranscript;
-        throttledSetSpeechInput(newMessage);
-      }
-    };
-
-    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error:', event.error, event.message);
-      setIsRecognizing(false);
-      toast.error(`Speech recognition failed: ${event.error}`);
-    };
-
-    recognitionRef.current.onend = () => {
-      setIsRecognizing(false);
-      lastInterimTranscriptRef.current = '';
-    };
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-    };
-  }, [inputMessage, throttledSetSpeechInput, resizeTextarea]);
-
-  useEffect(() => {
-    checkMicrophonePermission().then(status => {
-      setMicPermissionStatus(status === 'granted' ? 'granted' : status === 'denied' ? 'denied' : 'unknown');
-    });
-  }, [checkMicrophonePermission]);
-
-  const startRecognition = useCallback(async () => {
-    if (!recognitionRef.current) {
-      toast.error('Speech recognition is not supported in this browser.');
-      return;
-    }
-
-    if (isRecognizing) return;
-
-    if (micPermissionStatus !== 'granted') {
-      const hasNotificationPermission = await requestNotificationPermission();
-      if (!hasNotificationPermission) {
-        console.warn("Notification permission not granted, proceeding without notifications.");
-      }
-
-      const hasMicrophonePermission = await requestMicrophonePermission();
-      if (!hasMicrophonePermission) {
-        setIsRecognizing(false);
-        return;
-      }
-    }
-
-    try {
-      lastInterimTranscriptRef.current = '';
-      recognitionRef.current.start();
-      setIsRecognizing(true);
-      toast.info('Listening... Click the mic button again to stop.');
-    } catch (error: any) {
-      console.error('Error starting speech recognition:', error);
-      toast.error(`Failed to start speech recognition: ${error.message || 'Unknown error'}`);
-      setIsRecognizing(false);
-    }
-  }, [isRecognizing, micPermissionStatus, requestMicrophonePermission, requestNotificationPermission]);
-
-  const stopRecognition = useCallback(() => {
-    if (!recognitionRef.current) return;
-    if (isRecognizing) {
-      recognitionRef.current.stop();
-      setIsRecognizing(false);
-      lastInterimTranscriptRef.current = '';
-      toast.success('Speech recognition stopped.');
-    }
-  }, [isRecognizing]);
-
   const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
@@ -848,18 +514,16 @@ const AIChat: React.FC<AIChatProps> = ({
     if (!chatContainer) return;
     const { scrollTop } = chatContainer;
 
-    const scrollThreshold = 100; // Adjust as needed
+    const scrollThreshold = 100;
     if (scrollTop <= scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
       setIsLoadingOlderMessages(true);
       try {
         const oldScrollHeight = chatContainer.scrollHeight;
         await onLoadOlderMessages();
 
-        // Wait for the new messages to render
         setTimeout(() => {
           if (chatContainerRef.current) {
             const newScrollHeight = chatContainerRef.current.scrollHeight;
-            // Restore the scroll position to maintain the user's view
             chatContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
           }
           setIsLoadingOlderMessages(false);
@@ -881,15 +545,8 @@ const AIChat: React.FC<AIChatProps> = ({
       };
     }
   }, [handleScroll]);
-  useEffect(() => {
-    // This effect will run whenever attachedFiles, selectedDocumentIds, or mergedDocuments change
-    // console.log('Context changed, re-rendering badges');
-    // No need to explicitly set state here, just ensure a re-render is triggered
-    }, [attachedFiles, selectedDocumentIds, mergedDocuments]);
-  useEffect(() => {
-    const chatContainer = chatContainerRef.current;
-    if (!chatContainer) return;
 
+  useEffect(() => {
     const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
     if (isSessionChange) {
       if (!isLoadingSessionMessages && messages.length > 0) {
@@ -908,89 +565,24 @@ const AIChat: React.FC<AIChatProps> = ({
       isSubmittingUserMessage = false;
       scrollToBottom('auto');
     }
-    // else {
-    //   const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-    //   const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200;
-    //   if (isNearBottom) {
-    //     scrollToBottom('smooth');
-    //   }
-    // }
   }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom]);
 
-  const stripCodeBlocks = useCallback((content: string): string => {
-    let cleanedContent = content;
-    cleanedContent = cleanedContent.replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, '');
-    cleanedContent = cleanedContent.replace(/`[^`]+`/g, '');
-    cleanedContent = cleanedContent.replace(/(\*\*\*|\*\*|\*|_|==)/g, '');
-    cleanedContent = cleanedContent.replace(/(\n|^)(\*\*\*|---+)\s*\n/g, '');
-    cleanedContent = cleanedContent.replace(/\n\s*\n/g, '\n').replace(/\s+/g, ' ').trim();
-    return cleanedContent;
-  }, []);
-  // useEffect(() => {
-  //   //console.log('[AiChat] documents prop updated, syncing mergedDocuments', documents.length);
-  //   setMergedDocuments(mergedDocuments);
-  // }, [mergedDocuments]);
   useEffect(() => {
-    if (
-      !isPhone() ||
-      isLoading ||
-      isLoadingSessionMessages ||
-      !speechSynthesisRef.current ||
-      blockAutoSpeakRef.current ||
-      !messages.length
-    ) {
-      return;
-    }
+  }, [attachedFiles, selectedDocumentIds, mergedDocuments]);
 
-    const lastMessage = messages[messages.length - 1];
-    if (
-      lastMessage?.role === 'assistant' &&
-      !lastMessage.isError &&
-      lastMessage.id !== lastProcessedMessageIdRef.current &&
-      !isSpeaking &&
-      !isPaused
-    ) {
-      const cleanedContent = stripCodeBlocks(lastMessage.content);
-      if (cleanedContent) {
-        const utterance = new SpeechSynthesisUtterance(cleanedContent);
-        utterance.lang = 'en-US';
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-          currentUtteranceRef.current = null;
-          lastSpokenChunkRef.current = '';
-          lastProcessedMessageIdRef.current = lastMessage.id;
-          blockAutoSpeakRef.current = true;
-        };
-
-        utterance.onerror = (event) => {
-          if (event.error === 'interrupted') return;
-          console.error('Speech synthesis error:', event.error);
-          toast.error(`Speech synthesis failed: ${event.error}`);
-          setIsSpeaking(false);
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-          currentUtteranceRef.current = null;
-          lastSpokenChunkRef.current = '';
-          lastProcessedMessageIdRef.current = lastMessage.id;
-          blockAutoSpeakRef.current = true;
-        };
-
-        speechSynthesisRef.current.cancel();
-        currentUtteranceRef.current = utterance;
-        speechSynthesisRef.current.speak(utterance);
-        setIsSpeaking(true);
-        setSpeakingMessageId(lastMessage.id);
-        lastSpokenChunkRef.current = cleanedContent;
-        lastProcessedMessageIdRef.current = lastMessage.id;
+  const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
+    setMergedDocuments(prevDocs => {
+      const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
+      if (existingIndex > -1) {
+        const newDocs = [...prevDocs];
+        newDocs[existingIndex] = updatedDoc;
+        return newDocs;
+      } else {
+        return [...prevDocs, updatedDoc];
       }
-    }
-  }, [messages, isLoading, isLoadingSessionMessages, isPhone, isSpeaking, isPaused, stripCodeBlocks]);
+    });
+    onDocumentUpdated(updatedDoc);
+  }, [onDocumentUpdated]);
 
   const handleMessageDeleteClick = useCallback((messageId: string) => {
     setMessageToDelete(messageId);
@@ -1038,108 +630,6 @@ const AIChat: React.FC<AIChatProps> = ({
     setAttachedFiles([]);
   }, []);
 
-
-  // In handleDocumentUpdatedLocally:
-  const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
-    setMergedDocuments(prevDocs => {
-      const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
-      if (existingIndex > -1) {
-        const newDocs = [...prevDocs];
-        newDocs[existingIndex] = updatedDoc;
-        return newDocs;
-      } else {
-        return [...prevDocs, updatedDoc];
-      }
-    });
-    onDocumentUpdated(updatedDoc);
-  }, [onDocumentUpdated]);
-
-  const stopSpeech = useCallback(() => {
-    if (speechSynthesisRef.current) {
-      speechSynthesisRef.current.cancel();
-      setIsSpeaking(false);
-      setSpeakingMessageId(null);
-      setIsPaused(false);
-      currentUtteranceRef.current = null;
-      lastSpokenChunkRef.current = '';
-      blockAutoSpeakRef.current = true;
-    }
-  }, []);
-
-  const pauseSpeech = useCallback(() => {
-    if (speechSynthesisRef.current && isSpeaking && !isPaused) {
-      speechSynthesisRef.current.pause();
-      setIsPaused(true);
-    }
-  }, [isSpeaking, isPaused]);
-
-  const resumeSpeech = useCallback(() => {
-    if (speechSynthesisRef.current && isSpeaking && isPaused) {
-      speechSynthesisRef.current.resume();
-      setIsPaused(false);
-    }
-  }, [isSpeaking, isPaused]);
-
-  const speakMessage = useCallback((messageId: string, content: string) => {
-    if (!speechSynthesisRef.current) {
-      toast.error('Text-to-speech is not supported in this browser.');
-      return;
-    }
-
-    stopSpeech();
-
-    const cleanedContent = stripCodeBlocks(content);
-    if (!cleanedContent) {
-      toast.info('No readable text found after sanitization.');
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(cleanedContent);
-    utterance.lang = 'en-US';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      setSpeakingMessageId(null);
-      setIsPaused(false);
-      currentUtteranceRef.current = null;
-      lastSpokenChunkRef.current = '';
-      lastProcessedMessageIdRef.current = messageId;
-      blockAutoSpeakRef.current = true;
-    };
-
-    utterance.onerror = (event) => {
-      if (event.error === 'interrupted') return;
-      console.error('Speech synthesis error:', event.error);
-      toast.error(`Speech synthesis failed: ${event.error}`);
-      setIsSpeaking(false);
-      setSpeakingMessageId(null);
-      setIsPaused(false);
-      currentUtteranceRef.current = null;
-      lastSpokenChunkRef.current = '';
-      lastProcessedMessageIdRef.current = messageId;
-      blockAutoSpeakRef.current = true;
-    };
-
-    speechSynthesisRef.current.cancel();
-    currentUtteranceRef.current = utterance;
-    speechSynthesisRef.current.speak(utterance);
-    setIsSpeaking(true);
-    setSpeakingMessageId(messageId);
-    setIsPaused(false);
-    lastSpokenChunkRef.current = cleanedContent;
-    lastProcessedMessageIdRef.current = messageId;
-  }, [stopSpeech, stripCodeBlocks]);
-
-  useEffect(() => {
-    return () => {
-      stopSpeech();
-      stopRecognition();
-    };
-  }, [stopSpeech, stopRecognition]);
-
   useEffect(() => {
     if (activeChatSessionId !== null) {
       stopSpeech();
@@ -1172,45 +662,6 @@ const AIChat: React.FC<AIChatProps> = ({
       .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'image');
   }, [mergedDocuments, selectedDocumentIds]);
 
-  const contextBadges = useMemo(() => (
-    <div className="mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700">
-      <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200 font-claude">Context:</span>
-      {attachedFiles.length > 0 && (
-        <Badge
-          variant="secondary"
-          className="bg-orange-500/20 text-orange-800 border-orange-400 flex items-center gap-1 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700 text-sm md:text-base font-sans"
-        >
-          <Paperclip className="h-3 w-3" />
-          {attachedFiles.length} File{attachedFiles.length > 1 ? 's' : ''}
-          <XCircle
-            className="h-3 w-3 ml-1 cursor-pointer text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-200"
-            onClick={handleRemoveAllFiles}
-          />
-        </Badge>
-      )}
-      {selectedImageDocuments.length > 0 && (
-        <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
-          <Image className="h-3 w-3" /> {selectedImageDocuments.length} Image Doc{selectedImageDocuments.length > 1 ? 's' : ''}
-          <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !selectedImageDocuments.map(imgDoc => imgDoc.id).includes(id)))} />
-        </Badge>
-      )}
-      {selectedDocumentTitles.length > 0 && (
-        <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
-          <BookOpen className="h-3 w-3 mr-1" /> {selectedDocumentTitles.length} Text Doc{selectedDocumentTitles.length > 1 ? 's' : ''}
-          <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !documents.filter(doc => doc.type === 'text').map(d => d.id).includes(id)))} />
-        </Badge>
-      )}
-      {selectedNoteTitles.length > 0 && (
-        <Badge variant="secondary" className="bg-green-500/20 text-green-800 border-green-400 flex items-center gap-1 dark:bg-green-950 dark:text-green-300 dark:border-green-700 text-sm md:text-base font-sans">
-          <StickyNote className="h-3 w-3 mr-1" /> {selectedNoteTitles.length} Note{selectedNoteTitles.length > 1 ? 's' : ''}
-          <XCircle className="h-3 w-3 ml-1 cursor-pointer text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !notes.map(n => n.id).includes(id)))} />
-        </Badge>
-      )}
-    </div>
-  ), [attachedFiles, selectedImageDocuments, selectedDocumentTitles, selectedNoteTitles, handleRemoveAllFiles, onSelectionChange, documents, notes, selectedDocumentIds]);
-
-  // const displayMessages = useMemo(() => messages, [messages]);
-
   function handleDiagramCodeUpdate(messageId: string, newCode: string): Promise<void> {
     toast.info('Diagram code updated. You can regenerate the response to see changes.');
     return Promise.resolve();
@@ -1220,27 +671,9 @@ const AIChat: React.FC<AIChatProps> = ({
     <>
       <div
         ref={dropZoneRef}
-        className={`flex flex-col h-[93vh] border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-          }`}
+        className={`flex flex-col h-[93vh] border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
       >
-        {/* **Drag and Drop Overlay:** */}
-        {isDragging && (
-          <div className="fixed inset-0 bg-blue-500/20 dark:bg-blue-500/30 z-50 flex items-center justify-center">
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-lg border-2 border-dashed border-blue-500 shadow-lg">
-              <div className="flex flex-col items-center gap-4">
-                <Upload className="h-16 w-16 text-blue-500" />
-                <div className="text-center">
-                  <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
-                    Drop files here to attach
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Images, documents, and other files are supported
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <DragOverlay isDragging={isDragging} />
 
         <motion.div className={`relative flex flex-col h-full rounded-lg panel-transition
   ${isDiagramPanelOpen
@@ -1333,14 +766,25 @@ ${isDiagramPanelOpen
                   </div>
                 </div>
               )}
-              {(attachedFiles.length > 0 || selectedDocumentIds.length > 0) && contextBadges}
+              {(attachedFiles.length > 0 || selectedDocumentIds.length > 0) && (
+                <ContextBadges
+                  attachedFiles={attachedFiles}
+                  selectedImageDocuments={selectedImageDocuments}
+                  selectedDocumentTitles={selectedDocumentTitles}
+                  selectedNoteTitles={selectedNoteTitles}
+                  handleRemoveAllFiles={handleRemoveAllFiles}
+                  onSelectionChange={onSelectionChange}
+                  selectedDocumentIds={selectedDocumentIds}
+                  documents={documents}
+                  notes={notes}
+                />
+              )}
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
                 onChange={(e) => {
                   e.preventDefault();
                   setInputMessage(e.target.value);
-                  // throttledResizeTextarea();
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -1350,7 +794,7 @@ ${isDiagramPanelOpen
                 }}
                 placeholder="What do you want to know? (You can also drag and drop files here)"
                 className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 rounded-sm transition-colors duration-300 font-claude"
-                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping} // Added isAiTyping
+                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
                 rows={1}
               />
               <div className="flex items-center gap-2 mt-2 justify-between">
@@ -1380,7 +824,6 @@ ${isDiagramPanelOpen
                       isSubmittingUserMessage ||
                       isGeneratingImage ||
                       isUpdatingDocuments ||
-                      !recognitionRef.current ||
                       micPermissionStatus === 'checking' ||
                       isAiTyping
                     }
@@ -1466,7 +909,7 @@ ${isDiagramPanelOpen
                     (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) ||
                     !isLastAiMessageDisplayed ||
                     isCurrentlySending ||
-                    isAiTyping || // Added isAiTyping
+                    isAiTyping ||
                     messages.some(msg => msg.id.startsWith('optimistic-'))
                   }
                   className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
@@ -1503,7 +946,6 @@ ${isDiagramPanelOpen
               isLoadingDocuments={isLoadingDocuments}
               onDocumentUpdated={handleDocumentUpdatedLocally}
               activeChatSessionId={activeChatSessionId}
-
             />
           )}
           <ConfirmationModal
@@ -1549,20 +991,7 @@ ${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
   );
 };
 
-// Custom equality function for React.memo
 const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
-  if (prevProps.isLoading === nextProps.isLoading &&
-    prevProps.isSubmittingUserMessage === nextProps.isSubmittingUserMessage &&
-    prevProps.isLoadingSessionMessages === nextProps.isLoadingSessionMessages &&
-    prevProps.activeChatSessionId === nextProps.activeChatSessionId &&
-    prevProps.messages === nextProps.messages &&
-    prevProps.selectedDocumentIds === nextProps.selectedDocumentIds &&
-    prevProps.documents === nextProps.documents) {
-    //console.log('AIChat props unchanged, skipping re-render');
-  }
-  else {
-    //console.log('AIChat props changed, re-rendering');
-  }
   return (
     prevProps.isLoading === nextProps.isLoading &&
     prevProps.isSubmittingUserMessage === nextProps.isSubmittingUserMessage &&
@@ -1571,7 +1000,6 @@ const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
     prevProps.messages === nextProps.messages &&
     prevProps.selectedDocumentIds === nextProps.selectedDocumentIds &&
     prevProps.documents === nextProps.documents
-
   );
 };
 

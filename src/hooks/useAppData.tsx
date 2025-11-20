@@ -36,7 +36,7 @@ const LOADING_PRIORITIES = {
   quizzes: 6       // Lower - settings specific
 };
 
-interface DataLoadingState {
+export interface DataLoadingState {
   notes: boolean;
   recordings: boolean;
   scheduleItems: boolean;
@@ -1503,4 +1503,5 @@ export const useAppData = () => {
     loadSpecificDocuments,
     loadSpecificNotes,
   };
+  
 };
