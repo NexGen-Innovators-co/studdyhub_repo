@@ -1350,20 +1350,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                         <Card
                           key={doc.id}
                           ref={isLast ? lastDocumentElementRef : null}
-                          className={`group border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
+                          className={`group border-0 shadow-lg hover:shadow-xl animate-in slide-in-from-top-2 fade-in duration-500 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
                             }`}
                         >
                           {/* Add folder badges to show which folders the document is in */}
-                          <CardContent className="p-0">
+                          <CardContent className="p-0 ">
                             {viewMode === 'grid' ? (
                               <>
                                 {/* Grid View */}
-                                <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800">
+                                <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 ">
                                   {getFileCategory(doc.file_type) === 'image' && doc.file_url ? (
                                     <img
                                       src={doc.file_url}
                                       alt={doc.title}
-                                      className="w-full h-full object-cover"
+                                      className="w-full h-full object-contain"
                                       onError={(e) => {
                                         e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error';
                                         e.currentTarget.alt = 'Image failed to load';
@@ -1868,23 +1868,32 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             </div>
           </Suspense>
         )}
-        {dataLoading && (
-          <div className="mt-6">
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                  <DocumentCardSkeleton key={`loadmore-${i}`} />
-                ))}
+        {/* Loading More / No More Indicator - exactly like NotesList */}
+        {dataPagination?.documents?.hasMore || dataLoading ? (
+          <div
+            className={`w-full flex justify-center items-center py-12 ${viewMode === 'grid' ? 'col-span-full' : ''
+              }`}
+            style={{ minHeight: '120px' }} // makes sure it has height + triggers scroll earlier
+          >
+            {dataPagination?.documents?.hasMore && !dataLoading ? (
+              <div className="flex items-center gap-3 text-slate-600 dark:text-gray-400">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Loading more documents...</span>
               </div>
             ) : (
-              <div className="space-y-4">
-                {[...Array(6)].map((_, i) => (
-                  <DocumentCardSkeleton key={`loadmore-${i}`} />
-                ))}
-              </div>
+              <span className="text-sm text-slate-400 dark:text-gray-500">
+                Scroll to load more
+              </span>
             )}
           </div>
-        )}
+        ) : filteredAndSortedDocuments.length > 0 ? (
+          <div
+            className={`w-full text-center py-8 text-slate-400 dark:text-gray-500 ${viewMode === 'grid' ? 'col-span-full' : ''
+              }`}
+          >
+            No more documents
+          </div>
+        ) : null}
 
         {!dataPagination.documents.hasMore && filteredAndSortedDocuments.length > 0 && (
           <div className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400">
