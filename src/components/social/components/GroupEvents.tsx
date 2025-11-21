@@ -439,7 +439,7 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {events.map((event) => {
             const isPast = isEventPast(event);
             const isFull = isEventFull(event);
@@ -447,20 +447,20 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
 
             return (
               <Card key={event.id} className={`${isPast ? 'opacity-60' : ''}`}>
-                <CardContent className="pt-6">
-                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <CardContent className="pt-4 sm:pt-6 px-3 sm:px-6">
+                  <div className="flex flex-col gap-3 sm:gap-4">
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="text-xl font-semibold mb-1">{event.title}</h3>
-                          <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <Avatar className="h-5 w-5">
+                        <div className="flex-1 min-w-0 pr-2">
+                          <h3 className="text-lg sm:text-xl font-semibold mb-1 break-words">{event.title}</h3>
+                          <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
+                            <Avatar className="h-4 w-4 sm:h-5 sm:w-5">
                               <AvatarImage src={event.organizer?.avatar_url} />
                               <AvatarFallback className="text-xs">
                                 {event.organizer?.display_name?.charAt(0)}
                               </AvatarFallback>
                             </Avatar>
-                            <span>Organized by {event.organizer?.display_name}</span>
+                            <span className="truncate">Organized by {event.organizer?.display_name}</span>
                           </div>
                         </div>
                         {isOrganizer && canManage && (
@@ -468,6 +468,7 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteEvent(event.id)}
+                            className="flex-shrink-0"
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
@@ -475,33 +476,33 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
                       </div>
 
                       {event.description && (
-                        <p className="text-gray-600 dark:text-gray-400 mb-3">
+                        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-3">
                           {event.description}
                         </p>
                       )}
 
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Clock className="h-4 w-4 text-blue-500" />
-                          <span className="font-medium">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
+                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500 flex-shrink-0" />
+                          <span className="font-medium break-all">
                             {formatDateTime(event.start_date)}
                           </span>
                           {isPast && (
-                            <Badge variant="secondary" className="ml-2">Past Event</Badge>
+                            <Badge variant="secondary" className="text-xs">Past Event</Badge>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
                           {event.is_online ? (
                             <>
-                              <Video className="h-4 w-4 text-green-500" />
+                              <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
                               <span>Online Event</span>
                               {event.location && (
                                 <a
                                   href={event.location}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-blue-600 hover:underline ml-2"
+                                  className="text-blue-600 hover:underline break-all"
                                 >
                                   Join Meeting
                                 </a>
@@ -509,20 +510,20 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
                             </>
                           ) : (
                             <>
-                              <MapPin className="h-4 w-4 text-red-500" />
-                              <span>{event.location || 'Location TBD'}</span>
+                              <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500 flex-shrink-0" />
+                              <span className="break-words">{event.location || 'Location TBD'}</span>
                             </>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 text-sm">
-                          <UsersIcon className="h-4 w-4 text-blue-500" />
+                        <div className="flex items-center gap-2 text-xs sm:text-sm">
+                          <UsersIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
                           <span>
                             {event.attendees_count || 0} attending
                             {event.max_attendees && ` (${event.max_attendees} max)`}
                           </span>
                           {isFull && (
-                            <Badge variant="secondary" className="ml-2">Full</Badge>
+                            <Badge variant="secondary" className="text-xs">Full</Badge>
                           )}
                         </div>
                       </div>
@@ -530,34 +531,34 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
 
                     {/* RSVP Buttons */}
                     {!isPast && (
-                      <div className="flex flex-col gap-2 min-w-[140px]">
+                      <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-col sm:gap-2 sm:min-w-[140px]">
                         <Button
                           size="sm"
                           variant={event.user_attendance_status === 'attending' ? 'default' : 'outline'}
                           onClick={() => handleUpdateRSVP(event.id, 'attending')}
                           disabled={isFull && event.user_attendance_status !== 'attending'}
-                          className="w-full"
+                          className="w-full text-xs sm:text-sm"
                         >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          {event.user_attendance_status === 'attending' ? 'Attending' : 'Attend'}
+                          <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1" />
+                          <span className="hidden sm:inline">{event.user_attendance_status === 'attending' ? 'Attending' : 'Attend'}</span>
                         </Button>
                         <Button
                           size="sm"
                           variant={event.user_attendance_status === 'maybe' ? 'default' : 'outline'}
                           onClick={() => handleUpdateRSVP(event.id, 'maybe')}
-                          className="w-full"
+                          className="w-full text-xs sm:text-sm"
                         >
-                          <HelpCircle className="h-4 w-4 mr-1" />
-                          Maybe
+                          <HelpCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1" />
+                          <span className="hidden sm:inline">Maybe</span>
                         </Button>
                         <Button
                           size="sm"
                           variant={event.user_attendance_status === 'declined' ? 'destructive' : 'outline'}
                           onClick={() => handleUpdateRSVP(event.id, 'declined')}
-                          className="w-full"
+                          className="w-full text-xs sm:text-sm"
                         >
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Decline
+                          <XCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1" />
+                          <span className="hidden sm:inline">Decline</span>
                         </Button>
                       </div>
                     )}

@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { Search, Plus, Menu, Bell, LogOut, Loader2 } from 'lucide-react';
+import { Search, Plus, Menu, Bell, LogOut, Loader2, Users, TrendingUp, User, Home } from 'lucide-react';
 // import { Button } from '../ui/button'; // Replaced with local definition
 // import { Input } from '../ui/input'; // Replaced with local definition
 import { useNavigate } from 'react-router-dom';
 import BookPagesAnimation from '../ui/bookloader';
 import { toast } from 'sonner';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
+import { useAuth } from '@/hooks/useAuth';
 
 // --- Local UI Component Definitions (To fix import errors) ---
 const Button = ({ className = '', variant = 'default', size = 'default', children, ...props }) => {
@@ -89,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSocialSearchChange,
   onOpenCreatePostDialog,
 }) => {
-  const { logout } = { logout: () => new Promise(resolve => setTimeout(resolve, 500)) }; // Mock useAuth
+  const { signOut } = useAuth();
   const navigate = useNavigate();
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -110,9 +111,9 @@ export const Header: React.FC<HeaderProps> = ({
   const handleConfirmLogout = useCallback(async () => {
     setIsLoggingOut(true);
     try {
-      await logout();
+      await signOut();
       toast.success('Successfully signed out.');
-      navigate('/auth');
+      navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
       toast.error('Failed to sign out.');
@@ -121,14 +122,14 @@ export const Header: React.FC<HeaderProps> = ({
       setShowLogoutConfirm(false);
       setIsAvatarMenuOpen(false);
     }
-  }, [logout, navigate]);
+  }, [signOut, navigate]);
 
   const handleSocialInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     onSocialSearchChange(v);
     // keep URL in sync so the feed picks it up
     const search = v ? `?search=${encodeURIComponent(v)}` : '';
-    navigate(`/social${search}`, { replace: true });
+    navigate(`/social/feed${search}`, { replace: true });
   };
 
   return (
@@ -151,35 +152,62 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* --- SOCIAL SPECIFIC ACTIONS (CENTER) --- */}
+      {/* --- SOCIAL NAVIGATION IN HEADER – BLUE TEXT VERSION --- */}
       {activeTab === 'social' && (
-        <div className="flex items-center space-x-3 flex-1 max-w-xl mx-4">
-          {/* Search Input */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              type="text"
-              placeholder="Search posts, groups, and people..."
-              value={socialSearchQuery}
-              onChange={handleSocialInputChange}
-              className="pl-10 w-full rounded-full h-10 border-slate-200 dark:border-gray-700 dark:bg-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow"
-            />
+        <>
+          {/* Desktop / Tablet – Full Labels */}
+          <div className="hidden sm:flex items-center justify-center flex-1 max-w-5xl mx-auto">
+            <div className="flex items-center  p-1.5 gap-1">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                <Input
+                  type="text"
+                  placeholder="Search posts, people, groups..."
+                  value={socialSearchQuery}
+                  onChange={handleSocialInputChange}
+                  className="pl-10 pr-4 h-9 w-80 bg-transparent border-0 focus:ring-0 text-sm placeholder:text-slate-500"
+                />
+              </div>
+
+              <div className="h-6 w-px bg-slate-300 dark:bg-slate-600 mx-2" />
+
+              {/* Social Navigation Buttons */}
+              {[
+                { id: 'feed', label: 'Home', icon: Home, path: '/social/feed' },
+                { id: 'trending', label: 'Trending', icon: TrendingUp, path: '/social/trending' },
+                { id: 'groups', label: 'Groups', icon: Users, path: '/social/groups' },
+                { id: 'notifications', label: 'Notifications', icon: Bell, path: '/social/notifications' },
+                { id: 'profile', label: 'Profile', icon: User, path: '/social/profile' },
+              ].map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+
+                return (
+                  <Button
+                    key={item.id}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(item.path)}
+                    className={`
+                rounded-full px-5 h-9 text-sm font-medium transition-all flex items-center gap-2
+                ${isActive
+                        ? 'bg-blue-600 text-white shadow-md hover:bg-blue-100'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }
+              `}
+                  >
+                    <Icon className={`h-4 w-4 ${isActive ? 'text-blue-600' : 'text-slate-500 dark:text-slate-400'}`} />
+                    <span className={isActive ? 'text-blue-600 font-semibold' : ''}>
+                      {item.label}
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
           </div>
-
-          {/* Create Post Button (Desktop) */}
-          <Button
-            onClick={onOpenCreatePostDialog}
-            className="hidden sm:inline-flex bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg"
-            size="sm"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Post
-          </Button>
-        </div>
+        </>
       )}
-
-      {/* --- DEFAULT ACTIONS (CENTER) - Only visible when not on social tab --- */}
-
 
       {/* --- USER PROFILE & ACTIONS (RIGHT) --- */}
       <div className="flex items-center space-x-2 sm:space-x-4">

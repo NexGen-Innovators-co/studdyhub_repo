@@ -59,21 +59,23 @@ export const GroupMembers: React.FC<GroupMembersProps> = ({ groupId, currentUser
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader>
-          <CardTitle>Members ({members.length})</CardTitle>
+        <CardHeader className="px-4 sm:px-6">
+          <CardTitle className="text-lg sm:text-xl">Members ({members.length})</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-6">
           {members.map(member => (
-            <div key={member.id} className="flex items-center gap-4">
-              <Avatar>
+            <div key={member.id} className="flex items-center gap-3 sm:gap-4 p-2 sm:p-0">
+              <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
                 <AvatarImage src={member.avatar_url} />
-                <AvatarFallback>{member.display_name.charAt(0)}</AvatarFallback>
+                <AvatarFallback className="text-sm sm:text-base">
+                  {member.display_name.charAt(0)}
+                </AvatarFallback>
               </Avatar>
-              <div className="flex-1">
-                <p className="font-medium">{member.display_name}</p>
-                <p className="text-sm text-gray-500">@{member.username}</p>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm sm:text-base truncate">{member.display_name}</p>
+                <p className="text-xs sm:text-sm text-gray-500 truncate">@{member.username}</p>
               </div>
-              <Badge variant="secondary" className="capitalize">
+              <Badge variant="secondary" className="capitalize text-xs flex-shrink-0">
                 {member.role}
               </Badge>
             </div>

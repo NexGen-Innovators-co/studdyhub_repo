@@ -194,6 +194,16 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
+  // Listen for custom event to trigger create group dialog
+  useEffect(() => {
+    const handleTriggerCreateGroup = () => {
+      setIsCreateDialogOpen(true);
+    };
+
+    window.addEventListener('triggerCreateGroup', handleTriggerCreateGroup);
+    return () => window.removeEventListener('triggerCreateGroup', handleTriggerCreateGroup);
+  }, []);
+
   useEffect(() => {
     if (!loadMoreRef.current || !onLoadMore || !hasMore || isLoadingMore) return;
     const observer = new IntersectionObserver((entries) => {

@@ -335,7 +335,7 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
     <div className="space-y-6">
       {/* Create Post Card */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 ">
           <div className="flex gap-3">
             <Avatar className="h-10 w-10">
               <AvatarImage src={currentUser?.avatar_url} />
