@@ -49,14 +49,6 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
       <DialogContent className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">Create Post</DialogTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-            className="absolute right-4 top-4 text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-700"
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
         <div className="space-y-4 p-6">
           <Textarea

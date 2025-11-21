@@ -700,7 +700,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     try {
       await signOut();
       toast.success('Signed out successfully');
-      navigate('/auth');
+      navigate('/');
     } catch (error) {
       toast.error('Error signing out');
     } finally {

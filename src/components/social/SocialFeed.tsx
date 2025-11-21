@@ -39,20 +39,16 @@ interface SocialFeedProps {
   postId?: string;
 }
 
-export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiveTab, postId }) => {
+export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActiveTab, postId }) => {
   // State management
   const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications'>(initialActiveTab as any || 'feed');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<SortBy>('newest');
-  const [filterBy, setFilterBy] = useState<FilterBy>('all');
   const [showPostDialog, setShowPostDialog] = useState(false);
 
   // IMPROVED Pull-to-refresh & scroll-to-top states
   const [isPulling, setIsPulling] = useState(false);
-  const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-  const [canPull, setCanPull] = useState(false);
+
 
   // Post creation state
   const [newPostContent, setNewPostContent] = useState('');
@@ -67,12 +63,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
   const topRef = useRef<HTMLDivElement>(null);
   const firstPostRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
-  const touchStartY = useRef(0);
-  const rafId = useRef<number | null>(null);
-
-  const PULL_THRESHOLD = 80;
-  const MAX_PULL = 120;
-  const SCROLL_THRESHOLD = 5;
 
   const suggestedStripScrollPositions = useRef<Map<string, number>>(new Map());
 
@@ -133,7 +123,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
     isLoadingSuggestedUsers,
     hasMoreSuggestedUsers,
     loadMoreSuggestedUsers,
-  } =  useSocialDataContext();
+  } = useSocialDataContext();
 
   const {
     createPost,
@@ -239,16 +229,28 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
       profileObserver?.disconnect();
       suggestedObserver?.disconnect();
     };
-  }, [activeTab, hasMorePosts, hasMoreTrendingPosts, hasMoreUserPosts, isLoadingMorePosts, isLoadingUserPosts, hasMoreSuggestedUsers, isLoadingSuggestedUsers, loadMoreSuggestedUsers, isPulling, isRefreshing, loadMorePosts, loadMoreTrendingPosts, loadMoreUserPosts]);
-
-  useEffect(() => cleanup, [cleanup]);
-
+  }, [activeTab, hasMorePosts, hasMoreTrendingPosts, hasMoreUserPosts, isLoadingMorePosts, isLoadingUserPosts, hasMoreSuggestedUsers, isLoadingSuggestedUsers, loadMoreSuggestedUsers, isRefreshing, loadMorePosts, loadMoreTrendingPosts, loadMoreUserPosts]);
+  // Sync activeTab with URL route
   useEffect(() => {
-    if (routeTab) setActiveTab(routeTab as any);
-    else if (initialActiveTab) setActiveTab(initialActiveTab as any);
+    if (routeTab) {
+      setActiveTab(routeTab as any);
+    } else if (initialActiveTab) {
+      setActiveTab(initialActiveTab as any);
+    }
   }, [routeTab, initialActiveTab]);
 
+  // Update URL when activeTab changes
+  useEffect(() => {
+    if (!routeTab && activeTab && !routePostId && !routeGroupId) {
+      // Only update URL if we're not already on a specific route
+      const currentPath = location.pathname;
+      const expectedPath = `/social/${activeTab}`;
 
+      if (currentPath !== expectedPath) {
+        navigate(expectedPath, { replace: true });
+      }
+    }
+  }, [activeTab, routeTab, routePostId, routeGroupId, location.pathname, navigate]);
 
   // Handlers
   const handleCreatePost = async () => {
@@ -286,16 +288,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
   };
 
   const scrollToTop = () => {
-    // Try scrolling the topRef element into view first (works for both document and nested containers)
-    if (topRef.current && typeof topRef.current.scrollIntoView === 'function') {
-      try {
-        topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return;
-      } catch {
-        // ignore and fall back
-      }
-    }
-
     // Determine the scroll container at the time of click (use existing ref or compute)
     const container = scrollContainerRef.current ?? findScrollParent(topRef.current);
     if (!container) {
@@ -322,34 +314,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
     }
   };
 
-  // track scroll position to show/hide floating action buttons
-  useEffect(() => {
-    const container = findScrollParent(topRef.current);
-    scrollContainerRef.current = container as unknown as HTMLElement;
-
-    const onScroll = () => {
-      const scTop =
-        container === document.scrollingElement || container === document.documentElement
-          ? window.scrollY || window.pageYOffset
-          : (container as HTMLElement).scrollTop;
-      setShowScrollTop((prev) => {
-        const next = scTop > 300;
-        if (next !== prev) return next;
-        return prev;
-      });
-    };
-
-    // initial
-    onScroll();
-
-    if (container === document.scrollingElement || container === document.documentElement) {
-      window.addEventListener('scroll', onScroll, { passive: true });
-      return () => window.removeEventListener('scroll', onScroll);
-    } else {
-      (container as HTMLElement).addEventListener('scroll', onScroll, { passive: true });
-      return () => (container as HTMLElement).removeEventListener('scroll', onScroll);
-    }
-  }, []);
 
   const filterPosts = (postList: any[]) => {
     if (!searchQuery.trim()) return postList;
@@ -557,14 +521,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
     : null;
 
   return (
-    <div className="min-h-screen bg-transparent font-sans">
+    <div className=" bg-transparent font-sans">
 
-      <div className="max-w-[1440px] mx-auto px-0 sm:px-4 md:px-6">
+      <div className=" max-w-[1440px] mx-auto px-0 ">
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8 relative">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8 relative max-h-screen overflow-y-auto modern-scrollbar ">
 
           {/* Left Sidebar like LinkedIn */}
-          <div className="hidden lg:block lg:col-span-3 sticky top-0 h-screen pt-6 overflow-y-auto scrollbar-hide pr-8">
+          <div className="hidden lg:block lg:col-span-3 sticky top-0 h-screen lg:pt-3 overflow-y-auto scrollbar-hide pr-8 modern-scrollbar">
             <div className="space-y-6 w-full max-w-[350px]">
               {/* Profile Card */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
@@ -588,9 +552,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
                       <span className="text-slate-500">Following</span>
                       <span className="font-medium">{currentUser?.following_count || 0}</span>
                     </div>
-                    <Button 
-                      variant="outline" 
-                      className="w-full" 
+                    <Button
+                      variant="outline"
+                      className="w-full"
                       onClick={() => setActiveTab('profile')}
                     >
                       View Profile
@@ -600,11 +564,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
               </div>
 
               {/* Additional sections if needed */}
-              {/* For example, My Network or Saved Items */}
+
             </div>
           </div>
-
-          <main className="col-span-1 lg:col-span-6 max-h-[95vh] overflow-y-auto scrollbar-hide lg:border-x border-slate-200 dark:border-slate-800 pb-20 lg:pb-0">
+          <main className="col-span-1 lg:col-span-6 max-h-screen overflow-y-auto modern-scrollbar pb-20 lg:pb-20">
             <div ref={topRef} />
 
             {hasNewPosts && newPostsCount > 0 && (
@@ -623,7 +586,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
               </div>
             )}
 
-            <div className="px-0 ">
+            <div className="pb-10  ">
               {routePostId && postToDisplay ? (
                 <div className="mb-6">
                   <Button variant="ghost" onClick={() => navigate('/social/feed')} className="mb-2 pl-0 hover:pl-2">← Back</Button>
@@ -743,72 +706,336 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({  activeTab: initialActiv
               )}
             </div>
           </main>
-          <div className="hidden lg:block lg:col-span-3 sticky top-0 h-screen pt-6 overflow-y-auto scrollbar-hide pl-8">
-            <div className="space-y-6 w-full max-w-[350px]">
+          <div className="hidden lg:block lg:col-span-3 sticky top-0 lg:pb-20  lg:pt-3">
+            <div className="space-y-6 w-full max-w-[350px] max-h-[90vh] rounded-2xl shadow-sm overflow-y-auto modern-scrollbar ">
 
-              {/* Trending Widget */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-                  <h3 className="font-bold text-lg flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-yellow-500" /> Trends for you
-                  </h3>
-                </div>
-                <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {trendingHashtags.slice(0, 5).map((tag, i) => (
-                    <div key={i} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
-                      <div className="text-xs text-slate-500 mb-1">Trending</div>
-                      <div className="font-bold text-slate-800 dark:text-slate-200">#{tag.name}</div>
-                      <div className="text-xs text-slate-500 mt-1">{tag.count} posts</div>
+              {/* Tab-Specific Widgets */}
+              {activeTab === 'feed' && (
+                <>
+                  {/* Quick Actions Widget */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-blue-100 dark:border-slate-700 overflow-hidden">
+                    <div className="p-4">
+                      <h3 className="font-bold text-lg mb-3 text-blue-900 dark:text-blue-100">Quick Actions</h3>
+                      <div className="space-y-2">
+
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start bg-white dark:bg-slate-800"
+                          onClick={() => setShowPostDialog(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-2" /> Create Post
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start bg-white dark:bg-slate-800"
+                          onClick={() => navigate('/social/groups')}
+                        >
+                          <Users className="h-4 w-4 mr-2" /> Browse Groups
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start bg-white dark:bg-slate-800"
+                          onClick={() => {
+                            navigate('/social/groups');
+                            setTimeout(() => {
+                              const event = new CustomEvent('triggerCreateGroup');
+                              window.dispatchEvent(event);
+                            }, 100);
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-2" /> Create Group
+                        </Button>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <div className="p-3 text-center">
-                  <Button variant="ghost" className="text-blue-600 text-sm w-full" onClick={() => setActiveTab('trending')}>Show more</Button>
-                </div>
-              </div>
+                  </div>
 
-              {/* Suggested Users Widget */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden sticky top-6 z-10">
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-                  <h3 className="font-bold text-lg">Who to follow</h3>
-                </div>
-                <div className="p-4 space-y-4">
-                  {uniqueSuggestedUsers.map((user) => (
-                    <div key={user.id} className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={user.avatar_url} />
-                          <AvatarFallback>{user.display_name?.[0]}</AvatarFallback>
-                        </Avatar>
-                        <div className="truncate">
-                          <p className="font-semibold text-sm truncate">{user.display_name}</p>
-                          <p className="text-xs text-slate-500 truncate">@{user.username}</p>
+                  {/* Trending Widget */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                      <h3 className="font-bold text-lg flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-yellow-500" /> Trends for you
+                      </h3>
+                    </div>
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {trendingHashtags.slice(0, 5).map((tag, i) => (
+                        <div key={i} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+                          <div className="text-xs text-slate-500 mb-1">Trending</div>
+                          <div className="font-bold text-slate-800 dark:text-slate-200">#{tag.name}</div>
+                          <div className="text-xs text-slate-500 mt-1">{tag.count} posts</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-3 text-center">
+                      <Button variant="ghost" className="text-blue-600 text-sm w-full" onClick={() => setActiveTab('trending')}>Show more</Button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'trending' && (
+                <>
+                {/* Quick Actions Widget */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-blue-100 dark:border-slate-700 overflow-hidden">
+                    <div className="p-4">
+                      <h3 className="font-bold text-lg mb-3 text-blue-900 dark:text-blue-100">Quick Actions</h3>
+                      <div className="space-y-2">
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start bg-white dark:bg-slate-800"
+                          onClick={() => navigate('/social/groups')}
+                        >
+                          <Users className="h-4 w-4 mr-2" /> Browse Groups
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start bg-white dark:bg-slate-800"
+                          onClick={() => navigate('/social/feed')}
+                        >
+                          <Users className="h-4 w-4 mr-2" /> Browse Feeds
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Trending Stats Widget */}
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-purple-100 dark:border-slate-700 overflow-hidden">
+                    <div className="p-4">
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2 text-purple-900 dark:text-purple-100">
+                        <TrendingUp className="h-5 w-5" /> Trending Now
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-purple-600">{trendingPosts.length}</div>
+                          <div className="text-xs text-slate-500">Trending Posts</div>
+                        </div>
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-pink-600">{trendingHashtags.length}</div>
+                          <div className="text-xs text-slate-500">Active Hashtags</div>
                         </div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => followUser(user.id)} className="h-8 rounded-full px-3 text-xs">Follow</Button>
                     </div>
-                  ))}
-                  <div ref={suggestedObserverRef} className="h-6" />
-                  {isLoadingSuggestedUsers && <div className="text-center text-sm text-slate-500 py-2">Loading more...</div>}
+                  </div>
+
+                  {/* Top Hashtags Widget */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                      <h3 className="font-bold text-lg">Top Hashtags</h3>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {trendingHashtags.slice(0, 10).map((tag, i) => (
+                        <div key={i} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="text-lg font-bold text-slate-400">#{i + 1}</div>
+                            <div>
+                              <div className="font-semibold text-sm">#{tag.name}</div>
+                              <div className="text-xs text-slate-500">{tag.count} posts</div>
+                            </div>
+                          </div>
+                          <TrendingUp className="h-4 w-4 text-green-500" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'groups' && (
+                <>
+                  {/* Group Stats Widget */}
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-green-100 dark:border-slate-700 overflow-hidden">
+                    <div className="p-4">
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2 text-green-900 dark:text-green-100">
+                        <Users className="h-5 w-5" /> Your Groups
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-green-600">{groups.filter(g => g.is_member).length}</div>
+                          <div className="text-xs text-slate-500">Joined Groups</div>
+                        </div>
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-emerald-600">{groups.length}</div>
+                          <div className="text-xs text-slate-500">Total Groups</div>
+                        </div>
+                      </div>
+                      <Button
+                        className="w-full mt-3"
+                        size="sm"
+                        onClick={() => {
+                          setTimeout(() => {
+                            const event = new CustomEvent('triggerCreateGroup');
+                            window.dispatchEvent(event);
+                          }, 100);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" /> Create Group
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Popular Groups Widget */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                      <h3 className="font-bold text-lg">Popular Groups</h3>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {groups.slice(0, 5).map((group) => (
+                        <div key={group.id} className="flex items-start gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={group.avatar_url} />
+                            <AvatarFallback>{group.name?.[0]}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm truncate">{group.name}</div>
+                            <div className="text-xs text-slate-500">{group.members_count} members</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'profile' && (
+                <>
+                  {/* Profile Stats Widget */}
+                  <div className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-orange-100 dark:border-slate-700 overflow-hidden">
+                    <div className="p-4">
+                      <h3 className="font-bold text-lg mb-3 text-orange-900 dark:text-orange-100">Your Activity</h3>
+                      <div className="space-y-3">
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-orange-600">{userPosts.length}</div>
+                          <div className="text-xs text-slate-500">Total Posts</div>
+                        </div>
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-amber-600">{likedPosts.length}</div>
+                          <div className="text-xs text-slate-500">Liked Posts</div>
+                        </div>
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-yellow-600">{bookmarkedPosts.length}</div>
+                          <div className="text-xs text-slate-500">Bookmarked</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Profile Connections Widget */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                      <h3 className="font-bold text-lg">Connections</h3>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-slate-600 dark:text-slate-400">Followers</div>
+                        <div className="text-xl font-bold">{currentUser?.followers_count || 0}</div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-slate-600 dark:text-slate-400">Following</div>
+                        <div className="text-xl font-bold">{currentUser?.following_count || 0}</div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-slate-600 dark:text-slate-400">Groups</div>
+                        <div className="text-xl font-bold">{groups.filter(g => g.is_member).length}</div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'notifications' && (
+                <>
+                  {/* Notification Stats Widget */}
+                  <div className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-red-100 dark:border-slate-700 overflow-hidden">
+                    <div className="p-4">
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2 text-red-900 dark:text-red-100">
+                        <Bell className="h-5 w-5" /> Notifications
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-red-600">{unreadCount}</div>
+                          <div className="text-xs text-slate-500">Unread</div>
+                        </div>
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-rose-600">{notifications.length}</div>
+                          <div className="text-xs text-slate-500">Total</div>
+                        </div>
+                      </div>
+                      {unreadCount > 0 && (
+                        <Button
+                          variant="outline"
+                          className="w-full mt-3"
+                          size="sm"
+                          onClick={markAllNotificationsAsRead}
+                        >
+                          Mark all as read
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notification Types Widget */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                      <h3 className="font-bold text-lg">Activity Types</h3>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {['like', 'comment', 'follow', 'mention'].map((type) => {
+                        const count = notifications.filter(n => n.type === type).length;
+                        return (
+                          <div key={type} className="flex items-center justify-between">
+                            <div className="text-sm capitalize">{type}s</div>
+                            <div className="font-semibold">{count}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Suggested Users Widget - Show on all tabs except profile */}
+              {activeTab !== 'profile' && (
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 sticky top-6 z-10">
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                    <h3 className="font-bold text-lg">Who to follow</h3>
+                  </div>
+                  <div className="p-4 space-y-4 overflow-y-scroll max-h-[500px] modern-scrollbar">
+                    {uniqueSuggestedUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 overflow-hidden cursor-pointer" onClick={() => openUserModal(user)}>
+                          <Avatar className="h-9 w-9">
+                            <AvatarImage src={user.avatar_url} />
+                            <AvatarFallback>{user.display_name?.[0]}</AvatarFallback>
+                          </Avatar>
+                          <div className="truncate">
+                            <p className="font-semibold text-sm truncate">{user.display_name}</p>
+                            <p className="text-xs text-slate-500 truncate">@{user.username}</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => followUser(user.id)} className="h-8 rounded-full px-3 text-xs">Follow</Button>
+                      </div>
+                    ))}
+                    <div ref={suggestedObserverRef} className="h-6" />
+                    {isLoadingSuggestedUsers && <div className="text-center text-sm text-slate-500 py-2">Loading more...</div>}
+                    {!hasMoreSuggestedUsers && uniqueSuggestedUsers.length > 10 && (
+                      <div className="text-center text-xs text-slate-400 py-2">No more suggestions</div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
-
         </div>
 
         {/* MOBILE BOTTOM NAV */}
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-safe z-50">
           <div className="flex justify-around items-center h-16">
-            <button onClick={() => setActiveTab('feed')} className={`p-2 rounded-full ${activeTab === 'feed' ? 'text-blue-600' : 'text-slate-500'}`}><Home className="h-6 w-6" /></button>
-            <button onClick={() => setActiveTab('trending')} className={`p-2 rounded-full ${activeTab === 'trending' ? 'text-blue-600' : 'text-slate-500'}`}><Search className="h-6 w-6" /></button>
+            <button onClick={() => navigate('/social/feed')} className={`p-2 rounded-full ${activeTab === 'feed' ? 'text-blue-600' : 'text-slate-500'}`}><Home className="h-6 w-6" /></button>
+            <button onClick={() => navigate('/social/trending')} className={`p-2 rounded-full ${activeTab === 'trending' ? 'text-blue-600' : 'text-slate-500'}`}><Search className="h-6 w-6" /></button>
             <button onClick={() => setShowPostDialog(true)} className="p-3 bg-blue-600 rounded-full text-white shadow-lg -mt-6"><Plus className="h-6 w-6" /></button>
-            <button onClick={() => setActiveTab('notifications')} className={`p-2 rounded-full relative ${activeTab === 'notifications' ? 'text-blue-600' : 'text-slate-500'}`}>
+            <button onClick={() => navigate('/social/notifications')} className={`p-2 rounded-full relative ${activeTab === 'notifications' ? 'text-blue-600' : 'text-slate-500'}`}>
               <Bell className="h-6 w-6" />
               {unreadCount > 0 && <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full" />}
             </button>
-            <button onClick={() => setActiveTab('profile')} className={`p-2 rounded-full ${activeTab === 'profile' ? 'text-blue-600' : 'text-slate-500'}`}><User className="h-6 w-6" /></button>
-          </div>
+            <button onClick={() => navigate('/social/profile')} className={`p-2 rounded-full ${activeTab === 'profile' ? 'text-blue-600' : 'text-slate-500'}`}><User className="h-6 w-6" /></button>          </div>
         </div>
 
         {/* Floating Action Buttons: Refresh + Scroll-to-top */}

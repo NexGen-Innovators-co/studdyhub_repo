@@ -412,7 +412,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     // In TabContent.tsx
     case 'social':
       return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
+        <div className="flex-1 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>
             <SocialFeed
               activeTab={props.activeSocialTab}

@@ -488,6 +488,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
                       {(post.author as any)?.is_verified && <Check className="h-3.5 w-3.5 text-blue-500 ml-1" />}
                     </div>
                     <div className="flex items-center text-slate-500 text-sm gap-1.5">
+                      <span>{post.author?.bio} </span>
+                    </div>
+                    <div className="flex items-center text-slate-500 text-sm gap-1.5">
                       <span>{(post.author as any)?.followers_count || 0} followers</span>
                       <span className="text-slate-300 dark:text-slate-700">•</span>
                       <span className="hover:underline cursor-pointer">{getTimeAgo(post.created_at)}</span>

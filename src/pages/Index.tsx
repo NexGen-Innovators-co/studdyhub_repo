@@ -280,12 +280,24 @@ const Index = () => {
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
-      <div className={headerClass}>
+      {/* Smart Responsive Header */}
+      <header className={`
+  sticky top-0 z-50 
+  bg-white dark:bg-slate-900 
+  border-b border-slate-200 dark:border-slate-800 
+  shadow-sm
+  ${(currentActiveTab === 'notes' || currentActiveTab === 'social')
+          ? 'block'
+          : 'block lg:hidden'
+        }
+`}>
         <Header {...headerProps} />
-      </div>
+      </header>
       <div className="flex-1 flex">
-        <Sidebar {...sidebarProps} />
-        <div className="max-h-[95vh] w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar">
+        <div>
+          <Sidebar {...sidebarProps} />
+        </div>
+        <div className={` h-screen  w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar animate-in slide-in-from-top-2 fade-in duration-500`}>
           <TabContent {...tabContentProps} />
         </div>
       </div>

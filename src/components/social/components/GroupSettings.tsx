@@ -303,7 +303,7 @@ const navigate = useNavigate();
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 h-[calc(100vh-4rem)] pb-6 pt-6 overflow-y-auto">
       {/* Basic Settings */}
       <Card>
         <CardHeader>
