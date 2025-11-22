@@ -8,6 +8,7 @@ import { PostCard } from './PostCard';
 import { Calendar, MapPin, Link as LinkIcon, Grid, Heart, Bookmark, Users } from 'lucide-react';
 import { formatEngagementCount } from '../utils/postUtils';
 import { useNavigate } from 'react-router-dom';
+import { MessageCircle } from 'lucide-react';
 
 export const UserProfile: React.FC<any> = ({
   user,
@@ -36,6 +37,9 @@ export const UserProfile: React.FC<any> = ({
   onDeletePost,
   onEditPost,
   onFollow, // <-- new optional prop
+  onStartChat,
+  isFollowing,
+  onToggleFollow,
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'saved' | 'groups'>('posts');
@@ -52,8 +56,8 @@ export const UserProfile: React.FC<any> = ({
         if (id === 'saved') onRefreshBookmarkedPosts?.();
       }}
       className={`flex items-center justify-center gap-2 flex-1 pb-4 border-b-2 transition-colors font-medium text-sm ${activeTab === id
-          ? 'border-blue-600 text-blue-600'
-          : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+        ? 'border-blue-600 text-blue-600'
+        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
         }`}
     >
       <Icon className="h-4 w-4" />
@@ -79,18 +83,41 @@ export const UserProfile: React.FC<any> = ({
               <AvatarFallback className="text-4xl bg-slate-200">{user.display_name?.[0]}</AvatarFallback>
             </Avatar>
 
-            {isOwnProfile ? (
+            {isOwnProfile && (
               <Button variant="outline" className="rounded-full border-slate-300 shadow-sm" onClick={() => setIsEditModalOpen(true)}>
                 Edit Profile
               </Button>
-            ) : (
-              // use provided onFollow handler when available
-              <Button
-                className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-sm"
-                onClick={() => onFollow ? onFollow(user.id) : undefined}
-              >
-                Follow
-              </Button>
+            )}
+            {!isOwnProfile && (
+              <div className="flex gap-2 flex-1">
+                <Button
+                  onClick={() => onToggleFollow?.()}
+                  variant={isFollowing ? "outline" : "default"}
+                  className={`rounded-full font-medium transition-all relative overflow-hidden group ${isFollowing
+                      ? "border-slate-300 hover:border-red-300 dark:hover:border-red-800"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                    }`}
+                >
+                  <span className={`transition-all ${isFollowing ? "group-hover:opacity-0" : ""}`}>
+                    {isFollowing ? "Following" : "Follow"}
+                  </span>
+                  {isFollowing && (
+                    <span className="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                      Unfollow
+                    </span>
+                  )}
+                </Button>
+                {onStartChat && (
+                  <Button
+                    onClick={() => onStartChat(user.id)}
+                    variant="outline"
+                    className="flex-1 rounded-full"
+                  >
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Message
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 

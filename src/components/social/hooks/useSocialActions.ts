@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails, SocialGroup, CreateGroupData, GroupPrivacy } from '../../../integrations/supabase/socialTypes';
@@ -533,48 +534,114 @@ export const useSocialActions = (
   };
 
   // Enhanced follow user function that updates counts and removes from suggestions
-  const followUser = async (userId: string) => {
+  const toggleFollow = async (userId: string): Promise<{ isNowFollowing: boolean }> => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Insert the follow relationship
-      const { error: followError } = await supabase
+      // Check if already following
+      const { data: existingFollow, error: checkError } = await supabase
         .from('social_follows')
-        .insert({
-          follower_id: user.id,
-          following_id: userId
+        .select('id')
+        .eq('follower_id', user.id)
+        .eq('following_id', userId)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') throw checkError;
+
+      const isCurrentlyFollowing = !!existingFollow;
+
+      if (isCurrentlyFollowing) {
+        // Unfollow
+        const { error: deleteError } = await supabase
+          .from('social_follows')
+          .delete()
+          .eq('follower_id', user.id)
+          .eq('following_id', userId);
+
+        if (deleteError) throw deleteError;
+
+        // Update target's followers_count
+        const { data: targetUser, error: targetError } = await supabase
+          .from('social_users')
+          .select('followers_count')
+          .eq('id', userId)
+          .single();
+
+        if (targetError) throw targetError;
+
+        await supabase
+          .from('social_users')
+          .update({ followers_count: Math.max(0, (targetUser.followers_count || 0) - 1) })
+          .eq('id', userId);
+
+        // Update current user's following_count
+        if (currentUser) {
+          const newCount = Math.max(0, (currentUser.following_count || 0) - 1);
+          setCurrentUser(prev => prev ? { ...prev, following_count: newCount } : prev);
+          await supabase
+            .from('social_users')
+            .update({ following_count: newCount })
+            .eq('id', user.id);
+        }
+
+        toast.success('Unfollowed user');
+        return { isNowFollowing: false };
+      } else {
+        // Follow
+        const { error: followError } = await supabase
+          .from('social_follows')
+          .insert({
+            follower_id: user.id,
+            following_id: userId
+          });
+
+        if (followError) throw followError;
+
+        // Update target's followers_count
+        const { data: targetUser, error: targetError } = await supabase
+          .from('social_users')
+          .select('followers_count')
+          .eq('id', userId)
+          .single();
+
+        if (targetError) throw targetError;
+
+        await supabase
+          .from('social_users')
+          .update({ followers_count: (targetUser.followers_count || 0) + 1 })
+          .eq('id', userId);
+
+        // Update current user's following_count
+        if (currentUser) {
+          const newCount = (currentUser.following_count || 0) + 1;
+          setCurrentUser(prev => prev ? { ...prev, following_count: newCount } : prev);
+          await supabase
+            .from('social_users')
+            .update({ following_count: newCount })
+            .eq('id', user.id);
+        }
+
+        // Create notification
+        await supabase.from('social_notifications').insert({
+          user_id: userId,
+          type: 'follow',
+          title: 'New follower',
+          message: `${currentUser?.display_name} started following you`,
+          data: { user_id: user.id },
+          actor_id: user.id,
+          post_id: null
         });
 
-      if (followError) throw followError;
+        // Remove from suggested users list
+        setSuggestedUsers(prev => prev.filter(u => u.id !== userId));
 
-      // Update follower counts
-
-      // Create notification
-      await supabase.from('social_notifications').insert({
-        user_id: userId,
-        type: 'follow',
-        title: 'New follower',
-        message: `${currentUser?.display_name} started following you`,
-        data: { user_id: user.id },
-        actor_id: user.id, // Added
-        post_id: null // Added
-      });
-
-      // Remove from suggested users list
-      setSuggestedUsers(prev => prev.filter(u => u.id !== userId));
-
-      // Update current user's following count
-      if (currentUser) {
-        setCurrentUser(prev => prev ? {
-          ...prev,
-          following_count: prev.following_count + 1
-        } : prev);
+        toast.success('Followed user');
+        return { isNowFollowing: true };
       }
-
-      return true;
     } catch (error) {
-      console.error('Error following user:', error);
+      console.error('Error toggling follow:', error);
+      toast.error('Failed to update follow status');
       throw error; // Re-throw so the UI can handle the error
     }
   };
@@ -730,7 +797,7 @@ export const useSocialActions = (
     toggleLike,
     toggleBookmark,
     sharePost,
-    followUser,
+    toggleFollow,
     isUploading,
     createGroup,
     joinGroup,

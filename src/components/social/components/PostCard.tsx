@@ -37,12 +37,24 @@ import { toast } from 'sonner';
 import { PostCardProps } from '../types/social';
 import { CommentSection } from './CommentSection';
 import { getTimeAgo } from '../utils/postUtils';
-import { Dialog, DialogContent } from '../../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../ui/dialog';
+import { SocialPostWithDetails } from '@/integrations/supabase/socialTypes';
+import {
+  FaWhatsapp,
+  FaFacebook,
+  FaTwitter,
+  FaLinkedin,
+  FaReddit,
+  FaTelegram,
+  FaEnvelope
+} from 'react-icons/fa'; // Import react-icons for social SVGs
+import { useNavigate } from 'react-router-dom';
 
 interface PostCardWithViewTrackingProps extends PostCardProps {
   onPostView?: (postId: string) => void;
   onDeletePost?: (postId: string) => Promise<boolean>;
   onEditPost?: (postId: string, content: string) => Promise<boolean>;
+  onShareToChat?: (post: SocialPostWithDetails) => void;
 }
 
 // Global state for video playback
@@ -320,6 +332,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
       onDeletePost,
       onEditPost,
       onPostView,
+      onShareToChat,
     } = props;
 
     const [isContentExpanded, setIsContentExpanded] = useState(false);
@@ -342,7 +355,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
     // Share helpers
     const shareUrl = `${window.location.origin}/social/post/${post.id}`;
     const shareText = (post.content || '').slice(0, 300);
-
+    const navigate = useNavigate();
     const shareNative = async () => {
       setIsShareModalOpen(false);
       if ((navigator as any).share) {
@@ -362,41 +375,74 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
       }
       toast.error('Native share not available');
     };
+    const ShareDialog = memo(({ post, onClose }: { post: SocialPostWithDetails; onClose: () => void }) => {
+      const [copied, setCopied] = useState(false);
+      const shareUrl = `${window.location.origin}/social/post/${post.id}`;
+      const shareText = post.content.substring(0, 100) + '...';
 
-    const shareWhatsApp = async () => {
-      setIsShareModalOpen(false);
-      const encoded = encodeURIComponent(`${shareText}\n\n${shareUrl}`);
-      const ua = navigator.userAgent || '';
-      const isMobile = /Android|iPhone|iPad|iPod|Windows Phone/i.test(ua);
-      const waUrl = isMobile ? `whatsapp://send?text=${encoded}` : `https://wa.me/?text=${encoded}`;
-      window.open(waUrl, '_blank');
-      await onShare?.(post);
-    };
+      const handleCopyLink = () => {
+        navigator.clipboard.writeText(shareUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success('Link copied to clipboard!');
+      };
 
-    const shareFacebook = async () => {
-      setIsShareModalOpen(false);
-      const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`;
-      window.open(fbUrl, '_blank');
-      await onShare?.(post);
-    };
+      const platforms = [
+        { name: 'WhatsApp', icon: <FaWhatsapp className="h-5 w-5 text-green-600" />, url: `https://wa.me/?text=${encodeURIComponent(shareUrl)}` },
+        { name: 'Facebook', icon: <FaFacebook className="h-5 w-5 text-blue-600" />, url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}` },
+        { name: 'Twitter', icon: <FaTwitter className="h-5 w-5 text-blue-400" />, url: `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}` },
+        { name: 'LinkedIn', icon: <FaLinkedin className="h-5 w-5 text-blue-700" />, url: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(shareUrl)}` },
+        { name: 'Reddit', icon: <FaReddit className="h-5 w-5 text-orange-600" />, url: `https://reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}` },
+        { name: 'Telegram', icon: <FaTelegram className="h-5 w-5 text-blue-500" />, url: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}` },
+        { name: 'Email', icon: <FaEnvelope className="h-5 w-5 text-gray-600" />, url: `mailto:?subject=${encodeURIComponent(shareText)}&body=${encodeURIComponent(shareUrl)}` },
 
-    const shareTwitter = async () => {
-      setIsShareModalOpen(false);
-      const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
-      window.open(twitterUrl, '_blank');
-      await onShare?.(post);
-    };
+      ];
 
-    const shareCopyLink = async () => {
-      setIsShareModalOpen(false);
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success('Link copied to clipboard');
-        await onShare?.(post);
-      } catch {
-        toast.error('Unable to copy link');
-      }
-    };
+      return (
+        <Dialog open onOpenChange={onClose}>
+          <DialogContent>
+            <DialogTitle className="text-lg font-semibold mb-4">Share this post</DialogTitle>
+            <DialogDescription className="mb-6 text-sm text-slate-500">
+              Choose a platform to share this post:
+            </DialogDescription>
+            <div className="space-y-3">
+              {platforms.map((platform) => (
+                <Button
+                  key={platform.name}
+                  variant="outline"
+                  className="w-full flex items-center justify-start gap-3 py-6"
+                  onClick={() => window.open(platform.url, '_blank', 'noopener,noreferrer')}
+                >
+                  {platform.icon}
+                  <span>{platform.name}</span>
+                </Button>
+              ))}
+              {onShareToChat && (
+                <Button
+                  onClick={() => {
+                    setIsShareModalOpen(false);
+                    onShareToChat(post);
+                  }}
+                  variant="outline"
+                  className="w-full flex items-center justify-start gap-3 py-6"
+
+                >
+                  <MessageCircle className="h-5 w-5" /> <span >Share to Chat</span>
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                className="w-full flex items-center justify-start gap-3 py-6"
+                onClick={handleCopyLink}
+              >
+                {copied ? <Check className="h-5 w-5 text-green-600" /> : <Copy className="h-5 w-5" />}
+                <span>{copied ? 'Copied!' : 'Copy Link'}</span>
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      );
+    });
 
     const handleShare = (e?: React.MouseEvent) => {
       e?.stopPropagation();
@@ -454,13 +500,14 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
     const currentMedia = fullscreenIndex !== null ? post.media[fullscreenIndex] : null;
     const isFullscreenVideo = currentMedia?.type === 'video';
 
-    return ( 
+
+    return (
       <Card
         className="mb-4 border border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-500 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden max-w-[780px] mx-auto"
         ref={cardRef}
         onClick={(e) => {
           const target = e.target as HTMLElement;
-          if (!target.closest('button, a, input, textarea, video, [role="menuitem"]') && onClick) {
+          if (!target.closest('button, a, input, textarea, video, [role="menuitem"],span') && onClick) {
             onClick(post.id);
           }
         }}
@@ -469,19 +516,30 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
           <div className="flex gap-3">
             <div className="flex-1 min-w-0 ">
               <div className="p-4 pt-5 flex">
-                {/* Avatar Column */}
-                <div className="flex-shrink-0 ">
-                  <Avatar className="h-10 w-10 ring-2 ring-white dark:ring-slate-900 shadow-sm cursor-pointer hover:opacity-90">
-                    <AvatarImage src={post.author?.avatar_url} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
-                      {post.author?.display_name?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
+                <div
+                  className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/social/profile/${post.author_id}`);
+                  }}
+                >
+                  {/* Avatar Column */}
+                  <div className="flex-shrink-0 ">
+                    <Avatar className="h-10 w-10 ring-2 ring-white dark:ring-slate-900 shadow-sm cursor-pointer hover:opacity-90">
+                      <AvatarImage src={post.author?.avatar_url} />
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                        {post.author?.display_name?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
                 </div>
                 {/* Header */}
                 <div className="flex items-start justify-between mb-2 px-3 flex-1">
                   <div className="flex flex-col">
-                    <div className="flex items-center">
+                    <div className="flex items-center" onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/social/profile/${post.author_id}`);
+                  }}>
                       <span className="font-bold text-slate-900 dark:text-slate-100 text-base hover:underline cursor-pointer">
                         {post.author?.display_name}
                       </span>
@@ -496,29 +554,29 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
                       <span className="hover:underline cursor-pointer">{getTimeAgo(post.created_at)}</span>
                     </div>
                   </div>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 -mt-1 -mr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100 dark:border-slate-800">
-                      <DropdownMenuItem onClick={handleCopyLink}><Copy className="mr-2 h-4 w-4" /> Copy Link</DropdownMenuItem>
-                      {isOwnPost && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setIsEditing(true)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onDeletePost?.(post.id)} className="text-red-600"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
-                        </>
-                      )}
-                      {!isOwnPost && (
-                        <DropdownMenuItem onClick={() => toast.info("Reported")}><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 -mt-1 -mr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100 dark:border-slate-800">
+                    <DropdownMenuItem onClick={handleCopyLink}><Copy className="mr-2 h-4 w-4" /> Copy Link</DropdownMenuItem>
+                    {isOwnPost && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setIsEditing(true)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onDeletePost?.(post.id)} className="text-red-600"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+                      </>
+                    )}
+                    {!isOwnPost && (
+                      <DropdownMenuItem onClick={() => toast.info("Reported")}><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
+
               {/* Post Body */}
               {isEditing ? (
                 <div className="mb-3 space-y-2 px-4" onClick={e => e.stopPropagation()}>
@@ -603,26 +661,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
               </div>
 
               {/* Share Modal */}
-              <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen} >
-                <DialogContent className="max-w-sm w-[95vw] p-0 bg-transparent border-none">
-                  <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-4 space-y-3">
-                    <h3 className="text-lg font-semibold">Share post</h3>
-                    <p className="text-sm text-slate-500">Choose where you'd like to share this post</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {(navigator as any).share && (
-                        <Button onClick={shareNative} className="justify-start">🔤 Share via device</Button>
-                      )}
-                      <Button onClick={shareWhatsApp} className="justify-start">📱 WhatsApp</Button>
-                      <Button onClick={shareFacebook} className="justify-start">👍 Facebook</Button>
-                      <Button onClick={shareTwitter} className="justify-start">🦅 Twitter</Button>
-                      <Button variant="outline" onClick={shareCopyLink} className="justify-start">🔗 Copy link</Button>
-                      <div className="flex justify-end pt-2">
-                        <Button variant="ghost" onClick={() => setIsShareModalOpen(false)}>Cancel</Button>
-                      </div>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              {isShareModalOpen && (
+                <ShareDialog post={post} onClose={() => setIsShareModalOpen(false)} />
+              )}
             </div>
           </div>
 
@@ -644,10 +685,14 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
 
         {/* Fullscreen Media Viewer */}
         <Dialog open={fullscreenIndex !== null} onOpenChange={() => setFullscreenIndex(null)}>
-          <DialogContent className="w-[90vw] h-[90vh] max-w-[1200px] max-h-[800px] p-0 bg-transparent border-none">
+          <DialogContent className="w-[90vw] h-[90vh] max-w-[1200px] max-h-[800px] rounded-2xl p-0 bg-white dark:bg-slate-900 border-none">
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg overflow-hidden flex flex-col lg:grid lg:grid-cols-5 lg:gap-0 h-full">
               {/* Media Section */}
               <div className="relative bg-black flex items-center  justify-center lg:col-span-3 overflow-hidden flex-1 h-full">
+                <DialogHeader>
+                  <DialogTitle> </DialogTitle>
+                  <DialogDescription>  </DialogDescription>
+                </DialogHeader>
                 {currentMedia && (
                   <>
                     {isFullscreenVideo ? (
@@ -767,15 +812,15 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
                     <AvatarImage src={currentUser?.avatar_url} />
                     <AvatarFallback>{currentUser?.display_name?.[0]}</AvatarFallback>
                   </Avatar>
-                  <Textarea 
+                  <Textarea
                     placeholder="Add a comment..."
                     value={newComment}
                     onChange={(e) => onCommentChange(e.target.value)}
                     className="flex-1 min-h-[40px] resize-none"
                   />
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={onSubmitComment}
                     className="text-blue-600"
                   >
