@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
-  Search, RefreshCw, Bell, TrendingUp, Users, User, Home, Loader2, X, Plus, Sparkles, Settings, LogOut, ArrowUp, ExternalLink
+  Search, RefreshCw, Bell, TrendingUp, Users, User, Home, Loader2, X, Plus, Sparkles, Settings, LogOut, ArrowUp, ExternalLink,
+  MessageCircle
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Card, CardContent } from '../ui/card';
@@ -29,10 +30,19 @@ import { UserProfile } from './components/UserProfile';
 import { GroupsSection } from './components/GroupsSection';
 import { NotificationsSection } from './components/NotificationsSection';
 import { GroupDetailPage } from './components/GroupDetail';
-import { Dialog, DialogContent } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+
+import { ChatList } from './components/ChatList';
+import { ChatWindow } from './components/ChatWindow';
+import { useChatData } from './hooks/useChatData';
+import { useChatActions } from './hooks/useChatActions';
+import { ResourceSharingModal } from './components/ResourceSharingModal';
+import { SharePostToChatModal } from './components/SharePostToChatModal';
 
 // Import types
 import { SortBy, FilterBy, Privacy } from './types/social';
+import { SocialPostWithDetails } from '@/integrations/supabase/socialTypes';
+import { OtherUserProfile } from './components/OtherUserProfile';
 
 interface SocialFeedProps {
   activeTab?: string;
@@ -41,7 +51,7 @@ interface SocialFeedProps {
 
 export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActiveTab, postId }) => {
   // State management
-  const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications'>(initialActiveTab as any || 'feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications' | 'userProfile'>(initialActiveTab as any || 'feed');
   const [searchQuery, setSearchQuery] = useState('');
   const [showPostDialog, setShowPostDialog] = useState(false);
 
@@ -65,6 +75,38 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
   const scrollContainerRef = useRef<HTMLElement | null>(null);
 
   const suggestedStripScrollPositions = useRef<Map<string, number>>(new Map());
+  const [showChatList, setShowChatList] = useState(false);
+  const [selectedChatSession, setSelectedChatSession] = useState<string | null>(null);
+  const [showResourceSharingModal, setShowResourceSharingModal] = useState(false);
+  const [showSharePostModal, setShowSharePostModal] = useState(false);
+  const [postToShare, setPostToShare] = useState<SocialPostWithDetails | null>(null);
+  const [viewedUserId, setViewedUserId] = useState<string | null>(null);
+  const handleSharePostToChat = (post: SocialPostWithDetails) => {
+    setPostToShare(post);
+    setShowSharePostModal(true);
+  };
+
+  const handleSharePostMessage = async (sessionId: string, message: string): Promise<boolean> => {
+    if (!postToShare) return false;
+    const success = await sendMessageWithResource(sessionId, message, postToShare.id, 'post');
+    if (success) setPostToShare(null);
+    return success;
+  };
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { tab: routeTab, postId: routePostId, groupId: routeGroupId, userId: routeUserId } = useParams<{
+    tab?: string;
+    postId?: string;
+    groupId?: string;
+    userId?: string;
+  }>();
+  const handleShareResource = async (resourceId: string, resourceType: 'note' | 'document'): Promise<boolean> => {
+    if (!activeChatSessionId) {
+      toast.error("No active chat session to share resource to.");
+      return false;
+    }
+    return await sendMessageWithResource(activeChatSessionId, "", resourceId, resourceType);
+  };
 
   const findScrollParent = (el?: Element | null) => {
     let node = el as Element | null;
@@ -125,13 +167,39 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     loadMoreSuggestedUsers,
   } = useSocialDataContext();
 
+  // CHAT: Add chat hooks after existing hooks
+  const {
+    chatSessions,
+    activeSessionMessages,
+    isLoadingSessions: isLoadingChatSessions,
+    isLoadingMessages: isLoadingChatMessages,
+    activeSessionId: activeChatSessionId,
+    setActiveSession,
+    refetchSessions: refetchChatSessions,
+  } = useChatData(currentUser?.id || null);
+
+  const {
+    createP2PChatSession,
+    sendChatMessage,
+    sendMessageWithResource,
+    isSending: isSendingMessage,
+  } = useChatActions(currentUser?.id || null);
+
+  const handleStartChat = async (userId: string) => {
+    const sessionId = await createP2PChatSession(userId);
+    if (sessionId) {
+      setActiveSession(sessionId);
+      setShowChatList(true);
+      setSelectedChatSession(sessionId);
+    }
+  };
   const {
     createPost,
     updateProfile,
     toggleLike,
     toggleBookmark,
     sharePost,
-    followUser,
+    toggleFollow,
     isUploading,
     createGroup,
     joinGroup,
@@ -167,10 +235,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
   } = useSocialNotifications();
 
   const { trackPostView, cleanup } = useSocialPostViews(setPosts, setTrendingPosts, setUserPosts);
-
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { tab: routeTab, postId: routePostId, groupId: routeGroupId } = useParams<{ tab?: string; postId?: string; groupId?: string }>();
 
   // Sync search & "open create" dialog from URL query params
   useEffect(() => {
@@ -230,27 +294,44 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
       suggestedObserver?.disconnect();
     };
   }, [activeTab, hasMorePosts, hasMoreTrendingPosts, hasMoreUserPosts, isLoadingMorePosts, isLoadingUserPosts, hasMoreSuggestedUsers, isLoadingSuggestedUsers, loadMoreSuggestedUsers, isRefreshing, loadMorePosts, loadMoreTrendingPosts, loadMoreUserPosts]);
-  // Sync activeTab with URL route
+  // Replace the existing useEffect that sets activeTab from route
+useEffect(() => {
+  if (routeUserId) {
+    if (routeUserId === currentUser?.id) {
+      // Viewing own profile → go to normal profile tab
+      setActiveTab('profile');
+      setViewedUserId(null);
+      if (location.pathname !== '/social/profile') {
+        navigate('/social/profile', { replace: true });
+      }
+    } else {
+      // Viewing someone else's profile → special tab
+      setActiveTab('userProfile');
+      setViewedUserId(routeUserId);
+    }
+  } else if (routeTab) {
+    setActiveTab(routeTab as any);
+    setViewedUserId(null);
+  } else if (initialActiveTab) {
+    setActiveTab(initialActiveTab as any);
+    setViewedUserId(null);
+  } else {
+    setActiveTab('feed');
+    setViewedUserId(null);
+  }
+}, [routeTab, routeUserId, initialActiveTab, currentUser?.id, location.pathname, navigate]);
+  // Initialize activeTab from route on mount only
   useEffect(() => {
+    if (routeUserId) {
+      // Viewing a user profile - don't set activeTab to prevent conflicts
+      return;
+    }
     if (routeTab) {
       setActiveTab(routeTab as any);
     } else if (initialActiveTab) {
       setActiveTab(initialActiveTab as any);
     }
-  }, [routeTab, initialActiveTab]);
-
-  // Update URL when activeTab changes
-  useEffect(() => {
-    if (!routeTab && activeTab && !routePostId && !routeGroupId) {
-      // Only update URL if we're not already on a specific route
-      const currentPath = location.pathname;
-      const expectedPath = `/social/${activeTab}`;
-
-      if (currentPath !== expectedPath) {
-        navigate(expectedPath, { replace: true });
-      }
-    }
-  }, [activeTab, routeTab, routePostId, routeGroupId, location.pathname, navigate]);
+  }, [routeTab, initialActiveTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handlers
   const handleCreatePost = async () => {
@@ -333,12 +414,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     return Array.from(map.values());
   }, [suggestedUsers]);
 
-  const [modalUser, setModalUser] = useState<any | null>(null);
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const openUserModal = (user: any) => {
-    setModalUser(user);
-    setIsUserModalOpen(true);
-  };
 
   const InFeedSuggestedStrip: React.FC<{
     users: any[];
@@ -354,13 +429,18 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
       if (loadingIds[id]) return;
       setLoadingIds(prev => ({ ...prev, [id]: true }));
       try {
-        await followUser(id);
+        await toggleFollow(id);
         toast.success('Followed');
       } catch {
         toast.error('Failed to follow');
       } finally {
         setLoadingIds(prev => ({ ...prev, [id]: false }));
       }
+    };
+
+    // NEW: Navigate to user profile
+    const handleViewProfile = (userId: string) => {
+      navigate(`/social/profile/${userId}`);
     };
 
     const list = React.useMemo(() => {
@@ -395,17 +475,19 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
         <div
           ref={containerRef}
           onScroll={onScroll}
-          className="flex space-x-3 overflow-x-auto scrollbar-hide px-2 "
+          className="flex space-x-3 overflow-x-auto scrollbar-hide px-2"
         >
           {list.map((u) => (
             <div key={u.id} className="min-w-[140px] max-w-[180px] bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-3 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="cursor-pointer" onClick={() => openUserModal(u)}>
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={u.avatar_url} />
-                    <AvatarFallback>{u.display_name?.[0]}</AvatarFallback>
-                  </Avatar>
-                </div>
+              {/* CHANGED: Make avatar/name clickable to navigate */}
+              <div
+                className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => handleViewProfile(u.id)}
+              >
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={u.avatar_url} />
+                  <AvatarFallback>{u.display_name?.[0]}</AvatarFallback>
+                </Avatar>
                 <div className="min-w-0">
                   <div className="font-semibold text-sm truncate">{u.display_name}</div>
                   <div className="text-xs text-slate-500 truncate">@{u.username}</div>
@@ -420,11 +502,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
                 >
                   {loadingIds[u.id] ? '...' : 'Follow'}
                 </Button>
+                {/* CHANGED: Navigate instead of opening modal */}
                 <Button
                   size="icon"
                   variant="ghost"
                   className="ml-2"
-                  onClick={() => openUserModal(u)}
+                  onClick={() => handleViewProfile(u.id)}
+                  title="View Profile"
                 >
                   <ExternalLink className="h-4 w-4" />
                 </Button>
@@ -463,6 +547,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
             onClick={() => navigate(`/social/post/${post.id}`)}
             onDeletePost={deletePost}
             onEditPost={editPost}
+            onShareToChat={handleSharePostToChat}
           />
         </div>
       ) : (
@@ -484,6 +569,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
           onClick={() => navigate(`/social/post/${post.id}`)}
           onDeletePost={deletePost}
           onEditPost={editPost}
+          onShareToChat={handleSharePostToChat}
         />
       );
 
@@ -514,6 +600,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     </div>
   );
 
+
+  // BEFORE the return statement, handle profile routing:
   if (routeGroupId) return <GroupDetailPage currentUser={currentUser} />;
 
   const postToDisplay = routePostId
@@ -586,7 +674,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
               </div>
             )}
 
-            <div className="pb-10  ">
+            <div className="pb-10 p-2 ">
               {routePostId && postToDisplay ? (
                 <div className="mb-6">
                   <Button variant="ghost" onClick={() => navigate('/social/feed')} className="mb-2 pl-0 hover:pl-2">← Back</Button>
@@ -689,6 +777,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
                       onRefreshBookmarkedPosts={refetchBookmarkedPosts}
                       onDeletePost={deletePost}
                       onEditPost={editPost}
+                      onFollow={toggleFollow}
+                      onStartChat={handleStartChat}
                     />
                     <div ref={profileObserverRef} className="h-10" />
                   </TabsContent>
@@ -701,6 +791,33 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
                       markAllNotificationsAsRead={markAllNotificationsAsRead}
                       deleteNotification={deleteNotification}
                     />
+                  </TabsContent>
+                  <TabsContent value="userProfile" className="outline-none">
+                    {viewedUserId && currentUser && viewedUserId !== currentUser.id && (
+                      <OtherUserProfile
+                        currentUser={currentUser}
+                        onLike={toggleLike}
+                        onBookmark={toggleBookmark}
+                        onShare={sharePost}
+                        onComment={togglePostExpanded}
+                        isPostExpanded={isPostExpanded}
+                        getPostComments={getPostComments}
+                        isLoadingPostComments={isLoadingPostComments}
+                        getNewCommentContent={getNewCommentContent}
+                        onCommentChange={updateNewComment}
+                        onSubmitComment={addComment}
+                        onPostView={trackPostView}
+                        onDeletePost={deletePost}
+                        onEditPost={editPost}
+                        onFollow={toggleFollow}
+                        onStartChat={handleStartChat}
+                        likedPosts={likedPosts}
+                        bookmarkedPosts={bookmarkedPosts}
+                        onRefreshLikedPosts={refetchLikedPosts}
+                        onRefreshBookmarkedPosts={refetchBookmarkedPosts}
+                        userGroups={groups.filter(g => g.is_member)}
+                      />
+                    )}
                   </TabsContent>
                 </Tabs>
               )}
@@ -774,8 +891,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
 
               {activeTab === 'trending' && (
                 <>
-                {/* Quick Actions Widget */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-blue-100 dark:border-slate-700 overflow-hidden">
+                  {/* Quick Actions Widget */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-blue-100 dark:border-slate-700 overflow-hidden">
                     <div className="p-4">
                       <h3 className="font-bold text-lg mb-3 text-blue-900 dark:text-blue-100">Quick Actions</h3>
                       <div className="space-y-2">
@@ -894,52 +1011,49 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
                 </>
               )}
 
-              {activeTab === 'profile' && (
-                <>
-                  {/* Profile Stats Widget */}
-                  <div className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-orange-100 dark:border-slate-700 overflow-hidden">
-                    <div className="p-4">
-                      <h3 className="font-bold text-lg mb-3 text-orange-900 dark:text-orange-100">Your Activity</h3>
-                      <div className="space-y-3">
-                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
-                          <div className="text-2xl font-bold text-orange-600">{userPosts.length}</div>
-                          <div className="text-xs text-slate-500">Total Posts</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
-                          <div className="text-2xl font-bold text-amber-600">{likedPosts.length}</div>
-                          <div className="text-xs text-slate-500">Liked Posts</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
-                          <div className="text-2xl font-bold text-yellow-600">{bookmarkedPosts.length}</div>
-                          <div className="text-xs text-slate-500">Bookmarked</div>
-                        </div>
-                      </div>
-                    </div>
+              {activeTab !== 'profile' && (
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 sticky top-6 z-10">
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                    <h3 className="font-bold text-lg">Who to follow</h3>
                   </div>
-
-                  {/* Profile Connections Widget */}
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-                    <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-                      <h3 className="font-bold text-lg">Connections</h3>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-slate-600 dark:text-slate-400">Followers</div>
-                        <div className="text-xl font-bold">{currentUser?.followers_count || 0}</div>
+                  <div className="p-4 space-y-4 overflow-y-scroll max-h-[500px] modern-scrollbar">
+                    {uniqueSuggestedUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between gap-3">
+                        {/* CHANGED: Make clickable to navigate */}
+                        <div
+                          className="flex items-center gap-2 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => navigate(`/social/profile/${user.id}`)}
+                        >
+                          <Avatar className="h-9 w-9">
+                            <AvatarImage src={user.avatar_url} />
+                            <AvatarFallback>{user.display_name?.[0]}</AvatarFallback>
+                          </Avatar>
+                          <div className="truncate">
+                            <p className="font-semibold text-sm truncate">{user.display_name}</p>
+                            <p className="text-xs text-slate-500 truncate">@{user.username}</p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent navigation when clicking follow
+                            toggleFollow(user.id);
+                          }}
+                          className="h-8 rounded-full px-3 text-xs"
+                        >
+                          Follow
+                        </Button>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-slate-600 dark:text-slate-400">Following</div>
-                        <div className="text-xl font-bold">{currentUser?.following_count || 0}</div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-slate-600 dark:text-slate-400">Groups</div>
-                        <div className="text-xl font-bold">{groups.filter(g => g.is_member).length}</div>
-                      </div>
-                    </div>
+                    ))}
+                    <div ref={suggestedObserverRef} className="h-6" />
+                    {isLoadingSuggestedUsers && <div className="text-center text-sm text-slate-500 py-2">Loading more...</div>}
+                    {!hasMoreSuggestedUsers && uniqueSuggestedUsers.length > 10 && (
+                      <div className="text-center text-xs text-slate-400 py-2">No more suggestions</div>
+                    )}
                   </div>
-                </>
+                </div>
               )}
-
               {activeTab === 'notifications' && (
                 <>
                   {/* Notification Stats Widget */}
@@ -990,37 +1104,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
                   </div>
                 </>
               )}
-
-              {/* Suggested Users Widget - Show on all tabs except profile */}
-              {activeTab !== 'profile' && (
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 sticky top-6 z-10">
-                  <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-                    <h3 className="font-bold text-lg">Who to follow</h3>
-                  </div>
-                  <div className="p-4 space-y-4 overflow-y-scroll max-h-[500px] modern-scrollbar">
-                    {uniqueSuggestedUsers.map((user) => (
-                      <div key={user.id} className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 overflow-hidden cursor-pointer" onClick={() => openUserModal(user)}>
-                          <Avatar className="h-9 w-9">
-                            <AvatarImage src={user.avatar_url} />
-                            <AvatarFallback>{user.display_name?.[0]}</AvatarFallback>
-                          </Avatar>
-                          <div className="truncate">
-                            <p className="font-semibold text-sm truncate">{user.display_name}</p>
-                            <p className="text-xs text-slate-500 truncate">@{user.username}</p>
-                          </div>
-                        </div>
-                        <Button size="sm" variant="outline" onClick={() => followUser(user.id)} className="h-8 rounded-full px-3 text-xs">Follow</Button>
-                      </div>
-                    ))}
-                    <div ref={suggestedObserverRef} className="h-6" />
-                    {isLoadingSuggestedUsers && <div className="text-center text-sm text-slate-500 py-2">Loading more...</div>}
-                    {!hasMoreSuggestedUsers && uniqueSuggestedUsers.length > 10 && (
-                      <div className="text-center text-xs text-slate-400 py-2">No more suggestions</div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -1058,46 +1141,99 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
           >
             <ArrowUp className="h-5 w-5" />
           </button>
+          <button
+            onClick={() => setShowChatList(!showChatList)}
+            className="h-14 w-14 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center"
+            aria-label="Open chats"
+            title="Messages"
+          >
+            <MessageCircle className="h-6 w-6" />
+            {chatSessions.reduce((sum, s) => sum + (s.unread_count || 0), 0) > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                {chatSessions.reduce((sum, s) => sum + (s.unread_count || 0), 0)}
+              </span>
+            )}
+          </button>
         </div>
 
       </div>
-
       {/* User profile modal */}
-      <Dialog open={isUserModalOpen} onOpenChange={setIsUserModalOpen}>
-        <DialogContent className="max-w-[780px] w-[95vw] p-0 bg-transparent border-none">
-          {modalUser && (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg overflow-hidden">
-              <UserProfile
-                user={modalUser}
-                isOwnProfile={currentUser?.id === modalUser.id}
-                onEditProfile={updateProfile}
-                posts={[]}
-                isLoadingPosts={false}
-                onLike={toggleLike}
-                onBookmark={toggleBookmark}
-                onShare={sharePost}
-                onComment={togglePostExpanded}
-                isPostExpanded={isPostExpanded}
-                getPostComments={getPostComments}
-                isLoadingPostComments={isLoadingPostComments}
-                getNewCommentContent={getNewCommentContent}
-                onCommentChange={updateNewComment}
-                onSubmitComment={addComment}
-                currentUser={currentUser}
-                onPostView={trackPostView}
-                onClick={(id: string) => { setIsUserModalOpen(false); navigate(`/social/post/${id}`); }}
-                likedPosts={likedPosts}
-                bookmarkedPosts={bookmarkedPosts}
-                onRefreshLikedPosts={refetchLikedPosts}
-                onRefreshBookmarkedPosts={refetchBookmarkedPosts}
-                userGroups={groups.filter(g => g.is_member)}
-                onFollow={(id: string) => followUser(id)}
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
+      {showChatList && (
+        <div className="fixed inset-0 lg:inset-auto lg:right-6 animate-in fade-in duration-500 lg:bottom-24 lg:h-[600px] bg-white dark:bg-slate-900 z-50 lg:rounded-2xl lg:shadow-2xl overflow-hidden flex">
+          {/* Mobile close button */}
+          <button
+            onClick={() => {
+              setShowChatList(false);
+              setActiveSession(null);
+            }}
+            className=" absolute top-4 right-4 z-10 p-2 bg-slate-100 dark:bg-slate-800 rounded-full"
+          >
+            <X className="h-5 w-5" />
+          </button>
+
+          {/* Chat interface */}
+          <div className="flex-1 flex ">
+            {!activeChatSessionId ? (
+              <ChatList
+                sessions={chatSessions}
+                activeSessionId={activeChatSessionId}
+                onSessionSelect={setActiveSession}
+                currentUserId={currentUser?.id || ''}
+                isLoading={isLoadingChatSessions}
+              />
+            ) : (
+              <ChatWindow
+                session={chatSessions.find((s) => s.id === activeChatSessionId) || null}
+                messages={activeSessionMessages}
+                currentUserId={currentUser?.id || ''}
+                onBack={() => setActiveSession(null)}
+                onSendMessage={async (content, files) => {
+                  if (!activeChatSessionId) return false;
+                  return await sendChatMessage(activeChatSessionId, content, files);
+                }}
+                onSendMessageWithResource={async (content, resourceId, resourceType) => {
+                  if (!activeChatSessionId) return false;
+                  return await sendMessageWithResource(
+                    activeChatSessionId,
+                    content,
+                    resourceId,
+                    resourceType
+                  );
+                }}
+                isSending={isSendingMessage}
+                isLoading={isLoadingChatMessages}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Resource Sharing Modal */}
+      {activeChatSessionId && (
+        <ResourceSharingModal
+          isOpen={showResourceSharingModal}
+          onClose={() => setShowResourceSharingModal(false)}
+          onShareResource={handleShareResource}
+          notes={[]} // Pass actual notes from parent
+          documents={[]} // Pass actual documents from parent
+          isSharing={isSendingMessage}
+        />
+      )}
+
+      {/* Share Post to Chat Modal */}
+      <SharePostToChatModal
+        isOpen={showSharePostModal}
+        onClose={() => {
+          setShowSharePostModal(false);
+          setPostToShare(null);
+        }}
+        post={postToShare}
+        chatSessions={chatSessions}
+        currentUserId={currentUser?.id || ''}
+        onShare={handleSharePostMessage}
+        isSharing={isSendingMessage}
+      />
     </div>
   );
 };

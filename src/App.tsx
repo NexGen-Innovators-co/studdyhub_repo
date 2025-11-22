@@ -25,6 +25,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { AppProvider } from "./contexts/AppContext";
 import { AdminLayout } from "./components/admin/AdminLayout";
 import { SocialDataProvider } from "./components/social/context/SocialDataContext";
+import { SocialFeed } from "./components/social/SocialFeed"; // Import SocialFeed
 
 // Lazy load admin components
 const AdminDashboard = lazy(() => import("./components/admin/adminDashboard"));
@@ -99,6 +100,8 @@ const App = () => (
                   <Route path="/social/:tab" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
                   <Route path="/social/post/:postId" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
                   <Route path="/social/group/:groupId" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
+                  {/* ADD THIS LINE: Social profile route */}
+                  <Route path="/social/profile/:userId" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
 
                   {/* ==== ADMIN ROUTES - Protected by AdminLayout ==== */}
                   <Route element={<AdminLayout />}>

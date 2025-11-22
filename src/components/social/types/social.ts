@@ -1,5 +1,5 @@
 // Extended social types for the social feed components
-import { SocialPostWithDetails, SocialUserWithDetails, SocialCommentWithDetails } from '../../../integrations/supabase/socialTypes';
+import { SocialPostWithDetails, SocialCommentWithDetails, SocialGroup, SocialChatMessageMedia, SocialUser } from '../../../integrations/supabase/socialTypes';
 
 export interface SocialFeedProps {
   userProfile: any;
@@ -107,4 +107,95 @@ export interface PaginationState {
   hasMore: boolean;
   isLoading: boolean;
   lastRefresh: Date | null;
+}
+// Add these types to src/components/social/types/social.ts
+
+export interface ChatSession {
+  id: string;
+  chat_type: 'group' | 'p2p';
+  group_id?: string;
+  user_id1?: string;
+  user_id2?: string;
+  last_message_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionWithDetails extends ChatSession {
+  group?: SocialGroup;
+  user1?: SocialUserWithDetails;
+  user2?: SocialUserWithDetails;
+  last_message?: ChatMessageWithDetails;
+  unread_count?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+}
+
+export interface ChatMessageWithDetails extends ChatMessage {
+  sender: SocialUserWithDetails;
+  media?: SocialChatMessageMedia[];
+  resources?: ChatMessageResource[];
+}
+
+export interface ChatMessageResource {
+  id: string;
+  message_id: string;
+  resource_id: string;
+  resource_type: 'note' | 'document'|'post';
+  created_at: string;
+  note?: Note;
+  document?: Document;
+  post?: SocialPostWithDetails;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface Document {
+  id: string;
+  title: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  user_id: string;
+  created_at: string;
+}
+
+export type ChatType = 'group' | 'p2p';
+
+export interface ChatMessage {
+id: string;
+session_id: string;
+sender_id: string;
+content: string;
+created_at: string;
+resource_id?: string;
+resource_type?: 'note' | 'document';
+}
+
+export interface ChatMessageMedia {
+id: string;
+message_id: string;
+type: 'image' | 'video' | 'document';
+url: string;
+filename: string;
+size_bytes: number;
+mime_type: string;
+created_at: string;
+}
+
+export interface SocialUserWithDetails extends SocialUser {
+is_following?: boolean;
+is_followed_by?: boolean;
 }
