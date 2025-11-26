@@ -962,7 +962,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           isOpen
             ? 'translate-x-0 w-72 md:w-64'
             : '-translate-x-full md:translate-x-0 md:w-14 md:hover:w-64'
-        } fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative md:translate-x-0 md:w-16 lg:shadow-none lg:translate-x-0 lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden dark:bg-gray-900 dark:border-gray-600 overflow-y-scroll modern-scrollbar`}
+        } fixed inset-y-0 left-0 z-10 flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative md:translate-x-0 md:w-16 lg:shadow-none lg:translate-x-0 lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden dark:bg-gray-900 dark:border-gray-600 overflow-y-scroll modern-scrollbar`}
       >
         <div className="p-6 sm:p-4 flex-1">
           {/* Toggle Button for Mobile */}

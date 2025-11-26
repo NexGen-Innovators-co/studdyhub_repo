@@ -19,6 +19,9 @@ import { useTextToSpeech } from './hooks/useTextToSpeech';
 import { getFileType, validateFile, stripCodeBlocks, generateOptimisticId } from './utils/helpers';
 import { ContextBadges } from './Components/ContextBadges';
 import { DragOverlay } from './Components/DragOverlay';
+import { state } from 'mermaid/dist/rendering-util/rendering-elements/shapes/state.js';
+import { AppContext } from '@/contexts/AppContext';
+import { initialAppState } from '@/contexts/appReducer';
 
 export interface AttachedFile {
   file: File;
@@ -119,8 +122,13 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState('');
-  const [mergedDocuments, setMergedDocuments] = useState<Document[]>(documents);
+
+  // Enhanced document synchronization
+  const [mergedDocuments, setMergedDocuments] = useState<Document[]>([]);
   const prevSessionIdRef = useRef<string | null>(null);
+  const prevDocumentsRef = useRef<Document[]>([]);
+  const prevNotesRef = useRef<Note[]>([]);
+
   const [autoTypeInPanel, setAutoTypeInPanel] = useState(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const [isAiTyping, setIsAiTyping] = useState(false);
@@ -135,8 +143,78 @@ const AIChat: React.FC<AIChatProps> = ({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isUpdatingDocuments, setIsUpdatingDocuments] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+// Add with your other state declarations
+const [isLoadingSession, setIsLoadingSession] = useState(false);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
+  const isCurrentlySendingRef = useRef(false);
+  // Enhanced document synchronization effect
+  // Replace your current document synchronization useEffect with:
+useEffect(() => {
+  const documentsChanged = documents !== prevDocumentsRef.current;
+  const notesChanged = notes !== prevNotesRef.current;
 
+  if (documentsChanged || notesChanged) {
+    console.log('🔄 Documents or notes changed, updating merged documents');
+    
+    const timer = setTimeout(() => {
+      const allDocuments: Document[] = [
+        ...documents,
+        ...notes.map(note => ({
+          id: note.id,
+          title: note.title || 'Untitled Note',
+          file_name: note.title || 'Untitled Note',
+          file_type: 'text/plain',
+          file_size: new Blob([note.content]).size,
+          file_url: '',
+          content_extracted: note.content,
+          user_id: note.user_id,
+          type: 'text' as const,
+          processing_status: 'completed' as const,
+          processing_error: null,
+          created_at: new Date(note.createdAt),
+          updated_at: new Date(note.createdAt).toISOString(),
+          folder_ids: [],
+        }))
+      ];
+
+      setMergedDocuments(allDocuments);
+      prevDocumentsRef.current = documents;
+      prevNotesRef.current = notes;
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }
+}, [documents, notes]);
+  // Load session documents from database
+  const loadSessionDocuments = useCallback(async (sessionId: string) => {
+    if (!userProfile?.id) return;
+
+    try {
+      const { data: sessionData, error } = await supabase
+        .from('chat_sessions')
+        .select('document_ids')
+        .eq('id', sessionId)
+        .eq('user_id', userProfile.id)
+        .single();
+
+      if (error) {
+        console.error('Error loading session documents:', error);
+        return;
+      }
+
+      if (sessionData?.document_ids) {
+        console.log('📄 Loaded session documents:', sessionData.document_ids);
+        onSelectionChange(sessionData.document_ids);
+      }
+    } catch (error) {
+      console.error('Error loading session documents:', error);
+    }
+  }, [userProfile?.id, onSelectionChange]);
+
+  // Enhanced file processing with better error handling
   const processFiles = useCallback((files: File[]) => {
+    const validFiles: AttachedFile[] = [];
+
     files.forEach(file => {
       const validation = validateFile(file);
       if (!validation.isValid) {
@@ -152,17 +230,26 @@ const AIChat: React.FC<AIChatProps> = ({
         id: fileId
       };
 
+      // Process image files for preview
       if (fileType === 'image') {
         const reader = new FileReader();
         reader.onloadend = () => {
           attachedFile.preview = reader.result as string;
           setAttachedFiles(prev => [...prev, attachedFile]);
         };
+        reader.onerror = () => {
+          toast.error(`Failed to load image: ${file.name}`);
+        };
         reader.readAsDataURL(file);
       } else {
-        setAttachedFiles(prev => [...prev, attachedFile]);
+        validFiles.push(attachedFile);
       }
     });
+
+    // Add non-image files immediately
+    if (validFiles.length > 0) {
+      setAttachedFiles(prev => [...prev, ...validFiles]);
+    }
   }, []);
 
   const isDragging = useDragAndDrop(dropZoneRef, processFiles);
@@ -171,6 +258,190 @@ const AIChat: React.FC<AIChatProps> = ({
     const userAgent = navigator.userAgent.toLowerCase();
     return /mobile|android|iphone|ipad|tablet/i.test(userAgent) && window.innerWidth <= 768;
   }, []);
+
+  // Enhanced send message with better document synchronization
+  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+  
+    if (isCurrentlySendingRef.current) {
+      return;
+    }
+  
+    isCurrentlySendingRef.current = true;
+
+    if (isCurrentlySending) {
+      return;
+    }
+
+    const hasPendingOptimistic = messages.some(msg => msg.id.startsWith('optimistic-'));
+    if (hasPendingOptimistic) {
+      toast.info('Please wait for the previous message to complete');
+      return;
+    }
+
+    setIsCurrentlySending(true);
+    setIsLoading(true);
+    setIsAiTyping(true);
+
+    if (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) {
+      toast.error('Please enter a message, attach files, or select documents/notes.');
+      setIsLoading(false);
+      setIsCurrentlySending(false);
+      setIsAiTyping(false);
+      return;
+    }
+
+    try {
+      const userId = userProfile?.id;
+      if (!userId) {
+        toast.error("User ID is missing. Please ensure you are logged in.");
+        setIsLoading(false);
+        setIsCurrentlySending(false);
+        setIsAiTyping(false);
+        return;
+      }
+
+      // Update session documents in database
+      if (activeChatSessionId) {
+        const { error } = await supabase
+          .from('chat_sessions')
+          .update({
+            document_ids: selectedDocumentIds,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', activeChatSessionId)
+          .eq('user_id', userId);
+
+        if (error) {
+          console.error('Error updating session documents:', error);
+        } else {
+          console.log('💾 Session documents updated:', selectedDocumentIds);
+        }
+      }
+
+      // Separate document IDs and note IDs
+      const documentIds = selectedDocumentIds.filter(id =>
+        documents.some(doc => doc.id === id)
+      );
+      const noteIds = selectedDocumentIds.filter(id =>
+        notes.some(note => note.id === id)
+      );
+
+      console.log('📤 Sending message with context:', {
+        documents: documentIds.length,
+        notes: noteIds.length,
+        files: attachedFiles.length
+      });
+
+      // Process attached files for backend
+      const filesForBackend = await Promise.all(
+        attachedFiles.map(async (attachedFile) => {
+          const fileType = getFileType(attachedFile.file);
+          let data: string | null = null;
+          let content: string | null = null;
+
+          try {
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve, reject) => {
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = () => reject(new Error('Failed to read file'));
+              reader.readAsDataURL(attachedFile.file);
+            });
+
+            const base64Result = await base64Promise;
+            data = base64Result.split(',')[1];
+
+            if (fileType === 'document' || attachedFile.file.type.startsWith('text/')) {
+              try {
+                const textReader = new FileReader();
+                const textPromise = new Promise<string>((resolve, reject) => {
+                  textReader.onloadend = () => resolve(textReader.result as string);
+                  textReader.onerror = () => reject(new Error('Failed to read text content'));
+                  textReader.readAsText(attachedFile.file);
+                });
+                content = await textPromise;
+              } catch (textError) {
+                console.warn('Could not extract text content from file:', textError);
+              }
+            }
+          } catch (error) {
+            console.error('Error processing file:', attachedFile.file.name, error);
+            toast.error(`Failed to process file: ${attachedFile.file.name}`);
+            throw error;
+          }
+
+          return {
+            name: attachedFile.file.name,
+            mimeType: attachedFile.file.type,
+            data,
+            type: fileType,
+            size: attachedFile.file.size,
+            content,
+            processing_status: 'pending',
+            processing_error: null,
+          };
+        })
+      );
+      setInputMessage('');
+      // Send message to backend
+      await onSendMessageToBackend(
+        inputMessage.trim(),
+        documentIds,
+        noteIds,
+        filesForBackend
+      );
+      
+      // Reset form state
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+
+      setIsLastAiMessageDisplayed(false);
+      setAttachedFiles([]);
+      setExpandedMessages(new Set());
+
+    } catch (error: any) {
+      console.error("Error sending message:", error);
+      let errorMessage = 'Failed to send message.';
+
+      if (error.message.includes('Too Many Requests')) {
+        errorMessage = 'Message or context too large. Some older messages or document content was truncated.';
+      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        errorMessage = 'Network error: Unable to connect to the server. Please check your internet connection.';
+      } else if (error.message.includes('401')) {
+        errorMessage = 'Authentication failed. Please try logging in again.';
+      } else if (error.message.includes('403')) {
+        errorMessage = 'Access denied. Please check your permissions.';
+      } else if (error.message.includes('500')) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (error.message.includes('Resource exhausted')) {
+        errorMessage = 'Resource exhausted: The service is currently overloaded. Please try again later.';
+      }
+
+      toast.error(`Error: ${errorMessage}`);
+      setInputMessage('');
+      setAttachedFiles([]);
+      setExpandedMessages(new Set());
+    } finally {
+      setIsLoading(false);
+      setIsCurrentlySending(false);
+      setIsAiTyping(false);
+      isCurrentlySendingRef.current = false;
+    }
+  }, [
+    inputMessage,
+    attachedFiles,
+    userProfile?.id,
+    activeChatSessionId,
+    selectedDocumentIds,
+    documents,
+    notes,
+    onSendMessageToBackend,
+    isCurrentlySending,
+    messages
+  ]);
+
 
   const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
     if (!("Notification" in window)) {
@@ -236,175 +507,13 @@ const AIChat: React.FC<AIChatProps> = ({
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, []);
-  const { isRecognizing, startRecognition, stopRecognition, micPermissionStatus } = useSpeechRecognition({
-    setInputMessage,
-    resizeTextarea,
-    inputMessage,
-    requestNotificationPermission,
-    requestMicrophonePermission,
-    checkMicrophonePermission,
-  });
 
-  const { isSpeaking, speakingMessageId, isPaused, speakMessage, pauseSpeech, resumeSpeech, stopSpeech } = useTextToSpeech({
-    messages,
-    isLoading,
-    isLoadingSessionMessages,
-    isPhone,
-    stripCodeBlocks,
-  });
 
-  
 
   useEffect(() => {
     resizeTextarea();
   }, [inputMessage, resizeTextarea]);
 
-  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsAiTyping(true);
-    if (isCurrentlySending) {
-      return;
-    }
-
-    const hasPendingOptimistic = messages.some(msg => msg.id.startsWith('optimistic-'));
-    if (hasPendingOptimistic) {
-      toast.info('Please wait for the previous message to complete');
-      return;
-    }
-
-    setIsCurrentlySending(true);
-    setIsLoading(true);
-
-    if (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) {
-      toast.error('Please enter a message, attach files, or select documents/notes.');
-      setIsLoading(false);
-      setIsCurrentlySending(false);
-      return;
-    }
-
-    try {
-      const userId = userProfile?.id;
-      if (!userId) {
-        toast.error("User ID is missing. Please ensure you are logged in.");
-        setIsLoading(false);
-        setIsCurrentlySending(false);
-        return;
-      }
-
-      if (activeChatSessionId) {
-        await supabase
-          .from('chat_sessions')
-          .update({ document_ids: selectedDocumentIds })
-          .eq('id', activeChatSessionId)
-          .eq('user_id', userId);
-      }
-
-      const documentIds = selectedDocumentIds.filter(id => documents.some(doc => doc.id === id));
-      const noteIds = selectedDocumentIds.filter(id => notes.some(note => note.id === id));
-
-      const filesForBackend = await Promise.all(
-        attachedFiles.map(async (attachedFile) => {
-          const fileType = getFileType(attachedFile.file);
-          let data: string | null = null;
-          let content: string | null = null;
-
-          try {
-            const reader = new FileReader();
-            const base64Promise = new Promise<string>((resolve, reject) => {
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.onerror = () => reject(new Error('Failed to read file'));
-              reader.readAsDataURL(attachedFile.file);
-            });
-
-            const base64Result = await base64Promise;
-            data = base64Result.split(',')[1];
-
-            if (fileType === 'document' || attachedFile.file.type.startsWith('text/')) {
-              try {
-                const textReader = new FileReader();
-                const textPromise = new Promise<string>((resolve, reject) => {
-                  textReader.onloadend = () => resolve(textReader.result as string);
-                  textReader.onerror = () => reject(new Error('Failed to read text content'));
-                  textReader.readAsText(attachedFile.file);
-                });
-                content = await textPromise;
-              } catch (textError) {
-                console.warn('Could not extract text content from file:', textError);
-              }
-            }
-          } catch (error) {
-            console.error('Error processing file:', attachedFile.file.name, error);
-            toast.error(`Failed to process file: ${attachedFile.file.name}`);
-            throw error;
-          }
-
-          return {
-            name: attachedFile.file.name,
-            mimeType: attachedFile.file.type,
-            data,
-            type: fileType,
-            size: attachedFile.file.size,
-            content,
-            processing_status: 'pending',
-            processing_error: null,
-          };
-        })
-      );
-
-      const optimisticAiMessageId = generateOptimisticId();
-      const optimisticAiMessage: Message = {
-        id: optimisticAiMessageId,
-        content: 'Generating response...',
-        role: 'assistant',
-        timestamp: new Date().toISOString(),
-        isError: false,
-        attachedDocumentIds: [],
-        attachedNoteIds: [],
-        session_id: activeChatSessionId,
-        has_been_displayed: false,
-      };
-
-      onSendMessageToBackend(inputMessage.trim(), documentIds, noteIds, filesForBackend);
-
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      if (cameraInputRef.current) cameraInputRef.current.value = '';
-
-      setIsLastAiMessageDisplayed(false);
-      setInputMessage('');
-      setAttachedFiles([]);
-      setExpandedMessages(new Set());
-    } catch (error: any) {
-      console.error("Error sending message:", error);
-      let errorMessage = 'Failed to send message.';
-      if (error.message.includes('Too Many Requests')) {
-        errorMessage = 'Message or context too large. Some older messages or document content was truncated.';
-      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = 'Network error: Unable to connect to the server. Please check your internet connection.';
-      } else if (error.message.includes('401')) {
-        errorMessage = 'Authentication failed. Please try logging in again.';
-      } else if (error.message.includes('403')) {
-        errorMessage = 'Access denied. Please check your permissions.';
-      } else if (error.message.includes('500')) {
-        errorMessage = 'Server error. Please try again later.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      } else if (error.message.includes('Resource exhausted')) {
-        errorMessage = 'Resource exhausted: The service is currently overloaded. Please try again later.';
-      }
-      toast.error(`Error: ${errorMessage}`);
-      setInputMessage('');
-      setAttachedFiles([]);
-      setExpandedMessages(new Set());
-      setIsCurrentlySending(false);
-      setIsAiTyping(false);
-      setIsLastAiMessageDisplayed(true);
-      setIsLoading(false);
-      return;
-    } finally {
-      setIsLoading(false);
-      setIsCurrentlySending(false);
-    }
-  }, [inputMessage, attachedFiles, userProfile?.id, activeChatSessionId, selectedDocumentIds, onSendMessageToBackend, isCurrentlySending, messages]);
 
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {
@@ -505,84 +614,185 @@ const AIChat: React.FC<AIChatProps> = ({
     toast.info("AI correction prepared in input. Review and send to apply.");
   }, []);
 
-  const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  }, []);
-
-  const handleScroll = useCallback(async () => {
-    const chatContainer = chatContainerRef.current;
-    if (!chatContainer) return;
-    const { scrollTop } = chatContainer;
-
-    const scrollThreshold = 100;
-    if (scrollTop <= scrollThreshold && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
-      setIsLoadingOlderMessages(true);
-      try {
-        const oldScrollHeight = chatContainer.scrollHeight;
-        await onLoadOlderMessages();
-
-        setTimeout(() => {
-          if (chatContainerRef.current) {
-            const newScrollHeight = chatContainerRef.current.scrollHeight;
-            chatContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
-          }
-          setIsLoadingOlderMessages(false);
-        }, 0);
-      } catch (error) {
-        console.error("Error loading older messages:", error);
-        toast.error("Failed to load older messages.");
-        setIsLoadingOlderMessages(false);
-      }
-    }
-  }, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages]);
 
   useEffect(() => {
-    const chatContainer = chatContainerRef.current;
-    if (chatContainer) {
-      chatContainer.addEventListener('scroll', handleScroll);
-      return () => {
-        chatContainer.removeEventListener('scroll', handleScroll);
-      };
-    }
-  }, [handleScroll]);
-
-  useEffect(() => {
-    const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
-    if (isSessionChange) {
-      if (!isLoadingSessionMessages && messages.length > 0) {
-        setTimeout(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
-          }
-          prevSessionIdRef.current = activeChatSessionId;
-        }, 0);
+    if (!isAiTyping && !isLoadingSessionMessages) {
+      if (!isLastAiMessageDisplayed) {
+        scrollToBottom();
       }
-      setInputMessage('');
-      setAttachedFiles([]);
-      setExpandedMessages(new Set());
-      setIsCurrentlySending(false);
-      setIsAiTyping(false);
-      isSubmittingUserMessage = false;
-      scrollToBottom('auto');
     }
-  }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom]);
+  }, [attachedFiles, selectedDocumentIds, mergedDocuments, notes, isLoadingSessionMessages, activeChatSessionId, userProfile?.id, messages]);
 
-  useEffect(() => {
-  }, [attachedFiles, selectedDocumentIds, mergedDocuments]);
+// Throttle utility function
+const throttle = (func: Function, limit: number) => {
+  let inThrottle: boolean;
+  return function(this: any, ...args: any[]) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+};
+// Enhanced scroll management for AI typing
 
-  const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
-    setMergedDocuments(prevDocs => {
-      const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
-      if (existingIndex > -1) {
-        const newDocs = [...prevDocs];
-        newDocs[existingIndex] = updatedDoc;
-        return newDocs;
-      } else {
-        return [...prevDocs, updatedDoc];
-      }
+// Smooth scroll to bottom with AI typing support
+const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth', force = false) => {
+  if (!isAutoScrolling && !force) return;
+  
+  requestAnimationFrame(() => {
+    messagesEndRef.current?.scrollIntoView({ 
+      behavior,
+      block: 'end',
+      inline: 'nearest'
     });
-    onDocumentUpdated(updatedDoc);
-  }, [onDocumentUpdated]);
+  });
+}, [isAutoScrolling]);
+
+// Enhanced scroll handler with AI typing detection
+const handleScroll = useCallback(async () => {
+  const chatContainer = chatContainerRef.current;
+  if (!chatContainer) return;
+
+  const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+  const scrollBottom = scrollHeight - scrollTop - clientHeight;
+  
+  // Auto-scroll if user is near bottom (within 100px) or AI is typing
+  const isNearBottom = scrollBottom <= 100;
+  setIsAutoScrolling(isNearBottom || isAiTyping);
+
+  // Load older messages when scrolling up
+  if (scrollTop <= 100 && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
+    setIsLoadingOlderMessages(true);
+    try {
+      const oldScrollHeight = chatContainer.scrollHeight;
+      await onLoadOlderMessages();
+
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          const newScrollHeight = chatContainerRef.current.scrollHeight;
+          chatContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
+        }
+        setIsLoadingOlderMessages(false);
+      }, 0);
+    } catch (error) {
+      console.error("Error loading older messages:", error);
+      toast.error("Failed to load older messages.");
+      setIsLoadingOlderMessages(false);
+    }
+  }
+}, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages, isAiTyping]);
+
+// Enhanced effect for AI typing scroll
+useEffect(() => {
+  if (isAiTyping && isAutoScrolling) {
+    // Scroll more frequently during AI typing
+    const scrollInterval = setInterval(() => {
+      scrollToBottom('smooth');
+    }, 500); // Scroll every 500ms during typing
+    
+    return () => clearInterval(scrollInterval);
+  }
+}, [isAiTyping, isAutoScrolling, scrollToBottom]);
+
+// Enhanced effect for new messages and session changes
+useEffect(() => {
+  if (messages.length === 0) return;
+
+  const lastMessage = messages[messages.length - 1];
+  const isNewMessage = lastMessage.id !== lastProcessedMessageIdRef.current;
+
+  if (isNewMessage) {
+    lastProcessedMessageIdRef.current = lastMessage.id;
+
+    if (lastMessage.role === 'assistant') {
+      // AI message - scroll immediately and set typing state
+      setIsAiTyping(true);
+      scrollToBottom('smooth', true);
+    } else if (lastMessage.role === 'user') {
+      // User message - scroll immediately
+      scrollToBottom('smooth', true);
+    }
+  }
+
+  // If it's the last AI message and it's complete, stop typing
+  if (lastMessage.role === 'assistant' && !lastMessage.content.includes('█') && !isLoading) {
+    setIsAiTyping(false);
+  }
+}, [messages, isLoading, scrollToBottom]);
+
+
+useEffect(() => {
+  const chatContainer = chatContainerRef.current;
+  if (chatContainer) {
+    chatContainer.addEventListener('scroll', handleScroll);
+    return () => {
+      chatContainer.removeEventListener('scroll', handleScroll);
+    };
+  }
+}, [handleScroll]);
+
+// Replace your session change useEffect with:
+useEffect(() => {
+  const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
+  
+  if (isSessionChange && activeChatSessionId && !isLoadingSessionMessages && !isLoadingSession) {
+    setIsLoadingSession(true);
+    
+    setTimeout(() => {
+      scrollToBottom('auto', true);
+      prevSessionIdRef.current = activeChatSessionId;
+      setIsLoadingSession(false);
+    }, 100);
+    
+    setInputMessage('');
+    setAttachedFiles([]);
+    setExpandedMessages(new Set());
+    setIsCurrentlySending(false);
+    setIsAiTyping(false);
+  }
+}, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom, isLoadingSession]);
+// Enhanced session change handling
+useEffect(() => {
+  const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
+  
+  if (isSessionChange && activeChatSessionId && !isLoadingSessionMessages && messages.length > 0) {
+    // Force scroll to bottom on session change
+    setTimeout(() => {
+      scrollToBottom('auto', true);
+      prevSessionIdRef.current = activeChatSessionId;
+    }, 100);
+    
+    // Reset states
+    setInputMessage('');
+    setAttachedFiles([]);
+    setExpandedMessages(new Set());
+    setIsCurrentlySending(false);
+    setIsAiTyping(false);
+  }
+}, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom]);
+
+// Enhanced effect for when AI stops typing
+useEffect(() => {
+  if (!isAiTyping && isAutoScrolling) {
+    // Final scroll when AI finishes typing
+    setTimeout(() => {
+      scrollToBottom('smooth', true);
+    }, 100);
+  }
+}, [isAiTyping, isAutoScrolling, scrollToBottom]);
+
+// Enhanced scroll event listener
+useEffect(() => {
+  const chatContainer = chatContainerRef.current;
+  if (chatContainer) {
+    const handleScrollThrottled = throttle(handleScroll, 100);
+    chatContainer.addEventListener('scroll', handleScrollThrottled);
+    return () => {
+      chatContainer.removeEventListener('scroll', handleScrollThrottled);
+    };
+  }
+}, [handleScroll]);
 
   const handleMessageDeleteClick = useCallback((messageId: string) => {
     setMessageToDelete(messageId);
@@ -630,24 +840,10 @@ const AIChat: React.FC<AIChatProps> = ({
     setAttachedFiles([]);
   }, []);
 
-  useEffect(() => {
-    if (activeChatSessionId !== null) {
-      stopSpeech();
-      setInputMessage('');
-      setAttachedFiles([]);
-      setActiveDiagram(null);
-      setIsFullScreen(false);
-      setExpandedMessages(new Set());
-      setZoomLevel(1);
-      setPanOffset({ x: 0, y: 0 });
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      if (cameraInputRef.current) cameraInputRef.current.value = '';
-    }
-  }, [activeChatSessionId, stopSpeech]);
 
   const selectedDocumentTitles = useMemo(() => {
     return mergedDocuments
-      .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'text')
+      .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type !== 'image')
       .map(doc => doc.title);
   }, [mergedDocuments, selectedDocumentIds]);
 
@@ -662,11 +858,111 @@ const AIChat: React.FC<AIChatProps> = ({
       .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'image');
   }, [mergedDocuments, selectedDocumentIds]);
 
+  const { isRecognizing, startRecognition, stopRecognition, micPermissionStatus } = useSpeechRecognition({
+    setInputMessage,
+    resizeTextarea: useCallback(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      }
+    }, []),
+    inputMessage,
+    requestNotificationPermission: useCallback(async (): Promise<boolean> => {
+      if (!("Notification" in window)) {
+        console.warn("Notification API not supported in this browser.");
+        return false;
+      }
+      try {
+        const permission = await Notification.requestPermission();
+        return permission === "granted";
+      } catch (error) {
+        console.error("Error requesting notification permission:", error);
+        return false;
+      }
+    }, []),
+    requestMicrophonePermission: useCallback(async (): Promise<boolean> => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        return true;
+      } catch (error: any) {
+        console.error('Error requesting microphone permission:', error);
+        toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
+        return false;
+      }
+    }, []),
+    checkMicrophonePermission: useCallback(async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
+      try {
+        if (navigator.permissions && navigator.permissions.query) {
+          const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          return permissionStatus.state as 'granted' | 'denied' | 'prompt';
+        }
+        return 'unknown';
+      } catch (error) {
+        console.error('Error checking microphone permission:', error);
+        return 'unknown';
+      }
+    }, []),
+  });
+
+  const { isSpeaking, speakingMessageId, isPaused, speakMessage, pauseSpeech, resumeSpeech, stopSpeech } = useTextToSpeech({
+    messages,
+    isLoading,
+    isLoadingSessionMessages,
+    isPhone,
+    stripCodeBlocks,
+  });
+
+  // Enhanced document update handler
+  const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
+    setMergedDocuments(prevDocs => {
+      const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
+      if (existingIndex > -1) {
+        const newDocs = [...prevDocs];
+        newDocs[existingIndex] = updatedDoc;
+        return newDocs;
+      } else {
+        return [...prevDocs, updatedDoc];
+      }
+    });
+    onDocumentUpdated(updatedDoc);
+  }, [onDocumentUpdated]);
+
+  // Enhanced session change handling with document synchronization
+  useEffect(() => {
+    const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
+
+    if (isSessionChange && activeChatSessionId) {
+      console.log('🔄 Chat session changed, loading session documents');
+
+      // Load documents for the current session
+      loadSessionDocuments(activeChatSessionId);
+
+      prevSessionIdRef.current = activeChatSessionId;
+    }
+
+    // Reset states on session change
+    if (isSessionChange) {
+      setInputMessage('');
+      setAttachedFiles([]);
+      setExpandedMessages(new Set());
+      setIsCurrentlySending(false);
+      setIsAiTyping(false);
+      setActiveDiagram(null);
+      setIsFullScreen(false);
+      setZoomLevel(1);
+      setPanOffset({ x: 0, y: 0 });
+
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+
+      stopSpeech();
+    }
+  }, [activeChatSessionId, stopSpeech]);
   function handleDiagramCodeUpdate(messageId: string, newCode: string): Promise<void> {
     toast.info('Diagram code updated. You can regenerate the response to see changes.');
     return Promise.resolve();
   }
-
   return (
     <>
       <div
@@ -690,23 +986,16 @@ const AIChat: React.FC<AIChatProps> = ({
           }}
           transition={{ duration: 0.1, ease: 'easeInOut' }}
         >
+          {/* Chat content remains the same */}
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar pb-36 md:pb-6">
-            {messages.length === 0 && !isLoading && !isLoadingSessionMessages && !isLoadingOlderMessages && !isSubmittingUserMessage && (
-              <div className="text-center py-8 flex-grow flex flex-col justify-center items-center text-slate-400 dark:text-gray-500">
-                <BookPagesAnimation size="xl" showText={false} className="mb-6" />
-                <h3 className="text-lg md:text-2xl font-medium text-slate-700 mb-2 dark:text-gray-200 font-claude">Welcome to your AI Study Assistant!</h3>
-                <p className="text-base md:text-lg text-slate-500 max-w-md mx-auto dark:text-gray-400 font-claude leading-relaxed">
-                  I can help with questions about your notes, create study guides, explain concepts, and assist with academic work. Select documents and start chatting, use the microphone, or drag and drop files!
-                </p>
-              </div>
-            )}
+            {/* MessageList and other content */}
             <MessageList
               messages={messages}
               isLoading={isLoading}
               isLoadingSessionMessages={isLoadingSessionMessages}
               isLoadingOlderMessages={isLoadingOlderMessages}
               hasMoreMessages={hasMoreMessages}
-              mergedDocuments={mergedDocuments}
+              mergedDocuments={mergedDocuments} // Use synchronized documents
               onDeleteClick={handleMessageDeleteClick}
               onRegenerateClick={onRegenerateResponse}
               onRetryClick={onRetryFailedMessage}
@@ -754,31 +1043,24 @@ ${isDiagramPanelOpen
               ? (isPhone() ? 'hidden' : `md:pr-[calc(${panelWidth}%+1.5rem)]`)
               : ''
             }`}>
+            {/* Input form with enhanced context badges */}
             <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2">
-              {isRecognizing && (
-                <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 dark:bg-red-900/20 dark:border-red-800">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 bg-red-500 rounded-full animate-pulse"></div>
-                    <Mic className="h-4 w-4 text-red-600 dark:text-red-300 animate-pulse" />
-                    <span className="text-sm text-red-700 dark:text-red-300 font-medium">
-                      Listening... Click mic button to stop
-                    </span>
-                  </div>
+             {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
+                <div className="mb-2">
+                  <ContextBadges
+                    attachedFiles={attachedFiles}
+                    selectedImageDocuments={selectedImageDocuments}
+                    selectedDocumentTitles={selectedDocumentTitles}
+                    selectedNoteTitles={selectedNoteTitles}
+                    handleRemoveAllFiles={handleRemoveAllFiles}
+                    onSelectionChange={onSelectionChange}
+                    selectedDocumentIds={selectedDocumentIds}
+                    documents={documents}
+                    notes={notes}
+                  />
                 </div>
-              )}
-              {(attachedFiles.length > 0 || selectedDocumentIds.length > 0) && (
-                <ContextBadges
-                  attachedFiles={attachedFiles}
-                  selectedImageDocuments={selectedImageDocuments}
-                  selectedDocumentTitles={selectedDocumentTitles}
-                  selectedNoteTitles={selectedNoteTitles}
-                  handleRemoveAllFiles={handleRemoveAllFiles}
-                  onSelectionChange={onSelectionChange}
-                  selectedDocumentIds={selectedDocumentIds}
-                  documents={documents}
-                  notes={notes}
-                />
-              )}
+              ) : null} 
+              {/* Textarea and buttons */}
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
@@ -797,6 +1079,7 @@ ${isDiagramPanelOpen
                 disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
                 rows={1}
               />
+
               <div className="flex items-center gap-2 mt-2 justify-between">
                 <div className="flex items-center gap-2">
                   <Button
@@ -913,13 +1196,6 @@ ${isDiagramPanelOpen
                     messages.some(msg => msg.id.startsWith('optimistic-'))
                   }
                   className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                  title={
-                    isAiTyping
-                      ? 'AI is typing...'
-                      : messages.some(msg => msg.id.startsWith('optimistic-'))
-                        ? 'Waiting for response...'
-                        : 'Send Message'
-                  }
                 >
                   {isSubmittingUserMessage || isCurrentlySending || isAiTyping ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -930,7 +1206,10 @@ ${isDiagramPanelOpen
               </div>
             </div>
           </div>
+
+          {/* Document selector and other modals */}
           {showDocumentSelector && (
+           
             <DocumentSelector
               documents={mergedDocuments}
               notes={notes}
@@ -941,13 +1220,14 @@ ${isDiagramPanelOpen
                 setShowDocumentSelector(false);
                 setIsUpdatingDocuments(false);
               }}
-              onLoadMoreDocuments={onLoadMoreDocuments}
-              hasMoreDocuments={hasMoreDocuments}
-              isLoadingDocuments={isLoadingDocuments}
+              onLoadMoreDocuments={onLoadMoreDocuments} // Make sure this function loads more documents
+              hasMoreDocuments={hasMoreDocuments} // Make sure this is calculated correctly
+              isLoadingDocuments={isLoadingDocuments} // Make sure this state is managed
               onDocumentUpdated={handleDocumentUpdatedLocally}
               activeChatSessionId={activeChatSessionId}
             />
           )}
+
           <ConfirmationModal
             isOpen={showDeleteConfirm}
             onClose={() => setShowDeleteConfirm(false)}
@@ -957,6 +1237,7 @@ ${isDiagramPanelOpen
           />
         </motion.div>
 
+        {/* Diagram panel remains the same */}
         {isDiagramPanelOpen && (
           <DiagramPanel
             key={activeDiagram ? `${activeDiagram.type}-${activeDiagram.content?.substring(0, 50) || ''}-${activeDiagram.language || ''}` : 'no-diagram'}
@@ -971,26 +1252,15 @@ ${isDiagramPanelOpen
             initialWidthPercentage={panelWidth}
             liveContent={activeDiagram?.content}
             isPhone={isPhone}
+            currentTheme= {initialAppState.currentTheme}
           />
-        )}
-        {showScrollToBottomButton && (
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => scrollToBottom('smooth')}
-            className={`fixed bottom-28 right-6 md:bottom-8 bg-white rounded-full shadow-lg p-2 z-20 transition-all duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 font-sans
-${isDiagramPanelOpen ? `md:right-[calc(${panelWidth}%+1.5rem)]` : 'md:right-8'}
-`}
-            title="Scroll to bottom"
-          >
-            <ChevronDown className="h-5 w-5 text-slate-600 dark:text-gray-300" />
-          </Button>
         )}
       </div>
     </>
   );
 };
 
+// Keep your existing arePropsEqual function
 const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
   return (
     prevProps.isLoading === nextProps.isLoading &&

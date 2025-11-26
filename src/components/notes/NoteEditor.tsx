@@ -6,8 +6,6 @@ import { supabase } from '../../integrations/supabase/client';
 import { Note, NoteCategory, UserProfile } from '../../types';
 import { Database } from '../../integrations/supabase/types';
 
-// Import refactored components
-import { NoteEditorHeader } from './components/NoteEditorHeader';
 import { NoteContentArea } from './components/NoteContentArea';
 import { AISummarySection } from './components/AISummarySection';
 import { TranslatedContentSection } from './components/TranslatedContentSection';
@@ -219,7 +217,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   }, [audioProcessingJobId, userProfile, note, onNoteUpdate]);
 
   const handleSave = () => {
-    const currentMarkdown =  content;
+    const currentMarkdown = content;
 
     const updatedNote: Note = {
       ...note,
@@ -228,7 +226,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       category,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
       updatedAt: new Date(),
-      aiSummary:note.aiSummary
+      aiSummary: note.aiSummary
     };
 
     onNoteUpdate(updatedNote);
@@ -720,44 +718,44 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   // ============================================
-// FILE 1: NoteEditor.tsx
-// Replace the handleDownloadPdf function with this:
-// ============================================
+  // FILE 1: NoteEditor.tsx
+  // Replace the handleDownloadPdf function with this:
+  // ============================================
 
-const handleDownloadPdf = () => {
-  if (!content.trim()) {
-    toast.info("There's no content to convert to PDF.");
-    return;
-  }
+  const handleDownloadPdf = () => {
+    if (!content.trim()) {
+      toast.info("There's no content to convert to PDF.");
+      return;
+    }
 
-  // Get the HTML content from the editor
-  const htmlContent = contentAreaRef.current?.getInnerHTML() || '';
-  
-  if (!htmlContent) {
-    toast.error('Could not retrieve note content for PDF generation.');
-    return;
-  }
+    // Get the HTML content from the editor
+    const htmlContent = contentAreaRef.current?.getInnerHTML() || '';
 
-  toast.loading('Generating PDF...', { id: 'pdf-download' });
+    if (!htmlContent) {
+      toast.error('Could not retrieve note content for PDF generation.');
+      return;
+    }
 
-  if (typeof window.html2pdf === 'undefined') {
-    toast.error('PDF generation library not loaded. Please try again later.', { id: 'pdf-download' });
-    console.error('html2pdf.js is not loaded. Please ensure it is included in your project.');
-    return;
-  }
+    toast.loading('Generating PDF...', { id: 'pdf-download' });
 
-  // Create a temporary container for PDF generation
-  const tempContainer = document.createElement('div');
-  tempContainer.style.left = '-9999px';
-  tempContainer.style.width = '210mm'; // A4 width
-  tempContainer.style.padding = '20mm';
-  tempContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-  tempContainer.style.fontSize = '12pt';
-  tempContainer.style.lineHeight = '1.6';
-  tempContainer.style.color = '#000';
-  
-  // Add title and content with better styling
-  tempContainer.innerHTML = `
+    if (typeof window.html2pdf === 'undefined') {
+      toast.error('PDF generation library not loaded. Please try again later.', { id: 'pdf-download' });
+      console.error('html2pdf.js is not loaded. Please ensure it is included in your project.');
+      return;
+    }
+
+    // Create a temporary container for PDF generation
+    const tempContainer = document.createElement('div');
+    tempContainer.style.left = '-9999px';
+    tempContainer.style.width = '210mm'; // A4 width
+    tempContainer.style.padding = '20mm';
+    tempContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    tempContainer.style.fontSize = '12pt';
+    tempContainer.style.lineHeight = '1.6';
+    tempContainer.style.color = '#000';
+
+    // Add title and content with better styling
+    tempContainer.innerHTML = `
     <style>
       /* PDF-specific styles */
       * {
@@ -842,70 +840,70 @@ const handleDownloadPdf = () => {
     </div>
   `;
 
-  document.body.appendChild(tempContainer);
+    document.body.appendChild(tempContainer);
 
-  window.html2pdf()
-    .from(tempContainer)
-    .set({
-      margin: [15, 15, 15, 15],
-      filename: `${(title || 'untitled-note').replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        logging: false, 
-        dpi: 192, 
-        letterRendering: true,
-        backgroundColor: '#ffffff',
-        useCORS: true
-      },
-      jsPDF: { 
-        unit: 'mm', 
-        format: 'a4', 
-        orientation: 'portrait',
-        compress: true
-      },
-      pagebreak: { 
-        mode: ['avoid-all', 'css', 'legacy'],
-        before: '.page-break-before',
-        after: '.page-break-after',
-        avoid: ['pre', 'code', 'table', 'img', 'svg']
-      }
-    })
-    .save()
-    .then(() => {
-      toast.success('Note downloaded as PDF!', { id: 'pdf-download' });
-      document.body.removeChild(tempContainer);
-    })
-    .catch((error: any) => {
-      toast.error('Failed to generate PDF.', { id: 'pdf-download' });
-      console.error('Error generating PDF:', error);
-      if (document.body.contains(tempContainer)) {
+    window.html2pdf()
+      .from(tempContainer)
+      .set({
+        margin: [15, 15, 15, 15],
+        filename: `${(title || 'untitled-note').replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          logging: false,
+          dpi: 192,
+          letterRendering: true,
+          backgroundColor: '#ffffff',
+          useCORS: true
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait',
+          compress: true
+        },
+        pagebreak: {
+          mode: ['avoid-all', 'css', 'legacy'],
+          before: '.page-break-before',
+          after: '.page-break-after',
+          avoid: ['pre', 'code', 'table', 'img', 'svg']
+        }
+      })
+      .save()
+      .then(() => {
+        toast.success('Note downloaded as PDF!', { id: 'pdf-download' });
         document.body.removeChild(tempContainer);
-      }
-    });
-};
+      })
+      .catch((error: any) => {
+        toast.error('Failed to generate PDF.', { id: 'pdf-download' });
+        console.error('Error generating PDF:', error);
+        if (document.body.contains(tempContainer)) {
+          document.body.removeChild(tempContainer);
+        }
+      });
+  };
 
-// ============================================
-// FILE 2: ALTERNATIVE APPROACH (if html2pdf is not loaded)
-// Add this as a fallback method in NoteEditor.tsx
-// ============================================
+  // ============================================
+  // FILE 2: ALTERNATIVE APPROACH (if html2pdf is not loaded)
+  // Add this as a fallback method in NoteEditor.tsx
+  // ============================================
 
-const handleDownloadPdfFallback = () => {
-  if (!content.trim()) {
-    toast.info("There's no content to convert to PDF.");
-    return;
-  }
+  const handleDownloadPdfFallback = () => {
+    if (!content.trim()) {
+      toast.info("There's no content to convert to PDF.");
+      return;
+    }
 
-  // Use browser's print-to-PDF as fallback
-  const htmlContent = contentAreaRef.current?.getInnerHTML() || '';
-  
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    toast.error('Please allow pop-ups to generate PDF');
-    return;
-  }
+    // Use browser's print-to-PDF as fallback
+    const htmlContent = contentAreaRef.current?.getInnerHTML() || '';
 
-  printWindow.document.write(`
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow pop-ups to generate PDF');
+      return;
+    }
+
+    printWindow.document.write(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -991,16 +989,16 @@ const handleDownloadPdfFallback = () => {
     </html>
   `);
 
-  printWindow.document.close();
-  
-  // Wait for content to load before printing
-  printWindow.onload = () => {
-    setTimeout(() => {
-      printWindow.print();
-      toast.success('Opening print dialog. Choose "Save as PDF" as your printer.');
-    }, 500);
+    printWindow.document.close();
+
+    // Wait for content to load before printing
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print();
+        toast.success('Opening print dialog. Choose "Save as PDF" as your printer.');
+      }, 500);
+    };
   };
-};
 
   const handleCopyNoteContent = () => {
     if (!content.trim()) {
@@ -1247,39 +1245,6 @@ const handleDownloadPdfFallback = () => {
 
   return (
     <div className="flex flex-col max-h-[95vh] bg-white dark:bg-gray-950 rounded-lg shadow-sm ">
-      <NoteEditorHeader
-        title={title}
-        setTitle={setTitle}
-        category={category}
-        setCategory={setCategory}
-        tags={tags}
-        setTags={setTags}
-        isUploading={isUploading}
-        isGeneratingAI={isGeneratingAI}
-        isProcessingAudio={isProcessingAudio}
-        userProfile={userProfile}
-        regenerateNoteFromDocument={regenerateNoteFromDocument}
-        handleViewOriginalDocument={handleViewOriginalDocument}
-        handleDownloadNote={handleDownloadNote}
-        handleDownloadPdf={handleDownloadPdf}
-        handleDownloadHTML={handleDownloadHTML}
-        handleDownloadTXT={handleDownloadTXT}
-        handleDownloadWord={handleDownloadWord}
-        handleCopyNoteContent={handleCopyNoteContent}
-        handleTextToSpeech={handleTextToSpeech}
-        isSpeaking={isSpeaking}
-        handleSave={handleSave}
-        selectedVoiceURI={selectedVoiceURI}
-        setSelectedVoiceURI={setSelectedVoiceURI}
-        voices={voices}
-        documentId={note.document_id}
-        onToggleNotesHistory={onToggleNotesHistory}
-        isNotesHistoryOpen={isNotesHistoryOpen}
-        fileInputRef={fileInputRef}
-        handleFileSelect={handleFileSelect}
-        audioInputRef={audioInputRef}
-        handleAudioFileSelect={handleAudioFileSelect}
-      />
 
       <AudioOptionsSection
         uploadedAudioDetails={uploadedAudioDetails}
@@ -1302,17 +1267,47 @@ const handleDownloadPdfFallback = () => {
         isProcessingAudio={isProcessingAudio}
         userProfile={userProfile}
       />
+      <div className="fixed inset-0 lg:inset-auto animate-in fade-in duration-500 lg:h-screen  bg-white dark:bg-slate-900 z-40 lg:z-10  overflow-hidden flex">
+        <div className='fixed inset-0 lg:inset-auto lg:relative  flex flex-col w-full  shadow-lg border'>
 
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-y-auto lg:overflow-hidden">
-        <NoteContentArea
-          ref={contentAreaRef}
-          content={content}
-          setContent={setContent}
-          userProfile={userProfile}
-          title={title}
-          note={note}
-        />
-
+          <NoteContentArea
+            ref={contentAreaRef}
+            content={content}
+            setContent={setContent}
+            userProfile={userProfile}
+            title={title}
+            setTitle={setTitle}
+            category={category}
+            setCategory={setCategory}
+            tags={tags}
+            setTags={setTags}
+            onSave={handleSave}
+            onToggleNotesHistory={onToggleNotesHistory}
+            isNotesHistoryOpen={isNotesHistoryOpen}
+            isUploading={isUploading}
+            isGeneratingAI={isGeneratingAI}
+            isProcessingAudio={isProcessingAudio}
+            regenerateNoteFromDocument={regenerateNoteFromDocument}
+            handleViewOriginalDocument={handleViewOriginalDocument}
+            documentId={note.document_id}
+            handleDownloadNote={handleDownloadNote}
+            handleDownloadPdf={handleDownloadPdf}
+            handleDownloadHTML={handleDownloadHTML}
+            handleDownloadTXT={handleDownloadTXT}
+            handleDownloadWord={handleDownloadWord}
+            handleCopyNoteContent={handleCopyNoteContent}
+            handleTextToSpeech={handleTextToSpeech}
+            isSpeaking={isSpeaking}
+            selectedVoiceURI={selectedVoiceURI}
+            setSelectedVoiceURI={setSelectedVoiceURI}
+            voices={voices}
+            fileInputRef={fileInputRef}
+            handleFileSelect={handleFileSelect}
+            audioInputRef={audioInputRef}
+            handleAudioFileSelect={handleAudioFileSelect}
+            note={note}
+          />
+        </div>
         {note.aiSummary && (
           <AISummarySection
             aiSummary={note.aiSummary}

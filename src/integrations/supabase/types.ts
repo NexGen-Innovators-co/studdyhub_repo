@@ -896,6 +896,158 @@ export type Database = {
           },
         ]
       }
+      social_chat_messages: {
+        Row: {
+          id: string
+          session_id: string
+          sender_id: string
+          content: string
+          created_at: string
+          updated_at: string | null
+          is_read: boolean
+          read_at: string | null
+          is_edited: boolean
+          group_id: string | null
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          sender_id: string
+          content: string
+          created_at?: string
+          updated_at?: string | null
+          is_read?: boolean
+          read_at?: string | null
+          is_edited?: boolean
+          group_id?: string | null
+        }
+        Update: {
+          content?: string
+          updated_at?: string | null
+          is_read?: boolean
+          read_at?: string | null
+          is_edited?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_chat_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            referencedRelation: "social_chat_sessions"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      social_chat_sessions: {
+        Row: {
+          id: string
+          chat_type: 'p2p' | 'group'
+          group_id: string | null
+          user_id1: string | null
+          user_id2: string | null
+          last_message_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chat_type: 'p2p' | 'group'
+          group_id?: string | null
+          user_id1?: string | null
+          user_id2?: string | null
+          last_message_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          last_message_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_chat_sessions_group_id_fkey"
+            columns: ["group_id"]
+            referencedRelation: "social_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_sessions_user_id1_fkey"
+            columns: ["user_id1"]
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_sessions_user_id2_fkey"
+            columns: ["user_id2"]
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      social_chat_message_media: {
+        Row: {
+          id: string
+          message_id: string
+          type: 'image' | 'video' | 'document'
+          url: string
+          filename: string
+          size_bytes: number
+          mime_type: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          type: 'image' | 'video' | 'document'
+          url: string
+          filename: string
+          size_bytes: number
+          mime_type: string
+          created_at?: string
+        }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "social_chat_message_media_message_id_fkey"
+            columns: ["message_id"]
+            referencedRelation: "social_chat_messages"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      social_chat_message_resources: {
+        Row: {
+          id: string
+          message_id: string
+          resource_id: string
+          resource_type: 'note' | 'document' | 'post'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          resource_id: string
+          resource_type: 'note' | 'document' | 'post'
+          created_at?: string
+        }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "social_chat_message_resources_message_id_fkey"
+            columns: ["message_id"]
+            referencedRelation: "social_chat_messages"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       social_bookmarks: {
         Row: {
           created_at: string | null
@@ -932,188 +1084,104 @@ export type Database = {
           },
         ]
       }
-      social_chat_message_media: {
+      social_users: {
         Row: {
-          created_at: string | null
-          filename: string
           id: string
-          message_id: string
-          mime_type: string
-          size_bytes: number
-          type: string
-          url: string
+          username: string
+          display_name: string
+          avatar_url: string | null
+          bio: string | null
+          interests: string[] | null
+          is_verified: boolean
+          is_contributor: boolean
+          followers_count: number
+          following_count: number
+          posts_count: number
+          last_active: string
+          created_at: string
+          updated_at: string
+          email: string | null
         }
         Insert: {
-          created_at?: string | null
-          filename: string
-          id?: string
-          message_id: string
-          mime_type: string
-          size_bytes: number
-          type: string
-          url: string
+          id: string
+          username: string
+          display_name: string
+          avatar_url?: string | null
+          bio?: string | null
+          interests?: string[] | null
+          is_verified?: boolean
+          is_contributor?: boolean
+          followers_count?: number
+          following_count?: number
+          posts_count?: number
+          last_active?: string
+          created_at?: string
+          updated_at?: string
+          email?: string | null
         }
         Update: {
-          created_at?: string | null
-          filename?: string
-          id?: string
-          message_id?: string
-          mime_type?: string
-          size_bytes?: number
-          type?: string
-          url?: string
+          username?: string
+          display_name?: string
+          avatar_url?: string | null
+          bio?: string | null
+          interests?: string[] | null
+          last_active?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "social_chat_message_media_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "social_chat_messages"
+            foreignKeyName: "social_users_id_fkey"
+            columns: ["id"]
+            referencedRelation: "users"
             referencedColumns: ["id"]
-          },
+          }
         ]
-      }// Add these new table definitions to the existing types.ts file
-      // Insert after social_chat_messages table definition
+      }
 
-      social_chat_sessions: {
+      social_posts: {
         Row: {
           id: string
-          chat_type: string
+          author_id: string
+          content: string
+          privacy: 'public' | 'followers' | 'private'
           group_id: string | null
-          user_id1: string | null
-          user_id2: string | null
-          last_message_at: string | null
-          created_at: string | null
-          updated_at: string | null
+          likes_count: number
+          comments_count: number
+          shares_count: number
+          bookmarks_count: number
+          views_count: number
+          created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
-          chat_type: string
-          group_id?: string | null
-          user_id1?: string | null
-          user_id2?: string | null
-          last_message_at?: string | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          chat_type?: string
-          group_id?: string | null
-          user_id1?: string | null
-          user_id2?: string | null
-          last_message_at?: string | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "social_chat_sessions_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "social_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "social_chat_sessions_user_id1_fkey"
-            columns: ["user_id1"]
-            isOneToOne: false
-            referencedRelation: "social_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "social_chat_sessions_user_id2_fkey"
-            columns: ["user_id2"]
-            isOneToOne: false
-            referencedRelation: "social_users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-
-      social_chat_message_resources: {
-        Row: {
-          id: string
-          message_id: string
-          resource_id: string
-          resource_type: string
-          created_at: string | null
-        }
-        Insert: {
-          id?: string
-          message_id: string
-          resource_id: string
-          resource_type: string
-          created_at?: string | null
-        }
-        Update: {
-          id?: string
-          message_id?: string
-          resource_id?: string
-          resource_type?: string
-          created_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "social_chat_message_resources_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "social_chat_messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-
-      // UPDATE the existing social_chat_messages table to include session_id:
-      social_chat_messages: {
-        Row: {
+          author_id: string
           content: string
-          created_at: string | null
-          group_id: string
-          id: string
-          sender_id: string
-          session_id: string | null  // ADD THIS LINE
-        }
-        Insert: {
-          content: string
-          created_at?: string | null
-          group_id: string
-          id?: string
-          sender_id: string
-          session_id?: string | null  // ADD THIS LINE
+          privacy?: 'public' | 'followers' | 'private'
+          group_id?: string | null
+          likes_count?: number
+          comments_count?: number
+          shares_count?: number
+          bookmarks_count?: number
+          views_count?: number
+          created_at?: string
+          updated_at?: string
         }
         Update: {
           content?: string
-          created_at?: string | null
-          group_id?: string
-          id?: string
-          sender_id?: string
-          session_id?: string | null  // ADD THIS LINE
+          privacy?: 'public' | 'followers' | 'private'
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "social_chat_messages_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "social_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "social_chat_messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
+            foreignKeyName: "social_posts_author_id_fkey"
+            columns: ["author_id"]
             referencedRelation: "social_users"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "social_chat_messages_session_id_fkey"  // ADD THIS
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "social_chat_sessions"
-            referencedColumns: ["id"]
-          },
+          }
         ]
       }
+      
       social_comment_media: {
         Row: {
           comment_id: string
@@ -1713,66 +1781,7 @@ export type Database = {
           },
         ]
       }
-      social_posts: {
-        Row: {
-          author_id: string
-          bookmarks_count: number | null
-          comments_count: number | null
-          content: string
-          created_at: string | null
-          group_id: string | null
-          id: string
-          likes_count: number | null
-          privacy: string | null
-          shares_count: number | null
-          updated_at: string | null
-          views_count: number | null
-        }
-        Insert: {
-          author_id: string
-          bookmarks_count?: number | null
-          comments_count?: number | null
-          content: string
-          created_at?: string | null
-          group_id?: string | null
-          id?: string
-          likes_count?: number | null
-          privacy?: string | null
-          shares_count?: number | null
-          updated_at?: string | null
-          views_count?: number | null
-        }
-        Update: {
-          author_id?: string
-          bookmarks_count?: number | null
-          comments_count?: number | null
-          content?: string
-          created_at?: string | null
-          group_id?: string | null
-          id?: string
-          likes_count?: number | null
-          privacy?: string | null
-          shares_count?: number | null
-          updated_at?: string | null
-          views_count?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fk_posts_group_id"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "social_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "social_posts_author_id_fkey"
-            columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "social_users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+    
       social_reports: {
         Row: {
           comment_id: string | null
@@ -1918,60 +1927,6 @@ export type Database = {
         }
         Relationships: []
       }
-      social_users: {
-        Row: {
-          avatar_url: string | null
-          bio: string | null
-          created_at: string | null
-          display_name: string
-          email: string | null
-          followers_count: number | null
-          following_count: number | null
-          id: string
-          interests: string[] | null
-          is_contributor: boolean | null
-          is_verified: boolean | null
-          last_active: string | null
-          posts_count: number | null
-          updated_at: string | null
-          username: string
-        }
-        Insert: {
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          display_name: string
-          email?: string | null
-          followers_count?: number | null
-          following_count?: number | null
-          id: string
-          interests?: string[] | null
-          is_contributor?: boolean | null
-          is_verified?: boolean | null
-          last_active?: string | null
-          posts_count?: number | null
-          updated_at?: string | null
-          username: string
-        }
-        Update: {
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          display_name?: string
-          email?: string | null
-          followers_count?: number | null
-          following_count?: number | null
-          id?: string
-          interests?: string[] | null
-          is_contributor?: boolean | null
-          is_verified?: boolean | null
-          last_active?: string | null
-          posts_count?: number | null
-          updated_at?: string | null
-          username?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       chat_session_memory_stats: {
@@ -2055,6 +2010,20 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_session_summaries: {
+        Row: {
+          id: string
+          chat_type: 'p2p' | 'group'
+          group_id: string | null
+          user_id1: string | null
+          user_id2: string | null
+          last_message_at: string | null
+          created_at: string
+          updated_at: string
+          unread_count_user1: number | null
+          unread_count_user2: number | null
+        }
+      }
     }
     Functions: {
       get_suggested_users: {
@@ -2132,6 +2101,26 @@ export type Database = {
           p_quality: number
         }
         Returns: undefined
+      }
+      get_session_unread_count: {
+        Args: {
+          p_session_id: string
+          p_user_id: string
+        }
+        Returns: number
+      }
+      mark_session_messages_read: {
+        Args: {
+          p_session_id: string
+          p_user_id: string
+        }
+        Returns: number
+      }
+      get_user_unread_count: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: number
       }
       get_or_create_group_chat_session: {
         Args: {

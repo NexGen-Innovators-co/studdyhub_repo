@@ -72,7 +72,7 @@ export const NotesList: React.FC<NotesListProps> = ({
 
   return (
     <div className={`flex flex-col  ${isOpen
-      ? 'translate-x-0 w-72 md:w-64 lg:w-80 max-h-screen lg:max-h-[95vh] overflow-y-auto shadow-lg lg:shadow-none'
+      ? 'translate-x-0 w-72 md:w-64 lg:w-80 max-h-screen lg:max-h-[95vh] overflow-y-auto '
       : 'h-0 lg:h-[95vh] lg:translate-x-0'
       }   bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-gray-800`}>
       {/* Mobile Header with Close Button */}

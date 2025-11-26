@@ -38,7 +38,7 @@ export const GroupHeader: React.FC<GroupHeaderProps> = ({
       </div>
 
       {/* Back Button */}
-      <div className="absolute top-4 left-4 z-10">
+      <div className="absolute top-4 left-4 ">
         <Button
           variant="ghost"
           size="sm"
@@ -51,7 +51,7 @@ export const GroupHeader: React.FC<GroupHeaderProps> = ({
 
       {/* Settings Button (Admin/Mod only) */}
       {canManage && (
-        <div className="absolute top-4 right-4 z-10">
+        <div className="absolute top-4 right-4 ">
           <Button
             variant="ghost"
             size="sm"
@@ -64,7 +64,7 @@ export const GroupHeader: React.FC<GroupHeaderProps> = ({
       )}
 
       {/* Group Info */}
-      <div className="px-4 lg:px-6 pb-6 -mt-16 lg:-mt-20 relative z-10">
+      <div className="px-4 lg:px-6 pb-6 -mt-16 lg:-mt-20 relative ">
         <div className="flex items-end gap-4 lg:gap-6">
           <Avatar className="h-24 w-24 lg:h-32 lg:w-32 border-4 lg:border-8 border-white dark:border-slate-900 shadow-2xl">
             <AvatarImage src={group.avatar_url} />

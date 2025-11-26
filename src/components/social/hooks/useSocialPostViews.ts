@@ -70,6 +70,7 @@ export const useSocialPostViews = (
         setPosts(updatePostInState);
         if (setTrendingPosts) setTrendingPosts(updatePostInState);
         if (setUserPosts) setUserPosts(updatePostInState);
+        console.log(`✅ Tracked view for post ${postId}`);
       } catch (error) {
         console.error('Error tracking post view:', error);
         viewedPosts.current.delete(postId); // Remove from viewedPosts on error to allow retry

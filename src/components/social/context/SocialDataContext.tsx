@@ -1,16 +1,24 @@
-// components/social/context/SocialDataContext.tsx
-import { createContext, useContext, ReactNode } from 'react';
+// In SocialDataContext.tsx
+import { createContext, useContext, ReactNode, useEffect } from 'react';
 import { useSocialData } from '../hooks/useSocialData';
 import { useAppContext } from '../../../hooks/useAppContext';
+import { clearCache } from '../../../utils/socialCache';
 
 const SocialDataContext = createContext<ReturnType<typeof useSocialData> | null>(null);
 
 export const SocialDataProvider = ({ children }: { children: ReactNode }) => {
-  // Get userProfile from AppContext
-  const { userProfile } = useAppContext();
+  const { userProfile, user } = useAppContext();
   
-  // Use default sort and filter - these can be managed in SocialFeed component itself
   const socialData = useSocialData(userProfile, 'newest', 'all');
+  
+  // 🔥 ADD THIS: Clear social data when user changes
+  useEffect(() => {
+    if (!user) {
+      // User logged out, clear cache
+      clearCache();
+      console.log('🔴 User logged out - social cache cleared');
+    }
+  }, [user]);
   
   return (
     <SocialDataContext.Provider value={socialData}>

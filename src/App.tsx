@@ -96,12 +96,11 @@ const App = () => (
                   <Route path="/settings" element={<Index />} />
 
                   {/* ==== SOCIAL ROUTES - Wrapped with SocialDataProvider ==== */}
-                  <Route path="/social" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
-                  <Route path="/social/:tab" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
-                  <Route path="/social/post/:postId" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
-                  <Route path="/social/group/:groupId" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
-                  {/* ADD THIS LINE: Social profile route */}
-                  <Route path="/social/profile/:userId" element={<SocialRoutesWrapper><Index /></SocialRoutesWrapper>} />
+                  <Route path="/social" element={<Index />} />
+                  <Route path="/social/:tab" element={<Index />} />
+                 <Route path="/social/post/:postId" element={<Index />} />
+                 <Route path="/social/group/:groupId" element={<Index />} />
+                 <Route path="/social/profile/:userId" element={<Index />} />
 
                   {/* ==== ADMIN ROUTES - Protected by AdminLayout ==== */}
                   <Route element={<AdminLayout />}>
@@ -117,6 +116,7 @@ const App = () => (
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
+
             </AppProvider>
           </AdminAuthProvider>
         </AuthProvider>

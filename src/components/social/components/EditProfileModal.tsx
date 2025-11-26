@@ -75,7 +75,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10 p-4">
       <Card className="bg-white rounded-lg shadow-xl max-w-lg w-full dark:bg-gray-800">
         <CardHeader className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">Edit Profile</CardTitle>

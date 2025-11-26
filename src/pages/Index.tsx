@@ -6,6 +6,7 @@ import { TabContent } from '../components/layout/TabContent';
 import { useAppContext } from '../hooks/useAppContext';
 import { useMessageHandlers } from '../hooks/useMessageHandlers';
 import { LoadingScreen } from '@/components/ui/bookloader';
+import { clearCache } from '@/utils/socialCache';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -115,7 +116,17 @@ const Index = () => {
     currentActiveTab, userProfile, activeSocialTab, socialPostId,
     socialGroupId, socialSearchQuery, navigate,
   ]);
+  // Clear social data when leaving social tab
+  useEffect(() => {
+    const currentPath = location.pathname;
 
+    // If we're NOT on a social route and coming FROM a social route
+    if (!currentPath.startsWith('/social') && currentActiveTab !== 'social') {
+      clearCache();
+      console.log('🔴 Left social tab - social cache cleared');
+    }
+
+  }, [location.pathname, currentActiveTab]);
   const sidebarProps = useMemo(() => ({
     isOpen: isSidebarOpen,
     onToggle: () => setIsSidebarOpen(prev => !prev),
@@ -276,28 +287,29 @@ const Index = () => {
 
   if (authLoading) return <LoadingScreen message="Authenticating..." progress={50} phase='initial' />;
   if (dataLoading) return <LoadingScreen message="Loading data..." progress={80} phase='core' />;
+
   if (!user) return null;
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
       {/* Smart Responsive Header */}
       <header className={`
-  sticky top-0 z-50 
-  bg-white dark:bg-slate-900 
-  border-b border-slate-200 dark:border-slate-800 
-  shadow-sm
-  ${(currentActiveTab === 'notes' || currentActiveTab === 'social')
-          ? 'block'
+        sticky top-0 
+        bg-white dark:bg-slate-900 
+        border-b border-slate-200 dark:border-slate-800 
+        shadow-sm z-20
+        ${(currentActiveTab !== 'chat' )
+          ? '  lg:z-20 '
           : 'block lg:hidden'
         }
 `}>
         <Header {...headerProps} />
       </header>
-      <div className="flex-1 flex">
-        <div>
+      <div className="flex-1 flex relative lg:z-10">
+        <div className={`z-30 ${currentActiveTab !== 'chat' ? 'lg:hidden ' : 'block'}`}>
           <Sidebar {...sidebarProps} />
         </div>
-        <div className={` h-screen  w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar animate-in slide-in-from-top-2 fade-in duration-500`}>
+        <div className={` h-screen z-10  w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar animate-in slide-in-from-top-2 fade-in duration-500`}>
           <TabContent {...tabContentProps} />
         </div>
       </div>

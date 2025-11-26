@@ -218,7 +218,7 @@ const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFu
                   }}
                   data-index={index}
                   src={item.url}
-                  className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
+                  className="w-full h-full object-contain "
                   playsInline
                   loop
                   muted={globalMuted}
@@ -277,7 +277,7 @@ const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFu
               <img
                 src={item.url}
                 alt="Post content"
-                className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 cursor-pointer"
+                className="w-full h-full object-contain  cursor-pointer"
                 loading="lazy"
               />
             )}
@@ -313,7 +313,7 @@ const ActionButton = ({ icon: Icon, label, count, active, activeColor, onClick }
 );
 
 // --- MAIN POSTCARD COMPONENT ---
-export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
+export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
   (props) => {
     const {
       post,
@@ -385,6 +385,8 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
         toast.success('Link copied to clipboard!');
+        onShare?.(post);
+
       };
 
       const platforms = [
@@ -399,7 +401,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
       ];
 
       return (
-        <Dialog open onOpenChange={onClose}>
+        <Dialog open={isShareModalOpen} onOpenChange={onClose}>
           <DialogContent>
             <DialogTitle className="text-lg font-semibold mb-4">Share this post</DialogTitle>
             <DialogDescription className="mb-6 text-sm text-slate-500">
@@ -411,25 +413,26 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
                   key={platform.name}
                   variant="outline"
                   className="w-full flex items-center justify-start gap-3 py-6"
-                  onClick={() => window.open(platform.url, '_blank', 'noopener,noreferrer')}
+                  onClick={() => { window.open(platform.url, '_blank', 'noopener,noreferrer'); onShare(post); }}
                 >
                   {platform.icon}
                   <span>{platform.name}</span>
                 </Button>
               ))}
-              {onShareToChat && (
-                <Button
-                  onClick={() => {
-                    setIsShareModalOpen(false);
-                    onShareToChat(post);
-                  }}
-                  variant="outline"
-                  className="w-full flex items-center justify-start gap-3 py-6"
 
-                >
-                  <MessageCircle className="h-5 w-5" /> <span >Share to Chat</span>
-                </Button>
-              )}
+              <Button
+                onClick={() => {
+                  setIsShareModalOpen(false);
+
+                  onShareToChat?.(post);
+                }}
+                variant="outline"
+                className="w-full flex items-center justify-start gap-3 py-6"
+
+              >
+                <MessageCircle className="h-5 w-5" /> <span >Share to Chat</span>
+              </Button>
+
               <Button
                 variant="outline"
                 className="w-full flex items-center justify-start gap-3 py-6"
@@ -470,13 +473,12 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
       });
     };
 
-    // ref + local view tracking
     const cardRef = React.useRef<HTMLDivElement | null>(null);
     const [hasTrackedView, setHasTrackedView] = useState(false);
-    const [localViews, setLocalViews] = useState<number>(post.views_count ?? 0);
+
 
     // observe visibility and report view once per mounted Card
-    React.useEffect(() => {
+    useEffect(() => {
       if (!cardRef.current || !onPostView) return;
       const el = cardRef.current;
       const obs = new IntersectionObserver(
@@ -484,11 +486,12 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
           if (entries[0].isIntersecting && !hasTrackedView) {
             try {
               onPostView(post.id);
+              console.log(`👁️ Post ${post.id} viewed`);
             } catch (e) {
               // ignore
             }
             setHasTrackedView(true);
-            setLocalViews((v) => v + 1);
+
           }
         },
         { threshold: 0.6 }
@@ -503,7 +506,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
 
     return (
       <Card
-        className="mb-4 border border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-500 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden max-w-[780px] mx-auto"
+        className="border border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-500 bg-white dark:bg-slate-900 overflow-hidden max-w-[780px] mx-auto"
         ref={cardRef}
         onClick={(e) => {
           const target = e.target as HTMLElement;
@@ -537,9 +540,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
                 <div className="flex items-start justify-between mb-2 px-3 flex-1">
                   <div className="flex flex-col">
                     <div className="flex items-center" onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/social/profile/${post.author_id}`);
-                  }}>
+                      e.stopPropagation();
+                      navigate(`/social/profile/${post.author_id}`);
+                    }}>
                       <span className="font-bold text-slate-900 dark:text-slate-100 text-base hover:underline cursor-pointer">
                         {post.author?.display_name}
                       </span>
@@ -656,7 +659,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = memo(
                 {/* Views indicator */}
                 <div className="ml-3 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
                   <Eye className="h-4 w-4" />
-                  <span className="font-medium text-xs">{localViews}</span>
+                  <span className="font-medium text-xs">{post.views_count}</span>
                 </div>
               </div>
 
