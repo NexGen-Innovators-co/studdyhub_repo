@@ -121,14 +121,6 @@ export interface ChatSession {
   updated_at: string;
 }
 
-export interface ChatSessionWithDetails extends ChatSession {
-  group?: SocialGroup;
-  user1?: SocialUserWithDetails;
-  user2?: SocialUserWithDetails;
-  last_message?: ChatMessageWithDetails;
-  unread_count?: number;
-}
-
 export interface ChatMessage {
   id: string;
   session_id: string;
@@ -142,18 +134,6 @@ export interface ChatMessageWithDetails extends ChatMessage {
   media?: SocialChatMessageMedia[];
   resources?: ChatMessageResource[];
 }
-
-export interface ChatMessageResource {
-  id: string;
-  message_id: string;
-  resource_id: string;
-  resource_type: 'note' | 'document'|'post';
-  created_at: string;
-  note?: Note;
-  document?: Document;
-  post?: SocialPostWithDetails;
-}
-
 export interface Note {
   id: string;
   title: string;
@@ -172,30 +152,98 @@ export interface Document {
   created_at: string;
 }
 
-export type ChatType = 'group' | 'p2p';
-
-export interface ChatMessage {
-id: string;
-session_id: string;
-sender_id: string;
-content: string;
-created_at: string;
-resource_id?: string;
-resource_type?: 'note' | 'document';
-}
-
-export interface ChatMessageMedia {
-id: string;
-message_id: string;
-type: 'image' | 'video' | 'document';
-url: string;
-filename: string;
-size_bytes: number;
-mime_type: string;
-created_at: string;
-}
-
 export interface SocialUserWithDetails extends SocialUser {
 is_following?: boolean;
 is_followed_by?: boolean;
 }
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  sender_id: string;
+  content: string;
+  group_id?: string | null;
+  created_at: string;
+  // NEW FIELDS FOR CRUD
+  is_read?: boolean;
+  read_at?: string | null;
+  is_edited?: boolean;
+  updated_at?: string | null;
+}
+
+export interface ChatMessageMedia {
+  id: string;
+  message_id: string;
+  type: 'image' | 'video' | 'document';
+  url: string;
+  filename: string;
+  size_bytes: number;
+  mime_type: string;
+  created_at: string;
+}
+
+export interface ChatMessageResource {
+  id: string;
+  message_id: string;
+  resource_id: string;
+  resource_type: 'note' | 'document' | 'post';
+  created_at: string;
+}
+
+export interface ChatMessageWithDetails extends ChatMessage {
+  sender: SocialUserWithDetails;
+  media?: ChatMessageMedia[];
+  resources?: ChatMessageResource[];
+}
+
+export interface ChatSession {
+  id: string;
+  chat_type: 'group' | 'p2p';
+  group_id?: string | null;
+  user_id1?: string | null;
+  user_id2?: string | null;
+  last_message_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionWithDetails extends ChatSession {
+  group?: SocialGroup;
+  user1?: SocialUserWithDetails;
+  user2?: SocialUserWithDetails;
+  last_message?: ChatMessageWithDetails;
+  unread_count?: number;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface Document {
+  id: string;
+  title: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  file_size?: number;
+  user_id: string;
+  created_at: string;
+}
+export interface EnrichedResource extends ChatMessageResource {
+  title?: string;
+  content?: string;
+  content_extracted?: string;
+  file_url?: string;
+  file_name?: string;
+  file_type?: string;
+  file_size?: number;
+  category?: string;
+  tags?: string[];
+  ai_summary?: string;
+  document_id?: string | null;
+}
+export type ChatType = 'group' | 'p2p';

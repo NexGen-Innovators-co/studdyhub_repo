@@ -1,565 +1,353 @@
-import React, { useState, useEffect, useRef } from 'react';
+// GroupPosts.tsx - Updated to use PostCard and hooks
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { Button } from '../../ui/button';
-import { Textarea } from '../../ui/textarea';
-import { Card, CardContent } from '../../ui/card';
-import {
-  Send,
-  Image,
-  FileText,
-  Video,
-  X,
-  Loader2,
-  MessageCircle,
-  ThumbsUp,
-  Share2,
-  Bookmark
-} from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
+import { Loader2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
-
+import { PostCard } from './PostCard';
+import { CreatePostDialog } from './CreatePostDialog';
+import { SocialPostWithDetails } from '../../../integrations/supabase/socialTypes';
+import { useSocialActions } from '../hooks/useSocialActions';
+import { SharePostToChatModal } from './SharePostToChatModal';
+import { useChatData } from '../hooks/useChatData';
+import { useChatActions } from '../hooks/useChatActions';
+import { useSocialPostViews } from '../hooks/useSocialPostViews';
 interface GroupPostsProps {
   groupId: string;
   currentUser: any;
 }
 
-interface Post {
-  id: string;
-  content: string;
-  created_at: string;
-  author_id: string;
-  author: any;
-  media: any[];
-  likes_count: number;
-  comments_count: number;
-  is_liked: boolean;
-  is_bookmarked: boolean;
-}
-
 export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) => {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [newPost, setNewPost] = useState('');
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [posts, setPosts] = useState<SocialPostWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const channelRef = useRef<any>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
+  const [postComments, setPostComments] = useState<Record<string, any[]>>({});
+  const [isLoadingComments, setIsLoadingComments] = useState<Record<string, boolean>>({});
+  const [newComments, setNewComments] = useState<Record<string, string>>({});
+  const [postToShare, setPostToShare] = useState<SocialPostWithDetails | null>(null);
+  const [newPostContent, setNewPostContent] = useState('');
+  const [newPostPrivacy, setNewPostPrivacy] = useState<'public' | 'followers' | 'private'>('public');
+  const [newPostFiles, setNewPostFiles] = useState<File[]>([]);
+  const [showSharePostModal, setShowSharePostModal] = useState(false);
+
+  const { trackPostView, cleanup } = useSocialPostViews(setPosts);
+
+  // Use the social actions hook
+  const {
+    toggleLike,
+    toggleBookmark,
+    sharePost,
+    deletePost,
+    editPost,
+    isUploading,
+    createPost,
+  } = useSocialActions(
+    currentUser,
+    posts,
+    setPosts,
+    () => {}, // setSuggestedUsers - not needed here
+    [], // groups
+    () => {}, // setGroups
+    () => {}  // setCurrentUser
+  );
+
+  // Chat hooks
+  const {
+    chatSessions,
+    isLoadingSessions,
+  } = useChatData(currentUser?.id || null);
+
+  const {
+    sendMessageWithResource,
+    isSending: isSendingMessage,
+  } = useChatActions(currentUser?.id || null);
+
+  const handleSharePostMessage = async (sessionId: string, message: string): Promise<boolean> => {
+    if (!postToShare) return false;
+    const result = await sendMessageWithResource(sessionId, message, postToShare.id, 'post');
+    sharePost(postToShare); // Increment share count
+    // No addOptimisticMessage here as it's not the main chat window
+    if (result) {
+      setPostToShare(null);
+      setShowSharePostModal(false);
+    }
+    return !!result;
+  };
 
   useEffect(() => {
-    fetchPosts();
-    setupRealtimeSubscription();
-
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
-    };
+    if (groupId) {
+      fetchGroupPosts();
+    }
   }, [groupId]);
 
-  const setupRealtimeSubscription = () => {
-    channelRef.current = supabase
-      .channel(`group_posts_${groupId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'social_posts',
-          filter: `group_id=eq.${groupId}`
-        },
-        async (payload) => {
-          const postDetails = await fetchSinglePost(payload.new.id);
-          if (postDetails) {
-            setPosts(prev => [postDetails, ...prev]);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'social_posts',
-          filter: `group_id=eq.${groupId}`
-        },
-        async (payload) => {
-          const postDetails = await fetchSinglePost(payload.new.id);
-          if (postDetails) {
-            setPosts(prev => prev.map(p => p.id === postDetails.id ? postDetails : p));
-          }
-        }
-      )
-      .subscribe();
-  };
-
-  const fetchSinglePost = async (postId: string): Promise<Post | null> => {
+  const fetchGroupPosts = async () => {
     try {
-      const { data, error } = await supabase
+      setIsLoading(true);
+      const { data: postsData, error } = await supabase
         .from('social_posts')
         .select(`
           *,
           author:social_users(*),
-          media:social_media(*)
-        `)
-        .eq('id', postId)
-        .single();
-
-      if (error || !data) return null;
-
-      const { data: likeData } = await supabase
-        .from('social_likes')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('user_id', currentUser.id)
-        .single();
-
-      const { data: bookmarkData } = await supabase
-        .from('social_bookmarks')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('user_id', currentUser.id)
-        .single();
-
-      return {
-        ...data,
-        is_liked: !!likeData,
-        is_bookmarked: !!bookmarkData
-      };
-    } catch (error) {
-      console.error('Error fetching post:', error);
-      return null;
-    }
-  };
-
-  const fetchPosts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('social_posts')
-        .select(`
-          *,
-          author:social_users(*),
+          group:social_groups(*),
           media:social_media(*)
         `)
         .eq('group_id', groupId)
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const postIds = data.map(p => p.id);
+      if (!postsData || postsData.length === 0) {
+        setPosts([]);
+        return;
+      }
 
-      const [likesResult, bookmarksResult] = await Promise.all([
+      const postIds = postsData.map(post => post.id);
+
+      const [hashtagResult, tagResult, likeResult, bookmarkResult] = await Promise.all([
         supabase
+          .from('social_post_hashtags')
+          .select(`post_id, hashtag:social_hashtags(*)`)
+          .in('post_id', postIds),
+        supabase
+          .from('social_post_tags')
+          .select(`post_id, tag:social_tags(*)`)
+          .in('post_id', postIds),
+        currentUser ? supabase
           .from('social_likes')
           .select('post_id')
           .eq('user_id', currentUser.id)
-          .in('post_id', postIds),
-        supabase
+          .in('post_id', postIds) : { data: [] },
+        currentUser ? supabase
           .from('social_bookmarks')
           .select('post_id')
           .eq('user_id', currentUser.id)
-          .in('post_id', postIds)
+          .in('post_id', postIds) : { data: [] }
       ]);
 
-      const likedPostIds = new Set(likesResult.data?.map(l => l.post_id) || []);
-      const bookmarkedPostIds = new Set(bookmarksResult.data?.map(b => b.post_id) || []);
+      const transformedPosts = postsData.map(post => {
+        const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
+        const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
+        const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
+        const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
 
-      const transformedPosts = data.map(post => ({
-        ...post,
-        is_liked: likedPostIds.has(post.id),
-        is_bookmarked: bookmarkedPostIds.has(post.id)
-      }));
+        return {
+          ...post,
+          privacy: post.privacy as "public" | "followers" | "private",
+          media: (post.media || []).map((m: any) => ({
+            ...m,
+            type: m.type as "image" | "video" | "document"
+          })),
+          group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
+          hashtags: postHashtags,
+          tags: postTags,
+          is_liked: isLiked,
+          is_bookmarked: isBookmarked,
+          views_count: post.views_count || 0,
+        };
+      });
 
       setPosts(transformedPosts);
     } catch (error) {
-      console.error('Error fetching posts:', error);
+      console.error('Error fetching group posts:', error);
       toast.error('Failed to load posts');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setSelectedFiles(prev => [...prev, ...files]);
+  const handlePostView = async (postId: string) => {
+    await trackPostView(postId);
   };
 
-  const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const uploadFile = async (file: File): Promise<string | null> => {
+  const fetchComments = async (postId: string) => {
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
-
-      const { data, error } = await supabase.storage
-        .from('social-media')
-        .upload(fileName, file);
+      setIsLoadingComments(prev => ({ ...prev, [postId]: true }));
+      
+      const { data, error } = await supabase
+        .from('social_comments')
+        .select('*, author:social_users(*)')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('social-media')
-        .getPublicUrl(fileName);
-
-      return publicUrl;
+      setPostComments(prev => ({ ...prev, [postId]: data || [] }));
     } catch (error) {
-      console.error('Error uploading file:', error);
-      return null;
+      console.error('Error fetching comments:', error);
+      toast.error('Failed to load comments');
+    } finally {
+      setIsLoadingComments(prev => ({ ...prev, [postId]: false }));
     }
   };
 
-  const handleSubmitPost = async () => {
-    if (!newPost.trim() && selectedFiles.length === 0) {
-      toast.error('Please add some content or files');
+  const handleComment = (postId: string) => {
+    if (expandedPostId === postId) {
+      setExpandedPostId(null);
+    } else {
+      setExpandedPostId(postId);
+      if (!postComments[postId]) {
+        fetchComments(postId);
+      }
+    }
+  };
+
+  const handleSubmitComment = async (postId: string) => {
+    const content = newComments[postId]?.trim();
+    if (!content || !currentUser) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('social_comments')
+        .insert({
+          post_id: postId,
+          author_id: currentUser.id,
+          content,
+        })
+        .select('*, author:social_users(*)')
+        .single();
+
+      if (error) throw error;
+
+      setPostComments(prev => ({
+        ...prev,
+        [postId]: [data, ...(prev[postId] || [])]
+      }));
+
+      setNewComments(prev => ({ ...prev, [postId]: '' }));
+
+      // Update comments count
+      setPosts(prev => prev.map(p =>
+        p.id === postId ? { ...p, comments_count: p.comments_count + 1 } : p
+      ));
+
+      toast.success('Comment added');
+    } catch (error) {
+      console.error('Error submitting comment:', error);
+      toast.error('Failed to add comment');
+    }
+  };
+
+  const handlePostCreated = () => {
+    setIsCreateDialogOpen(false);
+    setNewPostContent('');
+    setNewPostPrivacy('public');
+    setNewPostFiles([]);
+    fetchGroupPosts();
+  };
+
+  const handleCreatePost = async () => {
+    if (!newPostContent.trim()) {
+      toast.error('Please enter some content');
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      const { data: postData, error: postError } = await supabase
-        .from('social_posts')
-        .insert({
-          author_id: currentUser.id,
-          content: newPost,
-          group_id: groupId,
-          privacy: 'public'
-        })
-        .select()
-        .single();
+    const success = await createPost(
+      newPostContent,
+      newPostPrivacy,
+      newPostFiles,
+      groupId
+    );
 
-      if (postError) throw postError;
-
-      if (selectedFiles.length > 0) {
-        const uploadPromises = selectedFiles.map(async file => {
-          const url = await uploadFile(file);
-          if (url) {
-            return supabase.from('social_media').insert({
-              post_id: postData.id,
-              type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document',
-              url,
-              filename: file.name,
-              size_bytes: file.size,
-              mime_type: file.type
-            });
-          }
-        });
-
-        await Promise.all(uploadPromises);
-      }
-
-      setNewPost('');
-      setSelectedFiles([]);
-      toast.success('Post created successfully!');
-    } catch (error) {
-      console.error('Error creating post:', error);
-      toast.error('Failed to create post');
-    } finally {
-      setIsSubmitting(false);
+    if (success) {
+      handlePostCreated();
     }
-  };
-
-  const handleToggleLike = async (postId: string, isLiked: boolean) => {
-    try {
-      if (isLiked) {
-        await supabase
-          .from('social_likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', currentUser.id);
-      } else {
-        await supabase
-          .from('social_likes')
-          .insert({ post_id: postId, user_id: currentUser.id });
-      }
-
-      setPosts(prev => prev.map(post =>
-        post.id === postId
-          ? {
-              ...post,
-              likes_count: isLiked ? post.likes_count - 1 : post.likes_count + 1,
-              is_liked: !isLiked
-            }
-          : post
-      ));
-    } catch (error) {
-      console.error('Error toggling like:', error);
-      toast.error('Failed to update like');
-    }
-  };
-
-  const handleToggleBookmark = async (postId: string, isBookmarked: boolean) => {
-    try {
-      if (isBookmarked) {
-        await supabase
-          .from('social_bookmarks')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', currentUser.id);
-      } else {
-        await supabase
-          .from('social_bookmarks')
-          .insert({ post_id: postId, user_id: currentUser.id });
-      }
-
-      setPosts(prev => prev.map(post =>
-        post.id === postId ? { ...post, is_bookmarked: !isBookmarked } : post
-      ));
-
-      toast.success(isBookmarked ? 'Removed from bookmarks' : 'Added to bookmarks');
-    } catch (error) {
-      console.error('Error toggling bookmark:', error);
-      toast.error('Failed to update bookmark');
-    }
-  };
-
-  const getTimeAgo = (date: string) => {
-    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    return `${Math.floor(seconds / 86400)}d ago`;
   };
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center py-12">
+      <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Create Post Card */}
-      <Card>
-        <CardContent className="pt-6 ">
-          <div className="flex gap-3">
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={currentUser?.avatar_url} />
-              <AvatarFallback>
-                {currentUser?.display_name?.charAt(0) || 'U'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <Textarea
-                placeholder="Share something with the group..."
-                value={newPost}
-                onChange={(e) => setNewPost(e.target.value)}
-                className="min-h-[100px] resize-none"
-              />
+    <div className="space-y-4">
+      {/* Create Post Button */}
+      <div className="flex justify-end px-4 pt-4">
+        <Button
+          onClick={() => setIsCreateDialogOpen(true)}
+          className="gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Create Post
+        </Button>
+      </div>
 
-              {selectedFiles.length > 0 && (
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {selectedFiles.map((file, index) => (
-                    <div key={index} className="relative group">
-                      {file.type.startsWith('image/') ? (
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={file.name}
-                          className="w-full h-32 object-cover rounded-lg"
-                        />
-                      ) : (
-                        <div className="w-full h-32 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-                          <FileText className="h-8 w-8 text-gray-400" />
-                        </div>
-                      )}
-                      <button
-                        onClick={() => removeFile(index)}
-                        className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                      <p className="text-xs text-gray-500 mt-1 truncate">{file.name}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-3 flex items-center justify-between">
-                <div className="flex gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,video/*,.pdf,.doc,.docx"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Image className="h-4 w-4 mr-2" />
-                    Photo
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Video className="h-4 w-4 mr-2" />
-                    Video
-                  </Button>
-                </div>
-                <Button
-                  onClick={handleSubmitPost}
-                  disabled={isSubmitting || (!newPost.trim() && selectedFiles.length === 0)}
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Send className="h-4 w-4 mr-2" />
-                  )}
-                  Post
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Posts Feed */}
+      {/* Posts List */}
       {posts.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <MessageCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-semibold mb-2">No posts yet</h3>
-            <p className="text-gray-500">Be the first to share something!</p>
-          </CardContent>
-        </Card>
+        <div className="text-center py-20">
+          <p className="text-slate-500">No posts yet</p>
+          <Button
+            onClick={() => setIsCreateDialogOpen(true)}
+            className="mt-4"
+          >
+            Create First Post
+          </Button>
+        </div>
       ) : (
-        posts.map((post) => (
-          <Card key={post.id} className="hover:shadow-lg transition-shadow">
-            <CardContent className="pt-6">
-              {/* Post Header */}
-              <div className="flex items-start gap-3 mb-4">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage src={post.author?.avatar_url} />
-                  <AvatarFallback>
-                    {post.author?.display_name?.charAt(0) || 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">{post.author?.display_name}</p>
-                      <p className="text-sm text-gray-500">
-                        @{post.author?.username} · {getTimeAgo(post.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        <div className="space-y-4">
+          {posts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              currentUser={currentUser}
+              onLike={toggleLike}
+              onBookmark={toggleBookmark}
+              onShare={sharePost}
+              onComment={() => handleComment(post.id)}
+              onDeletePost={deletePost}
+              onEditPost={editPost}
+              onPostView={handlePostView}
+              onShareToChat={(post) => {
+                setPostToShare(post);
+                setShowSharePostModal(true);
+              }}
+              isExpanded={expandedPostId === post.id}
+              comments={postComments[post.id] || []}
+              isLoadingComments={isLoadingComments[post.id] || false}
+              newComment={newComments[post.id] || ''}
+              onCommentChange={(value) =>
+                setNewComments(prev => ({ ...prev, [post.id]: value }))
+              }
+              onSubmitComment={() => handleSubmitComment(post.id)}
+            />
+          ))}
+        </div>
+      )}
 
-              {/* Post Content */}
-              <p className="text-slate-700 dark:text-gray-300 mb-4 whitespace-pre-wrap">
-                {post.content}
-              </p>
+      {/* Create Post Dialog */}
+      <CreatePostDialog
+        isOpen={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        content={newPostContent}
+        onContentChange={setNewPostContent}
+        privacy={newPostPrivacy}
+        onPrivacyChange={setNewPostPrivacy}
+        selectedFiles={newPostFiles}
+        onFilesChange={setNewPostFiles}
+        onSubmit={handleCreatePost}
+        isUploading={isUploading}
+        currentUser={currentUser}
+        groupId={groupId}
+      />
 
-              {/* Post Media */}
-              {post.media && post.media.length > 0 && (
-                <div className={`grid gap-2 mb-4 ${
-                  post.media.length === 1 ? 'grid-cols-1' : 
-                  post.media.length === 2 ? 'grid-cols-2' : 
-                  'grid-cols-2 sm:grid-cols-3'
-                }`}>
-                  {post.media.map((media: any, index: number) => (
-                    <div key={media.id || index} className="relative aspect-video rounded-lg overflow-hidden">
-                      {media.type === 'image' ? (
-                        <img
-                          src={media.url}
-                          alt={media.filename}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : media.type === 'video' ? (
-                        <video
-                          src={media.url}
-                          controls
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                          <FileText className="h-8 w-8 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+      {/* Share to Chat Dialog */}
+      {postToShare && (
+        <SharePostToChatModal
+        isOpen={showSharePostModal}
+        onClose={() => {
+          setShowSharePostModal(false);
+          setPostToShare(null);
+        }}
+        post={postToShare}
+        chatSessions={chatSessions}
+        currentUserId={currentUser?.id || ''}
+        onShare={handleSharePostMessage}
+        isSharing={isSendingMessage}
 
-              {/* Post Actions */}
-              <div className="flex items-center gap-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={() => handleToggleLike(post.id, post.is_liked)}
-                  className={`flex items-center gap-2 text-sm font-medium transition-colors ${
-                    post.is_liked
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400'
-                  }`}
-                >
-                  <ThumbsUp className={`h-5 w-5 ${post.is_liked ? 'fill-current' : ''}`} />
-                  {post.likes_count > 0 && <span>{post.likes_count}</span>}
-                </button>
-
-                <button
-                  onClick={() => {
-                    const newExpanded = new Set(expandedComments);
-                    if (newExpanded.has(post.id)) {
-                      newExpanded.delete(post.id);
-                    } else {
-                      newExpanded.add(post.id);
-                    }
-                    setExpandedComments(newExpanded);
-                  }}
-                  className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                >
-                  <MessageCircle className="h-5 w-5" />
-                  {post.comments_count > 0 && <span>{post.comments_count}</span>}
-                </button>
-
-                <button
-                  onClick={() => handleToggleBookmark(post.id, post.is_bookmarked)}
-                  className={`flex items-center gap-2 text-sm font-medium transition-colors ${
-                    post.is_bookmarked
-                      ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
-                  }`}
-                >
-                  <Bookmark className={`h-5 w-5 ${post.is_bookmarked ? 'fill-current' : ''}`} />
-                </button>
-
-                <button
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(
-                        `${window.location.origin}/social/post/${post.id}`
-                      );
-                      toast.success('Link copied to clipboard!');
-                    } catch (error) {
-                      toast.error('Failed to copy link');
-                    }
-                  }}
-                  className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                >
-                  <Share2 className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Comments Section (Placeholder) */}
-              {expandedComments.has(post.id) && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    Comments feature coming soon!
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))
+        />
       )}
     </div>
   );

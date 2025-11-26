@@ -1,66 +1,54 @@
-// useAppData.tsx - Optimized version with smooth loading and progressive data loading
-import { useState, useEffect, useCallback, useRef } from 'react';
+// useAppData.tsx - Highly Optimized version with enhanced performance
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
 import { DocumentFolder, FolderTreeNode } from '../types/Folder';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
+import { clearCache } from '@/utils/socialCache';
 
-// Enhanced pagination constants for smoother loading
+// Enhanced pagination with memory optimization
 const INITIAL_LOAD_LIMITS = {
-  notes: 15, // Increased for better initial experience
-  recordings: 8,
-  scheduleItems: 25,
-  documents: 12,
+  notes: 12, // Reduced for faster initial load
+  recordings: 6,
+  scheduleItems: 20,
+  documents: 10,
   chatMessages: 0,
-  quizzes: 8
+  quizzes: 6,
+  folders: 50 // Added for folders
 };
 
 const LOAD_MORE_LIMITS = {
-  notes: 25,
-  recordings: 15,
-  scheduleItems: 50,
-  documents: 20,
+  notes: 20,
+  recordings: 12,
+  scheduleItems: 30,
+  documents: 15,
   chatMessages: 50,
-  quizzes: 15
+  quizzes: 12,
+  folders: 100
 };
 
-// Progressive loading priorities
+// Priority-based loading with dependencies
 const LOADING_PRIORITIES = {
-  profile: 1,      // Highest - needed for all features
-  notes: 2,        // High - main content area
-  documents: 3,    // Medium-High - needed for chat
-  recordings: 4,   // Medium - tab-specific
-  scheduleItems: 5, // Medium - tab-specific  
-  quizzes: 6       // Lower - settings specific
+  profile: 1,
+  notes: 2,
+  documents: 3,
+  folders: 4, // Added folders priority
+  recordings: 5,
+  scheduleItems: 6,
+  quizzes: 7
 };
 
-export interface DataLoadingState {
-  notes: boolean;
-  recordings: boolean;
-  scheduleItems: boolean;
-  documents: boolean;
-  quizzes: boolean;
-  profile: boolean;
-  folders: boolean;
-}
-
-interface DataPaginationState {
-  notes: { hasMore: boolean; offset: number; total: number };
-  recordings: { hasMore: boolean; offset: number; total: number };
-  scheduleItems: { hasMore: boolean; offset: number; total: number };
-  documents: { hasMore: boolean; offset: number; total: number };
-  quizzes: { hasMore: boolean; offset: number; total: number };
-  folders: { hasMore: boolean; offset: number; total: number };
-}
-
-interface LoadingPhase {
-  phase: 'initial' | 'core' | 'secondary' | 'complete';
-  progress: number;
-}
+// Cache configuration
+const CACHE_CONFIG = {
+  enabled: true,
+  maxAge: 5 * 60 * 1000, // 5 minutes
+  maxSize: 100 // Max items per cache
+};
 
 export const useAppData = () => {
+  // State management with lazy initialization
   const [notes, setNotes] = useState<Note[]>([]);
   const [recordings, setRecordings] = useState<ClassRecording[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -80,34 +68,6 @@ export const useAppData = () => {
   const [folders, setFolders] = useState<DocumentFolder[]>([]);
   const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
 
-  // Enhanced loading state tracking
-  const [dataLoaded, setDataLoaded] = useState<Set<keyof DataLoadingState>>(new Set());
-  const [dataLoading, setDataLoading] = useState<DataLoadingState>({
-    notes: false,
-    recordings: false,
-    scheduleItems: false,
-    documents: false,
-    quizzes: false,
-    profile: false,
-    folders: false
-  });
-
-  // Progressive loading state
-  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>({
-    phase: 'initial',
-    progress: 0
-  });
-
-  // Pagination state
-  const [dataPagination, setDataPagination] = useState<DataPaginationState>({
-    notes: { hasMore: true, offset: 0, total: 0 },
-    recordings: { hasMore: true, offset: 0, total: 0 },
-    scheduleItems: { hasMore: true, offset: 0, total: 0 },
-    documents: { hasMore: true, offset: 0, total: 0 },
-    quizzes: { hasMore: true, offset: 0, total: 0 },
-    folders: { hasMore: false, offset: 0, total: 0 }
-  });
-
   // Real-time subscription refs
   const documentChannelRef = useRef<any>(null);
   const chatMessageChannelRef = useRef<any>(null);
@@ -119,40 +79,129 @@ export const useAppData = () => {
   const foldersChannelRef = useRef<any>(null);
   const folderItemsChannelRef = useRef<any>(null);
 
-  // Loading queue and batch processing
+
+  // Enhanced loading state with batched updates
+  const [dataLoaded, setDataLoaded] = useState<Set<keyof DataLoadingState>>(new Set());
+  const [dataLoading, setDataLoading] = useState<DataLoadingState>({
+    notes: false,
+    recordings: false,
+    scheduleItems: false,
+    documents: false,
+    quizzes: false,
+    profile: false,
+    folders: false
+  });
+
+  // Progressive loading with better progress tracking
+  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>({
+    phase: 'initial',
+    progress: 0
+  });
+
+  // Optimized pagination state
+  const [dataPagination, setDataPagination] = useState<DataPaginationState>({
+    notes: { hasMore: true, offset: 0, total: 0 },
+    recordings: { hasMore: true, offset: 0, total: 0 },
+    scheduleItems: { hasMore: true, offset: 0, total: 0 },
+    documents: { hasMore: true, offset: 0, total: 0 },
+    quizzes: { hasMore: true, offset: 0, total: 0 },
+    folders: { hasMore: false, offset: 0, total: 0 }
+  });
+
+  // Enhanced real-time subscription refs with connection management
+  const channelRefs = useRef<Record<string, any>>({});
+
+  // Performance optimization refs
   const loadingQueueRef = useRef<Set<keyof DataLoadingState>>(new Set());
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const dataCacheRef = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
-  // Auth listener to set currentUser
+  // Add this with your other refs
+  const isCurrentlySendingRef = useRef(false);
+  // Memoized selectors for better performance
+  const filteredNotes = useMemo(() => {
+    if (!searchQuery && selectedCategory === 'all') return notes;
+
+    const searchLower = searchQuery.toLowerCase();
+    return notes.filter(note => {
+      const matchesSearch = note.title.toLowerCase().includes(searchLower) ||
+        note.content.toLowerCase().includes(searchLower);
+      const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [notes, searchQuery, selectedCategory]);
+
+  // Enhanced auth listener with cleanup
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCurrentUser(session?.user || null);
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const newUser = session?.user || null;
+
+      // Only update if user actually changed
+      if (newUser?.id !== currentUser?.id) {
+        setCurrentUser(newUser);
+      }
     });
 
-    // Initial check
+    // Initial check with error handling
     supabase.auth.getUser().then(({ data: { user } }) => {
-      setCurrentUser(user || null);
-    });
+      if (user?.id !== currentUser?.id) {
+        setCurrentUser(user || null);
+      }
+    }).catch(console.error);
 
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [currentUser?.id]); // Only depend on user ID
 
-  // Progressive data loading when user changes
+  // Optimized user change detection with debouncing
   useEffect(() => {
     if (currentUser?.id && currentUser.id !== lastUserId) {
-      // ////console.log('User changed, starting progressive data loading...');
+      console.log('🔄 User changed, starting progressive data loading...');
       setLastUserId(currentUser.id);
+
+      // Clear cache and data
+      clearCache();
+      dataCacheRef.current.clear();
+      clearAllData();
+
+      // Start progressive loading
       startProgressiveDataLoading(currentUser);
     } else if (!currentUser && lastUserId !== null) {
-      // //console.log('User logged out, clearing data...');
+      console.log('🚪 User logged out, clearing data...');
       setLastUserId(null);
       clearAllData();
+      clearCache();
+      dataCacheRef.current.clear();
     }
   }, [currentUser, lastUserId]);
 
-  const clearAllData = () => {
+  // Cleanup function for abort controllers and timeouts
+  const cleanup = useCallback(() => {
+    // Clear all abort controllers
+    abortControllersRef.current.forEach(controller => controller.abort());
+    abortControllersRef.current.clear();
+
+    // Clear timeouts
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+
+    // Clear loading queue
+    loadingQueueRef.current.clear();
+
+    // Remove all real-time channels
+    Object.values(channelRefs.current).forEach(channel => {
+      if (channel) supabase.removeChannel(channel);
+    });
+    channelRefs.current = {};
+  }, []);
+
+  const clearAllData = useCallback(() => {
+    cleanup(); // Cleanup before clearing data
+
     setNotes([]);
     setRecordings([]);
     setScheduleItems([]);
@@ -161,6 +210,9 @@ export const useAppData = () => {
     setUserProfile(null);
     setQuizzes([]);
     setActiveNote(null);
+    setFolders([]);
+    setFolderTree([]);
+
     setDataLoaded(new Set());
     setDataLoading({
       notes: false,
@@ -171,6 +223,7 @@ export const useAppData = () => {
       profile: false,
       folders: false
     });
+
     setDataPagination({
       notes: { hasMore: true, offset: 0, total: 0 },
       recordings: { hasMore: true, offset: 0, total: 0 },
@@ -179,300 +232,33 @@ export const useAppData = () => {
       quizzes: { hasMore: true, offset: 0, total: 0 },
       folders: { hasMore: false, offset: 0, total: 0 }
     });
+
     setLoadingPhase({ phase: 'initial', progress: 0 });
     setLoading(false);
-  };
+  }, [cleanup]);
 
-  // Progressive loading strategy
-  const startProgressiveDataLoading = useCallback(async (user: any) => {
-    if (!user?.id) return;
-
-    setLoading(true);
-    setLoadingPhase({ phase: 'initial', progress: 10 });
-
-    try {
-      // Phase 1: Critical data (profile + basic UI needs)
-      await Promise.all([
-        loadUserProfile(user),
-        setupRealTimeListeners(user)
-      ]);
-
-      setLoadingPhase({ phase: 'core', progress: 30 });
-
-      // Phase 2: Core content (notes + documents + folders)
-      await Promise.all([
-        loadNotesPage(user.id, true),
-        loadDocumentsPage(user.id, true),
-        loadFolders(user.id, true), // ADD THIS
-      ]);
-
-      setLoadingPhase({ phase: 'secondary', progress: 60 });
-
-      // Phase 3: Secondary data (loaded in background, non-blocking)
-      // Use setTimeout to make this truly non-blocking
-      setTimeout(async () => {
-        try {
-          await Promise.all([
-            loadRecordingsPage(user.id, true),
-            loadSchedulePage(user.id, true),
-            loadQuizzesPage(user.id, true)
-          ]);
-
-          setLoadingPhase({ phase: 'complete', progress: 100 });
-        } catch (error) {
-          console.error('Error loading secondary data:', error);
-          // Don't show error toast for secondary data - it will load when needed
-          setLoadingPhase({ phase: 'complete', progress: 100 });
-        }
-      }, 100); // Small delay to ensure UI is responsive
-
-      // UI is ready after core data
-      setLoading(false);
-
-      // //console.log('Core user data loaded successfully, UI ready');
-    } catch (error) {
-      console.error('Error loading core user data:', error);
-      toast.error('Failed to load some data. Please refresh to try again.');
-      setLoading(false);
-      setLoadingPhase({ phase: 'complete', progress: 100 });
+  // Cache management utilities
+  const getCachedData = useCallback((key: string) => {
+    const cached = dataCacheRef.current.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_CONFIG.maxAge) {
+      return cached.data;
     }
+    dataCacheRef.current.delete(key); // Remove expired cache
+    return null;
   }, []);
-  const loadFolders = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.folders) return;
 
-    setDataLoading(prev => ({ ...prev, folders: true }));
-
-    try {
-      const { data, error } = await supabase
-        .from('document_folders')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      if (data) {
-        const formattedFolders: DocumentFolder[] = data.map(folder => ({
-          id: folder.id,
-          user_id: folder.user_id,
-          name: folder.name,
-          parent_folder_id: folder.parent_folder_id,
-          color: folder.color || '#3B82F6',
-          description: folder.description,
-          created_at: folder.created_at,
-          updated_at: folder.updated_at,
-          isExpanded: false,
-        }));
-
-        setFolders(formattedFolders);
-
-        const tree = buildFolderTree(formattedFolders);
-        setFolderTree(tree);
-      }
-
-      setDataLoaded(prev => new Set([...prev, 'folders']));
-    } catch (error) {
-      console.error('Error loading folders:', error);
-    } finally {
-      setDataLoading(prev => ({ ...prev, folders: false }));
+  const setCachedData = useCallback((key: string, data: any) => {
+    // Manage cache size
+    if (dataCacheRef.current.size >= CACHE_CONFIG.maxSize) {
+      const firstKey = dataCacheRef.current.keys().next().value;
+      dataCacheRef.current.delete(firstKey);
     }
-  }, [dataLoading.folders]);
 
-  const buildFolderTree = useCallback((folders: DocumentFolder[]): FolderTreeNode[] => {
-    const folderMap = new Map<string, FolderTreeNode>();
-    const rootFolders: FolderTreeNode[] = [];
-
-    folders.forEach(folder => {
-      folderMap.set(folder.id, {
-        ...folder,
-        children: [],
-        documents: [],
-        path: [],
-        level: 0,
-      });
+    dataCacheRef.current.set(key, {
+      data,
+      timestamp: Date.now()
     });
-
-    folders.forEach(folder => {
-      const node = folderMap.get(folder.id)!;
-
-      if (folder.parent_folder_id) {
-        const parent = folderMap.get(folder.parent_folder_id);
-        if (parent) {
-          parent.children.push(node);
-          node.path = [...parent.path, parent.id];
-          node.level = parent.level + 1;
-        }
-      } else {
-        rootFolders.push(node);
-      }
-    });
-
-    return rootFolders;
   }, []);
-  // Optimized user profile loading with better error handling
-  const loadUserProfile = useCallback(async (user: any) => {
-    if (dataLoaded.has('profile')) return;
-
-    setDataLoading(prev => ({ ...prev, profile: true }));
-
-    try {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (profileError && profileError.code !== 'PGRST116') { // Ignore "not found" errors
-        console.error('Error loading user profile:', profileError);
-        // Don't throw - continue with default profile
-      }
-
-      if (profileData) {
-        setUserProfile({
-          id: profileData.id,
-          email: profileData.email || user.email || '',
-          full_name: profileData.full_name || '',
-          avatar_url: profileData.avatar_url || '',
-          learning_style: (profileData.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
-          learning_preferences: (profileData.learning_preferences as any) || {
-            explanation_style: 'detailed',
-            examples: true,
-            difficulty: 'intermediate'
-          },
-          created_at: new Date(profileData.created_at || Date.now()),
-          updated_at: new Date(profileData.updated_at || Date.now())
-        });
-      } else {
-        // Create default profile silently
-        const defaultProfile = {
-          id: user.id,
-          email: user.email || '',
-          full_name: '',
-          avatar_url: '',
-          learning_style: 'visual' as const,
-          learning_preferences: {
-            explanation_style: 'detailed' as const,
-            examples: true,
-            difficulty: 'intermediate' as const
-          }
-        };
-
-        // Set profile immediately for UI responsiveness
-        setUserProfile({
-          ...defaultProfile,
-          created_at: new Date(),
-          updated_at: new Date()
-        });
-
-        // Create in background
-        setTimeout(async () => {
-          try {
-            await supabase.from('profiles').insert(defaultProfile);
-          } catch (error) {
-            console.error('Error creating default profile (non-critical):', error);
-          }
-        }, 500);
-      }
-
-      setDataLoaded(prev => new Set([...prev, 'profile']));
-    } catch (error) {
-      console.error('Error in loadUserProfile:', error);
-      // Create minimal profile to prevent UI blocking
-      setUserProfile({
-        id: user.id,
-        email: user.email || '',
-        full_name: '',
-        avatar_url: '',
-        learning_style: 'visual',
-        learning_preferences: {
-          explanation_style: 'detailed',
-          examples: true,
-          difficulty: 'intermediate'
-        },
-        created_at: new Date(),
-        updated_at: new Date()
-      });
-      setDataLoaded(prev => new Set([...prev, 'profile']));
-    } finally {
-      setDataLoading(prev => ({ ...prev, profile: false }));
-    }
-  }, [dataLoaded]);
-
-  // Optimized notes loading with better performance
-  const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
-    if (dataLoading.notes) return;
-    if (!isInitial && !dataPagination.notes.hasMore) return;
-
-    setDataLoading(prev => ({ ...prev, notes: true }));
-
-    try {
-      const limit = isInitial ? INITIAL_LOAD_LIMITS.notes : LOAD_MORE_LIMITS.notes;
-      const offset = isInitial ? 0 : dataPagination.notes.offset;
-
-      // Use more efficient query for better performance
-      const query = supabase
-        .from('notes')
-        .select('id, title, content, document_id, user_id, category, tags, created_at, updated_at, ai_summary', { count: 'exact' })
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: false });
-
-      if (!isInitial) {
-        query.range(offset, offset + limit - 1);
-      } else {
-        query.limit(limit);
-      }
-
-      const { data, error, count } = await query;
-
-      if (error) throw error;
-
-      if (data) {
-        const formattedNotes = data.map(note => ({
-          id: note.id,
-          title: note.title || 'Untitled Note',
-          content: note.content || '',
-          document_id: note.document_id || null,
-          user_id: note.user_id || userId,
-          category: note.category || 'general',
-          tags: note.tags || [],
-          createdAt: new Date(note.created_at || Date.now()),
-          updatedAt: new Date(note.updated_at || Date.now()),
-          aiSummary: note.ai_summary || ''
-        }));
-
-        if (isInitial) {
-          setNotes(formattedNotes);
-          // Set active note more intelligently
-          if (formattedNotes.length > 0 && !activeNote) {
-            // Prefer the most recently updated note
-            const mostRecent = formattedNotes.sort((a, b) =>
-              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-            )[0];
-            setActiveNote(mostRecent);
-          }
-        } else {
-          setNotes(prev => [...prev, ...formattedNotes]);
-        }
-
-        const newOffset = isInitial ? formattedNotes.length : offset + formattedNotes.length;
-        const hasMore = count ? newOffset < count : formattedNotes.length === limit;
-
-        setDataPagination(prev => ({
-          ...prev,
-          notes: { hasMore, offset: newOffset, total: count || 0 }
-        }));
-      }
-
-      setDataLoaded(prev => new Set([...prev, 'notes']));
-    } catch (error) {
-      console.error('Error loading notes:', error);
-      if (isInitial) {
-        toast.error('Failed to load notes');
-      }
-    } finally {
-      setDataLoading(prev => ({ ...prev, notes: false }));
-    }
-  }, [dataLoading.notes, dataPagination.notes, activeNote]);
 
   // Enhanced documents loading for chat dependency
   const loadDocumentsPage = useCallback(async (userId: string, isInitial = false) => {
@@ -717,151 +503,396 @@ export const useAppData = () => {
     }
   }, [dataLoading.quizzes, dataPagination.quizzes]);
 
-  // Batch loading for better performance
+
+  // Enhanced progressive loading with better error handling
+  const startProgressiveDataLoading = useCallback(async (user: any) => {
+    if (!user?.id) return;
+
+    setLoading(true);
+    setLoadingPhase({ phase: 'initial', progress: 10 });
+
+    try {
+      // Phase 1: Critical data (profile + real-time setup)
+      await Promise.all([
+        loadUserProfile(user),
+        setupRealTimeListeners(user)
+      ]);
+
+      setLoadingPhase({ phase: 'core', progress: 30 });
+
+      // Phase 2: Core content (notes + documents + folders)
+      await Promise.all([
+        loadNotesPage(user.id, true),
+        loadDocumentsPage(user.id, true),
+        loadFolders(user.id, true),
+      ]);
+
+      setLoadingPhase({ phase: 'secondary', progress: 60 });
+
+      // Phase 3: Secondary data (non-blocking, lower priority)
+      setTimeout(() => {
+        Promise.allSettled([
+          loadRecordingsPage(user.id, true),
+          loadSchedulePage(user.id, true),
+          loadQuizzesPage(user.id, true)
+        ]).then(() => {
+          setLoadingPhase({ phase: 'complete', progress: 100 });
+        }).catch(() => {
+          setLoadingPhase({ phase: 'complete', progress: 100 });
+        });
+      }, 150); // Increased delay for better UI responsiveness
+
+      // UI is ready after core data
+      setLoading(false);
+
+    } catch (error) {
+      console.error('❌ Error loading core user data:', error);
+      toast.error('Failed to load some data. Please refresh to try again.');
+      setLoading(false);
+      setLoadingPhase({ phase: 'complete', progress: 100 });
+    }
+  }, []);
+
+  // Optimized folder loading with caching
+  const loadFolders = useCallback(async (userId: string, isInitial = false) => {
+    if (dataLoading.folders) return;
+
+    const cacheKey = `folders_${userId}`;
+    const cached = getCachedData(cacheKey);
+    if (cached && isInitial) {
+      setFolders(cached.folders);
+      setFolderTree(cached.tree);
+      setDataLoaded(prev => new Set([...prev, 'folders']));
+      return;
+    }
+
+    setDataLoading(prev => ({ ...prev, folders: true }));
+
+    try {
+      const { data, error } = await supabase
+        .from('document_folders')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const formattedFolders: DocumentFolder[] = data.map(folder => ({
+          id: folder.id,
+          user_id: folder.user_id,
+          name: folder.name,
+          parent_folder_id: folder.parent_folder_id,
+          color: folder.color || '#3B82F6',
+          description: folder.description,
+          created_at: folder.created_at,
+          updated_at: folder.updated_at,
+          isExpanded: false,
+        }));
+
+        const tree = buildFolderTree(formattedFolders);
+
+        setFolders(formattedFolders);
+        setFolderTree(tree);
+
+        // Cache the result
+        setCachedData(cacheKey, { folders: formattedFolders, tree });
+      }
+
+      setDataLoaded(prev => new Set([...prev, 'folders']));
+    } catch (error) {
+      console.error('Error loading folders:', error);
+    } finally {
+      setDataLoading(prev => ({ ...prev, folders: false }));
+    }
+  }, [dataLoading.folders, getCachedData, setCachedData]);
+
+  // Optimized buildFolderTree with memoization
+  const buildFolderTree = useCallback((folders: DocumentFolder[]): FolderTreeNode[] => {
+    const folderMap = new Map<string, FolderTreeNode>();
+    const rootFolders: FolderTreeNode[] = [];
+
+    // First pass: create all nodes
+    folders.forEach(folder => {
+      folderMap.set(folder.id, {
+        ...folder,
+        children: [],
+        documents: [],
+        path: [],
+        level: 0,
+      });
+    });
+
+    // Second pass: build hierarchy
+    folders.forEach(folder => {
+      const node = folderMap.get(folder.id)!;
+
+      if (folder.parent_folder_id) {
+        const parent = folderMap.get(folder.parent_folder_id);
+        if (parent) {
+          parent.children.push(node);
+          node.path = [...parent.path, parent.id];
+          node.level = parent.level + 1;
+        }
+      } else {
+        rootFolders.push(node);
+      }
+    });
+
+    return rootFolders;
+  }, []);
+
+  // Enhanced user profile loading with better caching
+  const loadUserProfile = useCallback(async (user: any) => {
+    if (dataLoaded.has('profile')) return;
+
+    const cacheKey = `profile_${user.id}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) {
+      setUserProfile(cached);
+      setDataLoaded(prev => new Set([...prev, 'profile']));
+      return;
+    }
+
+    setDataLoading(prev => ({ ...prev, profile: true }));
+
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.error('Error loading user profile:', profileError);
+      }
+
+      let finalProfile: UserProfile;
+
+      if (profileData) {
+        finalProfile = {
+          id: profileData.id,
+          email: profileData.email || user.email || '',
+          full_name: profileData.full_name || '',
+          avatar_url: profileData.avatar_url || '',
+          learning_style: (profileData.learning_style || 'visual') as 'visual' | 'auditory' | 'kinesthetic' | 'reading',
+          learning_preferences: (profileData.learning_preferences as any) || {
+            explanation_style: 'detailed',
+            examples: true,
+            difficulty: 'intermediate'
+          },
+          created_at: new Date(profileData.created_at || Date.now()),
+          updated_at: new Date(profileData.updated_at || Date.now())
+        };
+      } else {
+        // Create default profile
+        finalProfile = {
+          id: user.id,
+          email: user.email || '',
+          full_name: '',
+          avatar_url: '',
+          learning_style: 'visual' as const,
+          learning_preferences: {
+            explanation_style: 'detailed' as const,
+            examples: true,
+            difficulty: 'intermediate' as const
+          },
+          created_at: new Date(),
+          updated_at: new Date()
+        };
+
+        // Create in background without blocking
+        setTimeout(async () => {
+          try {
+            await supabase.from('profiles').insert(finalProfile);
+          } catch (error) {
+            console.error('Error creating default profile:', error);
+          }
+        }, 0);
+      }
+
+      setUserProfile(finalProfile);
+      setCachedData(cacheKey, finalProfile);
+      setDataLoaded(prev => new Set([...prev, 'profile']));
+
+    } catch (error) {
+      console.error('Error in loadUserProfile:', error);
+      // Fallback profile
+      const fallbackProfile: UserProfile = {
+        id: user.id,
+        email: user.email || '',
+        full_name: '',
+        avatar_url: '',
+        learning_style: 'visual',
+        learning_preferences: {
+          explanation_style: 'detailed',
+          examples: true,
+          difficulty: 'intermediate'
+        },
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+      setUserProfile(fallbackProfile);
+      setDataLoaded(prev => new Set([...prev, 'profile']));
+    } finally {
+      setDataLoading(prev => ({ ...prev, profile: false }));
+    }
+  }, [dataLoaded, getCachedData, setCachedData]);
+
+  // Optimized notes loading with batched queries
+  const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
+    if (dataLoading.notes) return;
+    if (!isInitial && !dataPagination.notes.hasMore) return;
+
+    const cacheKey = `notes_${userId}_${isInitial ? 'initial' : dataPagination.notes.offset}`;
+    const cached = getCachedData(cacheKey);
+    if (cached && isInitial) {
+      setNotes(cached.notes);
+      if (cached.activeNote && !activeNote) setActiveNote(cached.activeNote);
+      setDataPagination(prev => ({ ...prev, notes: cached.pagination }));
+      setDataLoaded(prev => new Set([...prev, 'notes']));
+      return;
+    }
+
+    setDataLoading(prev => ({ ...prev, notes: true }));
+
+    // Create abort controller for this request
+    const controller = new AbortController();
+    abortControllersRef.current.set(`notes_${userId}`, controller);
+
+    try {
+      const limit = isInitial ? INITIAL_LOAD_LIMITS.notes : LOAD_MORE_LIMITS.notes;
+      const offset = isInitial ? 0 : dataPagination.notes.offset;
+
+      const { data, error, count } = await supabase
+        .from('notes')
+        .select('id, title, content, document_id, user_id, category, tags, created_at, updated_at, ai_summary', {
+          count: 'exact'
+        })
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) throw error;
+
+      if (data) {
+        const formattedNotes = data.map(note => ({
+          id: note.id,
+          title: note.title || 'Untitled Note',
+          content: note.content || '',
+          document_id: note.document_id || null,
+          user_id: note.user_id || userId,
+          category: note.category || 'general',
+          tags: note.tags || [],
+          createdAt: new Date(note.created_at || Date.now()),
+          updatedAt: new Date(note.updated_at || Date.now()),
+          aiSummary: note.ai_summary || ''
+        }));
+
+        let newActiveNote = activeNote;
+        if (isInitial && formattedNotes.length > 0 && !activeNote) {
+          newActiveNote = formattedNotes.sort((a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          )[0];
+        }
+
+        if (isInitial) {
+          setNotes(formattedNotes);
+          if (newActiveNote) setActiveNote(newActiveNote);
+        } else {
+          setNotes(prev => [...prev, ...formattedNotes]);
+        }
+
+        const newOffset = isInitial ? formattedNotes.length : offset + formattedNotes.length;
+        const hasMore = count ? newOffset < count : formattedNotes.length === limit;
+
+        const newPagination = { hasMore, offset: newOffset, total: count || 0 };
+        setDataPagination(prev => ({ ...prev, notes: newPagination }));
+
+        // Cache the result
+        if (isInitial) {
+          setCachedData(cacheKey, {
+            notes: formattedNotes,
+            activeNote: newActiveNote,
+            pagination: newPagination
+          });
+        }
+      }
+
+      setDataLoaded(prev => new Set([...prev, 'notes']));
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Error loading notes:', error);
+        if (isInitial) toast.error('Failed to load notes');
+      }
+    } finally {
+      abortControllersRef.current.delete(`notes_${userId}`);
+      setDataLoading(prev => ({ ...prev, notes: false }));
+    }
+  }, [dataLoading.notes, dataPagination.notes, activeNote, getCachedData, setCachedData]);
+
+  // Enhanced batch loading with better queue management
   const queueDataLoad = useCallback((dataType: keyof DataLoadingState) => {
+    if (loadingQueueRef.current.has(dataType)) return;
+
     loadingQueueRef.current.add(dataType);
 
-    // Clear existing timeout
     if (loadingTimeoutRef.current) {
       clearTimeout(loadingTimeoutRef.current);
     }
 
-    // Batch process after short delay
     loadingTimeoutRef.current = setTimeout(() => {
       const toLoad = Array.from(loadingQueueRef.current);
       loadingQueueRef.current.clear();
 
-      // Process in priority order
-      const sorted = toLoad.sort((a, b) =>
-        LOADING_PRIORITIES[a] - LOADING_PRIORITIES[b]
-      );
+      // Process in priority order with staggered loading
+      const sorted = toLoad.sort((a, b) => LOADING_PRIORITIES[a] - LOADING_PRIORITIES[b]);
 
       sorted.forEach((dataType, index) => {
-        // Stagger loads to prevent overwhelming
         setTimeout(() => {
           loadDataIfNeeded(dataType);
-        }, index * 50);
+        }, index * 75); // Increased stagger for better performance
       });
-    }, 100);
+    }, 150); // Increased delay for better batching
   }, []);
 
-  // Enhanced lazy loading
+  // Enhanced lazy loading with cache checking
   const loadDataIfNeeded = useCallback((dataType: keyof DataLoadingState) => {
     if (!currentUser?.id || dataLoaded.has(dataType) || dataLoading[dataType]) return;
 
-    switch (dataType) {
-      case 'recordings':
-        loadRecordingsPage(currentUser.id, true);
-        break;
-      case 'scheduleItems':
-        loadSchedulePage(currentUser.id, true);
-        break;
-      case 'documents':
-        loadDocumentsPage(currentUser.id, true);
-        break;
-      case 'quizzes':
-        loadQuizzesPage(currentUser.id, true);
-        break;
-      case 'notes':
-        loadNotesPage(currentUser.id, true);
-        break;
-      case 'profile':
-        if (!dataLoading.profile) {
-          loadUserProfile(currentUser);
-        }
-        break;
-      case 'folders':
-        loadFolders(currentUser.id, true);
-        break;
-    }
-  }, [currentUser, dataLoaded, dataLoading, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile]);
+    const loaders = {
+      recordings: () => loadRecordingsPage(currentUser.id, true),
+      scheduleItems: () => loadSchedulePage(currentUser.id, true),
+      documents: () => loadDocumentsPage(currentUser.id, true),
+      quizzes: () => loadQuizzesPage(currentUser.id, true),
+      notes: () => loadNotesPage(currentUser.id, true),
+      profile: () => !dataLoading.profile && loadUserProfile(currentUser),
+      folders: () => loadFolders(currentUser.id, true),
+    };
 
-  // Load more functions for pagination
-  const loadMoreNotes = useCallback(() => {
-    if (currentUser?.id) {
-      loadNotesPage(currentUser.id, false);
+    if (loaders[dataType]) {
+      loaders[dataType]();
     }
-  }, [currentUser, loadNotesPage]);
+  }, [currentUser, dataLoaded, dataLoading, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile, loadFolders]);
 
-  const loadMoreRecordings = useCallback(() => {
-    if (currentUser?.id) {
-      loadRecordingsPage(currentUser.id, false);
-    }
-  }, [currentUser, loadRecordingsPage]);
-
-  const loadMoreDocuments = useCallback(() => {
-    if (currentUser?.id) {
-      loadDocumentsPage(currentUser.id, false);
-    }
-  }, [currentUser, loadDocumentsPage]);
-
-  const loadMoreSchedule = useCallback(() => {
-    if (currentUser?.id) {
-      loadSchedulePage(currentUser.id, false);
-    }
-  }, [currentUser, loadSchedulePage]);
-
-  const loadMoreQuizzes = useCallback(() => {
-    if (currentUser?.id) {
-      loadQuizzesPage(currentUser.id, false);
-    }
-  }, [currentUser, loadQuizzesPage]);
-
-  // Smart tab-based loading with batching
+  // Smart tab-based loading optimization
   useEffect(() => {
-    if (loadingPhase.phase === 'complete') return;
+    if (loadingPhase.phase !== 'complete' || !currentUser?.id) return;
 
-    switch (activeTab) {
-      case 'recordings':
-        queueDataLoad('recordings');
-        queueDataLoad('quizzes');
-        break;
-      case 'schedule':
-        queueDataLoad('scheduleItems');
-        break;
-      case 'documents':
-        queueDataLoad('documents');
-        break;
-      case 'settings':
-        queueDataLoad('quizzes');
-        break;
-      case 'chat':
-        // Chat needs documents for context
-        queueDataLoad('documents');
-        break;
-      default:
-        // Notes tab - data already loaded in core phase
-        break;
-    }
-  }, [activeTab, loadingPhase.phase, queueDataLoad]);
+    const tabLoadMap = {
+      recordings: ['recordings', 'quizzes'],
+      schedule: ['scheduleItems'],
+      documents: ['documents'],
+      settings: ['quizzes'],
+      chat: ['documents'],
+      notes: [], // Already loaded in core phase
+      social: [] // Social handles its own loading
+    };
 
-  // Enhanced real-time listeners setup
-  const setupRealTimeListeners = useCallback(async (user: any) => {
-    // Clean up existing listeners
-    [documentChannelRef, chatMessageChannelRef, notesChannelRef,
-      recordingsChannelRef, scheduleChannelRef, profileChannelRef,
-      quizzesChannelRef, foldersChannelRef, folderItemsChannelRef].forEach(channelRef => {
-        if (channelRef.current) {
-          supabase.removeChannel(channelRef.current);
-          channelRef.current = null;
-        }
-      });
+    const typesToLoad = tabLoadMap[activeTab] || [];
+    typesToLoad.forEach(type => queueDataLoad(type as keyof DataLoadingState));
+  }, [activeTab, loadingPhase.phase, currentUser?.id, queueDataLoad]);
 
-    if (!user?.id) return;
-
-    // Set up all listeners in parallel for better performance
-    await Promise.all([
-      setupDocumentListener(user),
-      // setupChatMessageListener(user),
-      setupNotesListener(user),
-      setupRecordingsListener(user),
-      setupScheduleListener(user),
-      setupProfileListener(user),
-      setupQuizzesListener(user),
-      setupFoldersListener(user),
-      setupFolderItemsListener(user)
-    ]);
-  }, []);
 
   // Optimized real-time listeners with better error handling
   const setupDocumentListener = useCallback(async (user: any) => {
@@ -893,7 +924,7 @@ export const useAppData = () => {
                 type: newDoc.type as Document['type'],
                 processing_status: String(newDoc.processing_status) || null,
                 processing_error: String(newDoc.processing_error) || null,
-                created_at: new Date(newDoc.created_at).toISOString(),
+                created_at: newDoc.created_at.toISOString(),
                 updated_at: new Date(newDoc.updated_at).toISOString(),
                 folder_ids: folderItems?.map(item => item.folder_id) || [], // ADD THIS
               };
@@ -927,85 +958,98 @@ export const useAppData = () => {
       console.error('Error setting up document listener:', error);
     }
   }, []);
-  // const setupChatMessageListener = async (user: any) => {
-  //   try {
-  //     const channel = supabase
-  //       .channel(`chat_messages_${user.id}`)
-  //       .on(
-  //         'postgres_changes',
-  //         {
-  //           event: '*',
-  //           schema: 'public',
-  //           table: 'chat_messages',
-  //           filter: `user_id=eq.${user.id}`
-  //         },
-  //         (payload) => {
-  //           const formatMessage = (msg: any): Partial<Message> => ({
-  //             id: msg.id,
-  //             content: msg.content,
-  //             role: msg.role as 'user' | 'assistant',
-  //             timestamp: msg.timestamp,
-  //             isError: msg.is_error,
-  //             attachedDocumentIds: msg.attached_document_ids,
-  //             attachedNoteIds: msg.attached_note_ids,
-  //             image_url: msg.image_url,
-  //             image_mime_type: msg.image_mime_type,
-  //             session_id: msg.session_id,
-  //             has_been_displayed: msg.has_been_displayed
-  //           });
 
-  //           if (payload.eventType === 'INSERT') {
-  //             const newMessage = formatMessage(payload.new) as Message;
-  //             //console.log('[useAppData] New message received via realtime:', newMessage);
+  const setupChatMessageListener = useCallback(async (user: any) => {
+    try {
+      const channel = supabase
+        .channel(`chat_messages_${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'chat_messages',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            // Skip if we're currently sending a message to avoid duplicates
+            if (isCurrentlySendingRef.current) return;
 
-  //             setChatMessages(prevMessages => {
-  //               const exists = prevMessages.some(msg => msg.id === newMessage.id);
-  //               if (exists) {
-  //                 //console.log('[useAppData] Message already exists, updating if needed');
-  //                 return prevMessages.map(msg =>
-  //                   msg.id === newMessage.id
-  //                     ? { ...msg, ...newMessage }
-  //                     : msg
-  //                 );
-  //               }
+            const formatMessage = (msg: any): Message => ({
+              id: msg.id,
+              content: msg.content,
+              role: msg.role as 'user' | 'assistant',
+              timestamp: msg.timestamp,
+              isError: msg.is_error,
+              attachedDocumentIds: msg.attached_document_ids || [],
+              attachedNoteIds: msg.attached_note_ids || [],
+              image_url: msg.image_url,
+              image_mime_type: msg.image_mime_type,
+              session_id: msg.session_id,
+              has_been_displayed: msg.has_been_displayed,
+              files_metadata: msg.files_metadata,
+              isLoading: false
+            });
 
-  //               //console.log('[useAppData] Adding new message to state');
-  //               const updatedMessages = [...prevMessages, newMessage];
-  //               updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  //               return updatedMessages;
-  //             });
+            if (payload.eventType === 'INSERT') {
+              const newMessage = formatMessage(payload.new);
 
-  //             // Note: replaceOptimisticMessage should be passed from parent component if needed
-  //           } else if (payload.eventType === 'UPDATE') {
-  //             const updated = payload.new as any;
-  //             setChatMessages(prev => {
-  //               return prev.map(m => {
-  //                 if (m.id !== updated.id) return m;
-  //                 //console.log('[useAppData] Message updated via realtime:', updated);
-  //                 // Preserve existing content if incoming payload has null/undefined content
-  //                 const preservedContent = (updated.content === null || typeof updated.content === 'undefined') ? m.content : updated.content;
-  //                 return {
-  //                   ...m,
-  //                   ...updated,
-  //                   content: preservedContent,
-  //                 };
-  //               });
-  //             });
-  //           } else if (payload.eventType === 'DELETE') {
-  //             setChatMessages(prevMessages =>
-  //               prevMessages.filter(msg => msg.id !== payload.old.id)
-  //             );
-  //           }
-  //         }
-  //       )
-  //       .subscribe();
+              setChatMessages(prevMessages => {
+                // Check if message already exists (optimistic message case)
+                const exists = prevMessages.some(msg =>
+                  msg.id === newMessage.id ||
+                  (msg.id.startsWith('optimistic-') && msg.content === newMessage.content && msg.role === newMessage.role)
+                );
 
-  //     chatMessageChannelRef.current = channel;
-  //   } catch (error) {
-  //     console.error('Error setting up chat message listener:', error);
-  //   }
-  // }
+                if (exists) {
+                  // Replace optimistic message with real message
+                  return prevMessages.map(msg =>
+                    (msg.id.startsWith('optimistic-') && msg.content === newMessage.content && msg.role === newMessage.role)
+                      ? newMessage
+                      : msg.id === newMessage.id ? newMessage : msg
+                  );
+                }
 
+                // Add new message and sort by timestamp
+                const updatedMessages = [...prevMessages, newMessage];
+                return updatedMessages.sort((a, b) =>
+                  new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                );
+              });
+
+            } else if (payload.eventType === 'UPDATE') {
+              const updated = payload.new as any;
+              setChatMessages(prev => {
+                return prev.map(m => {
+                  if (m.id !== updated.id) return m;
+
+                  // Preserve existing content if incoming payload has null/undefined content
+                  const preservedContent = (updated.content === null || typeof updated.content === 'undefined')
+                    ? m.content
+                    : updated.content;
+
+                  return {
+                    ...m,
+                    ...updated,
+                    content: preservedContent,
+                    isLoading: false
+                  };
+                });
+              });
+            } else if (payload.eventType === 'DELETE') {
+              setChatMessages(prevMessages =>
+                prevMessages.filter(msg => msg.id !== payload.old.id)
+              );
+            }
+          }
+        )
+        .subscribe();
+
+      chatMessageChannelRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up chat message listener:', error);
+    }
+  }, []);
 
   const setupNotesListener = useCallback(async (user: any) => {
     try {
@@ -1338,105 +1382,37 @@ export const useAppData = () => {
       console.error('Error setting up folder items listener:', error);
     }
   }, []);
-  const loadSpecificDocuments = useCallback(async (userId: string, ids: string[]) => {
-    if (!ids.length) return;
-    //console.log(`Loading specific documents: ${ids.join(', ')}`);
-    setDataLoading(prev => ({ ...prev, documents: true }));
-    try {
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('user_id', userId)
-        .in('id', ids);
-      if (error) throw error;
-      setDocuments(prev => {
-        const newDocs = data || [];
-        const uniqueMap = new Map<string, Document>([
-          ...prev.map(d => [d.id, d] as [string, Document]),
-          ...newDocs.map(d => [d.id, d] as [string, Document])
-        ]);
-        return Array.from(uniqueMap.values());
-      });
-      //console.log(`Loaded ${data?.length || 0} specific documents`);
-    } catch (error) {
-      console.error('Error loading specific documents:', error);
-      toast.error('Failed to load required documents');
-    } finally {
-      setDataLoading(prev => ({ ...prev, documents: false }));
+  // Enhanced real-time listeners setup with connection pooling
+  const setupRealTimeListeners = useCallback(async (user: any) => {
+    // Clean up existing listeners
+    Object.values(channelRefs.current).forEach(channel => {
+      if (channel) supabase.removeChannel(channel);
+    });
+    channelRefs.current = {};
+
+    if (!user?.id) return;
+
+    // Set up listeners in batches to avoid connection limits
+    const listenerBatches = [
+      [() => setupDocumentListener(user)],
+      [() => setupNotesListener(user)],
+      [() => setupRecordingsListener(user), () => setupScheduleListener(user)],
+      [() => setupProfileListener(user), () => setupQuizzesListener(user)],
+      [() => setupFoldersListener(user), () => setupFolderItemsListener(user)]
+    ];
+
+    for (const batch of listenerBatches) {
+      await Promise.allSettled(batch.map(setup => setup()));
+      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay between batches
     }
   }, []);
 
-  const loadSpecificNotes = useCallback(async (userId: string, ids: string[]) => {
-    if (!ids.length) return;
-    //console.log(`Loading specific notes: ${ids.join(', ')}`);
-    setDataLoading(prev => ({ ...prev, notes: true }));
-    try {
-      const { data, error } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('user_id', userId)
-        .in('id', ids)
-        .order('updated_at', { ascending: false });
-      if (error) throw error;
-
-      // Transform Supabase data to match Note type
-      const transformedNotes: Note[] = (data || []).map((item: any) => ({
-        id: item.id,
-        document_id: item.document_id,
-        title: item.title,
-        content: item.content,
-        category: item.category,
-        aiSummary: item.ai_summary,
-        tags: item.tags,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at,
-        user_id: item.user_id,
-      }));
-
-      setNotes(prev => {
-        const uniqueMap = new Map<string, Note>([
-          ...prev.map(n => [n.id, n] as [string, Note]),
-          ...transformedNotes.map(n => [n.id, n] as [string, Note]),
-        ]);
-        return Array.from(uniqueMap.values());
-      });
-      //console.log(`Loaded ${transformedNotes.length} specific notes`);
-    } catch (error) {
-      console.error('Error loading specific notes:', error);
-      toast.error('Failed to load required notes');
-    } finally {
-      setDataLoading(prev => ({ ...prev, notes: false }));
-    }
-  }, []);
   // Cleanup on unmount
-  // useEffect(() => {
-  //   return () => {
-  //     // Clear timeouts
-  //     if (loadingTimeoutRef.current) {
-  //       clearTimeout(loadingTimeoutRef.current);
-  //     }
+  useEffect(() => {
+    return cleanup;
+  }, [cleanup]);
 
-  //     // Clear channels
-  //     [documentChannelRef, chatMessageChannelRef, notesChannelRef,
-  //       recordingsChannelRef, scheduleChannelRef, profileChannelRef,
-  //       quizzesChannelRef, foldersChannelRef, folderItemsChannelRef].forEach(channelRef => {
-  //         if (channelRef.current) {
-  //           supabase.removeChannel(channelRef.current);
-  //           channelRef.current = null;
-  //         }
-  //       });
-  //   };
-  // }, []);
-
-  // Computed values
-  const filteredNotes = notes.filter(note => {
-    const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.content.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
-
-  // Enhanced loading state - show progress and what's loading
+  // Enhanced loading state computation
   const enhancedLoading = loading || loadingPhase.phase !== 'complete';
   const loadingProgress = loadingPhase.progress;
   const loadingMessage = {
@@ -1446,6 +1422,7 @@ export const useAppData = () => {
     'complete': 'Ready!'
   }[loadingPhase.phase];
 
+  // Return optimized hook API
   return {
     // State
     notes,
@@ -1464,6 +1441,8 @@ export const useAppData = () => {
     loading: enhancedLoading,
     quizzes,
     currentUser,
+    folders,
+    folderTree,
 
     // Enhanced loading states
     dataLoading,
@@ -1486,22 +1465,149 @@ export const useAppData = () => {
     setActiveTab,
     setIsAILoading,
     setQuizzes,
-
+    setFolders,
+    clearAllData,
     // Lazy loading functions
     loadDataIfNeeded,
 
     // Load more functions
-    loadMoreNotes,
-    loadMoreRecordings,
-    loadMoreDocuments,
-    loadMoreSchedule,
-    loadMoreQuizzes,
-    folders,
-    folderTree,
-    setFolders,
+    loadMoreNotes: useCallback(() => currentUser?.id && loadNotesPage(currentUser.id, false), [currentUser, loadNotesPage]),
+    loadMoreRecordings: useCallback(() => currentUser?.id && loadRecordingsPage(currentUser.id, false), [currentUser, loadRecordingsPage]),
+    loadMoreDocuments: useCallback(() => currentUser?.id && loadDocumentsPage(currentUser.id, false), [currentUser, loadDocumentsPage]),
+    loadMoreSchedule: useCallback(() => currentUser?.id && loadSchedulePage(currentUser.id, false), [currentUser, loadSchedulePage]),
+    loadMoreQuizzes: useCallback(() => currentUser?.id && loadQuizzesPage(currentUser.id, false), [currentUser, loadQuizzesPage]),
+
+    // Utility functions
     loadFolders,
-    loadSpecificDocuments,
-    loadSpecificNotes,
+    loadSpecificDocuments: useCallback(async (userId: string, ids: string[]) => {
+      if (!ids.length) return;
+
+      const cacheKey = `specific_docs_${userId}_${ids.sort().join('_')}`;
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        setDocuments(prev => mergeDocuments(prev, cached));
+        return;
+      }
+
+      setDataLoading(prev => ({ ...prev, documents: true }));
+
+      try {
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('user_id', userId)
+          .in('id', ids);
+
+        if (error) throw error;
+
+        const newDocs = data || [];
+        setDocuments(prev => {
+          const merged = mergeDocuments(prev, newDocs);
+          setCachedData(cacheKey, newDocs);
+          return merged;
+        });
+      } catch (error) {
+        console.error('Error loading specific documents:', error);
+      } finally {
+        setDataLoading(prev => ({ ...prev, documents: false }));
+      }
+    }, [getCachedData, setCachedData]),
+
+    loadSpecificNotes: useCallback(async (userId: string, ids: string[]) => {
+      if (!ids.length) return;
+
+      const cacheKey = `specific_notes_${userId}_${ids.sort().join('_')}`;
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        setNotes(prev => mergeNotes(prev, cached));
+        return;
+      }
+
+      setDataLoading(prev => ({ ...prev, notes: true }));
+
+      try {
+        const { data, error } = await supabase
+          .from('notes')
+          .select('*')
+          .eq('user_id', userId)
+          .in('id', ids)
+          .order('updated_at', { ascending: false });
+
+        if (error) throw error;
+
+        const transformedNotes: Note[] = (data || []).map((item: any) => ({
+          id: item.id,
+          document_id: item.document_id,
+          title: item.title,
+          content: item.content,
+          category: item.category,
+          aiSummary: item.ai_summary,
+          tags: item.tags,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+          user_id: item.user_id,
+        }));
+
+        setNotes(prev => {
+          const merged = mergeNotes(prev, transformedNotes);
+          setCachedData(cacheKey, transformedNotes);
+          return merged;
+        });
+      } catch (error) {
+        console.error('Error loading specific notes:', error);
+      } finally {
+        setDataLoading(prev => ({ ...prev, notes: false }));
+      }
+    }, [getCachedData, setCachedData]),
   };
-  
 };
+
+// Helper functions for merging data
+// Helper functions for merging data - FIXED VERSION
+const mergeDocuments = (prev: Document[], newDocs: Document[]): Document[] => {
+  const uniqueMap = new Map<string, Document>();
+
+  // Add all previous documents
+  prev.forEach(doc => uniqueMap.set(doc.id, doc));
+
+  // Add/overwrite with new documents
+  newDocs.forEach(doc => uniqueMap.set(doc.id, doc));
+
+  return Array.from(uniqueMap.values());
+};
+
+const mergeNotes = (prev: Note[], newNotes: Note[]): Note[] => {
+  const uniqueMap = new Map<string, Note>();
+
+  // Add all previous notes
+  prev.forEach(note => uniqueMap.set(note.id, note));
+
+  // Add/overwrite with new notes
+  newNotes.forEach(note => uniqueMap.set(note.id, note));
+
+  return Array.from(uniqueMap.values());
+};
+// Type definitions (add these if missing)
+export interface DataLoadingState {
+  notes: boolean;
+  recordings: boolean;
+  scheduleItems: boolean;
+  documents: boolean;
+  quizzes: boolean;
+  profile: boolean;
+  folders: boolean;
+}
+
+interface DataPaginationState {
+  notes: { hasMore: boolean; offset: number; total: number };
+  recordings: { hasMore: boolean; offset: number; total: number };
+  scheduleItems: { hasMore: boolean; offset: number; total: number };
+  documents: { hasMore: boolean; offset: number; total: number };
+  quizzes: { hasMore: boolean; offset: number; total: number };
+  folders: { hasMore: boolean; offset: number; total: number };
+}
+
+interface LoadingPhase {
+  phase: 'initial' | 'core' | 'secondary' | 'complete';
+  progress: number;
+}

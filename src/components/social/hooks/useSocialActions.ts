@@ -375,21 +375,6 @@ export const useSocialActions = (
         .update({ posts_count: (currentUser?.posts_count || 0) + 1 })
         .eq('id', user.id);
 
-      // Step 6: Construct the SocialPostWithDetails object
-      const transformedPost: SocialPostWithDetails = {
-        ...newPost,
-        privacy: newPost.privacy as "public" | "followers" | "private",
-        author: authorData,
-        group: groupData || undefined,
-        media: [], // Media will be empty initially; you can fetch it separately if needed
-        hashtags: hashtags.map((name) => ({ id: uuidv4(), name, posts_count: 1, created_at: new Date().toISOString() })),
-        tags: [],
-        is_liked: false,
-        is_bookmarked: false,
-        views_count: 0,
-      };
-
-      setPosts((prev) => [transformedPost, ...prev]);
       toast.success('Post created successfully!');
       return true;
     } catch (error) {
@@ -398,53 +383,9 @@ export const useSocialActions = (
       return false;
     } finally {
       setIsUploading(false);
+      
     }
   };
-
-  // const joinGroup = async (groupId: string) => {
-  //   try {
-  //     const { data: { user } } = await supabase.auth.getUser();
-  //     if (!user) throw new Error('Not authenticated');
-
-  //     const { data: newMember, error } = await supabase
-  //       .from('social_group_members')
-  //       .insert({
-  //         group_id: groupId,
-  //         user_id: user.id,
-  //         role: 'member'
-  //       })
-  //       .select()
-  //       .single();
-
-  //     if (error) throw error;
-
-  //     setGroups(prev => prev.map(group => {
-  //       if (group.id === groupId) {
-  //         return {
-  //           ...group,
-  //           is_member: true,
-  //           members_count: group.members_count + 1,
-  //           members: [...group.members, {
-  //             id: newMember.id || uuidv4(),
-  //             group_id: groupId,
-  //             user_id: user.id,
-  //             role: 'member',
-  //             joined_at: new Date().toISOString()
-  //           }]
-  //         };
-  //       }
-  //       return group;
-  //     }));
-
-  //     toast.success('Successfully joined group!');
-  //   } catch (error) {
-  //     console.error('Error joining group:', error);
-  //     toast.error('Failed to join group');
-  //   }
-  // };
-
-  // fileName: useSocialActions.ts
-
   const toggleLike = async (postId: string, isLiked: boolean) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -513,8 +454,6 @@ export const useSocialActions = (
 
   const sharePost = async (post: SocialPostWithDetails) => {
     try {
-      // Only update share counters on the server/local state here.
-      // Native sharing is handled by the UI (PostCard) to ensure it's performed under a user gesture.
       await supabase
         .from('social_posts')
         .update({ shares_count: (post.shares_count || 0) + 1 })

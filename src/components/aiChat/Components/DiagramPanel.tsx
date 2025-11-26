@@ -22,7 +22,7 @@ import ErrorBoundary from '../../layout/ErrorBoundary';
 import * as ReactDOMClient from 'react-dom/client';
 import { HtmlRenderer } from './HtmlRenderer';
 import { MermaidRenderer } from './MermaidRenderer';
-import { SlidesRenderer } from './SlidesRenderer';
+import { SlidesRenderer, Slide } from './SlidesRenderer';
 import { ThreeJsRenderer } from './ThreeJsRenderer';
 import { DotRenderer } from './DotRenderer';
 import { ChartJsRenderer } from './ChartJsRenderer';
@@ -32,11 +32,6 @@ import { PlainTextRenderer } from './PlainTexRenderer';
 
 Chart.register(...registerables);
 
-interface Slide {
-  title: string;
-  content: string | string[];
-  layout?: string;
-}
 
 interface DiagramPanelProps {
   diagramContent?: string;
@@ -50,6 +45,7 @@ interface DiagramPanelProps {
   initialWidthPercentage?: number;
   liveContent?: string;
   isPhone: () => boolean;
+  currentTheme: 'light' | 'dark';
 }
 
 interface ThreeJSRendererProps {
@@ -71,7 +67,8 @@ export const DiagramPanel = memo(({
   imageUrl,
   initialWidthPercentage = 65,
   liveContent,
-  isPhone
+  isPhone,
+  currentTheme
 }: DiagramPanelProps) => {
   const [panelWidth, setPanelWidth] = useState(initialWidthPercentage);
   const [isResizing, setIsResizing] = useState(false);
@@ -564,7 +561,11 @@ ${isInteractiveContent ? 'cursor-grab' : ''}
               <MermaidRenderer mermaidContent={renderContent} handleNodeClick={handleNodeClick} />
             )}
             {effectiveDiagramType === 'slides' && (
-              <SlidesRenderer slides={slides} currentSlideIndex={currentSlideIndex} />
+              <SlidesRenderer
+                slides={slides}
+                currentSlideIndex={currentSlideIndex}
+                theme={currentTheme} // Pass the current theme for consistent styling
+              />
             )}
             {effectiveDiagramType === 'threejs' && (
               <div className="w-full h-full">

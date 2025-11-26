@@ -1,6 +1,8 @@
+
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
+import { clearCache } from '../utils/socialCache'; // Import the utility
 
 interface AuthContextType {
   user: User | null;
@@ -35,20 +37,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // Clear cache when user signs out
+        if (event === 'SIGNED_OUT') {
+          console.log('🔴 Auth state: SIGNED_OUT - clearing cache');
+          clearCache();
+        }
+       
       }
     );
-
+  
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
-
+  
     return () => subscription.unsubscribe();
   }, []);
 
   const signOut = async () => {
+    // Clear cache BEFORE signing out
+   clearCache();
     await supabase.auth.signOut();
   };
 

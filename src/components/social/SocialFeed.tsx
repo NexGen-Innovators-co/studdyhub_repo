@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import {
   useNavigate,
   useParams,
@@ -16,21 +16,20 @@ import { Card, CardContent } from '../ui/card';
 import { toast } from 'sonner';
 
 // Import hooks
-import { useSocialData } from './hooks/useSocialData';
 import { useSocialActions } from './hooks/useSocialActions';
 import { useSocialComments } from './hooks/useSocialComments';
-import { useSocialNotifications } from './hooks/useSocialNotifications';
+import { SocialNotification, useSocialNotifications } from './hooks/useSocialNotifications';
 import { useSocialPostViews } from './hooks/useSocialPostViews';
-import { useSocialDataContext } from './context/SocialDataContext';
+import { useSocialData } from './hooks/useSocialData';
 
 // Import components
 import { PostCard } from './components/PostCard';
 import { CreatePostDialog } from './components/CreatePostDialog';
 import { UserProfile } from './components/UserProfile';
 import { GroupsSection } from './components/GroupsSection';
-import { NotificationsSection } from './components/NotificationsSection';
+import { NotificationsSection, SocialNotificationItem } from './components/NotificationsSection';
 import { GroupDetailPage } from './components/GroupDetail';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+
 
 import { ChatList } from './components/ChatList';
 import { ChatWindow } from './components/ChatWindow';
@@ -43,6 +42,7 @@ import { SharePostToChatModal } from './components/SharePostToChatModal';
 import { SortBy, FilterBy, Privacy } from './types/social';
 import { SocialPostWithDetails } from '@/integrations/supabase/socialTypes';
 import { OtherUserProfile } from './components/OtherUserProfile';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SocialFeedProps {
   activeTab?: string;
@@ -60,6 +60,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
   const [isRefreshing, setIsRefreshing] = useState(false);
 
 
+  // Add these state variables near your other state declarations:
+  const [sortBy, setSortBy] = useState<SortBy>('newest');
+  const [filterBy, setFilterBy] = useState<FilterBy>('all');
+  const [userProfile, setUserProfile] = useState<any>(null); // You might need to get this from auth
+
+  // Add user profile effect
+
+
   // Post creation state
   const [newPostContent, setNewPostContent] = useState('');
   const [selectedPrivacy, setSelectedPrivacy] = useState<Privacy>('public');
@@ -75,12 +83,77 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
   const scrollContainerRef = useRef<HTMLElement | null>(null);
 
   const suggestedStripScrollPositions = useRef<Map<string, number>>(new Map());
+  const tabScrollPositions = useRef<Record<string, number>>({});
   const [showChatList, setShowChatList] = useState(false);
   const [selectedChatSession, setSelectedChatSession] = useState<string | null>(null);
   const [showResourceSharingModal, setShowResourceSharingModal] = useState(false);
   const [showSharePostModal, setShowSharePostModal] = useState(false);
   const [postToShare, setPostToShare] = useState<SocialPostWithDetails | null>(null);
   const [viewedUserId, setViewedUserId] = useState<string | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);        // > 800px
+  const [isScrolledDeep, setIsScrolledDeep] = useState(false); // > 1200px
+
+  // Add this helper once (outside component or inside but memoized)
+  const getScrollContainer = useCallback(() => {
+    if (scrollContainerRef.current) return scrollContainerRef.current;
+    const main = document.querySelector('main.overflow-y-auto');
+    if (main instanceof HTMLElement) return main;
+    return document.scrollingElement || document.documentElement;
+  }, []);
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserProfile({
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name || user.email?.split('@')[0],
+          avatar_url: user.user_metadata?.avatar_url || ''
+        });
+      }
+    };
+    fetchUserProfile();
+  }, []);
+  // Save scroll position BEFORE changing tab
+  const saveCurrentScroll = useCallback(() => {
+    if (!activeTab) return;
+    const container = getScrollContainer();
+    if (container) {
+      tabScrollPositions.current[activeTab] = container.scrollTop;
+    }
+  }, [activeTab, getScrollContainer]);
+
+  // Restore scroll AFTER tab changes
+  useLayoutEffect(() => {
+    const container = getScrollContainer();
+    const saved = tabScrollPositions.current[activeTab] || 0;
+    if (container && saved > 0) {
+      container.scrollTop = saved;
+    }
+  }, [activeTab, getScrollContainer]);
+
+  // Track scroll for floating buttons (isScrolled, etc.)
+  useEffect(() => {
+    const container = getScrollContainer();
+    if (!container) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      setIsScrolled(scrollTop > 800);
+      setIsScrolledDeep(scrollTop > 1200);
+    };
+
+    handleScroll(); // Initial check
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [getScrollContainer]);
+
+  // Correct handleTabChange — NO RECURSION!
+  const handleTabChange = useCallback((newTab: typeof activeTab) => {
+    saveCurrentScroll(); // Save current tab scroll
+    setActiveTab(newTab);
+  }, [saveCurrentScroll]);
+
   const handleSharePostToChat = (post: SocialPostWithDetails) => {
     setPostToShare(post);
     setShowSharePostModal(true);
@@ -88,9 +161,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
 
   const handleSharePostMessage = async (sessionId: string, message: string): Promise<boolean> => {
     if (!postToShare) return false;
-    const success = await sendMessageWithResource(sessionId, message, postToShare.id, 'post');
-    if (success) setPostToShare(null);
-    return success;
+    const result = await sendMessageWithResource(sessionId, message, postToShare.id, 'post');
+    sharePost(postToShare); // Increment share count
+    if (result && addOptimisticMessage) {
+      addOptimisticMessage(result);
+    }
+    if (result) setPostToShare(null);
+    return !!result;
   };
   const navigate = useNavigate();
   const location = useLocation();
@@ -103,9 +180,34 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
   const handleShareResource = async (resourceId: string, resourceType: 'note' | 'document'): Promise<boolean> => {
     if (!activeChatSessionId) {
       toast.error("No active chat session to share resource to.");
-      return false;
+      return Promise.resolve(false);
     }
-    return await sendMessageWithResource(activeChatSessionId, "", resourceId, resourceType);
+    sharePost(postToShare); // Increment share count
+    const result = await sendMessageWithResource(activeChatSessionId, "", resourceId, resourceType);
+    if (result && addOptimisticMessage) {
+      addOptimisticMessage(result);
+    }
+    return !!result;
+  };
+  const handleChatSendMessageWithResource = async (
+    content: string,
+    resourceId: string,
+    resourceType: 'note' | 'document' | 'post'
+  ): Promise<boolean> => {
+    if (!activeChatSessionId) return false;
+    const result = await sendMessageWithResource(activeChatSessionId, content, resourceId, resourceType);
+    if (result && addOptimisticMessage) {
+      addOptimisticMessage(result);
+    }
+    return !!result;
+  };
+  const handleChatSendMessage = async (content: string, files?: File[]): Promise<boolean> => {
+    if (!activeChatSessionId) return false;
+    const result = await sendChatMessage(activeChatSessionId, content, files);
+    if (result && addOptimisticMessage) {
+      addOptimisticMessage(result);
+    }
+    return !!result;
   };
 
   const findScrollParent = (el?: Element | null) => {
@@ -118,21 +220,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     }
     return document.scrollingElement || document.documentElement;
   };
-
-  // Custom hooks
   const {
     posts,
-    setPosts,
     trendingPosts,
-    setTrendingPosts,
     userPosts,
     groups,
-    setGroups,
     currentUser,
-    setCurrentUser,
     trendingHashtags,
     suggestedUsers,
-    setSuggestedUsers,
     isLoading,
     isLoadingGroups,
     isLoadingUserPosts,
@@ -145,7 +240,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     refetchTrendingPosts,
     refetchGroups,
     refetchUserPosts,
-    refetchSuggestedUsers,
     loadMorePosts,
     loadMoreTrendingPosts,
     loadMoreUserPosts,
@@ -157,7 +251,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     isLoadingBookmarkedPosts,
     refetchLikedPosts,
     refetchBookmarkedPosts,
-    setUserPosts,
     newPostsCount,
     hasNewPosts,
     showNewPosts,
@@ -165,7 +258,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     isLoadingSuggestedUsers,
     hasMoreSuggestedUsers,
     loadMoreSuggestedUsers,
-  } = useSocialDataContext();
+    forceRefresh,
+    setPosts,
+    setTrendingPosts,
+    setUserPosts,
+    setGroups,
+    setSuggestedUsers,
+    setCurrentUser,
+  } = useSocialData(userProfile, sortBy, filterBy);
 
   // CHAT: Add chat hooks after existing hooks
   const {
@@ -176,6 +276,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     activeSessionId: activeChatSessionId,
     setActiveSession,
     refetchSessions: refetchChatSessions,
+    editMessage,
+    deleteMessage,
+    addOptimisticMessage,
   } = useChatData(currentUser?.id || null);
 
   const {
@@ -183,15 +286,24 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     sendChatMessage,
     sendMessageWithResource,
     isSending: isSendingMessage,
+    isCreatingSession,
   } = useChatActions(currentUser?.id || null);
 
   const handleStartChat = async (userId: string) => {
     const sessionId = await createP2PChatSession(userId);
+    console.log(sessionId)
+
     if (sessionId) {
-      setActiveSession(sessionId);
-      setShowChatList(true);
-      setSelectedChatSession(sessionId);
+      try {
+        await refetchChatSessions();
+        setSelectedChatSession(sessionId);
+        setShowChatList(true);
+        await setActiveSession(sessionId);
+      } catch (error) {
+        console.error('Error refetching chat sessions:', error);
+      }
     }
+
   };
   const {
     createPost,
@@ -226,13 +338,22 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     getNewCommentContent,
   } = useSocialComments(currentUser, posts);
 
+  // In your SocialFeed component, update the usage:
   const {
     notifications,
     unreadCount,
+    isLoading: isLoadingNotifications,
+    fetchNotifications,
     markNotificationAsRead,
     markAllNotificationsAsRead,
     deleteNotification,
+    groupedNotifications,
+    hasMore,
+    isLoadingMore,
   } = useSocialNotifications();
+
+  // Use grouped notifications in your UI
+  const notificationGroups = groupedNotifications();
 
   const { trackPostView, cleanup } = useSocialPostViews(setPosts, setTrendingPosts, setUserPosts);
 
@@ -250,76 +371,120 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
+  // Add error state
+  const [error, setError] = useState<string | null>(null);
 
-  // Effects
+  // Add error handling to your refresh function
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    setError(null);
+
+    try {
+      await forceRefresh();
+      await fetchNotifications();
+    } catch (err) {
+      setError('Failed to refresh data');
+      console.error('Refresh error:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Add error display in your UI
+  {
+    error && (
+      <div className="mx-4 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div className="text-red-800 text-sm">{error}</div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setError(null)}
+            className="text-red-800 hover:bg-red-100"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    )
+  }
+  // Replace your existing useEffect with this improved version:
   useEffect(() => {
-    const createObserver = (ref: React.RefObject<HTMLDivElement>, hasMore: boolean, isLoading: boolean, loadMore: () => void) => {
-      if (ref.current) {
-        const observer = new IntersectionObserver(
-          (entries) => {
-            if (entries[0].isIntersecting && hasMore && !isLoading) {
-              loadMore();
-            }
-          },
-          { threshold: 0.1, rootMargin: '200px' }
-        );
-        observer.observe(ref.current);
-        return observer;
-      }
-      return null;
-    };
+    if (isLoading || isRefreshing) return;
 
-    const feedObserver = createObserver(feedObserverRef, hasMorePosts, isLoadingMorePosts, loadMorePosts);
-    const trendingObserver = createObserver(trendingObserverRef, hasMoreTrendingPosts, isLoadingMorePosts, loadMoreTrendingPosts);
-    const profileObserver = createObserver(profileObserverRef, hasMoreUserPosts, isLoadingUserPosts, loadMoreUserPosts);
+    const observers: IntersectionObserver[] = [];
 
-    let suggestedObserver: IntersectionObserver | null = null;
-    if (suggestedObserverRef.current) {
-      suggestedObserver = new IntersectionObserver(
+    const createObserver = (
+      ref: React.RefObject<HTMLDivElement>,
+      hasMore: boolean,
+      isLoadingMore: boolean,
+      loadMore: () => void
+    ) => {
+      if (!ref.current || !hasMore || isLoadingMore) return null;
+
+      const observer = new IntersectionObserver(
         (entries) => {
-          if (isPulling || isRefreshing) return;
-          if (entries[0].isIntersecting && hasMoreSuggestedUsers && !isLoadingSuggestedUsers) {
-            loadMoreSuggestedUsers();
+          if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isRefreshing) {
+            loadMore();
           }
         },
-        { threshold: 0.1, rootMargin: '200px' }
+        { threshold: 0.1, rootMargin: '100px' }
       );
-      suggestedObserver.observe(suggestedObserverRef.current);
+
+      observer.observe(ref.current);
+      return observer;
+    };
+
+    // Create observers based on active tab
+    switch (activeTab) {
+      case 'feed':
+        const feedObserver = createObserver(feedObserverRef, hasMorePosts, isLoadingMorePosts, loadMorePosts);
+        if (feedObserver) observers.push(feedObserver);
+        break;
+
+      case 'trending':
+        const trendingObserver = createObserver(trendingObserverRef, hasMoreTrendingPosts, isLoadingMorePosts, loadMoreTrendingPosts);
+        if (trendingObserver) observers.push(trendingObserver);
+        break;
+
+      case 'profile':
+        const profileObserver = createObserver(profileObserverRef, hasMoreUserPosts, isLoadingUserPosts, loadMoreUserPosts);
+        if (profileObserver) observers.push(profileObserver);
+        break;
     }
 
+    // Cleanup function
     return () => {
-      feedObserver?.disconnect();
-      trendingObserver?.disconnect();
-      profileObserver?.disconnect();
-      suggestedObserver?.disconnect();
+      observers.forEach(observer => observer.disconnect());
     };
-  }, [activeTab, hasMorePosts, hasMoreTrendingPosts, hasMoreUserPosts, isLoadingMorePosts, isLoadingUserPosts, hasMoreSuggestedUsers, isLoadingSuggestedUsers, loadMoreSuggestedUsers, isRefreshing, loadMorePosts, loadMoreTrendingPosts, loadMoreUserPosts]);
+  }, [activeTab, isLoading, isRefreshing, isLoadingMorePosts, isLoadingUserPosts]);
   // Replace the existing useEffect that sets activeTab from route
-useEffect(() => {
-  if (routeUserId) {
-    if (routeUserId === currentUser?.id) {
-      // Viewing own profile → go to normal profile tab
-      setActiveTab('profile');
-      setViewedUserId(null);
-      if (location.pathname !== '/social/profile') {
-        navigate('/social/profile', { replace: true });
+  useEffect(() => {
+    if (routeUserId) {
+      if (routeUserId === currentUser?.id) {
+        // Viewing own profile → go to normal profile tab
+        handleTabChange('profile');
+        setViewedUserId(null);
+        if (location.pathname !== '/social/profile') {
+          navigate('/social/profile', { replace: true });
+        }
+      } else {
+        // Viewing someone else's profile → special tab
+        handleTabChange('userProfile');
+        setViewedUserId(routeUserId);
       }
+    } else if (routeTab) {
+      handleTabChange(routeTab as any);
+      setViewedUserId(null);
+    } else if (initialActiveTab) {
+      handleTabChange(initialActiveTab as any);
+      setViewedUserId(null);
     } else {
-      // Viewing someone else's profile → special tab
-      setActiveTab('userProfile');
-      setViewedUserId(routeUserId);
+      handleTabChange('feed');
+      setViewedUserId(null);
     }
-  } else if (routeTab) {
-    setActiveTab(routeTab as any);
-    setViewedUserId(null);
-  } else if (initialActiveTab) {
-    setActiveTab(initialActiveTab as any);
-    setViewedUserId(null);
-  } else {
-    setActiveTab('feed');
-    setViewedUserId(null);
-  }
-}, [routeTab, routeUserId, initialActiveTab, currentUser?.id, location.pathname, navigate]);
+  }, [routeTab, routeUserId, initialActiveTab, currentUser?.id, location.pathname, navigate]);
   // Initialize activeTab from route on mount only
   useEffect(() => {
     if (routeUserId) {
@@ -327,9 +492,9 @@ useEffect(() => {
       return;
     }
     if (routeTab) {
-      setActiveTab(routeTab as any);
+      handleTabChange(routeTab as any);
     } else if (initialActiveTab) {
-      setActiveTab(initialActiveTab as any);
+      handleTabChange(initialActiveTab as any);
     }
   }, [routeTab, initialActiveTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -340,33 +505,11 @@ useEffect(() => {
       setNewPostContent('');
       setSelectedFiles([]);
       setShowPostDialog(false);
-      refetchUserPosts();
-      topRef.current?.scrollIntoView({ behavior: 'smooth' });
+
       toast.success('Post published!');
     }
   };
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return;
-    setIsRefreshing(true);
-    clearNewPosts();
-    const actions: Record<string, () => Promise<any> | void> = {
-      groups: async () => refetchGroups(),
-      profile: async () => refetchUserPosts(),
-      trending: async () => refetchTrendingPosts(),
-      feed: async () => refetchPosts(),
-      notifications: async () => { /* nothing */ },
-    };
-    try {
-      const act = actions[activeTab] || (() => { });
-      await act();
-      toast.success('Feed updated');
-    } catch (err) {
-      toast.error('Failed to refresh');
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
 
   const scrollToTop = () => {
     // Determine the scroll container at the time of click (use existing ref or compute)
@@ -395,6 +538,11 @@ useEffect(() => {
     }
   };
 
+  // Total unread count
+  const totalUnread = useMemo(() =>
+    chatSessions.reduce((sum, s) => sum + (s.unread_count || 0), 0),
+    [chatSessions]
+  );
 
   const filterPosts = (postList: any[]) => {
     if (!searchQuery.trim()) return postList;
@@ -469,7 +617,7 @@ useEffect(() => {
       <div className="py-3 px-2 -mx-2 mx-auto max-w-[680px]">
         <div className="flex items-center justify-between mb-2 px-2">
           <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Suggested for you</h4>
-          <button className="text-xs text-slate-500 hover:underline" onClick={() => setActiveTab('trending')}>See all</button>
+          <button className="text-xs text-slate-500 hover:underline" onClick={() => handleTabChange('trending')}>See all</button>
         </div>
 
         <div
@@ -496,7 +644,7 @@ useEffect(() => {
               <div className="mt-3 flex items-center justify-between gap-2">
                 <Button
                   size="sm"
-                  className="flex-1 rounded-full text-xs"
+                  className="flex-1 rounded-full text-xs bg-blue-600 hover:bg-blue-700"
                   onClick={() => handleFollow(u.id)}
                   disabled={!!loadingIds[u.id]}
                 >
@@ -506,11 +654,11 @@ useEffect(() => {
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="ml-2"
+                  className="ml-2 hover:bg-slate-200 "
                   onClick={() => handleViewProfile(u.id)}
                   title="View Profile"
                 >
-                  <ExternalLink className="h-4 w-4" />
+                  <ExternalLink className="h-4 w-4 color-blue-500" />
                 </Button>
               </div>
             </div>
@@ -520,7 +668,26 @@ useEffect(() => {
     );
   };
 
-  const renderPostsWithStrips = (postList: any[]) => {
+  const renderPostsWithStrips = (postList: any[], isLoading: boolean) => {
+    if (isLoading && postList.length === 0) {
+      return <LoadingSpinner />;
+    }
+
+    if (postList.length === 0 && !isLoading) {
+      return (
+        <div className="text-center py-12">
+          <div className="text-slate-400 text-lg">No posts found</div>
+          <Button
+            onClick={forceRefresh}
+            variant="outline"
+            className="mt-4"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+      );
+    }
     const items: JSX.Element[] = [];
     const POSTS_BETWEEN_STRIPS = 6;
     const filtered = filterPosts(postList);
@@ -529,7 +696,7 @@ useEffect(() => {
     filtered.forEach((post, idx) => {
       const isFirst = idx === 0;
       const postElement = isFirst ? (
-        <div key={post.id} ref={firstPostRef} data-first-post>
+        <div key={post.id} ref={firstPostRef} data-first-post className='space-y-1 lg:space-y-4'>
           <PostCard
             post={post}
             currentUser={currentUser}
@@ -551,26 +718,28 @@ useEffect(() => {
           />
         </div>
       ) : (
-        <PostCard
-          key={post.id}
-          post={post}
-          currentUser={currentUser}
-          onLike={toggleLike}
-          onBookmark={toggleBookmark}
-          onShare={sharePost}
-          onComment={() => togglePostExpanded(post.id)}
-          isExpanded={isPostExpanded(post.id)}
-          comments={getPostComments(post.id)}
-          isLoadingComments={isLoadingPostComments(post.id)}
-          newComment={getNewCommentContent(post.id)}
-          onCommentChange={(c) => updateNewComment(post.id, c)}
-          onSubmitComment={() => addComment(post.id)}
-          onPostView={trackPostView}
-          onClick={() => navigate(`/social/post/${post.id}`)}
-          onDeletePost={deletePost}
-          onEditPost={editPost}
-          onShareToChat={handleSharePostToChat}
-        />
+        <div key={post.id} className='space-y-1 lg:space-y-4'>
+          <PostCard
+            key={post.id}
+            post={post}
+            currentUser={currentUser}
+            onLike={toggleLike}
+            onBookmark={toggleBookmark}
+            onShare={sharePost}
+            onComment={() => togglePostExpanded(post.id)}
+            isExpanded={isPostExpanded(post.id)}
+            comments={getPostComments(post.id)}
+            isLoadingComments={isLoadingPostComments(post.id)}
+            newComment={getNewCommentContent(post.id)}
+            onCommentChange={(c) => updateNewComment(post.id, c)}
+            onSubmitComment={() => addComment(post.id)}
+            onPostView={trackPostView}
+            onClick={() => navigate(`/social/post/${post.id}`)}
+            onDeletePost={deletePost}
+            onEditPost={editPost}
+            onShareToChat={handleSharePostToChat}
+          />
+        </div>
       );
 
       items.push(postElement);
@@ -594,13 +763,51 @@ useEffect(() => {
     return items;
   };
 
-  const LoadingSpinner = () => (
-    <div className="flex flex-col items-center justify-center py-12">
-      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+  const LoadingSpinner = ({ size = "default" }: { size?: "default" | "sm" }) => (
+    <div className={`flex flex-col items-center justify-center ${size === "default" ? "py-12" : "py-4"}`}>
+      <Loader2 className={`${size === "default" ? "h-8 w-8" : "h-6 w-6"} animate-spin text-blue-600`} />
+      <p className="text-sm text-slate-500 mt-2">Loading posts...</p>
     </div>
-  );
+  );// In SocialFeed.tsx, update the adapter function:
+  const adaptNotifications = (socialNotifications: SocialNotification[]): SocialNotificationItem[] => {
+    return socialNotifications.map(notif => ({
+      id: notif.id,
+      user_id: notif.user_id,
+      type: notif.type,
+      title: getNotificationTitle(notif),
+      message: getNotificationMessage(notif),
+      is_read: notif.is_read,
+      created_at: notif.created_at,
+      data: {
+        actor: notif.actor,
+        post: notif.post
+      },
+      actor: notif.actor
+    }));
+  };
 
+  const getNotificationTitle = (notif: SocialNotification): string => {
+    switch (notif.type) {
+      case 'like': return 'New Like';
+      case 'comment': return 'New Comment';
+      case 'follow': return 'New Follower';
+      case 'mention': return 'You were mentioned';
+      case 'share': return 'Post Shared';
+      default: return 'Notification';
+    }
+  };
 
+  const getNotificationMessage = (notif: SocialNotification): string => {
+    const actorName = notif.actor?.display_name || 'Someone';
+    switch (notif.type) {
+      case 'like': return `${actorName} liked your post`;
+      case 'comment': return `${actorName} commented on your post`;
+      case 'follow': return `${actorName} started following you`;
+      case 'mention': return `${actorName} mentioned you in a post`;
+      case 'share': return `${actorName} shared your post`;
+      default: return 'You have a new notification';
+    }
+  };
   // BEFORE the return statement, handle profile routing:
   if (routeGroupId) return <GroupDetailPage currentUser={currentUser} />;
 
@@ -611,7 +818,7 @@ useEffect(() => {
   return (
     <div className=" bg-transparent font-sans">
 
-      <div className=" max-w-[1440px] mx-auto px-0 ">
+      <div className=" max-w-[1240px] mx-auto px-0 ">
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8 relative max-h-screen overflow-y-auto modern-scrollbar ">
 
@@ -643,20 +850,34 @@ useEffect(() => {
                     <Button
                       variant="outline"
                       className="w-full"
-                      onClick={() => setActiveTab('profile')}
+                      onClick={() => handleTabChange('profile')}
                     >
                       View Profile
                     </Button>
                   </div>
                 </div>
               </div>
-
-              {/* Additional sections if needed */}
-
+              {activeTab !== 'notifications' && (
+                <NotificationsSection
+                  notifications={adaptNotifications(notifications)}
+                  unreadCount={unreadCount}
+                  markNotificationAsRead={markNotificationAsRead}
+                  markAllNotificationsAsRead={markAllNotificationsAsRead}
+                  deleteNotification={deleteNotification}
+                  hasMore={hasMore}
+                  isLoading={isLoadingMore}
+                  fetchNotifications={fetchNotifications
+                  }
+                />
+              )}
             </div>
           </div>
-          <main className="col-span-1 lg:col-span-6 max-h-screen overflow-y-auto modern-scrollbar pb-20 lg:pb-20">
-            <div ref={topRef} />
+          <main
+            ref={scrollContainerRef}
+            className="col-span-1 lg:col-span-6 max-h-screen overflow-y-auto modern-scrollbar pb-20 lg:pb-20"
+          >
+            <div />
+
 
             {hasNewPosts && newPostsCount > 0 && (
               <div className="px-4 mb-4">
@@ -674,7 +895,7 @@ useEffect(() => {
               </div>
             )}
 
-            <div className="pb-10 p-2 ">
+            <div className="pb-10 p-0 space-y-6" ref={topRef}>
               {routePostId && postToDisplay ? (
                 <div className="mb-6">
                   <Button variant="ghost" onClick={() => navigate('/social/feed')} className="mb-2 pl-0 hover:pl-2">← Back</Button>
@@ -697,8 +918,8 @@ useEffect(() => {
                   />
                 </div>
               ) : (
-                <Tabs value={activeTab} className="space-y-6">
-                  <TabsContent value="feed" className="outline-none space-y-5">
+                <Tabs value={activeTab} className="space-y-1 ">
+                  <TabsContent value="feed" className="outline-none space-y-1 lg:space-y-4">
                     <CreatePostDialog
                       isOpen={showPostDialog}
                       onOpenChange={setShowPostDialog}
@@ -713,19 +934,24 @@ useEffect(() => {
                       currentUser={currentUser}
                     />
 
-                    {isLoading && posts.length === 0 ? <LoadingSpinner /> : (
+
+                    {posts.length === 0 ? <LoadingSpinner /> : (
                       <>
-                        {renderPostsWithStrips(posts)}
-                        {hasMorePosts && <div ref={feedObserverRef} className="h-10" />}
+                        {renderPostsWithStrips(posts, isLoading)}
+                        <div ref={feedObserverRef} className="h-10" />
+                        {isLoadingMorePosts && <LoadingSpinner size="sm" />}
                       </>
                     )}
                   </TabsContent>
 
-                  <TabsContent value="trending" className="outline-none space-y-5">
-                    {isLoading && trendingPosts.length === 0 ? <LoadingSpinner /> : (
+                  <TabsContent value="trending" className="outline-none space-y-1 lg:space-y-4">
+                    {trendingPosts.length === 0 ? <LoadingSpinner /> : (
                       <>
-                        {renderPostsWithStrips(trendingPosts)}
-                        {hasMoreTrendingPosts && <div ref={trendingObserverRef} className="h-10" />}
+                        {renderPostsWithStrips(trendingPosts, isLoading)}
+                        <div ref={trendingObserverRef} className="h-10" />
+                        {isLoadingMorePosts && <LoadingSpinner size="sm" />}
+
+
                       </>
                     )}
                   </TabsContent>
@@ -781,15 +1007,20 @@ useEffect(() => {
                       onStartChat={handleStartChat}
                     />
                     <div ref={profileObserverRef} className="h-10" />
+                    {isLoadingMorePosts == true && <LoadingSpinner />}
+
                   </TabsContent>
 
-                  <TabsContent value="notifications" className="outline-none">
+                  <TabsContent value="notifications" className="animate-in fade-in duration-500 lg:bottom-24  bg-white dark:bg-slate-900 overflow-hidden flex">
                     <NotificationsSection
-                      notifications={notifications}
+                      notifications={adaptNotifications(notifications)}
                       unreadCount={unreadCount}
                       markNotificationAsRead={markNotificationAsRead}
                       markAllNotificationsAsRead={markAllNotificationsAsRead}
                       deleteNotification={deleteNotification}
+                      hasMore={hasMore}
+                      isLoading={isLoadingMore}
+                      fetchNotifications={fetchNotifications}
                     />
                   </TabsContent>
                   <TabsContent value="userProfile" className="outline-none">
@@ -816,8 +1047,9 @@ useEffect(() => {
                         onRefreshLikedPosts={refetchLikedPosts}
                         onRefreshBookmarkedPosts={refetchBookmarkedPosts}
                         userGroups={groups.filter(g => g.is_member)}
-                      />
-                    )}
+                      />)
+                    }
+
                   </TabsContent>
                 </Tabs>
               )}
@@ -883,7 +1115,7 @@ useEffect(() => {
                       ))}
                     </div>
                     <div className="p-3 text-center">
-                      <Button variant="ghost" className="text-blue-600 text-sm w-full" onClick={() => setActiveTab('trending')}>Show more</Button>
+                      <Button variant="ghost" className="text-blue-600 text-sm w-full" onClick={() => handleTabChange('trending')}>Show more</Button>
                     </div>
                   </div>
                 </>
@@ -1011,8 +1243,8 @@ useEffect(() => {
                 </>
               )}
 
-              {activeTab !== 'profile' && (
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 sticky top-6 z-10">
+              {activeTab === 'profile' && (
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 sticky top-6 ">
                   <div className="p-4 border-b border-slate-100 dark:border-slate-800">
                     <h3 className="font-bold text-lg">Who to follow</h3>
                   </div>
@@ -1056,35 +1288,6 @@ useEffect(() => {
               )}
               {activeTab === 'notifications' && (
                 <>
-                  {/* Notification Stats Widget */}
-                  <div className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-red-100 dark:border-slate-700 overflow-hidden">
-                    <div className="p-4">
-                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2 text-red-900 dark:text-red-100">
-                        <Bell className="h-5 w-5" /> Notifications
-                      </h3>
-                      <div className="space-y-3">
-                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
-                          <div className="text-2xl font-bold text-red-600">{unreadCount}</div>
-                          <div className="text-xs text-slate-500">Unread</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
-                          <div className="text-2xl font-bold text-rose-600">{notifications.length}</div>
-                          <div className="text-xs text-slate-500">Total</div>
-                        </div>
-                      </div>
-                      {unreadCount > 0 && (
-                        <Button
-                          variant="outline"
-                          className="w-full mt-3"
-                          size="sm"
-                          onClick={markAllNotificationsAsRead}
-                        >
-                          Mark all as read
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Notification Types Widget */}
                   <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
                     <div className="p-4 border-b border-slate-100 dark:border-slate-800">
@@ -1109,11 +1312,11 @@ useEffect(() => {
         </div>
 
         {/* MOBILE BOTTOM NAV */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-safe z-50">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-safe">
           <div className="flex justify-around items-center h-16">
             <button onClick={() => navigate('/social/feed')} className={`p-2 rounded-full ${activeTab === 'feed' ? 'text-blue-600' : 'text-slate-500'}`}><Home className="h-6 w-6" /></button>
-            <button onClick={() => navigate('/social/trending')} className={`p-2 rounded-full ${activeTab === 'trending' ? 'text-blue-600' : 'text-slate-500'}`}><Search className="h-6 w-6" /></button>
-            <button onClick={() => setShowPostDialog(true)} className="p-3 bg-blue-600 rounded-full text-white shadow-lg -mt-6"><Plus className="h-6 w-6" /></button>
+            <button onClick={() => navigate('/social/groups')} className={`p-2 rounded-full ${activeTab === 'groups' ? 'text-blue-600' : 'text-slate-500'}`}><Users className="h-6 w-6" /></button>
+            <button onClick={() => { navigate('/social/feed'); setShowPostDialog(true) }} className="p-3 bg-blue-600 rounded-full text-white shadow-lg -mt-6"><Plus className="h-6 w-6" /></button>
             <button onClick={() => navigate('/social/notifications')} className={`p-2 rounded-full relative ${activeTab === 'notifications' ? 'text-blue-600' : 'text-slate-500'}`}>
               <Bell className="h-6 w-6" />
               {unreadCount > 0 && <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full" />}
@@ -1123,57 +1326,84 @@ useEffect(() => {
 
         {/* Floating Action Buttons: Refresh + Scroll-to-top */}
 
-        <div className="fixed right-6 bottom-24 lg:bottom-8 z-50 flex flex-col items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            className="h-11 w-11 rounded-full bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 shadow-lg hover:shadow-xl transition-transform hover:scale-105 flex items-center justify-center border border-slate-100 dark:border-slate-800"
-            aria-label="Refresh feed"
-            title="Refresh"
-          >
-            <RefreshCw className={`${isRefreshing ? 'animate-spin' : ''} h-5 w-5 text-blue-600`} />
-          </button>
-
-          <button
-            onClick={scrollToTop}
-            className="h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg hover:shadow-xl transition-transform hover:scale-110 flex items-center justify-center"
-            aria-label="Scroll to top"
-            title="Scroll to top"
-          >
-            <ArrowUp className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => setShowChatList(!showChatList)}
-            className="h-14 w-14 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center"
-            aria-label="Open chats"
-            title="Messages"
-          >
-            <MessageCircle className="h-6 w-6" />
-            {chatSessions.reduce((sum, s) => sum + (s.unread_count || 0), 0) > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                {chatSessions.reduce((sum, s) => sum + (s.unread_count || 0), 0)}
-              </span>
+        <div className="fixed bottom-16 right-2 flex flex-col gap-3 z-40 pointer-events-none">
+          <div className="flex flex-col items-center gap-3 pointer-events-auto">
+            {/* New Posts Banner (Instagram-style) */}
+            {hasNewPosts && (
+              <button
+                onClick={showNewPosts}
+                className="animate-bounce bg-blue-600 text-white px-5 py-2.5 rounded-full shadow-xl font-medium text-sm hover:bg-blue-700 transition-all flex items-center gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                {newPostsCount} new {newPostsCount === 1 ? 'post' : 'posts'}
+              </button>
             )}
-          </button>
-        </div>
 
+            {/* Refresh Button - shows when scrolled or has new posts */}
+            <button
+              onClick={() => handleRefresh?.()}
+              className={`
+              h-11 w-11 rounded-full bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 
+              shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center
+              border border-slate-100 dark:border-slate-800 backdrop-blur-sm
+              ${isScrolled || hasNewPosts ? 'translate-y-0 opacity-100' : 'translate-y-16 opacity-0'}
+            `}
+              aria-label="Refresh feed"
+              title="Refresh"
+            >
+              <RefreshCw className={`${isRefreshing || isLoading ? 'animate-spin' : ''} h-5 w-5 text-blue-600`} />
+            </button>
+
+            {/* Scroll to Top Button */}
+            <button
+              onClick={scrollToTop}
+              className={`
+              h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg hover:shadow-xl 
+              transition-all duration-300 flex items-center justify-center backdrop-blur-sm
+              ${isScrolledDeep ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-50'}
+            `}
+              aria-label="Scroll to top"
+              title="Back to top"
+            >
+              <ArrowUp className="h-6 w-6" />
+            </button>
+
+            {/* Open Chats Button */}
+            <button
+              onClick={() => setShowChatList(prev => !prev)}
+              className={`
+              relative h-14 w-14 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 
+              text-white shadow-lg hover:shadow-2xl transition-all duration-300 
+              flex items-center justify-center backdrop-blur-sm ring-4 ring-blue-500/20
+              ${isScrolled || showChatList || totalUnread > 0
+                  ? 'translate-y-0 opacity-100 scale-100'
+                  : 'translate-y-24 opacity-0 scale-75'}
+            `}
+              aria-label="Open messages"
+              title="Messages"
+            >
+              <MessageCircle className="h-7 w-7" />
+              {totalUnread > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center animate-pulse ring-2 ring-white">
+                  {totalUnread > 99 ? '99+' : totalUnread}
+                </span>
+              )}
+              {showChatList && (
+                <span className="absolute -inset-2 rounded-full bg-blue-600/30 animate-ping" />
+              )}
+            </button>
+          </div>
+        </div>
       </div>
       {/* User profile modal */}
 
       {showChatList && (
-        <div className="fixed inset-0 lg:inset-auto lg:right-6 animate-in fade-in duration-500 lg:bottom-24 lg:h-[600px] bg-white dark:bg-slate-900 z-50 lg:rounded-2xl lg:shadow-2xl overflow-hidden flex">
+        <div className="fixed inset-1 mt-11 lg:mt-0 lg:inset-auto lg:right-6 animate-in fade-in duration-500 lg:bottom-24 lg:h-[600px] bg-white dark:bg-slate-900 z-50 lg:rounded-2xl lg:shadow-2xl overflow-hidden flex">
           {/* Mobile close button */}
-          <button
-            onClick={() => {
-              setShowChatList(false);
-              setActiveSession(null);
-            }}
-            className=" absolute top-4 right-4 z-10 p-2 bg-slate-100 dark:bg-slate-800 rounded-full"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          
 
           {/* Chat interface */}
-          <div className="flex-1 flex ">
+          <div className="flex-1 flex max-w-[100vw]">
             {!activeChatSessionId ? (
               <ChatList
                 sessions={chatSessions}
@@ -1181,28 +1411,21 @@ useEffect(() => {
                 onSessionSelect={setActiveSession}
                 currentUserId={currentUser?.id || ''}
                 isLoading={isLoadingChatSessions}
+                onbackClick={() => setShowChatList(false)}
               />
             ) : (
+              // In the ChatWindow component usage:
               <ChatWindow
                 session={chatSessions.find((s) => s.id === activeChatSessionId) || null}
                 messages={activeSessionMessages}
                 currentUserId={currentUser?.id || ''}
-                onBack={() => setActiveSession(null)}
-                onSendMessage={async (content, files) => {
-                  if (!activeChatSessionId) return false;
-                  return await sendChatMessage(activeChatSessionId, content, files);
-                }}
-                onSendMessageWithResource={async (content, resourceId, resourceType) => {
-                  if (!activeChatSessionId) return false;
-                  return await sendMessageWithResource(
-                    activeChatSessionId,
-                    content,
-                    resourceId,
-                    resourceType
-                  );
-                }}
+                onBack={() => { setActiveSession(null); setShowChatList(true) }}
+                onSendMessage={handleChatSendMessage}
+                onSendMessageWithResource={handleChatSendMessageWithResource}
                 isSending={isSendingMessage}
                 isLoading={isLoadingChatMessages}
+                editMessage={editMessage}
+                deleteMessage={deleteMessage}
               />
             )}
           </div>

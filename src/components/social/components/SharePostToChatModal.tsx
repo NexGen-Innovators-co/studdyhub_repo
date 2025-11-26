@@ -71,7 +71,7 @@ export const SharePostToChatModal: React.FC<SharePostToChatModalProps> = ({
   const handleShare = async () => {
     if (!selectedSessionId || !post) return;
 
-    const shareMessage = message.trim() || `Check out this post: "${post.content.substring(0, 100)}${post.content.length > 100 ? '...' : ''}"`;
+    const shareMessage = message.trim() || `Check out this post by ${post.author?.display_name || 'someone'}`;
     const success = await onShare(selectedSessionId, shareMessage);
     
     if (success) {
@@ -86,7 +86,7 @@ export const SharePostToChatModal: React.FC<SharePostToChatModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] p-0">
+      <DialogContent className="max-w-2xl p-0">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle>Share Post to Chat</DialogTitle>
           <DialogDescription>

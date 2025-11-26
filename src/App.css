@@ -38,9 +38,6 @@
   }
 }
 
-.card {
-  padding: 2em;
-}
 
 .read-the-docs {
   color: #888;
@@ -199,3 +196,6 @@
   }
 }
 /* Enhanced Editor Styles for NoteMind */
+.group:hover .group-hover\\:block {
+  display: block;
+}

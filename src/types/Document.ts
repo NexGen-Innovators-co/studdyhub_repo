@@ -1,6 +1,6 @@
 export interface Document {
-  content_extracted: string | null;
-  created_at: string;
+  content_extracted:  string | null;
+  created_at: Date | null;
   file_name: string;
   file_size: number | null;
   file_type: string;

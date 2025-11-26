@@ -448,8 +448,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           break;
         case 'date':
         default:
-          aValue = new Date(a.created_at);
-          bValue = new Date(b.created_at);
+          aValue =a.created_at;
+          bValue = b.created_at;
           break;
       }
 
@@ -956,13 +956,61 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
   }, [appOperations, selectedFolderId, user, loadDataIfNeeded]);
 
+  // Enhanced document synchronization and duplicate prevention
+  useEffect(() => {
+    // Log for debugging
+    console.log('📄 Documents count:', documents.length);
 
+    // Check for duplicates
+    const documentIds = documents.map(doc => doc.id);
+    const uniqueIds = new Set(documentIds);
 
-  // Filter documents by selected folder
+    if (documentIds.length !== uniqueIds.size) {
+      console.warn('⚠️ Duplicate documents detected:', {
+        total: documentIds.length,
+        unique: uniqueIds.size,
+        duplicates: documentIds.length - uniqueIds.size
+      });
+
+      // Remove duplicates if found
+      const uniqueDocuments = documents.filter((doc, index) =>
+        documents.findIndex(d => d.id === doc.id) === index
+      );
+
+      if (uniqueDocuments.length !== documents.length) {
+        console.log('🔄 Removing duplicate documents');
+        // You might want to update the parent state here
+        // or handle this in your data loading logic
+      }
+    }
+  }, [documents]);
+// Debug duplicate documents
+useEffect(() => {
+  const duplicateIds = documents
+    .map(doc => doc.id)
+    .filter((id, index, ids) => ids.indexOf(id) !== index);
+  
+  if (duplicateIds.length > 0) {
+    console.error('🚨 DUPLICATE DOCUMENT IDs FOUND:', duplicateIds);
+    console.log('📋 All documents:', documents.map(d => ({ id: d.id, title: d.title })));
+    
+    // Log the duplicate documents
+    duplicateIds.forEach(dupId => {
+      const duplicates = documents.filter(d => d.id === dupId);
+      console.log(`📄 Duplicate for ${dupId}:`, duplicates);
+    });
+  }
+}, [documents]);
+  // Filter documents by selected folder with deduplication
   const filteredDocumentsByFolder = useMemo(() => {
     if (!selectedFolderId) {
-      return filteredAndSortedDocuments;
+      // Remove duplicates from filteredAndSortedDocuments
+      const uniqueDocuments = filteredAndSortedDocuments.filter((doc, index, self) =>
+        index === self.findIndex(d => d.id === doc.id)
+      );
+      return uniqueDocuments;
     }
+
     // Get all documents in this folder and subfolders
     const getFolderAndSubfolderIds = (folderId: string): string[] => {
       const ids = [folderId];
@@ -975,9 +1023,15 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       }
       return ids;
     };
+
     const relevantFolderIds = getFolderAndSubfolderIds(selectedFolderId);
-    return filteredAndSortedDocuments.filter(doc =>
+    const folderDocuments = filteredAndSortedDocuments.filter(doc =>
       doc.folder_ids?.some(id => relevantFolderIds.includes(id))
+    );
+
+    // Remove duplicates
+    return folderDocuments.filter((doc, index, self) =>
+      index === self.findIndex(d => d.id === doc.id)
     );
   }, [selectedFolderId, filteredAndSortedDocuments, folders]);
 
@@ -1346,9 +1400,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   >
                     {filteredDocumentsByFolder.map((doc, idx) => {
                       const isLast = idx === filteredDocumentsByFolder.length - 1;
+
+                      // Create a unique key that includes the index to prevent duplicates
+                      const uniqueKey = `${doc.id}-${idx}`;
+
                       return (
                         <Card
-                          key={doc.id}
+                          key={uniqueKey} // Use unique key with index
                           ref={isLast ? lastDocumentElementRef : null}
                           className={`group border-0 shadow-lg hover:shadow-xl animate-in slide-in-from-top-2 fade-in duration-500 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
                             }`}
@@ -1409,7 +1467,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                                     <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
                                       <span className="flex items-center gap-1">
                                         <Calendar className="h-4 w-4" />
-                                        {formatDate(doc.created_at)}
+                                        {doc.created_at ? (new Date(doc.created_at)).toLocaleDateString() : 'Unknown Date'}
                                       </span>
                                       <span className="flex items-center gap-1">
                                         <HardDrive className="h-4 w-4" />
@@ -1520,7 +1578,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                                           </div>
                                           <span className="flex items-center gap-1">
                                             <Calendar className="h-3 w-3" />
-                                            {formatDate(doc.created_at)}
+                                            {formatDate(new Date(doc.created_at).toLocaleDateString() || 'Unknown Date')}
                                           </span>
                                           <span className="flex items-center gap-1">
                                             <HardDrive className="h-3 w-3" />
@@ -1702,7 +1760,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                       </span>
                       <span className="flex items-center gap-1">
                         <Calendar className="h-4 w-4" />
-                        {formatDate(selectedDocument.created_at)}
+                        {formatDate(new Date(selectedDocument.created_at).toISOString() || 'Unknown Date')}
                       </span>
                       <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(selectedDocument.processing_status as string)}`}>
                         {getStatusIcon(selectedDocument.processing_status as string)}
@@ -1869,11 +1927,12 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           </Suspense>
         )}
         {/* Loading More / No More Indicator - exactly like NotesList */}
-        {dataPagination?.documents?.hasMore || dataLoading ? (
+        {(dataPagination?.documents?.hasMore || dataLoading) && (
           <div
+            key="loading-indicator"
             className={`w-full flex justify-center items-center py-12 ${viewMode === 'grid' ? 'col-span-full' : ''
               }`}
-            style={{ minHeight: '120px' }} // makes sure it has height + triggers scroll earlier
+            style={{ minHeight: '120px' }}
           >
             {dataPagination?.documents?.hasMore && !dataLoading ? (
               <div className="flex items-center gap-3 text-slate-600 dark:text-gray-400">
@@ -1886,17 +1945,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
               </span>
             )}
           </div>
-        ) : filteredAndSortedDocuments.length > 0 ? (
-          <div
-            className={`w-full text-center py-8 text-slate-400 dark:text-gray-500 ${viewMode === 'grid' ? 'col-span-full' : ''
-              }`}
-          >
-            No more documents
-          </div>
-        ) : null}
+        )}
 
-        {!dataPagination.documents.hasMore && filteredAndSortedDocuments.length > 0 && (
-          <div className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400">
+        {!dataPagination?.documents?.hasMore && filteredDocumentsByFolder.length > 0 && (
+          <div
+            key="no-more-indicator"
+            className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400 col-span-full"
+          >
             No more documents to load.
           </div>
         )}

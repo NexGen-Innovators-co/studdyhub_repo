@@ -1,5 +1,5 @@
 // src/components/social/components/OtherUserProfile.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { SocialUserWithDetails, SocialPostWithDetails } from '@/integrations/supabase/socialTypes';
@@ -32,6 +32,8 @@ interface OtherUserProfileProps {
     userGroups: any[];
 }
 
+const POSTS_PER_PAGE = 20;
+
 export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
     const { userId } = useParams<{ userId: string }>();
     const navigate = useNavigate();
@@ -40,11 +42,31 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
     const [userPosts, setUserPosts] = useState<SocialPostWithDetails[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
+
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [isFollowLoading, setIsFollowLoading] = useState(false); // Add loading state for follow action
+
+    // For infinite scroll
+    const observer = useRef<IntersectionObserver | null>(null);
+    const lastPostElementRef = useCallback((node: HTMLDivElement | null) => {
+        if (isLoadingMore || isLoadingPosts) return;
+        if (observer.current) observer.current.disconnect();
+
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+                loadMorePosts();
+            }
+        });
+
+        if (node) observer.current.observe(node);
+    }, [isLoadingMore, isLoadingPosts, hasMore]);
 
     useEffect(() => {
         if (userId) {
             fetchUserProfile();
-            fetchUserPosts();
+            fetchUserPosts(true); // reset = true
         }
     }, [userId]);
 
@@ -69,8 +91,6 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
             setIsLoading(false);
         }
     };
-    // Inside OtherUserProfile.tsx — after fetching the user
-    const [isFollowing, setIsFollowing] = useState(false);
 
     useEffect(() => {
         if (userId && props.currentUser) {
@@ -88,70 +108,58 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
             .eq('following_id', userId)
             .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
+        if (error && error.code !== 'PGRST116') {
             console.error('Error checking follow status:', error);
             return;
         }
 
         setIsFollowing(!!data);
     };
-    const fetchUserPosts = async () => {
+
+    const fetchUserPosts = async (reset: boolean = false) => {
         if (!userId) return;
 
-        setIsLoadingPosts(true);
+        const loadingState = reset ? setIsLoadingPosts : setIsLoadingMore;
+        loadingState(true);
+
         try {
+            const offset = reset ? 0 : userPosts.length;
+
             const { data: postsData, error: postsError } = await supabase
                 .from('social_posts')
                 .select(`
-          *,
-          author:social_users(*),
-          group:social_groups(*),
-          media:social_media(*)
-        `)
+                    *,
+                    author:social_users(*),
+                    group:social_groups(*),
+                    media:social_media(*)
+                `)
                 .eq('author_id', userId)
-                .eq('privacy', 'public') // Only show public posts
+                .eq('privacy', 'public')
                 .order('created_at', { ascending: false })
-                .limit(20);
+                .range(offset, offset + POSTS_PER_PAGE - 1);
 
             if (postsError) throw postsError;
 
-            const postIds = postsData?.map(p => p.id) || [];
-
-            const hashtagPromise = supabase
-                .from('social_post_hashtags')
-                .select(`post_id, hashtag:social_hashtags(*)`)
-                .in('post_id', postIds);
-
-            const tagPromise = supabase
-                .from('social_post_tags')
-                .select(`post_id, tag:social_tags(*)`)
-                .in('post_id', postIds);
-
-            let likePromise: PromiseLike<{ data: { post_id: string }[] | null }> = Promise.resolve({ data: [] });
-            let bookmarkPromise: PromiseLike<{ data: { post_id: string }[] | null }> = Promise.resolve({ data: [] });
-
-            if (props.currentUser) {
-                likePromise = supabase
-                    .from('social_likes')
-                    .select('post_id')
-                    .eq('user_id', props.currentUser.id)
-                    .in('post_id', postIds);
-
-                bookmarkPromise = supabase
-                    .from('social_bookmarks')
-                    .select('post_id')
-                    .eq('user_id', props.currentUser.id)
-                    .in('post_id', postIds);
+            if (!postsData || postsData.length === 0) {
+                setHasMore(false);
+                loadingState(false);
+                return;
             }
 
+            const postIds = postsData.map(p => p.id);
+
             const [hashtagResult, tagResult, likeResult, bookmarkResult] = await Promise.all([
-                hashtagPromise,
-                tagPromise,
-                likePromise,
-                bookmarkPromise
+                supabase.from('social_post_hashtags').select(`post_id, hashtag:social_hashtags(*)`).in('post_id', postIds),
+                supabase.from('social_post_tags').select(`post_id, tag:social_tags(*)`).in('post_id', postIds),
+                props.currentUser
+                    ? supabase.from('social_likes').select('post_id').eq('user_id', props.currentUser.id).in('post_id', postIds)
+                    : Promise.resolve({ data: [] }),
+                props.currentUser
+                    ? supabase.from('social_bookmarks').select('post_id').eq('user_id', props.currentUser.id).in('post_id', postIds)
+                    : Promise.resolve({ data: [] })
             ]);
 
-            const transformedPosts = postsData?.map(post => {
+            const transformedPosts = postsData.map(post => {
                 const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
                 const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
                 const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
@@ -167,14 +175,41 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
                     is_liked: isLiked,
                     is_bookmarked: isBookmarked
                 };
-            }) || [];
+            });
 
-            setUserPosts(transformedPosts);
+            setUserPosts(prev => reset ? transformedPosts : [...prev, ...transformedPosts]);
+            setHasMore(postsData.length === POSTS_PER_PAGE);
         } catch (error) {
             console.error('Error fetching user posts:', error);
-            toast.error('Failed to load user posts');
+            toast.error('Failed to load posts');
         } finally {
-            setIsLoadingPosts(false);
+            loadingState(false);
+        }
+    };
+    const handleToggleFollow = async () => {
+        if (!userId || isFollowLoading) return;
+        
+        // Optimistically update UI first
+        const newFollowingState = !isFollowing;
+        setIsFollowing(newFollowingState);
+        setIsFollowLoading(true);
+        
+        try {
+            await props.onFollow(userId);
+            // If successful, refresh data
+            fetchUserProfile();
+        } catch (error) {
+            console.error('Error toggling follow:', error);
+            toast.error('Failed to update follow status');
+            // Revert on error
+            setIsFollowing(!newFollowingState);
+        } finally {
+            setIsFollowLoading(false);
+        }
+    };
+    const loadMorePosts = () => {
+        if (hasMore && !isLoadingMore && !isLoadingPosts) {
+            fetchUserPosts(false);
         }
     };
 
@@ -201,9 +236,9 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
     const isOwnProfile = props.currentUser?.id === userId;
 
     return (
-        <div className="max-w-[780px] mx-auto">
+        <div className="max-w-[780px] mx-auto pb-20">
             {/* Back button */}
-            <div className="mb-4 px-4">
+            <div className="mb-4 px-4 pt-4">
                 <Button
                     variant="ghost"
                     onClick={() => navigate(-1)}
@@ -218,7 +253,7 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
             <UserProfile
                 user={user}
                 isOwnProfile={isOwnProfile}
-                onEditProfile={() => { }} // Only owner can edit
+                onEditProfile={() => {}}
                 posts={userPosts}
                 isLoadingPosts={isLoadingPosts}
                 onLike={props.onLike}
@@ -244,13 +279,21 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
                 onDeletePost={props.onDeletePost}
                 onEditPost={props.onEditPost}
                 isFollowing={isFollowing}
-                onToggleFollow={async () => {
-                    await props.onFollow(userId!);
-                    if (userId) { 
-                        setIsFollowing(!isFollowing);
-                    }
-                }}
+                onToggleFollow={handleToggleFollow}
             />
+
+            {/* Infinite Scroll Trigger */}
+            {hasMore && (
+                <div ref={lastPostElementRef} className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                </div>
+            )}
+
+            {!hasMore && userPosts.length > 0 && (
+                <div className="text-center py-8 text-slate-500 text-sm">
+                    No more posts to show
+                </div>
+            )}
         </div>
     );
 };

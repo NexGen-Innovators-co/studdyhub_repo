@@ -25,6 +25,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { toast } from 'sonner';
+import { measureMemory } from 'vm';
 
 interface Event {
   id: string;
@@ -269,6 +270,14 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
     return new Date(event.end_date) < new Date();
   };
 
+
+  const handleJoinMeeting = (e: React.MouseEvent, meetingUrl: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    window.open('https://' + meetingUrl,'_blank');
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -334,8 +343,11 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
                     id="meeting_link"
                     value={formData.meeting_link}
                     onChange={(e) => handleInputChange('meeting_link', e.target.value)}
-                    placeholder="https://zoom.us/j/... or Google Meet link"
+                    placeholder="zoom.us/j/... "
                   />
+                  <p className="text-xs text-gray-500">
+                    Tip: Don't include https:// at the beginning of your link
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -498,14 +510,12 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
                               <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
                               <span>Online Event</span>
                               {event.location && (
-                                <a
-                                  href={event.location}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:underline break-all"
+                                <button
+                                  onClick={(e) => handleJoinMeeting(e, event.location)}
+                                  className="text-blue-600 hover:underline break-all font-medium"
                                 >
                                   Join Meeting
-                                </a>
+                                </button>
                               )}
                             </>
                           ) : (

@@ -127,7 +127,7 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
+      <DialogContent className=" max-w-2xl p-0 lg:p-2">
         <DialogHeader>
           <DialogTitle>Share Note or Document</DialogTitle>
         </DialogHeader>
@@ -158,7 +158,7 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
             </TabsList>
 
             {/* Notes List */}
-            <TabsContent value="notes" className="max-h-[300px] overflow-y-auto modern-scrollbar">
+            <TabsContent value="notes" className="max-h-[300px] px-2 overflow-y-auto modern-scrollbar">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
@@ -188,10 +188,10 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
                       <div className="flex items-start gap-3">
                         <StickyNote className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-sm truncate">
+                          <h4 className="font-semibold text-sm">
                             {note.title}
                           </h4>
-                          <p className="text-xs text-slate-500 line-clamp-2 mt-1">
+                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">
                             {note.content}
                           </p>
                         </div>
@@ -231,12 +231,12 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <FileText className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                        <FileText className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-sm truncate">
+                          <h4 className="font-semibold text-sm">
                             {doc.title}
                           </h4>
-                          <p className="text-xs text-slate-500 truncate mt-1">
+                          <p className="text-xs text-slate-500 mt-1">
                             {doc.file_name} • {doc.file_type}
                           </p>
                         </div>

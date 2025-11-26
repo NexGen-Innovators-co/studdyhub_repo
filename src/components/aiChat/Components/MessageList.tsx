@@ -393,7 +393,7 @@ export const MessageList = memo(({
         const attachedFiles = parseAttachedFiles(message);
         const attachedDocumentTitles = message.attachedDocumentIds?.map(id => {
             const doc = mergedDocuments.find(d => d.id === id);
-            return { id, name: doc ? doc.title : 'loading document...', type: 'document' as const, doc, processing_status: doc?.processing_status, processing_error: doc?.processing_error }; // Include the entire document object
+            return { id, name: doc ? doc.title : 'loading document...', type: 'document' as const, doc, processing_status: doc?.processing_status, processing_error: doc?.processing_error };
         }) || [];
         const attachedNoteTitles = message.attachedNoteIds?.map(id => {
             const note = mergedDocuments.find(d => d.id === id);
@@ -404,7 +404,6 @@ export const MessageList = memo(({
 
         if (!hasAttachments) return null;
 
-        // Combine all attachments into a single array
         const allAttachments = [
             ...attachedFiles.map(file => ({
                 id: file.id || `file-${file.name}`,
@@ -422,9 +421,9 @@ export const MessageList = memo(({
                 type: 'document' as const,
                 onClick: () => handleViewAttachedFile('documents', doc.id),
                 icon: <FileText className="h-3 w-3" />,
-                processing: doc.processing_status === 'processing' || false, // Add processing status
+                processing: doc.processing_status === 'processing' || false,
                 error: doc.processing_error || false,
-                doc // Keep the document object
+                doc
             })),
             ...attachedNoteTitles.map(note => ({
                 id: note.id,
@@ -441,14 +440,16 @@ export const MessageList = memo(({
             <div className="mb-3 overflow-x-auto">
                 <div className="flex gap-2 pb-2 min-w-max">
                     {allAttachments.map((attachment, idx) => {
-                        // Special handling for image files
+                        // FIX: Use a more unique key by combining message.id and index
+                        const uniqueKey = `${message.id}-attachment-${attachment.id}-${idx}`;
+
                         if (attachment.type === 'file' && attachment.file?.type === 'image') {
                             const imageUrl = attachment.file.url ||
                                 (attachment.file.data ? `data:${attachment.file.mimeType};base64,${attachment.file.data}` : null);
 
                             return (
                                 <div
-                                    key={`${message.id}-attachment-${idx}`}
+                                    key={uniqueKey} // Use the unique key here
                                     className="relative flex-shrink-0 cursor-pointer group"
                                     onClick={() => {
                                         if (attachment.processing) {
@@ -456,7 +457,6 @@ export const MessageList = memo(({
                                             return;
                                         }
                                         if (!attachment.error) {
-                                            //console.log(attachment.error);
                                             toast.error('Cannot preview file due to processing error.');
                                             return;
                                         }
@@ -501,11 +501,9 @@ export const MessageList = memo(({
                                 </div>
                             );
                         }
-
-                        // Default container for documents, notes, and non-image files
                         return (
                             <div
-                                key={`${message.id}-attachment-${idx}`}
+                                key={uniqueKey} // Use the unique key here
                                 className="relative flex-shrink-0 cursor-pointer group"
                                 onClick={() => {
                                     if (attachment.processing) {
@@ -615,7 +613,6 @@ export const MessageList = memo(({
                         </div>
                     ) : (
                         <>
-                            {/* **Conditional Error Display** */}
                             {message.isError ? (
                                 <div className="p-3 rounded-lg border border-red-400 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-claude text-sm sm:text-base">
                                     <div className="flex items-center gap-2 mb-2">
@@ -623,13 +620,12 @@ export const MessageList = memo(({
                                         <span className="font-semibold">Error:</span>
                                     </div>
                                     <p className="leading-relaxed">There was a problem generating this response</p>
-                                    {/* **Retry Button** */}
                                     {isLastMessage && (
                                         <div className="mt-3 flex justify-end">
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => onRetryClick(messages[index - 2]?.content, message.content || '')} // Replace with a retry function if available
+                                                onClick={() => onRetryClick(messages[index - 2]?.content, message.content || '')}
                                                 className="text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/50"
                                             >
                                                 Retry
@@ -672,7 +668,8 @@ export const MessageList = memo(({
         }
 
         return (
-            <React.Fragment key={message.id}>
+            // FIX: Add index to the key to ensure uniqueness
+            <React.Fragment key={`${message.id}-${index}`}>
                 {showDateHeader && (
                     <div className="flex justify-center my-3 sm:my-4">
                         <Badge
@@ -748,7 +745,6 @@ export const MessageList = memo(({
                             </div>
                         )}
 
-                        {/* Only show actions if not loading */}
                         {!message.isLoading && !(message.id.startsWith('optimistic-ai-') && !message.content) && (
                             <div className={cn('flex gap-1 px-2 sm:px-4 pb-2 sm:pb-3', isUserMessage ? 'justify-end' : 'justify-start')}>
                                 <span className={cn('text-xs font-claude', isUserMessage ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-gray-400')}>
@@ -806,8 +802,7 @@ export const MessageList = memo(({
                 </div>
             </React.Fragment>
         );
-    }, [formatDate, formatTime, onToggleUserMessageExpansion, expandedMessages, onMermaidError, onSuggestAiCorrection, onViewContent, enableTypingAnimation, isLoading, onMarkMessageDisplayed, autoTypeInPanel, onBlockDetected, onBlockUpdate, onBlockEnd, isDiagramPanelOpen, handleDiagramCodeUpdate, onRegenerateClick, copy, onDeleteClick, isSpeaking, speakingMessageId, isPaused, resumeSpeech, pauseSpeech, stopSpeech, speakMessage, renderAttachments, messages]);
-    return (
+    }, [formatDate, formatTime, onToggleUserMessageExpansion, expandedMessages, onMermaidError, onSuggestAiCorrection, onViewContent, enableTypingAnimation, isLoading, onMarkMessageDisplayed, autoTypeInPanel, onBlockDetected, onBlockUpdate, onBlockEnd, isDiagramPanelOpen, handleDiagramCodeUpdate, onRegenerateClick, copy, onDeleteClick, isSpeaking, speakingMessageId, isPaused, resumeSpeech, pauseSpeech, stopSpeech, speakMessage, renderAttachments, messages]); return (
         <div
             className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8 bg-transparent px-2 sm:px-4 md:px-0"
             style={{ position: 'relative', zIndex: 1 }}

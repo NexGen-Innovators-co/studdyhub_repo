@@ -8,8 +8,8 @@ export interface Note {
   category: 'general' | 'math' | 'science' | 'history' | 'language' | 'other';
   tags: string[];
   aiSummary: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 

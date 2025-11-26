@@ -1,7 +1,7 @@
-// src/components/social/hooks/useChatActions.ts
 import { useState } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { toast } from 'sonner';
+import { ChatMessageWithDetails } from '../types/social';
 
 export const useChatActions = (currentUserId: string | null) => {
     const [isSending, setIsSending] = useState(false);
@@ -17,7 +17,6 @@ export const useChatActions = (currentUserId: string | null) => {
         try {
             setIsCreatingSession(true);
 
-            // Check if session already exists (in either direction)
             const { data: existing, error: searchError } = await supabase
                 .from('social_chat_sessions')
                 .select('id')
@@ -35,7 +34,6 @@ export const useChatActions = (currentUserId: string | null) => {
                 return existing.id;
             }
 
-            // Create new session
             const { data: newSession, error: createError } = await supabase
                 .from('social_chat_sessions')
                 .insert({
@@ -59,40 +57,37 @@ export const useChatActions = (currentUserId: string | null) => {
         }
     };
 
-    // Send a chat message
+    // Send a chat message - NOW RETURNS THE CREATED MESSAGE
     const sendChatMessage = async (
         sessionId: string,
         content: string,
         files?: File[]
-    ): Promise<boolean> => {
+    ): Promise<ChatMessageWithDetails | null> => {
         if (!currentUserId || !content.trim()) {
-            return false;
+            return null;
         }
 
         try {
             setIsSending(true);
 
-            // Insert message
-            const { data: newMessage, error: messageError } = await supabase
-                .from('social_chat_messages')
-                .insert({
-                    session_id: sessionId,
-                    sender_id: currentUserId,
-                    content: content.trim(),
-                    group_id: null,
-                })
-                .select()
+            // Get current user info for optimistic update
+            const { data: sender } = await supabase
+                .from('social_users')
+                .select('*')
+                .eq('id', currentUserId)
                 .single();
 
-            if (messageError) throw messageError;
+            if (!sender) throw new Error('Sender not found');
 
-            // Upload files if any
+            // Handle files
             if (files && files.length > 0) {
+                const uploadedMedia = [];
+
                 for (const file of files) {
                     const fileExt = file.name.split('.').pop();
                     const fileName = `${currentUserId}/${Date.now()}.${fileExt}`;
 
-                    const { data: uploadData, error: uploadError } = await supabase.storage
+                    const { error: uploadError } = await supabase.storage
                         .from('social-media')
                         .upload(fileName, file);
 
@@ -102,33 +97,88 @@ export const useChatActions = (currentUserId: string | null) => {
                         .from('social-media')
                         .getPublicUrl(fileName);
 
-                    // Insert media record
-                    await supabase.from('social_chat_message_media').insert({
-                        message_id: newMessage.id,
+                    uploadedMedia.push({
                         type: file.type.startsWith('image/')
                             ? 'image'
                             : file.type.startsWith('video/')
-                                ? 'video'
-                                : 'document',
+                            ? 'video'
+                            : 'document',
                         url: publicUrl,
                         filename: file.name,
                         size_bytes: file.size,
                         mime_type: file.type,
                     });
                 }
-            }
 
-            return true;
+                // Insert message with media
+                const { data: newMessage, error: messageError } = await supabase
+                    .from('social_chat_messages')
+                    .insert({
+                        session_id: sessionId,
+                        sender_id: currentUserId,
+                        content: content.trim(),
+                        group_id: null,
+                    })
+                    .select()
+                    .single();
+
+                if (messageError) throw messageError;
+
+                // Insert media records
+                const mediaRecords = [];
+                for (const media of uploadedMedia) {
+                    const { data: mediaRecord } = await supabase
+                        .from('social_chat_message_media')
+                        .insert({
+                            message_id: newMessage.id,
+                            ...media,
+                        })
+                        .select()
+                        .single();
+                    
+                    if (mediaRecord) mediaRecords.push(mediaRecord);
+                }
+
+                // Return complete message with media
+                return {
+                    ...newMessage,
+                    sender,
+                    media: mediaRecords,
+                    resources: [],
+                };
+            } else {
+                // Insert message without media
+                const { data: newMessage, error: messageError } = await supabase
+                    .from('social_chat_messages')
+                    .insert({
+                        session_id: sessionId,
+                        sender_id: currentUserId,
+                        content: content.trim(),
+                        group_id: null,
+                    })
+                    .select()
+                    .single();
+
+                if (messageError) throw messageError;
+
+                // Return complete message
+                return {
+                    ...newMessage,
+                    sender,
+                    media: [],
+                    resources: [],
+                };
+            }
         } catch (error) {
             console.error('Error sending message:', error);
             toast.error('Failed to send message');
-            return false;
+            return null;
         } finally {
             setIsSending(false);
         }
     };
 
-    // Share a resource (note, document, or post) in chat
+    // Share a resource
     const shareResource = async (
         messageId: string,
         resourceId: string,
@@ -150,13 +200,13 @@ export const useChatActions = (currentUserId: string | null) => {
 
             if (error) throw error;
 
-            let typeName;
-            if (resourceType === 'note') typeName = 'Note';
-            else if (resourceType === 'document') typeName = 'Document';
-            else if (resourceType === 'post') typeName = 'Post';
-            else typeName = 'Resource';
+            const typeNames: Record<string, string> = {
+                note: 'Note',
+                document: 'Document',
+                post: 'Post',
+            };
 
-            toast.success(`${typeName} shared`);
+            toast.success(`${typeNames[resourceType] || 'Resource'} shared`);
             return true;
         } catch (error) {
             console.error('Error sharing resource:', error);
@@ -165,19 +215,28 @@ export const useChatActions = (currentUserId: string | null) => {
         }
     };
 
-    // Send message with shared resource
+    // Send message with shared resource - NOW RETURNS THE CREATED MESSAGE
     const sendMessageWithResource = async (
         sessionId: string,
         content: string,
         resourceId: string,
         resourceType: 'note' | 'document' | 'post'
-    ): Promise<boolean> => {
+    ): Promise<ChatMessageWithDetails | null> => {
         if (!currentUserId || !content.trim()) {
-            return false;
+            return null;
         }
 
         try {
             setIsSending(true);
+
+            // Get current user info
+            const { data: sender } = await supabase
+                .from('social_users')
+                .select('*')
+                .eq('id', currentUserId)
+                .single();
+
+            if (!sender) throw new Error('Sender not found');
 
             // Insert message
             const { data: newMessage, error: messageError } = await supabase
@@ -194,13 +253,27 @@ export const useChatActions = (currentUserId: string | null) => {
             if (messageError) throw messageError;
 
             // Share resource
-            await shareResource(newMessage.id, resourceId, resourceType);
+            const { data: resourceRecord } = await supabase
+                .from('social_chat_message_resources')
+                .insert({
+                    message_id: newMessage.id,
+                    resource_id: resourceId,
+                    resource_type: resourceType,
+                })
+                .select()
+                .single();
 
-            return true;
+            // Return complete message with resource
+            return {
+                ...newMessage,
+                sender,
+                media: [],
+                resources: resourceRecord ? [resourceRecord] : [],
+            };
         } catch (error) {
             console.error('Error sending message with resource:', error);
             toast.error('Failed to send message');
-            return false;
+            return null;
         } finally {
             setIsSending(false);
         }

@@ -328,7 +328,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     // In TabContent.tsx 
     case 'notes':
       return (
-        <div className="flex flex-1 min-h-0 relative flex-row">
+        <div className="flex flex-1 min-h-0 relative flex-row mx-auto overflow-hidden">
           {isNotesHistoryOpen && (
             <div
               className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -338,7 +338,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
           {/* FIXED: Added overflow-y-auto here and removed h-screen */}
           <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'
-            } fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto bg-transparent border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none overflow-y-auto modern-scrollbar`}>
+            } fixed lg:relative inset-y-0 mt-12 lg:mt-1 z-50 lg:z-auto bg-white border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none overflow-y-auto modern-scrollbar`}>
             <NotesList
               {...notesHistoryProps}
               isOpen={isNotesHistoryOpen}
@@ -346,7 +346,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             />
           </div>
 
-          <div className="flex-1 bg-transparent min-h-0 dark:bg-transparent">
+          <div className="flex-1 z-20 bg-transparent min-h-0 dark:bg-transparent">
             {notesProps.activeNote ? (
               <NoteEditor
                 note={notesProps.activeNote}

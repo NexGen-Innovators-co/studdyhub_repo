@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
-import { 
-  Bell, 
-  Trash2, 
-  Heart, 
-  MessageCircle, 
-  UserPlus, 
-  Users, 
+import {
+  Bell,
+  Trash2,
+  Heart,
+  MessageCircle,
+  UserPlus,
+  Users,
   CheckCheck,
   X,
   Filter,
@@ -24,7 +24,8 @@ import {
   DropdownMenuTrigger,
 } from '../../ui/dropdown-menu';
 
-interface Notification {
+// ✅ CHANGED: Renamed from 'Notification' to 'SocialNotificationItem'
+export interface SocialNotificationItem {
   id: string;
   user_id: string;
   type: string;
@@ -37,27 +38,112 @@ interface Notification {
     id: string;
     display_name: string;
     username: string;
-    avatar_url: string;
+    avatar_url?: string;
   };
 }
 
 interface NotificationsSectionProps {
-  notifications: Notification[];
+  // ✅ CHANGED: Use the renamed interface
+  notifications: SocialNotificationItem[];
   unreadCount: number;
   markNotificationAsRead: (notificationId: string) => void;
   markAllNotificationsAsRead: () => void;
   deleteNotification: (notificationId: string) => void;
+  fetchNotifications: () => Promise<void>;
+  isLoading: boolean;
+  hasMore?: boolean;
 }
+// Add this helper function at the top of your component file
+const removeDuplicateNotifications = (notifications: SocialNotificationItem[]) => {
+  const seen = new Set();
+  return notifications.filter(notification => {
+    if (seen.has(notification.id)) {
+      return false;
+    }
+    seen.add(notification.id);
+    return true;
+  });
+};
 
+// In your NotificationsSection component, update the filteredNotifications calculation:
 export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
   notifications,
   unreadCount,
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
+  fetchNotifications,
+  isLoading,
+  hasMore = true,
 }) => {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+
+  // Remove duplicates from notifications prop
+  const uniqueNotifications = useMemo(() => {
+    return removeDuplicateNotifications(notifications);
+  }, [notifications]);
+
+  const filteredNotifications = useMemo(() => {
+    const result = filter === 'unread'
+      ? uniqueNotifications.filter(n => !n.is_read)
+      : uniqueNotifications;
+    
+    // Additional safety check
+    return removeDuplicateNotifications(result);
+  }, [uniqueNotifications, filter]);
+
+  // Update unread count based on unique notifications
+  const actualUnreadCount = useMemo(() => {
+    return uniqueNotifications.filter(n => !n.is_read).length;
+  }, [uniqueNotifications]);
+
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
+
+  // Infinite scroll handler
+  const handleScroll = useCallback(() => {
+    const container = document.querySelector('[data-notifications-container]');
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+    // Load more when 100px from bottom and not already loading
+    if (distanceFromBottom <= 100 && !isLoadingMore && hasMore && !isLoading) {
+      loadMoreNotifications();
+    }
+  }, [isLoadingMore, hasMore, isLoading]);
+
+  // Load more notifications
+  const loadMoreNotifications = async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    try {
+      setIsLoadingMore(true);
+      await fetchNotifications();
+      setPage(prev => prev + 1);
+    } catch (error) {
+      console.error('Error loading more notifications:', error);
+      toast.error('Failed to load more notifications');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Add scroll event listener
+  useEffect(() => {
+    const container = document.querySelector('[data-notifications-container]');
+    if (!container) return;
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -90,34 +176,26 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
     }
   };
 
-  const filteredNotifications = filter === 'unread' 
-    ? notifications.filter(n => !n.is_read)
-    : notifications;
 
   return (
-    <Card className="bg-white dark:bg-gray-800 shadow-lg border max-w-[780px] mx-auto rounded-xl border-slate-200 dark:border-gray-700">
-      <CardHeader className="border-b border-slate-200 dark:border-gray-700">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Bell className="h-5 w-5 text-slate-700 dark:text-gray-300" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">{unreadCount}</span>
-                </span>
-              )}
-            </div>
-            <CardTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">
-              Notifications
-            </CardTitle>
-            {unreadCount > 0 && (
-              <Badge variant="destructive" className="ml-2 hidden sm:inline-flex">
-                {unreadCount} new
-              </Badge>
+    <Card className="flex flex-col max-h-[calc(90vh-4rem)] overflow-y-auto pb-6 w-full bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700">
+    <CardHeader className="text-white p-4 flex  shadow-lg">
+      <div className="flex items-center gap-3 justify-between">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Bell className="h-5 w-5 text-slate-700 dark:text-gray-300" />
+            {actualUnreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-xs font-bold">{actualUnreadCount}</span>
+              </span>
             )}
           </div>
+          <CardTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">
+            Notifications
+          </CardTitle>
+        </div>
 
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex items-center text-slate-500 dark:text-gray-400 gap-2 gap-1 sm:gap-2">
             {/* Filter Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -128,7 +206,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                   </span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700">
                 <DropdownMenuItem onClick={() => setFilter('all')}>
                   All Notifications
                 </DropdownMenuItem>
@@ -147,14 +225,16 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                 className="gap-1 sm:gap-2"
               >
                 <CheckCheck className="h-4 w-4" />
-                <span className="hidden sm:inline">Mark all read</span>
               </Button>
             )}
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="p-0">
+      <CardContent 
+        className="flex-1 overflow-y-auto px-0 py-4 space-y-1"
+        data-notifications-container
+      >
         {filteredNotifications.length === 0 ? (
           <div className="text-center py-16">
             <div className="mx-auto w-16 h-16 bg-slate-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
@@ -164,24 +244,23 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
               {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
             </h3>
             <p className="text-sm text-slate-600 dark:text-gray-400">
-              {filter === 'unread' 
-                ? 'All caught up!' 
+              {filter === 'unread'
+                ? 'All caught up!'
                 : 'When you get notifications, they will show up here'}
             </p>
           </div>
         ) : (
           <div className="divide-y divide-slate-200 dark:divide-gray-700">
-            {filteredNotifications.map((notification) => {
+            {filteredNotifications.map((notification)=> {
               const isDeleting = deletingIds.has(notification.id);
-              
+
               return (
                 <div
                   key={notification.id}
-                  className={`group flex items-start gap-3 sm:gap-4 p-4 hover:bg-slate-50 dark:hover:bg-gray-700/50 transition-colors ${
-                    !notification.is_read
+                  className={`group flex items-start gap-3 sm:gap-4 p-4 hover:bg-slate-50 dark:hover:bg-gray-700/50 transition-colors ${!notification.is_read
                       ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
                       : ''
-                  }`}
+                    }`}
                 >
                   {/* Actor Avatar */}
                   {notification.actor ? (
@@ -207,11 +286,11 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                         <div className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>
                       )}
                     </div>
-                    
+
                     <p className="text-sm text-slate-600 dark:text-gray-300 mb-1 line-clamp-2">
                       {notification.message}
                     </p>
-                    
+
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-gray-400">
                       <span>
                         {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
@@ -238,7 +317,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                         <CheckCheck className="h-4 w-4" />
                       </Button>
                     )}
-                    
+
                     <Button
                       variant="ghost"
                       size="icon"
@@ -257,6 +336,25 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                 </div>
               );
             })}
+
+            {/* Loading indicator for infinite scroll */}
+            {(isLoadingMore || isLoading) && (
+              <div className="flex justify-center items-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                <span className="ml-2 text-sm text-slate-600 dark:text-gray-400">
+                  Loading more notifications...
+                </span>
+              </div>
+            )}
+
+            {/* No more notifications message */}
+            {!hasMore && filteredNotifications.length > 0 && (
+              <div className="flex justify-center items-center py-4">
+                <span className="text-sm text-slate-500 dark:text-gray-400">
+                  No more notifications to load
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -265,6 +363,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
           <div className="p-4 text-center border-t border-slate-200 dark:border-gray-700">
             <p className="text-sm text-slate-500 dark:text-gray-400">
               Showing {filteredNotifications.length} notification{filteredNotifications.length !== 1 ? 's' : ''}
+              {hasMore && !isLoadingMore && ' • Scroll to load more'}
             </p>
           </div>
         )}

@@ -26,7 +26,7 @@ interface MemoizedMarkdownRendererProps {
   onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
   onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
   isDiagramPanelOpen: boolean;
-  onDiagramCodeUpdate: (messageId: string, newCode: string) => Promise<void>; // Add this line
+  onDiagramCodeUpdate: (messageId: string, newCode: string) => Promise<void>;
 }
 
 // Define a separate memoized component for ReactMarkdown
@@ -104,13 +104,19 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
   const isExpanded = expandedMessages.has(content);
   const needsExpansion = isUserMessage && content.length > MAX_USER_MESSAGE_LENGTH;
 
-  let blockIndex = 0;
+  // Use a ref to track block index to avoid closure issues
+  const blockIndexRef = useRef(0);
+
+  // // Reset block index when content changes
+  // useEffect(() => {
+  //   blockIndexRef.current = 0;
+  // }, [content]);
 
   // Memoize the components object
   const components = useMemo(() => ({
     code: (props: any) => {
-      const isFirstBlockLocal = blockIndex === 0;
-      blockIndex++;
+      const isFirstBlockLocal = blockIndexRef.current === 0;
+      blockIndexRef.current++;
       return (
         <CodeBlock
           {...props}
@@ -192,7 +198,36 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
     em: (props) => (
       <em className={`italic ${textColorClass} font-claude`} {...props} />
     ),
-  }), [textColorClass, linkColorClass, headingColorClass, blockquoteTextColorClass, blockquoteBgClass, onMermaidError, onSuggestAiCorrection, onViewDiagram, autoTypeInPanel, isDiagramPanelOpen, onDiagramCodeUpdate, enableTyping, isUserMessage, isLastMessage, isAlreadyTyped]);
+  }), [
+    textColorClass, 
+    linkColorClass, 
+    headingColorClass, 
+    blockquoteTextColorClass, 
+    blockquoteBgClass, 
+    onMermaidError, 
+    onSuggestAiCorrection, 
+    onViewDiagram, 
+    autoTypeInPanel, 
+    isDiagramPanelOpen, 
+    onDiagramCodeUpdate, 
+    messageId,
+    enableTyping, 
+    isUserMessage, 
+    isLastMessage, 
+    isAlreadyTyped
+  ]);
+
+  // Debug logging to check if typing is working
+  useEffect(() => {
+    if (enableTyping && !isUserMessage && isLastMessage && !isAlreadyTyped) {
+      console.log('Typing animation:', {
+        isTyping,
+        displayedTextLength: displayedText.length,
+        contentLength: content.length,
+        contentToRenderLength: contentToRender.length
+      });
+    }
+  }, [isTyping, displayedText, content, contentToRender, enableTyping, isUserMessage, isLastMessage, isAlreadyTyped]);
 
   return (
     <CodeBlockErrorBoundary>

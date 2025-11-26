@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '../../ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { EditProfileModal } from './EditProfileModal';
 import { PostCard } from './PostCard';
-import { Calendar, MapPin, Link as LinkIcon, Grid, Heart, Bookmark, Users } from 'lucide-react';
+import { Calendar, MapPin, Link as LinkIcon, Grid, Heart, Bookmark, Users, Loader2 } from 'lucide-react';
 import { formatEngagementCount } from '../utils/postUtils';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
@@ -36,42 +36,80 @@ export const UserProfile: React.FC<any> = ({
   userGroups = [],
   onDeletePost,
   onEditPost,
-  onFollow, // <-- new optional prop
+  onFollow,
   onStartChat,
-  isFollowing,
+  isFollowing: initialIsFollowing, // Rename prop to avoid conflict
   onToggleFollow,
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'saved' | 'groups'>('posts');
+  const [isFollowing, setIsFollowing] = useState(initialIsFollowing || false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Update local state when prop changes
+  useEffect(() => {
+    setIsFollowing(initialIsFollowing || false);
+  }, [initialIsFollowing]);
 
   if (!user) return null;
 
-  // Helpers
-  const TabButton = ({ id, icon: Icon, label }: any) => (
-    <button
-      onClick={() => {
-        setActiveTab(id);
-        if (id === 'likes') onRefreshLikedPosts?.();
-        if (id === 'saved') onRefreshBookmarkedPosts?.();
-      }}
-      className={`flex items-center justify-center gap-2 flex-1 pb-4 border-b-2 transition-colors font-medium text-sm ${activeTab === id
-        ? 'border-blue-600 text-blue-600'
-        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-        }`}
-    >
-      <Icon className="h-4 w-4" />
-      <span className="hidden sm:inline">{label}</span>
-    </button>
+  const handleFollowToggle = async () => {
+    if (isFollowLoading) return;
+
+    setIsFollowLoading(true);
+    try {
+      // Optimistically update UI
+      setIsFollowing(!isFollowing);
+
+      // Call the actual follow function
+      if (onToggleFollow) {
+        await onToggleFollow();
+      } else if (onFollow) {
+        await onFollow(user.id);
+      }
+    } catch (error) {
+      // Revert on error
+      setIsFollowing(isFollowing);
+      console.error('Error toggling follow:', error);
+    } finally {
+      setIsFollowLoading(false);
+    }
+  };
+
+  // ✅ FIXED: Proper component function
+  const TabButton = ({ id, icon: Icon, label }: any) => {
+    return (
+      <button
+        onClick={() => {
+          setActiveTab(id);
+          if (id === 'likes') onRefreshLikedPosts?.();
+          if (id === 'saved') onRefreshBookmarkedPosts?.();
+        }}
+        className={`flex items-center justify-center gap-2 flex-1 pb-4 border-b-2 transition-colors font-medium text-sm ${activeTab === id
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+      >
+        <Icon className="h-4 w-4" />
+        <span className="hidden sm:inline">{label}</span>
+      </button>
+    );
+  };
+
+  const LoadingSpinner = () => (
+    <div className="flex flex-col items-center justify-center py-12">
+      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+    </div>
   );
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-500 max-w-[780px] mx-auto">
+    <div className="space-y-4 animate-in fade-in duration-500 max-w-[780px] lg:mx-auto">
 
       {/* 1. Immersive Header Card */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800">
         {/* Cover Photo */}
-        <div className="h-48 bg-gradient-to-r from-blue-400 via-indigo-500c relative">
+        <div className="h-48 bg-gradient-to-r from-blue-400 via-indigo-500 to-indigo-700 relative">
           {/* Optional: Add actual cover photo logic here */}
         </div>
 
@@ -91,20 +129,27 @@ export const UserProfile: React.FC<any> = ({
             {!isOwnProfile && (
               <div className="flex gap-2 flex-1">
                 <Button
-                  onClick={() => onToggleFollow?.()}
+                  onClick={onToggleFollow}
                   variant={isFollowing ? "outline" : "default"}
+                  disabled={isFollowLoading}
                   className={`rounded-full font-medium transition-all relative overflow-hidden group ${isFollowing
                       ? "border-slate-300 hover:border-red-300 dark:hover:border-red-800"
                       : "bg-blue-600 hover:bg-blue-700 text-white"
-                    }`}
+                    } ${isFollowLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <span className={`transition-all ${isFollowing ? "group-hover:opacity-0" : ""}`}>
-                    {isFollowing ? "Following" : "Follow"}
-                  </span>
-                  {isFollowing && (
-                    <span className="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                      Unfollow
-                    </span>
+                  {isFollowLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span className={`transition-all ${isFollowing ? "group-hover:opacity-0" : ""}`}>
+                        {isFollowing ? "Following" : "Follow"}
+                      </span>
+                      {isFollowing && (
+                        <span className="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                          Unfollow
+                        </span>
+                      )}
+                    </>
                   )}
                 </Button>
                 {onStartChat && (
@@ -135,9 +180,10 @@ export const UserProfile: React.FC<any> = ({
 
             {/* Metadata Row */}
             <div className="flex flex-wrap gap-4 text-sm text-slate-500 dark:text-slate-400">
-              <div className="flex items-center gap-1"><Calendar className="h-4 w-4" /> Joined {new Date(user.created_at).toLocaleDateString()}</div>
-              {/* Add Location/Website if available in data model */}
-              {/* <div className="flex items-center gap-1"><MapPin className="h-4 w-4" /> New York, USA</div> */}
+              <div className="flex items-center gap-1">
+                <Calendar className="h-4 w-4" />
+                Joined {new Date(user.created_at).toLocaleDateString()}
+              </div>
             </div>
 
             {/* Stats Row */}
@@ -174,7 +220,7 @@ export const UserProfile: React.FC<any> = ({
       {/* 2. Content Area */}
       <div className="min-h-[200px]">
         {activeTab === 'posts' && (
-          <div className="space-y-4">
+          <div className="lg:space-y-4 space-y-2">
             {posts.map((post: any) => (
               <PostCard
                 key={post.id}
@@ -194,6 +240,7 @@ export const UserProfile: React.FC<any> = ({
                 onEditPost={onEditPost}
               />
             ))}
+            {isLoadingPosts && <LoadingSpinner />}
           </div>
         )}
 
@@ -238,9 +285,7 @@ export const UserProfile: React.FC<any> = ({
                 onEditPost={onEditPost}
               />
             ))}
-            {((activeTab === 'likes' && likedPosts.length === 0) || (activeTab === 'saved' && bookmarkedPosts.length === 0)) && (
-              <div className="text-center py-12 text-slate-400">No items found here yet.</div>
-            )}
+            {(isLoadingPostComments || isLoadingPosts) && <LoadingSpinner />}
           </div>
         )}
       </div>

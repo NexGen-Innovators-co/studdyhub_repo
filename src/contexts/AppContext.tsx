@@ -6,7 +6,9 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
-  ReactNode
+  ReactNode,
+  useState,
+  useRef
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -78,6 +80,7 @@ interface AppContextType extends AppState {
   // Audio processing
   audioProcessing: ReturnType<typeof useAudioProcessing>;
 
+
   // Navigation
   handleNavigateToTab: (tab: string) => void;
   handleCreateNew: (type: 'note' | 'recording' | 'schedule' | 'document') => void;
@@ -108,6 +111,21 @@ interface AppContextType extends AppState {
   loadFolders: (userId: string, isInitial?: boolean) => Promise<void>;
   updateDocument: (document: AppDocument) => void;
   detailedDataLoading: DataLoadingState;
+
+  inputMessage: string;
+  setInputMessage: (message: string) => void;
+  attachedFiles: FileData[];
+  setAttachedFiles: (files: FileData[] | ((prev: FileData[]) => FileData[])) => void;
+  expandedMessages: Set<string>;
+  setExpandedMessages: (messages: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+  isCurrentlySending: boolean;
+  setIsCurrentlySending: (sending: boolean) => void;
+  isAiTyping: boolean;
+  setIsAiTyping: (typing: boolean) => void;
+  isLoadingSession: boolean;
+  setIsLoadingSession: (loading: boolean) => void;
+
+  // Add this with your other state declarations
 }
 
 // Create context
@@ -167,6 +185,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadFolders,
     loadSpecificDocuments,
     loadSpecificNotes,
+
   } = appData;
   const addDocument = useCallback((document: AppDocument) => {
     setDocuments(prev => [document, ...prev]);
@@ -461,6 +480,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Message management
   const loadSessionMessages = useCallback(async (sessionId: string) => {
     if (!user) return;
+
+    // Prevent multiple simultaneous loads
+    if (state.isLoadingSessionMessages) return;
+
     dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: true });
 
     try {
@@ -485,23 +508,94 @@ export function AppProvider({ children }: { children: ReactNode }) {
         imageMimeType: msg.image_mime_type || undefined,
         session_id: msg.session_id,
         has_been_displayed: msg.has_been_displayed || false,
+        files_metadata: msg.files_metadata,
+        isLoading: false
       }));
-      loadSpecificDocuments(user.id, fetchedMessages.flatMap(m => m.attachedDocumentIds || []));
-      loadSpecificNotes(user.id, fetchedMessages.flatMap(m => m.attachedNoteIds || []));
+
+      // Only load documents/notes if we have new messages
+      if (fetchedMessages.length > 0) {
+        loadSpecificDocuments(user.id, fetchedMessages.flatMap(m => m.attachedDocumentIds || []));
+        loadSpecificNotes(user.id, fetchedMessages.flatMap(m => m.attachedNoteIds || []));
+      }
 
       setChatMessages(prevAllMessages => {
-        const otherSessionMessages = prevAllMessages.filter(m => m.session_id !== sessionId);
+        // Filter out optimistic messages for this session and merge with new messages
+        const otherSessionMessages = prevAllMessages.filter(m =>
+          m.session_id !== sessionId || !m.id.startsWith('optimistic-')
+        );
+
         const newMessagesForSession = fetchedMessages.filter(
           fm => !otherSessionMessages.some(pm => pm.id === fm.id)
         );
-        const combinedMessages = [...otherSessionMessages];
-        newMessagesForSession.forEach(newMessage => {
-          if (!combinedMessages.some(m => m.id === newMessage.id)) {
-            combinedMessages.push(newMessage);
-          }
-        });
-        return combinedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        return [...otherSessionMessages, ...newMessagesForSession].sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
       });
+
+
+      if (!user) return;
+
+      // Prevent multiple simultaneous loads
+      if (state.isLoadingSessionMessages) return;
+
+      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: true });
+
+      try {
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('timestamp', { ascending: false })
+          .limit(CHAT_MESSAGES_PER_PAGE);
+
+        if (error) throw error;
+
+        const fetchedMessages: Message[] = data.reverse().map((msg: any) => ({
+          id: msg.id,
+          content: msg.content,
+          role: msg.role as 'user' | 'assistant',
+          timestamp: msg.timestamp || new Date().toISOString(),
+          isError: msg.is_error || false,
+          attachedDocumentIds: msg.attached_document_ids || [],
+          attachedNoteIds: msg.attached_note_ids || [],
+          imageUrl: msg.image_url || undefined,
+          imageMimeType: msg.image_mime_type || undefined,
+          session_id: msg.session_id,
+          has_been_displayed: msg.has_been_displayed || false,
+          files_metadata: msg.files_metadata,
+          isLoading: false
+        }));
+
+        // Only load documents/notes if we have new messages
+        if (fetchedMessages.length > 0) {
+          loadSpecificDocuments(user.id, fetchedMessages.flatMap(m => m.attachedDocumentIds || []));
+          loadSpecificNotes(user.id, fetchedMessages.flatMap(m => m.attachedNoteIds || []));
+        }
+
+        setChatMessages(prevAllMessages => {
+          // Filter out optimistic messages for this session and merge with new messages
+          const otherSessionMessages = prevAllMessages.filter(m =>
+            m.session_id !== sessionId || !m.id.startsWith('optimistic-')
+          );
+
+          const newMessagesForSession = fetchedMessages.filter(
+            fm => !otherSessionMessages.some(pm => pm.id === fm.id)
+          );
+
+          return [...otherSessionMessages, ...newMessagesForSession].sort(
+            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+        });
+
+        dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: data.length === CHAT_MESSAGES_PER_PAGE });
+      } catch (error) {
+        console.error('Error loading session messages:', error);
+        toast.error('Failed to load chat messages for this session.');
+      } finally {
+        dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
+      } // Removed the duplicate useCallback and its dependencies
+
 
       dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: data.length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
@@ -510,7 +604,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
     }
-  }, [user, setChatMessages]);
+  }, [user, setChatMessages, state.isLoadingSessionMessages]);
 
   const handleLoadOlderChatMessages = useCallback(async () => {
     if (!state.activeChatSessionId || !user || filteredChatMessages.length === 0) return;
@@ -734,12 +828,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user, loadChatSessions, state.chatSessionsLoadedCount]);
 
-  // Handle URL session restoration
-  useEffect(() => {
-    if (sessionIdFromUrl && sessionIdFromUrl !== state.activeChatSessionId && user) {
-      dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionIdFromUrl });
-    }
-  }, [sessionIdFromUrl, state.activeChatSessionId, user, location.pathname]);
+  // Add these declarations with your other state declarations
+  const [inputMessage, setInputMessage] = useState('');
+  const [attachedFiles, setAttachedFiles] = useState<FileData[]>([]);
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const [isCurrentlySending, setIsCurrentlySending] = useState(false);
+  const [isAiTyping, setIsAiTyping] = useState(false);
+  // Add this with your other state declarations
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
+  // Add this ref for tracking previous session ID
+
+// Enhanced session loading with URL session restoration
+useEffect(() => {
+  // Handle URL session restoration first
+  if (sessionIdFromUrl && sessionIdFromUrl !== state.activeChatSessionId && user) {
+    console.log('🔄 Session restored from URL:', sessionIdFromUrl);
+    dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionIdFromUrl });
+    loadSessionMessages(sessionIdFromUrl);
+    return;
+  }
+}, [sessionIdFromUrl, state.activeChatSessionId, user]);
 
   // Load messages for active session
   useEffect(() => {
@@ -900,6 +1008,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFolders,
     loadFolders,
     detailedDataLoading: appData.dataLoading,  // ← USE THIS
+    inputMessage,
+    setInputMessage,
+    attachedFiles,
+    setAttachedFiles,
+    expandedMessages,
+    setExpandedMessages,
+    isCurrentlySending,
+    setIsCurrentlySending,
+    isAiTyping,
+    setIsAiTyping,
+    isLoadingSession,
+    setIsLoadingSession,
   };
 
   return (
