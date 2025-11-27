@@ -1,7 +1,39 @@
 // ============================================
-// 1. TUTORIAL TYPES & CONFIG (types/tutorial.ts)
+// 2. UNIVERSAL TUTORIAL COMPONENT
 // ============================================
-export interface TutorialStep {
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  X,
+  ChevronRight,
+  ChevronLeft,
+  Play,
+  Square,
+  Sparkles,
+  Brain,
+  Download,
+  Volume2,
+  VolumeX,
+  UploadCloud,
+  Mic,
+  BookOpen,
+  Zap,
+  HelpCircle,
+  Target,
+  Check,
+  SkipForward,
+  Pause,
+  Info,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Lightbulb,
+  Rocket,
+} from 'lucide-react';
+import { Button } from '../../ui/button';
+
+interface TutorialStep {
   id: string;
   title: string;
   description: string;
@@ -27,40 +59,6 @@ export interface TutorialConfig {
   showProgress?: boolean;
 }
 
-// ============================================
-// 2. UNIVERSAL TUTORIAL COMPONENT
-// ============================================
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import {
-  X,
-  ChevronRight,
-  ChevronLeft,
-  Play,
-  Square,
-  Sparkles,
-  Brain,
-  Download,
-  Volume2,
-  UploadCloud,
-  Mic,
-  BookOpen,
-  Zap,
-  HelpCircle,
-  Target,
-  Check,
-  SkipForward,
-  Pause,
-  Info,
-  ArrowUp,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  Lightbulb,
-  Rocket,
-} from 'lucide-react';
-import { Button } from '../../ui/button';
-
 interface UniversalTutorialProps {
   config: TutorialConfig;
   isOpen: boolean;
@@ -74,7 +72,8 @@ interface TooltipPosition {
   width: number;
   height: number;
 }
-// Add to UniversalTutorial.tsx
+
+// Mobile detection hook
 const useMobileDetection = () => {
   const [isMobile, setIsMobile] = useState(false);
 
@@ -91,6 +90,14 @@ const useMobileDetection = () => {
   return isMobile;
 };
 
+interface TTSState {
+  isSpeaking: boolean;
+  isEnabled: boolean;
+  isAvailable: boolean;
+  currentUtterance: SpeechSynthesisUtterance | null;
+  isPaused: boolean;
+}
+
 export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
   config,
   isOpen,
@@ -101,11 +108,234 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
   const [isPlaying, setIsPlaying] = useState(true);
   const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition | null>(null);
   const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
   const [hasCompleted, setHasCompleted] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const isMobile = useMobileDetection();
+  const speechQueueRef = useRef<string[]>([]);
+  const isSpeakingRef = useRef(false);
+  
+  // TTS State with availability check
+  const [tts, setTts] = useState<TTSState>({
+    isSpeaking: false,
+    isEnabled: true,
+    isAvailable: false,
+    currentUtterance: null,
+    isPaused: false
+  });
+
+  // Check TTS availability on component mount
+  useEffect(() => {
+    const checkTTSAvailability = () => {
+      const isAvailable = 'speechSynthesis' in window;
+      console.log('TTS Available:', isAvailable);
+      setTts(prev => ({ ...prev, isAvailable }));
+
+      if (isAvailable) {
+        // Preload voices
+        const voices = window.speechSynthesis.getVoices();
+        console.log('Available voices:', voices);
+
+        // If voices aren't loaded yet, wait for them
+        if (voices.length === 0) {
+          window.speechSynthesis.onvoiceschanged = () => {
+            const loadedVoices = window.speechSynthesis.getVoices();
+            console.log('Voices loaded:', loadedVoices);
+            setTts(prev => ({ ...prev, isAvailable: loadedVoices.length > 0 }));
+          };
+        }
+      }
+    };
+
+    checkTTSAvailability();
+  }, []);
+
   const currentStepData = config.steps[currentStep];
   const isLastStep = currentStep === config.steps.length - 1;
+
+  // Improved TTS function with queue system
+  const speakText = useCallback((text: string) => {
+    if (!tts.isEnabled || !tts.isAvailable || !window.speechSynthesis) {
+      console.log('TTS not available or disabled');
+      return;
+    }
+    
+    // Add to queue
+    speechQueueRef.current.push(text);
+    
+    // If already speaking, just add to queue and return
+    if (isSpeakingRef.current) {
+      console.log('Added to speech queue:', text.substring(0, 50) + '...');
+      return;
+    }
+    
+    // Process the queue
+    processSpeechQueue();
+  }, [tts.isEnabled, tts.isAvailable]);
+
+  const processSpeechQueue = () => {
+    if (speechQueueRef.current.length === 0 || !window.speechSynthesis) {
+      isSpeakingRef.current = false;
+      setTts(prev => ({ ...prev, isSpeaking: false, currentUtterance: null }));
+      return;
+    }
+
+    const text = speechQueueRef.current[0];
+    isSpeakingRef.current = true;
+
+    try {
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Configure voice settings
+      utterance.rate = 0.9; // Slightly slower for better comprehension
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      
+      // Get available voices
+      const voices = window.speechSynthesis.getVoices();
+      
+      // Voice selection logic
+      const preferredVoice = voices.find(voice => 
+        voice.lang.includes('en') && 
+        (voice.name.includes('Google') || 
+         voice.name.includes('Samantha') || 
+         voice.name.includes('Microsoft') ||
+         voice.name.includes('Karen') ||
+         voice.name.includes('Daniel'))
+      );
+      
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+        console.log('Using voice:', preferredVoice.name);
+      } else if (voices.length > 0) {
+        // Use first available English voice
+        const englishVoice = voices.find(voice => voice.lang.includes('en'));
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+          console.log('Using English voice:', englishVoice.name);
+        } else {
+          utterance.voice = voices[0];
+          console.log('Using default voice:', voices[0].name);
+        }
+      }
+
+      utterance.onstart = () => {
+        console.log('Speech started successfully');
+        setTts(prev => ({ ...prev, isSpeaking: true, currentUtterance: utterance, isPaused: false }));
+      };
+
+      utterance.onend = () => {
+        console.log('Speech ended normally');
+        // Remove the completed speech from queue
+        speechQueueRef.current.shift();
+        // Process next in queue
+        setTimeout(() => processSpeechQueue(), 100);
+      };
+
+      utterance.onerror = (event) => {
+        console.error('Speech error:', event.error, event.type);
+        // Remove the failed speech from queue
+        speechQueueRef.current.shift();
+        // Process next in queue after a delay
+        setTimeout(() => processSpeechQueue(), 100);
+      };
+
+      utterance.onpause = () => {
+        setTts(prev => ({ ...prev, isPaused: true }));
+      };
+
+      utterance.onresume = () => {
+        setTts(prev => ({ ...prev, isPaused: false }));
+      };
+
+      console.log('Attempting to speak text:', text.substring(0, 50) + '...');
+      window.speechSynthesis.speak(utterance);
+      
+    } catch (error) {
+      console.error('Error with speech synthesis:', error);
+      speechQueueRef.current.shift();
+      setTimeout(() => processSpeechQueue(), 100);
+    }
+  };
+
+  // Manual speak function for current step
+  const speakCurrentStep = () => {
+    if (currentStepData) {
+      const textToSpeak = `${currentStepData.title}. ${currentStepData.description}`;
+      speakText(textToSpeak);
+    }
+  };
+
+  // Improved stop speaking function
+  const stopSpeaking = () => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    speechQueueRef.current = [];
+    isSpeakingRef.current = false;
+    setTts(prev => ({ ...prev, isSpeaking: false, currentUtterance: null, isPaused: false }));
+  };
+
+  // Pause/resume speech
+  const toggleSpeechPause = () => {
+    if (!window.speechSynthesis) return;
+
+    if (tts.isPaused) {
+      window.speechSynthesis.resume();
+      setTts(prev => ({ ...prev, isPaused: false }));
+    } else if (tts.isSpeaking) {
+      window.speechSynthesis.pause();
+      setTts(prev => ({ ...prev, isPaused: true }));
+    }
+  };
+
+  const toggleTTS = () => {
+    if (tts.isSpeaking) {
+      stopSpeaking();
+    }
+    setTts(prev => ({ ...prev, isEnabled: !prev.isEnabled }));
+  };
+
+  // Test TTS function
+  const testTTS = () => {
+    const testText = "This is a test of the text to speech functionality. The queue system should prevent interruptions.";
+    speakText(testText);
+  };
+
+  // Reset everything when tutorial opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(0);
+      setHasCompleted(false);
+      setIsPlaying(true);
+      // Clear any existing queue
+      speechQueueRef.current = [];
+      isSpeakingRef.current = false;
+    } else {
+      setHasCompleted(false);
+      stopSpeaking();
+    }
+  }, [isOpen]);
+
+  // Stop speaking when tutorial closes
+  useEffect(() => {
+    if (!isOpen) {
+      stopSpeaking();
+    }
+  }, [isOpen]);
+
+  // Auto-speak when step changes and TTS is enabled
+  useEffect(() => {
+    if (isOpen && isPlaying && currentStepData && tts.isEnabled) {
+      // Clear any existing speech
+      stopSpeaking();
+      
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        const textToSpeak = `${currentStepData.title}. ${currentStepData.description}`;
+        speakText(textToSpeak);
+      }, 500);
+    }
+  }, [currentStep, isPlaying, tts.isEnabled, currentStepData, isOpen]);
 
   // Calculate position with mobile adjustments
   const calculatePosition = useCallback(() => {
@@ -144,7 +374,6 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
 
     // Auto-adjust position for mobile
     if (isMobile) {
-      // On mobile, prefer bottom positioning to avoid keyboard
       if (position === 'top' || position === 'left' || position === 'right') {
         position = 'bottom';
       }
@@ -187,73 +416,86 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
 
     setTooltipPosition({ top, left, width: tooltipWidth, height: tooltipHeight });
 
+    // Scroll element into view with mobile consideration
     element.scrollIntoView({
       behavior: 'smooth',
       block: isMobile ? 'center' : 'center',
       inline: 'center'
     });
   }, [currentStepData, isMobile]);
+
+  // Recalculate position when step changes or window resizes
   useEffect(() => {
-    if (isOpen && isPlaying) {
+    calculatePosition();
+    
+    const handleResize = () => {
       calculatePosition();
-      window.addEventListener('resize', calculatePosition);
-      window.addEventListener('scroll', calculatePosition, true);
-      return () => {
-        window.removeEventListener('resize', calculatePosition);
-        window.removeEventListener('scroll', calculatePosition, true);
-      };
-    }
-  }, [isOpen, isPlaying, currentStep, calculatePosition]);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [calculatePosition]);
 
   const nextStep = () => {
+    stopSpeaking(); // Clear any ongoing speech
     if (isLastStep) {
       setHasCompleted(true);
       onComplete?.();
-      setTimeout(onClose, 1500);
     } else {
       setCurrentStep(prev => prev + 1);
     }
   };
 
   const prevStep = () => {
+    stopSpeaking(); // Clear any ongoing speech
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
     }
   };
 
   const skipTutorial = () => {
+    stopSpeaking();
+    setHasCompleted(false);
     onClose();
   };
 
   const togglePlayPause = () => {
+    if (isPlaying) {
+      stopSpeaking();
+    }
     setIsPlaying(prev => !prev);
+  };
+
+  // Speak additional content functions
+  const speakTips = () => {
+    if (currentStepData.tips && currentStepData.tips.length > 0) {
+      const tipsText = `Pro tips: ${currentStepData.tips.join('. ')}`;
+      speakText(tipsText);
+    }
+  };
+
+  const speakShortcuts = () => {
+    if (currentStepData.keyboardShortcuts && currentStepData.keyboardShortcuts.length > 0) {
+      const shortcutsText = `Keyboard shortcuts: ${currentStepData.keyboardShortcuts.map(s => `${s.action}: ${s.keys}`).join('. ')}`;
+      speakText(shortcutsText);
+    }
+  };
+
+  const handleCompletionClose = () => {
+    stopSpeaking();
+    setHasCompleted(false);
+    onClose();
   };
 
   if (!isOpen) return null;
 
-  // Arrow component for pointing
-  const Arrow = ({ direction }: { direction: 'up' | 'down' | 'left' | 'right' }) => {
-    const arrowClass = "absolute text-blue-500 animate-bounce";
-    const Icon = {
-      up: ArrowUp,
-      down: ArrowDown,
-      left: ArrowLeft,
-      right: ArrowRight,
-    }[direction];
-
-    return <Icon className={`${arrowClass} w-8 h-8`} />;
-  };
-
   // Completion celebration
   if (hasCompleted) {
-    setTimeout(() => {
-      setHasCompleted(false);
-      setCurrentStep(0);
-      setIsPlaying(true);
-    }, 2000);
-
     return createPortal(
-      <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
+      <div
+        className="fixed inset-0 bg-transparent z-[9999] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300"
+        onClick={handleCompletionClose}
+      >
         <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl shadow-2xl p-12 text-center max-w-md animate-in zoom-in duration-500">
           <div className="mb-6">
             <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto animate-bounce">
@@ -263,17 +505,28 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
           <h2 className="text-3xl font-bold text-white mb-3">
             🎉 Tutorial Complete!
           </h2>
-          <p className="text-white/90 text-lg">
-            {config.completionMessage || "You're all set! Start exploring and creating amazing content."}
+          <p className="text-white/90 text-lg mb-6">
+            {config.completionMessage || "You're now a note-taking pro! Start creating amazing notes."}
+          </p>
+          <Button
+            onClick={handleCompletionClose}
+            className="bg-white text-green-600 hover:bg-gray-100 font-semibold py-3 px-6 rounded-xl"
+          >
+            Got it!
+          </Button>
+          <p className="text-white/70 text-sm mt-3">
+            Click anywhere to close
           </p>
         </div>
       </div>,
       document.body
     );
-
   }
+
+  // Tooltip class with mobile adjustments
   const tooltipClass = `absolute bg-white dark:bg-gray-800 rounded-2xl shadow-2xl transition-all duration-500 animate-in slide-in-from-bottom-4 fade-in ${currentStepData.position === 'center' ? 'max-w-3xl' : 'max-w-md'
     } ${isMobile ? 'mx-4' : ''}`;
+
   return createPortal(
     <div className="fixed inset-0 z-[9999]">
       {/* Clear backdrop - only for click handling */}
@@ -282,7 +535,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
         onClick={isPlaying ? undefined : skipTutorial}
       />
 
-      {/* Highlight spotlight - keep only the animated ring and glow */}
+      {/* Highlight spotlight */}
       {highlightRect && isPlaying && (
         <>
           {/* Animated ring */}
@@ -311,7 +564,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
         </>
       )}
 
-      {/* Rest of your tooltip/modal code remains the same */}
+      {/* Tooltip/Modal */}
       {isPlaying && (
         <div
           ref={tooltipRef}
@@ -341,13 +594,74 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {/* TTS Status Indicator */}
+              {!tts.isAvailable && (
+                <div className="text-xs text-red-500 mr-2" title="Text-to-speech not available in this browser">
+                  No TTS
+                </div>
+              )}
+
+              {/* TTS Controls */}
+              {tts.isAvailable && tts.isEnabled && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleSpeechPause}
+                    className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900"
+                    title={tts.isPaused ? 'Resume speech' : 'Pause speech'}
+                  >
+                    {tts.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={speakCurrentStep}
+                    className="h-8 w-8 p-0 text-green-600 hover:bg-green-100 dark:hover:bg-green-900"
+                    title="Repeat current step"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                  </Button>
+                </>
+              )}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleTTS}
+                className={`h-8 w-8 p-0 ${tts.isEnabled && tts.isAvailable
+                    ? 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900'
+                    : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                title={tts.isAvailable
+                  ? (tts.isEnabled ? 'Disable Voice' : 'Enable Voice')
+                  : 'Text-to-speech not available'
+                }
+                disabled={!tts.isAvailable}
+              >
+                {tts.isEnabled && tts.isAvailable ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              </Button>
+
+              {/* Test TTS Button - remove in production */}
+              {process.env.NODE_ENV === 'development' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={testTTS}
+                  className="h-8 w-8 p-0 text-green-600"
+                  title="Test TTS"
+                >
+                  <Zap className="w-4 h-4" />
+                </Button>
+              )}
+
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={togglePlayPause}
                 className="h-8 w-8 p-0"
-                title={isPlaying ? 'Pause' : 'Resume'}
+                title={isPlaying ? 'Pause Tutorial' : 'Resume Tutorial'}
               >
                 {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
               </Button>
@@ -365,6 +679,30 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
 
           {/* Content */}
           <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto modern-scrollbar">
+            {/* TTS Status Information */}
+            {!tts.isAvailable && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3">
+                <div className="flex items-center gap-2 text-sm text-yellow-800 dark:text-yellow-200">
+                  <Info className="w-4 h-4" />
+                  <span>
+                    Text-to-speech is not available in your browser.
+                    {!window.speechSynthesis && ' Your browser does not support speech synthesis.'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Speaking Indicator */}
+            {tts.isSpeaking && (
+              <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 animate-pulse">
+                <Volume2 className="w-4 h-4 animate-pulse" />
+                <span>
+                  {tts.isPaused ? 'Speech paused...' : 'Reading instructions aloud...'}
+                  {speechQueueRef.current.length > 1 && ` (${speechQueueRef.current.length - 1} in queue)`}
+                </span>
+              </div>
+            )}
+
             {/* Step Title */}
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -390,11 +728,23 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
             {/* Tips */}
             {currentStepData.tips && currentStepData.tips.length > 0 && (
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <h5 className="font-semibold text-amber-900 dark:text-amber-100 text-sm">
-                    Pro Tips
-                  </h5>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <h5 className="font-semibold text-amber-900 dark:text-amber-100 text-sm">
+                      Pro Tips
+                    </h5>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={speakTips}
+                    className="h-6 w-6 p-0"
+                    title="Read tips aloud"
+                    disabled={!tts.isEnabled || !tts.isAvailable}
+                  >
+                    <Volume2 className="w-3 h-3" />
+                  </Button>
                 </div>
                 <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-200">
                   {currentStepData.tips.map((tip, index) => (
@@ -410,9 +760,21 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
             {/* Keyboard Shortcuts */}
             {currentStepData.keyboardShortcuts && currentStepData.keyboardShortcuts.length > 0 && (
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                <h5 className="font-semibold text-gray-900 dark:text-white text-sm mb-3">
-                  Keyboard Shortcuts
-                </h5>
+                <div className="flex items-center justify-between mb-3">
+                  <h5 className="font-semibold text-gray-900 dark:text-white text-sm">
+                    Keyboard Shortcuts
+                  </h5>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={speakShortcuts}
+                    className="h-6 w-6 p-0"
+                    title="Read shortcuts aloud"
+                    disabled={!tts.isEnabled || !tts.isAvailable}
+                  >
+                    <Volume2 className="w-3 h-3" />
+                  </Button>
+                </div>
                 <div className="space-y-2">
                   {currentStepData.keyboardShortcuts.map((shortcut, index) => (
                     <div key={index} className="flex justify-between items-center text-sm">
@@ -488,12 +850,15 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
                 {config.steps.map((_, index) => (
                   <button
                     key={index}
-                    onClick={() => setCurrentStep(index)}
+                    onClick={() => {
+                      stopSpeaking();
+                      setCurrentStep(index);
+                    }}
                     className={`h-2 rounded-full transition-all duration-300 ${index === currentStep
-                      ? 'w-8 bg-blue-600'
-                      : index < currentStep
-                        ? 'w-2 bg-green-500'
-                        : 'w-2 bg-gray-300 dark:bg-gray-600'
+                        ? 'w-8 bg-blue-600'
+                        : index < currentStep
+                          ? 'w-2 bg-green-500'
+                          : 'w-2 bg-gray-300 dark:bg-gray-600'
                       }`}
                     title={`Step ${index + 1}`}
                   />

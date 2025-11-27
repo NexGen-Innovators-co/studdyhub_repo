@@ -358,7 +358,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   return (
     <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
       {/* Centered Container with max-width */}
-      <div className="w-full h-full max-w-[1100px] mx-auto flex relative lg:shadow-2xl">
+      <div className="w-full h-full max-w-[1400px] mx-auto flex relative lg:shadow-2xl">
         {/* Notes List - Sidebar */}
         <div className={`
           ${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}

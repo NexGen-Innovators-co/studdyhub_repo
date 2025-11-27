@@ -1,4 +1,6 @@
-// tutorialConfigs.ts
+// ============================================
+// 3. TUTORIAL CONFIGURATIONS (tutorialConfigs.ts)
+// ============================================
 import { Brain, FileText, MessageSquare, Calendar, Upload } from 'lucide-react';
 import { TutorialConfig } from '../components/UniversalTutorial';
 
@@ -111,6 +113,18 @@ export const getNoteEditorTutorial = (isMobile: boolean): TutorialConfig => ({
       position: 'bottom',
       highlightPadding: 8,
       tips: ['Multiple voice options', 'Adjust speed', 'Learn while multitasking'],
+    },
+    {
+      id: 'tts-help',
+      title: '🔊 Voice Guidance',
+      description: 'The tutorial can read instructions aloud. Make sure your volume is up and browser permissions allow audio.',
+      position: 'center',
+      tips: [
+        'Chrome, Edge, and Safari support text-to-speech',
+        'Check browser permissions for audio',
+        'Ensure your system volume is not muted',
+      ],
+      // Remove customContent with JSX and use tips instead
     },
     {
       id: 'export',

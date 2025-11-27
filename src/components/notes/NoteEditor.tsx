@@ -1249,17 +1249,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               isLoading={isLoading}
             />
           </div>
-  
-          {/* AI Summary Section - Side panel */}
-          {note.ai_summary && (
-            <div className="lg:w-80 lg:border-l lg:border-gray-200 lg:dark:border-gray-700">
+          
+            {note.ai_summary && isSummaryVisible && (
               <AISummarySection
                 ai_summary={note.ai_summary}
                 isSummaryVisible={isSummaryVisible}
                 setIsSummaryVisible={setIsSummaryVisible}
               />
-            </div>
-          )}
+            )}
+
   
           {/* Translated Content Section */}
           {translatedContent && (
