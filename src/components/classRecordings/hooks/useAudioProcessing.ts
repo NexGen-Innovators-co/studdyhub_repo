@@ -152,7 +152,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
           summary: fetchedRecording.summary,
           duration: fetchedRecording.duration,
           date: fetchedRecording.date,
-          createdAt: fetchedRecording.created_at,
+          created_at: fetchedRecording.created_at,
           userId: fetchedRecording.user_id,
           document_id: fetchedRecording.document_id
         };
@@ -267,7 +267,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         summary: '',
         duration: 0,
         date: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString(),
         userId: user.id,
         document_id: newDocumentId
       };
@@ -284,7 +284,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
           duration: newRecording.duration,
           subject: newRecording.subject,
           date: newRecording.date,
-          created_at: newRecording.createdAt,
+          created_at: newRecording.created_at,
           document_id: newRecording.document_id
         });
 
@@ -368,7 +368,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         summary: '',
         duration: Math.floor(duration),
         date: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString(),
         userId: user.id,
         document_id: newDocumentId
       };
@@ -385,7 +385,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
           duration: newRecording.duration,
           subject: newRecording.subject,
           date: newRecording.date,
-          created_at: newRecording.createdAt,
+          created_at: newRecording.created_at,
           document_id: newRecording.document_id
         });
 
@@ -485,7 +485,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
             summary: fetchedRecording.summary,
             duration: fetchedRecording.duration,
             date: fetchedRecording.date,
-            createdAt: fetchedRecording.created_at,
+            created_at: fetchedRecording.created_at,
             userId: fetchedRecording.user_id,
             document_id: fetchedRecording.document_id
           };

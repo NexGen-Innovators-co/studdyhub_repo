@@ -463,7 +463,7 @@ const SharedNotePreview: React.FC<{ noteId: string; onClick: () => void }> = ({ 
   return (
     <div
       onClick={onClick}
-      className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 rounded-xl border border-amber-300 dark:border-amber-700 cursor-pointer hover:shadow-lg"
+      className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-gray-900 dark:to-gray-900/60 rounded-xl cursor-pointer "
     >
       <div className="flex items-center gap-3">
         <StickyNote className="h-8 w-8 text-amber-600" />
@@ -732,7 +732,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       {!isOwn && !showAvatar && <div className="w-8" />}
 
                       <div
-                        className={`relative rounded-2xl px-0 py-0 shadow-md max-w-full  hover:shadow-lg group ${isOwn ? theme.ownBubble : theme.otherBubble} ${isOwn ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
+                        className={`relative px-0 py-0 rounded-xl max-w-full  group ${isOwn ? theme.ownBubble : theme.otherBubble} ${isOwn ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
                       >
                         {/* Resources & Media */}
                         {message.resources?.length > 0 && (
@@ -822,7 +822,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       <NoteShareDialog isOpen={showNoteShare} onClose={() => setShowNoteShare(false)} onShare={handleShareNote} currentUserId={currentUserId} />
 
       <Dialog open={addNoteDialogOpen} onOpenChange={setAddNoteDialogOpen}>
-        <DialogContent className="sm:max-w-md z-50 ">
+        <DialogContent className="sm:max-w-md z-50">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <StickyNote className="h-5 w-5 text-amber-600" />

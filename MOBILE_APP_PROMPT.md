@@ -1035,7 +1035,7 @@ StuddyHub is an **AI-powered learning management system** that helps students or
 {
   "title": "Note Title",
   "content": "# Note Content...",
-  "aiSummary": "Summary..."
+  "ai_summary": "Summary..."
 }
 ```
 

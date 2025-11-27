@@ -1990,11 +1990,11 @@ The application uses the following libraries and frameworks:
 The application uses the following data structures:
 
 - UserProfile: {id: string, full_name: string, avatar_url: string, learning_style: string, learning_preferences: {explanation_style: string, examples: boolean, difficulty: string}}
-- Note: {id: string, title: string, category: string, content: string, aiSummary: string, createdAt: string}
+- Note: {id: string, title: string, category: string, content: string, ai_summary: string, created_at: string}
 - ClassRecording: {id: string, title: string, subject: string, date: string, duration: number, audioUrl: string, document_id: string}
 - ScheduleItem: {id: string, title: string, subject: string, type: string, startTime: string, endTime: string, location: string, description: string}
 - Message: {id: string, content: string, role: string, timestamp: string, attachedDocumentIds: string[], attachedNoteIds: string[]}
-- ChatSession: {id: string, title: string, createdAt: string, updatedAt: string, lastMessageAt: string, documentIds: string[]}
+- ChatSession: {id: string, title: string, created_at: string, updated_at: string, lastMessageAt: string, documentIds: string[]}
 - Quiz: {id: string, classId: string, questions: {question: string, options: string[], correctAnswer: string}[]}
 - Document: {id: string, title: string, file_name: string, file_url: string, file_type: string, file_size: number, content_extracted: string, type: string, processing_status: string, processing_error: string}
 `;

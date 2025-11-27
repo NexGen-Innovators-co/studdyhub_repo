@@ -127,7 +127,7 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className=" max-w-2xl p-0 lg:p-2">
+      <DialogContent className=" max-w-2xl p-0 lg:p-2 ">
         <DialogHeader>
           <DialogTitle>Share Note or Document</DialogTitle>
         </DialogHeader>

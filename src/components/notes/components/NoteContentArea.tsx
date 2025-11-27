@@ -50,6 +50,7 @@ import {
   ChevronUp,
   RefreshCw,
   BookOpen,
+  HelpCircle,
 } from 'lucide-react';
 
 import { generateFlashcardsFromNote } from '../services/FlashCardServices';
@@ -61,6 +62,9 @@ import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../ui/dropdown-menu';
+import { UniversalTutorial } from '@/components/notes/components/UniversalTutorial';
+import { useTutorial } from '@/components/notes/hooks/useTutorials';
+import { getNoteEditorTutorial  } from '@/components/notes/config/tutorialConfigs';
 
 /* ---------- Tiptap ---------- */
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -125,55 +129,7 @@ turndown.use(gfm.gfm);
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import { DiagramWrapper } from './DiagramWrapper';
-
-/** Chart.js node */
-const ChartJsNode = Node.create({
-  name: 'chartjs',
-  group: 'block',
-  atom: true,
-  addAttributes() {
-    return {
-      config: {
-        default: '{}',
-        parseHTML: element => element.getAttribute('data-config') || '{}',
-        renderHTML: attributes => ({ 'data-config': attributes.config }),
-      }
-    };
-  },
-  parseHTML() {
-    return [
-      {
-        tag: 'div[data-chartjs]',
-        getAttrs: (dom) => {
-          if (typeof dom === 'string') return {};
-          const element = dom as HTMLElement;
-          return { config: element.getAttribute('data-config') || '{}' };
-        }
-      },
-      {
-        tag: 'pre',
-        preserveWhitespace: 'full',
-        getAttrs: (dom) => {
-          if (typeof dom === 'string') return false;
-          const element = dom as HTMLElement;
-          const code = element.querySelector('code[class*="language-chartjs"]');
-          if (!code) return false;
-          return { config: code.textContent || '{}' };
-        }
-      }
-    ];
-  },
-  renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes, {
-      'data-chartjs': '',
-      'data-config': HTMLAttributes.config
-    })];
-  },
-  addNodeView() {
-    return ReactNodeViewRenderer(DiagramWrapper);
-  },
-});
-
+import { delay } from 'framer-motion';
 /** Mermaid node */
 const MermaidNode = Node.create({
   name: 'mermaid',
@@ -183,8 +139,19 @@ const MermaidNode = Node.create({
     return {
       code: {
         default: '',
-        parseHTML: element => element.getAttribute('data-code') || '',
-        renderHTML: attributes => ({ 'data-code': attributes.code }),
+        parseHTML: element => {
+          const code = element.getAttribute('data-code');
+          console.log("Mermaid parseHTML - element:", element, "code:", code);
+          return code || '';
+        },
+        renderHTML: attributes => {
+          console.log("Mermaid renderHTML - attributes:", attributes);
+          // FIX: Ensure we return the actual code, not just empty attributes
+          return {
+            'data-mermaid': '',
+            'data-code': attributes.code || ''
+          };
+        },
       }
     };
   },
@@ -195,27 +162,72 @@ const MermaidNode = Node.create({
         getAttrs: (dom) => {
           if (typeof dom === 'string') return {};
           const element = dom as HTMLElement;
-          return { code: element.getAttribute('data-code') || '' };
-        }
-      },
-      {
-        tag: 'pre',
-        preserveWhitespace: 'full',
-        getAttrs: (dom) => {
-          if (typeof dom === 'string') return false;
-          const element = dom as HTMLElement;
-          const code = element.querySelector('code[class*="language-mermaid"]');
-          if (!code) return false;
-          return { code: code.textContent || '' };
+          const code = element.getAttribute('data-code') || '';
+          console.log("Mermaid getAttrs - code:", code);
+          return { code };
         }
       }
     ];
   },
   renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes, {
+    console.log("Mermaid renderHTML - HTMLAttributes:", HTMLAttributes);
+    // FIX: Ensure the code is properly passed through
+    return ['div', {
       'data-mermaid': '',
-      'data-code': HTMLAttributes.code
-    })];
+      'data-code': HTMLAttributes.code || ''
+    }];
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(DiagramWrapper);
+  },
+});
+
+/** Chart.js node */
+const ChartJsNode = Node.create({
+  name: 'chartjs',
+  group: 'block',
+  atom: true,
+  addAttributes() {
+    return {
+      config: {
+        default: '{}',
+        parseHTML: element => {
+          const config = element.getAttribute('data-config');
+          console.log("ChartJS parseHTML - element:", element, "config:", config);
+          return config || '{}';
+        },
+        renderHTML: attributes => {
+          console.log("ChartJS renderHTML - attributes:", attributes);
+          // FIX: Ensure we return the actual config, not just empty attributes
+          return {
+            'data-chartjs': '',
+            'data-config': attributes.config || '{}'
+          };
+        },
+      }
+    };
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-chartjs]',
+        getAttrs: (dom) => {
+          if (typeof dom === 'string') return {};
+          const element = dom as HTMLElement;
+          const config = element.getAttribute('data-config') || '{}';
+          console.log("ChartJS getAttrs - config:", config);
+          return { config };
+        }
+      }
+    ];
+  },
+  renderHTML({ HTMLAttributes }) {
+    console.log("ChartJS renderHTML - HTMLAttributes:", HTMLAttributes);
+    // FIX: Ensure the config is properly passed through
+    return ['div', {
+      'data-chartjs': '',
+      'data-config': HTMLAttributes.config || '{}'
+    }];
   },
   addNodeView() {
     return ReactNodeViewRenderer(DiagramWrapper);
@@ -316,6 +328,7 @@ interface NoteContentAreaProps {
   handleFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
   audioInputRef: React.RefObject<HTMLInputElement>;
   handleAudioFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  isLoading: boolean;
 }
 
 export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
@@ -354,14 +367,141 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     handleFileSelect,
     audioInputRef,
     handleAudioFileSelect,
+    isLoading,
   }, ref) => {
-    const initialHtml = content
-      ? mdProcessor.processSync(content).toString()
-      : '';
+    // Function to convert editor HTML back to markdown while preserving diagrams
+    const convertEditorHtmlToMarkdown = (html: string): string => {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
 
+      console.log("=== CONVERTING HTML TO MARKDOWN ===");
+      console.log("Input HTML:", html);
+
+      // Handle Chart.js nodes
+      const chartNodes = tempDiv.querySelectorAll('div[data-chartjs]');
+      console.log("Found Chart.js nodes:", chartNodes.length);
+      chartNodes.forEach((node, index) => {
+        const config = node.getAttribute('data-config');
+        console.log(`Chart.js node ${index}:`, { config });
+        if (config && config.trim()) {
+          const codeBlock = document.createElement('pre');
+          const code = document.createElement('code');
+          code.className = 'language-chartjs';
+          code.textContent = config;
+          codeBlock.appendChild(code);
+          node.replaceWith(codeBlock);
+          console.log(`Replaced Chart.js node ${index} with code block`);
+        } else {
+          // Remove empty chart nodes
+          node.remove();
+          console.log(`Removed empty Chart.js node ${index}`);
+        }
+      });
+
+      // Handle Mermaid nodes
+      const mermaidNodes = tempDiv.querySelectorAll('div[data-mermaid]');
+      console.log("Found Mermaid nodes:", mermaidNodes.length);
+      mermaidNodes.forEach((node, index) => {
+        const code = node.getAttribute('data-code');
+        console.log(`Mermaid node ${index}:`, { code });
+        if (code && code.trim()) {
+          const codeBlock = document.createElement('pre');
+          const codeElement = document.createElement('code');
+          codeElement.className = 'language-mermaid';
+          codeElement.textContent = code;
+          codeBlock.appendChild(codeElement);
+          node.replaceWith(codeBlock);
+          console.log(`Replaced Mermaid node ${index} with code block`);
+        } else {
+          // Remove empty mermaid nodes
+          node.remove();
+          console.log(`Removed empty Mermaid node ${index}`);
+        }
+      });
+
+      // Handle Graphviz (DOT) nodes
+      const dotNodes = tempDiv.querySelectorAll('div[data-dot]');
+      console.log("Found DOT nodes:", dotNodes.length);
+      dotNodes.forEach((node, index) => {
+        const code = node.getAttribute('data-code');
+        console.log(`DOT node ${index}:`, { code });
+        if (code && code.trim()) {
+          const codeBlock = document.createElement('pre');
+          const codeElement = document.createElement('code');
+          codeElement.className = 'language-dot';
+          codeElement.textContent = code;
+          codeBlock.appendChild(codeElement);
+          node.replaceWith(codeBlock);
+          console.log(`Replaced DOT node ${index} with code block`);
+        } else {
+          // Remove empty dot nodes
+          node.remove();
+          console.log(`Removed empty DOT node ${index}`);
+        }
+      });
+
+      const markdown = turndown.turndown(tempDiv.innerHTML);
+      console.log("Final markdown:", markdown);
+      console.log("=== CONVERSION COMPLETE ===");
+
+      return markdown;
+    };
+
+    // Function to properly convert markdown to editor HTML with diagram support
+    const convertMarkdownToEditorHtml = (markdown: string): string => {
+      if (!markdown.trim()) return '';
+
+      try {
+        // First convert markdown to basic HTML
+        let html = mdProcessor.processSync(markdown).toString();
+
+        // Convert code blocks with specific languages to custom nodes
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+
+        // Convert mermaid code blocks to custom nodes
+        const mermaidCodeBlocks = tempDiv.querySelectorAll('pre code.language-mermaid');
+        mermaidCodeBlocks.forEach((codeBlock) => {
+          const code = codeBlock.textContent || '';
+          const mermaidDiv = document.createElement('div');
+          mermaidDiv.setAttribute('data-mermaid', '');
+          mermaidDiv.setAttribute('data-code', code);
+          codeBlock.parentElement?.replaceWith(mermaidDiv);
+        });
+
+        // Convert chartjs code blocks to custom nodes
+        const chartjsCodeBlocks = tempDiv.querySelectorAll('pre code.language-chartjs');
+        chartjsCodeBlocks.forEach((codeBlock) => {
+          const config = codeBlock.textContent || '{}';
+          const chartDiv = document.createElement('div');
+          chartDiv.setAttribute('data-chartjs', '');
+          chartDiv.setAttribute('data-config', config);
+          codeBlock.parentElement?.replaceWith(chartDiv);
+        });
+
+        // Convert dot code blocks to custom nodes
+        const dotCodeBlocks = tempDiv.querySelectorAll('pre code.language-dot, pre code.language-graphviz');
+        dotCodeBlocks.forEach((codeBlock) => {
+          const code = codeBlock.textContent || '';
+          const dotDiv = document.createElement('div');
+          dotDiv.setAttribute('data-dot', '');
+          dotDiv.setAttribute('data-code', code);
+          codeBlock.parentElement?.replaceWith(dotDiv);
+        });
+
+        return tempDiv.innerHTML;
+      } catch (error) {
+        console.error('Error converting markdown to HTML:', error);
+        return markdown; // Fallback to raw markdown
+      }
+    };
+
+    // Then update the editor configuration:
     const editor = useEditor({
       extensions: [
-        StarterKit.configure({ codeBlock: false }),
+        StarterKit.configure({
+          codeBlock: false
+        }),
         CodeBlockLowlight.configure({
           lowlight,
           defaultLanguage: 'javascript',
@@ -379,10 +519,15 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         MermaidNode,
         DotNode,
       ],
-      content: initialHtml,
+      content: convertMarkdownToEditorHtml(content),
       onUpdate: ({ editor }) => {
         const html = editor.getHTML();
-        const markdown = turndown.turndown(html);
+        console.log("Editor update - HTML:", html);
+
+        // Use our custom conversion to preserve diagrams
+        const markdown = convertEditorHtmlToMarkdown(html);
+        console.log("Editor update - Markdown:", markdown);
+
         setContent(markdown);
       },
       editorProps: {
@@ -393,24 +538,69 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       },
     });
 
+    // Update useImperativeHandle:
     useImperativeHandle(ref, () => ({
       getCurrentMarkdown: () => {
         if (!editor) return '';
         const html = editor.getHTML();
-        return turndown.turndown(html);
+        return convertEditorHtmlToMarkdown(html);
       },
       getInnerHTML: () => {
         return editor?.getHTML() || '';
       },
     }));
+    // Add this to your NoteContentArea component
+    const debugEditorState = () => {
+      if (!editor) return;
+
+      const html = editor.getHTML();
+      console.log("=== EDITOR STATE DEBUG ===");
+      console.log("Editor HTML:", html);
+
+      // Check if diagram nodes exist in the editor state
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+
+      const mermaidNodes = tempDiv.querySelectorAll('div[data-mermaid]');
+      console.log("Mermaid nodes in editor:", mermaidNodes.length);
+      mermaidNodes.forEach((node, index) => {
+        console.log(`Mermaid node ${index}:`, {
+          hasDataCode: node.hasAttribute('data-code'),
+          dataCode: node.getAttribute('data-code'),
+          innerHTML: node.innerHTML
+        });
+      });
+
+      const chartNodes = tempDiv.querySelectorAll('div[data-chartjs]');
+      console.log("ChartJS nodes in editor:", chartNodes.length);
+      chartNodes.forEach((node, index) => {
+        console.log(`ChartJS node ${index}:`, {
+          hasDataConfig: node.hasAttribute('data-config'),
+          dataConfig: node.getAttribute('data-config'),
+          innerHTML: node.innerHTML
+        });
+      });
+    };
+
+    // Call this in your save handler
+    const handleSave = () => {
+      debugEditorState();
+      onSave()
+    };
 
     useEffect(() => {
       if (!editor) return;
-      const currentMd = turndown.turndown(editor.getHTML());
-      if (content !== currentMd) {
-        const html = mdProcessor.processSync(content).toString();
-        editor.commands.setContent(html, false);
-      }
+
+      const timeoutId = setTimeout(() => {
+        const currentMarkdown = convertEditorHtmlToMarkdown(editor.getHTML());
+
+        // Deep comparison to avoid unnecessary updates
+        if (content !== currentMarkdown && content.trim() !== currentMarkdown.trim()) {
+          const html = convertMarkdownToEditorHtml(content);
+          editor.commands.setContent(html, false);
+        }
+      }, 100);
+      return () => clearTimeout(timeoutId);
     }, [content, editor]);
 
     /* ---------- Inline AI ---------- */
@@ -420,12 +610,14 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [generatedText, setGeneratedText] = useState('');
     const [actionType, setActionType] = useState('');
     const [isTyping, setIsTyping] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     // Add these state variables with your existing state
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showDiagramsMenu, setShowDiagramsMenu] = useState(false);
+    const { isOpen, startTutorial, closeTutorial, completeTutorial } = useTutorial('note-editor');
+
+
     const startAI = () => {
       if (!editor) return;
       const { from, to } = editor.state.selection;
@@ -442,7 +634,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     };
 
     const runAI = async (action: string, custom?: string) => {
-      setIsLoading(true);
       setError(null);
       setGeneratedText('');
       try {
@@ -457,7 +648,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       } catch (e: any) {
         setError(e.message);
       } finally {
-        setIsLoading(false);
+        setIsTyping(false);
       }
     };
 
@@ -466,6 +657,12 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       const htmlFromMd = mdProcessor.processSync(generatedText).toString();
       editor.chain().focus().insertContent(htmlFromMd, { parseOptions: { preserveWhitespace: true } }).run();
       setShowAI(false);
+      setGeneratedText('');
+    };
+
+    const cancelAI = () => {
+      setShowAI(false);
+      setGeneratedText('');
     };
 
     /* ---------- Flashcards ---------- */
@@ -510,74 +707,33 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
             }]
           }
         }, null, 2),
-        mermaid: 'flowchart TD\n    A[Start] --> B{Decision}\n    B -->|Yes| C[Result 1]\n    B -->|No| D[Result 2]',
+        mermaid: 'graph TD\n    A[Start] --> B{Decision}\n    B -->|Yes| C[Result 1]\n    B -->|No| D[Result 2]',
         dot: 'digraph G {\n    A -> B\n    B -> C\n    A -> C\n}'
       };
 
+      console.log(`Inserting ${type} diagram with code:`, defaults[type]);
+
       if (type === 'chartjs') {
-        editor.chain().focus().insertContent({ type: 'chartjs', attrs: { config: defaults.chartjs } }).run();
+        editor.chain().focus().insertContent({
+          type: 'chartjs',
+          attrs: { config: defaults.chartjs }
+        }).run();
       } else {
-        editor.chain().focus().insertContent({ type, attrs: { code: defaults[type] } }).run();
+        editor.chain().focus().insertContent({
+          type,
+          attrs: { code: defaults[type] }
+        }).run();
       }
+
+      // Debug: Check what was actually inserted
+      setTimeout(() => {
+        const html = editor.getHTML();
+        console.log("HTML after diagram insertion:", html);
+      }, 100);
     };
 
-    // Add this useEffect to close menus when clicking outside
-    useEffect(() => {
-      const handleClickOutside = () => {
-        setShowExportMenu(false);
-        setShowMoreMenu(false);
-        setShowDiagramsMenu(false);
-      };
 
-      document.addEventListener('click', handleClickOutside);
-      return () => {
-        document.removeEventListener('click', handleClickOutside);
-      };
-    }, []);
-    // Auto-render diagrams
-    useEffect(() => {
-      if (!editor) return;
-
-      const html = editor.getHTML();
-      const container = document.createElement('div');
-      container.innerHTML = html;
-
-      const mermaidBlocks = container.querySelectorAll('pre code.language-mermaid');
-      mermaidBlocks.forEach((block) => {
-        const code = block.textContent || '';
-        const div = document.createElement('div');
-        div.setAttribute('data-mermaid', '');
-        div.setAttribute('data-code', code);
-        block.parentElement?.replaceWith(div);
-      });
-
-      const chartBlocks = container.querySelectorAll('pre code.language-chartjs');
-      chartBlocks.forEach((block) => {
-        const config = block.textContent || '{}';
-        const div = document.createElement('div');
-        div.setAttribute('data-chartjs', '');
-        div.setAttribute('data-config', config);
-        block.parentElement?.replaceWith(div);
-      });
-
-      const dotBlocks = container.querySelectorAll('pre code.language-dot, pre code.language-graphviz');
-      dotBlocks.forEach((block) => {
-        const code = block.textContent || '';
-        const div = document.createElement('div');
-        div.setAttribute('data-dot', '');
-        div.setAttribute('data-code', code);
-        block.parentElement?.replaceWith(div);
-      });
-
-      if (mermaidBlocks.length + chartBlocks.length + dotBlocks.length > 0) {
-        Promise.resolve().then(() => {
-          if (editor?.commands) {
-            editor.commands.setContent(container.innerHTML, false);
-          }
-        });
-      }
-    }, [editor, content]);
-
+    // Diagram rendering useEffect (only for visual rendering, doesn't affect content)
     useEffect(() => {
       const renderAllDiagrams = async () => {
         const mermaidDivs = document.querySelectorAll('div[data-mermaid]');
@@ -649,149 +805,1142 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
       renderAllDiagrams();
     }, [editor?.getHTML()]);
-
+    const useMobileDetection = () => {
+      const [isMobile, setIsMobile] = useState(false);
+    
+      useEffect(() => {
+        const checkMobile = () => {
+          setIsMobile(window.innerWidth < 1024); // lg breakpoint
+        };
+    
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+      }, []);
+    
+      return isMobile;
+    };
+    
+      const isMobile = useMobileDetection();
+      
+      // Create dynamic tutorial config
+      const NOTE_EDITOR_TUTORIAL = getNoteEditorTutorial(isMobile);
     // UI State
     const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
+    // Add these new state variables near your existing state declarations
+    const [showMobileFormatMenu, setShowMobileFormatMenu] = useState(false);
+    const [showFlashcardsMenu, setShowFlashcardsMenu] = useState(false);
+    // Inside the NoteContentArea component, add this state:
+    const [showTutorial, setShowTutorial] = useState(false);
     return (
-      <div className="flex flex-col flex-1 mt-12 lg:mt-1 bg-white dark:bg-gray-900 overflow-y-auto  lg:mb-12">
+
+      // Enhanced responsive layout for the note editor component
+
+      <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-gray-900">
         <style>{`
-          .ProseMirror pre {
-            background:rgb(240, 245, 247);
-            color:rgb(41, 40, 40);
-            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            overflow-x: auto;
-            margin: 1rem 0;
+            .ProseMirror {
+            /* Base Typography */
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            font-size: 16px;
+            line-height: 1.7;
+            color: #1f2937;
+            max-width: 100%;
+            padding: 2rem;
           }
-          .dark .ProseMirror pre { background: #0d1117; }
-          .dark .ProseMirror code { background: #0d1117; color:rgb(199, 199, 199); }
-          .hljs-comment { color: #6a9955; }
-          .hljs-keyword { color: #569cd6; }
-          .hljs-string { color: #ce9178; }
-          .hljs-number { color: #b5cea8; }
-          .hljs-function { color: #dcdcaa; }
-          .hljs-class { color: #4ec9b0; }
-          .hljs-variable { color: #9cdcfe; }
-          .ProseMirror table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
-          .ProseMirror td, .ProseMirror th { border: 1px solid #d1d5db; padding: 0.5rem; text-align: left; }
-          .dark .ProseMirror td, .dark .ProseMirror th { border-color: #374151; }
-          .ProseMirror th { background: #f3f4f6; font-weight: 600; }
-          .dark .ProseMirror th { background: #1f2937; }
-        `}</style>
-        {/* ---------- FORMATTING TOOLBAR ---------- */}
-        <div className="text-blue-600 dark:text-blue-400 overflow-x-auto flex items-center order-b border-gray-700 dark:border-gray-100 bg-gray-50 dark:bg-gray-800 p-2  shadow-lg">
-        <button onClick={onToggleNotesHistory} className="p-2 rounded hover:bg-gray-200" title="History"><BookOpen className="w-4 h-4" /></button>
-          {/* Existing basic formatting buttons */}
-          <button onClick={() => editor?.chain().focus().undo().run()} disabled={!editor?.can().undo()} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded disabled:opacity-30"><Undo className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().redo().run()} disabled={!editor?.can().redo()} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded disabled:opacity-30"><Redo className="w-4 h-4" /></button>
-          <div className="w-px h-6 bg-gray-300 mx-1" />
 
-          <button onClick={() => editor?.chain().focus().toggleBold().run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('bold') ? 'bg-blue-100 text-blue-600' : ''}`}><Bold className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().toggleItalic().run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('italic') ? 'bg-blue-100 text-blue-600' : ''}`}><Italic className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().toggleUnderline().run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('underline') ? 'bg-blue-100 text-blue-600' : ''}`}><UnderlineIcon className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().toggleStrike().run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('strike') ? 'bg-blue-100 text-blue-600' : ''}`}><Strikethrough className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().toggleCode().run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('code') ? 'bg-blue-100 text-blue-600' : ''}`}><Code className="w-4 h-4" /></button>
-          <div className="w-px h-6 bg-gray-300 mx-1" />
+          /* Dark Mode Support */
+          .dark .ProseMirror {
+            color: #e5e7eb;
+          }
 
-          <button onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('heading', { level: 1 }) ? 'bg-blue-100 text-blue-600' : ''}`}><Heading1 className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('heading', { level: 2 }) ? 'bg-blue-100 text-blue-600' : ''}`}><Heading2 className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('heading', { level: 3 }) ? 'bg-blue-100 text-blue-600' : ''}`}><Heading3 className="w-4 h-4" /></button>
-          <div className="w-px h-6 bg-gray-300 mx-1" />
+          /* Headings */
+          .ProseMirror h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #111827;
+            letter-spacing: -0.025em;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 0.5rem;
+          }
 
-          <button onClick={() => editor?.chain().focus().toggleBulletList().run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('bulletList') ? 'bg-blue-100 text-blue-600' : ''}`}><List className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().toggleOrderedList().run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('orderedList') ? 'bg-blue-100 text-blue-600' : ''}`}><ListOrdered className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().toggleBlockquote().run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('blockquote') ? 'bg-blue-100 text-blue-600' : ''}`}><Quote className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().toggleCodeBlock().run()} className={`p-2 rounded hover:bg-gray-200 ${editor?.isActive('codeBlock') ? 'bg-blue-100 text-blue-600' : ''}`}><Code className="w-4 h-4" /></button>
-          <div className="w-px h-6 bg-gray-300 mx-1" />
+          .dark .ProseMirror h1 {
+            color: #f9fafb;
+            border-bottom-color: #60a5fa;
+          }
 
-          <button onClick={() => editor?.chain().focus().setTextAlign('left').run()} className="p-2 rounded hover:bg-gray-200"><AlignLeft className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().setTextAlign('center').run()} className="p-2 rounded hover:bg-gray-200"><AlignCenter className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().setTextAlign('right').run()} className="p-2 rounded hover:bg-gray-200"><AlignRight className="w-4 h-4" /></button>
-          <div className="w-px h-6 bg-gray-300 mx-1" />
+          .ProseMirror h2 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            line-height: 1.3;
+            margin-top: 1.75rem;
+            margin-bottom: 0.875rem;
+            color: #1f2937;
+            letter-spacing: -0.015em;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.375rem;
+          }
 
-          <button onClick={() => { const url = prompt('Enter link URL:'); if (url) editor?.chain().focus().setLink({ href: url }).run(); }} className="p-2 rounded hover:bg-gray-200"><LinkIcon className="w-4 h-4" /></button>
-          <button onClick={() => { const url = prompt('Enter image URL:'); if (url) editor?.chain().focus().setImage({ src: url }).run(); }} className="p-2 rounded hover:bg-gray-200"><ImageIcon className="w-4 h-4" /></button>
-          <button onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} className="p-2 rounded hover:bg-gray-200"><TableIcon className="w-4 h-4" /></button>
-          <div className="w-px h-6 bg-gray-300 mx-1" />
+          .dark .ProseMirror h2 {
+            color: #f3f4f6;
+            border-bottom-color: #374151;
+          }
 
-          {/* Individual action buttons */}
-          <button onClick={onSave} className="p-2 rounded hover:bg-gray-200" title="Save"><Save className="w-4 h-4" /></button>
-          <button onClick={() => {/* Add hash/heading functionality */ }} className="p-2 rounded hover:bg-gray-200" title="Heading"><Hash className="w-4 h-4" /></button>
+          .ProseMirror h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            line-height: 1.4;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #374151;
+          }
 
-          {/* File upload buttons */}
-          <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded hover:bg-gray-200" title="Upload File"><UploadCloud className="w-4 h-4" /></button>
-          <button onClick={() => audioInputRef.current?.click()} className="p-2 rounded hover:bg-gray-200" title="Upload Audio"><Mic className="w-4 h-4" /></button>
+          .dark .ProseMirror h3 {
+            color: #e5e7eb;
+          }
 
-          {/* Text-to-speech button */}
-          <button onClick={handleTextToSpeech} className="p-2 rounded hover:bg-gray-200" title="Text to Speech">
-            {isSpeaking ? <StopCircle className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
+          .ProseMirror h4 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            line-height: 1.5;
+            margin-top: 1.25rem;
+            margin-bottom: 0.625rem;
+            color: #4b5563;
+          }
 
-          {/* Export buttons */}
-          <button onClick={handleDownloadNote} className="p-2 rounded hover:bg-gray-200" title="Download Markdown"><Download className="w-4 h-4" /></button>
-          <button onClick={handleDownloadPdf} className="p-2 rounded hover:bg-gray-200" title="Download PDF"><FileText className="w-4 h-4" /></button>
-          <button onClick={handleCopyNoteContent} className="p-2 rounded hover:bg-gray-200" title="Copy Content"><Copy className="w-4 h-4" /></button>
+          .dark .ProseMirror h4 {
+            color: #d1d5db;
+          }
 
-          {/* More actions as individual buttons */}
-          
-          <button onClick={handleViewOriginalDocument} className="p-2 rounded hover:bg-gray-200" title="View Original"><FileText className="w-4 h-4" /></button>
-          <button onClick={regenerateNoteFromDocument} className="p-2 rounded hover:bg-gray-200" title="Regenerate"><RefreshCw className="w-4 h-4" /></button>
+          /* Paragraphs */
+          .ProseMirror p {
+            margin-top: 0;
+            margin-bottom: 1.25rem;
+            line-height: 1.75;
+          }
 
-          {/* Diagram buttons */}
-          <button onClick={() => insertDiagram('chartjs')} className="p-2 rounded hover:bg-gray-200" title="Insert Chart">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </button>
-          <button onClick={() => insertDiagram('mermaid')} className="p-2 rounded hover:bg-gray-200" title="Insert Mermaid">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-          </button>
-          <button onClick={() => insertDiagram('dot')} className="p-2 rounded hover:bg-gray-200" title="Insert Graphviz">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </button>
+          /* Links */
+          .ProseMirror a {
+            color: #3b82f6;
+            text-decoration: underline;
+            text-decoration-color: #93c5fd;
+            text-underline-offset: 3px;
+            transition: all 0.2s ease;
+          }
 
-          {/* AI button */}
-          <button onClick={startAI} className="p-2 rounded hover:bg-gradient-to-r hover:from-purple-500 hover:to-blue-500 hover:text-white" title="AI Assist"><Sparkles className="w-4 h-4" /></button>
+          .ProseMirror a:hover {
+            color: #2563eb;
+            text-decoration-color: #3b82f6;
+          }
 
-          {/* Flashcards button */}
-          <div className="ml-auto">
+          .dark .ProseMirror a {
+            color: #60a5fa;
+            text-decoration-color: #1e40af;
+          }
+
+          .dark .ProseMirror a:hover {
+            color: #93c5fd;
+            text-decoration-color: #60a5fa;
+          }
+
+          /* Lists */
+          .ProseMirror ul,
+          .ProseMirror ol {
+            padding-left: 1.75rem;
+            margin-top: 0.75rem;
+            margin-bottom: 1.25rem;
+          }
+
+          .ProseMirror ul {
+            list-style-type: disc;
+          }
+
+          .ProseMirror ul ul {
+            list-style-type: circle;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+          }
+
+          .ProseMirror ul ul ul {
+            list-style-type: square;
+          }
+
+          .ProseMirror ol {
+            list-style-type: decimal;
+          }
+
+          .ProseMirror li {
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            line-height: 1.7;
+          }
+
+          .ProseMirror li > p {
+            margin-bottom: 0.5rem;
+          }
+
+          /* Blockquotes */
+          .ProseMirror blockquote {
+            border-left: 4px solid #3b82f6;
+            padding-left: 1.5rem;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+            margin-left: 0;
+            margin-right: 0;
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+            font-style: italic;
+            color: #4b5563;
+            background-color: #f9fafb;
+            border-radius: 0 0.5rem 0.5rem 0;
+          }
+
+          .dark .ProseMirror blockquote {
+            border-left-color: #60a5fa;
+            color: #9ca3af;
+            background-color: #1f2937;
+          }
+
+          /* Code Blocks */
+          .ProseMirror pre {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            overflow-x: auto;
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+          }
+
+          .ProseMirror pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+            font-size: inherit;
+            border-radius: 0;
+          }
+
+          /* Inline Code */
+          .ProseMirror code {
+            background-color: #f1f5f9;
+            color: #e11d48;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.375rem;
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 0.875em;
+            font-weight: 500;
+            border: 1px solid #e2e8f0;
+          }
+
+          .dark .ProseMirror code {
+            background-color: #1e293b;
+            color: #fb7185;
+            border-color: #334155;
+          }
+
+          /* Tables */
+          .ProseMirror table {
+            border-collapse: collapse;
+            table-layout: auto;
+            width: 100%;
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            overflow: hidden;
+          }
+
+          .dark .ProseMirror table {
+            border-color: #374151;
+          }
+
+          .ProseMirror th {
+            background-color: #f3f4f6;
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 2px solid #d1d5db;
+            color: #111827;
+          }
+
+          .dark .ProseMirror th {
+            background-color: #1f2937;
+            border-bottom-color: #4b5563;
+            color: #f9fafb;
+          }
+
+          .ProseMirror td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            color: #374151;
+          }
+
+          .dark .ProseMirror td {
+            border-bottom-color: #374151;
+            color: #d1d5db;
+          }
+
+          .ProseMirror tr:last-child td {
+            border-bottom: none;
+          }
+
+          .ProseMirror tr:hover td {
+            background-color: #f9fafb;
+          }
+
+          .dark .ProseMirror tr:hover td {
+            background-color: #111827;
+          }
+
+          /* Horizontal Rule */
+          .ProseMirror hr {
+            border: none;
+            border-top: 2px solid #e5e7eb;
+            margin: 2rem 0;
+          }
+
+          .dark .ProseMirror hr {
+            border-top-color: #374151;
+          }
+
+          /* Images */
+          .ProseMirror img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.75rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+          }
+
+          /* Strong and Emphasis */
+          .ProseMirror strong {
+            font-weight: 700;
+            color: #111827;
+          }
+
+          .dark .ProseMirror strong {
+            color: #f9fafb;
+          }
+
+          .ProseMirror em {
+            font-style: italic;
+          }
+
+          /* Strikethrough */
+          .ProseMirror s {
+            text-decoration: line-through;
+            text-decoration-color: #9ca3af;
+            text-decoration-thickness: 2px;
+          }
+
+          /* Underline */
+          .ProseMirror u {
+            text-decoration: underline;
+            text-decoration-color: #6366f1;
+            text-underline-offset: 3px;
+            text-decoration-thickness: 2px;
+          }
+
+          /* Text Alignment */
+          .ProseMirror [style*="text-align: left"] {
+            text-align: left;
+          }
+
+          .ProseMirror [style*="text-align: center"] {
+            text-align: center;
+          }
+
+          .ProseMirror [style*="text-align: right"] {
+            text-align: right;
+          }
+
+          /* Placeholder */
+          .ProseMirror p.is-editor-empty:first-child::before {
+            color: #9ca3af;
+            content: attr(data-placeholder);
+            float: left;
+            height: 0;
+            pointer-events: none;
+          }
+
+          /* Selection */
+          .ProseMirror::selection {
+            background-color: #dbeafe;
+          }
+
+          .dark .ProseMirror::selection {
+            background-color: #1e3a8a;
+          }
+
+          /* Focus State */
+          .ProseMirror:focus {
+            outline: none;
+          }
+
+          /* Custom Diagram Styling */
+          .ProseMirror div[data-mermaid],
+          .ProseMirror div[data-chartjs],
+          .ProseMirror div[data-dot] {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background-color: #f9fafb;
+            border-radius: 0.75rem;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+          }
+
+          .dark .ProseMirror div[data-mermaid],
+          .dark .ProseMirror div[data-chartjs],
+          .dark .ProseMirror div[data-dot] {
+            background-color: #1f2937;
+            border-color: #374151;
+          }
+
+          /* Smooth Scrolling */
+          .ProseMirror {
+            scroll-behavior: smooth;
+          }
+
+          /* Better spacing for nested elements */
+          .ProseMirror > * + * {
+            margin-top: 0.75rem;
+          }
+
+          .ProseMirror li > * + * {
+            margin-top: 0.5rem;
+          }
+
+          /* Print Styles */
+          @media print {
+            .ProseMirror {
+              color: black;
+            }
+            
+            .ProseMirror a {
+              color: #0000ee;
+              text-decoration: underline;
+            }
+            
+            .ProseMirror pre {
+              background-color: #f5f5f5;
+              border: 1px solid #ccc;
+            }
+          }
+
+          /* Responsive adjustments */
+          @media (max-width: 768px) {
+            .ProseMirror {
+              padding: 1rem;
+              font-size: 15px;
+            }
+            
+            .ProseMirror h1 {
+              font-size: 1.875rem;
+            }
+            
+            .ProseMirror h2 {
+              font-size: 1.5rem;
+            }
+            
+            .ProseMirror h3 {
+              font-size: 1.25rem;
+            }
+            
+            .ProseMirror pre {
+              padding: 1rem;
+              font-size: 0.8125rem;
+            }
+          }
+             `}</style>
+        {/* Hidden file inputs */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          style={{ display: 'none' }}
+          accept=".pdf,.txt,.doc,.docx,.md"
+        />
+        <input
+          type="file"
+          ref={audioInputRef}
+          onChange={handleAudioFileSelect}
+          style={{ display: 'none' }}
+          accept="audio/*"
+        />
+
+
+        {/* ---------- RESPONSIVE FORMATTING TOOLBAR ---------- */}
+        <div className="flex-shrink-0 border-b border-gray-300 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 shadow-sm">
+          {/* Desktop Toolbar - Hidden on mobile */}
+          <div className="hidden lg:flex flex-wrap  items-center gap-3 px-3 py-2 overflow-x-auto scrollbar-thin">
+
+            {/* ========== NAVIGATION GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button onClick={startTutorial}>
+                <HelpCircle className="w-4 h-4" />
+              </button>
+              <button
+                onClick={onToggleNotesHistory}
+                className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md group"
+                title="History"
+              >
+                <BookOpen className="w-4 h-4 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== HISTORY GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={() => editor?.chain().focus().undo().run()}
+                disabled={!editor?.can().undo()}
+                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
+                title="Undo"
+              >
+                <Undo className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().redo().run()}
+                disabled={!editor?.can().redo()}
+                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
+                title="Redo"
+              >
+                <Redo className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== TEXT FORMATTING GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={() => editor?.chain().focus().toggleBold().run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('bold') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Bold"
+              >
+                <Bold className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleItalic().run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('italic') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Italic"
+              >
+                <Italic className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleUnderline().run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('underline') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Underline"
+              >
+                <UnderlineIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleStrike().run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('strike') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Strikethrough"
+              >
+                <Strikethrough className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleCode().run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('code') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Code"
+              >
+                <Code className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== HEADINGS & STRUCTURE GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 1 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Heading 1"
+              >
+                <Heading1 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 2 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Heading 2"
+              >
+                <Heading2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 3 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Heading 3"
+              >
+                <Heading3 className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== LISTS & BLOCKS GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={() => editor?.chain().focus().toggleBulletList().run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('bulletList') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Bullet List"
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('orderedList') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Ordered List"
+              >
+                <ListOrdered className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('blockquote') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Quote"
+              >
+                <Quote className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('codeBlock') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Code Block"
+              >
+                <Code className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== ALIGNMENT GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={() => editor?.chain().focus().setTextAlign('left').run()}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                title="Align Left"
+              >
+                <AlignLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().setTextAlign('center').run()}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                title="Align Center"
+              >
+                <AlignCenter className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().setTextAlign('right').run()}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                title="Align Right"
+              >
+                <AlignRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== INSERT ELEMENTS GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={() => { const url = prompt('Enter link URL:'); if (url) editor?.chain().focus().setLink({ href: url }).run(); }}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                title="Insert Link"
+              >
+                <LinkIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => { const url = prompt('Enter image URL:'); if (url) editor?.chain().focus().setImage({ src: url }).run(); }}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                title="Insert Image"
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                title="Insert Table"
+              >
+                <TableIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== DIAGRAMS & VISUALS GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={() => insertDiagram('chartjs')}
+                className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200"
+                title="Insert Chart"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => insertDiagram('mermaid')}
+                className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200"
+                title="Insert Mermaid"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => insertDiagram('dot')}
+                className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200"
+                title="Insert Graphviz"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== DOCUMENT ACTIONS GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={handleSave}
+                className="p-2 rounded-md hover:bg-green-100 dark:hover:bg-green-900 hover:text-green-600 dark:hover:text-green-400 transition-all duration-200"
+                title="Save"
+              >
+                <Save className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || isGeneratingAI || isProcessingAudio || !userProfile}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                title="Upload Document"
+              >
+                {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => audioInputRef.current?.click()}
+                disabled={isProcessingAudio || isUploading || isGeneratingAI || !userProfile}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                title="Upload Audio"
+              >
+                {isProcessingAudio ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={handleViewOriginalDocument}
+                disabled={!documentId || isProcessingAudio}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                title="View Original"
+              >
+                <FileText className="w-4 h-4" />
+              </button>
+              <button
+                onClick={regenerateNoteFromDocument}
+                disabled={isUploading || isGeneratingAI || isProcessingAudio || !documentId}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                title="Regenerate"
+              >
+                {isGeneratingAI ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== EXPORT GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={handleDownloadNote}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                title="Download Markdown"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleDownloadPdf}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                title="Download PDF"
+              >
+                <FileText className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleCopyNoteContent}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                title="Copy Content"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== VOICE & TTS GROUP ========== */}
+            <div className="flex items-center gap-2 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <select
+                value={selectedVoiceURI || ''}
+                onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                disabled={isSpeaking || voices.length === 0}
+                className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all duration-200"
+                title="Select Voice"
+              >
+                <option value="">Default Voice</option>
+                {voices.map((voice, index) => (
+                  <option key={`${voice.voiceURI}-${index}`} value={voice.voiceURI}>
+                    {`${voice.name} (${voice.lang})`}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleTextToSpeech}
+                disabled={isUploading || isGeneratingAI || isProcessingAudio}
+                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                title="Text to Speech"
+              >
+                {isSpeaking ? <StopCircle className="w-4 h-4 text-red-500" /> : <Volume2 className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== AI & INTELLIGENCE GROUP ========== */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
+              <button
+                onClick={startAI}
+                className="p-2 rounded-md bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                title="AI Assist"
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setShowMenu(v => !v)}
+                className="px-3 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-medium shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                <Brain className="w-4 h-4" />
+                <span className="hidden xl:inline">Flashcards</span>
+                {savedCards.length > 0 && (
+                  <span className="px-1.5 py-0.5 bg-white/20 rounded-full text-xs font-semibold">{savedCards.length}</span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Toolbar - Visible on mobile/tablet */}
+          <div className="flex lg:hidden items-center justify-between px-3 py-2">
+
+            {/* ========== MOBILE ESSENTIAL FORMATTING ========== */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowTutorial(true)}
+                className="p-2 rounded-md hover:bg-yellow-100 dark:hover:bg-yellow-900 hover:text-yellow-600 dark:hover:text-yellow-400 transition-all duration-200"
+                title="Show Tutorial"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+              <button
+                onClick={onToggleNotesHistory}
+                className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md group"
+                title="History"
+              >
+                <BookOpen className="w-4 h-4 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+              </button>
+            </div>
+
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* ========== HISTORY GROUP ========== */}
             <button
-              onClick={() => setShowMenu(v => !v)}
-              className="px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-medium"
+              onClick={() => editor?.chain().focus().undo().run()}
+              disabled={!editor?.can().undo()}
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
+              title="Undo"
             >
-              <Brain className="w-4 h-4" />
-              Flashcards
-              {savedCards.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded-full text-xs font-semibold">{savedCards.length}</span>
-              )}
+              <Undo className="w-4 h-4" />
             </button>
+            <button
+              onClick={() => editor?.chain().focus().redo().run()}
+              disabled={!editor?.can().redo()}
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
+              title="Redo"
+            >
+              <Redo className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => editor?.chain().focus().toggleBold().run()}
+              className={`p-2 rounded-lg ${editor?.isActive('bold') ? 'bg-blue-500 text-white' : 'hover:bg-white dark:hover:bg-gray-700'}`}
+              title="Bold"
+            >
+              <Bold className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => editor?.chain().focus().toggleItalic().run()}
+              className={`p-2 rounded-lg ${editor?.isActive('italic') ? 'bg-blue-500 text-white' : 'hover:bg-white dark:hover:bg-gray-700'}`}
+              title="Italic"
+            >
+              <Italic className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => editor?.chain().focus().toggleBulletList().run()}
+              className={`p-2 rounded-lg ${editor?.isActive('bulletList') ? 'bg-blue-500 text-white' : 'hover:bg-white dark:hover:bg-gray-700'}`}
+              title="Bullet List"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleSave}
+              className="p-2 rounded-lg hover:bg-green-100 dark:hover:bg-green-900 hover:text-green-600"
+              title="Save"
+            >
+              <Save className="w-4 h-4" />
+            </button>
+
+            {/* ========== MOBILE ACTIONS ========== */}
+            <div className="flex items-center gap-1">
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMobileFormatMenu(!showMobileFormatMenu);
+                  setShowFlashcardsMenu(false);
+                  setShowExportMenu(false);
+                }}
+                className="p-2 rounded-lg hover:bg-green-100 dark:hover:bg-green-900 hover:text-green-600"
+                title="More Options"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+
+              <button onClick={handleTextToSpeech} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200" title="Text to Speech">
+                {isSpeaking ? <StopCircle className="w-4 h-4 text-red-500" /> : <Volume2 className="w-4 h-4" />}
+              </button>
+
+              <button
+                onClick={startAI}
+                className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                title="AI Assist"
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+
+
+              {/* Flashcards Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowFlashcardsMenu(!showFlashcardsMenu);
+                  setShowMobileFormatMenu(false);
+                  setShowExportMenu(false);
+                }}
+                className="px-3 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-medium"
+              >
+                <Brain className="w-4 h-4" />
+                {savedCards.length > 0 && (
+                  <span className="px-1.5 py-0.5 bg-white/20 rounded-full text-xs font-semibold">
+                    {savedCards.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* ========== MOBILE EXPANDABLE MENUS ========== */}
+
+          {/* Export Menu */}
+          {showExportMenu && (
+            <div className="lg:hidden border-t border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 animate-slide-in-down">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    handleDownloadNote();
+                    setShowExportMenu(false);
+                  }}
+                  className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
+                >
+                  <Download className="w-4 h-4 mb-1" />
+                  <span className="text-xs">Markdown</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleDownloadPdf();
+                    setShowExportMenu(false);
+                  }}
+                  className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
+                >
+                  <FileText className="w-4 h-4 mb-1" />
+                  <span className="text-xs">PDF</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleDownloadHTML();
+                    setShowExportMenu(false);
+                  }}
+                  className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
+                >
+                  <Code className="w-4 h-4 mb-1" />
+                  <span className="text-xs">HTML</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleCopyNoteContent();
+                    setShowExportMenu(false);
+                  }}
+                  className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
+                >
+                  <Copy className="w-4 h-4 mb-1" />
+                  <span className="text-xs">Copy</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleDownloadWord();
+                    setShowExportMenu(false);
+                  }}
+                  className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
+                >
+                  <FileText className="w-4 h-4 mb-1" />
+                  <span className="text-xs">DOCX</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleDownloadNote();
+                    setShowExportMenu(false);
+                  }}
+                  className="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex flex-col items-center justify-center"
+                >
+                  <FileText className="w-4 h-4 mb-1" />
+                  <span className="text-xs">Notes</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Flashcards Menu */}
+          {showFlashcardsMenu && (
+            <div className="lg:hidden border-t border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 animate-slide-in-down">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Generate Flashcards
+                </label>
+                <button
+                  onClick={() => setShowFlashcardsMenu(false)}
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                >
+                  <XCircle className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={cardCount}
+                  onChange={e => setCardCount(Math.min(50, Math.max(1, +e.target.value)))}
+                  className="w-20 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">flashcards</span>
+              </div>
+
+              <button
+                onClick={generate}
+                disabled={generating}
+                className="w-full mb-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-70 text-white rounded-lg flex items-center justify-center gap-2 font-medium"
+              >
+                {generating ? (
+                  <>
+                    <RotateCw className="w-4 h-4 animate-spin" />
+                    <span>Generating…</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Generate {cardCount} Cards</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowDeck(!showDeck);
+                  setShowFlashcardsMenu(false);
+                }}
+                className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium"
+              >
+                {showDeck ? 'Hide' : 'Show'} Flashcards
+              </button>
+            </div>
+          )}
+
+          {/* Mobile Expandable Menu */}
+          {showMobileFormatMenu && (
+            <div className="lg:hidden border-t border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 space-y-2 animate-slide-in-down">
+              <div className="grid grid-cols-9 gap-1">
+                <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all">
+                  <UploadCloud className="w-4 h-4 " />
+                </button>
+                <button onClick={regenerateNoteFromDocument} className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all">
+                  <RefreshCw className="w-4 h-4 " />
+                </button>
+                <button onClick={handleViewOriginalDocument} className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all">
+                  <FileText className="w-4 h-4 " />
+                </button>
+                <button onClick={() => audioInputRef.current?.click()} className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all">
+                  <Mic className="w-4 h-4 " />
+                </button>
+                <button onClick={() => setShowExportMenu(true)} className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all">
+                  <Download className="w-4 h-4 " />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ---------- EDITOR CONTENT ---------- */}
+        <div className="flex-1 max-h-full overflow-y-auto relative">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
+              <div className="text-center">
+                <RotateCw className="animate-spin mx-auto mb-4 text-blue-600 dark:text-blue-400" size={48} />
+                <p className="text-lg font-medium text-gray-700 dark:text-gray-300">Loading...</p>
+              </div>
+            </div>
+          )}
+
+          <div className="h-full max-w-full mx-auto py-4 sm:py-6">
+            <EditorContent
+              editor={editor}
+              className="h-full prose prose-sm sm:prose lg:prose-lg dark:prose-invert max-w-none"
+            />
           </div>
         </div>
 
-        {/* ---------- Editor ---------- */}
-        <div className="flex-1 overflow-y-auto px-0 py-4 space-y-1">
-          <EditorContent editor={editor} className="overflow-y-scroll max-h-screen" />
-        </div>
-        {/* ---------- Status Bar ---------- */}
-        <div className="border-t px-4 py-2 text-xs text-gray-600 flex justify-between bg-gray-50 dark:bg-gray-800">
-          <span>{content.length} chars • {content.split(/\s+/).filter(Boolean).length} words</span>
-          <span className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              Ready
-            </span>
-            • Tiptap • Markdown • AI • Diagrams
-          </span>
+        {/* ---------- STATUS BAR ---------- */}
+        <div className="flex-shrink-0 border-t border-gray-300 dark:border-gray-700 px-4 py-2 sm:py-3 bg-gray-50 dark:bg-gray-800">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-3">
+              <span className="font-medium">{content.length} chars</span>
+              <span className="hidden sm:inline">•</span>
+              <span className="font-medium">{content.split(/\s+/).filter(Boolean).length} words</span>
+            </div>
+            <div className="flex items-center gap-2 text-2xs sm:text-xs">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="font-medium">Ready</span>
+              </span>
+              <span className="hidden md:inline">•</span>
+              <span className="hidden md:inline text-gray-500 dark:text-gray-500">Tiptap • Markdown • AI • Diagrams</span>
+            </div>
+          </div>
         </div>
 
-        {/* ---------- Inline AI Portal ---------- */}
+        {/* ---------- INLINE AI PORTAL ---------- */}
         {showAI && createPortal(
           <InlineAIEditor
             originalText={content}
@@ -805,52 +1954,16 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
             isVisible={showAI}
             onGenerate={runAI}
             onAccept={acceptAI}
-            onReject={() => setShowAI(false)}
+            onReject={() => cancelAI()}
             onClearError={() => setError(null)}
           />,
           document.body
         )}
 
-        {/* ---------- Flashcard Menu ---------- */}
-        {showMenu && (
-          <div className="absolute right-4 top-16 w-72 bg-white rounded-xl shadow-2xl border p-4 z-50">
-            <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-semibold">Generate Flashcards</label>
-              <button onClick={() => setShowMenu(false)} className="p-1 hover:bg-gray-100 rounded"><XCircle className="w-4 h-4" /></button>
-            </div>
 
-            <div className="flex items-center gap-2 mb-3">
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={cardCount}
-                onChange={e => setCardCount(Math.min(50, Math.max(1, +e.target.value)))}
-                className="w-20 px-3 py-2 border rounded-lg"
-              />
-              <span className="text-sm">flashcards</span>
-            </div>
-
-            <button
-              onClick={generate}
-              disabled={generating}
-              className="w-full mb-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-70 text-white rounded-lg flex items-center justify-center gap-2 font-medium"
-            >
-              {generating ? <><RotateCw className="w-4 h-4 animate-spin" />Generating…</> : <><Sparkles className="w-4 h-4" />Generate {cardCount} Cards</>}
-            </button>
-
-            <button
-              onClick={() => { setShowDeck(p => !p); setShowMenu(false); }}
-              className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
-            >
-              {showDeck ? 'Hide' : 'Show'} Flashcards
-            </button>
-          </div>
-        )}
-
-        {/* ---------- Flashcard Deck ---------- */}
+        {/* ---------- FLASHCARD DECK ---------- */}
         {showDeck && (
-          <div className="mt-6 border-t pt-6 pb-6">
+          <div className="border-t border-gray-300 dark:border-gray-700 p-4 sm:p-6 bg-gray-50 dark:bg-gray-800/50">
             <FlashcardDeck
               noteId={note.id}
               userId={userProfile?.id ?? ''}
@@ -858,8 +1971,16 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
             />
           </div>
         )}
-      </div>
+        {/* Tutorial Component */}
+        <UniversalTutorial
+          config={NOTE_EDITOR_TUTORIAL}
+          isOpen={isOpen}
+          onClose={closeTutorial}
+          onComplete={completeTutorial}
+        />
+        
 
+      </div>
     );
   }
 );

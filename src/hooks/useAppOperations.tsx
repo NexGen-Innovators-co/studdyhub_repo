@@ -67,30 +67,29 @@ export const useAppOperations = ({
       }
     }
   };
-
   const createNewNote = useCallback(async () => {
     try {
       await withRetry(async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
-
+  
         const newNote = {
           title: 'Untitled Note',
           content: '',
-          category: 'general' as const,
-          tags: [],
+          category: 'general',
+          tags: [] as string[],
           user_id: user.id,
           ai_summary: ''
         };
-
+  
         const { data, error } = await supabase
           .from('notes')
           .insert(newNote)
           .select()
           .single();
-
+  
         if (error) throw error;
-
+  
         if (!isRealtimeConnected) {
           const formattedNote: Note = {
             id: data.id,
@@ -98,16 +97,16 @@ export const useAppOperations = ({
             content: data.content || '',
             category: data.category || 'general',
             tags: data.tags || [],
-            createdAt: new Date(data.created_at || Date.now()),
-            updatedAt: new Date(data.updated_at || Date.now()),
-            aiSummary: data.ai_summary || '',
+            created_at: data.created_at,
+            updated_at: data.updated_at,
+            ai_summary: data.ai_summary || '',
             document_id: data.document_id || null,
             user_id: data.user_id
           };
           setNotes(prev => [formattedNote, ...prev]);
           setActiveNote(formattedNote);
         }
-
+  
         setActiveTab('notes');
       });
     } catch (error) {
@@ -116,13 +115,17 @@ export const useAppOperations = ({
       if (!isRealtimeConnected) refreshData();
     }
   }, [isRealtimeConnected, refreshData, setActiveNote, setActiveTab, setNotes]);
-
+  
   const updateNote = useCallback(async (updatedNote: Note) => {
     try {
+      if (!updatedNote.id) {
+        throw new Error('Note ID is required for update');
+      }
+  
       await withRetry(async () => {
         const { data: { user } = {} } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
-
+  
         const { error } = await supabase
           .from('notes')
           .update({
@@ -130,18 +133,18 @@ export const useAppOperations = ({
             content: updatedNote.content,
             category: updatedNote.category,
             tags: updatedNote.tags,
-            ai_summary: updatedNote.aiSummary,
+            ai_summary: updatedNote.ai_summary,
             updated_at: new Date().toISOString()
           })
           .eq('id', updatedNote.id)
           .eq('user_id', user.id);
-
+  
         if (error) throw error;
-
+  
         if (!isRealtimeConnected) {
           const noteWithUpdatedTime = {
             ...updatedNote,
-            updatedAt: new Date()
+            updated_at: new Date().toISOString()
           };
           setNotes(prev =>
             prev.map(note =>
@@ -267,7 +270,7 @@ export const useAppOperations = ({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-  
+
       const { data, error } = await supabase
         .from('document_folders')
         .insert({
@@ -279,9 +282,9 @@ export const useAppOperations = ({
         })
         .select()
         .single();
-  
+
       if (error) throw error;
-  
+
       toast.success(`Folder "${input.name}" created successfully`);
       return data;
     } catch (error: any) {
@@ -290,20 +293,20 @@ export const useAppOperations = ({
       return null;
     }
   }, []);
-  
+
   const updateFolder = useCallback(async (folderId: string, input: UpdateFolderInput) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-  
+
       const { error } = await supabase
         .from('document_folders')
         .update(input)
         .eq('id', folderId)
         .eq('user_id', user.id);
-  
+
       if (error) throw error;
-  
+
       toast.success('Folder updated successfully');
       return true;
     } catch (error: any) {
@@ -312,20 +315,20 @@ export const useAppOperations = ({
       return false;
     }
   }, []);
-  
+
   const deleteFolder = useCallback(async (folderId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-  
+
       const { error } = await supabase
         .from('document_folders')
         .delete()
         .eq('id', folderId)
         .eq('user_id', user.id);
-  
+
       if (error) throw error;
-  
+
       toast.success('Folder deleted successfully');
       return true;
     } catch (error: any) {
@@ -334,15 +337,15 @@ export const useAppOperations = ({
       return false;
     }
   }, []);
-  
+
   const addDocumentToFolder = useCallback(async (documentId: string, folderId: string) => {
     try {
       const { error } = await supabase
         .from('document_folder_items')
         .insert({ folder_id: folderId, document_id: documentId });
-  
+
       if (error) throw error;
-  
+
       toast.success('Document added to folder');
       return true;
     } catch (error: any) {
@@ -351,7 +354,7 @@ export const useAppOperations = ({
       return false;
     }
   }, []);
-  
+
   const removeDocumentFromFolder = useCallback(async (documentId: string, folderId: string) => {
     try {
       const { error } = await supabase
@@ -359,9 +362,9 @@ export const useAppOperations = ({
         .delete()
         .eq('folder_id', folderId)
         .eq('document_id', documentId);
-  
+
       if (error) throw error;
-  
+
       toast.success('Document removed from folder');
       return true;
     } catch (error: any) {
@@ -450,46 +453,64 @@ export const useAppOperations = ({
     }
   };
 
-  const addScheduleItem = async (item: ScheduleItem) => {
+  const addScheduleItem = useCallback(async (item: ScheduleItem) => {
     try {
-      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
+      const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
+  
+      const { data, error } = await supabase
         .from('schedule_items')
         .insert({
           title: item.title,
           subject: item.subject,
-          start_time: typeof item.startTime === 'string' ? item.startTime : item.startTime,
-          end_time: typeof item.endTime === 'string' ? item.endTime : item.endTime,
+          start_time: item.startTime,
+          end_time: item.endTime,
           type: item.type,
           description: item.description,
           location: item.location,
           color: item.color,
           user_id: user.id
-        });
-
+        })
+        .select()
+        .single();
+  
       if (error) throw error;
-
-      setScheduleItems(prev => [...prev, item]);
+  
+      // Create the complete schedule item with the returned data
+      const newScheduleItem: ScheduleItem = {
+        id: data.id,
+        title: data.title,
+        subject: data.subject,
+        startTime: data.start_time,
+        endTime: data.end_time,
+        type: data.type,
+        description: data.description,
+        location: data.location,
+        color: data.color,
+        userId: data.user_id,
+        created_at: data.created_at
+      };
+  
+      setScheduleItems(prev => [...prev, newScheduleItem]);
+      toast.success('Schedule item added successfully');
     } catch (error) {
       console.error('Error adding schedule item:', error);
       toast.error('Failed to add schedule item');
     }
-  };
-
-  const updateScheduleItem = async (item: ScheduleItem) => {
+  }, [setScheduleItems]);
+  
+  const updateScheduleItem = useCallback(async (item: ScheduleItem) => {
     try {
-      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
+      const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-
+  
       const { error } = await supabase
         .from('schedule_items')
         .update({
           title: item.title,
           subject: item.subject,
-          start_time: typeof item.startTime === 'string' ? item.startTime : item.startTime,
-          end_time: typeof item.endTime === 'string' ? item.endTime : item.endTime,
+          start_time: item.startTime,
+          end_time: item.endTime,
           type: item.type,
           description: item.description,
           location: item.location,
@@ -497,35 +518,37 @@ export const useAppOperations = ({
         })
         .eq('id', item.id)
         .eq('user_id', user.id);
-
+  
       if (error) throw error;
-
+  
       setScheduleItems(prev => prev.map(i => i.id === item.id ? item : i));
+      toast.success('Schedule item updated successfully');
     } catch (error) {
       console.error('Error updating schedule item:', error);
       toast.error('Failed to update schedule item');
     }
-  };
-
-  const deleteScheduleItem = async (id: string) => {
+  }, [setScheduleItems]);
+  
+  const deleteScheduleItem = useCallback(async (id: string) => {
     try {
-      const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
+      const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-
+  
       const { error } = await supabase
         .from('schedule_items')
         .delete()
         .eq('id', id)
         .eq('user_id', user.id);
-
+  
       if (error) throw error;
-
+  
       setScheduleItems(prev => prev.filter(i => i.id !== id));
+      toast.success('Schedule item deleted successfully');
     } catch (error) {
       console.error('Error deleting schedule item:', error);
       toast.error('Failed to delete schedule item');
     }
-  };
+  }, [setScheduleItems]);
   const sendChatMessage = useCallback(async (
     messageContent: string,
     session_id?: string,
@@ -538,9 +561,9 @@ export const useAppOperations = ({
       await withRetry(async () => {
         const { data: { user } = {} } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
-
+  
         const userMessageId = generateId();
-
+  
         const { error: insertError } = await supabase
           .from('chat_messages')
           .insert({
@@ -554,11 +577,11 @@ export const useAppOperations = ({
             image_url: imageUrl || null,
             image_mime_type: imageMimeType || null,
             session_id: session_id || null,
-            has_been_displayed: false, // NEW: Default to false
+            has_been_displayed: false,
           });
-
+  
         if (insertError) throw insertError;
-
+  
         if (!isRealtimeConnected) {
           const newMessage: Message = {
             id: userMessageId,
@@ -570,12 +593,12 @@ export const useAppOperations = ({
             attachedNoteIds: attachedNoteIds || [],
             image_url: imageUrl,
             image_mime_type: imageMimeType,
-            session_id: session_id || undefined,
-            has_been_displayed: false, // NEW: Default to false
+            session_id: session_id,
+            has_been_displayed: false,
           };
           setChatMessages(prev => [...prev, newMessage]);
         }
-
+  
         toast.success('Message sent!');
       });
     } catch (error) {
@@ -584,8 +607,6 @@ export const useAppOperations = ({
       if (!isRealtimeConnected) refreshData();
     }
   }, [isRealtimeConnected, refreshData, setChatMessages]);
-
-
 
   const handleDocumentUploaded = async (document: Document) => {
     try {

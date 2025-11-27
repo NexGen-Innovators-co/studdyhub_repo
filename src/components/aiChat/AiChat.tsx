@@ -143,48 +143,55 @@ const AIChat: React.FC<AIChatProps> = ({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isUpdatingDocuments, setIsUpdatingDocuments] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
-// Add with your other state declarations
-const [isLoadingSession, setIsLoadingSession] = useState(false);
+  // Add with your other state declarations
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
   const isCurrentlySendingRef = useRef(false);
   // Enhanced document synchronization effect
   // Replace your current document synchronization useEffect with:
-useEffect(() => {
-  const documentsChanged = documents !== prevDocumentsRef.current;
-  const notesChanged = notes !== prevNotesRef.current;
+  useEffect(() => {
+    const documentsChanged = documents !== prevDocumentsRef.current;
+    const notesChanged = notes !== prevNotesRef.current;
 
-  if (documentsChanged || notesChanged) {
-    console.log('🔄 Documents or notes changed, updating merged documents');
-    
-    const timer = setTimeout(() => {
-      const allDocuments: Document[] = [
-        ...documents,
-        ...notes.map(note => ({
-          id: note.id,
-          title: note.title || 'Untitled Note',
-          file_name: note.title || 'Untitled Note',
-          file_type: 'text/plain',
-          file_size: new Blob([note.content]).size,
-          file_url: '',
-          content_extracted: note.content,
-          user_id: note.user_id,
-          type: 'text' as const,
-          processing_status: 'completed' as const,
-          processing_error: null,
-          created_at: new Date(note.createdAt),
-          updated_at: new Date(note.createdAt).toISOString(),
-          folder_ids: [],
-        }))
-      ];
+    if (documentsChanged || notesChanged) {
+      console.log('🔄 Documents or notes changed, updating merged documents');
 
-      setMergedDocuments(allDocuments);
-      prevDocumentsRef.current = documents;
-      prevNotesRef.current = notes;
-    }, 100);
+      const timer = setTimeout(() => {
+        const allDocuments: Document[] = [
+          ...documents,
+          ...notes.map(note => ({
+            id: note.id,
+            title: note.title || 'Untitled Note',
+            file_name: note.title || 'Untitled Note',
+            file_type: 'text/plain',
+            file_size: new Blob([note.content]).size,
+            file_url: '',
+            content_extracted: note.content,
+            user_id: note.user_id,
+            type: 'text' as const,
+            processing_status: 'completed' as const,
+            processing_error: null,
+            created_at: note.created_at,
+            processing_started_at: null,
+            processing_completed_at: null,
+            processing_metadata: null,
+            extraction_model_used: null,
+            updated_at: note.created_at,
+            folder_ids: [],
+            total_processing_time_ms: 0, // Add this line
+            page_count: 0, // Add this line
+            vector_store_id: null, // Add this line
+          }))
+        ];
 
-    return () => clearTimeout(timer);
-  }
-}, [documents, notes]);
+        setMergedDocuments(allDocuments);
+        prevDocumentsRef.current = documents;
+        prevNotesRef.current = notes;
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [documents, notes]);
   // Load session documents from database
   const loadSessionDocuments = useCallback(async (sessionId: string) => {
     if (!userProfile?.id) return;
@@ -262,11 +269,11 @@ useEffect(() => {
   // Enhanced send message with better document synchronization
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-  
+
     if (isCurrentlySendingRef.current) {
       return;
     }
-  
+
     isCurrentlySendingRef.current = true;
 
     if (isCurrentlySending) {
@@ -390,7 +397,7 @@ useEffect(() => {
         noteIds,
         filesForBackend
       );
-      
+
       // Reset form state
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (cameraInputRef.current) cameraInputRef.current.value = '';
@@ -623,176 +630,99 @@ useEffect(() => {
     }
   }, [attachedFiles, selectedDocumentIds, mergedDocuments, notes, isLoadingSessionMessages, activeChatSessionId, userProfile?.id, messages]);
 
-// Throttle utility function
-const throttle = (func: Function, limit: number) => {
-  let inThrottle: boolean;
-  return function(this: any, ...args: any[]) {
-    if (!inThrottle) {
-      func.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
-    }
+  // Throttle utility function
+  const throttle = (func: Function, limit: number) => {
+    let inThrottle: boolean;
+    return function (this: any, ...args: any[]) {
+      if (!inThrottle) {
+        func.apply(this, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    };
   };
-};
-// Enhanced scroll management for AI typing
+  // Enhanced scroll management for AI typing
 
-// Smooth scroll to bottom with AI typing support
-const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth', force = false) => {
-  if (!isAutoScrolling && !force) return;
-  
-  requestAnimationFrame(() => {
-    messagesEndRef.current?.scrollIntoView({ 
-      behavior,
-      block: 'end',
-      inline: 'nearest'
+  // Smooth scroll to bottom with AI typing support
+  const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth', force = false) => {
+    if (!isAutoScrolling && !force) return;
+
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior,
+        block: 'end',
+        inline: 'nearest'
+      });
     });
-  });
-}, [isAutoScrolling]);
+  }, [isAutoScrolling]);
 
-// Enhanced scroll handler with AI typing detection
-const handleScroll = useCallback(async () => {
-  const chatContainer = chatContainerRef.current;
-  if (!chatContainer) return;
+  // Enhanced effect for new messages and session changes
+  useEffect(() => {
+    if (messages.length === 0) return;
 
-  const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-  const scrollBottom = scrollHeight - scrollTop - clientHeight;
-  
-  // Auto-scroll if user is near bottom (within 100px) or AI is typing
-  const isNearBottom = scrollBottom <= 100;
-  setIsAutoScrolling(isNearBottom || isAiTyping);
+    const lastMessage = messages[messages.length - 1];
+    const isNewMessage = lastMessage.id !== lastProcessedMessageIdRef.current;
 
-  // Load older messages when scrolling up
-  if (scrollTop <= 100 && hasMoreMessages && !isLoadingOlderMessages && !isLoading && !isLoadingSessionMessages) {
-    setIsLoadingOlderMessages(true);
-    try {
-      const oldScrollHeight = chatContainer.scrollHeight;
-      await onLoadOlderMessages();
+    if (isNewMessage) {
+      lastProcessedMessageIdRef.current = lastMessage.id;
+
+      if (lastMessage.role === 'assistant') {
+        // AI message - scroll immediately and set typing state
+        setIsAiTyping(true);
+        scrollToBottom('smooth', true);
+      } else if (lastMessage.role === 'user') {
+        // User message - scroll immediately
+        scrollToBottom('smooth', true);
+      }
+    }
+
+    // If it's the last AI message and it's complete, stop typing
+    if (lastMessage.role === 'assistant' && !lastMessage.content.includes('█') && !isLoading) {
+      setIsAiTyping(false);
+    }
+  }, [messages, isLoading, scrollToBottom]);
+
+
+  // Replace your session change useEffect with:
+  useEffect(() => {
+    const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
+
+    if (isSessionChange && activeChatSessionId && !isLoadingSessionMessages && !isLoadingSession) {
+      setIsLoadingSession(true);
 
       setTimeout(() => {
-        if (chatContainerRef.current) {
-          const newScrollHeight = chatContainerRef.current.scrollHeight;
-          chatContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
-        }
-        setIsLoadingOlderMessages(false);
-      }, 0);
-    } catch (error) {
-      console.error("Error loading older messages:", error);
-      toast.error("Failed to load older messages.");
-      setIsLoadingOlderMessages(false);
+        scrollToBottom('auto', true);
+        prevSessionIdRef.current = activeChatSessionId;
+        setIsLoadingSession(false);
+      }, 100);
+
+      setInputMessage('');
+      setAttachedFiles([]);
+      setExpandedMessages(new Set());
+      setIsCurrentlySending(false);
+      setIsAiTyping(false);
     }
-  }
-}, [hasMoreMessages, isLoadingOlderMessages, isLoading, onLoadOlderMessages, isLoadingSessionMessages, isAiTyping]);
+  }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom, isLoadingSession]);
+  // Enhanced session change handling
+  useEffect(() => {
+    const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
 
-// Enhanced effect for AI typing scroll
-useEffect(() => {
-  if (isAiTyping && isAutoScrolling) {
-    // Scroll more frequently during AI typing
-    const scrollInterval = setInterval(() => {
-      scrollToBottom('smooth');
-    }, 500); // Scroll every 500ms during typing
-    
-    return () => clearInterval(scrollInterval);
-  }
-}, [isAiTyping, isAutoScrolling, scrollToBottom]);
+    if (isSessionChange && activeChatSessionId && !isLoadingSessionMessages && messages.length > 0) {
+      // Force scroll to bottom on session change
+      setTimeout(() => {
+        scrollToBottom('auto', true);
+        prevSessionIdRef.current = activeChatSessionId;
+      }, 100);
 
-// Enhanced effect for new messages and session changes
-useEffect(() => {
-  if (messages.length === 0) return;
-
-  const lastMessage = messages[messages.length - 1];
-  const isNewMessage = lastMessage.id !== lastProcessedMessageIdRef.current;
-
-  if (isNewMessage) {
-    lastProcessedMessageIdRef.current = lastMessage.id;
-
-    if (lastMessage.role === 'assistant') {
-      // AI message - scroll immediately and set typing state
-      setIsAiTyping(true);
-      scrollToBottom('smooth', true);
-    } else if (lastMessage.role === 'user') {
-      // User message - scroll immediately
-      scrollToBottom('smooth', true);
+      // Reset states
+      setInputMessage('');
+      setAttachedFiles([]);
+      setExpandedMessages(new Set());
+      setIsCurrentlySending(false);
+      setIsAiTyping(false);
     }
-  }
+  }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom]);
 
-  // If it's the last AI message and it's complete, stop typing
-  if (lastMessage.role === 'assistant' && !lastMessage.content.includes('█') && !isLoading) {
-    setIsAiTyping(false);
-  }
-}, [messages, isLoading, scrollToBottom]);
-
-
-useEffect(() => {
-  const chatContainer = chatContainerRef.current;
-  if (chatContainer) {
-    chatContainer.addEventListener('scroll', handleScroll);
-    return () => {
-      chatContainer.removeEventListener('scroll', handleScroll);
-    };
-  }
-}, [handleScroll]);
-
-// Replace your session change useEffect with:
-useEffect(() => {
-  const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
-  
-  if (isSessionChange && activeChatSessionId && !isLoadingSessionMessages && !isLoadingSession) {
-    setIsLoadingSession(true);
-    
-    setTimeout(() => {
-      scrollToBottom('auto', true);
-      prevSessionIdRef.current = activeChatSessionId;
-      setIsLoadingSession(false);
-    }, 100);
-    
-    setInputMessage('');
-    setAttachedFiles([]);
-    setExpandedMessages(new Set());
-    setIsCurrentlySending(false);
-    setIsAiTyping(false);
-  }
-}, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom, isLoadingSession]);
-// Enhanced session change handling
-useEffect(() => {
-  const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
-  
-  if (isSessionChange && activeChatSessionId && !isLoadingSessionMessages && messages.length > 0) {
-    // Force scroll to bottom on session change
-    setTimeout(() => {
-      scrollToBottom('auto', true);
-      prevSessionIdRef.current = activeChatSessionId;
-    }, 100);
-    
-    // Reset states
-    setInputMessage('');
-    setAttachedFiles([]);
-    setExpandedMessages(new Set());
-    setIsCurrentlySending(false);
-    setIsAiTyping(false);
-  }
-}, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom]);
-
-// Enhanced effect for when AI stops typing
-useEffect(() => {
-  if (!isAiTyping && isAutoScrolling) {
-    // Final scroll when AI finishes typing
-    setTimeout(() => {
-      scrollToBottom('smooth', true);
-    }, 100);
-  }
-}, [isAiTyping, isAutoScrolling, scrollToBottom]);
-
-// Enhanced scroll event listener
-useEffect(() => {
-  const chatContainer = chatContainerRef.current;
-  if (chatContainer) {
-    const handleScrollThrottled = throttle(handleScroll, 100);
-    chatContainer.addEventListener('scroll', handleScrollThrottled);
-    return () => {
-      chatContainer.removeEventListener('scroll', handleScrollThrottled);
-    };
-  }
-}, [handleScroll]);
 
   const handleMessageDeleteClick = useCallback((messageId: string) => {
     setMessageToDelete(messageId);
@@ -989,6 +919,17 @@ useEffect(() => {
           {/* Chat content remains the same */}
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar pb-36 md:pb-6">
             {/* MessageList and other content */}
+            {isLoadingSessionMessages && (
+              <div className="flex justify-center items-center w-full py-10">
+                <Loader2 className="h-4 w-4 animate-spin text-pink-500" />
+              </div>
+            )}
+            {!hasMoreMessages && messages.length === 0 && !isLoadingSessionMessages && !activeChatSessionId && (
+              <div className="text-center text-gray-500 dark:text-gray-400 mt-20 font-claude">
+                <BookPagesAnimation className="mx-auto mb-4 h-16 w-16 text-pink-500" showText={false} />
+                <p className="text-lg md:text-xl">Start the conversation by sending a message!</p>
+              </div>
+            )}
             <MessageList
               messages={messages}
               isLoading={isLoading}
@@ -1045,7 +986,7 @@ ${isDiagramPanelOpen
             }`}>
             {/* Input form with enhanced context badges */}
             <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2">
-             {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
+              {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
                 <div className="mb-2">
                   <ContextBadges
                     attachedFiles={attachedFiles}
@@ -1059,7 +1000,7 @@ ${isDiagramPanelOpen
                     notes={notes}
                   />
                 </div>
-              ) : null} 
+              ) : null}
               {/* Textarea and buttons */}
               <textarea
                 ref={textareaRef}
@@ -1209,7 +1150,7 @@ ${isDiagramPanelOpen
 
           {/* Document selector and other modals */}
           {showDocumentSelector && (
-           
+
             <DocumentSelector
               documents={mergedDocuments}
               notes={notes}
@@ -1252,7 +1193,7 @@ ${isDiagramPanelOpen
             initialWidthPercentage={panelWidth}
             liveContent={activeDiagram?.content}
             isPhone={isPhone}
-            currentTheme= {initialAppState.currentTheme}
+            currentTheme={initialAppState.currentTheme}
           />
         )}
       </div>

@@ -101,7 +101,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
         description: formData.description,
         color: getColorForType(formData.type),
         userId: editingItem?.userId || '',
-        createdAt: editingItem?.createdAt || new Date().toISOString()
+        created_at: editingItem?.created_at || new Date().toISOString()
       };
 
       if (editingItem) {
@@ -226,7 +226,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
           )}
-          <Button 
+          <Button
             onClick={() => setShowForm(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
@@ -279,8 +279,8 @@ export const Schedule: React.FC<ScheduleProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Type *</label>
-                  <Select 
-                    value={formData.type} 
+                  <Select
+                    value={formData.type}
                     onValueChange={(value: ScheduleItem['type']) => setFormData({ ...formData, type: value })}
                     disabled={isSubmitting}
                   >
@@ -353,8 +353,8 @@ export const Schedule: React.FC<ScheduleProps> = ({
               </div>
 
               <div className="flex gap-2 pt-2">
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={isSubmitting}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
@@ -369,9 +369,9 @@ export const Schedule: React.FC<ScheduleProps> = ({
                     </>
                   )}
                 </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={resetForm}
                   disabled={isSubmitting}
                 >
@@ -411,7 +411,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
                   <p className="text-slate-500 dark:text-gray-400 mb-4">
                     Add your first schedule item to start organizing your time
                   </p>
-                  <Button 
+                  <Button
                     onClick={() => setShowForm(true)}
                     className="bg-blue-600 hover:bg-blue-700"
                   >
@@ -423,8 +423,8 @@ export const Schedule: React.FC<ScheduleProps> = ({
             ) : (
               <div className="grid gap-4">
                 {upcomingItems.map((item) => (
-                  <Card 
-                    key={item.id} 
+                  <Card
+                    key={item.id}
                     className="hover:shadow-lg transition-all duration-200 border-l-4"
                     style={{ borderLeftColor: item.color }}
                   >
@@ -477,9 +477,9 @@ export const Schedule: React.FC<ScheduleProps> = ({
                         </div>
 
                         <div className="flex gap-1 ml-4">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleEdit(item)}
                             title="Edit"
                             className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
@@ -513,8 +513,8 @@ export const Schedule: React.FC<ScheduleProps> = ({
               </summary>
               <div className="grid gap-4 mt-4 opacity-60">
                 {pastItems.slice(0, 10).map((item) => (
-                  <Card 
-                    key={item.id} 
+                  <Card
+                    key={item.id}
                     className="hover:shadow-md transition-shadow border-l-4"
                     style={{ borderLeftColor: item.color }}
                   >

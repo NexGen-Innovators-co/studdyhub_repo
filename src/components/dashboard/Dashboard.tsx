@@ -94,13 +94,12 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     const StatCard = ({ title, value, icon: Icon, trend, trendValue, color = 'blue', onClick, subtitle }: any) => (
         <Card
-            className={`hover:shadow-lg transition-all duration-200 cursor-pointer border-l-4 group ${
-                color === 'blue' ? 'border-l-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950' :
-                color === 'green' ? 'border-l-green-500 hover:bg-green-50 dark:hover:bg-green-950' :
-                color === 'yellow' ? 'border-l-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950' :
-                color === 'purple' ? 'border-l-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950' :
-                'border-l-gray-500 hover:bg-gray-50 dark:hover:bg-gray-950'
-            }`}
+            className={`hover:shadow-lg transition-all duration-200 cursor-pointer border-l-4 group ${color === 'blue' ? 'border-l-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950' :
+                    color === 'green' ? 'border-l-green-500 hover:bg-green-50 dark:hover:bg-green-950' :
+                        color === 'yellow' ? 'border-l-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950' :
+                            color === 'purple' ? 'border-l-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950' :
+                                'border-l-gray-500 hover:bg-gray-50 dark:hover:bg-gray-950'
+                }`}
             onClick={onClick}
         >
             <CardContent className="p-4 dark:bg-slate-800/80">
@@ -113,20 +112,19 @@ const Dashboard: React.FC<DashboardProps> = ({
                         )}
                         {trend && (
                             <div className={`flex items-center text-xs ${trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
-                                {trend === 'up' ? <ChevronUp className="h-3 w-3 mr-1" /> : 
-                                 trend === 'down' ? <ChevronDown className="h-3 w-3 mr-1" /> : 
-                                 <Minus className="h-3 w-3 mr-1" />}
+                                {trend === 'up' ? <ChevronUp className="h-3 w-3 mr-1" /> :
+                                    trend === 'down' ? <ChevronDown className="h-3 w-3 mr-1" /> :
+                                        <Minus className="h-3 w-3 mr-1" />}
                                 {trendValue}
                             </div>
                         )}
                     </div>
-                    <div className={`p-3 rounded-full group-hover:scale-110 transition-transform ${
-                        color === 'blue' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' :
-                        color === 'green' ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' :
-                        color === 'yellow' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-400' :
-                        color === 'purple' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400' :
-                        'bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400'
-                    }`}>
+                    <div className={`p-3 rounded-full group-hover:scale-110 transition-transform ${color === 'blue' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' :
+                            color === 'green' ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' :
+                                color === 'yellow' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-400' :
+                                    color === 'purple' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400' :
+                                        'bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400'
+                        }`}>
                         <Icon className="h-6 w-6" />
                     </div>
                 </div>
@@ -138,13 +136,12 @@ const Dashboard: React.FC<DashboardProps> = ({
         <Card className="hover:shadow-md transition-all duration-200 cursor-pointer dark:bg-slate-800/80 hover:scale-105" onClick={onClick}>
             <CardContent className="p-4">
                 <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${
-                        color === 'blue' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' :
-                        color === 'green' ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' :
-                        color === 'yellow' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-400' :
-                        color === 'purple' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400' :
-                        'bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400'
-                    }`}>
+                    <div className={`p-2 rounded-lg ${color === 'blue' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' :
+                            color === 'green' ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' :
+                                color === 'yellow' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-400' :
+                                    color === 'purple' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400' :
+                                        'bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400'
+                        }`}>
                         <Icon className="h-5 w-5" />
                     </div>
                     <div>
@@ -160,7 +157,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         return (
             <div className="flex items-center justify-center h-full">
                 <div className="text-center">
-                    <BookPagesAnimation size='lg' showText text='Loading dashboard data...'/>
+                    <BookPagesAnimation size='lg' showText text='Loading dashboard data...' />
                 </div>
             </div>
         );
@@ -227,7 +224,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         size="sm"
                         onClick={() => setTimeFilter(timeFilter === 'all' ? '7d' :
                             timeFilter === '7d' ? '30d' :
-                            timeFilter === '30d' ? '90d' : 'all')}
+                                timeFilter === '30d' ? '90d' : 'all')}
                     >
                         <Filter className="h-4 w-4 mr-2" />
                         {timeFilter === 'all' ? 'All Time' : timeFilter.toUpperCase()}
@@ -622,9 +619,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     <XAxis dataKey="week" />
                                     <YAxis />
                                     <Tooltip />
-                                    <Line 
-                                        type="monotone" 
-                                        dataKey="items" 
+                                    <Line
+                                        type="monotone"
+                                        dataKey="items"
                                         stroke={CHART_COLORS.purple}
                                         strokeWidth={2}
                                         dot={{ fill: CHART_COLORS.purple, r: 4 }}
@@ -664,13 +661,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                                             <p className="text-2xl font-bold text-blue-600">{stats.notesThisWeek}</p>
                                         </div>
                                     </div>
-                                    <Progress 
-                                        value={(stats.currentStreak / Math.max(stats.maxStreak, 1)) * 100} 
-                                        className="w-full h-3" 
+                                    <Progress
+                                        value={(stats.currentStreak / Math.max(stats.maxStreak, 1)) * 100}
+                                        className="w-full h-3"
                                     />
                                     {stats.currentStreak > 0 && (
                                         <p className="text-xs text-gray-500">
-                                            Keep it up! {stats.maxStreak - stats.currentStreak > 0 
+                                            Keep it up! {stats.maxStreak - stats.currentStreak > 0
                                                 ? `${stats.maxStreak - stats.currentStreak} days to beat your record!`
                                                 : 'You\'re on your best streak! 🎉'}
                                         </p>
@@ -747,8 +744,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <div className="space-y-3">
                                     {stats.topCategories.map((cat, index) => (
                                         <div key={cat.category} className="flex items-center gap-3">
-                                            <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white" 
-                                                 style={{ backgroundColor: COLORS[index % COLORS.length] }}>
+                                            <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white"
+                                                style={{ backgroundColor: COLORS[index % COLORS.length] }}>
                                                 {index + 1}
                                             </div>
                                             <div className="flex-1">
@@ -756,8 +753,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                                                     <span className="text-sm font-medium">{cat.category}</span>
                                                     <span className="text-sm text-gray-500">{cat.count} notes</span>
                                                 </div>
-                                                <Progress 
-                                                    value={(cat.count / stats.totalNotes) * 100} 
+                                                <Progress
+                                                    value={(cat.count / stats.totalNotes) * 100}
                                                     className="h-2"
                                                 />
                                             </div>
@@ -779,9 +776,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         <XAxis dataKey="date" hide />
                                         <YAxis />
                                         <Tooltip />
-                                        <Line 
-                                            type="monotone" 
-                                            dataKey="total" 
+                                        <Line
+                                            type="monotone"
+                                            dataKey="total"
                                             stroke={CHART_COLORS.primary}
                                             strokeWidth={2}
                                             dot={false}
@@ -824,9 +821,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     </div>
                                     <p className="text-gray-600 dark:text-gray-400 mt-2">
                                         {stats.engagementScore >= 80 ? '🔥 Outstanding! You\'re crushing it!' :
-                                         stats.engagementScore >= 60 ? '👍 Great work! Keep it up!' :
-                                         stats.engagementScore >= 40 ? '💪 Good progress! Room to improve!' :
-                                         '🌱 Just getting started!'}
+                                            stats.engagementScore >= 60 ? '👍 Great work! Keep it up!' :
+                                                stats.engagementScore >= 40 ? '💪 Good progress! Room to improve!' :
+                                                    '🌱 Just getting started!'}
                                     </p>
                                     <Progress value={stats.engagementScore} className="w-full h-3 mt-4" />
                                 </div>
@@ -935,8 +932,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <CardContent>
                         <div className="space-y-3 max-h-96 overflow-y-auto modern-scrollbar">
                             {stats.recentNotes.map((note) => (
-                                <div 
-                                    key={note.id} 
+                                <div
+                                    key={note.id}
                                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                                     onClick={() => onNavigateToTab('notes')}
                                 >
@@ -946,7 +943,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate">{note.title}</p>
                                         <p className="text-xs text-gray-500">
-                                            {new Date(note.createdAt).toLocaleDateString()} • {note.category}
+                                            {new Date(note.created_at).toLocaleDateString()} • {note.category}
                                         </p>
                                     </div>
                                     <Badge variant="outline" className="text-xs">{note.category}</Badge>
@@ -954,8 +951,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                             ))}
 
                             {stats.recentRecordings.map((recording) => (
-                                <div 
-                                    key={recording.id} 
+                                <div
+                                    key={recording.id}
                                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                                     onClick={() => onNavigateToTab('recordings')}
                                 >
@@ -965,7 +962,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate">{recording.title}</p>
                                         <p className="text-xs text-gray-500">
-                                            {new Date(recording.createdAt).toLocaleDateString()} • {Math.round(recording.duration / 60)}min
+                                            {new Date(recording.created_at).toLocaleDateString()} • {Math.round(recording.duration / 60)}min
                                         </p>
                                     </div>
                                     <Badge variant="outline" className="text-xs">Recording</Badge>
@@ -973,8 +970,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                             ))}
 
                             {stats.recentDocuments.map((doc) => (
-                                <div 
-                                    key={doc.id} 
+                                <div
+                                    key={doc.id}
                                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                                     onClick={() => onNavigateToTab('documents')}
                                 >
@@ -984,12 +981,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate">{doc.title}</p>
                                         <p className="text-xs text-gray-500">
-                                            {new Date(doc.createdAt).toLocaleDateString()} • {doc.type}
+                                            {new Date(doc.created_at).toLocaleDateString()} • {doc.type}
                                         </p>
                                     </div>
-                                    <Badge 
-                                        variant={doc.processing_status === 'completed' ? 'default' : 
-                                                doc.processing_status === 'failed' ? 'destructive' : 'secondary'}
+                                    <Badge
+                                        variant={doc.processing_status === 'completed' ? 'default' :
+                                            doc.processing_status === 'failed' ? 'destructive' : 'secondary'}
                                         className="text-xs"
                                     >
                                         {doc.processing_status}
@@ -1167,9 +1164,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     {Math.min(Math.round(stats.studyTimeThisWeek / 3600), 20)}/20
                                 </span>
                             </div>
-                            <Progress 
-                                value={(Math.min(Math.round(stats.studyTimeThisWeek / 3600), 20) / 20) * 100} 
-                                className="h-2" 
+                            <Progress
+                                value={(Math.min(Math.round(stats.studyTimeThisWeek / 3600), 20) / 20) * 100}
+                                className="h-2"
                             />
                             <p className="text-xs text-gray-500">Record 20 hours of study</p>
                         </div>
@@ -1181,9 +1178,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     {Math.min(stats.totalMessages, 50)}/50
                                 </span>
                             </div>
-                            <Progress 
-                                value={(Math.min(stats.totalMessages, 50) / 50) * 100} 
-                                className="h-2" 
+                            <Progress
+                                value={(Math.min(stats.totalMessages, 50) / 50) * 100}
+                                className="h-2"
                             />
                             <p className="text-xs text-gray-500">Engage with AI tutor</p>
                         </div>

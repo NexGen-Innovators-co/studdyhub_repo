@@ -1,18 +1,24 @@
+// types/Document.ts
 export interface Document {
-  content_extracted:  string | null;
-  created_at: Date | null;
-  file_name: string;
-  file_size: number | null;
-  file_type: string;
-  file_url: string;
   id: string;
-  title: string;
-  updated_at: string;
   user_id: string;
-  type: string;
-  processing_error: string | null; // Changed to 'string | null'
-  processing_status: string; // Changed to 'string'
-  folder_ids?: string[];
+  title: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  file_size: number | null;
+  content_extracted: string | null;
+  created_at: string; // Keep as string from Supabase
+  updated_at: string; // Keep as string from Supabase
+  type: 'pdf' | 'txt' | 'doc' | 'docx' | 'md' | 'audio' | 'video' | 'image' | 'other' | string;
+  processing_error: string | null;
+  processing_status: string | null;
+  processing_started_at: string | null;
+  processing_completed_at: string | null;
+  processing_metadata: any | null;
+  extraction_model_used: string | null;
+  total_processing_time_ms: number | null;
+  folder_ids: string[]; // From ARRAY default '{}'::uuid[]
 }
 
 export interface UserProfile {
