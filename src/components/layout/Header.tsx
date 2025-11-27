@@ -175,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({
       return (
         <Button onClick={onNewNote} size="sm" className="bg-orange-300 dark:bg-orange-900/30 text-white">
           <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline ml-2">New Note</span>
+          <span className=" sm:inline ml-2">New Note</span>
         </Button>
       );
     }
@@ -184,7 +184,7 @@ export const Header: React.FC<HeaderProps> = ({
       return (
         <Button onClick={onNewRecording} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
           <Mic className="h-4 w-4" />
-          <span className="hidden sm:inline ml-2">New Recording</span>
+          <span className=" sm:inline ml-2">New Recording</span>
         </Button>
       );
     }
@@ -193,7 +193,7 @@ export const Header: React.FC<HeaderProps> = ({
       return (
         <Button onClick={onNewSchedule} size="sm" className="bg-orange-600 hover:bg-orange-700 text-white">
           <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline ml-2">New Event</span>
+          <span className=" sm:inline ml-2">New Event</span>
         </Button>
       );
     }
@@ -202,7 +202,7 @@ export const Header: React.FC<HeaderProps> = ({
       return (
         <Button onClick={onUploadDocument} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
           <Upload className="h-4 w-4" />
-          <span className="hidden sm:inline ml-2">Upload Document</span>
+          <span className=" sm:inline ml-2">Upload Document</span>
         </Button>
       );
     }
@@ -211,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({
       return (
         <Button onClick={onNewChat} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
           <MessageCircle className="h-4 w-4" />
-          <span className="hidden sm:inline ml-2">New Chat</span>
+          <span className=" sm:inline ml-2">New Chat</span>
         </Button>
       );
     }
@@ -220,7 +220,7 @@ export const Header: React.FC<HeaderProps> = ({
       return (
         <Button onClick={onOpenCreatePostDialog} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
           <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline ml-2">New Post</span>
+          <span className=" sm:inline ml-2">New Post</span>
         </Button>
       );
     }
@@ -307,8 +307,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Center: Navigation with App Menu on ALL routes */}
         <div className="hidden md:flex items-center flex-1 justify-center max-w-5xl mx-auto gap-4">
-          {/* App Menu - Available on ALL routes */}
-          {getRouteSpecificActions()}
+          
           {isSocialRoute ? (
             // Social Route - Additional Social Navigation
             <>
@@ -371,9 +370,10 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Route-specific actions + Quick Social Access + Avatar */}
         <div className="flex items-center gap-3">
-          {/* Route-specific action buttons */}
-         
-
+          {/* Route-specific Actions */}
+          <div className=" md:flex">
+            {getRouteSpecificActions()}
+          </div>
           {/* Avatar with Dropdown */}
           <div ref={avatarRef} className="relative">
             <button

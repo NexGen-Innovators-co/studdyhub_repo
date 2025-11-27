@@ -28,7 +28,7 @@ interface CodeBlock {
 export const useTypingAnimation = ({
   text,
   messageId,
-  wordsPerSecond = 21,
+  wordsPerSecond = 5,
   enabled = true,
   onComplete,
   isAlreadyComplete = false,

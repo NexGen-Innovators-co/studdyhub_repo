@@ -28,10 +28,10 @@ export const useMessageHandlers = () => {
     allDocuments: AppDocument[],
     allNotes: Note[]
   ) => {
-    const selectedDocs = (allDocuments ?? []).filter(doc => 
+    const selectedDocs = (allDocuments ?? []).filter(doc =>
       (documentIdsToInclude ?? []).includes(doc.id)
     );
-    const selectedNotes = (allNotes ?? []).filter(note => 
+    const selectedNotes = (allNotes ?? []).filter(note =>
       (noteIdsToInclude ?? []).includes(note.id)
     );
 
@@ -44,8 +44,8 @@ export const useMessageHandlers = () => {
         if (doc.content_extracted) {
           context += docInfo + `Content: ${doc.content_extracted}\n\n`;
         } else {
-          context += docInfo + `Content: ${doc.processing_status === 'completed' 
-            ? 'No extractable content found' 
+          context += docInfo + `Content: ${doc.processing_status === 'completed'
+            ? 'No extractable content found'
             : `Processing status: ${doc.processing_status || 'pending'}`}\n\n`;
         }
       }
@@ -61,7 +61,7 @@ export const useMessageHandlers = () => {
         }
 
         const noteBlock = noteInfo + (noteContent ? `Content: ${noteContent}\n` : '') +
-          (note.aiSummary ? `Summary: ${note.aiSummary}\n` : '') +
+          (note.ai_summary ? `Summary: ${note.ai_summary}\n` : '') +
           (note.tags?.length ? `Tags: ${note.tags.join(', ')}\n` : '') + '\n';
 
         context += noteBlock;
@@ -124,9 +124,9 @@ export const useMessageHandlers = () => {
       }
 
       const currentAttachedContext = buildRichContext(
-        finalAttachedDocumentIds, 
-        finalAttachedNoteIds, 
-        documents, 
+        finalAttachedDocumentIds,
+        finalAttachedNoteIds,
+        documents,
         notes
       );
       if (currentAttachedContext) {
@@ -173,8 +173,8 @@ export const useMessageHandlers = () => {
 
       historicalMessagesForAI.forEach(msg => {
         const msgParts: MessagePart[] = [{ text: msg.content }];
-        if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 || 
-            msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
+        if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0 ||
+          msg.attachedNoteIds && msg.attachedNoteIds.length > 0) {
           const historicalContext = buildRichContext(
             msg.attachedDocumentIds || [],
             msg.attachedNoteIds || [],
@@ -305,10 +305,10 @@ export const useMessageHandlers = () => {
       // Update UI with real messages
       setChatMessages(prev => {
         // Remove optimistic messages
-        const withoutOptimistic = prev.filter(msg => 
+        const withoutOptimistic = prev.filter(msg =>
           msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
         );
-        
+
         // Add real messages
         return [...withoutOptimistic, realUserMessage, realAiMessage];
       });
@@ -343,12 +343,12 @@ export const useMessageHandlers = () => {
 
     } catch (error: any) {
       //console.error('Error in handleSubmitMessage:', error);
-      
+
       // Remove optimistic messages on error
       setChatMessages(prev => {
         return prev.filter(msg => !msg.id.startsWith('optimistic-'));
       });
-      
+
       let errorMessage = 'Failed to send message';
       if (error.message?.includes('content size exceeds')) {
         errorMessage = 'Message too large. Please reduce file sizes or message length.';
@@ -398,7 +398,7 @@ export const useMessageHandlers = () => {
       }
 
       // Optimistically remove from UI
-      setChatMessages(prevMessages => 
+      setChatMessages(prevMessages =>
         (prevMessages || []).filter(msg => msg.id !== messageId)
       );
       toast.info('Deleting message...');
@@ -447,8 +447,8 @@ export const useMessageHandlers = () => {
     // Mark message as updating in UI
     setChatMessages(prevAllMessages =>
       (prevAllMessages || []).map(msg =>
-        msg.id === lastAssistantMessage.id 
-          ? { ...msg, content: 'Regenerating...', isError: false } 
+        msg.id === lastAssistantMessage.id
+          ? { ...msg, content: 'Regenerating...', isError: false }
           : msg
       )
     );
@@ -472,8 +472,8 @@ export const useMessageHandlers = () => {
 
       setChatMessages(prevAllMessages =>
         (prevAllMessages || []).map(msg =>
-          msg.id === lastAssistantMessage.id 
-            ? { ...msg, isError: true } 
+          msg.id === lastAssistantMessage.id
+            ? { ...msg, isError: true }
             : msg
         )
       );
@@ -481,7 +481,7 @@ export const useMessageHandlers = () => {
   }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmitMessage]);
 
   const handleRetryFailedMessage = useCallback(async (
-    originalUserMessageContent: string, 
+    originalUserMessageContent: string,
     failedAiMessageId: string
   ) => {
     if (!user || !activeChatSessionId) {
@@ -500,8 +500,8 @@ export const useMessageHandlers = () => {
     // Mark message as retrying in UI
     setChatMessages(prevAllMessages =>
       (prevAllMessages || []).map(msg =>
-        msg.id === failedAiMessageId 
-          ? { ...msg, content: 'Retrying...', isError: false } 
+        msg.id === failedAiMessageId
+          ? { ...msg, content: 'Retrying...', isError: false }
           : msg
       )
     );
@@ -525,8 +525,8 @@ export const useMessageHandlers = () => {
 
       setChatMessages(prevAllMessages =>
         (prevAllMessages || []).map(msg =>
-          msg.id === failedAiMessageId 
-            ? { ...msg, isError: true } 
+          msg.id === failedAiMessageId
+            ? { ...msg, isError: true }
             : msg
         )
       );
@@ -544,47 +544,47 @@ export const useMessageHandlers = () => {
 
 // Helper hook for session management
 export const useSessionHelpers = () => {
-  const { 
-    user, 
-    chatSessions, 
-    activeChatSessionId, 
+  const {
+    user,
+    chatSessions,
+    activeChatSessionId,
     dispatch,
-    loadChatSessions 
+    loadChatSessions
   } = useAppContext();
 
   const extractFirstSentence = useCallback((text: string): string => {
     if (!text) return 'New Chat';
-    
+
     // Remove markdown and clean text
     const cleanText = text
       .replace(/[#*`]/g, '')
       .replace(/\n+/g, ' ')
       .trim();
-    
+
     // Find first sentence
     const sentences = cleanText.split(/[.!?]+/);
     const firstSentence = sentences[0]?.trim();
-    
+
     if (firstSentence && firstSentence.length > 5) {
-      return firstSentence.length > 50 
-        ? firstSentence.substring(0, 47) + '...' 
+      return firstSentence.length > 50
+        ? firstSentence.substring(0, 47) + '...'
         : firstSentence;
     }
-    
+
     return 'New Chat';
   }, []);
 
   const switchToSession = useCallback(async (sessionId: string) => {
     if (sessionId === activeChatSessionId) return;
-    
+
     dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionId });
-    
+
     // Update selected document IDs for the new session
     const session = chatSessions.find(s => s.id === sessionId);
     if (session) {
-      dispatch({ 
-        type: 'SET_SELECTED_DOCUMENT_IDS', 
-        payload: session.document_ids || [] 
+      dispatch({
+        type: 'SET_SELECTED_DOCUMENT_IDS',
+        payload: session.document_ids || []
       });
     }
   }, [activeChatSessionId, chatSessions, dispatch]);
@@ -645,7 +645,7 @@ export const useDataHelpers = () => {
   }, [setNotes]);
 
   const updateOptimisticNote = useCallback((noteId: string, updates: Partial<Note>) => {
-    setNotes(prev => prev.map(note => 
+    setNotes(prev => prev.map(note =>
       note.id === noteId ? { ...note, ...updates } : note
     ));
   }, [setNotes]);

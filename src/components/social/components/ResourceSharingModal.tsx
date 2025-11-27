@@ -10,11 +10,11 @@ import {
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
-import { 
-  FileText, 
-  File, 
-  Search, 
-  Loader2, 
+import {
+  FileText,
+  File,
+  Search,
+  Loader2,
   CheckCircle2,
   Calendar,
   FolderOpen
@@ -121,23 +121,21 @@ export const ResourceSharingModal: React.FC<ResourceSharingModalProps> = ({
               ) : (
                 filteredNotes.map((note) => {
                   const isSelected = selectedResourceId === note.id && selectedResourceType === 'note';
-                  
+
                   return (
                     <Card
                       key={note.id}
-                      className={`cursor-pointer transition-all hover:shadow-md ${
-                        isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : ''
-                      }`}
+                      className={`cursor-pointer transition-all hover:shadow-md ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : ''
+                        }`}
                       onClick={() => handleSelectResource(note.id, 'note')}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start gap-3">
-                          <div className={`mt-1 rounded-lg p-2 ${
-                            isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800'
-                          }`}>
+                          <div className={`mt-1 rounded-lg p-2 ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800'
+                            }`}>
                             <FileText className="h-5 w-5" />
                           </div>
-                          
+
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2 mb-1">
                               <h4 className="font-semibold text-slate-900 dark:text-white truncate">
@@ -147,13 +145,13 @@ export const ResourceSharingModal: React.FC<ResourceSharingModalProps> = ({
                                 <CheckCircle2 className="h-5 w-5 text-blue-600 flex-shrink-0" />
                               )}
                             </div>
-                            
+
                             {note.content && (
                               <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2 mb-2">
                                 {note.content}
                               </p>
                             )}
-                            
+
                             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                               {note.category && (
                                 <Badge variant="secondary" className="text-xs">
@@ -162,7 +160,7 @@ export const ResourceSharingModal: React.FC<ResourceSharingModalProps> = ({
                               )}
                               <span className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
-                                {formatDistanceToNow(new Date(note.createdAt || ''), { addSuffix: true })}
+                                {formatDistanceToNow(new Date(note.created_at || ''), { addSuffix: true })}
                               </span>
                             </div>
                           </div>
@@ -186,23 +184,21 @@ export const ResourceSharingModal: React.FC<ResourceSharingModalProps> = ({
                 filteredDocuments.map((doc) => {
                   const isSelected = selectedResourceId === doc.id && selectedResourceType === 'document';
                   const fileSize = doc.file_size ? `${(doc.file_size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size';
-                  
+
                   return (
                     <Card
                       key={doc.id}
-                      className={`cursor-pointer transition-all hover:shadow-md ${
-                        isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : ''
-                      }`}
+                      className={`cursor-pointer transition-all hover:shadow-md ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : ''
+                        }`}
                       onClick={() => handleSelectResource(doc.id, 'document')}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start gap-3">
-                          <div className={`mt-1 rounded-lg p-2 ${
-                            isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800'
-                          }`}>
+                          <div className={`mt-1 rounded-lg p-2 ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800'
+                            }`}>
                             <File className="h-5 w-5" />
                           </div>
-                          
+
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2 mb-1">
                               <div>
@@ -217,7 +213,7 @@ export const ResourceSharingModal: React.FC<ResourceSharingModalProps> = ({
                                 <CheckCircle2 className="h-5 w-5 text-blue-600 flex-shrink-0" />
                               )}
                             </div>
-                            
+
                             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-2">
                               <Badge variant="secondary" className="text-xs">
                                 {doc.file_type}
@@ -231,7 +227,7 @@ export const ResourceSharingModal: React.FC<ResourceSharingModalProps> = ({
 
                             {doc.processing_status && (
                               <div className="mt-2">
-                                <Badge 
+                                <Badge
                                   variant={doc.processing_status === 'completed' ? 'default' : 'secondary'}
                                   className="text-xs"
                                 >

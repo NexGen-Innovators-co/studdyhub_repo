@@ -118,6 +118,22 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
   }, []);
 
+  // Add this function to handle note updates from the NotesList
+  const handleNoteUpdateFromList = useCallback(async (noteId: string, updates: Partial<Note>) => {
+    // Find the note in the filtered notes
+    const noteToUpdate = props.filteredNotes.find(note => note.id === noteId);
+    if (!noteToUpdate) return;
+
+    // Create the updated note
+    const updatedNote: Note = {
+      ...noteToUpdate,
+      ...updates
+    };
+
+    // Call the parent's onNoteUpdate function
+    await props.onNoteUpdate(updatedNote);
+  }, [props.filteredNotes, props.onNoteUpdate]);
+
   const handleDocumentsScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     if (!props.isLoadingDocuments && props.hasMoreDocuments) {
       const el = e.currentTarget;
@@ -288,12 +304,24 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     activeNote: props.activeNote,
     onNoteSelect: props.onNoteSelect,
     onNoteDelete: props.onNoteDelete,
+    onNoteUpdate: handleNoteUpdateFromList, // Add this line for inline editing
     isOpen: isNotesHistoryOpen,
     onClose: onToggleNotesHistory,
     hasMore: props.hasMoreNotes,
     isLoadingMore: props.isLoadingNotes,
     onLoadMore: props.onLoadMoreNotes,
-  }), [props.filteredNotes, props.activeNote, props.onNoteSelect, props.onNoteDelete, isNotesHistoryOpen, onToggleNotesHistory, props.hasMoreNotes, props.isLoadingNotes, props.onLoadMoreNotes]);
+  }), [
+    props.filteredNotes,
+    props.activeNote,
+    props.onNoteSelect,
+    props.onNoteDelete,
+    handleNoteUpdateFromList, // Add this
+    isNotesHistoryOpen,
+    onToggleNotesHistory,
+    props.hasMoreNotes,
+    props.isLoadingNotes,
+    props.onLoadMoreNotes
+  ]);
 
   const dashboardProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -327,46 +355,49 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     // In TabContent.tsx 
     case 'notes':
-      return (
-        <div className="flex flex-1 min-h-0 relative flex-row mx-auto overflow-hidden">
-          {isNotesHistoryOpen && (
-            <div
-              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-              onClick={onToggleNotesHistory}
-            />
-          )}
-
-          {/* FIXED: Added overflow-y-auto here and removed h-screen */}
-          <div className={`${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'
-            } fixed lg:relative inset-y-0 mt-12 lg:mt-1 z-50 lg:z-auto bg-white border-r border-slate-200 shadow-lg lg:shadow-none flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-80 dark:bg-transparent dark:border-gray-800 dark:shadow-none overflow-y-auto modern-scrollbar`}>
-            <NotesList
-              {...notesHistoryProps}
-              isOpen={isNotesHistoryOpen}
-              onClose={onToggleNotesHistory}
-            />
-          </div>
-
-          <div className="flex-1 z-20 bg-transparent min-h-0 dark:bg-transparent">
-            {notesProps.activeNote ? (
-              <NoteEditor
-                note={notesProps.activeNote}
-                onNoteUpdate={notesProps.onNoteUpdate}
-                userProfile={userProfile}
-                onToggleNotesHistory={onToggleNotesHistory}
-                isNotesHistoryOpen={isNotesHistoryOpen}
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
-                <div className="text-center">
-                  <div className="text-4xl sm:text-6xl mb-4">📝</div>
-                  <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
-                  <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
-                </div>
-              </div>
-            )}
-          </div>
+  return (
+    <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
+      {/* Centered Container with max-width */}
+      <div className="w-full h-full max-w-[1100px] mx-auto flex relative lg:shadow-2xl">
+        {/* Notes List - Sidebar */}
+        <div className={`
+          ${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0 lg:static lg:w-80 lg:flex-shrink-0
+          fixed inset-y-0 left-0 z-10 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
+          transition-transform duration-300 ease-in-out lg:transition-none
+          lg:border-r lg:border-gray-200 lg:dark:border-gray-700
+        `}>
+          <NotesList
+            {...notesHistoryProps}
+            isOpen={isNotesHistoryOpen}
+            onClose={onToggleNotesHistory}
+          />
         </div>
-      );
+        
+        {/* Editor Area - Centered content */}
+        <div className="flex-1 h-full bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
+          {notesProps.activeNote ? (
+            <NoteEditor
+              note={notesProps.activeNote}
+              onNoteUpdate={notesProps.onNoteUpdate}
+              userProfile={userProfile}
+              onToggleNotesHistory={onToggleNotesHistory}
+              isNotesHistoryOpen={isNotesHistoryOpen}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
+              <div className="text-center">
+                <div className="text-4xl sm:text-6xl mb-4">📝</div>
+                <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
+                <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
     case 'recordings':
       return (
         <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleRecordingsScroll}>

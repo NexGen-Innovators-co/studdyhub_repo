@@ -773,27 +773,7 @@ export const MessageList = memo(({
                                             >
                                                 {copied ? <Check className="h-3 w-3 sm:h-4 sm:w-4" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4" />}
                                             </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => onDeleteClick(message.id)}
-                                                className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                                                title="Delete message"
-                                            >
-                                                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                            </Button>
                                         </>
-                                    )}
-                                    {isUserMessage && (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => onDeleteClick(message.id)}
-                                            className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-gray-700"
-                                            title="Delete message"
-                                        >
-                                            <X className="h-3 w-3 sm:h-4 sm:w-4" />
-                                        </Button>
                                     )}
                                 </div>
                             </div>

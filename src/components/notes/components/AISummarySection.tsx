@@ -8,17 +8,17 @@ import { Button } from '../../ui/button';
 import { CodeRenderer } from './CodeRenderer'; // Corrected import path
 
 interface AISummarySectionProps {
-  aiSummary: string | null;
+  ai_summary: string | null;
   isSummaryVisible: boolean;
   setIsSummaryVisible: (isVisible: boolean) => void;
 }
 
 export const AISummarySection: React.FC<AISummarySectionProps> = ({
-  aiSummary,
+  ai_summary,
   isSummaryVisible,
   setIsSummaryVisible,
 }) => {
-  if (!aiSummary) {
+  if (!ai_summary) {
     return null;
   }
 
@@ -84,7 +84,7 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
             rehypePlugins={[rehypeRaw]}
             components={commonMarkdownComponents}
           >
-            {String(aiSummary || '')}
+            {String(ai_summary || '')}
           </ReactMarkdown>
         </div>
       </div>

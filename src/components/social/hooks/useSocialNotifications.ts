@@ -216,13 +216,6 @@ export const useSocialNotifications = () => {
     };
   }, [userId]);
 
-  // Load initial notifications
-  useEffect(() => {
-    if (userId) {
-      fetchNotifications(0, false);
-    }
-  }, [userId, fetchNotifications]);
-
 
   useEffect(() => {
     const getUser = async () => {

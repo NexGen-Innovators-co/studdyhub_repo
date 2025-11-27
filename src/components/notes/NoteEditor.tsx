@@ -1,5 +1,5 @@
 // NoteEditor.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
@@ -14,6 +14,8 @@ import { AudioOptionsSection } from './components/AudioOptionsSection';
 // Dialogs
 import { SectionSelectionDialog } from './components/SectionSelectionDialog';
 import { DocumentViewerDialog } from './components/DocumentViewerDialog';
+import { RotateCw } from 'lucide-react';
+import { set } from 'date-fns';
 
 // Explicitly type the supabase client for better type inference with custom tables
 const typedSupabase = supabase as any;
@@ -76,7 +78,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const [uploadedDocumentPublicUrl, setUploadedDocumentPublicUrl] = useState<string | null>(null);
   const [documentIdForDialog, setDocumentIdForDialog] = useState<string | null>(null);
-
+  const [isLoading, setIsloading] = useState(false);
   const contentAreaRef = useRef<any>(null);
 
   // Reset on note change
@@ -166,7 +168,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             onNoteUpdate({
               ...note,
               content: audioResult.transcript || '',
-              aiSummary: audioResult.summary || 'No summary available.',
+              ai_summary: audioResult.summary || 'No summary available.',
               document_id: audioResult.document_id || null
             });
             setTranslatedContent(audioResult.translated_content || null);
@@ -215,23 +217,59 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (pollInterval) clearInterval(pollInterval);
     };
   }, [audioProcessingJobId, userProfile, note, onNoteUpdate]);
+  // Add this state to track if content has been modified
+  const [isContentModified, setIsContentModified] = useState(false);
 
-  const handleSave = () => {
-    const currentMarkdown = content;
+  // Enhanced save handler
+  // Enhanced save handler
+  const handleSave = useCallback(() => {
+    console.log("Save triggered - Getting current markdown from editor...");
+    if (!content) {
+      toast.error("No content to save");
+      return;
+    }
+    // Use the markdown from the ref (which includes diagrams) or fallback to content state
+    setIsloading(true);
+    const markdownToSave = content;
+    console.log("Markdown to save length:", markdownToSave.length);
 
     const updatedNote: Note = {
       ...note,
       title: title || 'Untitled Note',
-      content: currentMarkdown,
+      content: markdownToSave,
       category,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-      updatedAt: new Date(),
-      aiSummary: note.aiSummary
+      updated_at: new Date().toISOString(),
+      ai_summary: note.ai_summary
     };
 
-    onNoteUpdate(updatedNote);
-    toast.success('Note saved!');
-  };
+    // Update local state to ensure synchronization
+    if (markdownToSave !== content) {
+      setContent(markdownToSave);
+    }
+    setTimeout(() => {
+      onNoteUpdate(updatedNote);
+      setIsContentModified(false);
+      setIsloading(false);
+      toast.success("Note saved successfully");
+    }, 1000);
+
+  }, [note, title, content, category, tags, onNoteUpdate]);
+
+  // Enhanced content change handler
+  const handleContentChange = useCallback((newContent: string) => {
+    console.log("Content changed in editor, length:", newContent.length);
+    setContent(newContent);
+    setIsContentModified(true);
+  }, []);
+
+  // Add a useEffect to log content changes for debugging
+  useEffect(() => {
+    console.log("Content state updated, length:", content.length);
+  }, [content]);
+
+  // Add auto-save or manual save indicator in the UI if needed
+
   const regenerateNoteFromDocument = async () => {
     if (!note.document_id) {
       toast.error('This note is not linked to a source document and cannot be regenerated.');
@@ -239,6 +277,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
     if (!userProfile) {
       toast.error('User profile not found. Cannot generate personalized note.');
+      return;
+    }
+
+    // Add validation for note ID
+    if (!note.id) {
+      toast.error('Cannot update note: Note ID is missing.');
       return;
     }
 
@@ -257,8 +301,22 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         throw new Error(error.message || 'An unknown error occurred');
       }
 
-      onNoteUpdate(newNote);
-      setContent(newNote.content);
+      // Ensure the updated note has the original note's ID and other required properties
+      const updatedNote: Note = {
+        ...note, // Preserve all original note properties including id
+        title: newNote.title || note.title,
+        content: newNote.content || note.content,
+        ai_summary: newNote.ai_summary || note.ai_summary,
+        updated_at: new Date().toISOString(), // Always update the timestamp
+      };
+
+      // Validate the note has an ID before updating
+      if (!updatedNote.id) {
+        throw new Error('Generated note is missing ID property');
+      }
+
+      onNoteUpdate(updatedNote);
+      setContent(updatedNote.content);
       toast.success('Note regenerated successfully!', { id: toastId });
     } catch (error) {
       let errorMessage = 'Failed to regenerate note.';
@@ -274,30 +332,29 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
       }
       toast.error(errorMessage, { id: toastId });
-      //console.error('Error regenerating note:', error);
     } finally {
       setIsGeneratingAI(false);
     }
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    //console.log("🚀 handleFileSelect triggered!");
+    console.log("🚀 handleFileSelect triggered!");
     const file = event.target.files?.[0];
 
     if (!file || !userProfile) {
       if (!userProfile) {
-        //console.error("❌ User profile is missing");
+        console.error("❌ User profile is missing");
         toast.error("Cannot upload: User profile is missing.");
       }
       return;
     }
 
-    // console.log("📄 File selected:", {
-    //   name: file.name,
-    //   type: file.type,
-    //   size: file.size,
-    //   userId: userProfile.id
-    // });
+    console.log("📄 File selected:", {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      userId: userProfile.id
+    });
 
     const allowedDocumentTypes = [
       'application/pdf',
@@ -316,14 +373,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     // Route to audio handler if audio file
     if (allowedAudioTypes.includes(file.type)) {
-      //console.log("🎵 Routing to audio file handler");
+      console.log("🎵 Routing to audio file handler");
       handleAudioFileSelect(event);
       return;
     }
 
     // Validate document type
     if (!allowedDocumentTypes.includes(file.type)) {
-      //console.error("❌ Unsupported file type:", file.type);
+      console.error("❌ Unsupported file type:", file.type);
       toast.error('Unsupported file type. Please upload a PDF, TXT, Word document, or an audio file.');
       if (event.target) event.target.value = '';
       return;
@@ -404,7 +461,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
       }
       toast.error(errorMessage, { id: toastId });
-      //console.error('Error processing document:', error);
     } finally {
       setIsUploading(false);
       if (event.target) event.target.value = '';
@@ -415,13 +471,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     targetNote: Note,
     user: UserProfile,
     selectedSection: string | null,
-    toastId: string, // Receive the toast ID
+    toastId: string,
     documentIdForGeneration: string | null
   ) => {
     setIsGeneratingAI(true);
 
-    // Update the existing toast
-    toast.loading('Generating AI note content...', { id: toastId });
+    // Add validation for note ID if updating existing note
+    if (targetNote.id) {
+      toast.loading('Generating AI note content...', { id: toastId });
+    } else {
+      toast.loading('Creating new AI note...', { id: toastId });
+    }
 
     try {
       const requestBody = {
@@ -438,15 +498,38 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (generationError) throw new Error(generationError.message || 'Failed to generate note content.');
 
       const updatedNote: Note = {
-        ...targetNote,
+        ...targetNote, // Preserve original properties including ID
         title: aiGeneratedNote.title || targetNote.title,
         content: aiGeneratedNote.content,
-        aiSummary: aiGeneratedNote.aiSummary,
-        updatedAt: new Date(),
+        ai_summary: aiGeneratedNote.ai_summary,
+        updated_at: new Date().toISOString(),
         document_id: documentIdForGeneration,
       };
 
-      if (!targetNote.id) {
+      // For existing notes, validate ID before update
+      if (targetNote.id) {
+        if (!updatedNote.id) {
+          throw new Error('Note ID is missing during update');
+        }
+
+        const { error: updateNoteError } = await supabase
+          .from('notes')
+          .update({
+            title: updatedNote.title,
+            content: updatedNote.content,
+            ai_summary: updatedNote.ai_summary,
+            updated_at: new Date().toISOString(),
+            document_id: updatedNote.document_id,
+          })
+          .eq('id', updatedNote.id) // This line was causing the error
+          .eq('user_id', user.id);
+
+        if (updateNoteError) throw updateNoteError;
+
+        onNoteUpdate(updatedNote);
+        toast.success('Note updated from document!', { id: toastId });
+      } else {
+        // Create new note logic remains the same
         const { data: newNoteData, error: createNoteError } = await supabase
           .from('notes')
           .insert({
@@ -455,7 +538,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             category: updatedNote.category,
             tags: updatedNote.tags,
             user_id: user.id,
-            ai_summary: updatedNote.aiSummary,
+            ai_summary: updatedNote.ai_summary,
             document_id: updatedNote.document_id,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -468,28 +551,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         onNoteUpdate({
           ...updatedNote,
           id: newNoteData.id,
-          createdAt: new Date(newNoteData.created_at),
-          updatedAt: new Date(newNoteData.updated_at),
+          created_at: new Date(newNoteData.created_at).toISOString(),
+          updated_at: new Date(newNoteData.updated_at).toISOString(),
         });
 
         toast.success('New note generated from document!', { id: toastId });
-      } else {
-        const { error: updateNoteError } = await supabase
-          .from('notes')
-          .update({
-            title: updatedNote.title,
-            content: updatedNote.content,
-            ai_summary: updatedNote.aiSummary,
-            updated_at: new Date().toISOString(),
-            document_id: updatedNote.document_id,
-          })
-          .eq('id', updatedNote.id)
-          .eq('user_id', user.id);
-
-        if (updateNoteError) throw updateNoteError;
-
-        onNoteUpdate(updatedNote);
-        toast.success('Note updated from document!', { id: toastId });
       }
 
       setContent(updatedNote.content);
@@ -520,6 +586,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setSelectedFile(null);
       setExtractedContent(null);
       setUploadedDocumentPublicUrl(null);
+      setDocumentIdForDialog(null);
     }
   };
 
@@ -542,6 +609,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       documentIdFromDialog
     );
   };
+
   const processMarkdownForSpeech = (markdownContent: string): string => {
     let processedText = markdownContent;
 
@@ -581,6 +649,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     return processedText;
   };
+
   const handleTextToSpeech = () => {
     if (!('speechSynthesis' in window)) {
       toast.error("Text-to-speech is not supported in this browser.");
@@ -600,8 +669,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       toast.info("There's no content to read aloud.");
       return;
     }
-
-
 
     const textToRead = processMarkdownForSpeech(content);
     if (!textToRead) {
@@ -635,14 +702,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     } else {
       // If no voice is found after all attempts, show error and prevent speaking
       toast.error("No suitable text-to-speech voice found on your device. Please check your device settings.");
-      //console.error("No suitable voice found for speech synthesis.");
       return;
     }
 
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = (e: SpeechSynthesisErrorEvent) => {
-      //console.error("Speech synthesis error:", e);
       let errorMessage = "An unknown error occurred while reading the note.";
       if (e.error === "interrupted") {
         errorMessage = "Speech was interrupted. This can happen if you switch apps, receive a call, or rapidly tap the read button.";
@@ -658,7 +723,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       speechSynthesis.speak(utterance);
     } catch (error) {
-      //console.error("Error calling speechSynthesis.speak:", error);
       toast.error("Failed to start reading. Your browser might have restrictions.");
       setIsSpeaking(false);
     }
@@ -694,7 +758,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         errorMessage = error.message;
       }
       toast.error(errorMessage, { id: toastId });
-      //console.error('Error loading original document:', error);
     } finally {
       setIsLoadingDocument(false);
     }
@@ -716,11 +779,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     URL.revokeObjectURL(link.href);
     toast.success('Note downloaded as Markdown!');
   };
-
-  // ============================================
-  // FILE 1: NoteEditor.tsx
-  // Replace the handleDownloadPdf function with this:
-  // ============================================
 
   const handleDownloadPdf = () => {
     if (!content.trim()) {
@@ -883,123 +941,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       });
   };
 
-  // ============================================
-  // FILE 2: ALTERNATIVE APPROACH (if html2pdf is not loaded)
-  // Add this as a fallback method in NoteEditor.tsx
-  // ============================================
-
-  const handleDownloadPdfFallback = () => {
-    if (!content.trim()) {
-      toast.info("There's no content to convert to PDF.");
-      return;
-    }
-
-    // Use browser's print-to-PDF as fallback
-    const htmlContent = contentAreaRef.current?.getInnerHTML() || '';
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('Please allow pop-ups to generate PDF');
-      return;
-    }
-
-    printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>${title || 'Untitled Note'}</title>
-      <style>
-        @page {
-          margin: 2cm;
-          size: A4;
-        }
-        body {
-          font-family: system-ui, -apple-system, sans-serif;
-          font-size: 12pt;
-          line-height: 1.6;
-          color: #000;
-          max-width: 210mm;
-          margin: 0 auto;
-          padding: 20px;
-          background: white;
-        }
-        h1, h2, h3, h4, h5, h6 {
-          color: #000;
-          margin-top: 1em;
-          margin-bottom: 0.5em;
-          font-weight: bold;
-          break-after: avoid;
-        }
-        h1 { font-size: 24pt; }
-        h2 { font-size: 20pt; }
-        h3 { font-size: 16pt; }
-        pre {
-          background: #f5f5f5;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          padding: 10px;
-          overflow-x: auto;
-          font-family: 'Courier New', monospace;
-          font-size: 10pt;
-          margin: 1em 0;
-          break-inside: avoid;
-        }
-        code {
-          background: #f5f5f5;
-          padding: 2px 6px;
-          border-radius: 3px;
-          font-family: 'Courier New', monospace;
-          font-size: 10pt;
-        }
-        table {
-          border-collapse: collapse;
-          width: 100%;
-          margin: 1em 0;
-          break-inside: avoid;
-        }
-        th, td {
-          border: 1px solid #ddd;
-          padding: 8px;
-          text-align: left;
-        }
-        th {
-          background: #f5f5f5;
-          font-weight: bold;
-        }
-        img, svg {
-          max-width: 100%;
-          height: auto;
-          break-inside: avoid;
-        }
-        @media print {
-          body {
-            background: white;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      <div style="margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">
-        <h1>${title || 'Untitled Note'}</h1>
-        ${category !== 'general' ? `<p style="color: #666; font-size: 10pt;">Category: ${category}</p>` : ''}
-        ${tags ? `<p style="color: #666; font-size: 10pt;">Tags: ${tags}</p>` : ''}
-      </div>
-      ${htmlContent}
-    </body>
-    </html>
-  `);
-
-    printWindow.document.close();
-
-    // Wait for content to load before printing
-    printWindow.onload = () => {
-      setTimeout(() => {
-        printWindow.print();
-        toast.success('Opening print dialog. Choose "Save as PDF" as your printer.');
-      }, 500);
-    };
-  };
-
   const handleCopyNoteContent = () => {
     if (!content.trim()) {
       toast.info("There's no content to copy.");
@@ -1013,7 +954,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       document.execCommand('copy');
       toast.success('Note content copied to clipboard!');
     } catch (err) {
-      //console.error('Failed to copy text: ', err);
       toast.error('Failed to copy note content.');
     } finally {
       document.body.removeChild(textarea);
@@ -1076,7 +1016,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleAudioFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    ("handleAudioFileSelect triggered!");
+    console.log("handleAudioFileSelect triggered!");
     toast.info("Audio file selected, starting upload...");
     const file = event.target.files?.[0];
     if (!file || !userProfile) {
@@ -1104,8 +1044,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       if (uploadError) {
         throw uploadError;
-
       }
+
       const { data: publicUrlData } = supabase.storage
         .from('documents')
         .getPublicUrl(filePath);
@@ -1121,20 +1061,18 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       });
       setIsAudioOptionsVisible(true);
       toast.success('Audio file uploaded. Processing options available.', { id: toastId });
-      setIsProcessingAudio(false);
     } catch (error) {
       let errorMessage = 'An error occurred during audio file upload.';
       if (error instanceof Error) {
         errorMessage = error.message;
       }
       toast.error(errorMessage, { id: toastId });
-      //console.error('Error uploading audio file:', error);
-      setIsProcessingAudio(false);
     } finally {
       if (event.target) event.target.value = '';
       setIsProcessingAudio(false);
     }
   };
+
   const handleAudioPlayerPlay = () => setIsPlayingAudio(true);
   const handleAudioPlayerPause = () => setIsPlayingAudio(false);
   const handleAudioPlayerEnded = () => setIsPlayingAudio(false);
@@ -1242,10 +1180,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setIsTranslatingAudio(false);
     }
   };
-
   return (
-    <div className="flex flex-col max-h-[95vh] bg-white dark:bg-gray-950 rounded-lg shadow-sm ">
-
+    <div className="flex bg-white flex-col h-full w-full dark:bg-gray-950">
+      {/* Audio Options Section */}
       <AudioOptionsSection
         uploadedAudioDetails={uploadedAudioDetails}
         isAudioOptionsVisible={isAudioOptionsVisible}
@@ -1253,9 +1190,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         isPlayingAudio={isPlayingAudio}
         handlePlayAudio={handleAudioPlayerPlay}
         handleAudioEnded={handleAudioPlayerEnded}
-        handleDownloadAudio={() => { /* Placeholder if needed, but handled by NoteEditorHeader */ }}
-        handleCopyAudioUrl={() => { /* Placeholder if needed, but handled by NoteEditorHeader */ }}
-        handleClearAudioProcessing={() => { /* Placeholder if needed, but handled by NoteEditorHeader */ }}
+        handleDownloadAudio={() => {}}
+        handleCopyAudioUrl={() => {}}
+        handleClearAudioProcessing={() => {}}
         handleGenerateNoteFromAudio={() => handleProcessAudio('transcribe', null, note.document_id)}
         handleGenerateSummaryFromAudio={() => handleProcessAudio('summarize', null, note.document_id)}
         targetLanguage={targetLanguage}
@@ -1267,64 +1204,77 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         isProcessingAudio={isProcessingAudio}
         userProfile={userProfile}
       />
-      <div className="fixed inset-0 lg:inset-auto animate-in fade-in duration-500 lg:h-screen  bg-white dark:bg-slate-900 z-40 lg:z-10  overflow-hidden flex">
-        <div className='fixed inset-0 lg:inset-auto lg:relative  flex flex-col w-full  shadow-lg border'>
-
-          <NoteContentArea
-            ref={contentAreaRef}
-            content={content}
-            setContent={setContent}
-            userProfile={userProfile}
-            title={title}
-            setTitle={setTitle}
-            category={category}
-            setCategory={setCategory}
-            tags={tags}
-            setTags={setTags}
-            onSave={handleSave}
-            onToggleNotesHistory={onToggleNotesHistory}
-            isNotesHistoryOpen={isNotesHistoryOpen}
-            isUploading={isUploading}
-            isGeneratingAI={isGeneratingAI}
-            isProcessingAudio={isProcessingAudio}
-            regenerateNoteFromDocument={regenerateNoteFromDocument}
-            handleViewOriginalDocument={handleViewOriginalDocument}
-            documentId={note.document_id}
-            handleDownloadNote={handleDownloadNote}
-            handleDownloadPdf={handleDownloadPdf}
-            handleDownloadHTML={handleDownloadHTML}
-            handleDownloadTXT={handleDownloadTXT}
-            handleDownloadWord={handleDownloadWord}
-            handleCopyNoteContent={handleCopyNoteContent}
-            handleTextToSpeech={handleTextToSpeech}
-            isSpeaking={isSpeaking}
-            selectedVoiceURI={selectedVoiceURI}
-            setSelectedVoiceURI={setSelectedVoiceURI}
-            voices={voices}
-            fileInputRef={fileInputRef}
-            handleFileSelect={handleFileSelect}
-            audioInputRef={audioInputRef}
-            handleAudioFileSelect={handleAudioFileSelect}
-            note={note}
-          />
+  
+      {/* Main Editor Container - Centered with max-width */}
+      <div className="flex-1 h-full overflow-hidden flex">
+        <div className="w-full max-w-[1200px] mx-auto flex flex-col lg:flex-row shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900">
+          {/* Content Area */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <NoteContentArea
+              ref={contentAreaRef}
+              content={content}
+              setContent={handleContentChange}
+              userProfile={userProfile}
+              title={title}
+              setTitle={setTitle}
+              category={category}
+              setCategory={setCategory}
+              tags={tags}
+              setTags={setTags}
+              onSave={handleSave}
+              onToggleNotesHistory={onToggleNotesHistory}
+              isNotesHistoryOpen={isNotesHistoryOpen}
+              isUploading={isUploading}
+              isGeneratingAI={isGeneratingAI}
+              isProcessingAudio={isProcessingAudio}
+              regenerateNoteFromDocument={regenerateNoteFromDocument}
+              handleViewOriginalDocument={handleViewOriginalDocument}
+              documentId={note.document_id}
+              handleDownloadNote={handleDownloadNote}
+              handleDownloadPdf={handleDownloadPdf}
+              handleDownloadHTML={handleDownloadHTML}
+              handleDownloadTXT={handleDownloadTXT}
+              handleDownloadWord={handleDownloadWord}
+              handleCopyNoteContent={handleCopyNoteContent}
+              handleTextToSpeech={handleTextToSpeech}
+              isSpeaking={isSpeaking}
+              selectedVoiceURI={selectedVoiceURI}
+              setSelectedVoiceURI={setSelectedVoiceURI}
+              voices={voices}
+              fileInputRef={fileInputRef}
+              handleFileSelect={handleFileSelect}
+              audioInputRef={audioInputRef}
+              handleAudioFileSelect={handleAudioFileSelect}
+              note={note}
+              isLoading={isLoading}
+            />
+          </div>
+  
+          {/* AI Summary Section - Side panel */}
+          {note.ai_summary && (
+            <div className="lg:w-80 lg:border-l lg:border-gray-200 lg:dark:border-gray-700">
+              <AISummarySection
+                ai_summary={note.ai_summary}
+                isSummaryVisible={isSummaryVisible}
+                setIsSummaryVisible={setIsSummaryVisible}
+              />
+            </div>
+          )}
+  
+          {/* Translated Content Section */}
+          {translatedContent && (
+            <div className="lg:w-80 lg:border-l lg:border-gray-200 lg:dark:border-gray-700">
+              <TranslatedContentSection
+                translatedContent={translatedContent}
+                targetLanguage={targetLanguage}
+                setTranslatedContent={setTranslatedContent}
+              />
+            </div>
+          )}
         </div>
-        {note.aiSummary && (
-          <AISummarySection
-            aiSummary={note.aiSummary}
-            isSummaryVisible={isSummaryVisible}
-            setIsSummaryVisible={setIsSummaryVisible}
-          />
-        )}
-
-        {translatedContent && (
-          <TranslatedContentSection
-            translatedContent={translatedContent}
-            targetLanguage={targetLanguage}
-            setTranslatedContent={setTranslatedContent}
-          />
-        )}
       </div>
-
+  
+      {/* Dialogs */}
       <SectionSelectionDialog
         isOpen={isSectionDialogOpen}
         sections={documentSections}
@@ -1339,7 +1289,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }}
         documentId={documentIdForDialog!}
       />
-
+  
       <DocumentViewerDialog
         isOpen={isDocumentViewerOpen}
         onClose={() => setIsDocumentViewerOpen(false)}
@@ -1349,4 +1299,4 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       />
     </div>
   );
-};
+}

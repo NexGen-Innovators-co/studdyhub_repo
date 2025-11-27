@@ -1,4 +1,4 @@
-// contexts/AppContext.tsx - Complete implementation
+// contexts/AppContext.tsx - Complete implementation with proper types and timeouts
 import React, {
   createContext,
   useContext,
@@ -124,6 +124,9 @@ interface AppContextType extends AppState {
   setIsAiTyping: (typing: boolean) => void;
   isLoadingSession: boolean;
   setIsLoadingSession: (loading: boolean) => void;
+  dataErrors: Record<string, string>;
+  clearError: (dataType: string) => void;
+  retryLoading: (dataType: string) => void;
 
   // Add this with your other state declarations
 }
@@ -136,6 +139,91 @@ const MAX_HISTORY_MESSAGES = 1000;
 const CHAT_SESSIONS_PER_PAGE = 15;
 const CHAT_MESSAGES_PER_PAGE = 25;
 
+// Timeout constants
+const API_TIMEOUT = 30000; // 30 seconds
+const LOADING_TIMEOUT = 10000; // 10 seconds for loading states
+
+// Type definitions for Supabase responses
+interface SupabaseChatSession {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string | null;
+  document_ids: string[];
+  user_id: string;
+  message_count: number;
+}
+
+interface SupabaseChatMessage {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp: string;
+  is_error: boolean;
+  attached_document_ids: string[];
+  attached_note_ids: string[];
+  image_url: string | null;
+  image_mime_type: string | null;
+  session_id: string;
+  has_been_displayed: boolean;
+  files_metadata: any;
+}
+
+// Helper function for timeout handling
+const withTimeout = async <T,>(
+  supabaseQuery: any,
+  timeoutMs: number,
+  errorMessage: string
+): Promise<{ data: T | null; error: any }> => {
+  try {
+    // Create a timeout promise
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${errorMessage} (timeout after ${timeoutMs}ms)`)), timeoutMs)
+    );
+
+    // Execute the Supabase query and race it against the timeout
+    const result = await Promise.race([supabaseQuery, timeoutPromise]);
+    return result;
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
+// Helper function to handle loading state with timeout
+const useLoadingWithTimeout = (initialState = false) => {
+  const [isLoading, setIsLoading] = useState(initialState);
+  const timeoutRef = useRef<NodeJS.Timeout>();
+
+  const setLoadingWithTimeout = useCallback((loading: boolean) => {
+    setIsLoading(loading);
+
+    // Clear existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Set timeout to automatically reset loading state
+    if (loading) {
+      timeoutRef.current = setTimeout(() => {
+        setIsLoading(false);
+        console.warn('Loading state timeout - resetting loading state');
+      }, LOADING_TIMEOUT);
+    }
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  return [isLoading, setLoadingWithTimeout] as const;
+};
+
 // Provider component
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialAppState);
@@ -143,9 +231,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Use loading states with timeouts
+  const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useLoadingWithTimeout(false);
+  const [isLoadingChatSessions, setIsLoadingChatSessions] = useLoadingWithTimeout(false);
+
   // Get all data from useAppData hook
   const appData = useAppData();
   const {
+    dataErrors,
+    clearError,
+    retryLoading,
     notes,
     recordings,
     scheduleItems,
@@ -201,7 +296,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onAddRecording: (rec) => setRecordings(prev => [...prev, rec]),
     onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r))
   });
-
+  const enhancedDataLoading = useMemo(() => ({
+    ...appData.dataLoading,
+    errors: dataErrors
+  }), [appData.dataLoading, dataErrors]);
   // App operations
   const appOperations = useAppOperations({
     notes,
@@ -311,7 +409,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         const noteBlock = noteInfo + (noteContent ? `Content: ${noteContent}\n` : '') +
-          (note.aiSummary ? `Summary: ${note.aiSummary}\n` : '') +
+          (note.ai_summary ? `Summary: ${note.ai_summary}\n` : '') +
           (note.tags?.length ? `Tags: ${note.tags.join(', ')}\n` : '') + '\n';
 
         context += noteBlock;
@@ -320,20 +418,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return context;
   }, []);
+
   const loadChatSessions = useCallback(async () => {
     try {
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('last_message_at', { ascending: false })
-        .range(0, state.chatSessionsLoadedCount - 1);
+      setIsLoadingChatSessions(true);
+
+      const { data, error } = await withTimeout<SupabaseChatSession[]>(
+        supabase
+          .from('chat_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('last_message_at', { ascending: false })
+          .range(0, state.chatSessionsLoadedCount - 1),
+        API_TIMEOUT,
+        'Failed to load chat sessions'
+      );
 
       if (error) throw error;
 
-      const formattedSessions: ChatSession[] = data.map(session => ({
+      const formattedSessions: ChatSession[] = (data || []).map((session: SupabaseChatSession) => ({
         id: session.id,
         title: session.title,
         created_at: session.created_at,
@@ -352,8 +457,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error loading chat sessions:', error);
       toast.error('Failed to load chat sessions.');
+    } finally {
+      setIsLoadingChatSessions(false);
     }
-  }, [user, state.chatSessionsLoadedCount]);
+  }, [user, state.chatSessionsLoadedCount, setIsLoadingChatSessions]);
 
   const handleLoadMoreChatSessions = useCallback(() => {
     dispatch({
@@ -369,16 +476,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .insert({
-          user_id: user.id,
-          title: 'New Chat',
-          document_ids: state.selectedDocumentIds,
-          message_count: 0,
-        })
-        .select()
-        .single();
+      const { data, error } = await withTimeout<SupabaseChatSession>(
+        supabase
+          .from('chat_sessions')
+          .insert({
+            user_id: user.id,
+            title: 'New Chat',
+            document_ids: state.selectedDocumentIds,
+            message_count: 0,
+          })
+          .select()
+          .single(),
+        API_TIMEOUT,
+        'Failed to create chat session'
+      );
 
       if (error) throw error;
       if (!data) throw new Error('No data returned from session creation');
@@ -414,11 +525,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       if (!user) return;
 
-      const { error } = await supabase
-        .from('chat_sessions')
-        .delete()
-        .eq('id', sessionId)
-        .eq('user_id', user.id);
+      const { error } = await withTimeout<null>(
+        supabase
+          .from('chat_sessions')
+          .delete()
+          .eq('id', sessionId)
+          .eq('user_id', user.id),
+        API_TIMEOUT,
+        'Failed to delete chat session'
+      );
 
       if (error) throw error;
 
@@ -458,11 +573,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       if (!user) return;
 
-      const { error } = await supabase
-        .from('chat_sessions')
-        .update({ title: newTitle })
-        .eq('id', sessionId)
-        .eq('user_id', user.id);
+      const { error } = await withTimeout<null>(
+        supabase
+          .from('chat_sessions')
+          .update({ title: newTitle })
+          .eq('id', sessionId)
+          .eq('user_id', user.id),
+        API_TIMEOUT,
+        'Failed to rename chat session'
+      );
 
       if (error) throw error;
 
@@ -482,21 +601,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     // Prevent multiple simultaneous loads
-    if (state.isLoadingSessionMessages) return;
+    if (isLoadingSessionMessages) return;
 
-    dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: true });
+    setIsLoadingSessionMessages(true);
 
     try {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('timestamp', { ascending: false })
-        .limit(CHAT_MESSAGES_PER_PAGE);
+      const { data, error } = await withTimeout<SupabaseChatMessage[]>(
+        supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('timestamp', { ascending: false })
+          .limit(CHAT_MESSAGES_PER_PAGE),
+        API_TIMEOUT,
+        'Failed to load session messages'
+      );
 
       if (error) throw error;
 
-      const fetchedMessages: Message[] = data.reverse().map((msg: any) => ({
+      const fetchedMessages: Message[] = (data || []).reverse().map((msg: SupabaseChatMessage) => ({
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
@@ -533,78 +656,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         );
       });
 
-
-      if (!user) return;
-
-      // Prevent multiple simultaneous loads
-      if (state.isLoadingSessionMessages) return;
-
-      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: true });
-
-      try {
-        const { data, error } = await supabase
-          .from('chat_messages')
-          .select('*')
-          .eq('session_id', sessionId)
-          .order('timestamp', { ascending: false })
-          .limit(CHAT_MESSAGES_PER_PAGE);
-
-        if (error) throw error;
-
-        const fetchedMessages: Message[] = data.reverse().map((msg: any) => ({
-          id: msg.id,
-          content: msg.content,
-          role: msg.role as 'user' | 'assistant',
-          timestamp: msg.timestamp || new Date().toISOString(),
-          isError: msg.is_error || false,
-          attachedDocumentIds: msg.attached_document_ids || [],
-          attachedNoteIds: msg.attached_note_ids || [],
-          imageUrl: msg.image_url || undefined,
-          imageMimeType: msg.image_mime_type || undefined,
-          session_id: msg.session_id,
-          has_been_displayed: msg.has_been_displayed || false,
-          files_metadata: msg.files_metadata,
-          isLoading: false
-        }));
-
-        // Only load documents/notes if we have new messages
-        if (fetchedMessages.length > 0) {
-          loadSpecificDocuments(user.id, fetchedMessages.flatMap(m => m.attachedDocumentIds || []));
-          loadSpecificNotes(user.id, fetchedMessages.flatMap(m => m.attachedNoteIds || []));
-        }
-
-        setChatMessages(prevAllMessages => {
-          // Filter out optimistic messages for this session and merge with new messages
-          const otherSessionMessages = prevAllMessages.filter(m =>
-            m.session_id !== sessionId || !m.id.startsWith('optimistic-')
-          );
-
-          const newMessagesForSession = fetchedMessages.filter(
-            fm => !otherSessionMessages.some(pm => pm.id === fm.id)
-          );
-
-          return [...otherSessionMessages, ...newMessagesForSession].sort(
-            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-          );
-        });
-
-        dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: data.length === CHAT_MESSAGES_PER_PAGE });
-      } catch (error) {
-        console.error('Error loading session messages:', error);
-        toast.error('Failed to load chat messages for this session.');
-      } finally {
-        dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
-      } // Removed the duplicate useCallback and its dependencies
-
-
-      dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: data.length === CHAT_MESSAGES_PER_PAGE });
+      dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: (data || []).length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
       console.error('Error loading session messages:', error);
       toast.error('Failed to load chat messages for this session.');
     } finally {
-      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
+      setIsLoadingSessionMessages(false);
     }
-  }, [user, setChatMessages, state.isLoadingSessionMessages]);
+  }, [user, setChatMessages, isLoadingSessionMessages, setIsLoadingSessionMessages, loadSpecificDocuments, loadSpecificNotes]);
 
   const handleLoadOlderChatMessages = useCallback(async () => {
     if (!state.activeChatSessionId || !user || filteredChatMessages.length === 0) return;
@@ -612,18 +671,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const oldestMessageTimestamp = filteredChatMessages[0].timestamp;
 
     try {
-      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: true });
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', state.activeChatSessionId)
-        .lt('timestamp', oldestMessageTimestamp)
-        .order('timestamp', { ascending: false })
-        .limit(CHAT_MESSAGES_PER_PAGE);
+      setIsLoadingSessionMessages(true);
+      const { data, error } = await withTimeout<SupabaseChatMessage[]>(
+        supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('session_id', state.activeChatSessionId)
+          .lt('timestamp', oldestMessageTimestamp)
+          .order('timestamp', { ascending: false })
+          .limit(CHAT_MESSAGES_PER_PAGE),
+        API_TIMEOUT,
+        'Failed to load older messages'
+      );
 
       if (error) throw error;
 
-      const olderMessages: Message[] = data.map((msg: any) => ({
+      const olderMessages: Message[] = (data || []).map((msg: SupabaseChatMessage) => ({
         id: msg.id,
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
@@ -646,14 +709,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         );
       });
 
-      dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: data.length === CHAT_MESSAGES_PER_PAGE });
+      dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: (data || []).length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
       console.error('Error loading older messages:', error);
       toast.error('Failed to load older messages.');
     } finally {
-      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
+      setIsLoadingSessionMessages(false);
     }
-  }, [state.activeChatSessionId, user, filteredChatMessages, setChatMessages]);
+  }, [state.activeChatSessionId, user, filteredChatMessages, setChatMessages, setIsLoadingSessionMessages]);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     try {
@@ -667,12 +730,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       toast.info('Deleting message...');
 
-      const { error } = await supabase
-        .from('chat_messages')
-        .delete()
-        .eq('id', messageId)
-        .eq('session_id', state.activeChatSessionId)
-        .eq('user_id', user.id);
+      const { error } = await withTimeout<null>(
+        supabase
+          .from('chat_messages')
+          .delete()
+          .eq('id', messageId)
+          .eq('session_id', state.activeChatSessionId)
+          .eq('user_id', user.id),
+        API_TIMEOUT,
+        'Failed to delete message'
+      );
 
       if (error) {
         console.error('Error deleting message from DB:', error);
@@ -832,22 +899,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [inputMessage, setInputMessage] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<FileData[]>([]);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
-  const [isCurrentlySending, setIsCurrentlySending] = useState(false);
-  const [isAiTyping, setIsAiTyping] = useState(false);
+  const [isCurrentlySending, setIsCurrentlySending] = useLoadingWithTimeout(false);
+  const [isAiTyping, setIsAiTyping] = useLoadingWithTimeout(false);
   // Add this with your other state declarations
-  const [isLoadingSession, setIsLoadingSession] = useState(false);
+  const [isLoadingSession, setIsLoadingSession] = useLoadingWithTimeout(false);
   // Add this ref for tracking previous session ID
 
-// Enhanced session loading with URL session restoration
-useEffect(() => {
-  // Handle URL session restoration first
-  if (sessionIdFromUrl && sessionIdFromUrl !== state.activeChatSessionId && user) {
-    console.log('🔄 Session restored from URL:', sessionIdFromUrl);
-    dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionIdFromUrl });
-    loadSessionMessages(sessionIdFromUrl);
-    return;
-  }
-}, [sessionIdFromUrl, state.activeChatSessionId, user]);
+  // Enhanced session loading with URL session restoration
+  useEffect(() => {
+    // Handle URL session restoration first
+    if (sessionIdFromUrl && sessionIdFromUrl !== state.activeChatSessionId && user) {
+      console.log('🔄 Session restored from URL:', sessionIdFromUrl);
+      dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionIdFromUrl });
+      loadSessionMessages(sessionIdFromUrl);
+      return;
+    }
+  }, [sessionIdFromUrl, state.activeChatSessionId, user]);
 
   // Load messages for active session
   useEffect(() => {
@@ -863,13 +930,13 @@ useEffect(() => {
         loadSessionMessages(state.activeChatSessionId);
       } else {
         dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: messagesForActiveSession.length > 0 });
-        dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
+        setIsLoadingSessionMessages(false);
       }
     } else if (!state.activeChatSessionId) {
       dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: false });
-      dispatch({ type: 'SET_IS_LOADING_SESSION_MESSAGES', payload: false });
+      setIsLoadingSessionMessages(false);
     }
-  }, [state.activeChatSessionId, user, allChatMessages.length, state.chatSessions, loadSessionMessages]);
+  }, [state.activeChatSessionId, user, allChatMessages.length, state.chatSessions, loadSessionMessages, setIsLoadingSessionMessages]);
 
   // Update selected document IDs when active session changes
   useEffect(() => {
@@ -928,7 +995,9 @@ useEffect(() => {
     user,
     authLoading,
     dataLoading,
-
+    dataErrors,
+    clearError,
+    retryLoading,
     // Data from useAppData
     notes,
     recordings,

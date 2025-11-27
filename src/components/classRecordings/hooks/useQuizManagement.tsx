@@ -48,7 +48,7 @@ export const useQuizManagement = ({ onGenerateQuiz }: { onGenerateQuiz: (recordi
         title: data.title || recording.title,
         questions: data.questions,
         userId: user.id,
-        createdAt: new Date().toISOString()
+        created_at: new Date().toISOString()
       };
 
       const { error: insertError } = await supabase
@@ -59,7 +59,7 @@ export const useQuizManagement = ({ onGenerateQuiz }: { onGenerateQuiz: (recordi
           title: quiz.title,
           questions: quiz.questions as any, // Cast to any for Supabase JSONB column
           user_id: user.id,
-          created_at: quiz.createdAt
+          created_at: quiz.created_at
         });
 
       if (insertError) throw new Error(`Failed to save quiz to database: ${insertError.message}`);

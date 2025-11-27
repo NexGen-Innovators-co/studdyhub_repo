@@ -30,7 +30,7 @@ export const QuizHistory: React.FC<QuizHistoryProps> = ({ quizzes, onSelectQuiz 
                     {quiz.questions.length} Questions
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    Generated on: {formatDate(new Date(quiz.createdAt))}
+                    Generated on: {formatDate(new Date(quiz.created_at))}
                   </p>
                 </div>
                 <Button
