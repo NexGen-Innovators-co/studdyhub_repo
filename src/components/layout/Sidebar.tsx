@@ -79,6 +79,7 @@ interface SidebarProps {
       | 'settings'
       | 'dashboard'
       | 'social'
+      | 'quizzes'
       | string,
   ) => void;
   chatSessions: ChatSession[];

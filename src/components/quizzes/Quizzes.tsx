@@ -87,8 +87,8 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
   };
 
   return (
-    <div className="h-full w-full overflow-y-auto modern-scrollbar p-6 space-y-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="max-w-7xl mx-auto">
+    <div className="h-full w-full  overflow-y-auto modern-scrollbar p-6 space-y-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="max-w-7xl mx-auto lg:p-12 mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold flex items-center gap-2">

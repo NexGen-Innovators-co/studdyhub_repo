@@ -347,7 +347,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   switch (activeTab) {
     case 'dashboard':
       return (
-        <div className="flex-1 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-transparent">
+        <div className="flex-1 pb-6 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>
             <Dashboard {...dashboardProps} />
           </ErrorBoundary>
@@ -458,7 +458,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     // In TabContent.tsx
     case 'social':
       return (
-        <div className="flex-1 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>
             <SocialFeed
               activeTab={props.activeSocialTab}
