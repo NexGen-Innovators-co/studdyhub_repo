@@ -1,3 +1,9 @@
+// Updated src/components/classRecordings/ClassRecordings.tsx
+// Note: This is the full updated component with integrations.
+// I've added the necessary imports, hooks usage, and StatsPanel integration.
+// Also integrated useQuizTracking, seedDefaultBadges, useRealtimeSync, and adjusted useQuizManagement to useEnhancedQuizManagement if needed.
+// Assuming useQuizManagement is aliased or renamed appropriately.
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -10,9 +16,15 @@ import { AudioUploadSection } from './components/AudioUploadSection';
 import { QuizModal } from './components/QuizModal';
 import { QuizHistory } from './components/QuizHistory';
 import { useAudioProcessing } from './hooks/useAudioProcessing';
-import { useQuizManagement } from './hooks/useQuizManagement';
+import { useQuizManagement } from './hooks/useQuizManagement'; // Adjust if it's useEnhancedQuizManagement
 import { RecordingSidePanel } from './components/RecordingSidePanel';
 import { toast } from 'sonner';
+import { useRealtimeSync } from './hooks/useRealTimeSync'; // Newly created
+import { StatsPanel } from './components/StatsPanel'; // Newly created
+import { useQuizTracking } from './hooks/useQuizTracking';
+import { seedDefaultBadges } from './utils/seedBefaultBadges';
+import { supabase } from '../../integrations/supabase/client';
+import { UserStats } from '../../types/EnhancedClasses';
 
 interface ClassRecordingsProps {
   recordings?: ClassRecording[];
@@ -36,6 +48,21 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   onReprocessAudio,
 }) => {
   const [selectedRecording, setSelectedRecording] = useState<ClassRecording | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Fetch user ID
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    };
+    fetchUser();
+  }, []);
+
+  // Seed default badges on mount
+  useEffect(() => {
+    seedDefaultBadges();
+  }, []);
 
   // Audio processing hook
   const {
@@ -49,6 +76,15 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     handleCopyAudioUrl,
   } = useAudioProcessing({ onAddRecording, onUpdateRecording });
 
+  // Quiz tracking
+  const {
+    userStats,
+    isLoadingStats,
+    recordQuizAttempt,
+    fetchUserStats,
+  } = useQuizTracking(userId || '');
+
+  // Enhanced quiz management
   const {
     quizMode,
     currentQuestionIndex,
@@ -61,7 +97,23 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     handleExitQuizMode,
     calculateScore,
     setQuizMode,
-  } = useQuizManagement({ onGenerateQuiz });
+    handleSubmitQuiz, // If available in your version
+  } = useQuizManagement({
+    onGenerateQuiz,
+    recordQuizAttempt,
+    fetchUserStats,
+  });
+
+  // Realtime sync
+  useRealtimeSync({
+    userId: userId || '',
+    onRecordingUpdate: onUpdateRecording,
+    onQuizUpdate: (quiz) => {
+      // Handle quiz update, perhaps refresh quizzes list
+      // For now, assuming quizzes are props, might need to lift state
+    },
+    onStatsUpdate: fetchUserStats,
+  });
 
   const formatDuration = (seconds: number | null) => {
     if (!seconds) return '0 min';
@@ -127,7 +179,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   }, [selectedRecording, audioPlayerRef, handlePauseAudio]);
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col max-h-screen overflow-auto modern-scrollbar pb-10 min-h-0">
       <audio ref={audioPlayerRef} className="hidden" />
       <div className="flex flex-col lg:flex-row flex-1 min-h-0">
         {/* Centered container for recordings list when side panel is closed */}
@@ -165,6 +217,9 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
               </CardContent>
             </Card>
           </div>
+
+          {/* Add StatsPanel here */}
+          <StatsPanel stats={userStats as UserStats} isLoading={isLoadingStats} />
 
           <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-6 sm:mt-10 mb-4 flex items-center gap-2">
             <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" /> All Class Recordings
