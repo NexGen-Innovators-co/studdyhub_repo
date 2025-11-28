@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          badge_id: string
+          earned_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          badge_id: string
+          earned_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          badge_id?: string
+          earned_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "achievements_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_activity_logs: {
         Row: {
           action: string
@@ -221,6 +250,39 @@ export type Database = {
           },
         ]
       }
+      badges: {
+        Row: {
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          name: string
+          requirement_type: string
+          requirement_value: number
+          xp_reward: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          icon: string
+          id?: string
+          name: string
+          requirement_type: string
+          requirement_value: number
+          xp_reward?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          name?: string
+          requirement_type?: string
+          requirement_value?: number
+          xp_reward?: number
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           attached_document_ids: string[] | null
@@ -293,6 +355,7 @@ export type Database = {
           memory_strategy: string | null
           message_count: number | null
           title: string
+          token_count: number | null
           updated_at: string
           user_id: string
         }
@@ -308,6 +371,7 @@ export type Database = {
           memory_strategy?: string | null
           message_count?: number | null
           title?: string
+          token_count?: number | null
           updated_at?: string
           user_id: string
         }
@@ -323,6 +387,7 @@ export type Database = {
           memory_strategy?: string | null
           message_count?: number | null
           title?: string
+          token_count?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -532,6 +597,7 @@ export type Database = {
           file_size: number | null
           file_type: string
           file_url: string
+          folder_ids: string[] | null
           id: string
           processing_completed_at: string | null
           processing_error: string | null
@@ -543,7 +609,6 @@ export type Database = {
           type: string
           updated_at: string
           user_id: string
-          folder_ids: string[] | null
         }
         Insert: {
           content_extracted?: string | null
@@ -553,6 +618,7 @@ export type Database = {
           file_size?: number | null
           file_type: string
           file_url: string
+          folder_ids?: string[] | null
           id?: string
           processing_completed_at?: string | null
           processing_error?: string | null
@@ -564,7 +630,6 @@ export type Database = {
           type?: string
           updated_at?: string
           user_id: string
-          folder_ids?: string[] | null
         }
         Update: {
           content_extracted?: string | null
@@ -574,6 +639,7 @@ export type Database = {
           file_size?: number | null
           file_type?: string
           file_url?: string
+          folder_ids?: string[] | null
           id?: string
           processing_completed_at?: string | null
           processing_error?: string | null
@@ -585,7 +651,6 @@ export type Database = {
           type?: string
           updated_at?: string
           user_id?: string
-          folder_ids?: string[] | null
         }
         Relationships: []
       }
@@ -647,64 +712,57 @@ export type Database = {
       }
       flashcards: {
         Row: {
-          id: string
-          user_id: string
-          note_id: string | null
-          front: string
           back: string
           category: string | null
+          created_at: string | null
           difficulty: string | null
+          ease_factor: number | null
+          front: string
           hint: string | null
-          review_count: number
+          id: string
+          interval_days: number | null
           last_reviewed_at: string | null
           next_review_at: string | null
-          ease_factor: number | null
-          interval_days: number | null
-          created_at: string | null
+          note_id: string | null
+          review_count: number | null
           updated_at: string | null
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          note_id?: string | null
-          front: string
           back: string
           category?: string | null
+          created_at?: string | null
           difficulty?: string | null
+          ease_factor?: number | null
+          front: string
           hint?: string | null
-          review_count?: number
+          id?: string
+          interval_days?: number | null
           last_reviewed_at?: string | null
           next_review_at?: string | null
-          ease_factor?: number | null
-          interval_days?: number | null
-          created_at?: string | null
+          note_id?: string | null
+          review_count?: number | null
           updated_at?: string | null
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          note_id?: string | null
-          front?: string
           back?: string
           category?: string | null
+          created_at?: string | null
           difficulty?: string | null
+          ease_factor?: number | null
+          front?: string
           hint?: string | null
-          review_count?: number
+          id?: string
+          interval_days?: number | null
           last_reviewed_at?: string | null
           next_review_at?: string | null
-          ease_factor?: number | null
-          interval_days?: number | null
-          created_at?: string | null
+          note_id?: string | null
+          review_count?: number | null
           updated_at?: string | null
+          user_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "flashcards_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "flashcards_note_id_fkey"
             columns: ["note_id"]
@@ -804,6 +862,53 @@ export type Database = {
         }
         Relationships: []
       }
+      quiz_attempts: {
+        Row: {
+          answers: Json
+          created_at: string
+          id: string
+          percentage: number
+          quiz_id: string
+          score: number
+          time_taken_seconds: number
+          total_questions: number
+          user_id: string
+          xp_earned: number
+        }
+        Insert: {
+          answers?: Json
+          created_at?: string
+          id?: string
+          percentage: number
+          quiz_id: string
+          score: number
+          time_taken_seconds: number
+          total_questions: number
+          user_id: string
+          xp_earned?: number
+        }
+        Update: {
+          answers?: Json
+          created_at?: string
+          id?: string
+          percentage?: number
+          quiz_id?: string
+          score?: number
+          time_taken_seconds?: number
+          total_questions?: number
+          user_id?: string
+          xp_earned?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_attempts_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quizzes: {
         Row: {
           class_id: string | null
@@ -896,158 +1001,6 @@ export type Database = {
           },
         ]
       }
-      social_chat_messages: {
-        Row: {
-          id: string
-          session_id: string
-          sender_id: string
-          content: string
-          created_at: string
-          updated_at: string | null
-          is_read: boolean
-          read_at: string | null
-          is_edited: boolean
-          group_id: string | null
-        }
-        Insert: {
-          id?: string
-          session_id: string
-          sender_id: string
-          content: string
-          created_at?: string
-          updated_at?: string | null
-          is_read?: boolean
-          read_at?: string | null
-          is_edited?: boolean
-          group_id?: string | null
-        }
-        Update: {
-          content?: string
-          updated_at?: string | null
-          is_read?: boolean
-          read_at?: string | null
-          is_edited?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "social_chat_messages_sender_id_fkey"
-            columns: ["sender_id"]
-            referencedRelation: "social_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "social_chat_messages_session_id_fkey"
-            columns: ["session_id"]
-            referencedRelation: "social_chat_sessions"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-
-      social_chat_sessions: {
-        Row: {
-          id: string
-          chat_type: 'p2p' | 'group'
-          group_id: string | null
-          user_id1: string | null
-          user_id2: string | null
-          last_message_at: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          chat_type: 'p2p' | 'group'
-          group_id?: string | null
-          user_id1?: string | null
-          user_id2?: string | null
-          last_message_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          last_message_at?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "social_chat_sessions_group_id_fkey"
-            columns: ["group_id"]
-            referencedRelation: "social_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "social_chat_sessions_user_id1_fkey"
-            columns: ["user_id1"]
-            referencedRelation: "social_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "social_chat_sessions_user_id2_fkey"
-            columns: ["user_id2"]
-            referencedRelation: "social_users"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-
-      social_chat_message_media: {
-        Row: {
-          id: string
-          message_id: string
-          type: 'image' | 'video' | 'document'
-          url: string
-          filename: string
-          size_bytes: number
-          mime_type: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          message_id: string
-          type: 'image' | 'video' | 'document'
-          url: string
-          filename: string
-          size_bytes: number
-          mime_type: string
-          created_at?: string
-        }
-        Update: never
-        Relationships: [
-          {
-            foreignKeyName: "social_chat_message_media_message_id_fkey"
-            columns: ["message_id"]
-            referencedRelation: "social_chat_messages"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-
-      social_chat_message_resources: {
-        Row: {
-          id: string
-          message_id: string
-          resource_id: string
-          resource_type: 'note' | 'document' | 'post'
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          message_id: string
-          resource_id: string
-          resource_type: 'note' | 'document' | 'post'
-          created_at?: string
-        }
-        Update: never
-        Relationships: [
-          {
-            foreignKeyName: "social_chat_message_resources_message_id_fkey"
-            columns: ["message_id"]
-            referencedRelation: "social_chat_messages"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
       social_bookmarks: {
         Row: {
           created_at: string | null
@@ -1084,104 +1037,241 @@ export type Database = {
           },
         ]
       }
-      social_users: {
+      social_chat_message_media: {
         Row: {
+          created_at: string | null
+          filename: string
           id: string
-          username: string
-          display_name: string
-          avatar_url: string | null
-          bio: string | null
-          interests: string[] | null
-          is_verified: boolean
-          is_contributor: boolean
-          followers_count: number
-          following_count: number
-          posts_count: number
-          last_active: string
-          created_at: string
-          updated_at: string
-          email: string | null
+          message_id: string
+          mime_type: string
+          size_bytes: number
+          type: string
+          url: string
         }
         Insert: {
-          id: string
-          username: string
-          display_name: string
-          avatar_url?: string | null
-          bio?: string | null
-          interests?: string[] | null
-          is_verified?: boolean
-          is_contributor?: boolean
-          followers_count?: number
-          following_count?: number
-          posts_count?: number
-          last_active?: string
-          created_at?: string
-          updated_at?: string
-          email?: string | null
+          created_at?: string | null
+          filename: string
+          id?: string
+          message_id: string
+          mime_type: string
+          size_bytes: number
+          type: string
+          url: string
         }
         Update: {
-          username?: string
-          display_name?: string
-          avatar_url?: string | null
-          bio?: string | null
-          interests?: string[] | null
-          last_active?: string
-          updated_at?: string
+          created_at?: string | null
+          filename?: string
+          id?: string
+          message_id?: string
+          mime_type?: string
+          size_bytes?: number
+          type?: string
+          url?: string
         }
         Relationships: [
           {
-            foreignKeyName: "social_users_id_fkey"
-            columns: ["id"]
-            referencedRelation: "users"
+            foreignKeyName: "social_chat_message_media_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "social_chat_messages"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
-
-      social_posts: {
+      social_chat_message_reads: {
         Row: {
-          id: string
-          author_id: string
-          content: string
-          privacy: 'public' | 'followers' | 'private'
-          group_id: string | null
-          likes_count: number
-          comments_count: number
-          shares_count: number
-          bookmarks_count: number
-          views_count: number
           created_at: string
-          updated_at: string
+          id: string
+          message_id: string
+          read_at: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          author_id: string
-          content: string
-          privacy?: 'public' | 'followers' | 'private'
-          group_id?: string | null
-          likes_count?: number
-          comments_count?: number
-          shares_count?: number
-          bookmarks_count?: number
-          views_count?: number
           created_at?: string
-          updated_at?: string
+          id?: string
+          message_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_chat_message_reads_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "social_chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_message_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_chat_message_resources: {
+        Row: {
+          created_at: string | null
+          id: string
+          message_id: string
+          resource_id: string
+          resource_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          message_id: string
+          resource_id: string
+          resource_type: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          message_id?: string
+          resource_id?: string
+          resource_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_chat_message_resources_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "social_chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_chat_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          group_id: string | null
+          id: string
+          is_edited: boolean | null
+          is_read: boolean | null
+          read_at: string | null
+          sender_id: string
+          session_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          is_edited?: boolean | null
+          is_read?: boolean | null
+          read_at?: string | null
+          sender_id: string
+          session_id?: string | null
+          updated_at?: string | null
         }
         Update: {
           content?: string
-          privacy?: 'public' | 'followers' | 'private'
-          updated_at?: string
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          is_edited?: boolean | null
+          is_read?: boolean | null
+          read_at?: string | null
+          sender_id?: string
+          session_id?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "social_posts_author_id_fkey"
-            columns: ["author_id"]
+            foreignKeyName: "social_chat_messages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "social_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
             referencedRelation: "social_users"
             referencedColumns: ["id"]
-          }
+          },
+          {
+            foreignKeyName: "social_chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_session_summaries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "social_chat_sessions"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      
+      social_chat_sessions: {
+        Row: {
+          chat_type: string
+          created_at: string | null
+          group_id: string | null
+          id: string
+          last_message_at: string | null
+          updated_at: string | null
+          user_id1: string | null
+          user_id2: string | null
+        }
+        Insert: {
+          chat_type: string
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          updated_at?: string | null
+          user_id1?: string | null
+          user_id2?: string | null
+        }
+        Update: {
+          chat_type?: string
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          updated_at?: string | null
+          user_id1?: string | null
+          user_id2?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_chat_sessions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "social_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_sessions_user_id1_fkey"
+            columns: ["user_id1"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_sessions_user_id2_fkey"
+            columns: ["user_id2"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_comment_media: {
         Row: {
           comment_id: string
@@ -1781,7 +1871,66 @@ export type Database = {
           },
         ]
       }
-    
+      social_posts: {
+        Row: {
+          author_id: string
+          bookmarks_count: number | null
+          comments_count: number | null
+          content: string
+          created_at: string | null
+          group_id: string | null
+          id: string
+          likes_count: number | null
+          privacy: string | null
+          shares_count: number | null
+          updated_at: string | null
+          views_count: number | null
+        }
+        Insert: {
+          author_id: string
+          bookmarks_count?: number | null
+          comments_count?: number | null
+          content: string
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          likes_count?: number | null
+          privacy?: string | null
+          shares_count?: number | null
+          updated_at?: string | null
+          views_count?: number | null
+        }
+        Update: {
+          author_id?: string
+          bookmarks_count?: number | null
+          comments_count?: number | null
+          content?: string
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          likes_count?: number | null
+          privacy?: string | null
+          shares_count?: number | null
+          updated_at?: string | null
+          views_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_posts_group_id"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "social_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_posts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_reports: {
         Row: {
           comment_id: string | null
@@ -1927,6 +2076,108 @@ export type Database = {
         }
         Relationships: []
       }
+      social_users: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string | null
+          display_name: string
+          email: string | null
+          followers_count: number | null
+          following_count: number | null
+          id: string
+          interests: string[] | null
+          is_contributor: boolean | null
+          is_verified: boolean | null
+          last_active: string | null
+          posts_count: number | null
+          updated_at: string | null
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          display_name: string
+          email?: string | null
+          followers_count?: number | null
+          following_count?: number | null
+          id: string
+          interests?: string[] | null
+          is_contributor?: boolean | null
+          is_verified?: boolean | null
+          last_active?: string | null
+          posts_count?: number | null
+          updated_at?: string | null
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          display_name?: string
+          email?: string | null
+          followers_count?: number | null
+          following_count?: number | null
+          id?: string
+          interests?: string[] | null
+          is_contributor?: boolean | null
+          is_verified?: boolean | null
+          last_active?: string | null
+          posts_count?: number | null
+          updated_at?: string | null
+          username?: string
+        }
+        Relationships: []
+      }
+      user_stats: {
+        Row: {
+          average_score: number
+          badges_earned: string[]
+          created_at: string
+          current_streak: number
+          last_activity_date: string | null
+          level: number
+          longest_streak: number
+          total_quizzes_attempted: number
+          total_quizzes_completed: number
+          total_study_time_seconds: number
+          total_xp: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          average_score?: number
+          badges_earned?: string[]
+          created_at?: string
+          current_streak?: number
+          last_activity_date?: string | null
+          level?: number
+          longest_streak?: number
+          total_quizzes_attempted?: number
+          total_quizzes_completed?: number
+          total_study_time_seconds?: number
+          total_xp?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          average_score?: number
+          badges_earned?: string[]
+          created_at?: string
+          current_streak?: number
+          last_activity_date?: string | null
+          level?: number
+          longest_streak?: number
+          total_quizzes_attempted?: number
+          total_quizzes_completed?: number
+          total_study_time_seconds?: number
+          total_xp?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       chat_session_memory_stats: {
@@ -1974,82 +2225,109 @@ export type Database = {
         }
         Relationships: []
       }
-      flashcard_stats: {
-        Row: {
-          user_id: string | null
-          note_id: string | null
-          total_cards: number | null
-          easy_cards: number | null
-          medium_cards: number | null
-          hard_cards: number | null
-          due_for_review: number | null
-          avg_reviews: number | null
-          last_study_session: string | null
-        }
-        Insert: {
-          user_id?: never
-          note_id?: never
-          total_cards?: never
-          easy_cards?: never
-          medium_cards?: never
-          hard_cards?: never
-          due_for_review?: never
-          avg_reviews?: never
-          last_study_session?: never
-        }
-        Update: {
-          user_id?: never
-          note_id?: never
-          total_cards?: never
-          easy_cards?: never
-          medium_cards?: never
-          hard_cards?: never
-          due_for_review?: never
-          avg_reviews?: never
-          last_study_session?: never
-        }
-        Relationships: []
-      }
       chat_session_summaries: {
         Row: {
-          id: string
-          chat_type: 'p2p' | 'group'
+          chat_type: string | null
+          created_at: string | null
           group_id: string | null
-          user_id1: string | null
-          user_id2: string | null
+          id: string | null
           last_message_at: string | null
-          created_at: string
-          updated_at: string
           unread_count_user1: number | null
           unread_count_user2: number | null
+          updated_at: string | null
+          user_id1: string | null
+          user_id2: string | null
         }
+        Insert: {
+          chat_type?: string | null
+          created_at?: string | null
+          group_id?: string | null
+          id?: string | null
+          last_message_at?: string | null
+          unread_count_user1?: never
+          unread_count_user2?: never
+          updated_at?: string | null
+          user_id1?: string | null
+          user_id2?: string | null
+        }
+        Update: {
+          chat_type?: string | null
+          created_at?: string | null
+          group_id?: string | null
+          id?: string | null
+          last_message_at?: string | null
+          unread_count_user1?: never
+          unread_count_user2?: never
+          updated_at?: string | null
+          user_id1?: string | null
+          user_id2?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_chat_sessions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "social_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_sessions_user_id1_fkey"
+            columns: ["user_id1"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_chat_sessions_user_id2_fkey"
+            columns: ["user_id2"]
+            isOneToOne: false
+            referencedRelation: "social_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flashcard_stats: {
+        Row: {
+          avg_reviews: number | null
+          due_for_review: number | null
+          easy_cards: number | null
+          hard_cards: number | null
+          last_study_session: string | null
+          medium_cards: number | null
+          note_id: string | null
+          total_cards: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcards_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
-      get_suggested_users: {
-        Args: {
-          p_user_id: string
-          p_exclude_ids: string[]
-          p_limit: number
-          p_offset: number
-        }
-        Returns: {
-          id: string
-          username: string
-          display_name: string
-          avatar_url: string | null
-          bio: string | null
-          interests: string[] | null
-          followers_count: number | null
-          following_count: number | null
-          posts_count: number | null
-          is_verified: boolean | null
-          last_active: string | null
-          created_at: string | null
-          recommendation_score: number
-        }[]
+      _social_groups_recalc_members_count_for: {
+        Args: { p_group_id: string }
+        Returns: undefined
       }
       generate_unique_username: { Args: { p_email: string }; Returns: string }
+      get_due_flashcards: {
+        Args: { p_limit?: number; p_user_id: string }
+        Returns: {
+          back: string
+          category: string
+          difficulty: string
+          ease_factor: number
+          front: string
+          hint: string
+          id: string
+          review_count: number
+        }[]
+      }
       get_folder_documents_recursive: {
         Args: { p_folder_id: string; p_user_id: string }
         Returns: {
@@ -2062,6 +2340,39 @@ export type Database = {
           type: string
         }[]
       }
+      get_or_create_group_chat_session: {
+        Args: { p_group_id: string }
+        Returns: string
+      }
+      get_session_unread_count: {
+        Args: { p_session_id: string; p_user_id: string }
+        Returns: number
+      }
+      get_suggested_users: {
+        Args: {
+          p_exclude_ids: string[]
+          p_limit: number
+          p_offset: number
+          p_user_id: string
+        }
+        Returns: {
+          avatar_url: string
+          bio: string
+          created_at: string
+          display_name: string
+          followers_count: number
+          following_count: number
+          id: string
+          interests: string[]
+          is_verified: boolean
+          last_active: string
+          posts_count: number
+          recommendation_score: number
+          username: string
+        }[]
+      }
+      get_user_unread_count: { Args: { p_user_id: string }; Returns: number }
+      get_xp_for_level: { Args: { level_num: number }; Returns: number }
       is_admin: {
         Args: {
           _min_role?: Database["public"]["Enums"]["admin_role"]
@@ -2078,67 +2389,25 @@ export type Database = {
         }
         Returns: string
       }
-      get_due_flashcards: {
-        Args: {
-          p_user_id: string
-          p_limit?: number
-        }
-        Returns: {
-          id: string
-          front: string
-          back: string
-          category: string | null
-          difficulty: string | null
-          hint: string | null
-          review_count: number
-          ease_factor: number | null
-        }[]
+      mark_session_messages_read: {
+        Args: { p_session_id: string; p_user_id: string }
+        Returns: number
       }
       review_flashcard: {
-        Args: {
-          p_flashcard_id: string
-          p_user_id: string
-          p_quality: number
-        }
+        Args: { p_flashcard_id: string; p_quality: number; p_user_id: string }
         Returns: undefined
-      }
-      get_session_unread_count: {
-        Args: {
-          p_session_id: string
-          p_user_id: string
-        }
-        Returns: number
-      }
-      mark_session_messages_read: {
-        Args: {
-          p_session_id: string
-          p_user_id: string
-        }
-        Returns: number
-      }
-      get_user_unread_count: {
-        Args: {
-          p_user_id: string
-        }
-        Returns: number
-      }
-      get_or_create_group_chat_session: {
-        Args: {
-          p_group_id: string
-        }
-        Returns: string
       }
     }
     Enums: {
       admin_role: "super_admin" | "admin" | "moderator"
       message_role: "user" | "assistant"
       note_category:
-      | "general"
-      | "math"
-      | "science"
-      | "history"
-      | "language"
-      | "other"
+        | "general"
+        | "math"
+        | "science"
+        | "history"
+        | "language"
+        | "other"
       schedule_item_type: "class" | "study" | "assignment" | "exam" | "other"
     }
     CompositeTypes: {
@@ -2153,116 +2422,116 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-  | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-  : never = never,
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-  ? R
-  : never
+    ? R
+    : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-    DefaultSchema["Views"])
-  ? (DefaultSchema["Tables"] &
-    DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-      Row: infer R
-    }
-  ? R
-  : never
-  : never
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-  | keyof DefaultSchema["Tables"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-    Insert: infer I
-  }
-  ? I
-  : never
+      Insert: infer I
+    }
+    ? I
+    : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-    Insert: infer I
-  }
-  ? I
-  : never
-  : never
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-  | keyof DefaultSchema["Tables"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-    Update: infer U
-  }
-  ? U
-  : never
+      Update: infer U
+    }
+    ? U
+    : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-    Update: infer U
-  }
-  ? U
-  : never
-  : never
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-  | keyof DefaultSchema["Enums"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-  : never
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-  | keyof DefaultSchema["CompositeTypes"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-  : never
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
 
 export const Constants = {
   public: {
