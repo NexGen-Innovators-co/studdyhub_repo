@@ -198,7 +198,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 lg:p-12 max-w-7xl mx-auto space-y-6">
             {/* Header with Engagement Score */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="flex-1">

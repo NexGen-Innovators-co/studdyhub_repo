@@ -350,6 +350,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       case 'documents': return 'documents';
       case 'social': return 'social';
       case 'settings': return 'settings';
+      case 'quizzes': return 'quizzes';
       default: return 'dashboard';
     }
   }, [location.pathname]);
@@ -952,7 +953,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Set active tab based on current route
   useEffect(() => {
-    setActiveTab(currentActiveTab as 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings');
+    return setActiveTab(currentActiveTab);
   }, [currentActiveTab, setActiveTab]);
 
   // Smart data loading based on tab activation

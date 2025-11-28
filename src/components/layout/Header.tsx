@@ -5,7 +5,8 @@ import {
   Settings, LogOutIcon, BookOpen, Video, Calendar, MessageSquare, FileText, 
   Sliders, LayoutDashboard, Share2, ChevronDown, Download, Upload, 
   Mic, VideoIcon, Clock, BookMarked, Bot, MessageCircle,
-  Users2
+  Users2,
+  Sparkles
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BookPagesAnimation from '../ui/bookloader';
@@ -46,7 +47,7 @@ interface HeaderProps {
   onNewNote: () => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social';
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social'|'quizzes';
   fullName: string | null;
   avatarUrl: string | null;
   socialSearchQuery: string;
@@ -68,6 +69,7 @@ const tabNames: Record<HeaderProps['activeTab'], string> = {
   settings: 'Learning Settings',
   dashboard: 'Dashboard',
   social: 'Social',
+  quizzes: 'Quizzes'
 };
 
 const getInitials = (name: string | null) => {
@@ -85,6 +87,7 @@ const mainNavItems = [
   { label: 'Documents', icon: FileText, path: '/documents', tab: 'documents' },
   { label: 'Settings', icon: Sliders, path: '/settings', tab: 'settings' },
   { label: 'Social', icon: Users2, path: '/social', tab: 'social' },
+  { label: 'Quizzes', icon: Sparkles, path: '/quizzes', tab: 'quizzes' },
 ];
 
 // Social navigation items
@@ -168,6 +171,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isDocumentsRoute = location.pathname.startsWith('/documents');
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const isDashboardRoute = location.pathname === '/dashboard';
+  const isQuizzesRoute = location.pathname === 'quizzes'
 
   // Route-specific actions
   const getRouteSpecificActions = () => {
@@ -225,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
       );
     }
 
-    return null;
+   return null;
   };
 
   // Route-specific search placeholder
