@@ -41,11 +41,11 @@ export const GroupMembers: React.FC<GroupMembersProps> = ({ groupId, currentUser
         toast.error('Failed to load members');
       } else {
         // Ensure role is one of the allowed values
-        const typedMembers = data.map(d => ({
-          ...d.user,
+        const typedMembers = (data || []).map(d => ({
+          ...(d.user as any),
           role: (['admin', 'moderator', 'member'].includes(d.role) ? d.role : 'member') as 'admin' | 'moderator' | 'member',
           joined_at: d.joined_at
-        }));
+        })) as GroupMemberWithDetails[];
         setMembers(typedMembers);
       }
       setIsLoading(false);

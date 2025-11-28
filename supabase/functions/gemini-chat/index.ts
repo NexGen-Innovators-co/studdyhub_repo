@@ -4,7 +4,6 @@ import mammoth from 'https://esm.sh/mammoth@1.6.0';
 import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
 import JSZIP from 'https://esm.sh/jszip@3.10.1';
 import xml2js from 'https://esm.sh/xml2js@0.5.0';
-import { encode, decode } from "npm:gpt-tokenizer";
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
