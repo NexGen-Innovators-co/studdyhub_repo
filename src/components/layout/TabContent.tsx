@@ -14,6 +14,7 @@ import { Document, UserProfile } from '../../types/Document';
 import ErrorBoundary from './ErrorBoundary';
 import { toast } from 'sonner';
 import { SocialFeed } from '../social/SocialFeed';
+import { Quizzes } from '../quizzes/Quizzes';
 
 interface ChatSession {
   id: string;
@@ -27,7 +28,7 @@ interface ChatSession {
 
 interface TabContentProps {
   socialGroupId?: string; // Added
-  activeTab: 'dashboard' | 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social';
+  activeTab: 'dashboard' | 'notes' | 'recordings' | 'quizzes' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social';
   activeSocialTab?: string;
   socialPostId?: string;
   filteredNotes: Note[];
@@ -403,6 +404,20 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleRecordingsScroll}>
           <ErrorBoundary>
             <ClassRecordings {...recordingsProps} />
+          </ErrorBoundary>
+        </div>
+      );
+
+    case 'quizzes':
+      return (
+        <div className="flex-1 overflow-y-auto modern-scrollbar dark:bg-transparent">
+          <ErrorBoundary>
+            <Quizzes 
+              quizzes={props.quizzes}
+              recordings={props.recordings ?? []}
+              onGenerateQuiz={props.onGenerateQuiz}
+              userId={props.userProfile?.id || ''}
+            />
           </ErrorBoundary>
         </div>
       );

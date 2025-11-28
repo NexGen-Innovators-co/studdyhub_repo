@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { FolderTree, FolderTreeProps } from './FolderTree';
 import { DocumentFolder, FolderTreeNode } from '../../types/Folder';
+import { toast } from 'sonner';
 
 interface MoveFolderDialogProps {
     // Existing props
