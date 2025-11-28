@@ -31,7 +31,8 @@ import {
   LogOut,
   Home,
   TrendingUp,
-  User
+  User,
+  Lightbulb
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
@@ -59,13 +60,14 @@ interface SidebarProps {
   activeTab:
     | 'notes'
     | 'recordings'
+    | 'quizzes'
     | 'schedule'
     | 'chat'
     | 'documents'
     | 'settings'
     | 'dashboard'
     | 'social'
-    | string; // Allow string for dynamic chat paths like 'chat/:sessionId'
+    | string;
   activeSocialTab?: string; // New prop for social sub-navigation
   onTabChange: (
     tab:
@@ -848,6 +850,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { id: 'dashboard', name: 'Dashboard', icon: Book },
       { id: 'notes', name: 'Notes', icon: FileText },
       { id: 'recordings', name: 'Recordings', icon: Mic },
+      { id: 'quizzes', name: 'Quizzes', icon: Lightbulb },
       { id: 'schedule', name: 'Schedule', icon: Calendar },
       { id: 'chat', name: 'AI Chat', icon: MessageCircle },
       { id: 'documents', name: 'Documents', icon: Upload },
