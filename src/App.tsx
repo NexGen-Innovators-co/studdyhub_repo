@@ -1,10 +1,9 @@
-// Modified App.tsx - Removed SocialRoutesWrapper and SocialDataProvider
-// In App.tsx
+// App.tsx - Updated with simpler SEO approach
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { AdminAuthProvider } from "./hooks/useAdminAuth";
 import Index from "./pages/Index";
@@ -26,6 +25,8 @@ import React, { Suspense, lazy } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { AppProvider } from "./contexts/AppContext";
 import { AdminLayout } from "./components/admin/AdminLayout";
+import { HelmetProvider } from "react-helmet-async";
+import DynamicHead from "./components/seo/DynamicHead";
 
 // Lazy load admin components
 const AdminDashboard = lazy(() => import("./components/admin/adminDashboard"));
@@ -46,95 +47,91 @@ const Fallback = () => (
   </div>
 );
 
+// Create a wrapper component for SEO
+const AppWithSEO = () => {
+  const location = useLocation();
+
+  return (
+    <>
+      <DynamicHead pathname={location.pathname} />
+      <Suspense fallback={<Fallback />}>
+        <Routes>
+          {/* ==== PUBLIC ROUTES ==== */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/about-us" element={<AboutUs />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/blogs" element={<Blog />} />
+          <Route path="/integrations" element={<Integrations />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
+          <Route path="/careers" element={<Careers />} />
+          <Route path="/api" element={<APIPage />} />
+          <Route path="/documentation-page" element={<DocumentationPage />} />
+          <Route path="/user-guide-page" element={<UserGuidePage />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* ==== AUTHENTICATED APP ROUTES (Non-Social) ==== */}
+          <Route path="/dashboard" element={<Index />} />
+          <Route path="/notes" element={<Index />} />
+          <Route path="/note" element={<Index />} />
+          <Route path="/recordings" element={<Index />} />
+          <Route path="/schedule" element={<Index />} />
+          <Route path="/chat" element={<Index />} />
+
+          {/* Protected chat session route */}
+          <Route path="/chat/:sessionId" element={<Index />} />
+
+          <Route path="/documents" element={<Index />} />
+          <Route path="/settings" element={<Index />} />
+          <Route path="/quizzes" element={<Index />} />
+
+          {/* ==== SOCIAL ROUTES - Protected ==== */}
+          <Route path="/social" element={<Index />} />
+          <Route path="/social/:tab" element={<Index />} />
+
+          {/* Protected social routes */}
+          <Route path="/social/post/:postId" element={<Index />} />
+          <Route path="/social/group/:groupId" element={<Index />} />
+          <Route path="/social/profile/:userId" element={<Index />} />
+
+          {/* ==== ADMIN ROUTES - Protected by AdminLayout ==== */}
+          <Route element={<AdminLayout />}>
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/users" element={<UserManagement />} />
+            <Route path="/admin/admins" element={<AdminManagement />} />
+            <Route path="/admin/moderation" element={<ContentModeration />} />
+            <Route path="/admin/settings" element={<SystemSettings />} />
+            <Route path="/admin/logs" element={<ActivityLogs />} />
+          </Route>
+
+          {/* ==== 404 NOT FOUND ==== */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
+    </>
+  );
+};
+
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <Analytics />
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <AdminAuthProvider>
-            <AppProvider>
-              <Suspense fallback={<Fallback />}>
-                <Routes>
-                  {/* ==== PUBLIC ROUTES ==== */}
-                  <Route path="/" element={<LandingPage />} />
-                  <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                  <Route path="/about-us" element={<AboutUs />} />
-                  <Route path="/contact" element={<Contact />} />
-                  <Route path="/blogs" element={<Blog />} />
-                  <Route path="/integrations" element={<Integrations />} />
-                  <Route path="/terms-of-service" element={<TermsOfService />} />
-                  <Route path="/careers" element={<Careers />} />
-                  <Route path="/api" element={<APIPage />} />
-                  <Route path="/documentation-page" element={<DocumentationPage />} />
-                  <Route path="/user-guide-page" element={<UserGuidePage />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/reset-password" element={<ResetPassword />} />
-
-                  {/* ==== AUTHENTICATED APP ROUTES (Non-Social) ==== */}
-                  <Route path="/dashboard" element={<Index />} />
-                  <Route path="/notes" element={<Index />} />
-                  <Route path="/note" element={<Index />} />
-                  <Route path="/recordings" element={<Index />} />
-                  <Route path="/schedule" element={<Index />} />
-                  <Route path="/chat" element={<Index />} />
-
-                  {/* Protected chat session route */}
-                  <Route path="/chat/:sessionId" element={
-
-                    <Index />
-
-                  } />
-
-                  <Route path="/documents" element={<Index />} />
-                  <Route path="/settings" element={<Index />} />
-                  <Route path="/quizzes" element={<Index />} />
-
-                  {/* ==== SOCIAL ROUTES - Protected ==== */}
-                  <Route path="/social" element={<Index />} />
-                  <Route path="/social/:tab" element={<Index />} />
-
-                  {/* Protected social routes */}
-                  <Route path="/social/post/:postId" element={
-
-                    <Index />
-
-                  } />
-
-                  <Route path="/social/group/:groupId" element={
-
-                    <Index />
-
-                  } />
-
-                  <Route path="/social/profile/:userId" element={
-
-                    <Index />
-
-                  } />
-
-                  {/* ==== ADMIN ROUTES - Protected by AdminLayout ==== */}
-                  <Route element={<AdminLayout />}>
-                    <Route path="/admin" element={<AdminDashboard />} />
-                    <Route path="/admin/users" element={<UserManagement />} />
-                    <Route path="/admin/admins" element={<AdminManagement />} />
-                    <Route path="/admin/moderation" element={<ContentModeration />} />
-                    <Route path="/admin/settings" element={<SystemSettings />} />
-                    <Route path="/admin/logs" element={<ActivityLogs />} />
-                  </Route>
-
-                  {/* ==== 404 NOT FOUND ==== */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-            </AppProvider>
-          </AdminAuthProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <HelmetProvider>
+    <QueryClientProvider client={queryClient}>
+      <Analytics />
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <AdminAuthProvider>
+              <AppProvider>
+                <AppWithSEO />
+              </AppProvider>
+            </AdminAuthProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </HelmetProvider>
 );
 
 export default App;
