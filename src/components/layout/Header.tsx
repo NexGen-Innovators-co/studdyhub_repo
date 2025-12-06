@@ -130,13 +130,49 @@ export const Header: React.FC<HeaderProps> = ({
   const getPrimaryAction = () => {
     switch (activeTab) {
       case 'notes':
-        return <Button onClick={onNewNote} className="bg-gradient-to-r from-orange-500 to-blue-500"><Plus className="h-4 w-4 mr-2" />New Note</Button>;
+        return (
+          <Button
+            onClick={onNewNote}
+            className="bg-gradient-to-r from-orange-500 to-blue-500 hover:from-orange-600 hover:to-blue-600"
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">New Note</span>
+          </Button>
+        );
       case 'recordings':
-        return <Button onClick={() => onNewRecording?.()} className="bg-green-600"><Mic className="h-4 w-4 mr-2" />Record</Button>;
+        return (
+          <Button
+            onClick={() => onNewRecording?.()}
+            className="bg-green-600 hover:bg-green-700"
+            size="sm"
+          >
+            <Mic className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Record</span>
+          </Button>
+        );
       case 'documents':
-        return <Button onClick={() => onUploadDocument?.()} className="bg-blue-600"><Upload className="h-4 w-4 mr-2" />Upload</Button>;
+        return (
+          <Button
+            onClick={() => onUploadDocument?.()}
+            className="bg-blue-600 hover:bg-blue-700"
+            size="sm"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Upload</span>
+          </Button>
+        );
       case 'schedule':
-        return <Button onClick={() => onNewSchedule?.()} className="bg-blue-600"><Plus className="h-4 w-4 mr-2" />Add Event</Button>;
+        return (
+          <Button
+            onClick={() => onNewSchedule?.()}
+            className="bg-blue-600 hover:bg-blue-700"
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Add Event</span>
+          </Button>
+        );
       case 'chat':
         return (
           <Button
@@ -144,13 +180,24 @@ export const Header: React.FC<HeaderProps> = ({
               const id = await createNewChatSession?.();
               if (id) navigate(`/chat/${id}`);
             }}
-            className="bg-gradient-to-r from-indigo-600 to-blue-600"
+            className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
+            size="sm"
           >
-            <MessageCircle className="h-4 w-4 mr-2" />New Chat
+            <MessageCircle className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">New Chat</span>
           </Button>
         );
       case 'social':
-        return <Button onClick={onOpenCreatePostDialog} className="bg-gradient-to-r from-blue-600 to-blue-700"><Plus className="h-4 w-4 mr-2" />Post</Button>;
+        return (
+          <Button
+            onClick={onOpenCreatePostDialog}
+            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Post</span>
+          </Button>
+        );
       default:
         return null;
     }
@@ -160,15 +207,14 @@ export const Header: React.FC<HeaderProps> = ({
     <>
       <header className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 z-50">
         <div className="flex items-center justify-between h-16 px-4">
-
           {/* Left: Toggle + App Menu + Title */}
           <div className="flex items-center gap-3">
             <button onClick={onToggleSidebar} className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
               <Menu className="h-5 w-5" />
             </button>
 
-            {/* App Menu Dropdown */}
-            <div ref={appMenuRef} className="relative lg:block">
+            {/* App Menu Dropdown - Hidden on mobile */}
+            <div ref={appMenuRef} className="relative hidden lg:block">
               <Button
                 variant="ghost"
                 onClick={() => setIsAppMenuOpen(!isAppMenuOpen)}
@@ -209,9 +255,9 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Center: Search + Social Nav */}
-          <div className="flex-1 flex items-center justify-center px-8">
+          <div className="flex-1 flex items-center justify-center px-4 lg:px-8">
             {isSocialRoute ? (
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-full p-2 gap-3 max-w-4xl w-full">
+              <div className="hidden lg:flex items-center bg-slate-100 dark:bg-slate-800 rounded-full p-2 gap-3 max-w-4xl w-full">
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                   <Input
@@ -244,7 +290,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="relative w-full max-w-md hidden md:block">
+              <div className="relative w-full max-w-md hidden lg:block">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input
                   placeholder={`Search ${tabNames[activeTab].toLowerCase()}...`}
@@ -255,11 +301,15 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             )}
           </div>
+
+          {/* Right: Create Button + Avatar - Show create button on all screens */}
           <div className="flex items-center gap-3">
-            <div className="hidden lg:block">
+            {/* Create Button - Now visible on all screens */}
+            <div>
               {getPrimaryAction()}
             </div>
 
+            {/* Avatar - Always visible */}
             <div ref={avatarRef} className="relative">
               <button
                 onClick={() => setIsAvatarMenuOpen(!isAvatarMenuOpen)}
@@ -309,11 +359,6 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
           </div>
-        </div>
-
-        {/* Mobile Floating Action */}
-        <div className="lg:hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-40">
-          {getPrimaryAction()}
         </div>
       </header>
 
