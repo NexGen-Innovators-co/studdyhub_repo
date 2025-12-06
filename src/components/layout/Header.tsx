@@ -168,7 +168,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* App Menu Dropdown */}
-            <div ref={appMenuRef} className="relative hidden lg:block">
+            <div ref={appMenuRef} className="relative lg:block">
               <Button
                 variant="ghost"
                 onClick={() => setIsAppMenuOpen(!isAppMenuOpen)}

@@ -1218,10 +1218,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         window.removeEventListener('resize', checkOverflow);
       };
     }, [editor, savedCards.length, isToolbarExpanded, isSummaryVisible, isExpanded]);
-
     return (
-
-      // Enhanced responsive layout for the note editor component
 
       <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-gray-900">
 
