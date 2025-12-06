@@ -41,8 +41,8 @@ export interface DataLoadingState {
 }
 
 // In useAppData.tsx - Update timeout constants
-const API_TIMEOUT = 45000; // Increase from 30 to 45 seconds
-const LOADING_TIMEOUT = 30000; // Increase from 10 to 30 seconds for loading states
+const API_TIMEOUT = 60000; // Increase from 30 to 45 seconds
+const LOADING_TIMEOUT = 60000; // Increase from 10 to 30 seconds for loading states
 
 // Priority-based loading with dependencies
 const LOADING_PRIORITIES = {

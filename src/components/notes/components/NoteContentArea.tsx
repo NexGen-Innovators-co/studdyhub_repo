@@ -52,6 +52,9 @@ import {
   BookOpen,
   HelpCircle,
   ChevronRight,
+  Plus, // Add Plus icon
+  FilePlus, // Add FilePlus icon
+  Lightbulb, // Add Lightbulb icon
 } from 'lucide-react';
 
 import { generateFlashcardsFromNote } from '../services/FlashCardServices';
@@ -131,6 +134,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import { DiagramWrapper } from './DiagramWrapper';
 import { delay } from 'framer-motion';
+
 /** Mermaid node */
 const MermaidNode = Node.create({
   name: 'mermaid',
@@ -142,17 +146,12 @@ const MermaidNode = Node.create({
         default: '',
         parseHTML: element => {
           const code = element.getAttribute('data-code');
-          //console.log("Mermaid parseHTML - element:", element, "code:", code);
           return code || '';
         },
-        renderHTML: attributes => {
-          //console.log("Mermaid renderHTML - attributes:", attributes);
-          // FIX: Ensure we return the actual code, not just empty attributes
-          return {
-            'data-mermaid': '',
-            'data-code': attributes.code || ''
-          };
-        },
+        renderHTML: attributes => ({
+          'data-mermaid': '',
+          'data-code': attributes.code || ''
+        }),
       }
     };
   },
@@ -164,15 +163,12 @@ const MermaidNode = Node.create({
           if (typeof dom === 'string') return {};
           const element = dom as HTMLElement;
           const code = element.getAttribute('data-code') || '';
-          //console.log("Mermaid getAttrs - code:", code);
           return { code };
         }
       }
     ];
   },
   renderHTML({ HTMLAttributes }) {
-    //console.log("Mermaid renderHTML - HTMLAttributes:", HTMLAttributes);
-    // FIX: Ensure the code is properly passed through
     return ['div', {
       'data-mermaid': '',
       'data-code': HTMLAttributes.code || ''
@@ -194,17 +190,12 @@ const ChartJsNode = Node.create({
         default: '{}',
         parseHTML: element => {
           const config = element.getAttribute('data-config');
-          //console.log("ChartJS parseHTML - element:", element, "config:", config);
           return config || '{}';
         },
-        renderHTML: attributes => {
-          //console.log("ChartJS renderHTML - attributes:", attributes);
-          // FIX: Ensure we return the actual config, not just empty attributes
-          return {
-            'data-chartjs': '',
-            'data-config': attributes.config || '{}'
-          };
-        },
+        renderHTML: attributes => ({
+          'data-chartjs': '',
+          'data-config': attributes.config || '{}'
+        }),
       }
     };
   },
@@ -216,15 +207,12 @@ const ChartJsNode = Node.create({
           if (typeof dom === 'string') return {};
           const element = dom as HTMLElement;
           const config = element.getAttribute('data-config') || '{}';
-          //console.log("ChartJS getAttrs - config:", config);
           return { config };
         }
       }
     ];
   },
   renderHTML({ HTMLAttributes }) {
-    //console.log("ChartJS renderHTML - HTMLAttributes:", HTMLAttributes);
-    // FIX: Ensure the config is properly passed through
     return ['div', {
       'data-chartjs': '',
       'data-config': HTMLAttributes.config || '{}'
@@ -289,7 +277,7 @@ export { ChartJsNode, MermaidNode, DotNode };
 interface NoteContentAreaProps {
   content: string;
   setContent: (md: string) => void;
-  note: Note;
+  note: Note | null; // Allow note to be null
   userProfile: UserProfile | null;
   title: string;
   setTitle: (title: string) => void;
@@ -331,6 +319,11 @@ interface NoteContentAreaProps {
   handleAudioFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
   isLoading: boolean;
   isSummaryVisible: boolean;
+
+  // Add new props for creating first note
+  onCreateFirstNote?: () => void;
+  onCreateFromTemplate?: () => void;
+  onCreateFromDocument?: () => void;
 }
 
 export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
@@ -342,8 +335,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     title,
     setTitle,
     category,
-    setCategory,
-    tags,
     setTags,
     onSave,
     onToggleNotesHistory,
@@ -371,21 +362,29 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     handleAudioFileSelect,
     isLoading,
     isSummaryVisible,
+    // New props
+    onCreateFirstNote,
+    onCreateFromTemplate,
+    onCreateFromDocument,
   }, ref) => {
+    // Add state to track if we're in empty state
+    const [isEmptyState, setIsEmptyState] = useState(false);
+
+    // Check if we're in empty state
+    useEffect(() => {
+      const isEmpty = !note || !note.id || (!content.trim() && !isLoading);
+      setIsEmptyState(isEmpty);
+    }, [note, content, isLoading]);
+
     // Function to convert editor HTML back to markdown while preserving diagrams
     const convertEditorHtmlToMarkdown = (html: string): string => {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = html;
 
-      //console.log("=== CONVERTING HTML TO MARKDOWN ===");
-      //console.log("Input HTML:", html);
-
       // Handle Chart.js nodes
       const chartNodes = tempDiv.querySelectorAll('div[data-chartjs]');
-      //console.log("Found Chart.js nodes:", chartNodes.length);
       chartNodes.forEach((node, index) => {
         const config = node.getAttribute('data-config');
-        //console.log(`Chart.js node ${index}:`, { config });
         if (config && config.trim()) {
           const codeBlock = document.createElement('pre');
           const code = document.createElement('code');
@@ -393,20 +392,15 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           code.textContent = config;
           codeBlock.appendChild(code);
           node.replaceWith(codeBlock);
-          //console.log(`Replaced Chart.js node ${index} with code block`);
         } else {
-          // Remove empty chart nodes
           node.remove();
-          //console.log(`Removed empty Chart.js node ${index}`);
         }
       });
 
       // Handle Mermaid nodes
       const mermaidNodes = tempDiv.querySelectorAll('div[data-mermaid]');
-      //console.log("Found Mermaid nodes:", mermaidNodes.length);
       mermaidNodes.forEach((node, index) => {
         const code = node.getAttribute('data-code');
-        //console.log(`Mermaid node ${index}:`, { code });
         if (code && code.trim()) {
           const codeBlock = document.createElement('pre');
           const codeElement = document.createElement('code');
@@ -414,20 +408,15 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           codeElement.textContent = code;
           codeBlock.appendChild(codeElement);
           node.replaceWith(codeBlock);
-          //console.log(`Replaced Mermaid node ${index} with code block`);
         } else {
-          // Remove empty mermaid nodes
           node.remove();
-          //console.log(`Removed empty Mermaid node ${index}`);
         }
       });
 
       // Handle Graphviz (DOT) nodes
       const dotNodes = tempDiv.querySelectorAll('div[data-dot]');
-      //console.log("Found DOT nodes:", dotNodes.length);
       dotNodes.forEach((node, index) => {
         const code = node.getAttribute('data-code');
-        //console.log(`DOT node ${index}:`, { code });
         if (code && code.trim()) {
           const codeBlock = document.createElement('pre');
           const codeElement = document.createElement('code');
@@ -435,18 +424,12 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           codeElement.textContent = code;
           codeBlock.appendChild(codeElement);
           node.replaceWith(codeBlock);
-          //console.log(`Replaced DOT node ${index} with code block`);
         } else {
-          // Remove empty dot nodes
           node.remove();
-          //console.log(`Removed empty DOT node ${index}`);
         }
       });
 
       const markdown = turndown.turndown(tempDiv.innerHTML);
-      //console.log("Final markdown:", markdown);
-      //console.log("=== CONVERSION COMPLETE ===");
-
       return markdown;
     };
 
@@ -455,14 +438,11 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       if (!markdown.trim()) return '';
 
       try {
-        // First convert markdown to basic HTML
         let html = mdProcessor.processSync(markdown).toString();
 
-        // Convert code blocks with specific languages to custom nodes
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
 
-        // Convert mermaid code blocks to custom nodes
         const mermaidCodeBlocks = tempDiv.querySelectorAll('pre code.language-mermaid');
         mermaidCodeBlocks.forEach((codeBlock) => {
           const code = codeBlock.textContent || '';
@@ -472,7 +452,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           codeBlock.parentElement?.replaceWith(mermaidDiv);
         });
 
-        // Convert chartjs code blocks to custom nodes
         const chartjsCodeBlocks = tempDiv.querySelectorAll('pre code.language-chartjs');
         chartjsCodeBlocks.forEach((codeBlock) => {
           const config = codeBlock.textContent || '{}';
@@ -482,7 +461,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           codeBlock.parentElement?.replaceWith(chartDiv);
         });
 
-        // Convert dot code blocks to custom nodes
         const dotCodeBlocks = tempDiv.querySelectorAll('pre code.language-dot, pre code.language-graphviz');
         dotCodeBlocks.forEach((codeBlock) => {
           const code = codeBlock.textContent || '';
@@ -495,7 +473,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         return tempDiv.innerHTML;
       } catch (error) {
         console.error('Error converting markdown to HTML:', error);
-        return markdown; // Fallback to raw markdown
+        return markdown;
       }
     };
 
@@ -525,12 +503,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       content: convertMarkdownToEditorHtml(content),
       onUpdate: ({ editor }) => {
         const html = editor.getHTML();
-        console.log("Editor update - HTML:", html);
-
-        // Use our custom conversion to preserve diagrams
         const markdown = convertEditorHtmlToMarkdown(html);
-        console.log("Editor update - Markdown:", markdown);
-
         setContent(markdown);
       },
       editorProps: {
@@ -541,7 +514,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       },
     });
 
-    // Update useImperativeHandle:
     useImperativeHandle(ref, () => ({
       getCurrentMarkdown: () => {
         if (!editor) return '';
@@ -552,6 +524,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         return editor?.getHTML() || '';
       },
     }));
+
     // Add this to your NoteContentArea component
     const debugEditorState = () => {
       if (!editor) return;
@@ -559,33 +532,8 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       const html = editor.getHTML();
       console.log("=== EDITOR STATE DEBUG ===");
       console.log("Editor HTML:", html);
-
-      // Check if diagram nodes exist in the editor state
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = html;
-
-      const mermaidNodes = tempDiv.querySelectorAll('div[data-mermaid]');
-      console.log("Mermaid nodes in editor:", mermaidNodes.length);
-      mermaidNodes.forEach((node, index) => {
-        console.log(`Mermaid node ${index}:`, {
-          hasDataCode: node.hasAttribute('data-code'),
-          dataCode: node.getAttribute('data-code'),
-          innerHTML: node.innerHTML
-        });
-      });
-
-      const chartNodes = tempDiv.querySelectorAll('div[data-chartjs]');
-      console.log("ChartJS nodes in editor:", chartNodes.length);
-      chartNodes.forEach((node, index) => {
-        console.log(`ChartJS node ${index}:`, {
-          hasDataConfig: node.hasAttribute('data-config'),
-          dataConfig: node.getAttribute('data-config'),
-          innerHTML: node.innerHTML
-        });
-      });
     };
 
-    // Call this in your save handler
     const handleSave = () => {
       debugEditorState();
       onSave()
@@ -597,7 +545,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       const timeoutId = setTimeout(() => {
         const currentMarkdown = convertEditorHtmlToMarkdown(editor.getHTML());
 
-        // Deep comparison to avoid unnecessary updates
         if (content !== currentMarkdown && content.trim() !== currentMarkdown.trim()) {
           const html = convertMarkdownToEditorHtml(content);
           editor.commands.setContent(html, false);
@@ -614,7 +561,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [actionType, setActionType] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    // Add these state variables with your existing state
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showDiagramsMenu, setShowDiagramsMenu] = useState(false);
@@ -679,7 +625,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       try {
         const res = await generateFlashcardsFromNote({
           noteContent: content,
-          noteId: note.id,
+          noteId: note?.id || '',
           userProfile: userProfile!,
           numberOfCards: cardCount,
         });
@@ -713,8 +659,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         dot: 'digraph G {\n    A -> B\n    B -> C\n    A -> C\n}'
       };
 
-      console.log(`Inserting ${type} diagram with code:`, defaults[type]);
-
       if (type === 'chartjs') {
         editor.chain().focus().insertContent({
           type: 'chartjs',
@@ -726,14 +670,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           attrs: { code: defaults[type] }
         }).run();
       }
-
-      // Debug: Check what was actually inserted
-      setTimeout(() => {
-        const html = editor.getHTML();
-        console.log("HTML after diagram insertion:", html);
-      }, 100);
     };
-
 
     // Diagram rendering useEffect (only for visual rendering, doesn't affect content)
     useEffect(() => {
@@ -812,7 +749,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
       useEffect(() => {
         const checkMobile = () => {
-          setIsMobile(window.innerWidth < 1024); // lg breakpoint
+          setIsMobile(window.innerWidth < 1024);
         };
 
         checkMobile();
@@ -830,10 +767,8 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     // UI State
     const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    // Add these new state variables near your existing state declarations
     const [showMobileFormatMenu, setShowMobileFormatMenu] = useState(false);
     const [showFlashcardsMenu, setShowFlashcardsMenu] = useState(false);
-    // Inside the NoteContentArea component, add this state:
     const [showTutorial, setShowTutorial] = useState(false);
 
     const toolbarRef = useRef<HTMLDivElement>(null);
@@ -1196,8 +1131,8 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         const newHidden = new Set<number>();
 
         children.forEach((child, index) => {
-          totalWidth += child.offsetWidth + 8; // + gap (adjust if needed)
-          if (totalWidth > containerWidth - 1) { // leave space for Chevron button
+          totalWidth += child.offsetWidth + 8;
+          if (totalWidth > containerWidth - 1) {
             newHidden.add(index);
           }
         });
@@ -1218,10 +1153,13 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         window.removeEventListener('resize', checkOverflow);
       };
     }, [editor, savedCards.length, isToolbarExpanded, isSummaryVisible, isExpanded]);
+
+    // Render empty state when there's no note
+
+
+    // Render normal editor when note exists
     return (
-
       <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-gray-900">
-
         {/* Hidden file inputs */}
         <input
           type="file"
@@ -1238,13 +1176,11 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           accept="audio/*"
         />
 
-
         {/* ---------- RESPONSIVE FORMATTING TOOLBAR ---------- */}
         <div className="flex-shrink-0 relative border-b border-gray-300 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 shadow-sm">
           {/* Desktop Toolbar - Hidden on mobile */}
           <div className={`hidden lg:flex items-center gap-2 px-4 py-2 overflow-x-scroll modern-scrollbar in transition-all duration-300 ${isExpanded ? 'flex-wrap' : ''}`}>
             <div className={`flex items-center gap-2 flex-1 min-w-0 ${isExpanded ? 'flex-wrap' : ''}`} ref={toolbarRef}>
-              {/* All your button groups go here – wrapped in a ref for measurement */}
               {toolbarItems.map((item, index) => (
                 <div
                   key={index}
@@ -1664,17 +1600,17 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           document.body
         )}
 
-
         {/* ---------- FLASHCARD DECK ---------- */}
         {showDeck && (
           <div className="border-t border-gray-300 dark:border-gray-700 p-4 sm:p-6 bg-gray-50 dark:bg-gray-800/50">
             <FlashcardDeck
-              noteId={note.id}
+              noteId={note?.id || ''}
               userId={userProfile?.id ?? ''}
               onGenerate={generate}
             />
           </div>
         )}
+
         {/* Tutorial Component */}
         <UniversalTutorial
           config={NOTE_EDITOR_TUTORIAL}
@@ -1682,8 +1618,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClose={closeTutorial}
           onComplete={completeTutorial}
         />
-
-
       </div>
     );
   }
