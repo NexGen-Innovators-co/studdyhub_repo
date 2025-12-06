@@ -56,7 +56,7 @@ export const generateFlashcardsFromNote = async (
 
     return data as FlashcardGenerationResult;
   } catch (error) {
-    console.error('Flashcard generation error:', error);
+    //console.error('Flashcard generation error:', error);
     throw error;
   }
 };
@@ -89,7 +89,7 @@ export const saveFlashcards = async (
       throw error;
     }
   } catch (error) {
-    console.error('Error saving flashcards:', error);
+    //console.error('Error saving flashcards:', error);
     throw error;
   }
 };
@@ -112,10 +112,10 @@ export const getFlashcardsForNote = async (
     if (error) {
       throw error;
     }
-console.log('Fetched flashcards:', data);
+//console.log('Fetched flashcards:', data);
     return data as Flashcard[];
   } catch (error) {
-    console.error('Error fetching flashcards:', error);
+    //console.error('Error fetching flashcards:', error);
     throw error;
   }
 };
@@ -139,7 +139,7 @@ export const updateFlashcard = async (
       throw error;
     }
   } catch (error) {
-    console.error('Error updating flashcard:', error);
+    //console.error('Error updating flashcard:', error);
     throw error;
   }
 };
@@ -162,7 +162,7 @@ export const deleteFlashcard = async (
       throw error;
     }
   } catch (error) {
-    console.error('Error deleting flashcard:', error);
+    //console.error('Error deleting flashcard:', error);
     throw error;
   }
 };

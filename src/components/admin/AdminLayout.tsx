@@ -4,13 +4,13 @@ import { useAdminAuth } from '../../hooks/useAdminAuth';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';
-import { 
-  LogOut, 
-  Home, 
-  Users, 
-  Shield, 
-  AlertTriangle, 
-  Settings, 
+import {
+  LogOut,
+  Home,
+  Users,
+  Shield,
+  AlertTriangle,
+  Settings,
   FileText,
   Menu,
   X,
@@ -73,8 +73,8 @@ export const AdminLayout = () => {
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             You don't have permission to access the admin panel.
           </p>
-          <Button 
-            onClick={() => navigate('/dashboard')} 
+          <Button
+            onClick={() => navigate('/dashboard')}
             variant="outline"
             className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
           >
@@ -128,8 +128,8 @@ export const AdminLayout = () => {
             >
               Back to App
             </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="icon"
               onClick={handleSignOut}
               className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-red-600 dark:hover:text-red-400"
@@ -160,7 +160,7 @@ export const AdminLayout = () => {
         >
           <nav className="p-4 space-y-1 overflow-y-auto h-full">
             <div className="mb-4 px-3">
-              <div className="flex items-center gap-2 p-3 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg border border-blue-200 dark:border-blue-800/50">
+              <div className="flex items-center gap-2 p-3 bg-gradient-to-r from-blue-50 to-blue-50 dark:from-blue-900/20 dark:to-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800/50">
                 <BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <div>
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Admin Level</p>
@@ -178,8 +178,8 @@ export const AdminLayout = () => {
                 onClick={() => setMobileMenuOpen(false)}
                 className={`
                   w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
-                  ${isActive(to) 
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-600 dark:to-blue-700 text-white shadow-lg' 
+                  ${isActive(to)
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-600 dark:to-blue-700 text-white shadow-lg'
                     : 'text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
                   }
                 `}

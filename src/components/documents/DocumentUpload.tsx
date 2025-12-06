@@ -448,7 +448,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           break;
         case 'date':
         default:
-          aValue =a.created_at;
+          aValue = a.created_at;
           bValue = b.created_at;
           break;
       }
@@ -959,7 +959,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   // Enhanced document synchronization and duplicate prevention
   useEffect(() => {
     // Log for debugging
-    console.log('📄 Documents count:', documents.length);
+    //console.log('📄 Documents count:', documents.length);
 
     // Check for duplicates
     const documentIds = documents.map(doc => doc.id);
@@ -978,29 +978,29 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       );
 
       if (uniqueDocuments.length !== documents.length) {
-        console.log('🔄 Removing duplicate documents');
+        //console.log('🔄 Removing duplicate documents');
         // You might want to update the parent state here
         // or handle this in your data loading logic
       }
     }
   }, [documents]);
-// Debug duplicate documents
-useEffect(() => {
-  const duplicateIds = documents
-    .map(doc => doc.id)
-    .filter((id, index, ids) => ids.indexOf(id) !== index);
-  
-  if (duplicateIds.length > 0) {
-    console.error('🚨 DUPLICATE DOCUMENT IDs FOUND:', duplicateIds);
-    console.log('📋 All documents:', documents.map(d => ({ id: d.id, title: d.title })));
-    
-    // Log the duplicate documents
-    duplicateIds.forEach(dupId => {
-      const duplicates = documents.filter(d => d.id === dupId);
-      console.log(`📄 Duplicate for ${dupId}:`, duplicates);
-    });
-  }
-}, [documents]);
+  // Debug duplicate documents
+  useEffect(() => {
+    const duplicateIds = documents
+      .map(doc => doc.id)
+      .filter((id, index, ids) => ids.indexOf(id) !== index);
+
+    if (duplicateIds.length > 0) {
+      console.error('🚨 DUPLICATE DOCUMENT IDs FOUND:', duplicateIds);
+      //console.log('📋 All documents:', documents.map(d => ({ id: d.id, title: d.title })));
+
+      // Log the duplicate documents
+      duplicateIds.forEach(dupId => {
+        const duplicates = documents.filter(d => d.id === dupId);
+        //console.log(`📄 Duplicate for ${dupId}:`, duplicates);
+      });
+    }
+  }, [documents]);
   // Filter documents by selected folder with deduplication
   const filteredDocumentsByFolder = useMemo(() => {
     if (!selectedFolderId) {

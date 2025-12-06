@@ -19,7 +19,7 @@ import {
   Edit as EditIcon,
   Trash2,
   Copy as CopyIcon,
-  Check,Sparkle
+  Check, Sparkle
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -188,9 +188,8 @@ const MediaRenderer: React.FC<{ media: any }> = ({ media }) => {
             className="max-w-full rounded-xl  hover:shadow-2xl"
           />
           <div
-            className={`absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center gap-3 duration-200 ${
-              isHovered ? 'opacity-100' : 'opacity-0'
-            }`}
+            className={`absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center gap-3 duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'
+              }`}
           >
             <Button size="icon" variant="secondary" className="bg-white/90 hover:bg-white">
               <ZoomIn className="h-5 w-5" />
@@ -298,7 +297,7 @@ const SharedDocumentPreview: React.FC<{ documentId: string; currentUserId: strin
         user_id: currentUserId,
         title: doc.title ||
 
- doc.file_name,
+          doc.file_name,
         file_name: doc.file_name,
         file_url: doc.file_url,
         file_type: doc.file_type,
@@ -603,7 +602,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const renderResource = (resource: any) => {
     switch (resource.resource_type) {
       case 'post':
-        return <SharedPostPreview postId={resource.resource_id} onClick={() => {navigate(`/social/post/${resource.resource_id}`); onBack();}} />;
+        return <SharedPostPreview postId={resource.resource_id} onClick={() => { navigate(`/social/post/${resource.resource_id}`); onBack(); }} />;
       case 'note':
         return (
           <SharedNotePreview
@@ -656,15 +655,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <Button variant="outline" size="icon" onClick={onBack} className="dark:text-white border-white/30 hover:bg-white/20 bg-transparent">
             <ArrowLeft className="h-6 w-6" />
           </Button>
-          <div className="relative" onClick={() => {onBack(); navigate(`/social/profile/${session.chat_type === 'group' ? session.group?.id : session.user_id1 === currentUserId ? session.user2?.id : session.user1?.id}`);}}>
+          <div className="relative" onClick={() => { onBack(); navigate(`/social/profile/${session.chat_type === 'group' ? session.group?.id : session.user_id1 === currentUserId ? session.user2?.id : session.user1?.id}`); }}>
             <Avatar className="h-12 w-12 ring-4 ring-white/30 shadow-lg cursor-pointer">
               <AvatarImage
                 src={
                   session.chat_type === 'group'
                     ? session.group?.avatar_url
                     : session.user_id1 === currentUserId
-                    ? session.user2?.avatar_url
-                    : session.user1?.avatar_url
+                      ? session.user2?.avatar_url
+                      : session.user1?.avatar_url
                 }
               />
               <AvatarFallback className="bg-white/20 text-white text-lg font-semibold">
@@ -811,10 +810,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
 
         {/* Input */}
-        <MessageInput 
-          onSendMessage={handleSendMessage} 
-          onShareNote={() => setShowNoteShare(true)} 
-          isSending={isSending} 
+        <MessageInput
+          onSendMessage={handleSendMessage}
+          onShareNote={() => setShowNoteShare(true)}
+          isSending={isSending}
         />
       </div>
 

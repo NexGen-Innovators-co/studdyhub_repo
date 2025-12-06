@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '../../../integrations/supabase/client';
-import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails } from '../../../integrations/supabase/socialTypes';
+import { supabase } from '../integrations/supabase/client';
+import { SocialPostWithDetails, SocialUserWithDetails, SocialGroupWithDetails } from '../integrations/supabase/socialTypes';
 import { toast } from 'sonner';
-import { SortBy, FilterBy } from '../types/social';
-import { DEFAULT_LIMITS } from '../utils/socialConstants';
+import { SortBy, FilterBy } from '../components/social/types/social';
+import { DEFAULT_LIMITS } from '../components/social/utils/socialConstants';
 
 import {
   CACHE_KEYS,
@@ -11,7 +11,7 @@ import {
   saveToCache,
   loadFromCache,
   clearCache
-} from '../../../utils/socialCache';
+} from '../utils/socialCache';
 
 export type SuggestedUser = SocialUserWithDetails & {
   recommendation_score?: number;
@@ -29,13 +29,13 @@ const uniqueById = <T extends { id: string }>(arr: T[]): T[] => {
 // Optimized: Batch queries and cache frequently used data
 const createPostQuery = (baseQuery: any, sortBy: SortBy) => {
   let query = baseQuery;
-  
+
   if (sortBy === 'newest') {
     query = query.order('created_at', { ascending: false });
   } else if (sortBy === 'popular') {
     query = query.order('likes_count', { ascending: false });
   }
-  
+
   return query;
 };
 
@@ -51,19 +51,19 @@ const fetchPostRelations = async (postIds: string[], currentUserId: string | nul
       .from('social_post_tags')
       .select(`post_id, tag:social_tags(*)`)
       .in('post_id', postIds),
-    currentUserId 
+    currentUserId
       ? supabase
-          .from('social_likes')
-          .select('post_id')
-          .eq('user_id', currentUserId)
-          .in('post_id', postIds)
+        .from('social_likes')
+        .select('post_id')
+        .eq('user_id', currentUserId)
+        .in('post_id', postIds)
       : { data: [] },
     currentUserId
       ? supabase
-          .from('social_bookmarks')
-          .select('post_id')
-          .eq('user_id', currentUserId)
-          .in('post_id', postIds)
+        .from('social_bookmarks')
+        .select('post_id')
+        .eq('user_id', currentUserId)
+        .in('post_id', postIds)
       : { data: [] }
   ]);
 
@@ -76,7 +76,7 @@ const fetchPostRelations = async (postIds: string[], currentUserId: string | nul
 };
 
 const transformPosts = (
-  postsData: any[], 
+  postsData: any[],
   relations: any
 ): SocialPostWithDetails[] => {
   return postsData.map(post => {
@@ -100,9 +100,9 @@ const transformPosts = (
         ...m,
         type: m.type as "image" | "video" | "document"
       })),
-      group: post.group ? { 
-        ...post.group, 
-        privacy: post.group.privacy as "public" | "private" 
+      group: post.group ? {
+        ...post.group,
+        privacy: post.group.privacy as "public" | "private"
       } : undefined,
       hashtags: postHashtags,
       tags: postTags,
@@ -134,13 +134,13 @@ export const useSocialData = (
   const [isLoadingSuggestedUsers, setIsLoadingSuggestedUsers] = useState(false);
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
   const [isLoadingMoreGroups, setIsLoadingMoreGroups] = useState(false);
-  
+
   const [postsOffset, setPostsOffset] = useState(0);
   const [trendingPostsOffset, setTrendingPostsOffset] = useState(0);
   const [userPostsOffset, setUserPostsOffset] = useState(0);
   const [suggestedUsersOffset, setSuggestedUsersOffset] = useState(0);
   const [groupsOffset, setGroupsOffset] = useState(0);
-  
+
   const [hasMorePosts, setHasMorePosts] = useState(true);
   const [hasMoreTrendingPosts, setHasMoreTrendingPosts] = useState(true);
   const [hasMoreUserPosts, setHasMoreUserPosts] = useState(true);
@@ -165,7 +165,7 @@ export const useSocialData = (
   const [isLoadingCurrentUser, setIsLoadingCurrentUser] = useState(true);
   const [viewedPostIds, setViewedPostIds] = useState<Set<string>>(new Set());
   const groupPageRef = useRef<number>(0);
-  
+
   // Cache for frequently accessed data
   const postRelationsCache = useRef<Map<string, any>>(new Map());
 
@@ -226,7 +226,7 @@ export const useSocialData = (
 
       // OPTIMIZED: Batch fetch all relations at once
       const relations = await fetchPostRelations(postIds, currentUserIdRef.current);
-      
+
       const transformedPosts = transformPosts(selectedPosts, relations);
 
       if (reset) {
@@ -241,7 +241,7 @@ export const useSocialData = (
         setHasMorePosts(false);
       }
     } catch (error) {
-      console.error('Error fetching posts:', error);
+      //console.error('Error fetching posts:', error);
       toast.error('Failed to load posts');
     } finally {
       setIsLoading(false);
@@ -312,7 +312,7 @@ export const useSocialData = (
         setHasMoreTrendingPosts(false);
       }
     } catch (error) {
-      console.error('Error fetching trending posts:', error);
+      //console.error('Error fetching trending posts:', error);
       toast.error('Failed to load trending posts');
     } finally {
       setIsLoading(false);
@@ -375,7 +375,7 @@ export const useSocialData = (
         setHasMoreUserPosts(false);
       }
     } catch (error) {
-      console.error('Error fetching user posts:', error);
+      //console.error('Error fetching user posts:', error);
       toast.error('Failed to load user posts');
     } finally {
       setIsLoadingUserPosts(false);
@@ -461,7 +461,7 @@ export const useSocialData = (
 
       setLikedPosts(transformedPosts);
     } catch (error) {
-      console.error('Error fetching liked posts:', error);
+      //console.error('Error fetching liked posts:', error);
       toast.error('Failed to load liked posts');
     } finally {
       setIsLoadingLikedPosts(false);
@@ -547,7 +547,7 @@ export const useSocialData = (
 
       setBookmarkedPosts(transformedPosts);
     } catch (error) {
-      console.error('Error fetching bookmarked posts:', error);
+      //console.error('Error fetching bookmarked posts:', error);
       toast.error('Failed to load bookmarked posts');
     } finally {
       setIsLoadingBookmarkedPosts(false);
@@ -604,7 +604,7 @@ export const useSocialData = (
 
       saveToCache(CACHE_KEYS.GROUPS, reset ? groupsWithDetails : [...groups, ...groupsWithDetails]);
     } catch (err) {
-      console.error('Error fetching groups:', err);
+      //console.error('Error fetching groups:', err);
       toast.error('Failed to load groups');
     } finally {
       setIsLoadingGroups(false);
@@ -623,8 +623,6 @@ export const useSocialData = (
 
         // 🔥 NEW: If user changed, clear everything first
         if (currentUserIdRef.current && currentUserIdRef.current !== user.id) {
-          console.log('🟡 Different user detected in initializeSocialUser');
-          clearCache();
           setPosts([]);
           setTrendingPosts([]);
           setUserPosts([]);
@@ -658,7 +656,7 @@ export const useSocialData = (
             .single();
 
           if (createError) {
-            console.error('Error creating social user:', createError);
+            //console.error('Error creating social user:', createError);
             toast.error('Failed to initialize social profile');
             setIsLoading(false);
             setIsLoadingGroups(false);
@@ -672,7 +670,7 @@ export const useSocialData = (
           setIsLoadingGroups(false);
         }
       } catch (error) {
-        console.error('Error initializing social user:', error);
+        //console.error('Error initializing social user:', error);
         setIsLoading(false);
         setIsLoadingGroups(false);
       }
@@ -695,7 +693,7 @@ export const useSocialData = (
 
         setViewedPostIds(new Set(data.map((view: { post_id: string }) => view.post_id)));
       } catch (err) {
-        console.error('Error fetching viewed posts:', err);
+        //console.error('Error fetching viewed posts:', err);
       }
     };
 
@@ -811,7 +809,7 @@ export const useSocialData = (
                 toast.info('You have a new notification!');
               }
             } catch (error) {
-              console.error('Error fetching notification details:', error);
+              //console.error('Error fetching notification details:', error);
               if (onNotificationReceived) {
                 onNotificationReceived(payload.new);
               }
@@ -878,7 +876,7 @@ export const useSocialData = (
               });
             }
           } catch (err) {
-            console.error('Realtime posts handler error:', err);
+            //console.error('Realtime posts handler error:', err);
           }
         }
       )
@@ -1048,13 +1046,13 @@ export const useSocialData = (
         is_bookmarked: isBookmarked
       };
     } catch (error) {
-      console.error('Error fetching post details:', error);
+      //console.error('Error fetching post details:', error);
       return null;
     }
   };
 
   const resetAndFetchData = () => {
-    clearCache();
+
     setPostsOffset(0);
     setTrendingPostsOffset(0);
     setUserPostsOffset(0);
@@ -1083,7 +1081,7 @@ export const useSocialData = (
     fetchGroups(true);
     fetchTrendingHashtags();
     fetchSuggestedUsers(true);
-    
+
   };
 
   // In useSocialData.ts, update the fetchPosts function:
@@ -1499,7 +1497,7 @@ export const useSocialData = (
         setTrendingHashtags(data);
       }
     } catch (error) {
-      console.error('Error fetching trending hashtags:', error);
+      //console.error('Error fetching trending hashtags:', error);
     }
   };
   // const fetchLikedPosts = useCallback(async () => {
@@ -1745,7 +1743,7 @@ export const useSocialData = (
           setHasMoreSuggestedUsers(false);
         }
       } catch (err) {
-        console.error('Error fetching suggested users:', err);
+        //console.error('Error fetching suggested users:', err);
         if (reset || suggestedUsers.length === 0) {
           toast.error('Failed to load suggested users');
         }

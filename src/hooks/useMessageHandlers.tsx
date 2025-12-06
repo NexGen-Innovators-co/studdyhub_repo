@@ -106,6 +106,21 @@ export const useMessageHandlers = () => {
 
       let currentSessionId = activeChatSessionId;
 
+      // **VALIDATE SESSION ID**
+      if (currentSessionId) {
+        const { data: sessionData, error: sessionError } = await supabase
+          .from('chat_sessions')
+          .select('id')
+          .eq('id', currentSessionId)
+          .eq('user_id', currentUser.id)
+          .single();
+
+        if (sessionError || !sessionData) {
+          console.warn('Invalid session ID. Creating a new session.');
+          currentSessionId = null; // Reset session ID to force creation of a new one
+        }
+      }
+
       if (!currentSessionId) {
         currentSessionId = await createNewChatSession();
         if (!currentSessionId) {

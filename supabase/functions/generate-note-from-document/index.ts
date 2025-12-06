@@ -309,7 +309,7 @@ serve(async (req) => {
         const newNotePayload = {
             user_id: user.id,
             document_id: documentId,
-            title: `AI Notes for: ${document.title}${selectedSection ? ` - ${selectedSection}` : ''}`, // Add section to title
+            title: `${document.title}${selectedSection ? ` - ${selectedSection}` : ''}`, // Add section to title
             content: aiContent,
             category: 'general',
             tags: [

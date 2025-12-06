@@ -60,7 +60,7 @@ const ActivityLogs = () => {
   // Stats
   const totalActions = logs.length;
   const uniqueAdmins = [...new Set(logs.map(log => log.admin_id).filter(Boolean))].length;
-  const todayActions = logs.filter(log => 
+  const todayActions = logs.filter(log =>
     new Date(log.created_at).toDateString() === new Date().toDateString()
   ).length;
 
@@ -89,11 +89,11 @@ const ActivityLogs = () => {
       delete: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800',
       view: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700',
     };
-    
+
     for (const [key, value] of Object.entries(colors)) {
       if (action.toLowerCase().includes(key)) return value;
     }
-    return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+    return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800';
   };
 
   const exportLogs = () => {
@@ -130,7 +130,7 @@ const ActivityLogs = () => {
           <p className="text-gray-600 dark:text-gray-400">Monitor admin actions and system events</p>
         </div>
         <div className="flex gap-2">
-          <Button 
+          <Button
             onClick={exportLogs}
             variant="outline"
             className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
@@ -138,7 +138,7 @@ const ActivityLogs = () => {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button 
+          <Button
             onClick={fetchLogs}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
@@ -184,8 +184,8 @@ const ActivityLogs = () => {
                 <p className="text-sm text-gray-600 dark:text-gray-400">Today's Actions</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-white">{todayActions}</p>
               </div>
-              <div className="p-3 bg-purple-500/10 dark:bg-purple-500/20 rounded-lg">
-                <Calendar className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+              <div className="p-3 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg">
+                <Calendar className="h-8 w-8 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
           </CardContent>
@@ -202,23 +202,23 @@ const ActivityLogs = () => {
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={activityByDay}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
-                <XAxis 
-                  dataKey="date" 
+                <XAxis
+                  dataKey="date"
                   className="text-xs text-gray-600 dark:text-gray-400"
                 />
                 <YAxis className="text-xs text-gray-600 dark:text-gray-400" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgb(31 41 55)', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgb(31 41 55)',
                     border: '1px solid rgb(55 65 81)',
                     borderRadius: '0.5rem',
                     color: 'white'
                   }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="actions" 
-                  stroke="#3b82f6" 
+                <Line
+                  type="monotone"
+                  dataKey="actions"
+                  stroke="#3b82f6"
                   strokeWidth={2}
                   dot={{ fill: '#3b82f6', r: 4 }}
                 />
@@ -235,17 +235,17 @@ const ActivityLogs = () => {
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={actionDistribution}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
-                <XAxis 
-                  dataKey="action" 
+                <XAxis
+                  dataKey="action"
                   className="text-xs text-gray-600 dark:text-gray-400"
                   angle={-45}
                   textAnchor="end"
                   height={80}
                 />
                 <YAxis className="text-xs text-gray-600 dark:text-gray-400" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgb(31 41 55)', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgb(31 41 55)',
                     border: '1px solid rgb(55 65 81)',
                     borderRadius: '0.5rem',
                     color: 'white'
@@ -305,7 +305,7 @@ const ActivityLogs = () => {
               </TableHeader>
               <TableBody>
                 {filteredLogs.map(log => (
-                  <TableRow 
+                  <TableRow
                     key={log.id}
                     className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                   >
@@ -348,8 +348,8 @@ const ActivityLogs = () => {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         onClick={() => setSelectedLog(log)}
                         className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"

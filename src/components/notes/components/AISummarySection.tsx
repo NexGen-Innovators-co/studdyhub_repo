@@ -87,14 +87,15 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
       <div
         className={`
           ${/* Desktop Styles */ ''}
-          lg:block lg:relative lg:h-screen lg:w-80 
+          lg:block lg:relative lg:max-h-screen lg:w-80 
           lg:border-l lg:border-gray-200 lg:dark:border-gray-700
           lg:bg-gradient-to-br lg:from-blue-50 lg:to-indigo-50
           lg:dark:from-gray-800 lg:dark:to-gray-900
-          lg:shadow-inner
+          lg:shadow-inner lg:overflow-y-auto lg:pb-12
+          
 
           ${/* Mobile Styles */ ''}
-          fixed bottom-0 left-0 right-0 z-50
+          fixed bottom-0 left-0 right-0 z-50 max-h-[45vh] 
           
           bg-white dark:bg-gray-800
           
@@ -105,7 +106,7 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
           ${isSummaryVisible ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
           
           ${/* Layout */ ''}
-          flex flex-col overflow-hidden
+          flex flex-col overflow-scroll
         `}
       >
         {/* Header */}

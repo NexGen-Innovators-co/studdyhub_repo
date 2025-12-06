@@ -1,6 +1,6 @@
 // src/components/quizzes/utils/seedDefaultBadges.ts
 import { supabase } from '../../../integrations/supabase/client';
-import { Badge } from '../../../types/EnhancedClasses';
+import { Achievement, Badge } from '../../../types/EnhancedClasses';
 
 const DEFAULT_BADGES: Omit<Badge, 'id' | 'created_at'>[] = [
   {
@@ -143,6 +143,91 @@ export const getUserAchievements = async (userId: string) => {
     return data || [];
   } catch (error) {
     console.error('Error fetching user achievements:', error);
+    return [];
+  }
+};
+
+export const checkAndAwardBadges = async (userId: string): Promise<Achievement[]> => {
+  try {
+    // Get user stats and recent activity
+    const { data: userStats, error: statsError } = await supabase
+      .from('user_stats')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (statsError) throw statsError;
+
+    const { data: quizAttempts, error: attemptsError } = await supabase
+      .from('quiz_attempts')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (attemptsError) throw attemptsError;
+
+    const { data: existingAchievements, error: achievementsError } = await supabase
+      .from('achievements')
+      .select('badge_id')
+      .eq('user_id', userId);
+
+    if (achievementsError) throw achievementsError;
+
+    const earnedBadgeIds = new Set(existingAchievements?.map(a => a.badge_id) || []);
+    const allBadges = await getAllBadges();
+    const newAchievements: Achievement[] = [];
+
+    for (const badge of allBadges) {
+      if (earnedBadgeIds.has(badge.id)) continue;
+
+      let earned = false;
+
+      switch (badge.requirement_type) {
+        case 'quiz_count':
+          earned = (userStats?.total_quizzes_completed || 0) >= badge.requirement_value;
+          break;
+        case 'streak':
+          earned = (userStats?.current_streak || 0) >= badge.requirement_value;
+          break;
+        case 'score':
+          earned = (userStats?.average_score || 0) >= badge.requirement_value;
+          break;
+        case 'xp':
+          earned = (userStats?.total_xp || 0) >= badge.requirement_value;
+          break;
+        case 'perfect_score':
+          const perfectScores = quizAttempts?.filter(attempt => attempt.percentage === 100).length || 0;
+          earned = perfectScores >= badge.requirement_value;
+          break;
+      }
+
+      if (earned) {
+        const { data: achievement, error: insertError } = await supabase
+          .from('achievements')
+          .insert({
+            user_id: userId,
+            badge_id: badge.id,
+          })
+          .select('*, badges(*)')
+          .single();
+
+        if (!insertError && achievement) {
+          newAchievements.push(achievement);
+          
+          // Award badge XP
+          await supabase
+            .from('user_stats')
+            .update({
+              total_xp: (userStats?.total_xp || 0) + badge.xp_reward,
+              badges_earned: [...(userStats?.badges_earned || []), badge.id],
+            })
+            .eq('user_id', userId);
+        }
+      }
+    }
+
+    return newAchievements;
+  } catch (error) {
+    console.error('Error checking and awarding badges:', error);
     return [];
   }
 };

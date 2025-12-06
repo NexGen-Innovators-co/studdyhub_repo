@@ -92,7 +92,7 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({ noteId, userId, on
   }
 
   return (
-    <div className="space-y-4 px-2 sm:px-4">
+    <div className="space-y-4 px-2 ">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -115,7 +115,7 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({ noteId, userId, on
       </div>
 
       {/* Cards Grid - Fixed responsive layout */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[70vh] overflow-y-auto pb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto pb-18">
         <AnimatePresence>
           {flashcards.map((card) => (
             <motion.div

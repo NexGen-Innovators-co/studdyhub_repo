@@ -51,7 +51,7 @@ export const useChatData = (currentUserId: string | null) => {
                 .single();
 
             if (error || !note) {
-                console.error('Error fetching shared note:', error);
+                //console.error('Error fetching shared note:', error);
                 return { ...res, error: 'Note not found or access denied' };
             }
 
@@ -87,7 +87,7 @@ export const useChatData = (currentUserId: string | null) => {
                 .single();
 
             if (error || !doc) {
-                console.error('Error fetching shared document:', error);
+                //console.error('Error fetching shared document:', error);
                 return { ...res, error: 'Document not found or access denied' };
             }
 
@@ -160,7 +160,7 @@ export const useChatData = (currentUserId: string | null) => {
 
             if (activeSessionId) markSessionMessagesAsRead(activeSessionId);
         } catch (err) {
-            console.error('Error processing realtime messages:', err);
+            //console.error('Error processing realtime messages:', err);
         }
     };
 
@@ -216,7 +216,7 @@ export const useChatData = (currentUserId: string | null) => {
 
             setChatSessions(sessionsWithDetails as ChatSessionWithDetails[]);
         } catch (error) {
-            console.error('Error fetching chat sessions:', error);
+            //console.error('Error fetching chat sessions:', error);
             toast.error('Failed to load chats');
         } finally {
             setIsLoadingSessions(false);
@@ -263,7 +263,7 @@ export const useChatData = (currentUserId: string | null) => {
             setActiveSessionMessages(messagesWithDetails);
             markSessionMessagesAsRead(sessionId);
         } catch (error) {
-            console.error('Error fetching messages:', error);
+            //console.error('Error fetching messages:', error);
             toast.error('Failed to load messages');
         } finally {
             setIsLoadingMessages(false);
@@ -283,7 +283,7 @@ export const useChatData = (currentUserId: string | null) => {
                 prev.map(s => (s.id === sessionId ? { ...s, unread_count: 0 } : s))
             );
         } catch (error) {
-            console.error('Error marking messages read:', error);
+            //console.error('Error marking messages read:', error);
         }
     };
 
@@ -301,7 +301,7 @@ export const useChatData = (currentUserId: string | null) => {
             toast.success('Message deleted');
             return true;
         } catch (error) {
-            console.error('Error deleting message:', error);
+            //console.error('Error deleting message:', error);
             toast.error('Failed to delete message');
             return false;
         }
@@ -331,7 +331,7 @@ export const useChatData = (currentUserId: string | null) => {
             toast.success('Message updated');
             return true;
         } catch (error) {
-            console.error('Error editing message:', error);
+            //console.error('Error editing message:', error);
             toast.error('Failed to edit message');
             return false;
         }
@@ -422,7 +422,7 @@ export const useChatData = (currentUserId: string | null) => {
 
             return { ...msg, sender: msg.sender, media: media || [], resources: enriched };
         } catch (err) {
-            console.error('Error fetching full message:', err);
+            //console.error('Error fetching full message:', err);
             return null;
         }
     };

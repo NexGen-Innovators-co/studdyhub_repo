@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/card';
 import { Button } from '../../ui/button';
@@ -20,7 +20,9 @@ import {
   AlertTriangle,
   Loader2,
   CheckCircle,
-  X
+  X,
+  Bug,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -40,40 +42,48 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
   onGroupUpdate,
   onNavigateToGroups
 }) => {
-  
+
   // Basic Info
   const [name, setName] = useState(group.name || '');
   const [description, setDescription] = useState(group.description || '');
   const [category, setCategory] = useState(group.category || 'general');
   const [privacy, setPrivacy] = useState<'public' | 'private'>(group.privacy || 'public');
-  
+
   // Advanced Settings
   const [allowMemberPosts, setAllowMemberPosts] = useState(true);
   const [requireApproval, setRequireApproval] = useState(privacy === 'private');
   const [allowMemberInvites, setAllowMemberInvites] = useState(true);
-  
+
   // Moderation
   const [pendingMembers, setPendingMembers] = useState<any[]>([]);
   const [reportedContent, setReportedContent] = useState<any[]>([]);
-  
+
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isLoadingPending, setIsLoadingPending] = useState(false);
+
+  const navigate = useNavigate();
 
   // Fetch pending members and reported content
-  React.useEffect(() => {
+  useEffect(() => {
     fetchPendingMembers();
     fetchReportedContent();
   }, [groupId]);
 
   const fetchPendingMembers = async () => {
     try {
+      setIsLoadingPending(true);
+      console.log('Fetching pending members for group:', groupId);
+
       const { data, error } = await supabase
         .from('social_group_members')
         .select(`
           id,
           user_id,
+          role,
+          status,
           joined_at,
           user:social_users(*)
         `)
@@ -81,14 +91,25 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
         .eq('status', 'pending')
         .order('joined_at', { ascending: false });
 
-      if (!error && data) {
+      if (error) {
+        console.error('Error fetching pending members:', error);
+        toast.error('Failed to load pending members');
+        return;
+      }
+
+      console.log('Pending members data:', data);
+
+      if (data) {
         setPendingMembers(data);
       }
     } catch (error) {
       console.error('Error fetching pending members:', error);
+      toast.error('Failed to load pending members');
+    } finally {
+      setIsLoadingPending(false);
     }
   };
-const navigate = useNavigate();
+
   const fetchReportedContent = async () => {
     try {
       const { data, error } = await supabase
@@ -108,6 +129,48 @@ const navigate = useNavigate();
       }
     } catch (error) {
       console.error('Error fetching reports:', error);
+    }
+  };
+
+  // Debug function to see all members
+  const fetchAllMembers = async () => {
+    try {
+      console.log('Fetching ALL members for debugging...');
+      const { data, error } = await supabase
+        .from('social_group_members')
+        .select(`
+          id,
+          user_id,
+          role,
+          status,
+          joined_at,
+          user:social_users(*)
+        `)
+        .eq('group_id', groupId)
+        .order('joined_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching all members:', error);
+        toast.error('Debug: Failed to fetch all members');
+        return;
+      }
+
+      console.log('ALL members in database:', data);
+
+      // Separate by status
+      const pending = data.filter(m => m.status === 'pending');
+      const active = data.filter(m => m.status === 'active');
+      const other = data.filter(m => !['pending', 'active'].includes(m.status));
+
+      console.log('Pending members:', pending);
+      console.log('Active members:', active);
+      console.log('Other status members:', other);
+
+      toast.success(`Debug: Found ${data.length} total members (${pending.length} pending, ${active.length} active)`);
+
+    } catch (error) {
+      console.error('Error in fetchAllMembers:', error);
+      toast.error('Debug: Error fetching members');
     }
   };
 
@@ -153,7 +216,7 @@ const navigate = useNavigate();
     setIsSaving(true);
     try {
       let avatarUrl = group.avatar_url;
-      
+
       if (selectedFile) {
         const uploadedUrl = await uploadAvatar();
         if (uploadedUrl) {
@@ -189,7 +252,7 @@ const navigate = useNavigate();
 
   const handleDeleteGroup = async () => {
     const confirmMessage = `Are you sure you want to delete "${group.name}"? This action cannot be undone and will remove all posts, members, and data associated with this group.`;
-    
+
     if (!window.confirm(confirmMessage)) return;
 
     const doubleConfirm = window.prompt(
@@ -228,33 +291,102 @@ const navigate = useNavigate();
       setIsDeleting(false);
     }
   };
-
   const handleApproveMember = async (membershipId: string, userId: string) => {
     try {
-      const { error } = await supabase
-        .from('social_group_members')
-        .update({ status: 'active' })
-        .eq('id', membershipId);
+      console.log('Approving member via RPC:', { membershipId, userId, groupId });
 
-      if (error) throw error;
-
-      // Send notification
-      await supabase.from('social_notifications').insert({
-        user_id: userId,
-        type: 'group_invite',
-        title: 'Request Approved',
-        message: `Your request to join "${group.name}" has been approved!`,
-        data: { group_id: groupId }
+      // Call the PostgreSQL function that bypasses RLS
+      const { data, error } = await supabase.rpc('approve_group_member', {
+        p_membership_id: membershipId,
+        p_group_id: groupId,
+        p_user_id: userId,
+        p_approver_id: currentUser.id
       });
 
+      if (error) {
+        console.error('RPC error:', error);
+        toast.error(`Failed: ${error.message}`);
+        return;
+      }
+
+      console.log('RPC result:', data);
+
+      if (!data?.success) {
+        toast.error(data?.error || 'Failed to approve member');
+        return;
+      }
+
+      // Update group members count
+      try {
+        const { count } = await supabase
+          .from('social_group_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('group_id', groupId)
+          .eq('status', 'active');
+
+        if (count !== null) {
+          await supabase
+            .from('social_groups')
+            .update({
+              members_count: count,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', groupId);
+        }
+      } catch (countError) {
+        console.error('Error updating count:', countError);
+      }
+
+      // Remove from pending list
       setPendingMembers(prev => prev.filter(m => m.id !== membershipId));
-      toast.success('Member approved');
-    } catch (error) {
+
+      toast.success('Member approved successfully!');
+
+      // Refresh data
+      setTimeout(() => {
+        fetchAllMembers();
+        fetchPendingMembers();
+      }, 500);
+
+    } catch (error: any) {
       console.error('Error approving member:', error);
-      toast.error('Failed to approve member');
+      toast.error(`Failed: ${error.message || 'Unknown error'}`);
     }
   };
+  const debugTriggers = async () => {
+    try {
+      console.log('Debugging triggers for social_group_members...');
 
+      // Check current group members count
+      const { data: groupData } = await supabase
+        .from('social_groups')
+        .select('members_count')
+        .eq('id', groupId)
+        .single();
+
+      console.log('Current group members_count:', groupData?.members_count);
+
+      // Count active members manually - correct syntax
+      const { count } = await supabase
+        .from('social_group_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('group_id', groupId)
+        .eq('status', 'active');
+
+      console.log('Manual count of active members:', count);
+
+      // Check all members
+      const { data: allMembers } = await supabase
+        .from('social_group_members')
+        .select('user_id, status')
+        .eq('group_id', groupId);
+
+      console.log('All members in group:', allMembers);
+
+    } catch (error) {
+      console.error('Debug error:', error);
+    }
+  };
   const handleRejectMember = async (membershipId: string, userId: string) => {
     try {
       const { error } = await supabase
@@ -273,7 +405,9 @@ const navigate = useNavigate();
         data: { group_id: groupId }
       });
 
+      // Remove from pending list
       setPendingMembers(prev => prev.filter(m => m.id !== membershipId));
+
       toast.success('Request declined');
     } catch (error) {
       console.error('Error rejecting member:', error);
@@ -437,6 +571,51 @@ const navigate = useNavigate();
         </CardContent>
       </Card>
 
+      {/* Debug Tools (Temporary - remove after fixing) */}
+      {/* <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bug className="h-5 w-5" />
+            Debug Tools
+          </CardTitle>
+          <CardDescription>
+            Temporary tools to help debug member approval issues
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button
+            variant="outline"
+            onClick={fetchAllMembers}
+            className="w-full gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Fetch All Members (Console)
+          </Button>
+          <Button
+            variant="outline"
+            onClick={fetchPendingMembers}
+            className="w-full gap-2"
+            disabled={isLoadingPending}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoadingPending ? 'animate-spin' : ''}`} />
+            Refresh Pending Members
+          </Button>
+          <Button
+            variant="outline"
+            onClick={debugTriggers}
+            className="w-full gap-2"
+          >
+            <Bug className="h-4 w-4" />
+            Debug Triggers & Counts
+          </Button>
+          <div className="text-xs text-gray-500 p-2 bg-gray-50 dark:bg-gray-800 rounded">
+            <p>Pending members count: {pendingMembers.length}</p>
+            <p>Group ID: {groupId}</p>
+            <p>Check browser console for debug logs</p>
+          </div>
+        </CardContent>
+      </Card> */}
+
       {/* Pending Member Requests */}
       {privacy === 'private' && pendingMembers.length > 0 && (
         <Card>
@@ -450,39 +629,53 @@ const navigate = useNavigate();
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {pendingMembers.map((member) => (
-              <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarImage src={member.user.avatar_url} />
-                    <AvatarFallback>
-                      {member.user.display_name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{member.user.display_name}</p>
-                    <p className="text-sm text-gray-500">@{member.user.username}</p>
+            {isLoadingPending ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+              </div>
+            ) : (
+              pendingMembers.map((member) => (
+                <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarImage src={member.user.avatar_url} />
+                      <AvatarFallback>
+                        {member.user.display_name?.charAt(0) || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{member.user.display_name || 'Unknown User'}</p>
+                      <p className="text-sm text-gray-500">@{member.user.username || 'unknown'}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Requested {new Date(member.joined_at).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        ID: {member.id.substring(0, 8)}...
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleApproveMember(member.id, member.user_id)}
+                      className="gap-1"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Approve</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleRejectMember(member.id, member.user_id)}
+                      className="gap-1"
+                    >
+                      <X className="h-4 w-4" />
+                      <span>Decline</span>
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleApproveMember(member.id, member.user_id)}
-                  >
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleRejectMember(member.id, member.user_id)}
-                  >
-                    <X className="h-4 w-4 mr-1" />
-                    Decline
-                  </Button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
       )}

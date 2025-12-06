@@ -1,4 +1,4 @@
-// GroupDetail.tsx - FULLY REDESIGNED: Bottom Nav as Primary Tabs with Working Chat
+// GroupDetail.tsx - UPDATED: Floating button with all group sections
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../integrations/supabase/client';
@@ -12,7 +12,12 @@ import {
   Loader2, ArrowUp, RefreshCw, Home, Search, Plus, User,
   Copy, Check,
   Send,
-  X
+  X,
+  Menu,
+  ChevronDown,
+  MoreVertical,
+  Sparkles,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -30,6 +35,13 @@ import {
   DialogDescription,
   DialogTitle,
 } from '../../ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '../../ui/dropdown-menu';
 
 import { GroupPosts } from './GroupPosts';
 import { GroupChat } from './GroupChat';
@@ -59,6 +71,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
   const [isLoadingChatSession, setIsLoadingChatSession] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isFloatingMenuOpen, setIsFloatingMenuOpen] = useState(false);
 
   const {
     sendChatMessage,
@@ -193,7 +206,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
       toast.error('Chat session not ready');
       return false;
     }
-  
+
     const result = await sendChatMessage(groupChatSession.id, content, files);
     if (result && addOptimisticMessage) {
       addOptimisticMessage(result);
@@ -210,7 +223,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
       toast.error('Chat session not ready');
       return false;
     }
-  
+
     const result = await sendMessageWithResource(
       groupChatSession.id,
       content,
@@ -222,6 +235,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
     }
     return !!result; // Convert to boolean
   };
+
   const handleLeaveGroup = async () => {
     if (!confirm('Leave this group?')) return;
     const { error } = await supabase
@@ -271,6 +285,15 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
     { name: 'Email', icon: <FaEnvelope className="h-5 w-5 text-gray-600" />, url: `mailto:?subject=${encodeURIComponent(shareText)}&body=${encodeURIComponent(shareUrl)}` },
   ];
 
+  // Group section items for floating menu
+  const groupSections = [
+    { id: 'posts', label: 'Posts', icon: MessageCircle, description: 'View group discussions' },
+    { id: 'chat', label: 'Group Chat', icon: Send, description: 'Chat with members' },
+    { id: 'events', label: 'Events', icon: Calendar, description: 'Upcoming activities' },
+    { id: 'members', label: 'Members', icon: Users, description: 'See all members' },
+    { id: 'settings', label: 'Settings', icon: Settings, description: 'Manage group', isAdminOnly: true },
+  ];
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -283,7 +306,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
     return (
       <div className="text-center py-20">
         <p className="text-xl text-slate-500">Group not found</p>
-        <Button onClick={() => {navigate('/social/groups'); setActiveSession(null);}} className="mt-4">
+        <Button onClick={() => { navigate('/social/groups'); setActiveSession(null); }} className="mt-4">
           Back to Groups
         </Button>
       </div>
@@ -327,10 +350,30 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
           <main className="col-span-1 lg:col-span-6 max-h-screen overflow-y-auto modern-scrollbar lg:pb-10">
             <div ref={topRef} />
 
-            {/* Content Sections - Controlled by Bottom Nav */}
-            <div className="">
+            {/* Simple Back Button for Mobile */}
+            <div className="lg:hidden sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 mb-4">
+              <div className="flex items-center justify-between p-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate('/social/groups')}
+                  className="gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Back to Groups</span>
+                </Button>
+
+                {/* Current Section Indicator */}
+                <Badge variant="outline" className="capitalize">
+                  {activeSection.replace('s', '')}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Content Sections */}
+            <div className="px-0">
               {activeSection === 'posts' && (
-                <div className="max-h-[calc(100vh-5rem)]  lg:max-h-[calc(100vh-5rem)] pt-6 overflow-y-auto modern-scrollbar pb-10">
+                <div className="max-h-[calc(100vh-8rem)] lg:max-h-[calc(100vh-5rem)] overflow-y-auto modern-scrollbar pb-10">
                   <GroupHeader
                     group={group}
                     isMember={isMember}
@@ -342,15 +385,14 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
               )}
 
               {activeSection === 'chat' && (
-                <div className="fixed inset-0 lg:inset-auto animate-in fade-in duration-500 lg:h-[90vh]  bg-white dark:bg-slate-900 z-40 lg:z-10  overflow-hidden flex">
-                  <div className='fixed inset-0 lg:inset-auto lg:relative bg-white dark:bg-slate-900 flex flex-col lg:w-[40vw] w-full  shadow-lg border'>
+                <div className="fixed inset-0 lg:inset-auto animate-in fade-in duration-500 lg:h-[90vh] bg-white dark:bg-slate-900 z-40 lg:z-10 overflow-hidden flex">
+                  <div className='fixed inset-0 lg:inset-auto lg:relative bg-white dark:bg-slate-900 flex flex-col lg:w-[40vw] w-full shadow-lg border'>
                     {isLoadingChatSession ? (
                       <div className="flex items-center justify-center h-full">
                         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                       </div>
                     ) : groupChatSession ? (
                       <>
-
                         <ChatWindow
                           session={groupChatSession}
                           messages={activeSessionMessages}
@@ -360,7 +402,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
                           onSendMessageWithResource={handleSendMessageWithResource}
                           isSending={isSending}
                           isLoading={isLoadingMessages}
-                          editMessage={editMessage} 
+                          editMessage={editMessage}
                           deleteMessage={deleteMessage}
                         />
                       </>
@@ -404,9 +446,9 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
                 />
               )}
 
-              {/* Mobile Actions Section */}
+              {/* Actions Section */}
               {activeSection === 'actions' && (
-                <div className="p-4 space-y-4 pb-24">
+                <div className="space-y-4 pb-24">
                   <Card className="dark:bg-slate-900 shadow-sm border">
                     <CardContent className="pt-6 space-y-3">
                       <h2 className="text-xl font-bold mb-4">Group Actions</h2>
@@ -524,73 +566,109 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
           </DialogContent>
         </Dialog>
 
-        {/* BOTTOM NAVIGATION - NOW CONTROLS GROUP SECTIONS */}
-        {group && (
-          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-safe ">
-            <div className="flex justify-around items-center h-16">
-              {/* Posts */}
-              <button
-                onClick={() => setActiveSection('posts')}
-                className={`flex flex-col items-center pt-2 pb-1 flex-1 ${activeSection === 'posts' ? 'text-blue-600' : 'text-slate-500'
-                  }`}
-              >
-                <MessageCircle className="h-6 w-6" />
-                <span className="text-xs mt-1">Posts</span>
-              </button>
-
-              {/* Chat */}
-              <button
-                onClick={() => setActiveSection('chat')}
-                className={`flex flex-col items-center pt-2 pb-1 flex-1 ${activeSection === 'chat' ? 'text-blue-600' : 'text-slate-500'
-                  }`}
-              >
-                <Send className="h-6 w-6" />
-                <span className="text-xs mt-1">Chat</span>
-              </button>
-
-              {/* Events */}
-              <button
-                onClick={() => setActiveSection('events')}
-                className={`flex flex-col items-center pt-2 pb-1 flex-1 ${activeSection === 'events' ? 'text-blue-600' : 'text-slate-500'
-                  }`}
-              >
-                <Calendar className="h-6 w-6" />
-                <span className="text-xs mt-1">Events</span>
-              </button>
-
-              {/* Members */}
-              <button
-                onClick={() => setActiveSection('members')}
-                className={`flex flex-col items-center pt-2 pb-1 flex-1 ${activeSection === 'members' ? 'text-blue-600' : 'text-slate-500'
-                  }`}
-              >
-                <Users className="h-6 w-6" />
-                <span className="text-xs mt-1">Members</span>
-              </button>
-
-              {/* More/Actions - Always visible on mobile */}
-              <button
-                onClick={() => setActiveSection('actions')}
-                className={`flex flex-col items-center pt-2 pb-1 flex-1 ${activeSection === 'actions' ? 'text-blue-600' : 'text-slate-500'
-                  }`}
-              >
-                <Settings className="h-6 w-6" />
-                <span className="text-xs mt-1">More</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {activeSection !== 'chat' && (
-          <div className="fixed right-6 bottom-24 lg:bottom-8 z-50 flex flex-col gap-3">
+        {/* FLOATING ACTION BUTTON WITH GROUP MENU */}
+        <div className="fixed right-4 bottom-20 lg:bottom-8 z-50 flex flex-col items-end gap-3">
+          {/* Refresh Button */}
+          {activeSection !== 'chat' && (
             <button
               onClick={handleRefresh}
-              className="h-11 w-11 rounded-full bg-white dark:bg-slate-900 shadow-lg border flex items-center justify-center"
+              className="h-12 w-12 rounded-full bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:shadow-xl transition-all"
+              title="Refresh"
             >
               <RefreshCw className={`h-5 w-5 text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
-          </div>
-        )}
+          )}
+
+          {/* Main Floating Menu Button */}
+          <DropdownMenu open={isFloatingMenuOpen} onOpenChange={setIsFloatingMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <button className="h-14 w-14 rounded-full lg:hidden bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg border-4 border-white dark:border-slate-900 flex items-center justify-center hover:shadow-xl hover:scale-105 transition-all">
+                <Menu className="h-6 w-6 text-white" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64 rounded-2xl p-2 shadow-2xl bg-slate-50">
+              <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+                <p className="font-semibold">Group Sections</p>
+                <p className="text-xs text-slate-500">Navigate to different parts</p>
+              </div>
+
+              {groupSections
+                .filter(section => !section.isAdminOnly || canManage)
+                .map(section => (
+                  <DropdownMenuItem
+                    key={section.id}
+                    onClick={() => {
+                      setActiveSection(section.id as any);
+                      setIsFloatingMenuOpen(false);
+                    }}
+                    className={`flex items-center gap-3 p-3 rounded-lg my-1 ${activeSection === section.id
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                  >
+                    <section.icon className="h-5 w-5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-medium">{section.label}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{section.description}</p>
+                    </div>
+                    {activeSection === section.id && (
+                      <div className="h-2 w-2 bg-blue-600 rounded-full" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+
+              <DropdownMenuSeparator className="my-2" />
+
+              {/* Action Items */}
+              <DropdownMenuItem
+                onClick={() => {
+                  handleShareGroup();
+                  setIsFloatingMenuOpen(false);
+                }}
+                className="flex items-center gap-3 p-3 rounded-lg my-1 hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <Share2 className="h-5 w-5" />
+                <div className="flex-1">
+                  <p className="font-medium">Share Group</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Invite others to join</p>
+                </div>
+              </DropdownMenuItem>
+
+              {isMember && !canManage && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    handleLeaveGroup();
+                    setIsFloatingMenuOpen(false);
+                  }}
+                  className="flex items-center gap-3 p-3 rounded-lg my-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                >
+                  <X className="h-5 w-5" />
+                  <div className="flex-1">
+                    <p className="font-medium">Leave Group</p>
+                    <p className="text-xs">Exit this community</p>
+                  </div>
+                </DropdownMenuItem>
+              )}
+
+              <DropdownMenuSeparator className="my-2" />
+
+              {/* Back to Groups */}
+              <DropdownMenuItem
+                onClick={() => {
+                  navigate('/social/groups');
+                  setIsFloatingMenuOpen(false);
+                }}
+                className="flex items-center gap-3 p-3 rounded-lg my-1 hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <ArrowLeft className="h-5 w-5" />
+                <div className="flex-1">
+                  <p className="font-medium">Back to Groups</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Browse all communities</p>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
   );

@@ -95,5 +95,27 @@ export const stripCodeBlocks = (content: string): string => {
   cleanedContent = cleanedContent.replace(/\n\s*\n/g, '\n').replace(/\s+/g, ' ').trim();
   return cleanedContent;
 };
+export const cleanTextForTTS = (text: string): string => {
+  return text
+    .replace(/[\u{1F600}-\u{1F64F}]/gu, '') // remove most emojis
+    .replace(/[\u{1F300}-\u{1F5FF}]/gu, '')
+    .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
+    .replace(/[\u{2600}-\u{26FF}]/gu, '')
+    .replace(/[\u{2700}-\u{27BF}]/gu, '')
+    .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '')
 
+    // Replace specific common ones with spoken equivalents
+    .replace(/thumbs up|okay hand/g, 'thumbs up')
+    .replace(/heart|red heart|heart eyes/g, 'heart')
+    .replace(/laughing|crying laughing|joy/g, 'laughing')
+    .replace(/fire/g, 'fire')
+
+    .replace(/:\)+|:\-+\)+|XD/gi, 'smile')     // :) or :-)) → "smile"
+    .replace(/:\(+|:\-+\(+/gi, 'sad')          // :( → "sad"
+    .replace(/<3/g, 'love')
+
+    .replace(/:\w+:/g, '') // remove all :named: emojis
+    .replace(/\s+/g, ' ')
+    .trim();
+};
 export const generateOptimisticId = () => `optimistic-ai-${uuidv4()}`;

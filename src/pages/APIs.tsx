@@ -32,24 +32,24 @@ const APIPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex flex-col">
             {/* Header */}
-            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md">
-                <Link to="/" className="flex items-center gap-3 group">
+            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md fixed top-0">
+                <Link to="/" className="flex items-center gap-3 group" aria-label="Home">
                     <img
-                        src="/siteimage.png"
+                        src="https://placehold.co/32x32?text=Logo"
                         alt="studdyhub AI Logo"
                         className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
+                        loading="lazy"
                     />
                     <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
                 </Link>
                 <div className="flex items-center gap-4">
                     <Link to="/auth">
-                        <Button type="button" className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
+                        <Button className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
                     </Link>
                     <Button
-                        type="button"
                         onClick={toggleDarkMode}
                         className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                        title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                        aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
                     >
                         {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                     </Button>
@@ -58,87 +58,50 @@ const APIPage: React.FC = () => {
 
             {/* Main Content */}
             <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
-                <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">studdyhub AI API</h1>
-                <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto text-center mb-12">
-                    Integrate studdyhub AI's powerful features directly into your applications.
-                </p>
-
-                <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 max-w-4xl mx-auto">
-                    <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Overview</h2>
-                    <p className="mb-6 text-gray-700 dark:text-gray-300">
-                        The studdyhub AI API allows developers to programmatically access our core AI capabilities, including intelligent summarization, document analysis, and personalized learning insights. Build custom applications that leverage the power of studdyhub AI.
+                <section className="text-center mb-16">
+                    <h1 className="text-4xl md:text-5xl font-extrabold mb-4 text-blue-600 dark:text-blue-400">studdyhub AI API</h1>
+                    <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto">
+                        Integrate studdyhub AI's powerful features directly into your applications. Our API provides access to intelligent summarization, document analysis, and personalized learning insights.
                     </p>
+                </section>
 
-                    <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Key Features</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                        <div className="flex items-start gap-4">
-                            <Book className="h-8 w-8 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Document Processing</h3>
-                                <p className="text-gray-700 dark:text-gray-300">Upload and get structured insights from various document types (PDFs, text, images).</p>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <Zap className="h-8 w-8 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">AI Chat Integration</h3>
-                                <p className="text-gray-700 dark:text-gray-300">Embed our contextual AI chat functionality into your own platforms.</p>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <Sparkles className="h-8 w-8 text-green-600 dark:text-green-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Personalization Engine</h3>
-                                <p className="text-gray-700 dark:text-gray-300">Access and apply personalized learning style adaptations for users.</p>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <Code className="h-8 w-8 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Code Generation (Diagrams)</h3>
-                                <p className="text-gray-700 dark:text-gray-300">Generate Mermaid, DOT, Chart.js, and Three.js code programmatically.</p>
-                            </div>
-                        </div>
+                <section className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+                    <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800">
+                        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Code className="h-6 w-6 text-blue-600" /> Overview</h2>
+                        <p className="text-gray-700 dark:text-gray-300">
+                            The studdyhub AI API allows developers to programmatically access our core AI capabilities. Build custom applications that leverage the power of studdyhub AI for note-taking, transcription, and more.
+                        </p>
                     </div>
+                    <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800">
+                        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Zap className="h-6 w-6 text-yellow-600" /> Key Features</h2>
+                        <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 space-y-2">
+                            <li><strong>Text Summarization:</strong> Generate concise summaries from long documents.</li>
+                            <li><strong>Transcription:</strong> Convert audio recordings to text with speaker identification.</li>
+                            <li><strong>Personalized Insights:</strong> Get learning recommendations based on user data.</li>
+                            <li><strong>Secure and Scalable:</strong> Built with enterprise-grade security and performance.</li>
+                        </ul>
+                    </div>
+                </section>
 
-                    <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Getting Started</h2>
-                    <p className="mb-4 text-gray-700 dark:text-gray-300">
-                        To start using the studdyhub AI API, you'll need an API key.
-                    </p>
-                    <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg">
-                        Get Your API Key
-                    </Button>
-
-                    <h2 className="text-3xl font-bold mt-10 mb-6 text-gray-900 dark:text-white">Documentation</h2>
-                    <p className="mb-4 text-gray-700 dark:text-gray-300">
-                        Our comprehensive API documentation provides detailed information on endpoints, request/response formats, and code examples.
-                    </p>
-                    <Link to="/documentation-page">
-                        <Button variant="outline" className="text-blue-600 border-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-400 dark:hover:bg-blue-900">
-                            View API Documentation
-                        </Button>
-                    </Link>
-
-                    <h2 className="text-3xl font-bold mt-10 mb-6 text-gray-900 dark:text-white">Support</h2>
-                    <p className="mb-4 text-gray-700 dark:text-gray-300">
-                        Need help integrating? Our developer support team is here to assist you.
-                    </p>
+                <section className="text-center">
+                    <h2 className="text-2xl font-bold mb-4">Get Started</h2>
+                    <p className="text-gray-700 dark:text-gray-300 mb-6">Need help integrating? Our developer support team is here to assist you.</p>
                     <Link to="/contact">
-                        <Button variant="outline" className="text-blue-600 border-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-400 dark:hover:bg-blue-900">
-                            Contact Support
-                        </Button>
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">Contact Support</Button>
                     </Link>
-                </div>
+                </section>
             </main>
 
+            {/* Footer */}
             <footer className="py-16 px-6 bg-gray-800 dark:bg-black text-gray-300">
                 <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
                     <div className="md:col-span-2">
                         <div className="flex items-center gap-3 mb-6">
                             <img
-                                src="/siteimage.png"
+                                src="https://placehold.co/48x48?text=Logo"
                                 alt="studdyhub AI Logo"
-                                className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
+                                className="h-12 w-12 object-contain"
+                                loading="lazy"
                             />
                             <span className="text-2xl font-extrabold text-white">studdyhub AI</span>
                         </div>
@@ -146,14 +109,15 @@ const APIPage: React.FC = () => {
                             Empowering students and professionals to achieve more with intelligent tools for notes, recordings, and schedules.
                         </p>
                         <div className="flex gap-4">
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
+                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors" aria-label="Global">
                                 <Globe className="h-5 w-5" />
                             </a>
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
+                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors" aria-label="Logo Link">
                                 <img
-                                    src="/siteimage.png"
+                                    src="https://placehold.co/32x32?text=Logo"
                                     alt="studdyhub AI Logo"
-                                    className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
+                                    className="h-8 w-8 object-contain"
+                                    loading="lazy"
                                 />
                             </a>
                         </div>
@@ -162,8 +126,6 @@ const APIPage: React.FC = () => {
                     <div>
                         <h3 className="text-white font-semibold mb-4">Product</h3>
                         <ul className="space-y-3 text-gray-400">
-                            {/* <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                            <li><a href="#cta" className="hover:text-white transition-colors">Pricing</a></li> */}
                             <li><a href="api" className="hover:text-white transition-colors">API</a></li>
                             <li><a href="integrations" className="hover:text-white transition-colors">Integrations</a></li>
                         </ul>

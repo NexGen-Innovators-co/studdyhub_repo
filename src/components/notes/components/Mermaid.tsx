@@ -94,7 +94,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
   const [showSourceCode, setShowSourceCode] = useState(false);
   const [sourceCodeCopied, setSourceCodeCopied] = useState(false);
   const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // State for custom zoom and pan
   const [scale, setScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
@@ -103,7 +103,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
   const lastPanPosition = useRef({ x: 0, y: 0 });
   const [initialPinchDistance, setInitialPinchDistance] = useState<number | null>(null);
   const [initialPinchScale, setInitialPinchScale] = useState<number>(1);
-  
+
   // State for expand/collapse and resizable height
   const [isDiagramExpanded, setIsDiagramExpanded] = useState(true);
   const [componentHeight, setComponentHeight] = useState(300);
@@ -182,7 +182,7 @@ Here's the error message received: "${error}". Please provide only the corrected
 
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
-      
+
       script.onload = () => {
         // Poll for mermaid to be available
         let attempts = 0;
@@ -197,12 +197,12 @@ Here's the error message received: "${error}". Please provide only the corrected
           }
         }, 100);
       };
-      
+
       script.onerror = () => {
         setError("Failed to load Mermaid library. Please check your network connection.");
         setIsMermaidLoaded(false);
       };
-      
+
       document.head.appendChild(script);
     };
 
@@ -285,7 +285,7 @@ Here's the error message received: "${error}". Please provide only the corrected
         });
 
         const result = await renderPromise;
-        
+
         // Handle different return formats from mermaid.render
         let generatedSvg = '';
         if (typeof result === 'string') {
@@ -296,12 +296,12 @@ Here's the error message received: "${error}". Please provide only the corrected
           console.error('Unexpected mermaid render result:', result);
           throw new Error("Mermaid returned unexpected result format");
         }
-        
+
         if (!generatedSvg || generatedSvg.trim() === '') {
           throw new Error("Mermaid rendered empty SVG");
         }
 
-        console.log('Mermaid SVG generated, length:', generatedSvg.length);
+        //console.log('Mermaid SVG generated, length:', generatedSvg.length);
         setSvg(generatedSvg);
         setLastRenderedChart(chart);
 
@@ -362,9 +362,9 @@ Here's the error message received: "${error}". Please provide only the corrected
               iframeDoc.open();
               iframeDoc.write(fullHtml);
               iframeDoc.close();
-              
+
               // Log for debugging
-              console.log('Iframe content updated');
+              //console.log('Iframe content updated');
             }
           }
         }, 50);
@@ -384,7 +384,7 @@ Here's the error message received: "${error}". Please provide only the corrected
       const timer = setTimeout(() => {
         renderDiagram();
       }, 100);
-      
+
       return () => {
         clearTimeout(timer);
         cleanupRender();
@@ -465,7 +465,7 @@ Here's the error message received: "${error}". Please provide only the corrected
     initialResizeY.current = event.clientY;
     initialComponentHeight.current = componentHeight;
     document.body.style.cursor = 'ns-resize';
-    
+
     const handleResizeMouseMove = (e: MouseEvent) => {
       if (isResizing.current) {
         const deltaY = e.clientY - initialResizeY.current;
@@ -667,9 +667,9 @@ Here's the error message received: "${error}". Please provide only the corrected
               <GripVertical className="h-4 w-4" />
             </div>
           </div>
-          
+
           {/* Fallback: Direct SVG rendering (hidden, for debugging) */}
-          <div 
+          <div
             className="hidden mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700 overflow-auto"
             style={{ maxHeight: '400px' }}
             dangerouslySetInnerHTML={{ __html: svg }}

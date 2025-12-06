@@ -3,6 +3,7 @@ import { useState, useEffect, createContext, useContext, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
 import { clearCache } from '../utils/socialCache'; // Import the utility
+import { clearDashboardCache } from '@/components/dashboard/hooks/useDashboardStats';
 
 interface AuthContextType {
   user: User | null;
@@ -37,30 +38,59 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
-        
+
         // Clear cache when user signs out
         if (event === 'SIGNED_OUT') {
           console.log('🔴 Auth state: SIGNED_OUT - clearing cache');
           clearCache();
         }
-       
+
       }
     );
-  
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
-  
+
     return () => subscription.unsubscribe();
   }, []);
 
   const signOut = async () => {
-    // Clear cache BEFORE signing out
-   clearCache();
-    await supabase.auth.signOut();
+    try {
+      console.log('🔴 Starting sign out process...');
+
+      // Clear all caches BEFORE signing out
+      clearCache(); // Social cache
+      clearDashboardCache(); // Dashboard stats cache
+
+      // Clear any localStorage/sessionStorage data
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Clear any service worker caches if you have them
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          names.forEach(name => {
+            caches.delete(name);
+          });
+        });
+      }
+
+      // Sign out from Supabase
+      await supabase.auth.signOut();
+
+      console.log('✅ Sign out completed successfully');
+    } catch (error) {
+      console.error('❌ Error during sign out:', error);
+      // Still try to clear caches even if signout fails
+      clearCache();
+      clearDashboardCache();
+      localStorage.clear();
+      sessionStorage.clear();
+    }
   };
 
   const value = {

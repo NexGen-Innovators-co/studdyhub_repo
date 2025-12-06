@@ -486,7 +486,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
           if (entries[0].isIntersecting && !hasTrackedView) {
             try {
               onPostView(post.id);
-              console.log(`👁️ Post ${post.id} viewed`);
+              //console.log(`👁️ Post ${post.id} viewed`);
             } catch (e) {
               // ignore
             }
@@ -626,7 +626,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
               </div>
 
               {/* Footer Actions */}
-              <div className="flex items-center border-t border-slate-200 dark:border-slate-800 mt-2 justify-between mt-4 pt-2 p-4 -ml-2">
+              <div className="flex items-center border-t border-slate-200 dark:border-slate-800 mt-2 justify-between pt-2 p-4 -ml-2">
                 <ActionButton
                   icon={Heart}
                   count={post.likes_count}

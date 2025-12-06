@@ -110,10 +110,6 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
     const [isEditing, setIsEditing] = useState(false); // Add this line
     const [editedCode, setEditedCode] = useState(codeContent); // Add this line
 
-    useEffect(() => {
-        setEditedCode(codeContent); // Initialize editedCode with codeContent
-    }, [codeContent]);
-
     const handleCopyCode = useCallback(async () => {
         await copy(editedCode); // Copy editedCode instead of codeContent
     }, [copied, copy, editedCode]);
@@ -204,7 +200,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                             codeTagProps={{
                                 className: 'font-mono text-gray-800 dark:text-gray-100',
                             }}
-                             >
+                        >
                             {codeContent}
                         </SyntaxHighlighter>
                     </div>
@@ -262,10 +258,10 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
     // Handle diagram blocks (mermaid, chartjs, threejs, dot)
     const createDiagramBlock = useCallback((title: string, type: any) => (
         <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800 dark:border-gray-600">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row flex-wrap sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-2 sm:gap-3 text-slate-700 dark:text-gray-200">
                     <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                    <span className="font-medium text-sm sm:text-base">{title}</span>
+                    <span className="font-medium text-sm sm:text-base truncated">{title}</span>
                 </div>
                 <div className="flex gap-2">
                     <Button
@@ -275,8 +271,6 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
                         className="bg-blue-500 text-white hover:bg-blue-600 shadow-sm dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm flex-1 sm:flex-initial"
                     >
                         <Maximize2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                        <span className="hidden xs:inline">View Diagram</span>
-                        <span className="xs:hidden">View</span>
                     </Button>
                     <Button
                         variant="ghost"
@@ -311,7 +305,7 @@ const CodeBlock: React.FC<CodeBlockProps> = memo(({
     const renderInlineCode = useCallback(() => {
         return (
             <code
-                className="bg-gray-100 text-gray-900 px-1 sm:px-1.5 py-0.5 rounded font-mono text-xs sm:text-sm dark:bg-gray-800 dark:text-gray-100"
+                className="bg-gray-100 text-gray-900 px-1 sm:px-1.5 py-0.5 rounded-full font-mono text-xs sm:text-sm dark:bg-gray-800 dark:text-gray-100"
                 {...props}
             >
                 {children}

@@ -143,12 +143,10 @@ const AIChat: React.FC<AIChatProps> = ({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isUpdatingDocuments, setIsUpdatingDocuments] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
-  // Add with your other state declarations
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
   const isCurrentlySendingRef = useRef(false);
-  // Enhanced document synchronization effect
-  // Replace your current document synchronization useEffect with:
+
   useEffect(() => {
     const documentsChanged = documents !== prevDocumentsRef.current;
     const notesChanged = notes !== prevNotesRef.current;
@@ -178,9 +176,9 @@ const AIChat: React.FC<AIChatProps> = ({
             extraction_model_used: null,
             updated_at: note.created_at,
             folder_ids: [],
-            total_processing_time_ms: 0, // Add this line
-            page_count: 0, // Add this line
-            vector_store_id: null, // Add this line
+            total_processing_time_ms: 0,
+            page_count: 0,
+            vector_store_id: null,
           }))
         ];
 
@@ -192,7 +190,7 @@ const AIChat: React.FC<AIChatProps> = ({
       return () => clearTimeout(timer);
     }
   }, [documents, notes]);
-  // Load session documents from database
+
   const loadSessionDocuments = useCallback(async (sessionId: string) => {
     if (!userProfile?.id) return;
 
@@ -218,7 +216,6 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, [userProfile?.id, onSelectionChange]);
 
-  // Enhanced file processing with better error handling
   const processFiles = useCallback((files: File[]) => {
     const validFiles: AttachedFile[] = [];
 
@@ -237,7 +234,6 @@ const AIChat: React.FC<AIChatProps> = ({
         id: fileId
       };
 
-      // Process image files for preview
       if (fileType === 'image') {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -253,7 +249,6 @@ const AIChat: React.FC<AIChatProps> = ({
       }
     });
 
-    // Add non-image files immediately
     if (validFiles.length > 0) {
       setAttachedFiles(prev => [...prev, ...validFiles]);
     }
@@ -266,7 +261,6 @@ const AIChat: React.FC<AIChatProps> = ({
     return /mobile|android|iphone|ipad|tablet/i.test(userAgent) && window.innerWidth <= 768;
   }, []);
 
-  // Enhanced send message with better document synchronization
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -308,7 +302,6 @@ const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
-      // Update session documents in database
       if (activeChatSessionId) {
         const { error } = await supabase
           .from('chat_sessions')
@@ -326,7 +319,6 @@ const AIChat: React.FC<AIChatProps> = ({
         }
       }
 
-      // Separate document IDs and note IDs
       const documentIds = selectedDocumentIds.filter(id =>
         documents.some(doc => doc.id === id)
       );
@@ -340,7 +332,6 @@ const AIChat: React.FC<AIChatProps> = ({
         files: attachedFiles.length
       });
 
-      // Process attached files for backend
       const filesForBackend = await Promise.all(
         attachedFiles.map(async (attachedFile) => {
           const fileType = getFileType(attachedFile.file);
@@ -390,7 +381,7 @@ const AIChat: React.FC<AIChatProps> = ({
         })
       );
       setInputMessage('');
-      // Send message to backend
+
       await onSendMessageToBackend(
         inputMessage.trim(),
         documentIds,
@@ -398,7 +389,6 @@ const AIChat: React.FC<AIChatProps> = ({
         filesForBackend
       );
 
-      // Reset form state
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (cameraInputRef.current) cameraInputRef.current.value = '';
 
@@ -449,65 +439,6 @@ const AIChat: React.FC<AIChatProps> = ({
     messages
   ]);
 
-
-  const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
-    if (!("Notification" in window)) {
-      console.warn("Notification API not supported in this browser.");
-      return false;
-    }
-
-    try {
-      const permission = await Notification.requestPermission();
-      return permission === "granted";
-    } catch (error) {
-      console.error("Error requesting notification permission:", error);
-      return false;
-    }
-  }, []);
-
-  const showNotification = useCallback((title: string, options: NotificationOptions) => {
-    if (Notification.permission === "granted") {
-      new Notification(title, options);
-    }
-  }, []);
-
-  const checkMicrophonePermission = useCallback(async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
-    try {
-      if (navigator.permissions && navigator.permissions.query) {
-        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        return permissionStatus.state as 'granted' | 'denied' | 'prompt';
-      }
-      return 'unknown';
-    } catch (error) {
-      console.error('Error checking microphone permission:', error);
-      return 'unknown';
-    }
-  }, []);
-
-  const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
-    const currentStatus = await checkMicrophonePermission();
-    if (currentStatus === 'granted') {
-      return true;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
-
-      if (currentStatus === 'prompt' || currentStatus === 'unknown') {
-        showNotification("Microphone Access Granted", {
-          body: "You can now use speech recognition.",
-          icon: "/microphone-icon.png",
-        });
-      }
-
-      return true;
-    } catch (error: any) {
-      console.error('Error requesting microphone permission:', error);
-      toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
-      return false;
-    }
-  }, [showNotification, checkMicrophonePermission]);
   const resizeTextarea = useCallback(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -515,12 +446,9 @@ const AIChat: React.FC<AIChatProps> = ({
     }
   }, []);
 
-
-
   useEffect(() => {
     resizeTextarea();
   }, [inputMessage, resizeTextarea]);
-
 
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {
@@ -621,29 +549,6 @@ const AIChat: React.FC<AIChatProps> = ({
     toast.info("AI correction prepared in input. Review and send to apply.");
   }, []);
 
-
-  useEffect(() => {
-    if (!isAiTyping && !isLoadingSessionMessages) {
-      if (!isLastAiMessageDisplayed) {
-        scrollToBottom();
-      }
-    }
-  }, [attachedFiles, selectedDocumentIds, mergedDocuments, notes, isLoadingSessionMessages, activeChatSessionId, userProfile?.id, messages]);
-
-  // Throttle utility function
-  const throttle = (func: Function, limit: number) => {
-    let inThrottle: boolean;
-    return function (this: any, ...args: any[]) {
-      if (!inThrottle) {
-        func.apply(this, args);
-        inThrottle = true;
-        setTimeout(() => inThrottle = false, limit);
-      }
-    };
-  };
-  // Enhanced scroll management for AI typing
-
-  // Smooth scroll to bottom with AI typing support
   const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth', force = false) => {
     if (!isAutoScrolling && !force) return;
 
@@ -656,7 +561,6 @@ const AIChat: React.FC<AIChatProps> = ({
     });
   }, [isAutoScrolling]);
 
-  // Enhanced effect for new messages and session changes
   useEffect(() => {
     if (messages.length === 0) return;
 
@@ -667,23 +571,18 @@ const AIChat: React.FC<AIChatProps> = ({
       lastProcessedMessageIdRef.current = lastMessage.id;
 
       if (lastMessage.role === 'assistant') {
-        // AI message - scroll immediately and set typing state
         setIsAiTyping(true);
         scrollToBottom('smooth', true);
       } else if (lastMessage.role === 'user') {
-        // User message - scroll immediately
         scrollToBottom('smooth', true);
       }
     }
 
-    // If it's the last AI message and it's complete, stop typing
     if (lastMessage.role === 'assistant' && !lastMessage.content.includes('█') && !isLoading) {
       setIsAiTyping(false);
     }
   }, [messages, isLoading, scrollToBottom]);
 
-
-  // Replace your session change useEffect with:
   useEffect(() => {
     const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
 
@@ -703,26 +602,6 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsAiTyping(false);
     }
   }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom, isLoadingSession]);
-  // Enhanced session change handling
-  useEffect(() => {
-    const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
-
-    if (isSessionChange && activeChatSessionId && !isLoadingSessionMessages && messages.length > 0) {
-      // Force scroll to bottom on session change
-      setTimeout(() => {
-        scrollToBottom('auto', true);
-        prevSessionIdRef.current = activeChatSessionId;
-      }, 100);
-
-      // Reset states
-      setInputMessage('');
-      setAttachedFiles([]);
-      setExpandedMessages(new Set());
-      setIsCurrentlySending(false);
-      setIsAiTyping(false);
-    }
-  }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom]);
-
 
   const handleMessageDeleteClick = useCallback((messageId: string) => {
     setMessageToDelete(messageId);
@@ -769,7 +648,6 @@ const AIChat: React.FC<AIChatProps> = ({
   const handleRemoveAllFiles = useCallback(() => {
     setAttachedFiles([]);
   }, []);
-
 
   const selectedDocumentTitles = useMemo(() => {
     return mergedDocuments
@@ -843,7 +721,6 @@ const AIChat: React.FC<AIChatProps> = ({
     stripCodeBlocks,
   });
 
-  // Enhanced document update handler
   const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
     setMergedDocuments(prevDocs => {
       const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
@@ -858,20 +735,15 @@ const AIChat: React.FC<AIChatProps> = ({
     onDocumentUpdated(updatedDoc);
   }, [onDocumentUpdated]);
 
-  // Enhanced session change handling with document synchronization
   useEffect(() => {
     const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
 
     if (isSessionChange && activeChatSessionId) {
       console.log('🔄 Chat session changed, loading session documents');
-
-      // Load documents for the current session
       loadSessionDocuments(activeChatSessionId);
-
       prevSessionIdRef.current = activeChatSessionId;
     }
 
-    // Reset states on session change
     if (isSessionChange) {
       setInputMessage('');
       setAttachedFiles([]);
@@ -882,43 +754,45 @@ const AIChat: React.FC<AIChatProps> = ({
       setIsFullScreen(false);
       setZoomLevel(1);
       setPanOffset({ x: 0, y: 0 });
+      stopSpeech()
 
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (cameraInputRef.current) cameraInputRef.current.value = '';
-
       stopSpeech();
     }
   }, [activeChatSessionId, stopSpeech]);
+
   function handleDiagramCodeUpdate(messageId: string, newCode: string): Promise<void> {
     toast.info('Diagram code updated. You can regenerate the response to see changes.');
     return Promise.resolve();
   }
+
   return (
     <>
       <div
         ref={dropZoneRef}
-        className={`flex flex-col h-screen border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+        className={`flex flex-col h-[90vh] lg:h-screen ${isDiagramPanelOpen ? `` : 'max-w-3xl mx-auto'} border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
       >
         <DragOverlay isDragging={isDragging} />
 
-        <motion.div className={`relative flex flex-col h-full rounded-lg panel-transition
-  ${isDiagramPanelOpen
-            ? (isPhone()
-              ? 'hidden'
-              : `md:w-[calc(100% - ${panelWidth}%)] flex-shrink-0`)
-            : 'w-full flex-1'
-          } bg-transparent dark:bg-transparent`}
-          initial={{ width: '100%' }}
-          animate={{
-            width: isDiagramPanelOpen
-              ? (isPhone() ? '0%' : `calc(100% - ${panelWidth}%)`)
-              : '100%'
+        {/* Chat Panel - Remove motion animation and use inline style for width */}
+        <div
+          className={`relative flex flex-col h-full rounded-lg panel-transition
+            ${isDiagramPanelOpen
+              ? (isPhone()
+                ? 'hidden'
+                : `flex-shrink-0`)
+              : 'w-full flex-1'
+            } bg-transparent dark:bg-transparent`}
+          style={{
+            width: isDiagramPanelOpen && !isPhone()
+              ? `calc(100% - ${panelWidth}%)`
+              : '100%',
+            transition: 'width 0.1s ease-in-out'
           }}
-          transition={{ duration: 0.1, ease: 'easeInOut' }}
         >
-          {/* Chat content remains the same */}
+          {/* Chat content */}
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar pb-36 md:pb-6">
-            {/* MessageList and other content */}
             {isLoadingSessionMessages && (
               <div className="flex justify-center items-center w-full py-10">
                 <Loader2 className="h-4 w-4 animate-spin text-pink-500" />
@@ -936,7 +810,7 @@ const AIChat: React.FC<AIChatProps> = ({
               isLoadingSessionMessages={isLoadingSessionMessages}
               isLoadingOlderMessages={isLoadingOlderMessages}
               hasMoreMessages={hasMoreMessages}
-              mergedDocuments={mergedDocuments} // Use synchronized documents
+              mergedDocuments={mergedDocuments}
               onDeleteClick={handleMessageDeleteClick}
               onRegenerateClick={onRegenerateResponse}
               onRetryClick={onRetryFailedMessage}
@@ -979,12 +853,12 @@ const AIChat: React.FC<AIChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Input area */}
           <div className={`fixed bottom-0 left-0 right-0 sm:pb-8 md:shadow-none md:static rounded-t-lg rounded-lg md:rounded-lg bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
           ${isDiagramPanelOpen
               ? (isPhone() ? 'hidden' : `md:pr-[calc(${panelWidth}%+1.5rem)]`)
               : ''
             }`}>
-            {/* Input form with enhanced context badges */}
             <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2">
               {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
                 <div className="mb-2">
@@ -1001,7 +875,6 @@ const AIChat: React.FC<AIChatProps> = ({
                   />
                 </div>
               ) : null}
-              {/* Textarea and buttons */}
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
@@ -1150,7 +1023,6 @@ const AIChat: React.FC<AIChatProps> = ({
 
           {/* Document selector and other modals */}
           {showDocumentSelector && (
-
             <DocumentSelector
               documents={mergedDocuments}
               notes={notes}
@@ -1161,9 +1033,9 @@ const AIChat: React.FC<AIChatProps> = ({
                 setShowDocumentSelector(false);
                 setIsUpdatingDocuments(false);
               }}
-              onLoadMoreDocuments={onLoadMoreDocuments} // Make sure this function loads more documents
-              hasMoreDocuments={hasMoreDocuments} // Make sure this is calculated correctly
-              isLoadingDocuments={isLoadingDocuments} // Make sure this state is managed
+              onLoadMoreDocuments={onLoadMoreDocuments}
+              hasMoreDocuments={hasMoreDocuments}
+              isLoadingDocuments={isLoadingDocuments}
               onDocumentUpdated={handleDocumentUpdatedLocally}
               activeChatSessionId={activeChatSessionId}
             />
@@ -1176,12 +1048,12 @@ const AIChat: React.FC<AIChatProps> = ({
             title="Delete Message"
             message="Are you sure you want to delete this message? This action cannot be undone."
           />
-        </motion.div>
+        </div>
 
-        {/* Diagram panel remains the same */}
+        {/* Diagram Panel */}
         {isDiagramPanelOpen && (
           <DiagramPanel
-            key={activeDiagram ? `${activeDiagram.type}-${activeDiagram.content?.substring(0, 50) || ''}-${activeDiagram.language || ''}` : 'no-diagram'}
+            key={`diagram-panel-${panelWidth}`}
             diagramContent={activeDiagram?.content}
             diagramType={activeDiagram?.type || 'unknown'}
             onClose={handleCloseDiagramPanel}
@@ -1194,6 +1066,8 @@ const AIChat: React.FC<AIChatProps> = ({
             liveContent={activeDiagram?.content}
             isPhone={isPhone}
             currentTheme={initialAppState.currentTheme}
+            panelWidth={panelWidth}
+            setPanelWidth={setPanelWidth}
           />
         )}
       </div>
@@ -1201,7 +1075,6 @@ const AIChat: React.FC<AIChatProps> = ({
   );
 };
 
-// Keep your existing arePropsEqual function
 const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
   return (
     prevProps.isLoading === nextProps.isLoading &&

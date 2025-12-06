@@ -86,7 +86,7 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
   };
 
   return (
-    <div className="p-4 sm:p-6 border-b border-slate-200/60 bg-white/80 backdrop-blur-sm dark:bg-gray-900/80 dark:border-gray-700/60">
+    <div className="p-12 sm:p-6 border-b border-slate-200/60 bg-white/80 backdrop-blur-sm dark:bg-gray-900/80 dark:border-gray-700/60">
       {/* Main Header Row */}
       <div className="flex items-center justify-between mb-4">
         {/* Left: Title and Basic Controls */}
@@ -154,7 +154,7 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
 
       {/* Expanded Desktop Controls */}
       {isDesktopHeaderExpanded && (
-        <div className="hidden lg:block space-y-4">
+        <div className="hidden pb-4 lg:flex space-y-4">
           {/* First Row: Import & Generate Actions */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">

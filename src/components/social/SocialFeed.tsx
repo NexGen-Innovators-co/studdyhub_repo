@@ -20,7 +20,7 @@ import { useSocialActions } from './hooks/useSocialActions';
 import { useSocialComments } from './hooks/useSocialComments';
 import { SocialNotification, useSocialNotifications } from './hooks/useSocialNotifications';
 import { useSocialPostViews } from './hooks/useSocialPostViews';
-import { useSocialData } from './hooks/useSocialData';
+import { useSocialData } from '../../hooks/useSocialData';
 
 // Import components
 import { PostCard } from './components/PostCard';
@@ -614,7 +614,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
     if (!list || list.length === 0) return null;
 
     return (
-      <div className="py-3 px-2 -mx-2 mx-auto max-w-[680px]">
+      <div className="py-3 px-2 -mx-2 max-w-[680px]">
         <div className="flex items-center justify-between mb-2 px-2">
           <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Suggested for you</h4>
           <button className="text-xs text-slate-500 hover:underline" onClick={() => handleTabChange('trending')}>See all</button>
@@ -1146,14 +1146,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
                     </div>
                   </div>
                   {/* Trending Stats Widget */}
-                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-purple-100 dark:border-slate-700 overflow-hidden">
+                  <div className="bg-gradient-to-br from-blue-50 to-pink-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-blue-100 dark:border-slate-700 overflow-hidden">
                     <div className="p-4">
-                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2 text-purple-900 dark:text-purple-100">
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2 text-blue-900 dark:text-blue-100">
                         <TrendingUp className="h-5 w-5" /> Trending Now
                       </h3>
                       <div className="space-y-3">
                         <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
-                          <div className="text-2xl font-bold text-purple-600">{trendingPosts.length}</div>
+                          <div className="text-2xl font-bold text-blue-600">{trendingPosts.length}</div>
                           <div className="text-xs text-slate-500">Trending Posts</div>
                         </div>
                         <div className="bg-white dark:bg-slate-800 rounded-lg p-3">
@@ -1312,17 +1312,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
         </div>
 
         {/* MOBILE BOTTOM NAV */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-safe">
-          <div className="flex justify-around items-center h-16">
-            <button onClick={() => navigate('/social/feed')} className={`p-2 rounded-full ${activeTab === 'feed' ? 'text-blue-600' : 'text-slate-500'}`}><Home className="h-6 w-6" /></button>
-            <button onClick={() => navigate('/social/groups')} className={`p-2 rounded-full ${activeTab === 'groups' ? 'text-blue-600' : 'text-slate-500'}`}><Users className="h-6 w-6" /></button>
-            <button onClick={() => { navigate('/social/feed'); setShowPostDialog(true) }} className="p-3 bg-blue-600 rounded-full text-white shadow-lg -mt-6"><Plus className="h-6 w-6" /></button>
-            <button onClick={() => navigate('/social/notifications')} className={`p-2 rounded-full relative ${activeTab === 'notifications' ? 'text-blue-600' : 'text-slate-500'}`}>
-              <Bell className="h-6 w-6" />
-              {unreadCount > 0 && <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full" />}
-            </button>
-            <button onClick={() => navigate('/social/profile')} className={`p-2 rounded-full ${activeTab === 'profile' ? 'text-blue-600' : 'text-slate-500'}`}><User className="h-6 w-6" /></button>          </div>
-        </div>
+
 
         {/* Floating Action Buttons: Refresh + Scroll-to-top */}
 
@@ -1400,7 +1390,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
       {showChatList && (
         <div className="fixed inset-1 mt-11 lg:mt-0 lg:inset-auto lg:right-6 animate-in fade-in duration-500 lg:bottom-24 lg:h-[600px] bg-white dark:bg-slate-900 z-50 lg:rounded-2xl lg:shadow-2xl overflow-hidden flex">
           {/* Mobile close button */}
-          
+
 
           {/* Chat interface */}
           <div className="flex-1 flex max-w-[100vw]">

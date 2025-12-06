@@ -13,15 +13,16 @@ export interface ClassRecording {
   document_id?: string | null;
 }
 
+// src/types/Class.ts - Update the Quiz interface
 export interface Quiz {
   id: string;
+  classId: string;
   title: string;
   questions: QuizQuestion[];
-  classId?: string; // Optional: Link to the class recording it was generated from
   userId: string;
   created_at: string;
+  source_type?: 'recording' | 'notes' | 'ai'; // Add this field
 }
-
 export interface QuizQuestion {
   id?: string; // Optional, can be generated client-side or by AI
   question: string;

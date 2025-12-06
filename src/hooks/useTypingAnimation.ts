@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface UseTypingAnimationProps {
@@ -6,7 +5,7 @@ interface UseTypingAnimationProps {
   messageId: string;
   wordsPerSecond?: number;
   enabled?: boolean;
-  onComplete?: (messageId: string) => void;
+  onComplete?: (messageId: string, duration: number, actualWPS: number) => void;
   isAlreadyComplete?: boolean;
   onBlockDetected?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean, blockIndex?: number) => void;
   onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html', content: string, language?: string, isFirstBlock?: boolean, blockIndex?: number) => void;
@@ -18,11 +17,11 @@ interface CodeBlock {
   type: 'code' | 'mermaid' | 'html';
   start: number;
   end: number;
-  content: string; // Full block including fences
-  innerContent: string; // Content without fences
+  content: string;
+  innerContent: string;
   language?: string;
   isFirstBlock: boolean;
-  blockIndex: number; // New property to track block index
+  blockIndex: number;
 }
 
 export const useTypingAnimation = ({
@@ -45,13 +44,26 @@ export const useTypingAnimation = ({
   const wordsRef = useRef<string[]>([]);
   const indexRef = useRef(0);
   const detectedBlocksRef = useRef<Set<string>>(new Set());
-  const blocksRef = useRef<CodeBlock[]>([]); // Ref to store detected blocks
-  const wordsPerChunkRef = useRef(Math.max(1, Math.floor(wordsPerSecond / 5))); // Store wordsPerChunk in ref
-  const animationFrameRef = useRef<number>(); // Store animation frame ID
-  const lastUpdateTimeRef = useRef<number>(0);
+  const blocksRef = useRef<CodeBlock[]>([]);
+  const typingStartTimeRef = useRef<number | null>(null);
+  const durationRef = useRef<number>(0);
+  const isPanelInitializingRef = useRef(false);
+  const blockStartIndexRef = useRef<number>(-1);
 
-  // Memoize the detectBlocks function
-  const detectBlocks = useRef(
+  // Store callbacks in refs to prevent re-renders
+  const onBlockDetectedRef = useRef(onBlockDetected);
+  const onBlockUpdateRef = useRef(onBlockUpdate);
+  const onBlockEndRef = useRef(onBlockEnd);
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    onBlockDetectedRef.current = onBlockDetected;
+    onBlockUpdateRef.current = onBlockUpdate;
+    onBlockEndRef.current = onBlockEnd;
+    onCompleteRef.current = onComplete;
+  }, [onBlockDetected, onBlockUpdate, onBlockEnd, onComplete]);
+
+  const detectBlocks = useCallback(
     (text: string): CodeBlock[] => {
       const blocks: CodeBlock[] = [];
       let blockIndex = 0;
@@ -60,8 +72,8 @@ export const useTypingAnimation = ({
       let match;
       while ((match = codeBlockRegex.exec(text)) !== null) {
         const language = match[1] || 'text';
-        const innerContent = match[2]; // Content between ```language and ```
-        const fullContent = match[0]; // Full block including fences
+        const innerContent = match[2];
+        const fullContent = match[0];
         blocks.push({
           type: 'code',
           start: match.index,
@@ -111,8 +123,9 @@ export const useTypingAnimation = ({
       }
 
       return blocks.sort((a, b) => a.start - b.start);
-    }
-  ).current;
+    },
+    []
+  );
 
   useEffect(() => {
     if (!enabled || isAlreadyComplete) {
@@ -121,9 +134,8 @@ export const useTypingAnimation = ({
       return;
     }
 
-    // Detect blocks only once when the text prop changes
     const blocks = detectBlocks(text);
-    blocksRef.current = blocks; // Store blocks in the ref
+    blocksRef.current = blocks;
 
     const words = text.split(/(\s+)/);
     wordsRef.current = words;
@@ -134,132 +146,165 @@ export const useTypingAnimation = ({
     indexRef.current = 0;
     setCurrentBlock(null);
     detectedBlocksRef.current.clear();
+    typingStartTimeRef.current = performance.now();
+    durationRef.current = 0;
+    isPanelInitializingRef.current = false;
+    blockStartIndexRef.current = -1;
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
 
-    const typeNextChunk = (timestamp: number) => {
-      animationFrameRef.current = requestAnimationFrame(typeNextChunk);
-
-      if (!lastUpdateTimeRef.current) {
-        lastUpdateTimeRef.current = timestamp;
-      }
-      const progress = timestamp - lastUpdateTimeRef.current;
-
+    const typeNextWord = () => {
+      {isTyping && (
+        `<span className="inline-block w-5 h-3 bg-gray-600 dark:bg-gray-400 ml-0.5 animate-pulse" />`
+      )}
       if (indexRef.current >= words.length) {
+        //console.log('🏁 [useTypingAnimation] Typing completed for message:', messageId);
         setIsTyping(false);
         setCurrentBlock(null);
         setBlockText('');
-        onComplete?.(messageId);
-        cancelAnimationFrame(animationFrameRef.current);
+        const endTime = performance.now();
+        durationRef.current = endTime - (typingStartTimeRef.current || endTime);
+        const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+        const actualWPS = wordCount / (durationRef.current / 1000);
+        onCompleteRef.current?.(messageId, durationRef.current, actualWPS);
         return;
       }
 
       const currentPosition = words.slice(0, indexRef.current).join('').length;
-      const enteringBlock = blocksRef.current.find(block =>
-        currentPosition >= block.start &&
-        currentPosition < block.end &&
+      const nextWord = words[indexRef.current];
+      const nextPosition = currentPosition + (nextWord?.length || 0);
+
+      // Check if we're about to enter a block
+      const upcomingBlock = blocksRef.current.find(block =>
+        currentPosition < block.start &&
+        nextPosition >= block.start &&
         !detectedBlocksRef.current.has(`${block.start}-${block.end}`)
       );
 
-      if (enteringBlock) {
-        detectedBlocksRef.current.add(`${enteringBlock.start}-${enteringBlock.end}`);
-        setCurrentBlock(enteringBlock);
+      if (upcomingBlock) {
+        // console.log('🚪 [useTypingAnimation] Block detected:', {
+        //   type: upcomingBlock.type,
+        //   language: upcomingBlock.language,
+        //   isFirstBlock: upcomingBlock.isFirstBlock,
+        //   autoTypeInPanel
+        // });
 
-        // Only call onBlockDetected if autoTypeInPanel is true and it's the first block
-        if (enteringBlock.isFirstBlock && autoTypeInPanel && onBlockDetected) {
-          onBlockDetected(enteringBlock.type, enteringBlock.innerContent, enteringBlock.language, enteringBlock.isFirstBlock, enteringBlock.blockIndex);
+        detectedBlocksRef.current.add(`${upcomingBlock.start}-${upcomingBlock.end}`);
+        setCurrentBlock(upcomingBlock);
+        blockStartIndexRef.current = indexRef.current;
+
+        // For first block with autoTypeInPanel
+        if (upcomingBlock.isFirstBlock && autoTypeInPanel && onBlockDetectedRef.current) {
+          //console.log('🎯 [useTypingAnimation] Initializing panel with empty content');
+          isPanelInitializingRef.current = true;
+
+          // CRITICAL FIX: Call onBlockDetected with empty string first
+          // The panel will show "Typing..." state
+          onBlockDetectedRef.current(
+            upcomingBlock.type,
+            '', // Start with empty content
+            upcomingBlock.language,
+            upcomingBlock.isFirstBlock,
+            upcomingBlock.blockIndex
+          );
+
+          // Wait for panel to initialize
+          setTimeout(() => {
+            console.log('▶️ [useTypingAnimation] Panel ready - starting content typing');
+            isPanelInitializingRef.current = false;
+          }, 150);
+
         }
 
-        // Always display placeholder in main text area for all blocks IF autoTypeInPanel is true
-        if (autoTypeInPanel) {
-          const renderingText = enteringBlock.isFirstBlock ? "Rendering..." : "Loading...";
-          setDisplayedText(prev => prev + ` \n<div class="block mx-2 p-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 w-full">
-<div class="flex items-center space-x-2">
-<span class="text-sm text-gray-500">${renderingText}</span>
-</div>
-</div>\n`);
-        }
-
-        if (enteringBlock.isFirstBlock && autoTypeInPanel) {
-          // Send entire block content to panel at once for first block
-          if (onBlockUpdate) {
-            onBlockUpdate(enteringBlock.type, enteringBlock.innerContent, enteringBlock.language, enteringBlock.isFirstBlock, enteringBlock.blockIndex);
-          }
-          if (onBlockEnd) {
-            onBlockEnd(enteringBlock.type, enteringBlock.innerContent, enteringBlock.language, enteringBlock.isFirstBlock, enteringBlock.blockIndex);
-          }
-          // Skip to the end of the block
-          const blockEndPosition = enteringBlock.end;
-          let charsSoFar = words.slice(0, indexRef.current).join('').length; // Re-calculate current position
-          let i = indexRef.current;
-          while (i < words.length && charsSoFar < blockEndPosition) {
-            charsSoFar += words[i].length;
-            i++;
-          }
-          indexRef.current = i;
-          setCurrentBlock(null); // Clear current block after processing
-          setBlockText(''); // Clear blockText
-          lastUpdateTimeRef.current = timestamp;
-          return; // Skip remaining word processing for this iteration
-        }
+        // Skip to next iteration
+        timeoutRef.current = window.setTimeout(typeNextWord, 50);
+        return;
       }
 
-      // Determine the number of words to process in this chunk
-      const chunkWords = words.slice(indexRef.current, indexRef.current + wordsPerChunkRef.current);
-      const nextChunk = chunkWords.join('');
+      const isActualWord = nextWord?.trim().length > 0;
 
-      // Determine where the typing should happen
-      if (currentBlock && !autoTypeInPanel) {
-        // Type block content in main text area if not in panel
+      // Check if we're inside a block (must be after block start was detected)
+      const isInCodeBlock = currentBlock &&
+        blockStartIndexRef.current >= 0 &&
+        indexRef.current >= blockStartIndexRef.current &&
+        currentPosition < currentBlock.end &&
+        autoTypeInPanel;
+
+      if (isInCodeBlock && currentBlock) {
+        // CRITICAL: Type in panel - accumulate ALL content including delimiters
+        //console.log('📄 [useTypingAnimation] Typing in panel');
+
         setBlockText(prev => {
-          const newText = prev + nextChunk;
-          // Only call onBlockUpdate if autoTypeInPanel is false
-          if (onBlockUpdate) {
-            onBlockUpdate(currentBlock.type, newText, currentBlock.language, currentBlock.isFirstBlock, currentBlock.blockIndex);
+          const newText = prev + nextWord;
+
+          // CRITICAL FIX: Always send updates to panel for first block
+          // This includes the opening delimiter and all content
+          if (onBlockUpdateRef.current && currentBlock.isFirstBlock) {
+           
+            onBlockUpdateRef.current(
+              currentBlock.type,
+              newText,
+              currentBlock.language,
+              currentBlock.isFirstBlock,
+              currentBlock.blockIndex
+            );
           }
           return newText;
         });
-        const newPosition = words.slice(0, indexRef.current + chunkWords.length).join('').length;
-        if (newPosition >= (currentBlock?.end || 0)) {
-          // Only call onBlockEnd if autoTypeInPanel is false
-          if (onBlockEnd) {
-            onBlockEnd(currentBlock.type, blockText + nextChunk, currentBlock.language, currentBlock.isFirstBlock, currentBlock.blockIndex);
+
+        // Check if we've reached the end of the block
+        const newPosition = words.slice(0, indexRef.current + 1).join('').length;
+        if (newPosition >= currentBlock.end) {
+          //console.log('🏁 [useTypingAnimation] Block complete');
+          if (onBlockEndRef.current && currentBlock.isFirstBlock) {
+            const finalContent = blockText + nextWord;
+            onBlockEndRef.current(
+              currentBlock.type,
+              finalContent,
+              currentBlock.language,
+              currentBlock.isFirstBlock,
+              currentBlock.blockIndex
+            );
           }
           setCurrentBlock(null);
           setBlockText('');
+          blockStartIndexRef.current = -1;
         }
+
+        // Don't add to displayed text
+        //console.log('⏭️ [useTypingAnimation] Skipping main chat display');
+
       } else {
-        // Type non-block content in main text area, or if it's a block but autoTypeInPanel is true (handled by the if-block above)
-        setDisplayedText(prev => prev + nextChunk);
+        // Type in main text area
+        //console.log('💬 [useTypingAnimation] Typing in main area');
+        setDisplayedText(prev => prev + nextWord);
       }
 
-      indexRef.current += chunkWords.length;
+      indexRef.current++;
 
-      // Calculate delay based on the number of actual words in the chunk
-      const actualWordsInChunk = chunkWords.filter(word => word?.trim().length > 0).length;
-      const delay = actualWordsInChunk > 0 ? (1000 / wordsPerSecond) * actualWordsInChunk : 50;
-
-      if (progress > delay) {
-        lastUpdateTimeRef.current = timestamp;
+      // Calculate delay - FASTER for code blocks, NATURAL for text
+      let delay;
+      if (isInCodeBlock) {
+        // Code blocks type 3x faster than normal text
+        delay = isActualWord ? (1000 / (wordsPerSecond * 7)) : 10;
+      } else {
+        // Normal text at natural speed
+        delay = isActualWord ? (wordsPerSecond) : 20;
       }
+
+      timeoutRef.current = window.setTimeout(typeNextWord, delay);
     };
 
-    animationFrameRef.current = requestAnimationFrame(typeNextChunk);
+    timeoutRef.current = window.setTimeout(typeNextWord, 100);
 
     return () => {
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current);
       }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
     };
-  }, [text, messageId, wordsPerSecond, enabled, onComplete, isAlreadyComplete, onBlockDetected, onBlockUpdate, onBlockEnd, autoTypeInPanel, detectBlocks]);
+  }, [text, messageId, wordsPerSecond, enabled, isAlreadyComplete, autoTypeInPanel, detectBlocks]);
 
   return {
     displayedText,
