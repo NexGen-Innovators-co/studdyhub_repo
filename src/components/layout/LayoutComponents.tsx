@@ -2,7 +2,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
-import { Sun, Moon, Menu, X } from 'lucide-react';
+import { Sun, Moon, Menu, X, LocateIcon, MapIcon, PhoneCallIcon } from 'lucide-react';
 
 // Header component extracted from LandingPage
 export const AppHeader: React.FC<{
@@ -162,11 +162,11 @@ export const AppFooter: React.FC = () => {
               Based at the University of Mines and Technology, Tarkwa, Ghana.
             </p>
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-              <span className="font-medium">📍</span>
+              <span className="font-medium text-green-700"><MapIcon /></span>
               <span>Agri-IoT Lab, UMaT, Tarkwa, Ghana</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mt-2">
-              <span className="font-medium">📞</span>
+              <span className="font-medium text-blue-700"><PhoneCallIcon /></span>
               <span>027 169 2568</span>
             </div>
           </div>

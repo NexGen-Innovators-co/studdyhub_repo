@@ -11,6 +11,7 @@ import { AlertTriangle, Bot, FileText, Home, Mic, RefreshCw, Users2, X } from 'l
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import AIBot from '@/components/ui/aibot';
+import { Helmet } from 'react-helmet-async';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -112,6 +113,54 @@ const Index = () => {
     activeSocialTab = tab as string | undefined;
   }
   const [socialSearchQuery, setSocialSearchQuery] = useState('');
+  const getPageSEO = () => {
+    const pathname = location.pathname;
+
+    // If it's a social route, let DynamicHead handle it
+    if (pathname.startsWith('/social/')) {
+      return null; // DynamicHead will handle this
+    }
+
+    // App page SEO
+    const pageData = {
+      dashboard: {
+        title: 'Dashboard | StuddyHub',
+        description: 'Your personalized study dashboard with AI-powered insights',
+      },
+      notes: {
+        title: 'Smart Notes | StuddyHub',
+        description: 'Create, organize, and summarize your study notes with AI assistance',
+      },
+      recordings: {
+        title: 'Class Recordings | StuddyHub',
+        description: 'Record, transcribe, and summarize your lectures with AI',
+      },
+      schedule: {
+        title: 'Study Schedule | StuddyHub',
+        description: 'Plan and organize your study sessions',
+      },
+      chat: {
+        title: 'AI Study Assistant | StuddyHub',
+        description: 'Get instant help with your studies from our AI assistant',
+      },
+      social: {
+        title: 'Social Learning | StuddyHub',
+        description: 'Connect with other students, share notes, and collaborate',
+      },
+      settings: {
+        title: 'Settings | StuddyHub',
+        description: 'Customize your StuddyHub experience',
+      },
+      quizzes: {
+        title: 'Quizzes | StuddyHub',
+        description: 'Test your knowledge with AI-generated quizzes',
+      },
+    };
+
+    return pageData[currentActiveTab as keyof typeof pageData] || pageData.dashboard;
+  };
+
+  const pageSEO = getPageSEO();
 
   // Filter critical errors - moved BEFORE any conditional returns
   const criticalErrors = useMemo(() => {
@@ -362,8 +411,17 @@ const Index = () => {
   }
 
   return (
+
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
       {/* Smart Responsive Header */}
+      {pageSEO && (
+        <Helmet>
+          <title>{pageSEO.title}</title>
+          <meta name="description" content={pageSEO.description} />
+          <meta property="og:title" content={pageSEO.title} />
+          <meta property="og:description" content={pageSEO.description} />
+        </Helmet>
+      )}
       <header className={`
         sticky top-0 
         bg-white dark:bg-slate-900 
