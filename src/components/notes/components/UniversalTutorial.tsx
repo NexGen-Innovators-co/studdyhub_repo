@@ -614,15 +614,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
                   >
                     {tts.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={speakCurrentStep}
-                    className="h-8 w-8 p-0 text-green-600 hover:bg-green-100 dark:hover:bg-green-900"
-                    title="Repeat current step"
-                  >
-                    <Volume2 className="w-4 h-4" />
-                  </Button>
+                  
                 </>
               )}
 
@@ -656,15 +648,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
                 </Button>
               )}
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={togglePlayPause}
-                className="h-8 w-8 p-0"
-                title={isPlaying ? 'Pause Tutorial' : 'Resume Tutorial'}
-              >
-                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              </Button>
+              
               <Button
                 variant="ghost"
                 size="sm"
@@ -692,22 +676,9 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
               </div>
             )}
 
-            {/* Speaking Indicator */}
-            {tts.isSpeaking && (
-              <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 animate-pulse">
-                <Volume2 className="w-4 h-4 animate-pulse" />
-                <span>
-                  {tts.isPaused ? 'Speech paused...' : 'Reading instructions aloud...'}
-                  {speechQueueRef.current.length > 1 && ` (${speechQueueRef.current.length - 1} in queue)`}
-                </span>
-              </div>
-            )}
 
             {/* Step Title */}
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Lightbulb className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              </div>
               <div className="flex-1">
                 <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
                   {currentStepData.title}
@@ -735,16 +706,6 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
                       Pro Tips
                     </h5>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={speakTips}
-                    className="h-6 w-6 p-0"
-                    title="Read tips aloud"
-                    disabled={!tts.isEnabled || !tts.isAvailable}
-                  >
-                    <Volume2 className="w-3 h-3" />
-                  </Button>
                 </div>
                 <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-200">
                   {currentStepData.tips.map((tip, index) => (

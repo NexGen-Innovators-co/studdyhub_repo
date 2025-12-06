@@ -15,6 +15,9 @@ import ErrorBoundary from './ErrorBoundary';
 import { toast } from 'sonner';
 import { SocialFeed } from '../social/SocialFeed';
 import { Quizzes } from '../quizzes/Quizzes';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ChatSessionsListMobile } from '../aiChat/Components/ChatSessionsListMobile';
+
 
 interface ChatSession {
   id: string;
@@ -110,10 +113,16 @@ interface TabContentProps {
   hasMoreNotes?: boolean;
   isLoadingNotes?: boolean;
   onLoadMoreNotes?: () => void;
+  hasMoreChatSessions: boolean;
+  onLoadMoreChatSessions: () => void;
+  dispatch: React.Dispatch<any>;
+  isLoadingChatSessions?: boolean;
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
   const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory, activeSocialTab, socialPostId } = props;
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSuggestAiCorrection = useCallback((prompt?: string) => {
     toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
@@ -356,48 +365,48 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
     // In TabContent.tsx 
     case 'notes':
-  return (
-    <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
-      {/* Centered Container with max-width */}
-      <div className="w-full h-full max-w-[1400px] mx-auto flex relative lg:shadow-2xl">
-        {/* Notes List - Sidebar */}
-        <div className={`
+      return (
+        <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
+          {/* Centered Container with max-width */}
+          <div className="w-full h-full max-w-[1400px] mx-auto flex relative lg:shadow-2xl">
+            {/* Notes List - Sidebar */}
+            <div className={`
           ${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0 lg:static lg:w-80 lg:flex-shrink-0
           fixed inset-y-0 left-0 z-10 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
           transition-transform duration-300 ease-in-out lg:transition-none
           lg:border-r lg:border-gray-200 lg:dark:border-gray-700
         `}>
-          <NotesList
-            {...notesHistoryProps}
-            isOpen={isNotesHistoryOpen}
-            onClose={onToggleNotesHistory}
-          />
-        </div>
-        
-        {/* Editor Area - Centered content */}
-        <div className="flex-1 h-full bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
-          {notesProps.activeNote ? (
-            <NoteEditor
-              note={notesProps.activeNote}
-              onNoteUpdate={notesProps.onNoteUpdate}
-              userProfile={userProfile}
-              onToggleNotesHistory={onToggleNotesHistory}
-              isNotesHistoryOpen={isNotesHistoryOpen}
-            />
-          ) : (
-            <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
-              <div className="text-center">
-                <div className="text-4xl sm:text-6xl mb-4">📝</div>
-                <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
-                <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
-              </div>
+              <NotesList
+                {...notesHistoryProps}
+                isOpen={isNotesHistoryOpen}
+                onClose={onToggleNotesHistory}
+              />
             </div>
-          )}
+
+            {/* Editor Area - Centered content */}
+            <div className="flex-1 h-full bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
+              {notesProps.activeNote ? (
+                <NoteEditor
+                  note={notesProps.activeNote}
+                  onNoteUpdate={notesProps.onNoteUpdate}
+                  userProfile={userProfile}
+                  onToggleNotesHistory={onToggleNotesHistory}
+                  isNotesHistoryOpen={isNotesHistoryOpen}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
+                  <div className="text-center">
+                    <div className="text-4xl sm:text-6xl mb-4">📝</div>
+                    <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
+                    <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  );
+      );
 
     case 'recordings':
       return (
@@ -412,7 +421,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       return (
         <div className="flex-1 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>
-            <Quizzes 
+            <Quizzes
               quizzes={props.quizzes}
               recordings={props.recordings ?? []}
               onGenerateQuiz={props.onGenerateQuiz}
@@ -430,14 +439,36 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       );
 
     case 'chat':
-      return (
-        <div className="flex flex-1 min-h-0 relative overflow-hidden">
-          <div className={`flex-1 flex flex-col min-w-0 dark:bg-transparent`}>
-            <AIChat {...chatProps} setIsLoading={props.setIsAILoading} />
-          </div>
+      const isMobile = window.innerWidth < 1024;
+      const showSessionList = isMobile && (location.pathname === '/chat' || !props.activeChatSessionId);
+
+      return showSessionList ? (
+        // Mobile: Full screen session list
+        <div className="flex-1 flex flex-col min-h-0 bg-gray-50 dark:bg-slate-900">
+          <ChatSessionsListMobile
+            chatSessions={props.chatSessions ?? []}
+            activeChatSessionId={props.activeChatSessionId}
+            onSessionSelect={(sessionId) => {
+              props.dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionId });
+              navigate(`/chat/${sessionId}`);
+            }}
+            onNewChatSession={async () => {
+              const newId = await props.onNewChatSession();
+              if (newId) navigate(`/chat/${newId}`);
+            }}
+            onDeleteChatSession={props.onDeleteChatSession}
+            onRenameChatSession={props.onRenameChatSession}
+            hasMoreChatSessions={props.hasMoreChatSessions}
+            onLoadMoreChatSessions={props.onLoadMoreChatSessions}
+            isLoading={props.isLoadingChatSessions ?? false}
+          />
+        </div>
+      ) : (
+        // Desktop: Side-by-side OR Mobile: Full chat
+        <div className="flex-1 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+          <AIChat {...chatProps} setIsLoading={props.setIsAILoading} />
         </div>
       );
-
     case 'documents':
       return (
         <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleDocumentsScroll}>

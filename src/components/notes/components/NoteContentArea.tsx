@@ -51,6 +51,7 @@ import {
   RefreshCw,
   BookOpen,
   HelpCircle,
+  ChevronRight,
 } from 'lucide-react';
 
 import { generateFlashcardsFromNote } from '../services/FlashCardServices';
@@ -64,7 +65,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../ui/dropdown-menu';
 import { UniversalTutorial } from '@/components/notes/components/UniversalTutorial';
 import { useTutorial } from '@/components/notes/hooks/useTutorials';
-import { getNoteEditorTutorial  } from '@/components/notes/config/tutorialConfigs';
+import { getNoteEditorTutorial } from '@/components/notes/config/tutorialConfigs';
 
 /* ---------- Tiptap ---------- */
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -141,11 +142,11 @@ const MermaidNode = Node.create({
         default: '',
         parseHTML: element => {
           const code = element.getAttribute('data-code');
-          console.log("Mermaid parseHTML - element:", element, "code:", code);
+          //console.log("Mermaid parseHTML - element:", element, "code:", code);
           return code || '';
         },
         renderHTML: attributes => {
-          console.log("Mermaid renderHTML - attributes:", attributes);
+          //console.log("Mermaid renderHTML - attributes:", attributes);
           // FIX: Ensure we return the actual code, not just empty attributes
           return {
             'data-mermaid': '',
@@ -163,14 +164,14 @@ const MermaidNode = Node.create({
           if (typeof dom === 'string') return {};
           const element = dom as HTMLElement;
           const code = element.getAttribute('data-code') || '';
-          console.log("Mermaid getAttrs - code:", code);
+          //console.log("Mermaid getAttrs - code:", code);
           return { code };
         }
       }
     ];
   },
   renderHTML({ HTMLAttributes }) {
-    console.log("Mermaid renderHTML - HTMLAttributes:", HTMLAttributes);
+    //console.log("Mermaid renderHTML - HTMLAttributes:", HTMLAttributes);
     // FIX: Ensure the code is properly passed through
     return ['div', {
       'data-mermaid': '',
@@ -193,11 +194,11 @@ const ChartJsNode = Node.create({
         default: '{}',
         parseHTML: element => {
           const config = element.getAttribute('data-config');
-          console.log("ChartJS parseHTML - element:", element, "config:", config);
+          //console.log("ChartJS parseHTML - element:", element, "config:", config);
           return config || '{}';
         },
         renderHTML: attributes => {
-          console.log("ChartJS renderHTML - attributes:", attributes);
+          //console.log("ChartJS renderHTML - attributes:", attributes);
           // FIX: Ensure we return the actual config, not just empty attributes
           return {
             'data-chartjs': '',
@@ -215,14 +216,14 @@ const ChartJsNode = Node.create({
           if (typeof dom === 'string') return {};
           const element = dom as HTMLElement;
           const config = element.getAttribute('data-config') || '{}';
-          console.log("ChartJS getAttrs - config:", config);
+          //console.log("ChartJS getAttrs - config:", config);
           return { config };
         }
       }
     ];
   },
   renderHTML({ HTMLAttributes }) {
-    console.log("ChartJS renderHTML - HTMLAttributes:", HTMLAttributes);
+    //console.log("ChartJS renderHTML - HTMLAttributes:", HTMLAttributes);
     // FIX: Ensure the config is properly passed through
     return ['div', {
       'data-chartjs': '',
@@ -329,6 +330,7 @@ interface NoteContentAreaProps {
   audioInputRef: React.RefObject<HTMLInputElement>;
   handleAudioFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
   isLoading: boolean;
+  isSummaryVisible: boolean;
 }
 
 export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
@@ -368,21 +370,22 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     audioInputRef,
     handleAudioFileSelect,
     isLoading,
+    isSummaryVisible,
   }, ref) => {
     // Function to convert editor HTML back to markdown while preserving diagrams
     const convertEditorHtmlToMarkdown = (html: string): string => {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = html;
 
-      console.log("=== CONVERTING HTML TO MARKDOWN ===");
-      console.log("Input HTML:", html);
+      //console.log("=== CONVERTING HTML TO MARKDOWN ===");
+      //console.log("Input HTML:", html);
 
       // Handle Chart.js nodes
       const chartNodes = tempDiv.querySelectorAll('div[data-chartjs]');
-      console.log("Found Chart.js nodes:", chartNodes.length);
+      //console.log("Found Chart.js nodes:", chartNodes.length);
       chartNodes.forEach((node, index) => {
         const config = node.getAttribute('data-config');
-        console.log(`Chart.js node ${index}:`, { config });
+        //console.log(`Chart.js node ${index}:`, { config });
         if (config && config.trim()) {
           const codeBlock = document.createElement('pre');
           const code = document.createElement('code');
@@ -390,20 +393,20 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           code.textContent = config;
           codeBlock.appendChild(code);
           node.replaceWith(codeBlock);
-          console.log(`Replaced Chart.js node ${index} with code block`);
+          //console.log(`Replaced Chart.js node ${index} with code block`);
         } else {
           // Remove empty chart nodes
           node.remove();
-          console.log(`Removed empty Chart.js node ${index}`);
+          //console.log(`Removed empty Chart.js node ${index}`);
         }
       });
 
       // Handle Mermaid nodes
       const mermaidNodes = tempDiv.querySelectorAll('div[data-mermaid]');
-      console.log("Found Mermaid nodes:", mermaidNodes.length);
+      //console.log("Found Mermaid nodes:", mermaidNodes.length);
       mermaidNodes.forEach((node, index) => {
         const code = node.getAttribute('data-code');
-        console.log(`Mermaid node ${index}:`, { code });
+        //console.log(`Mermaid node ${index}:`, { code });
         if (code && code.trim()) {
           const codeBlock = document.createElement('pre');
           const codeElement = document.createElement('code');
@@ -411,20 +414,20 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           codeElement.textContent = code;
           codeBlock.appendChild(codeElement);
           node.replaceWith(codeBlock);
-          console.log(`Replaced Mermaid node ${index} with code block`);
+          //console.log(`Replaced Mermaid node ${index} with code block`);
         } else {
           // Remove empty mermaid nodes
           node.remove();
-          console.log(`Removed empty Mermaid node ${index}`);
+          //console.log(`Removed empty Mermaid node ${index}`);
         }
       });
 
       // Handle Graphviz (DOT) nodes
       const dotNodes = tempDiv.querySelectorAll('div[data-dot]');
-      console.log("Found DOT nodes:", dotNodes.length);
+      //console.log("Found DOT nodes:", dotNodes.length);
       dotNodes.forEach((node, index) => {
         const code = node.getAttribute('data-code');
-        console.log(`DOT node ${index}:`, { code });
+        //console.log(`DOT node ${index}:`, { code });
         if (code && code.trim()) {
           const codeBlock = document.createElement('pre');
           const codeElement = document.createElement('code');
@@ -432,17 +435,17 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           codeElement.textContent = code;
           codeBlock.appendChild(codeElement);
           node.replaceWith(codeBlock);
-          console.log(`Replaced DOT node ${index} with code block`);
+          //console.log(`Replaced DOT node ${index} with code block`);
         } else {
           // Remove empty dot nodes
           node.remove();
-          console.log(`Removed empty DOT node ${index}`);
+          //console.log(`Removed empty DOT node ${index}`);
         }
       });
 
       const markdown = turndown.turndown(tempDiv.innerHTML);
-      console.log("Final markdown:", markdown);
-      console.log("=== CONVERSION COMPLETE ===");
+      //console.log("Final markdown:", markdown);
+      //console.log("=== CONVERSION COMPLETE ===");
 
       return markdown;
     };
@@ -616,8 +619,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showDiagramsMenu, setShowDiagramsMenu] = useState(false);
     const { isOpen, startTutorial, closeTutorial, completeTutorial } = useTutorial('note-editor');
-
-
+    const [isToolbarExpanded, setIsToolbarExpanded] = useState(true);
     const startAI = () => {
       if (!editor) return;
       const { from, to } = editor.state.selection;
@@ -807,24 +809,24 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     }, [editor?.getHTML()]);
     const useMobileDetection = () => {
       const [isMobile, setIsMobile] = useState(false);
-    
+
       useEffect(() => {
         const checkMobile = () => {
           setIsMobile(window.innerWidth < 1024); // lg breakpoint
         };
-    
+
         checkMobile();
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
       }, []);
-    
+
       return isMobile;
     };
-    
-      const isMobile = useMobileDetection();
-      
-      // Create dynamic tutorial config
-      const NOTE_EDITOR_TUTORIAL = getNoteEditorTutorial(isMobile);
+
+    const isMobile = useMobileDetection();
+
+    // Create dynamic tutorial config
+    const NOTE_EDITOR_TUTORIAL = getNoteEditorTutorial(isMobile);
     // UI State
     const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -833,434 +835,396 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [showFlashcardsMenu, setShowFlashcardsMenu] = useState(false);
     // Inside the NoteContentArea component, add this state:
     const [showTutorial, setShowTutorial] = useState(false);
+
+    const toolbarRef = useRef<HTMLDivElement>(null);
+    const [hiddenIndices, setHiddenIndices] = useState<Set<number>>(new Set());
+    const [hasOverflow, setHasOverflow] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    // Define your toolbar groups as React nodes
+    const toolbarItems: React.ReactNode[] = [
+      // Navigation
+      <React.Fragment key="nav">
+        <button onClick={() => startTutorial()}>
+          <HelpCircle className="w-4 h-4" />
+        </button>
+        <button
+          onClick={onToggleNotesHistory}
+          className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md group"
+          title="History"
+        >
+          <BookOpen className="w-4 h-4 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+        </button>
+      </React.Fragment>,
+
+      // History
+      <React.Fragment key="history">
+        <button
+          onClick={() => editor?.chain().focus().undo().run()}
+          disabled={!editor?.can().undo()}
+          className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
+          title="Undo"
+        >
+          <Undo className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().redo().run()}
+          disabled={!editor?.can().redo()}
+          className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
+          title="Redo"
+        >
+          <Redo className="w-4 h-4" />
+        </button>
+      </React.Fragment>,
+
+      // Text formatting
+      <React.Fragment key="format">
+        <button
+          onClick={() => editor?.chain().focus().toggleBold().run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('bold') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Bold"
+        >
+          <Bold className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().toggleItalic().run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('italic') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Italic"
+        >
+          <Italic className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().toggleUnderline().run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('underline') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Underline"
+        >
+          <UnderlineIcon className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().toggleStrike().run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('strike') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Strikethrough"
+        >
+          <Strikethrough className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().toggleCode().run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('code') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Code"
+        >
+          <Code className="w-4 h-4" />
+        </button>
+      </React.Fragment>,
+
+      // Headings
+      <React.Fragment key="headings">
+        <button
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 1 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Heading 1"
+        >
+          <Heading1 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 2 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Heading 2"
+        >
+          <Heading2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 3 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Heading 3"
+        >
+          <Heading3 className="w-4 h-4" />
+        </button>
+      </React.Fragment>,
+
+      // Lists & Blocks
+      <React.Fragment key="lists">
+        <button
+          onClick={() => editor?.chain().focus().toggleBulletList().run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('bulletList') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Bullet List"
+        >
+          <List className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('orderedList') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Ordered List"
+        >
+          <ListOrdered className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('blockquote') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Quote"
+        >
+          <Quote className="w-4 h-4" />
+        </button>
+      </React.Fragment>,
+
+      // Alignment
+      <React.Fragment key="alignment">
+        <button
+          onClick={() => editor?.chain().focus().setTextAlign('left').run()}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Align Left"
+        >
+          <AlignLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().setTextAlign('center').run()}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Align Center"
+        >
+          <AlignCenter className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().setTextAlign('right').run()}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Align Right"
+        >
+          <AlignRight className="w-4 h-4" />
+        </button>
+      </React.Fragment>,
+
+      // Insert
+      <React.Fragment key="insert">
+        <button
+          onClick={() => { const url = prompt('Enter link URL:'); if (url) editor?.chain().focus().setLink({ href: url }).run(); }}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Insert Link"
+        >
+          <LinkIcon className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => { const url = prompt('Enter image URL:'); if (url) editor?.chain().focus().setImage({ src: url }).run(); }}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Insert Image"
+        >
+          <ImageIcon className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Insert Table"
+        >
+          <TableIcon className="w-4 h-4" />
+        </button>
+      </React.Fragment>,
+
+      // Diagrams
+      <React.Fragment key="diagrams">
+        <button
+          onClick={() => insertDiagram('chartjs')}
+          className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200"
+          title="Insert Chart"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        </button>
+        <button
+          onClick={() => insertDiagram('mermaid')}
+          className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200"
+          title="Insert Mermaid"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </button>
+        <button
+          onClick={() => insertDiagram('dot')}
+          className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200"
+          title="Insert Graphviz"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </button>
+        <button
+          onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+          className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('codeBlock') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title="Code Block"
+        >
+          <Code className="w-4 h-4" />
+        </button>
+      </React.Fragment>,
+
+      // Document actions
+      <React.Fragment key="document">
+        <button
+          onClick={handleSave}
+          className="p-2 rounded-md hover:bg-green-100 dark:hover:bg-green-900 hover:text-green-600 dark:hover:text-green-400 transition-all duration-200"
+          title="Save"
+        >
+          <Save className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading || isGeneratingAI || isProcessingAudio || !userProfile}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          title="Upload Document"
+        >
+          {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+        </button>
+        <button
+          onClick={() => audioInputRef.current?.click()}
+          disabled={isProcessingAudio || isUploading || isGeneratingAI || !userProfile}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          title="Upload Audio"
+        >
+          {isProcessingAudio ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
+        </button>
+        <button
+          onClick={handleViewOriginalDocument}
+          disabled={!documentId || isProcessingAudio}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          title="View Original"
+        >
+          <FileText className="w-4 h-4" />
+        </button>
+        <button
+          onClick={regenerateNoteFromDocument}
+          disabled={isUploading || isGeneratingAI || isProcessingAudio || !documentId}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          title="Regenerate"
+        >
+          {isGeneratingAI ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        </button>
+      </React.Fragment>,
+
+      // Export
+      <React.Fragment key="export">
+        <button
+          onClick={handleDownloadNote}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Download Markdown"
+        >
+          <Download className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleDownloadPdf}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Download PDF"
+        >
+          <FileText className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleCopyNoteContent}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+          title="Copy Content"
+        >
+          <Copy className="w-4 h-4" />
+        </button>
+      </React.Fragment>,
+
+      // TTS
+      <React.Fragment key="tts">
+        <select
+          value={selectedVoiceURI || ''}
+          onChange={(e) => setSelectedVoiceURI(e.target.value)}
+          disabled={isSpeaking || voices.length === 0}
+          className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all duration-200"
+          title="Select Voice"
+        >
+          <option value="">Default Voice</option>
+          {voices.map((voice, index) => (
+            <option key={`${voice.voiceURI}-${index}`} value={voice.voiceURI}>
+              {`${voice.name} (${voice.lang})`}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={handleTextToSpeech}
+          disabled={isUploading || isGeneratingAI || isProcessingAudio}
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          title="Text to Speech"
+        >
+          {isSpeaking ? <StopCircle className="w-4 h-4 text-red-500" /> : <Volume2 className="w-4 h-4" />}
+        </button>
+      </React.Fragment>,
+
+      // AI & Flashcards
+      <React.Fragment key="ai">
+        <button
+          onClick={startAI}
+          className="p-2 rounded-md bg-gradient-to-r from-blue-500 to-blue-500 hover:from-blue-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
+          title="AI Assist"
+        >
+          <Sparkles className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={() => {
+            setShowMenu(!showMenu);
+            if (!showMenu) {
+              setShowDeck(false);
+            }
+          }}
+          className="px-3 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-medium shadow-md hover:shadow-lg transition-all duration-200"
+          title="Flashcards Menu"
+        >
+          <Brain className="w-4 h-4" />
+          <span className="hidden xl:inline">Flashcards</span>
+          {savedCards.length > 0 && (
+            <span className="px-1.5 py-0.5 bg-white/20 rounded-full text-xs font-semibold">{savedCards.length}</span>
+          )}
+        </button>
+      </React.Fragment>,
+    ];
+
+    useEffect(() => {
+      if (!toolbarRef.current) return;
+
+      const checkOverflow = () => {
+        const container = toolbarRef.current;
+        if (!container) return;
+
+        if (isExpanded) {
+          setHiddenIndices(new Set());
+          setHasOverflow(false);
+          return;
+        }
+
+        const children = Array.from(container.children) as HTMLElement[];
+        const containerWidth = container.offsetWidth;
+        let totalWidth = 0;
+        const newHidden = new Set<number>();
+
+        children.forEach((child, index) => {
+          totalWidth += child.offsetWidth + 8; // + gap (adjust if needed)
+          if (totalWidth > containerWidth - 1) { // leave space for Chevron button
+            newHidden.add(index);
+          }
+        });
+
+        setHiddenIndices(newHidden);
+        setHasOverflow(newHidden.size > 0);
+      };
+
+      checkOverflow();
+
+      const resizeObserver = new ResizeObserver(checkOverflow);
+      resizeObserver.observe(toolbarRef.current);
+
+      window.addEventListener('resize', checkOverflow);
+
+      return () => {
+        resizeObserver.disconnect();
+        window.removeEventListener('resize', checkOverflow);
+      };
+    }, [editor, savedCards.length, isToolbarExpanded, isSummaryVisible, isExpanded]);
+
     return (
 
       // Enhanced responsive layout for the note editor component
 
       <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-gray-900">
-        <style>{`
-            .ProseMirror {
-            /* Base Typography */
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-            font-size: 16px;
-            line-height: 1.7;
-            color: #1f2937;
-            max-width: 100%;
-            padding: 2rem;
-          }
 
-          /* Dark Mode Support */
-          .dark .ProseMirror {
-            color: #e5e7eb;
-          }
-
-          /* Headings */
-          .ProseMirror h1 {
-            font-size: 2.25rem;
-            font-weight: 800;
-            line-height: 1.2;
-            margin-top: 2rem;
-            margin-bottom: 1rem;
-            color: #111827;
-            letter-spacing: -0.025em;
-            border-bottom: 3px solid #3b82f6;
-            padding-bottom: 0.5rem;
-          }
-
-          .dark .ProseMirror h1 {
-            color: #f9fafb;
-            border-bottom-color: #60a5fa;
-          }
-
-          .ProseMirror h2 {
-            font-size: 1.875rem;
-            font-weight: 700;
-            line-height: 1.3;
-            margin-top: 1.75rem;
-            margin-bottom: 0.875rem;
-            color: #1f2937;
-            letter-spacing: -0.015em;
-            border-bottom: 2px solid #e5e7eb;
-            padding-bottom: 0.375rem;
-          }
-
-          .dark .ProseMirror h2 {
-            color: #f3f4f6;
-            border-bottom-color: #374151;
-          }
-
-          .ProseMirror h3 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            line-height: 1.4;
-            margin-top: 1.5rem;
-            margin-bottom: 0.75rem;
-            color: #374151;
-          }
-
-          .dark .ProseMirror h3 {
-            color: #e5e7eb;
-          }
-
-          .ProseMirror h4 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            line-height: 1.5;
-            margin-top: 1.25rem;
-            margin-bottom: 0.625rem;
-            color: #4b5563;
-          }
-
-          .dark .ProseMirror h4 {
-            color: #d1d5db;
-          }
-
-          /* Paragraphs */
-          .ProseMirror p {
-            margin-top: 0;
-            margin-bottom: 1.25rem;
-            line-height: 1.75;
-          }
-
-          /* Links */
-          .ProseMirror a {
-            color: #3b82f6;
-            text-decoration: underline;
-            text-decoration-color: #93c5fd;
-            text-underline-offset: 3px;
-            transition: all 0.2s ease;
-          }
-
-          .ProseMirror a:hover {
-            color: #2563eb;
-            text-decoration-color: #3b82f6;
-          }
-
-          .dark .ProseMirror a {
-            color: #60a5fa;
-            text-decoration-color: #1e40af;
-          }
-
-          .dark .ProseMirror a:hover {
-            color: #93c5fd;
-            text-decoration-color: #60a5fa;
-          }
-
-          /* Lists */
-          .ProseMirror ul,
-          .ProseMirror ol {
-            padding-left: 1.75rem;
-            margin-top: 0.75rem;
-            margin-bottom: 1.25rem;
-          }
-
-          .ProseMirror ul {
-            list-style-type: disc;
-          }
-
-          .ProseMirror ul ul {
-            list-style-type: circle;
-            margin-top: 0.5rem;
-            margin-bottom: 0.5rem;
-          }
-
-          .ProseMirror ul ul ul {
-            list-style-type: square;
-          }
-
-          .ProseMirror ol {
-            list-style-type: decimal;
-          }
-
-          .ProseMirror li {
-            margin-top: 0.5rem;
-            margin-bottom: 0.5rem;
-            line-height: 1.7;
-          }
-
-          .ProseMirror li > p {
-            margin-bottom: 0.5rem;
-          }
-
-          /* Blockquotes */
-          .ProseMirror blockquote {
-            border-left: 4px solid #3b82f6;
-            padding-left: 1.5rem;
-            padding-top: 0.5rem;
-            padding-bottom: 0.5rem;
-            margin-left: 0;
-            margin-right: 0;
-            margin-top: 1.5rem;
-            margin-bottom: 1.5rem;
-            font-style: italic;
-            color: #4b5563;
-            background-color: #f9fafb;
-            border-radius: 0 0.5rem 0.5rem 0;
-          }
-
-          .dark .ProseMirror blockquote {
-            border-left-color: #60a5fa;
-            color: #9ca3af;
-            background-color: #1f2937;
-          }
-
-          /* Code Blocks */
-          .ProseMirror pre {
-            background-color: #1e293b;
-            color: #e2e8f0;
-            border-radius: 0.75rem;
-            padding: 1.25rem;
-            overflow-x: auto;
-            margin-top: 1.5rem;
-            margin-bottom: 1.5rem;
-            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
-            font-size: 0.875rem;
-            line-height: 1.6;
-            border: 1px solid #334155;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-          }
-
-          .ProseMirror pre code {
-            background: none;
-            padding: 0;
-            color: inherit;
-            font-size: inherit;
-            border-radius: 0;
-          }
-
-          /* Inline Code */
-          .ProseMirror code {
-            background-color: #f1f5f9;
-            color: #e11d48;
-            padding: 0.2rem 0.4rem;
-            border-radius: 0.375rem;
-            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
-            font-size: 0.875em;
-            font-weight: 500;
-            border: 1px solid #e2e8f0;
-          }
-
-          .dark .ProseMirror code {
-            background-color: #1e293b;
-            color: #fb7185;
-            border-color: #334155;
-          }
-
-          /* Tables */
-          .ProseMirror table {
-            border-collapse: collapse;
-            table-layout: auto;
-            width: 100%;
-            margin-top: 1.5rem;
-            margin-bottom: 1.5rem;
-            border: 1px solid #e5e7eb;
-            border-radius: 0.5rem;
-            overflow: hidden;
-          }
-
-          .dark .ProseMirror table {
-            border-color: #374151;
-          }
-
-          .ProseMirror th {
-            background-color: #f3f4f6;
-            font-weight: 600;
-            text-align: left;
-            padding: 0.75rem 1rem;
-            border-bottom: 2px solid #d1d5db;
-            color: #111827;
-          }
-
-          .dark .ProseMirror th {
-            background-color: #1f2937;
-            border-bottom-color: #4b5563;
-            color: #f9fafb;
-          }
-
-          .ProseMirror td {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid #e5e7eb;
-            color: #374151;
-          }
-
-          .dark .ProseMirror td {
-            border-bottom-color: #374151;
-            color: #d1d5db;
-          }
-
-          .ProseMirror tr:last-child td {
-            border-bottom: none;
-          }
-
-          .ProseMirror tr:hover td {
-            background-color: #f9fafb;
-          }
-
-          .dark .ProseMirror tr:hover td {
-            background-color: #111827;
-          }
-
-          /* Horizontal Rule */
-          .ProseMirror hr {
-            border: none;
-            border-top: 2px solid #e5e7eb;
-            margin: 2rem 0;
-          }
-
-          .dark .ProseMirror hr {
-            border-top-color: #374151;
-          }
-
-          /* Images */
-          .ProseMirror img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 0.75rem;
-            margin-top: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-          }
-
-          /* Strong and Emphasis */
-          .ProseMirror strong {
-            font-weight: 700;
-            color: #111827;
-          }
-
-          .dark .ProseMirror strong {
-            color: #f9fafb;
-          }
-
-          .ProseMirror em {
-            font-style: italic;
-          }
-
-          /* Strikethrough */
-          .ProseMirror s {
-            text-decoration: line-through;
-            text-decoration-color: #9ca3af;
-            text-decoration-thickness: 2px;
-          }
-
-          /* Underline */
-          .ProseMirror u {
-            text-decoration: underline;
-            text-decoration-color: #6366f1;
-            text-underline-offset: 3px;
-            text-decoration-thickness: 2px;
-          }
-
-          /* Text Alignment */
-          .ProseMirror [style*="text-align: left"] {
-            text-align: left;
-          }
-
-          .ProseMirror [style*="text-align: center"] {
-            text-align: center;
-          }
-
-          .ProseMirror [style*="text-align: right"] {
-            text-align: right;
-          }
-
-          /* Placeholder */
-          .ProseMirror p.is-editor-empty:first-child::before {
-            color: #9ca3af;
-            content: attr(data-placeholder);
-            float: left;
-            height: 0;
-            pointer-events: none;
-          }
-
-          /* Selection */
-          .ProseMirror::selection {
-            background-color: #dbeafe;
-          }
-
-          .dark .ProseMirror::selection {
-            background-color: #1e3a8a;
-          }
-
-          /* Focus State */
-          .ProseMirror:focus {
-            outline: none;
-          }
-
-          /* Custom Diagram Styling */
-          .ProseMirror div[data-mermaid],
-          .ProseMirror div[data-chartjs],
-          .ProseMirror div[data-dot] {
-            margin: 2rem 0;
-            padding: 1.5rem;
-            background-color: #f9fafb;
-            border-radius: 0.75rem;
-            border: 1px solid #e5e7eb;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-          }
-
-          .dark .ProseMirror div[data-mermaid],
-          .dark .ProseMirror div[data-chartjs],
-          .dark .ProseMirror div[data-dot] {
-            background-color: #1f2937;
-            border-color: #374151;
-          }
-
-          /* Smooth Scrolling */
-          .ProseMirror {
-            scroll-behavior: smooth;
-          }
-
-          /* Better spacing for nested elements */
-          .ProseMirror > * + * {
-            margin-top: 0.75rem;
-          }
-
-          .ProseMirror li > * + * {
-            margin-top: 0.5rem;
-          }
-
-          /* Print Styles */
-          @media print {
-            .ProseMirror {
-              color: black;
-            }
-            
-            .ProseMirror a {
-              color: #0000ee;
-              text-decoration: underline;
-            }
-            
-            .ProseMirror pre {
-              background-color: #f5f5f5;
-              border: 1px solid #ccc;
-            }
-          }
-
-          /* Responsive adjustments */
-          @media (max-width: 768px) {
-            .ProseMirror {
-              padding: 1rem;
-              font-size: 15px;
-            }
-            
-            .ProseMirror h1 {
-              font-size: 1.875rem;
-            }
-            
-            .ProseMirror h2 {
-              font-size: 1.5rem;
-            }
-            
-            .ProseMirror h3 {
-              font-size: 1.25rem;
-            }
-            
-            .ProseMirror pre {
-              padding: 1rem;
-              font-size: 0.8125rem;
-            }
-          }
-             `}</style>
         {/* Hidden file inputs */}
         <input
           type="file"
@@ -1279,366 +1243,105 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
 
         {/* ---------- RESPONSIVE FORMATTING TOOLBAR ---------- */}
-        <div className="flex-shrink-0 border-b border-gray-300 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 shadow-sm">
+        <div className="flex-shrink-0 relative border-b border-gray-300 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 shadow-sm">
           {/* Desktop Toolbar - Hidden on mobile */}
-          <div className="hidden lg:flex flex-wrap  items-center gap-3 px-3 py-2 overflow-x-auto scrollbar-thin">
-
-            {/* ========== NAVIGATION GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button onClick={startTutorial}>
-                <HelpCircle className="w-4 h-4" />
-              </button>
-              <button
-                onClick={onToggleNotesHistory}
-                className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md group"
-                title="History"
-              >
-                <BookOpen className="w-4 h-4 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
-              </button>
+          <div className={`hidden lg:flex items-center gap-2 px-4 py-2 overflow-x-scroll modern-scrollbar in transition-all duration-300 ${isExpanded ? 'flex-wrap' : ''}`}>
+            <div className={`flex items-center gap-2 flex-1 min-w-0 ${isExpanded ? 'flex-wrap' : ''}`} ref={toolbarRef}>
+              {/* All your button groups go here – wrapped in a ref for measurement */}
+              {toolbarItems.map((item, index) => (
+                <div
+                  key={index}
+                  data-index={index}
+                  className={`flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg transition-all duration-300 ${hiddenIndices.has(index) && !isExpanded ? 'opacity-0 w-0 p-0 m-0 overflow-hidden' : ''}`}
+                  style={{
+                    flexShrink: 0,
+                  }}
+                >
+                  {item}
+                </div>
+              ))}
             </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== HISTORY GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={() => editor?.chain().focus().undo().run()}
-                disabled={!editor?.can().undo()}
-                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
-                title="Undo"
-              >
-                <Undo className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().redo().run()}
-                disabled={!editor?.can().redo()}
-                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
-                title="Redo"
-              >
-                <Redo className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== TEXT FORMATTING GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={() => editor?.chain().focus().toggleBold().run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('bold') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Bold"
-              >
-                <Bold className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().toggleItalic().run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('italic') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Italic"
-              >
-                <Italic className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().toggleUnderline().run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('underline') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Underline"
-              >
-                <UnderlineIcon className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().toggleStrike().run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('strike') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Strikethrough"
-              >
-                <Strikethrough className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().toggleCode().run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('code') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Code"
-              >
-                <Code className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== HEADINGS & STRUCTURE GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 1 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Heading 1"
-              >
-                <Heading1 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 2 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Heading 2"
-              >
-                <Heading2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 3 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Heading 3"
-              >
-                <Heading3 className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== LISTS & BLOCKS GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={() => editor?.chain().focus().toggleBulletList().run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('bulletList') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Bullet List"
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('orderedList') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Ordered List"
-              >
-                <ListOrdered className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('blockquote') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Quote"
-              >
-                <Quote className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
-                className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('codeBlock') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                title="Code Block"
-              >
-                <Code className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== ALIGNMENT GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={() => editor?.chain().focus().setTextAlign('left').run()}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
-                title="Align Left"
-              >
-                <AlignLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().setTextAlign('center').run()}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
-                title="Align Center"
-              >
-                <AlignCenter className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().setTextAlign('right').run()}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
-                title="Align Right"
-              >
-                <AlignRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== INSERT ELEMENTS GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={() => { const url = prompt('Enter link URL:'); if (url) editor?.chain().focus().setLink({ href: url }).run(); }}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
-                title="Insert Link"
-              >
-                <LinkIcon className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => { const url = prompt('Enter image URL:'); if (url) editor?.chain().focus().setImage({ src: url }).run(); }}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
-                title="Insert Image"
-              >
-                <ImageIcon className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
-                title="Insert Table"
-              >
-                <TableIcon className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== DIAGRAMS & VISUALS GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={() => insertDiagram('chartjs')}
-                className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200"
-                title="Insert Chart"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </button>
-              <button
-                onClick={() => insertDiagram('mermaid')}
-                className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200"
-                title="Insert Mermaid"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </button>
-              <button
-                onClick={() => insertDiagram('dot')}
-                className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200"
-                title="Insert Graphviz"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== DOCUMENT ACTIONS GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={handleSave}
-                className="p-2 rounded-md hover:bg-green-100 dark:hover:bg-green-900 hover:text-green-600 dark:hover:text-green-400 transition-all duration-200"
-                title="Save"
-              >
-                <Save className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading || isGeneratingAI || isProcessingAudio || !userProfile}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                title="Upload Document"
-              >
-                {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => audioInputRef.current?.click()}
-                disabled={isProcessingAudio || isUploading || isGeneratingAI || !userProfile}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                title="Upload Audio"
-              >
-                {isProcessingAudio ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={handleViewOriginalDocument}
-                disabled={!documentId || isProcessingAudio}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                title="View Original"
-              >
-                <FileText className="w-4 h-4" />
-              </button>
-              <button
-                onClick={regenerateNoteFromDocument}
-                disabled={isUploading || isGeneratingAI || isProcessingAudio || !documentId}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                title="Regenerate"
-              >
-                {isGeneratingAI ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== EXPORT GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={handleDownloadNote}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
-                title="Download Markdown"
-              >
-                <Download className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleDownloadPdf}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
-                title="Download PDF"
-              >
-                <FileText className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleCopyNoteContent}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
-                title="Copy Content"
-              >
-                <Copy className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== VOICE & TTS GROUP ========== */}
-            <div className="flex items-center gap-2 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <select
-                value={selectedVoiceURI || ''}
-                onChange={(e) => setSelectedVoiceURI(e.target.value)}
-                disabled={isSpeaking || voices.length === 0}
-                className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all duration-200"
-                title="Select Voice"
-              >
-                <option value="">Default Voice</option>
-                {voices.map((voice, index) => (
-                  <option key={`${voice.voiceURI}-${index}`} value={voice.voiceURI}>
-                    {`${voice.name} (${voice.lang})`}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleTextToSpeech}
-                disabled={isUploading || isGeneratingAI || isProcessingAudio}
-                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                title="Text to Speech"
-              >
-                {isSpeaking ? <StopCircle className="w-4 h-4 text-red-500" /> : <Volume2 className="w-4 h-4" />}
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-
-            {/* ========== AI & INTELLIGENCE GROUP ========== */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg">
-              <button
-                onClick={startAI}
-                className="p-2 rounded-md bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
-                title="AI Assist"
-              >
-                <Sparkles className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setShowMenu(v => !v)}
-                className="px-3 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-medium shadow-md hover:shadow-lg transition-all duration-200"
-              >
-                <Brain className="w-4 h-4" />
-                <span className="hidden xl:inline">Flashcards</span>
-                {savedCards.length > 0 && (
-                  <span className="px-1.5 py-0.5 bg-white/20 rounded-full text-xs font-semibold">{savedCards.length}</span>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 flex-shrink-0 ml-2"
+              title={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
           </div>
+          {showMenu && !isMobile && (
+            <div className="border-b border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-lg animate-slide-in-down">
+              <div className="max-w-4xl mx-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <label className="text-sm font-semibold text-gray-900 dark:text-white">
+                      Generate Flashcards from Your Notes
+                    </label>
+                  </div>
+                  <button
+                    onClick={() => setShowMenu(false)}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    title="Close Menu"
+                  >
+                    <XCircle className="w-5 h-5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" />
+                  </button>
+                </div>
 
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={cardCount}
+                      onChange={e => setCardCount(Math.min(50, Math.max(1, +e.target.value)))}
+                      className="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">flashcards</span>
+                  </div>
+
+                  <button
+                    onClick={generate}
+                    disabled={generating}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
+                  >
+                    {generating ? (
+                      <>
+                        <RotateCw className="w-4 h-4 animate-spin" />
+                        <span>Generating…</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Generate {cardCount} Cards</span>
+                      </>
+                    )}
+                  </button>
+
+                  {savedCards.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setShowDeck(!showDeck);
+                        setShowMenu(false);
+                      }}
+                      className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-all flex items-center gap-2"
+                    >
+                      <Brain className="w-4 h-4" />
+                      {showDeck ? 'Hide' : 'View'} Flashcards ({savedCards.length})
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {/* Mobile Toolbar - Visible on mobile/tablet */}
-          <div className="flex lg:hidden items-center justify-between px-3 py-2">
+          <div className="flex lg:hidden items-center overflow-x-scroll justify-between px-3 py-2">
 
             {/* ========== MOBILE ESSENTIAL FORMATTING ========== */}
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setShowTutorial(true)}
+                onClick={() => startTutorial}
                 className="p-2 rounded-md hover:bg-yellow-100 dark:hover:bg-yellow-900 hover:text-yellow-600 dark:hover:text-yellow-400 transition-all duration-200"
                 title="Show Tutorial"
               >
@@ -1724,7 +1427,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
               <button
                 onClick={startAI}
-                className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-500 text-white"
                 title="AI Assist"
               >
                 <Sparkles className="w-4 h-4" />
@@ -1738,8 +1441,12 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
                   setShowFlashcardsMenu(!showFlashcardsMenu);
                   setShowMobileFormatMenu(false);
                   setShowExportMenu(false);
+                  if (!showFlashcardsMenu) {
+                    setShowDeck(false);
+                  }
                 }}
                 className="px-3 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-medium"
+                title="Flashcards Menu"
               >
                 <Brain className="w-4 h-4" />
                 {savedCards.length > 0 && (
@@ -1903,7 +1610,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         </div>
 
         {/* ---------- EDITOR CONTENT ---------- */}
-        <div className="flex-1 max-h-full overflow-y-auto relative">
+        <div className="flex-1 max-h-full pb-6 overflow-y-auto relative">
           {isLoading && (
             <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
               <div className="text-center">
@@ -1916,7 +1623,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           <div className="h-full max-w-full mx-auto py-4 sm:py-6">
             <EditorContent
               editor={editor}
-              className="h-full prose prose-sm sm:prose lg:prose-lg dark:prose-invert max-w-none"
+              className="h-full  prose prose-sm sm:prose lg:prose-lg dark:prose-invert max-w-none"
             />
           </div>
         </div>
@@ -1978,7 +1685,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClose={closeTutorial}
           onComplete={completeTutorial}
         />
-        
+
 
       </div>
     );

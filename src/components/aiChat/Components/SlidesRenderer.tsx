@@ -281,7 +281,7 @@ const ParticleRain: React.FC<{ color: string; density: number }> = ({ color, den
       {particles.map(p => (
         <motion.div
           key={p.id}
-          className="absolute w-1 h-1 rounded-full"
+          className="absolute w-1 h-1 "
           style={{ 
             left: `${p.x}%`, 
             top: '-5%',
@@ -518,23 +518,6 @@ export const SlidesRenderer: React.FC<SlidesRendererProps> = ({
         </motion.div>
       </div>
 
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(0, 0, 0, 0.1);
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: ${slideTheme.accentColor}60;
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: ${slideTheme.accentColor}80;
-        }
-      `}</style>
     </motion.div>
   );
 };

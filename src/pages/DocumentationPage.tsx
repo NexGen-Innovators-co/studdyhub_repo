@@ -32,24 +32,24 @@ const DocumentationPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex flex-col">
             {/* Header */}
-            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md">
-                <Link to="/" className="flex items-center gap-3 group">
+            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md fixed top-0">
+                <Link to="/" className="flex items-center gap-3 group" aria-label="Home">
                     <img
-                        src="/siteimage.png"
+                        src="https://placehold.co/32x32?text=Logo"
                         alt="studdyhub AI Logo"
                         className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
+                        loading="lazy"
                     />
                     <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
                 </Link>
                 <div className="flex items-center gap-4">
                     <Link to="/auth">
-                        <Button type="button" className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
+                        <Button className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
                     </Link>
                     <Button
-                        type="button"
                         onClick={toggleDarkMode}
                         className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                        title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                        aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
                     >
                         {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                     </Button>
@@ -58,92 +58,57 @@ const DocumentationPage: React.FC = () => {
 
             {/* Main Content */}
             <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
-                <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">studdyhub AI Documentation</h1>
-                <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto text-center mb-12">
-                    Comprehensive guides and references to help you get the most out of studdyhub AI.
-                </p>
-
-                <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 max-w-5xl mx-auto">
-                    <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Getting Started</h2>
-                    <p className="mb-6 text-gray-700 dark:text-gray-300">
-                        New to studdyhub AI? This section will guide you through the initial setup and core functionalities.
+                <section className="text-center mb-16">
+                    <h1 className="text-4xl md:text-5xl font-extrabold mb-4 text-blue-600 dark:text-blue-400">studdyhub AI Documentation</h1>
+                    <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto">
+                        Comprehensive guides and references to help you get the most out of studdyhub AI.
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                        <div className="flex items-start gap-4">
-                            <Book className="h-8 w-8 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Quick Start Guide</h3>
-                                <p className="text-gray-700 dark:text-gray-300">Learn how to create your first notes, upload documents, and start chatting with AI.</p>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <Lightbulb className="h-8 w-8 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Understanding AI Features</h3>
-                                <p className="text-gray-700 dark:text-gray-300">Dive deeper into how our AI processes information and generates insights.</p>
-                            </div>
-                        </div>
-                    </div>
+                </section>
 
-                    <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">API Documentation</h2>
-                    <p className="mb-6 text-gray-700 dark:text-gray-300">
-                        For developers looking to integrate studdyhub AI's powerful features into their own applications.
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                        <div className="flex items-start gap-4">
-                            <Code className="h-8 w-8 text-green-600 dark:text-green-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Authentication & Authorization</h3>
-                                <p className="text-gray-700 dark:text-gray-300">Details on how to obtain API keys and authenticate your requests securely.</p>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <Zap className="h-8 w-8 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">API Endpoints Reference</h3>
-                                <p className="text-gray-700 dark:text-gray-300">A complete list of available API endpoints, their parameters, and response formats.</p>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <Book className="h-8 w-8 text-red-600 dark:text-red-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Code Examples & SDKs</h3>
-                                <p className="text-gray-700 dark:text-gray-300">Practical code snippets and guides for integrating with popular programming languages.</p>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <Lightbulb className="h-8 w-8 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-1" />
-                            <div>
-                                <h3 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Best Practices & Troubleshooting</h3>
-                                <p className="text-gray-700 dark:text-gray-300">Tips for optimizing your API usage and resolving common issues.</p>
-                            </div>
-                        </div>
+                <section className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+                    <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800">
+                        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Book className="h-6 w-6 text-blue-600" /> Getting Started</h2>
+                        <p className="text-gray-700 dark:text-gray-300 mb-4">
+                            New to studdyhub AI? This section will guide you through the initial setup and core functionalities.
+                        </p>
+                        <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300">
+                            <li>Quick Start Guide: Learn how to create your first note or schedule.</li>
+                            <li>Account Setup: Customize your learning preferences.</li>
+                        </ul>
                     </div>
+                    <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800">
+                        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Code className="h-6 w-6 text-green-600" /> API Reference</h2>
+                        <p className="text-gray-700 dark:text-gray-300 mb-4">
+                            Detailed documentation for our API endpoints.
+                        </p>
+                        <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300">
+                            <li>Authentication & Authorization: Obtain API keys securely.</li>
+                            <li>Endpoints: Parameters and response formats.</li>
+                            <li>Code Examples: Snippets in popular languages.</li>
+                            <li>Best Practices: Optimization and troubleshooting.</li>
+                        </ul>
+                    </div>
+                </section>
 
-                    <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">User Guides & Tutorials</h2>
-                    <p className="mb-6 text-gray-700 dark:text-gray-300">
+                <section className="text-center mb-16">
+                    <h2 className="text-2xl font-bold mb-4">User Guides & Tutorials</h2>
+                    <p className="text-gray-700 dark:text-gray-300 mb-6">
                         Step-by-step instructions and video tutorials for all studdyhub AI features.
                     </p>
-                    <div className="text-center">
-                        <Link to="/user-guide-page">
-                            <Button variant="outline" className="text-blue-600 border-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-400 dark:hover:bg-blue-900">
-                                Explore User Guides
-                            </Button>
-                        </Link>
-                    </div>
+                    <Link to="/user-guide-page">
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">Explore User Guides</Button>
+                    </Link>
+                </section>
 
-                    <h2 className="text-3xl font-bold mt-10 mb-6 text-gray-900 dark:text-white">FAQs & Support</h2>
-                    <p className="mb-6 text-gray-700 dark:text-gray-300">
+                <section className="text-center">
+                    <h2 className="text-2xl font-bold mb-4">FAQs & Support</h2>
+                    <p className="text-gray-700 dark:text-gray-300 mb-6">
                         Find answers to frequently asked questions or contact our support team for personalized assistance.
                     </p>
-                    <div className="text-center">
-                        <Link to="/contact">
-                            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
-                                Contact Support
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
+                    <Link to="/contact">
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">Contact Support</Button>
+                    </Link>
+                </section>
             </main>
 
             {/* Footer */}

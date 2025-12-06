@@ -72,7 +72,7 @@ const SystemSettings = () => {
 
   const categoryColors: Record<string, string> = {
     general: 'from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700',
-    database: 'from-purple-500 to-purple-600 dark:from-purple-600 dark:to-purple-700',
+    database: 'from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700',
     api: 'from-green-500 to-green-600 dark:from-green-600 dark:to-green-700',
     notifications: 'from-yellow-500 to-yellow-600 dark:from-yellow-600 dark:to-yellow-700',
     security: 'from-red-500 to-red-600 dark:from-red-600 dark:to-red-700',
@@ -103,7 +103,7 @@ const SystemSettings = () => {
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">System Settings</h2>
           <p className="text-gray-600 dark:text-gray-400">Configure platform settings and preferences</p>
         </div>
-        <Button 
+        <Button
           onClick={fetchSettings}
           variant="outline"
           className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
@@ -136,8 +136,8 @@ const SystemSettings = () => {
                 <p className="text-sm text-gray-600 dark:text-gray-400">Categories</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-white">{categories.length}</p>
               </div>
-              <div className="p-3 bg-purple-500/10 dark:bg-purple-500/20 rounded-lg">
-                <Database className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+              <div className="p-3 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg">
+                <Database className="h-8 w-8 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
           </CardContent>
@@ -179,7 +179,7 @@ const SystemSettings = () => {
           <TabsContent key={category} value={category} className="mt-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {groupedSettings[category].map((setting) => (
-                <Card 
+                <Card
                   key={setting.id}
                   className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:shadow-lg dark:hover:shadow-gray-900/50 transition-all"
                 >
@@ -232,7 +232,7 @@ const SystemSettings = () => {
                           />
                         </div>
                       )}
-                      
+
                       <div className="pt-3 border-t border-gray-200 dark:border-gray-800">
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           Last updated: {new Date(setting.updated_at || '').toLocaleString()}
@@ -256,7 +256,7 @@ const SystemSettings = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button 
+          <Button
             variant="outline"
             className="h-auto p-6 flex flex-col items-start gap-2 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800/50 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-900/30 dark:hover:to-blue-800/30"
           >
@@ -267,18 +267,18 @@ const SystemSettings = () => {
             </div>
           </Button>
 
-          <Button 
+          <Button
             variant="outline"
-            className="h-auto p-6 flex flex-col items-start gap-2 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-800/50 hover:from-purple-100 hover:to-purple-200 dark:hover:from-purple-900/30 dark:hover:to-purple-800/30"
+            className="h-auto p-6 flex flex-col items-start gap-2 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800/50 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-900/30 dark:hover:to-blue-800/30"
           >
-            <Shield className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+            <Shield className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             <div className="text-left">
               <h3 className="font-semibold text-gray-900 dark:text-white">Security Audit</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">Run security check</p>
             </div>
           </Button>
 
-          <Button 
+          <Button
             variant="outline"
             className="h-auto p-6 flex flex-col items-start gap-2 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800/50 hover:from-green-100 hover:to-green-200 dark:hover:from-green-900/30 dark:hover:to-green-800/30"
           >

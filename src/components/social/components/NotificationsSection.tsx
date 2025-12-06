@@ -90,7 +90,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
     const result = filter === 'unread'
       ? uniqueNotifications.filter(n => !n.is_read)
       : uniqueNotifications;
-    
+
     // Additional safety check
     return removeDuplicateNotifications(result);
   }, [uniqueNotifications, filter]);
@@ -154,7 +154,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
       case 'follow':
         return <UserPlus className="h-5 w-5 text-green-500" />;
       case 'group_invite':
-        return <Users className="h-5 w-5 text-purple-500" />;
+        return <Users className="h-5 w-5 text-blue-500" />;
       default:
         return <Bell className="h-5 w-5 text-gray-500" />;
     }
@@ -179,23 +179,23 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
 
   return (
     <Card className="flex flex-col max-h-[calc(90vh-4rem)] overflow-y-auto pb-6 w-full bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700">
-    <CardHeader className="text-white p-4 flex  shadow-lg">
-      <div className="flex items-center gap-3 justify-between">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Bell className="h-5 w-5 text-slate-700 dark:text-gray-300" />
-            {actualUnreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-xs font-bold">{actualUnreadCount}</span>
-              </span>
-            )}
+      <CardHeader className="text-white p-4 flex  shadow-lg">
+        <div className="flex items-center gap-3 justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Bell className="h-5 w-5 text-slate-700 dark:text-gray-300" />
+              {actualUnreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">{actualUnreadCount}</span>
+                </span>
+              )}
+            </div>
+            <CardTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">
+              Notifications
+            </CardTitle>
           </div>
-          <CardTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">
-            Notifications
-          </CardTitle>
-        </div>
 
-          <div className="flex items-center text-slate-500 dark:text-gray-400 gap-2 gap-1 sm:gap-2">
+          <div className="flex items-center text-slate-500 dark:text-gray-400 gap-2 sm:gap-2">
             {/* Filter Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -231,7 +231,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
         </div>
       </CardHeader>
 
-      <CardContent 
+      <CardContent
         className="flex-1 overflow-y-auto px-0 py-4 space-y-1"
         data-notifications-container
       >
@@ -251,15 +251,15 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-slate-200 dark:divide-gray-700">
-            {filteredNotifications.map((notification)=> {
+            {filteredNotifications.map((notification) => {
               const isDeleting = deletingIds.has(notification.id);
 
               return (
                 <div
                   key={notification.id}
                   className={`group flex items-start gap-3 sm:gap-4 p-4 hover:bg-slate-50 dark:hover:bg-gray-700/50 transition-colors ${!notification.is_read
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
-                      : ''
+                    ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
+                    : ''
                     }`}
                 >
                   {/* Actor Avatar */}

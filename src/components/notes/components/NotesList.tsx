@@ -63,7 +63,7 @@ export const NotesList: React.FC<NotesListProps> = ({
         observerRef.current.unobserve(loadMoreRef.current);
       }
     };
-  }, [hasMore, isLoadingMore, onLoadMore]);
+  }, [hasMore]);
 
   const truncateContent = (content: string, maxLength: number = 100) => {
     if (content.length <= maxLength) return content;

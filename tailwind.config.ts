@@ -19,37 +19,10 @@ export default {
 		},
 		extend: {
 			fontFamily: {
-				'claude': [
-					'Inter', 
-					'system-ui', 
-					'-apple-system', 
-					'BlinkMacSystemFont', 
-					'Segoe UI', 
-					'Roboto', 
-					'Helvetica Neue', 
-					'Arial', 
-					'sans-serif'
-				],
-				'claude-mono': [
-					'JetBrains Mono', 
-					'Fira Code', 
-					'Monaco', 
-					'Consolas', 
-					'Liberation Mono', 
-					'Courier New', 
-					'monospace'
-				],
-				'sans': [
-					'Inter', 
-					'system-ui', 
-					'-apple-system', 
-					'sans-serif'
-				],
-				'mono': [
-					'JetBrains Mono', 
-					'Fira Code', 
-					'monospace'
-				],
+				'claude': ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+				'claude-mono': ['JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
+				'sans': ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+				'mono': ['JetBrains Mono', 'Fira Code', 'monospace'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',
@@ -70,37 +43,30 @@ export default {
 					700: '#1d4ed8',
 					800: '#1e40af',
 					900: '#1e3a8a',
-					950: '#172554',
 				},
-				secondary: {
-					DEFAULT: 'hsl(var(--secondary))',
-					foreground: 'hsl(var(--secondary-foreground))',
-					50: '#f8fafc',
-					100: '#f1f5f9',
-					200: '#e2e8f0',
-					300: '#cbd5e1',
-					400: '#94a3b8',
-					500: '#64748b',
-					600: '#475569',
-					700: '#334155',
-					800: '#1e293b',
-					900: '#0f172a',
-					950: '#020617',
+				// Add Grok-like dark mode colors
+				dark: {
+					bg: '#000000', // Deep black background
+					bgSecondary: '#1a1a1a', // Slightly lighter for cards/bubbles
+					text: '#ffffff', // White for main text
+					textMuted: '#a0a0a0', // Gray for timestamps/subtext
+					accent: '#3b82f6', // Blue accents (buttons, links)
+					border: '#333333', // Subtle gray borders
 				},
-				destructive: {
-					DEFAULT: 'hsl(var(--destructive))',
-					foreground: 'hsl(var(--destructive-foreground))',
-					50: '#fef2f2',
-					100: '#fee2e2',
-					200: '#fecaca',
-					300: '#fca5a5',
-					400: '#f87171',
-					500: '#ef4444',
-					600: '#dc2626',
-					700: '#b91c1c',
-					800: '#991b1b',
-					900: '#7f1d1d',
+			},
+			typography: {
+				DEFAULT: {
+					css: {
+						maxWidth: '100%',
+						lineHeight: '1.6',
+						fontSize: '16px', // Base for readability
+						h1: { fontSize: '2rem', marginBottom: '1rem' },
+						h2: { fontSize: '1.5rem', marginBottom: '0.75rem' },
+						p: { marginBottom: '1.5rem' },
+						code: { fontFamily: 'var(--font-claude-mono)', background: '#1a1a1a', padding: '0.2rem 0.4rem', borderRadius: '0.25rem' },
+					},
 				},
+
 				muted: {
 					DEFAULT: 'hsl(var(--muted))',
 					foreground: 'hsl(var(--muted-foreground))'
@@ -191,8 +157,9 @@ export default {
 				'128': '32rem',
 			},
 			fontSize: {
-				'2xs': ['0.625rem', { lineHeight: '0.75rem' }],
-				'3xs': ['0.5rem', { lineHeight: '0.625rem' }],
+				'2xs': ['0.1rem', { lineHeight: '0.1rem' }],
+				'3xs': ['0.75rem', { lineHeight: '0.75rem' }],
+
 			},
 			boxShadow: {
 				'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
@@ -430,7 +397,7 @@ export default {
 	plugins: [
 		require("tailwindcss-animate"),
 		// Add custom utilities
-		function({ addUtilities }: any) {
+		function ({ addUtilities }: any) {
 			const newUtilities = {
 				'.text-balance': {
 					'text-wrap': 'balance',

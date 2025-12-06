@@ -16,7 +16,7 @@ import { SectionSelectionDialog } from './components/SectionSelectionDialog';
 import { DocumentViewerDialog } from './components/DocumentViewerDialog';
 import { RotateCw } from 'lucide-react';
 import { set } from 'date-fns';
-
+import '../../noteStyle.css'
 // Explicitly type the supabase client for better type inference with custom tables
 const typedSupabase = supabase as any;
 
@@ -223,7 +223,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   // Enhanced save handler
   // Enhanced save handler
   const handleSave = useCallback(() => {
-    console.log("Save triggered - Getting current markdown from editor...");
+    //console.log("Save triggered - Getting current markdown from editor...");
     if (!content) {
       toast.error("No content to save");
       return;
@@ -231,7 +231,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     // Use the markdown from the ref (which includes diagrams) or fallback to content state
     setIsloading(true);
     const markdownToSave = content;
-    console.log("Markdown to save length:", markdownToSave.length);
+    //console.log("Markdown to save length:", markdownToSave.length);
 
     const updatedNote: Note = {
       ...note,
@@ -258,14 +258,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   // Enhanced content change handler
   const handleContentChange = useCallback((newContent: string) => {
-    console.log("Content changed in editor, length:", newContent.length);
+    //console.log("Content changed in editor, length:", newContent.length);
     setContent(newContent);
     setIsContentModified(true);
   }, []);
 
   // Add a useEffect to log content changes for debugging
   useEffect(() => {
-    console.log("Content state updated, length:", content.length);
+    //console.log("Content state updated, length:", content.length);
   }, [content]);
 
   // Add auto-save or manual save indicator in the UI if needed
@@ -338,7 +338,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("🚀 handleFileSelect triggered!");
+    //console.log("🚀 handleFileSelect triggered!");
     const file = event.target.files?.[0];
 
     if (!file || !userProfile) {
@@ -349,12 +349,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       return;
     }
 
-    console.log("📄 File selected:", {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      userId: userProfile.id
-    });
+
 
     const allowedDocumentTypes = [
       'application/pdf',
@@ -373,7 +368,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     // Route to audio handler if audio file
     if (allowedAudioTypes.includes(file.type)) {
-      console.log("🎵 Routing to audio file handler");
+      //console.log("🎵 Routing to audio file handler");
       handleAudioFileSelect(event);
       return;
     }
@@ -1016,7 +1011,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleAudioFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("handleAudioFileSelect triggered!");
+    //console.log("handleAudioFileSelect triggered!");
     toast.info("Audio file selected, starting upload...");
     const file = event.target.files?.[0];
     if (!file || !userProfile) {
@@ -1190,9 +1185,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         isPlayingAudio={isPlayingAudio}
         handlePlayAudio={handleAudioPlayerPlay}
         handleAudioEnded={handleAudioPlayerEnded}
-        handleDownloadAudio={() => {}}
-        handleCopyAudioUrl={() => {}}
-        handleClearAudioProcessing={() => {}}
+        handleDownloadAudio={() => { }}
+        handleCopyAudioUrl={() => { }}
+        handleClearAudioProcessing={() => { }}
         handleGenerateNoteFromAudio={() => handleProcessAudio('transcribe', null, note.document_id)}
         handleGenerateSummaryFromAudio={() => handleProcessAudio('summarize', null, note.document_id)}
         targetLanguage={targetLanguage}
@@ -1204,7 +1199,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         isProcessingAudio={isProcessingAudio}
         userProfile={userProfile}
       />
-  
+
       {/* Main Editor Container - Centered with max-width */}
       <div className="flex-1 h-full overflow-hidden flex">
         <div className="w-full max-w-[1200px] mx-auto flex flex-col lg:flex-row shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900">
@@ -1247,18 +1242,19 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               handleAudioFileSelect={handleAudioFileSelect}
               note={note}
               isLoading={isLoading}
+              isSummaryVisible={isSummaryVisible}
             />
           </div>
-          
-            {note.ai_summary && isSummaryVisible && (
-              <AISummarySection
-                ai_summary={note.ai_summary}
-                isSummaryVisible={isSummaryVisible}
-                setIsSummaryVisible={setIsSummaryVisible}
-              />
-            )}
 
-  
+          {note.ai_summary && isSummaryVisible && (
+            <AISummarySection
+              ai_summary={note.ai_summary}
+              isSummaryVisible={isSummaryVisible}
+              setIsSummaryVisible={setIsSummaryVisible}
+            />
+          )}
+
+
           {/* Translated Content Section */}
           {translatedContent && (
             <div className="lg:w-80 lg:border-l lg:border-gray-200 lg:dark:border-gray-700">
@@ -1271,7 +1267,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           )}
         </div>
       </div>
-  
+
       {/* Dialogs */}
       <SectionSelectionDialog
         isOpen={isSectionDialogOpen}
@@ -1287,7 +1283,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }}
         documentId={documentIdForDialog!}
       />
-  
+
       <DocumentViewerDialog
         isOpen={isDocumentViewerOpen}
         onClose={() => setIsDocumentViewerOpen(false)}

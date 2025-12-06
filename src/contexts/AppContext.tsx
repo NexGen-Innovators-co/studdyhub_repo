@@ -23,6 +23,8 @@ import { Note } from '../types/Note';
 import { appReducer, initialAppState, AppState, AppAction } from './appReducer';
 import { DocumentFolder, FolderTreeNode } from '@/types/Folder';
 import { DataLoadingState } from '../hooks/useAppData';
+import { useSocialData } from '../hooks/useSocialData';
+import { clearCache } from '../utils/socialCache'
 
 // Context interface
 interface AppContextType extends AppState {
@@ -127,7 +129,8 @@ interface AppContextType extends AppState {
   dataErrors: Record<string, string>;
   clearError: (dataType: string) => void;
   retryLoading: (dataType: string) => void;
-
+  // ← Added socialData to the interface
+  socialData: ReturnType<typeof useSocialData>;
   // Add this with your other state declarations
 }
 
@@ -207,7 +210,7 @@ const useLoadingWithTimeout = (initialState = false) => {
     if (loading) {
       timeoutRef.current = setTimeout(() => {
         setIsLoading(false);
-        console.warn('Loading state timeout - resetting loading state');
+        //console.warn('Loading state timeout - resetting loading state');
       }, LOADING_TIMEOUT);
     }
   }, []);
@@ -321,7 +324,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     folders,
     setFolders,
   });
-
+  const socialData = useSocialData(userProfile, 'newest', 'all');
   // Theme management
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -334,7 +337,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('theme', state.currentTheme);
     }
   }, [state.currentTheme]);
-
+  useEffect(() => {
+    if (!user) {
+      // User logged out, clear cache
+      clearCache();
+      console.log('🔴 User logged out - social cache cleared');
+    }
+  }, [user]);
   const handleThemeChange = useCallback((theme: 'light' | 'dark') => {
     dispatch({ type: 'SET_THEME', payload: theme });
   }, []);
@@ -456,8 +465,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         payload: formattedSessions.length === state.chatSessionsLoadedCount
       });
     } catch (error) {
-      console.error('Error loading chat sessions:', error);
-      toast.error('Failed to load chat sessions.');
+      //console.error('Error loading chat sessions:', error);
+      // toast.error('Failed to load chat sessions.');
     } finally {
       setIsLoadingChatSessions(false);
     }
@@ -516,7 +525,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast.success('New chat session created!');
       return newSession.id;
     } catch (error: any) {
-      console.error('Error creating new session:', error);
+      //console.error('Error creating new session:', error);
       toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
       return null;
     }
@@ -565,7 +574,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       toast.success('Chat session deleted.');
     } catch (error: any) {
-      console.error('Error deleting session:', error);
+      //console.error('Error deleting session:', error);
       toast.error(`Failed to delete chat session: ${error.message || 'Unknown error'}`);
     }
   }, [user, state.chatSessions, state.activeChatSessionId, loadChatSessions, navigate]);
@@ -592,7 +601,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       toast.success('Chat session renamed.');
     } catch (error) {
-      console.error('Error renaming session:', error);
+      //console.error('Error renaming session:', error);
       toast.error('Failed to rename chat session');
     }
   }, [user]);
@@ -660,7 +669,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: (data || []).length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
       console.error('Error loading session messages:', error);
-      toast.error('Failed to load chat messages for this session.');
+      return
+      // toast.error('Failed to load chat messages for this session.');
     } finally {
       setIsLoadingSessionMessages(false);
     }
@@ -712,7 +722,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: (data || []).length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
-      console.error('Error loading older messages:', error);
+      //console.error('Error loading older messages:', error);
       toast.error('Failed to load older messages.');
     } finally {
       setIsLoadingSessionMessages(false);
@@ -743,14 +753,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
 
       if (error) {
-        console.error('Error deleting message from DB:', error);
+        //console.error('Error deleting message from DB:', error);
         toast.error('Failed to delete message from database.');
         loadSessionMessages(state.activeChatSessionId);
       } else {
         toast.success('Message deleted successfully.');
       }
     } catch (error: any) {
-      console.error('Error in handleDeleteMessage:', error);
+      //console.error('Error in handleDeleteMessage:', error);
       toast.error(`Error deleting message: ${error.message || 'Unknown error'}`);
       if (state.activeChatSessionId) {
         loadSessionMessages(state.activeChatSessionId);
@@ -794,7 +804,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // For now, we'll just show a placeholder implementation
       ////console.log('Regenerating response for:', lastUserMessageContent);
     } catch (error) {
-      console.error('Error regenerating response:', error);
+      //console.error('Error regenerating response:', error);
       toast.error('Failed to regenerate response');
 
       setChatMessages(prevAllMessages =>
@@ -837,9 +847,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // This would call the message submission handler
       // For now, we'll just show a placeholder implementation
-      //console.log('Retrying failed message:', originalUserMessageContent);
+      ////console.log('Retrying failed message:', originalUserMessageContent);
     } catch (error) {
-      console.error('Error retrying message:', error);
+      //console.error('Error retrying message:', error);
       toast.error('Failed to retry message');
 
       setChatMessages(prevAllMessages =>
@@ -910,7 +920,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Handle URL session restoration first
     if (sessionIdFromUrl && sessionIdFromUrl !== state.activeChatSessionId && user) {
-      console.log('🔄 Session restored from URL:', sessionIdFromUrl);
+      //console.log('🔄 Session restored from URL:', sessionIdFromUrl);
       dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionIdFromUrl });
       loadSessionMessages(sessionIdFromUrl);
       return;
@@ -1090,6 +1100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsAiTyping,
     isLoadingSession,
     setIsLoadingSession,
+    socialData,
   };
 
   return (

@@ -5,19 +5,18 @@ import { Header } from '../components/layout/Header';
 import { TabContent } from '../components/layout/TabContent';
 import { useAppContext } from '../hooks/useAppContext';
 import { useMessageHandlers } from '../hooks/useMessageHandlers';
-import { LoadingScreen } from '@/components/ui/bookloader';
-import { clearCache } from '@/utils/socialCache';
+import BookPagesAnimation, { LoadingScreen } from '@/components/ui/bookloader';
 import { QuickTips } from '@/components/notes/components/QuickTip';
-import { AlertTriangle, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Bot, FileText, Home, Mic, RefreshCw, Users2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { set } from 'date-fns';
+import { motion } from 'framer-motion';
+import AIBot from '@/components/ui/aibot';
 
 const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
 
-  // Social routing
   let activeSocialTab: string | undefined;
   let socialPostId: string | undefined;
   let socialGroupId: string | undefined;
@@ -94,19 +93,30 @@ const Index = () => {
     handleRetryFailedMessage,
   } = useMessageHandlers();
 
-  // Auth redirect
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate('/auth');
-    }
-  }, [user, authLoading, navigate]);
+  // Extract IDs from URL
+  const sessionId = params.sessionId;
+  const postId = params.postId;
+  const groupId = params.groupId;
+  const userId = params.userId;
+  const tab = params.tab;
 
+  if (location.pathname.startsWith('/social/group/')) {
+    activeSocialTab = 'group';
+    socialGroupId = groupId;
+  } else if (location.pathname.startsWith('/social/post/')) {
+    activeSocialTab = 'post';
+    socialPostId = postId;
+  } else if (location.pathname.startsWith('/social/profile/')) {
+    activeSocialTab = 'profile';
+  } else {
+    activeSocialTab = tab as string | undefined;
+  }
   const [socialSearchQuery, setSocialSearchQuery] = useState('');
 
   // Filter critical errors - moved BEFORE any conditional returns
   const criticalErrors = useMemo(() => {
     if (!dataErrors) return {};
-    
+
     const critical: Record<string, string> = {};
     Object.entries(dataErrors).forEach(([key, value]) => {
       // Consider notes and profile as critical, documents as less critical
@@ -135,6 +145,7 @@ const Index = () => {
     onOpenCreatePostDialog: () => navigate('/social?openCreate=true'),
     // Add error indicators
     hasDataErrors: Object.keys(dataErrors || {}).length > 0,
+    currentTheme: currentTheme,
   }), [
     searchQuery, appOperations.createNewNote, isSidebarOpen, setIsSidebarOpen,
     currentActiveTab, userProfile, activeSocialTab, socialPostId,
@@ -255,6 +266,10 @@ const Index = () => {
     dataErrors: dataErrors || {},
     onRetryData: retryLoading,
     onClearError: clearError,
+    hasMoreChatSessions: hasMoreChatSessions ?? false,
+    onLoadMoreChatSessions: handleLoadMoreChatSessions,
+    dispatch,                                         // ← from useAppContext()
+    isLoadingChatSessions: isLoadingSessionMessages, // ← rename for clarity
   }), [
     currentActiveTab,
     activeSocialTab,
@@ -299,11 +314,17 @@ const Index = () => {
     clearError,
   ]);
 
+  // Auth redirect (existing)
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, authLoading, navigate]);
+
   const headerClass = useMemo(() => {
     const isNotesTab = currentActiveTab === 'notes';
     return `flex items-center ${isNotesTab ? '' : ''} justify-between w-full p-0 sm:p-0 shadow-none bg-white dark:bg-gray-600 border-none`;
   }, [currentActiveTab]);
-
 
   if (!user) return null;
 
@@ -320,14 +341,14 @@ const Index = () => {
             We couldn't load your user profile. This may be due to network issues.
           </p>
           <div className="space-y-3">
-            <Button 
+            <Button
               onClick={() => retryLoading('profile')}
               className="w-full flex items-center justify-center gap-2"
             >
               <RefreshCw className="w-4 h-4" />
               Try Again
             </Button>
-            <Button 
+            <Button
               variant="outline"
               onClick={() => window.location.reload()}
               className="w-full"
@@ -352,17 +373,93 @@ const Index = () => {
           ? '  lg:z-20 '
           : 'block lg:hidden'}
       `}>
-        <Header {...headerProps} />
+        <Header onThemeChange={handleThemeChange} {...headerProps} />
       </header>
-      
-      <div className="flex-1 flex relative lg:z-10">
-        <div className={`z-30 ${currentActiveTab !== 'chat' ? 'lg:hidden ' : 'block'}`}>
+
+      <div className="flex-1 flex relative overflow-hidden">
+        <div className={`z-30 ${currentActiveTab === 'chat' ? 'block' : 'lg:hidden'}`}>
           <Sidebar {...sidebarProps} />
         </div>
-        <div className={`h-screen z-10 w-full dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-y-auto modern-scrollbar animate-in slide-in-from-top-2 fade-in duration-500`}>
+
+        {/* Main Content */}
+        <div className="flex-1 h-full overflow-y-auto modern-scrollbar bg-gray-50 dark:bg-slate-900">
           <TabContent {...tabContentProps} />
         </div>
       </div>
+
+      {/* Bottom Navigation - Hide when inside a chat session on mobile */}
+      {(currentActiveTab !== 'chat' || !activeChatSessionId || location.pathname !== '/chat/' + activeChatSessionId) && (
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 z-20 shadow-2xl">
+          <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
+            {[
+              { tab: 'dashboard', label: 'Home', icon: Home },
+              { tab: 'notes', label: 'Notes', icon: FileText },
+              {
+                tab: 'chat',
+                icon: AIBot,
+                size: "lg" as const, // Pass "lg" size to AIBot
+                isSpecial: true
+              },
+              { tab: 'social', label: 'Social', icon: Users2 },
+              { tab: 'recordings', label: 'Record', icon: Mic },
+            ].map(({ tab, label, icon: Icon, size = undefined, isSpecial = false }) => {
+              const isActive =
+                currentActiveTab === tab ||
+                (tab === 'chat' && location.pathname.startsWith('/chat')) ||
+                (tab === 'social' && location.pathname.startsWith('/social'));
+
+              return (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    if (tab === 'chat') {
+                      handleNavigateToTab('chat');
+                    } else {
+                      handleNavigateToTab(tab);
+                    }
+                  }}
+                  className={`
+                    relative flex flex-col items-center justify-center flex-1 h-full py-2
+                    transition-all duration-300
+                    ${isActive
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }
+                  `}
+                >
+                  {/* AIBot gets special styling and size prop */}
+                  <div className={`relative ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`}>
+                    {isSpecial ? (
+                      // Pass size prop to AIBot component
+                      <Icon size={size} className="mb-1" />
+                    ) : (
+                      <Icon className="h-6 w-6 mb-1" />
+                    )}
+
+                    {/* Add a subtle glow effect for active AI tab */}
+                    {isActive && tab === 'chat' && (
+                      <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-md -z-10"></div>
+                    )}
+                  </div>
+                  <span className={`text-xs font-medium ${isActive ? 'font-bold' : ''}`}>
+                    {label}
+                  </span>
+
+                  {/* Active Indicator */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="bottomNavIndicator"
+                      className="absolute bottom-0 w-12 h-1 bg-blue-600 dark:bg-blue-400 rounded-t-full"
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+
       <QuickTips />
     </div>
   );

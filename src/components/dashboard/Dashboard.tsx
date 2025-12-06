@@ -1,25 +1,28 @@
+// components/Dashboard.tsx
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
 import { Badge } from '../ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
+import 'react-circular-progressbar/dist/styles.css';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, RadarChart, PolarGrid,
-    PolarAngleAxis, PolarRadiusAxis, Radar, Legend
+    AreaChart, Area, PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
 import {
-    BookOpen, FileText, Calendar, MessageCircle, Users, TrendingUp,
-    Clock, Target, Award, Activity, Brain, Zap, BookMarked,
-    PlusCircle, Eye, CheckCircle, AlertCircle, Star, Play,
-    Download, Upload, Search, Filter, RefreshCw, Flame, Trophy,
-    ChevronUp, ChevronDown, Minus, Sparkles, BarChart3, PieChart as PieChartIcon,
-    TrendingDown, AlertTriangle, FileCheck, FileClock, FileX, HardDrive
+    BookOpen, FileText, MessageCircle, Play, HardDrive, Flame,
+    Activity, Brain, Sparkles, Target, RefreshCw, Filter,
+    TrendingUp, Clock, Zap, AlertCircle, Calendar, CheckCircle,
+    Clock as ClockIcon, Star, FileWarning, FileCheck, FileX,
+    BarChart2, PieChart as PieIcon, LineChart as LineIcon,
+    List, Users, Brain as BrainIcon, Bot
 } from 'lucide-react';
 import { useDashboardStats } from './hooks/useDashboardStats';
-import { Loader2 } from 'lucide-react';
 import BookPagesAnimation from '../ui/bookloader';
+
+const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
+const GRADIENT_ID = 'engagementGradient';
 
 interface DashboardProps {
     userProfile: any;
@@ -27,1198 +30,498 @@ interface DashboardProps {
     onCreateNew: (type: 'note' | 'recording' | 'document' | 'schedule') => void;
 }
 
-const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0', '#a4de6c', '#ffa07a'];
-const CHART_COLORS = {
-    primary: '#3b82f6',
-    secondary: '#10b981',
-    accent: '#f59e0b',
-    danger: '#ef4444',
-    info: '#06b6d4',
-    purple: '#8b5cf6',
-    pink: '#ec4899',
-    indigo: '#6366f1'
-};
-
-const Dashboard: React.FC<DashboardProps> = ({
-    userProfile,
-    onNavigateToTab,
-    onCreateNew
-}) => {
-    const [timeFilter, setTimeFilter] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
-    const [selectedMetric, setSelectedMetric] = useState<'activity' | 'productivity' | 'learning' | 'insights'>('activity');
-    const [animatedCounts, setAnimatedCounts] = useState({
-        notes: 0,
-        recordings: 0,
-        documents: 0,
-        messages: 0
-    });
-
+const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab }) => {
+    const [selectedTab, setSelectedTab] = useState<'activity' | 'insights' | 'recent'>('activity');
     const { stats, loading, error, refresh } = useDashboardStats(userProfile?.id);
 
-    // Animate counters when stats are loaded
-    useEffect(() => {
-        if (!stats) return;
-
-        const targetCounts = {
-            notes: stats.totalNotes,
-            recordings: stats.totalRecordings,
-            documents: stats.totalDocuments,
-            messages: stats.totalMessages
-        };
-
-        const duration = 1000;
-        const steps = 60;
-        const stepDuration = duration / steps;
-
-        let step = 0;
-        const timer = setInterval(() => {
-            step++;
-            const progress = step / steps;
-            const easeOut = 1 - Math.pow(1 - progress, 3);
-
-            setAnimatedCounts({
-                notes: Math.floor(targetCounts.notes * easeOut),
-                recordings: Math.floor(targetCounts.recordings * easeOut),
-                documents: Math.floor(targetCounts.documents * easeOut),
-                messages: Math.floor(targetCounts.messages * easeOut)
-            });
-
-            if (step >= steps) {
-                clearInterval(timer);
-                setAnimatedCounts(targetCounts);
-            }
-        }, stepDuration);
-
-        return () => clearInterval(timer);
-    }, [stats]);
-
-    const StatCard = ({ title, value, icon: Icon, trend, trendValue, color = 'blue', onClick, subtitle }: any) => (
-        <Card
-            className={`hover:shadow-lg transition-all duration-200 cursor-pointer border-l-4 group ${color === 'blue' ? 'border-l-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950' :
-                    color === 'green' ? 'border-l-green-500 hover:bg-green-50 dark:hover:bg-green-950' :
-                        color === 'yellow' ? 'border-l-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950' :
-                            color === 'purple' ? 'border-l-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950' :
-                                'border-l-gray-500 hover:bg-gray-50 dark:hover:bg-gray-950'
-                }`}
-            onClick={onClick}
-        >
-            <CardContent className="p-4 dark:bg-slate-800/80">
-                <div className="flex items-center justify-between">
-                    <div className="space-y-1 flex-1">
-                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
-                        <p className="text-3xl font-bold group-hover:scale-105 transition-transform">{value}</p>
-                        {subtitle && (
-                            <p className="text-xs text-gray-500 dark:text-gray-500">{subtitle}</p>
-                        )}
-                        {trend && (
-                            <div className={`flex items-center text-xs ${trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
-                                {trend === 'up' ? <ChevronUp className="h-3 w-3 mr-1" /> :
-                                    trend === 'down' ? <ChevronDown className="h-3 w-3 mr-1" /> :
-                                        <Minus className="h-3 w-3 mr-1" />}
-                                {trendValue}
-                            </div>
-                        )}
-                    </div>
-                    <div className={`p-3 rounded-full group-hover:scale-110 transition-transform ${color === 'blue' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' :
-                            color === 'green' ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' :
-                                color === 'yellow' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-400' :
-                                    color === 'purple' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400' :
-                                        'bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400'
-                        }`}>
-                        <Icon className="h-6 w-6" />
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-    );
-
-    const QuickAction = ({ title, description, icon: Icon, onClick, color = 'blue' }: any) => (
-        <Card className="hover:shadow-md transition-all duration-200 cursor-pointer dark:bg-slate-800/80 hover:scale-105" onClick={onClick}>
-            <CardContent className="p-4">
-                <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${color === 'blue' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' :
-                            color === 'green' ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' :
-                                color === 'yellow' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-400' :
-                                    color === 'purple' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400' :
-                                        'bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400'
-                        }`}>
-                        <Icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                        <p className="font-medium">{title}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-    );
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                    <BookPagesAnimation size='lg' showText text='Loading dashboard data...' />
-                </div>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                    <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-600" />
-                    <p className="text-red-600 mb-4">{error}</p>
-                    <Button onClick={refresh} variant="outline">
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Retry
-                    </Button>
-                </div>
-            </div>
-        );
-    }
-
-    if (!stats) return null;
-
-    // Format file size
     const formatFileSize = (bytes: number) => {
-        if (bytes === 0) return '0 B';
+        if (!bytes) return '0 B';
         const k = 1024;
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
     };
 
-    // Get engagement color
-    const getEngagementColor = (score: number) => {
-        if (score >= 80) return 'text-green-600';
-        if (score >= 60) return 'text-blue-600';
-        if (score >= 40) return 'text-yellow-600';
-        return 'text-red-600';
+    const formatTime = (seconds: number) => {
+        const hours = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        return `${hours}h ${mins}m`;
     };
+
+    const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <BookPagesAnimation size="lg" showText text="Loading your mind palace..." />
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !stats) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl">
+                    <div className="w-20 h-20 mx-auto mb-4 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+                        <AlertCircle className="h-10 w-10 text-red-600 dark:text-red-400" />
+                    </div>
+                    <p className="text-red-600 dark:text-red-400 text-lg font-semibold mb-4">{error || "No data"}</p>
+                    <Button onClick={refresh} variant="outline" className="border-red-300">
+                        <RefreshCw className="h-4 w-4 mr-2" /> Retry
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    const engagementColor = stats.engagementScore >= 80 ? '#10b981' :
+        stats.engagementScore >= 60 ? '#3b82f6' :
+            stats.engagementScore >= 40 ? '#f59e0b' : '#ef4444';
 
     return (
-    <div className="p-6 lg:p-12 max-w-7xl mx-auto space-y-6">
-            {/* Header with Engagement Score */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                            Welcome back, {userProfile?.full_name || 'Student'}! 👋
-                        </h1>
-                        {stats.currentStreak >= 3 && (
-                            <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
-                                <Flame className="h-3 w-3 mr-1" />
-                                {stats.currentStreak} day streak!
-                            </Badge>
-                        )}
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-400 mt-1">
-                        Your engagement score: <span className={`font-bold ${getEngagementColor(stats.engagementScore)}`}>{stats.engagementScore}/100</span>
-                    </p>
-                </div>
+        <div className="min-h-screen max-w-7xl pb-8 mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Hero Header */}
+            <div className="relative overflow-hidden rounded-2xl my-4 p-6 sm:p-8 bg-gradient-to-r from-blue-600 to-blue-600 text-white shadow-2xl">
+                <div className="absolute inset-0 bg-black opacity-20"></div>
+                <div className="relative z-10">
+                    <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-2">
+                        Welcome back, {userProfile?.full_name?.split(' ')[0] || 'Learner'}!
+                    </h1>
+                    <p className="text-base sm:text-xl opacity-90">Your mind is growing stronger every day</p>
 
-                <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row items-center gap-4 mt-6">
+                        <div className="flex items-center gap-3">
+                            <div className="relative">
+                                <Flame className={`h-6 w-6 sm:h-8 sm:w-8 ${stats.currentStreak >= 3 ? 'text-orange-400 animate-pulse' : 'text-gray-400'}`} />
+                                {stats.currentStreak >= 7 && (
+                                    <div className="absolute -inset-2 bg-orange-500 rounded-full animate-ping opacity-20"></div>
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-2xl sm:text-3xl font-bold">{stats.currentStreak}</p>
+                                <p className="text-xs sm:text-sm opacity-80">day streak (Max: {stats.maxStreak})</p>
+                            </div>
+                        </div>
+
+                        <div className="w-24 h-24 sm:w-32 sm:h-32">
+                            <CircularProgressbar
+                                value={stats.engagementScore}
+                                text={`${stats.engagementScore}`}
+                                styles={buildStyles({
+                                    textSize: '20px',
+                                    pathColor: engagementColor,
+                                    textColor: '#fff',
+                                    trailColor: 'rgba(255,255,255,0.2)',
+                                    pathTransitionDuration: 1.5,
+                                })}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+                {[
+                    { title: "Notes", value: stats.totalNotes, icon: BookOpen, color: "from-blue-500 to-cyan-500", bg: "bg-blue-100 dark:bg-blue-900" },
+                    { title: "Recordings", value: formatTime(stats.totalStudyTime), icon: Play, color: "from-green-500 to-emerald-500", bg: "bg-green-100 dark:bg-green-900" },
+                    { title: "Documents", value: formatFileSize(stats.totalDocumentSize), icon: FileText, color: "from-yellow-500 to-orange-500", bg: "bg-yellow-100 dark:bg-yellow-900" },
+                    { title: "AI Chats", value: stats.totalMessages, icon: MessageCircle, color: "from-blue-500 to-pink-500", bg: "bg-blue-100 dark:bg-blue-900" },
+                    { title: "Schedule", value: stats.totalScheduleItems, icon: Calendar, color: "from-blue-500 to-indigo-500", bg: "bg-blue-100 dark:bg-blue-900" },
+                    { title: "Quizzes", value: stats.totalQuizzesTaken, icon: BrainIcon, color: "from-red-500 to-pink-500", bg: "bg-red-100 dark:bg-red-900" },
+                ].map((stat, i) => (
+                    <Card key={i} className="overflow-hidden hover:scale-105 transition-all duration-300 cursor-pointer group" onClick={() => onNavigateToTab(stat.title.toLowerCase())}>
+                        <CardContent className="p-4 sm:p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{stat.title}</p>
+                                    <p className="text-xl sm:text-3xl font-bold mt-2">{stat.value}</p>
+                                </div>
+                                <div className={`p-3 sm:p-4 rounded-2xl ${stat.bg} group-hover:scale-110 transition-transform`}>
+                                    <stat.icon className="h-6 w-6 sm:h-8 sm:w-8 text-gray-700 dark:text-gray-300" />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-2xl p-2 shadow-xl mb-8">
+                {(['activity', 'insights', 'recent'] as const).map(tab => (
                     <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setTimeFilter(timeFilter === 'all' ? '7d' :
-                            timeFilter === '7d' ? '30d' :
-                                timeFilter === '30d' ? '90d' : 'all')}
+                        key={tab}
+                        variant={selectedTab === tab ? "default" : "ghost"}
+                        className={`flex-1 rounded-xl ${selectedTab === tab ? 'shadow-lg' : ''}`}
+                        onClick={() => setSelectedTab(tab)}
                     >
-                        <Filter className="h-4 w-4 mr-2" />
-                        {timeFilter === 'all' ? 'All Time' : timeFilter.toUpperCase()}
+                        {tab === 'activity' ? <Activity className="h-5 w-5 mr-2" /> :
+                            tab === 'insights' ? <Sparkles className="h-5 w-5 mr-2" /> :
+                                <List className="h-5 w-5 mr-2" />}
+                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     </Button>
-                    <Button variant="outline" size="sm" onClick={refresh}>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Refresh
-                    </Button>
-                </div>
+                ))}
             </div>
 
-            {/* Main Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard
-                    title="Total Notes"
-                    value={animatedCounts.notes}
-                    subtitle={`${stats.notesThisWeek} this week`}
-                    icon={BookOpen}
-                    color="blue"
-                    trend={stats.notesThisWeek > 0 ? 'up' : 'neutral'}
-                    trendValue={stats.notesThisWeek > 0 ? `+${stats.notesThisWeek} this week` : 'No activity'}
-                    onClick={() => onNavigateToTab('notes')}
-                />
-                <StatCard
-                    title="Recordings"
-                    value={animatedCounts.recordings}
-                    subtitle={`${Math.round(stats.totalStudyTime / 3600)}h total`}
-                    icon={Play}
-                    color="green"
-                    trend={stats.recordingsThisWeek > 0 ? 'up' : 'neutral'}
-                    trendValue={stats.recordingsThisWeek > 0 ? `+${stats.recordingsThisWeek} this week` : 'No recordings'}
-                    onClick={() => onNavigateToTab('recordings')}
-                />
-                <StatCard
-                    title="Documents"
-                    value={animatedCounts.documents}
-                    subtitle={formatFileSize(stats.totalDocumentSize)}
-                    icon={FileText}
-                    color="yellow"
-                    trend={stats.documentsPending > 0 ? 'up' : 'neutral'}
-                    trendValue={stats.documentsPending > 0 ? `${stats.documentsPending} processing` : 'All processed'}
-                    onClick={() => onNavigateToTab('documents')}
-                />
-                <StatCard
-                    title="AI Conversations"
-                    value={animatedCounts.messages}
-                    subtitle={`${Math.round(stats.aiUsageRate)}% AI usage`}
-                    icon={MessageCircle}
-                    color="purple"
-                    trend={stats.aiUsageRate > 50 ? 'up' : 'neutral'}
-                    trendValue={`${Math.round(stats.aiUsageRate)}% notes with AI`}
-                    onClick={() => onNavigateToTab('chat')}
-                />
-            </div>
-
-            {/* Quick Actions */}
-            <Card className='dark:bg-transparent border-0'>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Zap className="h-5 w-5" />
-                        Quick Actions
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <QuickAction
-                            title="New Note"
-                            description="Create a new study note"
-                            icon={PlusCircle}
-                            onClick={() => onCreateNew('note')}
-                            color="blue"
-                        />
-                        <QuickAction
-                            title="Record Session"
-                            description="Start audio recording"
-                            icon={Play}
-                            onClick={() => onCreateNew('recording')}
-                            color="green"
-                        />
-                        <QuickAction
-                            title="Upload Document"
-                            description="Add learning material"
-                            icon={Upload}
-                            onClick={() => onCreateNew('document')}
-                            color="yellow"
-                        />
-                        <QuickAction
-                            title="Schedule Event"
-                            description="Plan your study time"
-                            icon={Calendar}
-                            onClick={() => onCreateNew('schedule')}
-                            color="purple"
-                        />
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Analytics Tabs */}
-            <Tabs value={selectedMetric} onValueChange={(value: any) => setSelectedMetric(value)}>
-                <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="activity" className="flex items-center gap-2">
-                        <Activity className="h-4 w-4" />
-                        Activity
-                    </TabsTrigger>
-                    <TabsTrigger value="productivity" className="flex items-center gap-2">
-                        <Target className="h-4 w-4" />
-                        Productivity
-                    </TabsTrigger>
-                    <TabsTrigger value="learning" className="flex items-center gap-2">
-                        <Brain className="h-4 w-4" />
-                        Learning
-                    </TabsTrigger>
-                    <TabsTrigger value="insights" className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4" />
-                        Insights
-                    </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="activity" className="space-y-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* 7-Day Activity Chart */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Weekly Activity (Last 7 Days)</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <AreaChart data={stats.activityData7Days}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="date" />
-                                        <YAxis />
-                                        <Tooltip />
-                                        <Legend />
-                                        <Area
-                                            type="monotone"
-                                            dataKey="notes"
-                                            stackId="1"
-                                            stroke={CHART_COLORS.primary}
-                                            fill={CHART_COLORS.primary}
-                                            fillOpacity={0.6}
-                                        />
-                                        <Area
-                                            type="monotone"
-                                            dataKey="recordings"
-                                            stackId="1"
-                                            stroke={CHART_COLORS.secondary}
-                                            fill={CHART_COLORS.secondary}
-                                            fillOpacity={0.6}
-                                        />
-                                        <Area
-                                            type="monotone"
-                                            dataKey="documents"
-                                            stackId="1"
-                                            stroke={CHART_COLORS.accent}
-                                            fill={CHART_COLORS.accent}
-                                            fillOpacity={0.6}
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </CardContent>
-                        </Card>
-
-                        {/* Category Distribution */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Note Categories</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <PieChart>
-                                        <Pie
-                                            data={stats.categoryData}
-                                            cx="50%"
-                                            cy="50%"
-                                            labelLine={false}
-                                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                            outerRadius={80}
-                                            fill="#8884d8"
-                                            dataKey="value"
-                                        >
-                                            {stats.categoryData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </CardContent>
-                        </Card>
-
-                        {/* Hourly Activity Pattern */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Activity by Hour</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <BarChart data={stats.hourlyActivity}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="hour" label={{ value: 'Hour of Day', position: 'insideBottom', offset: -5 }} />
-                                        <YAxis />
-                                        <Tooltip />
-                                        <Bar dataKey="activity" fill={CHART_COLORS.primary} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </CardContent>
-                        </Card>
-
-                        {/* Weekday Activity Pattern */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Activity by Day of Week</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <BarChart data={stats.weekdayActivity}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="day" />
-                                        <YAxis />
-                                        <Tooltip />
-                                        <Bar dataKey="activity" fill={CHART_COLORS.secondary} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="productivity" className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Study Time Card */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Clock className="h-5 w-5" />
-                                    Study Time
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm">Total Hours</span>
-                                        <span className="font-bold text-xl">{Math.round(stats.totalStudyTime / 3600)}h</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm">This Week</span>
-                                        <span className="font-bold text-lg">{Math.round(stats.studyTimeThisWeek / 3600)}h</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm">Daily Average</span>
-                                        <span className="font-bold text-lg">{Math.round(stats.avgDailyStudyTime / 60)}min</span>
-                                    </div>
-                                    <Progress value={(stats.studyTimeThisWeek / 36000) * 100} className="w-full" />
-                                    <p className="text-xs text-gray-500">Weekly goal: 10 hours</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* AI Usage Card */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Brain className="h-5 w-5" />
-                                    AI Usage
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="text-center">
-                                        <div className="text-4xl font-bold text-blue-600">
-                                            {stats.aiUsageRate.toFixed(0)}%
-                                        </div>
-                                        <p className="text-sm text-gray-600 mt-1">Notes with AI summaries</p>
-                                    </div>
-                                    <Progress value={stats.aiUsageRate} className="w-full" />
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between">
-                                            <span>Notes with AI</span>
-                                            <span className="font-semibold">{stats.notesWithAI}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span>Total Messages</span>
-                                            <span className="font-semibold">{stats.totalMessages}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Schedule Overview */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Calendar className="h-5 w-5" />
-                                    Schedule Overview
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-950 rounded">
-                                        <div className="flex items-center gap-2">
-                                            <Calendar className="h-4 w-4 text-blue-500" />
-                                            <span className="text-sm">Today's Tasks</span>
-                                        </div>
-                                        <Badge variant="secondary">{stats.todayTasks}</Badge>
-                                    </div>
-                                    <div className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950 rounded">
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle className="h-4 w-4 text-green-500" />
-                                            <span className="text-sm">Completed</span>
-                                        </div>
-                                        <Badge variant="secondary">{stats.completedTasks}</Badge>
-                                    </div>
-                                    <div className="flex items-center justify-between p-2 bg-yellow-50 dark:bg-yellow-950 rounded">
-                                        <div className="flex items-center gap-2">
-                                            <Clock className="h-4 w-4 text-yellow-500" />
-                                            <span className="text-sm">Upcoming</span>
-                                        </div>
-                                        <Badge variant="secondary">{stats.upcomingTasks}</Badge>
-                                    </div>
-                                    {stats.overdueTasks > 0 && (
-                                        <div className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950 rounded">
-                                            <div className="flex items-center gap-2">
-                                                <AlertTriangle className="h-4 w-4 text-red-500" />
-                                                <span className="text-sm">Overdue</span>
-                                            </div>
-                                            <Badge variant="destructive">{stats.overdueTasks}</Badge>
-                                        </div>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Document Processing Status */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-green-600">
-                                    <FileCheck className="h-5 w-5" />
-                                    Processed
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-center">
-                                    <div className="text-4xl font-bold text-green-600">{stats.documentsProcessed}</div>
-                                    <p className="text-sm text-gray-500 mt-1">Documents ready</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-yellow-600">
-                                    <FileClock className="h-5 w-5" />
-                                    Processing
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-center">
-                                    <div className="text-4xl font-bold text-yellow-600">{stats.documentsPending}</div>
-                                    <p className="text-sm text-gray-500 mt-1">Being processed</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-red-600">
-                                    <FileX className="h-5 w-5" />
-                                    Failed
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-center">
-                                    <div className="text-4xl font-bold text-red-600">{stats.documentsFailed}</div>
-                                    <p className="text-sm text-gray-500 mt-1">Processing errors</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Learning Velocity */}
-                    <Card>
+            {/* Activity Tab */}
+            {selectedTab === 'activity' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Weekly Activity */}
+                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
                         <CardHeader>
-                            <CardTitle>Learning Velocity (Last 12 Weeks)</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                <Activity className="h-6 w-6 text-blue-600" />
+                                Weekly Activity
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <ResponsiveContainer width="100%" height={250}>
-                                <LineChart data={stats.learningVelocity}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="week" />
+                            <ResponsiveContainer width="100%" height={300}>
+                                <AreaChart data={stats.activityData7Days}>
+                                    <defs>
+                                        <linearGradient id="notes" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
+                                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                    <XAxis dataKey="date" />
                                     <YAxis />
                                     <Tooltip />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="items"
-                                        stroke={CHART_COLORS.purple}
-                                        strokeWidth={2}
-                                        dot={{ fill: CHART_COLORS.purple, r: 4 }}
-                                    />
+                                    <Area type="monotone" dataKey="total" stroke="#8b5cf6" fillOpacity={1} fill="url(#notes)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+
+                    {/* Monthly Activity */}
+                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <TrendingUp className="h-6 w-6 text-green-600" />
+                                Monthly Activity
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <LineChart data={stats.activityData30Days}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                    <XAxis dataKey="date" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Line type="monotone" dataKey="notes" stroke="#8b5cf6" />
+                                    <Line type="monotone" dataKey="recordings" stroke="#10b981" />
+                                    <Line type="monotone" dataKey="documents" stroke="#f59e0b" />
+                                    <Line type="monotone" dataKey="messages" stroke="#ef4444" />
                                 </LineChart>
                             </ResponsiveContainer>
                         </CardContent>
                     </Card>
-                </TabsContent>
 
-                <TabsContent value="learning" className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Learning Streak */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Flame className="h-5 w-5 text-orange-500" />
-                                    Learning Streak
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-center space-y-4">
-                                    <div className="flex items-center justify-center gap-2">
-                                        <Award className="h-12 w-12 text-yellow-500" />
-                                        <span className="text-6xl font-bold text-blue-600">
-                                            {stats.currentStreak}
-                                        </span>
-                                    </div>
-                                    <p className="text-gray-600 text-lg">Days in a row</p>
-                                    <div className="flex justify-around text-sm">
-                                        <div>
-                                            <p className="text-gray-500">Best Streak</p>
-                                            <p className="text-2xl font-bold text-green-600">{stats.maxStreak}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-gray-500">This Week</p>
-                                            <p className="text-2xl font-bold text-blue-600">{stats.notesThisWeek}</p>
-                                        </div>
-                                    </div>
-                                    <Progress
-                                        value={(stats.currentStreak / Math.max(stats.maxStreak, 1)) * 100}
-                                        className="w-full h-3"
-                                    />
-                                    {stats.currentStreak > 0 && (
-                                        <p className="text-xs text-gray-500">
-                                            Keep it up! {stats.maxStreak - stats.currentStreak > 0
-                                                ? `${stats.maxStreak - stats.currentStreak} days to beat your record!`
-                                                : 'You\'re on your best streak! 🎉'}
-                                        </p>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Learning Progress */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Target className="h-5 w-5" />
-                                    Learning Progress
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                                        <div className="flex items-center gap-2">
-                                            <BookMarked className="h-4 w-4 text-blue-500" />
-                                            <span className="text-sm">Notes Created</span>
-                                        </div>
-                                        <Badge variant="secondary" className="text-sm font-bold">
-                                            {stats.totalNotes}
-                                        </Badge>
-                                    </div>
-                                    <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-                                        <div className="flex items-center gap-2">
-                                            <Play className="h-4 w-4 text-green-500" />
-                                            <span className="text-sm">Sessions Recorded</span>
-                                        </div>
-                                        <Badge variant="secondary" className="text-sm font-bold">
-                                            {stats.totalRecordings}
-                                        </Badge>
-                                    </div>
-                                    <div className="flex items-center justify-between p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg">
-                                        <div className="flex items-center gap-2">
-                                            <FileText className="h-4 w-4 text-yellow-500" />
-                                            <span className="text-sm">Documents Added</span>
-                                        </div>
-                                        <Badge variant="secondary" className="text-sm font-bold">
-                                            {stats.totalDocuments}
-                                        </Badge>
-                                    </div>
-                                    <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-950 rounded-lg">
-                                        <div className="flex items-center gap-2">
-                                            <MessageCircle className="h-4 w-4 text-purple-500" />
-                                            <span className="text-sm">AI Interactions</span>
-                                        </div>
-                                        <Badge variant="secondary" className="text-sm font-bold">
-                                            {stats.totalMessages}
-                                        </Badge>
-                                    </div>
-                                    <div className="flex items-center justify-between p-3 bg-pink-50 dark:bg-pink-950 rounded-lg">
-                                        <div className="flex items-center gap-2">
-                                            <Trophy className="h-4 w-4 text-pink-500" />
-                                            <span className="text-sm">Quizzes Taken</span>
-                                        </div>
-                                        <Badge variant="secondary" className="text-sm font-bold">
-                                            {stats.totalQuizzesTaken}
-                                        </Badge>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Top Categories */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Top Categories</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3">
-                                    {stats.topCategories.map((cat, index) => (
-                                        <div key={cat.category} className="flex items-center gap-3">
-                                            <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white"
-                                                style={{ backgroundColor: COLORS[index % COLORS.length] }}>
-                                                {index + 1}
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="flex justify-between mb-1">
-                                                    <span className="text-sm font-medium">{cat.category}</span>
-                                                    <span className="text-sm text-gray-500">{cat.count} notes</span>
-                                                </div>
-                                                <Progress
-                                                    value={(cat.count / stats.totalNotes) * 100}
-                                                    className="h-2"
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* 30-Day Activity Trend */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>30-Day Activity Trend</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <ResponsiveContainer width="100%" height={200}>
-                                    <LineChart data={stats.activityData30Days}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="date" hide />
-                                        <YAxis />
-                                        <Tooltip />
-                                        <Line
-                                            type="monotone"
-                                            dataKey="total"
-                                            stroke={CHART_COLORS.primary}
-                                            strokeWidth={2}
-                                            dot={false}
-                                        />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                                    <div>
-                                        <p className="text-xs text-gray-500">This Week</p>
-                                        <p className="text-lg font-bold">{stats.notesThisWeek}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500">This Month</p>
-                                        <p className="text-lg font-bold">{stats.notesThisMonth}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500">Avg/Day</p>
-                                        <p className="text-lg font-bold">{stats.avgNotesPerDay.toFixed(1)}</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="insights" className="space-y-6">
-                    {/* Engagement Score Card */}
-                    <Card className="border-2 border-blue-200 dark:border-blue-800">
+                    {/* Note Categories */}
+                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <Sparkles className="h-5 w-5 text-yellow-500" />
-                                Your Engagement Score
+                                <PieIcon className="h-6 w-6 text-blue-600" />
+                                Note Categories
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex items-center gap-6">
-                                <div className="flex-1">
-                                    <div className={`text-6xl font-bold ${getEngagementColor(stats.engagementScore)}`}>
-                                        {stats.engagementScore}
-                                    </div>
-                                    <p className="text-gray-600 dark:text-gray-400 mt-2">
-                                        {stats.engagementScore >= 80 ? '🔥 Outstanding! You\'re crushing it!' :
-                                            stats.engagementScore >= 60 ? '👍 Great work! Keep it up!' :
-                                                stats.engagementScore >= 40 ? '💪 Good progress! Room to improve!' :
-                                                    '🌱 Just getting started!'}
-                                    </p>
-                                    <Progress value={stats.engagementScore} className="w-full h-3 mt-4" />
-                                </div>
-                                <div className="text-right space-y-2">
-                                    <div className="text-sm">
-                                        <p className="text-gray-500">Most Active</p>
-                                        <p className="font-bold">{stats.mostProductiveDay}</p>
-                                    </div>
-                                    <div className="text-sm">
-                                        <p className="text-gray-500">Peak Hour</p>
-                                        <p className="font-bold">{stats.mostProductiveHour}:00</p>
-                                    </div>
-                                </div>
-                            </div>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <PieChart>
+                                    <Pie
+                                        data={stats.categoryData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={100}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                    >
+                                        {stats.categoryData.map((_, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
                         </CardContent>
                     </Card>
 
-                    {/* Productivity Insights */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>This Week vs Last Week</CardTitle>
+                    {/* Hourly Activity */}
+                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <ClockIcon className="h-6 w-6 text-yellow-600" />
+                                Hourly Activity
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <BarChart data={stats.hourlyActivity}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                    <XAxis dataKey="hour" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Bar dataKey="activity" fill="#3b82f6" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+
+                    {/* Weekday Activity */}
+                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <BarChart2 className="h-6 w-6 text-orange-600" />
+                                Weekday Activity
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <BarChart data={stats.weekdayActivity}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                    <XAxis dataKey="day" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Bar dataKey="activity" fill="#10b981" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+
+                    {/* Learning Velocity */}
+                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <LineIcon className="h-6 w-6 text-red-600" />
+                                Learning Velocity
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <LineChart data={stats.learningVelocity}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                    <XAxis dataKey="week" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Line type="monotone" dataKey="items" stroke="#ef4444" />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* Insights Tab */}
+            {selectedTab === 'insights' && (
+                <div className="space-y-6">
+                    <Card className="bg-gradient-to-r from-blue-600 to-blue-600 text-white border-0 shadow-2xl">
+                        <CardContent className="p-6 sm:p-8 text-center">
+                            <h2 className="text-2xl sm:text-4xl font-bold mb-4">You're in the top 5% of learners!</h2>
+                            <p className="text-base sm:text-xl opacity-90">With {stats.currentStreak} day streak and {Math.round(stats.avgDailyStudyTime / 60)} mins/day</p>
+                        </CardContent>
+                    </Card>
+
+                    {/* Productivity Metrics */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                        <Card className="text-center p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <Zap className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-yellow-500" />
+                            <p className="text-xl sm:text-3xl font-bold">{stats.mostProductiveDay}</p>
+                            <p className="text-gray-600 dark:text-gray-400">Most Productive Day</p>
+                        </Card>
+                        <Card className="text-center p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <Clock className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-blue-500" />
+                            <p className="text-xl sm:text-3xl font-bold">{stats.mostProductiveHour}:00</p>
+                            <p className="text-gray-600 dark:text-gray-400">Peak Focus Hour</p>
+                        </Card>
+                        <Card className="text-center p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <TrendingUp className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-green-500" />
+                            <p className="text-xl sm:text-3xl font-bold">{stats.avgNotesPerDay}</p>
+                            <p className="text-gray-600 dark:text-gray-400">Avg Notes/Day</p>
+                        </Card>
+                        <Card className="text-center p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <ClockIcon className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-blue-500" />
+                            <p className="text-xl sm:text-3xl font-bold">{formatTime(stats.avgDailyStudyTime)}</p>
+                            <p className="text-gray-600 dark:text-gray-400">Avg Daily Study</p>
+                        </Card>
+                    </div>
+
+                    {/* This Week / Month Stats */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                        <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <CardHeader className="p-0">
+                                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                    <BookOpen className="h-5 w-5 text-blue-600" />
+                                    This Week
+                                </CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm">Notes</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold">{stats.notesThisWeek}</span>
-                                            {stats.notesThisWeek > 0 && (
-                                                <TrendingUp className="h-4 w-4 text-green-600" />
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm">Study Time</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold">{Math.round(stats.studyTimeThisWeek / 3600)}h</span>
-                                            {stats.studyTimeThisWeek > 0 && (
-                                                <TrendingUp className="h-4 w-4 text-green-600" />
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm">Recordings</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold">{stats.recordingsThisWeek}</span>
-                                            {stats.recordingsThisWeek > 0 && (
-                                                <TrendingUp className="h-4 w-4 text-green-600" />
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
+                            <CardContent className="p-0 mt-2">
+                                <p>Notes: {stats.notesThisWeek}</p>
+                                <p>Recordings: {stats.recordingsThisWeek}</p>
+                                <p>Study Time: {formatTime(stats.studyTimeThisWeek)}</p>
                             </CardContent>
                         </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Storage Overview</CardTitle>
+                        <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <CardHeader className="p-0">
+                                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                    <BookOpen className="h-5 w-5 text-blue-600" />
+                                    This Month
+                                </CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-3">
-                                        <HardDrive className="h-8 w-8 text-blue-500" />
-                                        <div className="flex-1">
-                                            <p className="text-2xl font-bold">{formatFileSize(stats.totalDocumentSize)}</p>
-                                            <p className="text-sm text-gray-500">Total storage used</p>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-2 text-center">
-                                        <div className="p-2 bg-blue-50 dark:bg-blue-950 rounded">
-                                            <p className="text-lg font-bold">{stats.totalDocuments}</p>
-                                            <p className="text-xs text-gray-500">Files</p>
-                                        </div>
-                                        <div className="p-2 bg-green-50 dark:bg-green-950 rounded">
-                                            <p className="text-lg font-bold">{stats.documentsProcessed}</p>
-                                            <p className="text-xs text-gray-500">Processed</p>
-                                        </div>
-                                        <div className="p-2 bg-yellow-50 dark:bg-yellow-950 rounded">
-                                            <p className="text-lg font-bold">{stats.documentsPending}</p>
-                                            <p className="text-xs text-gray-500">Pending</p>
-                                        </div>
-                                    </div>
-                                </div>
+                            <CardContent className="p-0 mt-2">
+                                <p>Notes: {stats.notesThisMonth}</p>
+                                <p>Recordings: {stats.recordingsThisMonth}</p>
+                                <p>Study Time: {formatTime(stats.studyTimeThisMonth)}</p>
+                            </CardContent>
+                        </Card>
+                        <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <CardHeader className="p-0">
+                                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                    <Bot className="h-5 w-5 text-indigo-600" />
+                                    AI Usage
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 mt-2">
+                                <p>Notes with AI: {stats.notesWithAI}</p>
+                                <p>Usage Rate: {stats.aiUsageRate.toFixed(1)}%</p>
+                                <Progress value={stats.aiUsageRate} className="mt-2" />
+                            </CardContent>
+                        </Card>
+                        <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <CardHeader className="p-0">
+                                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                    <Star className="h-5 w-5 text-yellow-600" />
+                                    Quizzes
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 mt-2">
+                                <p>Taken: {stats.totalQuizzesTaken}</p>
+                                <p>Avg Score: {stats.avgQuizScore.toFixed(1)}%</p>
                             </CardContent>
                         </Card>
                     </div>
-                </TabsContent>
-            </Tabs>
 
-            {/* Recent Activity & AI Insights */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Recent Activity */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center justify-between">
-                            <span className="flex items-center gap-2">
-                                <Activity className="h-5 w-5" />
-                                Recent Activity
-                            </span>
-                            <Button variant="ghost" size="sm" onClick={() => onNavigateToTab('notes')}>
-                                View All
-                            </Button>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-3 max-h-96 overflow-y-auto modern-scrollbar">
-                            {stats.recentNotes.map((note) => (
-                                <div
-                                    key={note.id}
-                                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                                    onClick={() => onNavigateToTab('notes')}
-                                >
-                                    <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                                        <BookOpen className="h-4 w-4 text-blue-600" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">{note.title}</p>
-                                        <p className="text-xs text-gray-500">
-                                            {new Date(note.created_at).toLocaleDateString()} • {note.category}
-                                        </p>
-                                    </div>
-                                    <Badge variant="outline" className="text-xs">{note.category}</Badge>
-                                </div>
-                            ))}
-
-                            {stats.recentRecordings.map((recording) => (
-                                <div
-                                    key={recording.id}
-                                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                                    onClick={() => onNavigateToTab('recordings')}
-                                >
-                                    <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
-                                        <Play className="h-4 w-4 text-green-600" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">{recording.title}</p>
-                                        <p className="text-xs text-gray-500">
-                                            {new Date(recording.created_at).toLocaleDateString()} • {Math.round(recording.duration / 60)}min
-                                        </p>
-                                    </div>
-                                    <Badge variant="outline" className="text-xs">Recording</Badge>
-                                </div>
-                            ))}
-
-                            {stats.recentDocuments.map((doc) => (
-                                <div
-                                    key={doc.id}
-                                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                                    onClick={() => onNavigateToTab('documents')}
-                                >
-                                    <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
-                                        <FileText className="h-4 w-4 text-yellow-600" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">{doc.title}</p>
-                                        <p className="text-xs text-gray-500">
-                                            {new Date(doc.created_at).toLocaleDateString()} • {doc.type}
-                                        </p>
-                                    </div>
-                                    <Badge
-                                        variant={doc.processing_status === 'completed' ? 'default' :
-                                            doc.processing_status === 'failed' ? 'destructive' : 'secondary'}
-                                        className="text-xs"
-                                    >
-                                        {doc.processing_status}
-                                    </Badge>
-                                </div>
-                            ))}
-
-                            {stats.recentNotes.length === 0 && stats.recentRecordings.length === 0 && stats.recentDocuments.length === 0 && (
-                                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                                    <Activity className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                    <p className="font-medium">No recent activity</p>
-                                    <p className="text-xs mt-1">Start by creating a note or recording!</p>
-                                </div>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* AI Insights & Tips */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Brain className="h-5 w-5" />
-                            AI Insights & Tips
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {stats.aiUsageRate < 30 && (
-                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                    <div className="flex items-start gap-2">
-                                        <Star className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                                                Boost Your Learning
-                                            </p>
-                                            <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
-                                                Try using AI summaries for your notes to improve retention and understanding.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {stats.currentStreak === 0 && (
-                                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                                    <div className="flex items-start gap-2">
-                                        <Target className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                                                Build Consistency
-                                            </p>
-                                            <p className="text-xs text-yellow-600 dark:text-yellow-300 mt-1">
-                                                Start your learning streak by creating a note today!
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {stats.todayTasks === 0 && (
-                                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                    <div className="flex items-start gap-2">
-                                        <Calendar className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                                                Plan Your Day
-                                            </p>
-                                            <p className="text-xs text-green-600 dark:text-green-300 mt-1">
-                                                Add some study sessions to your schedule to stay organized.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {stats.overdueTasks > 0 && (
-                                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                                    <div className="flex items-start gap-2">
-                                        <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                                                Tasks Need Attention
-                                            </p>
-                                            <p className="text-xs text-red-600 dark:text-red-300 mt-1">
-                                                You have {stats.overdueTasks} overdue task{stats.overdueTasks > 1 ? 's' : ''}. Consider rescheduling or completing them.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {stats.totalRecordings > 0 && stats.totalNotes > 0 && stats.currentStreak >= 3 && (
-                                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                                    <div className="flex items-start gap-2">
-                                        <Zap className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
-                                                Excellent Progress!
-                                            </p>
-                                            <p className="text-xs text-purple-600 dark:text-purple-300 mt-1">
-                                                You're actively using multiple learning methods and maintaining consistency. Keep it up!
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {stats.documentsPending > 0 && (
-                                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                                    <div className="flex items-start gap-2">
-                                        <FileClock className="h-4 w-4 text-indigo-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
-                                                Documents Processing
-                                            </p>
-                                            <p className="text-xs text-indigo-600 dark:text-indigo-300 mt-1">
-                                                {stats.documentsPending} document{stats.documentsPending > 1 ? 's are' : ' is'} being processed. Check back soon!
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Achievement badges */}
-                            <div className="pt-4 border-t dark:border-gray-700">
-                                <p className="text-sm font-medium mb-3">Your Achievements</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {stats.totalNotes >= 10 && <Badge variant="secondary" className="text-xs">📚 Note Taker</Badge>}
-                                    {stats.totalNotes >= 50 && <Badge variant="secondary" className="text-xs">📖 Prolific Writer</Badge>}
-                                    {stats.totalRecordings >= 5 && <Badge variant="secondary" className="text-xs">🎤 Voice Learner</Badge>}
-                                    {stats.totalRecordings >= 20 && <Badge variant="secondary" className="text-xs">🎙️ Audio Master</Badge>}
-                                    {stats.currentStreak >= 7 && <Badge variant="secondary" className="text-xs">🔥 Week Warrior</Badge>}
-                                    {stats.currentStreak >= 30 && <Badge variant="secondary" className="text-xs">💪 Month Master</Badge>}
-                                    {stats.currentStreak >= 100 && <Badge variant="secondary" className="text-xs">👑 Century Champion</Badge>}
-                                    {stats.aiUsageRate >= 70 && <Badge variant="secondary" className="text-xs">🤖 AI Explorer</Badge>}
-                                    {stats.totalDocuments >= 10 && <Badge variant="secondary" className="text-xs">📑 Resource Collector</Badge>}
-                                    {stats.totalDocuments >= 50 && <Badge variant="secondary" className="text-xs">📚 Library Builder</Badge>}
-                                    {stats.totalMessages >= 100 && <Badge variant="secondary" className="text-xs">💬 Chat Champion</Badge>}
-                                    {stats.engagementScore >= 80 && <Badge variant="secondary" className="text-xs">⭐ Super Learner</Badge>}
-                                    {stats.totalStudyTime >= 36000 && <Badge variant="secondary" className="text-xs">⏰ 10 Hour Club</Badge>}
-                                    {stats.totalStudyTime >= 180000 && <Badge variant="secondary" className="text-xs">🏆 50 Hour Hero</Badge>}
-                                </div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Study Goals & Progress */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Target className="h-5 w-5" />
-                        Learning Goals
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                                <span>Weekly Notes</span>
-                                <span className="text-gray-500">
-                                    {Math.min(stats.notesThisWeek, 7)}/7
-                                </span>
-                            </div>
-                            <Progress value={(Math.min(stats.notesThisWeek, 7) / 7) * 100} className="h-2" />
-                            <p className="text-xs text-gray-500">Create 7 notes this week</p>
-                        </div>
-
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                                <span>Study Hours</span>
-                                <span className="text-gray-500">
-                                    {Math.min(Math.round(stats.studyTimeThisWeek / 3600), 20)}/20
-                                </span>
-                            </div>
-                            <Progress
-                                value={(Math.min(Math.round(stats.studyTimeThisWeek / 3600), 20) / 20) * 100}
-                                className="h-2"
-                            />
-                            <p className="text-xs text-gray-500">Record 20 hours of study</p>
-                        </div>
-
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                                <span>AI Interactions</span>
-                                <span className="text-gray-500">
-                                    {Math.min(stats.totalMessages, 50)}/50
-                                </span>
-                            </div>
-                            <Progress
-                                value={(Math.min(stats.totalMessages, 50) / 50) * 100}
-                                className="h-2"
-                            />
-                            <p className="text-xs text-gray-500">Engage with AI tutor</p>
-                        </div>
+                    {/* Tasks and Documents */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                        <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <CardHeader className="p-0">
+                                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                    <Calendar className="h-5 w-5 text-green-600" />
+                                    Tasks
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 mt-2">
+                                <p>Today: {stats.todayTasks}</p>
+                                <p>Upcoming: {stats.upcomingTasks}</p>
+                                <p>Completed: {stats.completedTasks}</p>
+                                <p>Overdue: {stats.overdueTasks}</p>
+                            </CardContent>
+                        </Card>
+                        <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                            <CardHeader className="p-0">
+                                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                    <FileText className="h-5 w-5 text-orange-600" />
+                                    Documents
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 mt-2">
+                                <p className="flex items-center gap-2"><FileCheck className="h-4 w-4 text-green-500" /> Processed: {stats.documentsProcessed}</p>
+                                <p className="flex items-center gap-2"><FileWarning className="h-4 w-4 text-yellow-500" /> Pending: {stats.documentsPending}</p>
+                                <p className="flex items-center gap-2"><FileX className="h-4 w-4 text-red-500" /> Failed: {stats.documentsFailed}</p>
+                                <p>Total Size: {formatFileSize(stats.totalDocumentSize)}</p>
+                            </CardContent>
+                        </Card>
                     </div>
-                </CardContent>
-            </Card>
 
-            {/* Footer Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                        <p className="text-3xl font-bold text-blue-600">
-                            {Math.round(stats.totalStudyTime / 3600)}h
-                        </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Hours Studied</p>
-                    </CardContent>
-                </Card>
-                <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                        <p className="text-3xl font-bold text-green-600">{stats.currentStreak}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Day Streak</p>
-                    </CardContent>
-                </Card>
-                <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                        <p className="text-3xl font-bold text-purple-600">{stats.totalMessages}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">AI Chats</p>
-                    </CardContent>
-                </Card>
-                <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                        <p className="text-3xl font-bold text-yellow-600">
-                            {Math.round(stats.aiUsageRate)}%
-                        </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">AI Usage</p>
-                    </CardContent>
-                </Card>
-            </div>
+                    {/* Top Categories */}
+                    <Card className="p-4 sm:p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
+                        <CardHeader className="p-0">
+                            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                                <Filter className="h-5 w-5 text-pink-600" />
+                                Top Categories
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0 mt-2">
+                            <ul className="space-y-2">
+                                {stats.topCategories.map((cat, i) => (
+                                    <li key={i} className="flex justify-between">
+                                        <span>{cat.category}</span>
+                                        <Badge variant="secondary">{cat.count}</Badge>
+                                    </li>
+                                ))}
+                            </ul>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* Recent Tab */}
+            {selectedTab === 'recent' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Recent Notes */}
+                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <BookOpen className="h-6 w-6 text-blue-600" />
+                                Recent Notes
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ul className="space-y-4">
+                                {stats.recentNotes.map(note => (
+                                    <li key={note.id} className="border-b pb-2">
+                                        <p className="font-semibold">{note.title}</p>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">{note.category} - {formatDate(note.created_at)}</p>
+                                    </li>
+                                ))}
+                            </ul>
+                        </CardContent>
+                    </Card>
+
+                    {/* Recent Recordings */}
+                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Play className="h-6 w-6 text-green-600" />
+                                Recent Recordings
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ul className="space-y-4">
+                                {stats.recentRecordings.map(rec => (
+                                    <li key={rec.id} className="border-b pb-2">
+                                        <p className="font-semibold">{rec.title}</p>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">Duration: {formatTime(rec.duration)} - {formatDate(rec.created_at)}</p>
+                                    </li>
+                                ))}
+                            </ul>
+                        </CardContent>
+                    </Card>
+
+                    {/* Recent Documents */}
+                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <FileText className="h-6 w-6 text-yellow-600" />
+                                Recent Documents
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ul className="space-y-4">
+                                {stats.recentDocuments.map(doc => (
+                                    <li key={doc.id} className="border-b pb-2">
+                                        <p className="font-semibold">{doc.title}</p>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">{doc.type} - {doc.processing_status} - {formatDate(doc.created_at)}</p>
+                                    </li>
+                                ))}
+                            </ul>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 };

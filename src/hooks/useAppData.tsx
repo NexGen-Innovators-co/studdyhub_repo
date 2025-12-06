@@ -230,7 +230,7 @@ export const useAppData = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' |'dashboard'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -918,99 +918,99 @@ export const useAppData = () => {
 
   // Optimized notes loading with batched queries and timeout
   // Fix the notes loading function
-const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
-  if (dataLoading.notes) return;
-  if (!isInitial && !dataPagination.notes.hasMore) return;
+  const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
+    if (dataLoading.notes) return;
+    if (!isInitial && !dataPagination.notes.hasMore) return;
 
-  setDataLoading('notes', true);
-  setDataErrors(prev => ({ ...prev, notes: '' }));
+    setDataLoading('notes', true);
+    setDataErrors(prev => ({ ...prev, notes: '' }));
 
-  const cacheKey = `notes_${userId}_${isInitial ? 'initial' : dataPagination.notes.offset}`;
-  const cached = getCachedData(cacheKey);
-  if (cached && isInitial) {
-    setNotes(cached.notes);
-    if (cached.activeNote && !activeNote) setActiveNote(cached.activeNote);
-    setDataPagination(prev => ({ ...prev, notes: cached.pagination }));
-    setDataLoaded(prev => new Set([...prev, 'notes']));
-    return;
-  }
-
-  const controller = new AbortController();
-  abortControllersRef.current.set(`notes_${userId}`, controller);
-
-  try {
-    const limit = isInitial ? INITIAL_LOAD_LIMITS.notes : LOAD_MORE_LIMITS.notes;
-    const offset = isInitial ? 0 : dataPagination.notes.offset;
-
-    const { data, error } = await withTimeout<any[]>(
-      supabase
-        .from('notes')
-        .select('*', { count: 'exact' })
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: false })
-        .range(offset, offset + limit - 1),
-      API_TIMEOUT,
-      'Failed to load notes'
-    );
-
-    if (error) throw error;
-
-    if (data) {
-      const formattedNotes: Note[] = data.map(note => ({
-        id: note.id,
-        title: note.title || 'Untitled Note',
-        content: note.content || '',
-        document_id: note.document_id || null,
-        user_id: note.user_id,
-        category: note.category || 'general',
-        tags: note.tags || [],
-        created_at: note.created_at,
-        updated_at: note.updated_at,
-        ai_summary: note.ai_summary || '',
-      }));
-
-      let newActiveNote = activeNote;
-      if (isInitial && formattedNotes.length > 0 && !activeNote) {
-        newActiveNote = formattedNotes.sort((a, b) =>
-          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-        )[0];
-      }
-
-      if (isInitial) {
-        setNotes(formattedNotes);
-        if (newActiveNote) setActiveNote(newActiveNote);
-      } else {
-        setNotes(prev => [...prev, ...formattedNotes]);
-      }
-
-      const newOffset = isInitial ? formattedNotes.length : offset + formattedNotes.length;
-      const hasMore = formattedNotes.length === limit;
-
-      const newPagination = { hasMore, offset: newOffset, total: dataPagination.notes.total + formattedNotes.length };
-      setDataPagination(prev => ({ ...prev, notes: newPagination }));
-
-      if (isInitial) {
-        setCachedData(cacheKey, {
-          notes: formattedNotes,
-          activeNote: newActiveNote,
-          pagination: newPagination
-        });
-      }
+    const cacheKey = `notes_${userId}_${isInitial ? 'initial' : dataPagination.notes.offset}`;
+    const cached = getCachedData(cacheKey);
+    if (cached && isInitial) {
+      setNotes(cached.notes);
+      if (cached.activeNote && !activeNote) setActiveNote(cached.activeNote);
+      setDataPagination(prev => ({ ...prev, notes: cached.pagination }));
+      setDataLoaded(prev => new Set([...prev, 'notes']));
+      return;
     }
 
-    setDataLoaded(prev => new Set([...prev, 'notes']));
-  } catch (error) {
-    console.error('Error loading notes:', error);
-    setDataErrors(prev => ({ ...prev, notes: 'Failed to load notes' }));
+    const controller = new AbortController();
+    abortControllersRef.current.set(`notes_${userId}`, controller);
 
-    if (isInitial) {
-      toast.error('Failed to load notes');
+    try {
+      const limit = isInitial ? INITIAL_LOAD_LIMITS.notes : LOAD_MORE_LIMITS.notes;
+      const offset = isInitial ? 0 : dataPagination.notes.offset;
+
+      const { data, error } = await withTimeout<any[]>(
+        supabase
+          .from('notes')
+          .select('*', { count: 'exact' })
+          .eq('user_id', userId)
+          .order('updated_at', { ascending: false })
+          .range(offset, offset + limit - 1),
+        API_TIMEOUT,
+        'Failed to load notes'
+      );
+
+      if (error) throw error;
+
+      if (data) {
+        const formattedNotes: Note[] = data.map(note => ({
+          id: note.id,
+          title: note.title || 'Untitled Note',
+          content: note.content || '',
+          document_id: note.document_id || null,
+          user_id: note.user_id,
+          category: note.category || 'general',
+          tags: note.tags || [],
+          created_at: note.created_at,
+          updated_at: note.updated_at,
+          ai_summary: note.ai_summary || '',
+        }));
+
+        let newActiveNote = activeNote;
+        if (isInitial && formattedNotes.length > 0 && !activeNote) {
+          newActiveNote = formattedNotes.sort((a, b) =>
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+          )[0];
+        }
+
+        if (isInitial) {
+          setNotes(formattedNotes);
+          if (newActiveNote) setActiveNote(newActiveNote);
+        } else {
+          setNotes(prev => [...prev, ...formattedNotes]);
+        }
+
+        const newOffset = isInitial ? formattedNotes.length : offset + formattedNotes.length;
+        const hasMore = formattedNotes.length === limit;
+
+        const newPagination = { hasMore, offset: newOffset, total: dataPagination.notes.total + formattedNotes.length };
+        setDataPagination(prev => ({ ...prev, notes: newPagination }));
+
+        if (isInitial) {
+          setCachedData(cacheKey, {
+            notes: formattedNotes,
+            activeNote: newActiveNote,
+            pagination: newPagination
+          });
+        }
+      }
+
+      setDataLoaded(prev => new Set([...prev, 'notes']));
+    } catch (error) {
+      console.error('Error loading notes:', error);
+      setDataErrors(prev => ({ ...prev, notes: 'Failed to load notes' }));
+
+      if (isInitial) {
+        toast.error('Failed to load notes');
+      }
+    } finally {
+      abortControllersRef.current.delete(`notes_${userId}`);
+      setDataLoading('notes', false);
     }
-  } finally {
-    abortControllersRef.current.delete(`notes_${userId}`);
-    setDataLoading('notes', false);
-  }
-}, [dataLoading.notes, dataPagination.notes, activeNote, getCachedData, setCachedData, setDataLoading]);
+  }, [dataLoading.notes, dataPagination.notes, activeNote, getCachedData, setCachedData, setDataLoading]);
   // [Rest of the real-time listener functions - setupDocumentListener, setupChatMessageListener, etc.]
   // These would need to be implemented similarly with proper typing
 
@@ -1186,116 +1186,116 @@ const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
     // Utility functions
     loadFolders,
     // Fix specific documents loading
-loadSpecificDocuments: useCallback(async (userId: string, ids: string[]) => {
-  if (!ids.length) return;
+    loadSpecificDocuments: useCallback(async (userId: string, ids: string[]) => {
+      if (!ids.length) return;
 
-  const cacheKey = `specific_docs_${userId}_${ids.sort().join('_')}`;
-  const cached = getCachedData(cacheKey);
-  if (cached) {
-    setDocuments(prev => mergeDocuments(prev, cached));
-    return;
-  }
+      const cacheKey = `specific_docs_${userId}_${ids.sort().join('_')}`;
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        setDocuments(prev => mergeDocuments(prev, cached));
+        return;
+      }
 
-  setDataLoading('documents', true);
+      setDataLoading('documents', true);
 
-  try {
-    const { data, error } = await withTimeout<any[]>(
-      supabase
-        .from('documents')
-        .select('*')
-        .eq('user_id', userId)
-        .in('id', ids),
-      API_TIMEOUT,
-      'Failed to load specific documents'
-    );
+      try {
+        const { data, error } = await withTimeout<any[]>(
+          supabase
+            .from('documents')
+            .select('*')
+            .eq('user_id', userId)
+            .in('id', ids),
+          API_TIMEOUT,
+          'Failed to load specific documents'
+        );
 
-    if (error) throw error;
+        if (error) throw error;
 
-    const newDocs: Document[] = (data || []).map(doc => ({
-      id: doc.id,
-      title: doc.title,
-      file_name: doc.file_name,
-      file_type: doc.file_type,
-      file_size: doc.file_size || 0,
-      file_url: doc.file_url,
-      content_extracted: doc.content_extracted || '',
-      user_id: doc.user_id,
-      type: doc.type,
-      processing_status: doc.processing_status || 'pending',
-      processing_error: doc.processing_error || null,
-      created_at: doc.created_at,
-      updated_at: doc.updated_at,
-      folder_ids: doc.folder_ids || [],
-      processing_started_at: doc.processing_started_at || null,
-      processing_completed_at: doc.processing_completed_at || null,
-      processing_metadata: doc.processing_metadata || null,
-      extraction_model_used: doc.extraction_model_used || null,
-      total_processing_time_ms: doc.total_processing_time_ms || null,
-    }));
+        const newDocs: Document[] = (data || []).map(doc => ({
+          id: doc.id,
+          title: doc.title,
+          file_name: doc.file_name,
+          file_type: doc.file_type,
+          file_size: doc.file_size || 0,
+          file_url: doc.file_url,
+          content_extracted: doc.content_extracted || '',
+          user_id: doc.user_id,
+          type: doc.type,
+          processing_status: doc.processing_status || 'pending',
+          processing_error: doc.processing_error || null,
+          created_at: doc.created_at,
+          updated_at: doc.updated_at,
+          folder_ids: doc.folder_ids || [],
+          processing_started_at: doc.processing_started_at || null,
+          processing_completed_at: doc.processing_completed_at || null,
+          processing_metadata: doc.processing_metadata || null,
+          extraction_model_used: doc.extraction_model_used || null,
+          total_processing_time_ms: doc.total_processing_time_ms || null,
+        }));
 
-    setDocuments(prev => {
-      const merged = mergeDocuments(prev, newDocs);
-      setCachedData(cacheKey, newDocs);
-      return merged;
-    });
-  } catch (error) {
-    console.error('Error loading specific documents:', error);
-  } finally {
-    setDataLoading('documents', false);
-  }
-}, [getCachedData, setCachedData, setDataLoading]),
+        setDocuments(prev => {
+          const merged = mergeDocuments(prev, newDocs);
+          setCachedData(cacheKey, newDocs);
+          return merged;
+        });
+      } catch (error) {
+        console.error('Error loading specific documents:', error);
+      } finally {
+        setDataLoading('documents', false);
+      }
+    }, [getCachedData, setCachedData, setDataLoading]),
 
     // Fix specific notes loading
-loadSpecificNotes: useCallback(async (userId: string, ids: string[]) => {
-  if (!ids.length) return;
+    loadSpecificNotes: useCallback(async (userId: string, ids: string[]) => {
+      if (!ids.length) return;
 
-  const cacheKey = `specific_notes_${userId}_${ids.sort().join('_')}`;
-  const cached = getCachedData(cacheKey);
-  if (cached) {
-    setNotes(prev => mergeNotes(prev, cached));
-    return;
-  }
+      const cacheKey = `specific_notes_${userId}_${ids.sort().join('_')}`;
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        setNotes(prev => mergeNotes(prev, cached));
+        return;
+      }
 
-  setDataLoading('notes', true);
+      setDataLoading('notes', true);
 
-  try {
-    const { data, error } = await withTimeout<any[]>(
-      supabase
-        .from('notes')
-        .select('*')
-        .eq('user_id', userId)
-        .in('id', ids)
-        .order('updated_at', { ascending: false }),
-      API_TIMEOUT,
-      'Failed to load specific notes'
-    );
+      try {
+        const { data, error } = await withTimeout<any[]>(
+          supabase
+            .from('notes')
+            .select('*')
+            .eq('user_id', userId)
+            .in('id', ids)
+            .order('updated_at', { ascending: false }),
+          API_TIMEOUT,
+          'Failed to load specific notes'
+        );
 
-    if (error) throw error;
+        if (error) throw error;
 
-    const transformedNotes: Note[] = (data || []).map(item => ({
-      id: item.id,
-      document_id: item.document_id,
-      title: item.title,
-      content: item.content,
-      category: item.category,
-      ai_summary: item.ai_summary,
-      tags: item.tags,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      user_id: item.user_id,
-    }));
+        const transformedNotes: Note[] = (data || []).map(item => ({
+          id: item.id,
+          document_id: item.document_id,
+          title: item.title,
+          content: item.content,
+          category: item.category,
+          ai_summary: item.ai_summary,
+          tags: item.tags,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          user_id: item.user_id,
+        }));
 
-    setNotes(prev => {
-      const merged = mergeNotes(prev, transformedNotes);
-      setCachedData(cacheKey, transformedNotes);
-      return merged;
-    });
-  } catch (error) {
-    console.error('Error loading specific notes:', error);
-  } finally {
-    setDataLoading('notes', false);
-  }
-}, [getCachedData, setCachedData, setDataLoading]),
+        setNotes(prev => {
+          const merged = mergeNotes(prev, transformedNotes);
+          setCachedData(cacheKey, transformedNotes);
+          return merged;
+        });
+      } catch (error) {
+        console.error('Error loading specific notes:', error);
+      } finally {
+        setDataLoading('notes', false);
+      }
+    }, [getCachedData, setCachedData, setDataLoading]),
   };
 };
 

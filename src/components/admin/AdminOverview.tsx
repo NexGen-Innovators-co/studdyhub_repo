@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
-import { 
-  Users, 
-  FileText, 
-  MessageSquare, 
-  AlertTriangle, 
+import {
+  Users,
+  FileText,
+  MessageSquare,
+  AlertTriangle,
   TrendingUp,
   Activity,
   Shield,
@@ -53,7 +53,7 @@ const AdminOverview = () => {
   const fetchStats = async () => {
     try {
       setLoading(true);
-      
+
       const [
         usersCount,
         usersCountYesterday,
@@ -87,8 +87,8 @@ const AdminOverview = () => {
 
       const totalUsers = usersCount.count || 0;
       const totalUsersYesterday = usersCountYesterday.count || 0;
-      const userGrowth = totalUsersYesterday > 0 
-        ? ((totalUsers - totalUsersYesterday) / totalUsersYesterday) * 100 
+      const userGrowth = totalUsersYesterday > 0
+        ? ((totalUsers - totalUsersYesterday) / totalUsersYesterday) * 100
         : 0;
 
       setStats({
@@ -115,13 +115,13 @@ const AdminOverview = () => {
   const fetchChartData = async () => {
     try {
       const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
-      
+
       // Fetch user growth data
       const userGrowthData = [];
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
         const dateStr = date.toISOString().split('T')[0];
-        
+
         const [users, activeUsers] = await Promise.all([
           supabase.from('profiles').select('*', { count: 'exact', head: true })
             .lte('created_at', date.toISOString()),
@@ -129,7 +129,7 @@ const AdminOverview = () => {
             .gte('updated_at', new Date(date.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
             .lte('updated_at', date.toISOString())
         ]);
-        
+
         userGrowthData.push({
           date: dateStr,
           users: users.count || 0,
@@ -214,9 +214,9 @@ const AdminOverview = () => {
       title: 'Total Posts',
       value: stats?.totalPosts || 0,
       icon: MessageSquare,
-      color: 'text-purple-500 dark:text-purple-400',
-      bgColor: 'bg-purple-500/10 dark:bg-purple-500/20',
-      borderColor: 'border-purple-500/20 dark:border-purple-500/30',
+      color: 'text-blue-500 dark:text-blue-400',
+      bgColor: 'bg-blue-500/10 dark:bg-blue-500/20',
+      borderColor: 'border-blue-500/20 dark:border-blue-500/30',
       subtitle: `${stats?.totalComments || 0} comments`,
       trend: 0,
       trendLabel: 'total interactions'
@@ -316,11 +316,10 @@ const AdminOverview = () => {
               <button
                 key={range}
                 onClick={() => setTimeRange(range)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  timeRange === range
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${timeRange === range
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
+                  }`}
               >
                 {range}
               </button>
@@ -340,8 +339,8 @@ const AdminOverview = () => {
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card 
-              key={card.title} 
+            <Card
+              key={card.title}
               className={`bg-white dark:bg-gray-900 border ${card.borderColor} hover:shadow-lg dark:hover:shadow-gray-900/50 transition-all duration-200`}
             >
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -360,11 +359,10 @@ const AdminOverview = () => {
                   <div className="flex items-center gap-2">
                     <p className="text-xs text-gray-500 dark:text-gray-500">{card.subtitle}</p>
                     {card.trend !== 0 && (
-                      <div className={`flex items-center gap-1 text-xs font-medium ${
-                        card.trend > 0 
-                          ? 'text-green-600 dark:text-green-400' 
+                      <div className={`flex items-center gap-1 text-xs font-medium ${card.trend > 0
+                          ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
-                      }`}>
+                        }`}>
                         {card.trend > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
                         {Math.abs(card.trend).toFixed(1)}%
                       </div>
@@ -392,44 +390,44 @@ const AdminOverview = () => {
               <AreaChart data={chartData?.userGrowth || []}>
                 <defs>
                   <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
-                <XAxis 
-                  dataKey="date" 
+                <XAxis
+                  dataKey="date"
                   className="text-xs text-gray-600 dark:text-gray-400"
                   tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 />
                 <YAxis className="text-xs text-gray-600 dark:text-gray-400" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgb(31 41 55)', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgb(31 41 55)',
                     border: '1px solid rgb(55 65 81)',
                     borderRadius: '0.5rem',
                     color: 'white'
                   }}
                 />
                 <Legend />
-                <Area 
-                  type="monotone" 
-                  dataKey="users" 
-                  stroke="#3b82f6" 
-                  fillOpacity={1} 
-                  fill="url(#colorUsers)" 
+                <Area
+                  type="monotone"
+                  dataKey="users"
+                  stroke="#3b82f6"
+                  fillOpacity={1}
+                  fill="url(#colorUsers)"
                   name="Total Users"
                 />
-                <Area 
-                  type="monotone" 
-                  dataKey="active" 
-                  stroke="#10b981" 
-                  fillOpacity={1} 
-                  fill="url(#colorActive)" 
+                <Area
+                  type="monotone"
+                  dataKey="active"
+                  stroke="#10b981"
+                  fillOpacity={1}
+                  fill="url(#colorActive)"
                   name="Active Users"
                 />
               </AreaChart>
@@ -462,9 +460,9 @@ const AdminOverview = () => {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgb(31 41 55)', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgb(31 41 55)',
                     border: '1px solid rgb(55 65 81)',
                     borderRadius: '0.5rem',
                     color: 'white'
@@ -490,9 +488,9 @@ const AdminOverview = () => {
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
               <XAxis dataKey="day" className="text-xs text-gray-600 dark:text-gray-400" />
               <YAxis className="text-xs text-gray-600 dark:text-gray-400" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'rgb(31 41 55)', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'rgb(31 41 55)',
                   border: '1px solid rgb(55 65 81)',
                   borderRadius: '0.5rem',
                   color: 'white'
@@ -523,8 +521,8 @@ const AdminOverview = () => {
             <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Manage Users</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">{stats?.totalUsers || 0} total users</p>
           </button>
-          <button className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200 dark:border-purple-800/50 hover:from-purple-100 hover:to-purple-200 dark:hover:from-purple-900/30 dark:hover:to-purple-800/30 rounded-xl text-left transition-all duration-200 group">
-            <Shield className="h-8 w-8 text-purple-600 dark:text-purple-400 mb-3 group-hover:scale-110 transition-transform" />
+          <button className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800/50 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-900/30 dark:hover:to-blue-800/30 rounded-xl text-left transition-all duration-200 group">
+            <Shield className="h-8 w-8 text-blue-600 dark:text-blue-400 mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-semibold text-gray-900 dark:text-white mb-1">System Settings</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">Configure platform</p>
           </button>

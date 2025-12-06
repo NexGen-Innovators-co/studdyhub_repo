@@ -1,4 +1,4 @@
-// src/components/quizzes/hooks/useQuizManagement.ts
+// src/components/quizzes/hooks/useQuizManagement.ts - UPDATED
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '../../../integrations/supabase/client';
@@ -31,6 +31,214 @@ export const useQuizManagement = ({
   const [quizStartTime, setQuizStartTime] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Generate quiz from notes
+  const handleGenerateQuizFromNotes = useCallback(async (
+    notesContent: string,
+    numQuestions: number,
+    difficulty: string
+  ) => {
+    const toastId = toast.loading('Generating quiz from notes...');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase.functions.invoke('generate-quiz-from-notes', {
+        body: {
+          notes_content: notesContent,
+          num_questions: numQuestions,
+          difficulty: difficulty,
+        },
+      });
+
+      if (error) throw new Error(error.message || 'Failed to generate quiz from notes');
+
+      if (!data || !Array.isArray(data.questions) || data.questions.length === 0) {
+        toast.error('Unable to generate quiz questions from these notes. Try adding more detailed content.', { id: toastId });
+        return;
+      }
+
+      const quiz: Quiz = {
+        id: generateId(),
+        classId: 'notes-generated',
+        title: data.title || 'Notes Quiz',
+        questions: data.questions,
+        userId: user.id,
+        created_at: new Date().toISOString(),
+        source_type: 'notes'
+      };
+
+      const { error: insertError } = await supabase
+        .from('quizzes')
+        .insert({
+          id: quiz.id,
+          title: quiz.title,
+          questions: quiz.questions as any,
+          user_id: user.id,
+          created_at: quiz.created_at,
+          source_type: 'notes'
+        });
+
+      if (insertError) throw new Error(`Failed to save quiz: ${insertError.message}`);
+
+      const notesRecording: ClassRecording = {
+        id: 'notes-generated',
+        title: 'Notes Quiz',
+        audioUrl: '',
+        transcript: notesContent.substring(0, 200) + '...',
+        summary: 'Generated from user notes',
+        duration: 0,
+        subject: 'Personal Notes',
+        date: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        userId: user.id
+      };
+
+      onGenerateQuiz(notesRecording, quiz);
+      setQuizMode({ recording: notesRecording, quiz });
+      setUserAnswers(new Array(quiz.questions?.length || 0).fill(null));
+      setCurrentQuestionIndex(0);
+      setShowResults(false);
+      setQuizStartTime(Date.now());
+
+      toast.success('Quiz generated from notes!', { id: toastId });
+    } catch (error) {
+      console.error('Error generating quiz from notes:', error);
+      toast.error('Failed to generate quiz from notes', { id: toastId });
+    }
+  }, [onGenerateQuiz]);
+
+  // Generate AI-powered adaptive quiz
+  // Update the handleGenerateAIQuiz function in useQuizManagement.ts
+const handleGenerateAIQuiz = useCallback(async (
+  topics: string[],
+  focusAreas: string[]
+) => {
+  const toastId = toast.loading('Creating AI-powered quiz...');
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    console.log('🔍 Starting AI quiz generation for user:', user.id);
+    console.log('📝 Topics:', topics);
+    console.log('🎯 Focus areas:', focusAreas);
+
+    // Get user's quiz performance data for personalization
+    const { data: recentAttempts, error: attemptsError } = await supabase
+      .from('quiz_attempts')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (attemptsError) {
+      console.error('❌ Error fetching recent attempts:', attemptsError);
+    } else {
+      console.log('📊 Recent attempts found:', recentAttempts?.length || 0);
+    }
+
+    console.log('🚀 Calling generate-ai-quiz edge function...');
+    
+    const { data, error } = await supabase.functions.invoke('generate-ai-quiz', {
+      body: {
+        user_topics: topics,
+        focus_areas: focusAreas,
+        recent_performance: recentAttempts?.map(attempt => ({
+          score: attempt.percentage,
+          time_taken: attempt.time_taken_seconds
+        })) || [],
+        learning_style: 'adaptive'
+      },
+    });
+
+    if (error) {
+      console.error('❌ Edge function error:', error);
+      throw new Error(error.message || 'Failed to generate AI quiz');
+    }
+
+    console.log('✅ Edge function response received:', data);
+    console.log('📋 Response data type:', typeof data);
+    console.log('📋 Has questions array?', Array.isArray(data?.questions));
+    console.log('📋 Questions count:', data?.questions?.length);
+
+    if (!data) {
+      throw new Error('No data received from AI quiz generation');
+    }
+
+    if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
+      console.error('❌ Invalid questions data:', data);
+      throw new Error('AI generated quiz has no valid questions');
+    }
+
+    const quiz: Quiz = {
+      id: generateId(),
+      classId: 'ai-generated',
+      title: data.title || 'AI Smart Quiz',
+      questions: data.questions,
+      userId: user.id,
+      created_at: new Date().toISOString(),
+      source_type: 'ai'
+    };
+
+    console.log('💾 Saving quiz to database...', quiz);
+
+    const { error: insertError } = await supabase
+      .from('quizzes')
+      .insert({
+        id: quiz.id,
+        title: quiz.title,
+        questions: quiz.questions as any,
+        user_id: user.id,
+        created_at: quiz.created_at,
+        source_type: 'ai'
+      });
+
+    if (insertError) {
+      console.error('❌ Database insert error:', insertError);
+      console.error('❌ Insert error details:', insertError.details);
+      console.error('❌ Insert error hint:', insertError.hint);
+      throw insertError;
+    }
+
+    console.log('✅ Quiz saved successfully');
+
+    const aiRecording: ClassRecording = {
+      id: 'ai-generated',
+      title: 'AI Smart Quiz',
+      audioUrl: '',
+      transcript: `AI-generated quiz focusing on: ${topics.join(', ')}`,
+      summary: `Personalized quiz with focus on: ${focusAreas.join(', ')}`,
+      duration: 0,
+      subject: 'Multiple Topics',
+      date: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      userId: user.id
+    };
+
+    onGenerateQuiz(aiRecording, quiz);
+    setQuizMode({ recording: aiRecording, quiz });
+    setUserAnswers(new Array(quiz.questions?.length || 0).fill(null));
+    setCurrentQuestionIndex(0);
+    setShowResults(false);
+    setQuizStartTime(Date.now());
+
+    console.log('🎉 AI Smart Quiz fully generated and ready!');
+    toast.success('AI Smart Quiz generated!', { id: toastId });
+    
+  } catch (error) {
+    console.error('💥 Full error in handleGenerateAIQuiz:', error);
+    
+    let errorMessage = 'Failed to generate AI quiz';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      console.error('💥 Error message:', error.message);
+      console.error('💥 Error stack:', error.stack);
+    }
+    
+    toast.error(errorMessage, { id: toastId });
+  }
+}, [onGenerateQuiz]);
+
+  // Original recording-based quiz generation
   const handleGenerateQuizFromRecording = useCallback(async (
     recording: ClassRecording,
     numQuestions: number,
@@ -69,7 +277,8 @@ export const useQuizManagement = ({
         title: data.title || recording.title,
         questions: data.questions,
         userId: user.id,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        source_type: 'recording'
       };
 
       const { error: insertError } = await supabase
@@ -80,7 +289,8 @@ export const useQuizManagement = ({
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,
-          created_at: quiz.created_at
+          created_at: quiz.created_at,
+          source_type: 'recording'
         });
 
       if (insertError) throw new Error(`Failed to save quiz to database: ${insertError.message}`);
@@ -178,7 +388,22 @@ export const useQuizManagement = ({
       await fetchUserStats();
 
       setShowResults(true);
-      toast.success('Quiz submitted successfully!', { id: toastId });
+      
+      // Show personalized success message based on performance
+      const percentage = Math.round((score / totalQuestions) * 100);
+      let successMessage = 'Quiz submitted successfully!';
+      
+      if (percentage >= 90) {
+        successMessage = 'Outstanding! Perfect or near-perfect score! 🎉';
+      } else if (percentage >= 75) {
+        successMessage = 'Great job! Solid performance! 👍';
+      } else if (percentage >= 60) {
+        successMessage = 'Good effort! Keep practicing! 💪';
+      } else {
+        successMessage = 'Quiz completed! Review the answers to improve! 📚';
+      }
+      
+      toast.success(successMessage, { id: toastId });
     } catch (error) {
       console.error('Error submitting quiz:', error);
       toast.error('Failed to submit quiz. Please try again.', { id: toastId });
@@ -221,6 +446,8 @@ export const useQuizManagement = ({
     quizStartTime,
     isSubmitting,
     handleGenerateQuizFromRecording,
+    handleGenerateQuizFromNotes,
+    handleGenerateAIQuiz,
     handleAnswerSelect,
     handleNextQuestion,
     handlePreviousQuestion,

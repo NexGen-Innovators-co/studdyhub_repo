@@ -54,11 +54,11 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          console.log('🔽 Loading more documents...');
+          //console.log('🔽 Loading more documents...');
           onLoadMoreDocuments();
         }
       },
-      { 
+      {
         threshold: 0.1,
         rootMargin: '50px' // Load more when 50px from bottom
       }
@@ -99,12 +99,12 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
       if (activeChatSessionId) {
         const { error } = await supabase
           .from('chat_sessions')
-          .update({ 
+          .update({
             document_ids: localSelectedIds,
             updated_at: new Date().toISOString()
           })
           .eq('id', activeChatSessionId);
-        
+
         if (error) {
           console.error('Error updating chat session:', error);
           toast.error(`Failed to update chat session documents: ${error.message}`);
@@ -112,7 +112,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
         }
         toast.success('Chat session documents updated successfully!');
       }
-      
+
       onSelectionChange(localSelectedIds);
       onClose();
     } catch (error: any) {
@@ -129,13 +129,13 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   // Enhanced select all functionality
   const handleSelectAllDocuments = () => {
     const allDocumentIds = documents.map(doc => doc.id);
-    const currentDocumentIds = localSelectedIds.filter(id => 
+    const currentDocumentIds = localSelectedIds.filter(id =>
       documents.some(doc => doc.id === id)
     );
-    
+
     if (currentDocumentIds.length === allDocumentIds.length) {
       // Deselect all documents
-      setLocalSelectedIds(prev => prev.filter(id => 
+      setLocalSelectedIds(prev => prev.filter(id =>
         !documents.some(doc => doc.id === id)
       ));
     } else {
@@ -147,13 +147,13 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
 
   const handleSelectAllNotes = () => {
     const allNoteIds = notes.map(note => note.id);
-    const currentNoteIds = localSelectedIds.filter(id => 
+    const currentNoteIds = localSelectedIds.filter(id =>
       notes.some(note => note.id === id)
     );
-    
+
     if (currentNoteIds.length === allNoteIds.length) {
       // Deselect all notes
-      setLocalSelectedIds(prev => prev.filter(id => 
+      setLocalSelectedIds(prev => prev.filter(id =>
         !notes.some(note => note.id === id)
       ));
     } else {
@@ -164,11 +164,11 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   };
 
   // Calculate selection counts for UI
-  const selectedDocumentsCount = localSelectedIds.filter(id => 
+  const selectedDocumentsCount = localSelectedIds.filter(id =>
     documents.some(doc => doc.id === id)
   ).length;
 
-  const selectedNotesCount = localSelectedIds.filter(id => 
+  const selectedNotesCount = localSelectedIds.filter(id =>
     notes.some(note => note.id === id)
   ).length;
 
@@ -181,8 +181,8 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
         <DialogHeader className="flex-shrink-0 p-6 pb-4">
           <DialogTitle className="text-xl font-semibold flex items-center justify-between">
             <span>Select Documents and Notes</span>
-             </DialogTitle>
-          
+          </DialogTitle>
+
           {/* Selection Summary */}
           <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
             <span>Selected: {totalSelectedCount} of {totalItemsCount}</span>
@@ -213,7 +213,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
                     {selectedDocumentsCount === documents.length ? 'Deselect All' : 'Select All'}
                   </Button>
                 </div>
-                
+
                 <div className="space-y-1">
                   {documents.map((doc, index) => (
                     <motion.div
@@ -237,8 +237,8 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
                         <div className="min-w-0 flex-1">
                           <p className="font-medium truncate">{doc.title || doc.file_name}</p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {doc.content_extracted ? 
-                              `${doc.content_extracted.substring(0, 60)}...` : 
+                            {doc.content_extracted ?
+                              `${doc.content_extracted.substring(0, 60)}...` :
                               'No content extracted'
                             }
                           </p>
@@ -266,7 +266,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
                     {selectedNotesCount === notes.length ? 'Deselect All' : 'Select All'}
                   </Button>
                 </div>
-                
+
                 <div className="space-y-1">
                   {notes.map((note, index) => (
                     <motion.div
@@ -290,8 +290,8 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
                         <div className="min-w-0 flex-1">
                           <p className="font-medium truncate">{note.title}</p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {note.content ? 
-                              `${note.content.substring(0, 60)}...` : 
+                            {note.content ?
+                              `${note.content.substring(0, 60)}...` :
                               'Empty note'
                             }
                           </p>
@@ -315,7 +315,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
 
             {/* Load More Trigger (for Intersection Observer) */}
             {hasMoreDocuments && !isLoadingDocuments && (
-              <div 
+              <div
                 ref={loadMoreTriggerRef}
                 className="h-4 flex items-center justify-center"
               >
@@ -349,7 +349,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
             >
               Cancel
             </Button>
-            
+
             <div className="flex items-center gap-3">
               {totalSelectedCount > 0 && (
                 <span className="text-sm text-muted-foreground">

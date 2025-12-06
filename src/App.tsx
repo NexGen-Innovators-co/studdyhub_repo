@@ -1,3 +1,5 @@
+// Modified App.tsx - Removed SocialRoutesWrapper and SocialDataProvider
+// In App.tsx
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -24,8 +26,6 @@ import React, { Suspense, lazy } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { AppProvider } from "./contexts/AppContext";
 import { AdminLayout } from "./components/admin/AdminLayout";
-import { SocialDataProvider } from "./components/social/context/SocialDataContext";
-import { SocialFeed } from "./components/social/SocialFeed"; // Import SocialFeed
 
 // Lazy load admin components
 const AdminDashboard = lazy(() => import("./components/admin/adminDashboard"));
@@ -45,17 +45,6 @@ const Fallback = () => (
     </div>
   </div>
 );
-
-// Wrapper component for Social routes that provides the SocialDataProvider
-// This gets userProfile from AppContext
-const SocialRoutesWrapper = ({ children }: { children: React.ReactNode }) => {
-  // We'll pass userProfile through context or props
-  return (
-    <SocialDataProvider>
-      {children}
-    </SocialDataProvider>
-  );
-};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -91,18 +80,40 @@ const App = () => (
                   <Route path="/recordings" element={<Index />} />
                   <Route path="/schedule" element={<Index />} />
                   <Route path="/chat" element={<Index />} />
-                  <Route path="/chat/:sessionId" element={<Index />} />
+
+                  {/* Protected chat session route */}
+                  <Route path="/chat/:sessionId" element={
+
+                    <Index />
+
+                  } />
+
                   <Route path="/documents" element={<Index />} />
                   <Route path="/settings" element={<Index />} />
-                  <Route path="/quizzes" element={<Index/>}/>
-                  {/* ==== SOCIAL ROUTES - Wrapped with SocialDataProvider ==== */}
+                  <Route path="/quizzes" element={<Index />} />
+
+                  {/* ==== SOCIAL ROUTES - Protected ==== */}
                   <Route path="/social" element={<Index />} />
                   <Route path="/social/:tab" element={<Index />} />
-                 <Route path="/social/post/:postId" element={<Index />} />
-                 <Route path="/social/group/:groupId" element={<Index />} />
-                 <Route path="/social/profile/:userId" element={<Index />} />
 
-                 
+                  {/* Protected social routes */}
+                  <Route path="/social/post/:postId" element={
+
+                    <Index />
+
+                  } />
+
+                  <Route path="/social/group/:groupId" element={
+
+                    <Index />
+
+                  } />
+
+                  <Route path="/social/profile/:userId" element={
+
+                    <Index />
+
+                  } />
 
                   {/* ==== ADMIN ROUTES - Protected by AdminLayout ==== */}
                   <Route element={<AdminLayout />}>
@@ -118,7 +129,6 @@ const App = () => (
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
-
             </AppProvider>
           </AdminAuthProvider>
         </AuthProvider>

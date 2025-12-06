@@ -437,8 +437,8 @@ export const MessageList = memo(({
         ];
 
         return (
-            <div className="mb-3 overflow-x-auto">
-                <div className="flex gap-2 pb-2 min-w-max">
+            <div className="min-w-0 max-w-sm overflow-scroll justify-end ">
+                <div className="flex flex-row gap-3">
                     {allAttachments.map((attachment, idx) => {
                         // FIX: Use a more unique key by combining message.id and index
                         const uniqueKey = `${message.id}-attachment-${attachment.id}-${idx}`;
@@ -456,7 +456,7 @@ export const MessageList = memo(({
                                             toast.info('File is still processing, please wait.');
                                             return;
                                         }
-                                        if (!attachment.error) {
+                                        if (attachment.error) {
                                             toast.error('Cannot preview file due to processing error.');
                                             return;
                                         }
@@ -464,7 +464,7 @@ export const MessageList = memo(({
                                     }}
                                     title={attachment.name}
                                 >
-                                    <div className="w-12 h-12 rounded-lg overflow-hidden border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105">
+                                    <div className="w-12 h-12 rounded-lg overflow-hidden border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 shadow-sm hover:shadow-md ">
                                         {imageUrl ? (
                                             <img
                                                 src={imageUrl}
@@ -488,19 +488,15 @@ export const MessageList = memo(({
                                             <Loader2 className="h-2 w-2 animate-spin text-white" />
                                         </div>
                                     )}
-                                    {!attachment.error && (
+                                    {attachment.error && (
                                         <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
                                             <X className="h-2 w-2 text-white" />
                                         </div>
                                     )}
-
-                                    {/* Tooltip on hover */}
-                                    <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                                        {attachment.name.length > 15 ? `${attachment.name.substring(0, 15)}...` : attachment.name}
-                                    </div>
                                 </div>
                             );
                         }
+
                         return (
                             <div
                                 key={uniqueKey} // Use the unique key here
@@ -509,7 +505,8 @@ export const MessageList = memo(({
                                     if (attachment.processing) {
                                         toast.info('File is still processing, please wait.');
                                         return;
-                                    } attachment.onClick();
+                                    }
+                                    attachment.onClick();
                                 }}
                                 title={attachment.name}
                             >
@@ -540,10 +537,7 @@ export const MessageList = memo(({
                                         <Loader2 className="h-2 w-2 animate-spin text-white" />
                                     </div>
                                 )}
-                                {/* Full name tooltip on hover */}
-                                <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                                    {attachment.name}
-                                </div>
+
                             </div>
                         );
                     })}
@@ -566,42 +560,46 @@ export const MessageList = memo(({
         if (isUserMessage) {
             contentToRender = (
                 <>
-                    {renderAttachments(message)}
-                    <div className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 p-2 sm:p-3 rounded-lg border border-blue-200 dark:border-blue-800 max-w-full font-claude leading-relaxed break-words whitespace-pre-wrap overflow-auto">
-                        {message.content.length > 200 && !isMessageExpanded ? (
-                            <>
-                                <span>{message.content.substring(0, 200)}...</span>
-                                <Button
-                                    variant="link"
-                                    size="sm"
-                                    onClick={() => onToggleUserMessageExpansion(message.content)}
-                                    className="text-blue-600 p-0 h-auto mt-1 flex justify-end dark:text-blue-400 font-claude underline text-xs sm:text-sm"
-                                >
-                                    View More
-                                </Button>
-                            </>
-                        ) : (
-                            <>
-                                {message.content}
-                                {message.content.length > 200 && isMessageExpanded && (
+                    <div className="flex flex-col gap-3 max-w-xs sm:max-w-lg overflow-x-auto items-end justify-items-end">
+                        {renderAttachments(message)}
+                        <div className=" text-md text-slate-700 right-0 dark:text-slate-300 bg-slate-500/10 dark:bg-slate-950/30 p-2 sm:p-3 rounded-lg border border-slate-200/5 dark:border-blue-800 max-w-xs font-claude leading-relaxed break-words whitespace-pre-wrap overflow-auto">
+
+                            {message.content.length > 200 && !isMessageExpanded ? (
+                                <>
+                                    <span>{message.content.substring(0, 200)}...</span>
                                     <Button
                                         variant="link"
                                         size="sm"
                                         onClick={() => onToggleUserMessageExpansion(message.content)}
                                         className="text-blue-600 p-0 h-auto mt-1 flex justify-end dark:text-blue-400 font-claude underline text-xs sm:text-sm"
                                     >
-                                        View Less
+                                        View More
                                     </Button>
-                                )}
-                            </>
-                        )}
-                        {message.id.startsWith('optimistic-') && !message.content && (
-                            <div className="flex items-center gap-2 mt-2 text-xs text-blue-600 dark:text-blue-400 font-claude">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                <span>Sending...</span>
-                            </div>
-                        )}
+                                </>
+                            ) : (
+                                <>
+                                    {message.content}
+                                    {message.content.length > 200 && isMessageExpanded && (
+                                        <Button
+                                            variant="link"
+                                            size="sm"
+                                            onClick={() => onToggleUserMessageExpansion(message.content)}
+                                            className="text-blue-600 p-0 h-auto mt-1 flex justify-end dark:text-blue-400 font-claude underline text-xs sm:text-sm"
+                                        >
+                                            View Less
+                                        </Button>
+                                    )}
+                                </>
+                            )}
+                            {message.id.startsWith('optimistic-') && !message.content && (
+                                <div className="flex items-center gap-2 mt-2 text-xs text-blue-600 dark:text-blue-400 font-claude">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span>Sending...</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
+
                 </>
             );
         } else {
@@ -625,10 +623,18 @@ export const MessageList = memo(({
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => onRetryClick(messages[index - 2]?.content, message.content || '')}
+                                                onClick={() => onRetryClick(messages[index - 1]?.content, message.content || '')}
                                                 className="text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/50"
                                             >
                                                 Retry
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => onDeleteClick(message[index]?.id)}
+                                                className="text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/50"
+                                            >
+                                                Delete
                                             </Button>
                                         </div>)
                                     }
@@ -691,8 +697,6 @@ export const MessageList = memo(({
                 >
                     {message.role === 'assistant' && isSpeaking && speakingMessageId === message.id ? (
                         <>
-                            <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
-
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -712,10 +716,8 @@ export const MessageList = memo(({
                                 <Square className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                         </>
-                    ) : message.role === 'assistant' && !isSpeaking && !message.isLoading && !(message.id.startsWith('optimistic-ai-') && !message.content) ? (
+                    ) : (message.role === 'assistant' && !isSpeaking && !message.isLoading && !(message.id.startsWith('optimistic-ai-') && !message.content) &&
                         <>
-                            <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
-
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -726,17 +728,11 @@ export const MessageList = memo(({
                                 <Volume2 className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                         </>
-                    ) : (
-                        message.role === 'assistant' && !message.isLoading && <AIBot size="lg" isError={message.isError} className='hidden sm:block flex-shrink-0' />
                     )}
-                    {message.role === 'user' && (
-                        <div className="hidden sm:flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 order-2 flex-shrink-0">
-                            <User className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400" />
-                        </div>
-                    )}
+
                     <div className={cn('flex flex-col flex-1 min-w-0', isUserMessage ? 'items-end' : 'items-start')}>
                         {isUserMessage ? (
-                            <div className="max-w-[280px] xs:max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl">
+                            <div className="min-w-0 max-w-lg break-words whitespace-pre-wrap overflow-auto">
                                 {contentToRender}
                             </div>
                         ) : (
@@ -754,15 +750,25 @@ export const MessageList = memo(({
                                     {message.role === 'assistant' && (
                                         <>
                                             {isLastMessage && !isLoading && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => onRegenerateClick(messages[index - 1]?.content || '')}
-                                                    className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
-                                                    title="Regenerate response"
-                                                >
-                                                    <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
-                                                </Button>
+                                                <>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => onRegenerateClick(messages[index - 1]?.content || '')}
+                                                        className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
+                                                        title="Regenerate response"
+                                                    >
+                                                        <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => onDeleteClick(message[index]?.id)}
+                                                        className="text-red-600 rounded-full h-5 w-5 sm:h-6 sm:w-6 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/50"
+                                                    >
+                                                        <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                                                    </Button>
+                                                </>
                                             )}
                                             <Button
                                                 variant="ghost"

@@ -1,6 +1,6 @@
 // src/pages/LandingPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, Menu, X, ChevronLeft, ChevronRight, Sun, Moon, Loader2 } from 'lucide-react';
 
@@ -20,7 +20,7 @@ const LandingPage: React.FC = () => {
       if (savedTheme) {
         return savedTheme === 'dark';
       }
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return window.matchMedia('(prefers-color-scheme: light)').matches;
     }
     return false;
   });
@@ -124,7 +124,7 @@ const LandingPage: React.FC = () => {
 
     fetchAppStats();
   }, []);
-
+  const navigate = useNavigate()
   // Effect to apply/remove 'dark' class to html element
   useEffect(() => {
     if (isDarkMode) {
@@ -273,7 +273,7 @@ const LandingPage: React.FC = () => {
             alt="studdyhub AI Logo"
             className="h-14 w-14 object-contain group-hover:scale-110 transition-transform"
           />
-          <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
+          <span className=" flex justify-between gap-2 flex-auto text-3xl  font-claude font-extrabold text-blue-700/95 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">StuddyHub <pre className='text-3xl font-claude text-red-600/65'>AI</pre></span>
         </Link>
 
         {/* Desktop Navigation */}
@@ -281,15 +281,11 @@ const LandingPage: React.FC = () => {
           <a href="#features" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">Features</a>
           <a href="#testimonials" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">Testimonials</a>
           <a href="#cta" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">Pricing</a>
-          <Link to="/auth">
-            <Button type="button" className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
-          </Link>
-          <Link to="/auth">
-            <Button type="button" className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">Get Started</Button>
-          </Link>
+          <a href='/about-us' className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">About</a>
+          <Button type="button" onClick={() => navigate('/auth')} className="px-6 py-2.5  bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Get Started</Button>
           {/* Dark Mode Toggle for Desktop */}
           <Button
-            type="button"
+            variant='outline'
             onClick={toggleDarkMode}
             className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -327,7 +323,7 @@ const LandingPage: React.FC = () => {
               <a href="#cta" className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium" onClick={() => setIsMenuOpen(false)}>Pricing</a>
               <hr className="border-gray-200 dark:border-gray-700" />
               <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                <Button type="button" className="w-full text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors justify-start">Sign In</Button>
+                <Button type="button" className="w-full bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">Sign In</Button>
               </Link>
               <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
                 <Button type="button" className="w-full bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">Get Started</Button>

@@ -34,33 +34,33 @@ const Integrations: React.FC = () => {
             name: "Note-Taking & Document Management",
             icon: FileText,
             integrations: [
-                { name: "Google Drive", description: "Sync your documents and notes from Google Drive for AI analysis.", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Google_Drive_icon_%282020%29.svg/1200px-Google_Drive_icon_%282020%29.svg.png" },
-                { name: "Dropbox", description: "Connect your Dropbox account to easily import and analyze files.", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Dropbox_Icon.svg/1200px-Dropbox_Icon.svg.png" },
-                { name: "Evernote", description: "Import your existing notes from Evernote for intelligent organization.", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Evernote_logo.svg/1200px-Evernote_logo.svg.png" },
+                { name: "Google Drive", description: "Sync your documents and notes from Google Drive for AI analysis.", logo: "https://placehold.co/100x100?text=Google+Drive" },
+                { name: "Dropbox", description: "Connect your Dropbox account to easily import and analyze files.", logo: "https://placehold.co/100x100?text=Dropbox" },
+                { name: "Evernote", description: "Import your existing notes from Evernote for intelligent organization.", logo: "https://placehold.co/100x100?text=Evernote" },
             ]
         },
         {
             name: "Productivity & Collaboration",
             icon: LayoutDashboard,
             integrations: [
-                { name: "Slack", description: "Get AI summaries of discussions and action items directly in Slack channels.", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Slack_icon_2019.svg/1200px-Slack_icon_2019.svg.png" },
-                { name: "Microsoft Teams", description: "Integrate studdyhub AI with Teams for enhanced meeting insights.", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/Microsoft_Office_Teams_logo.svg/1200px-Microsoft_Office_Teams_logo.svg.png" },
-                { name: "Zoom", description: "Transcribe and analyze Zoom meeting recordings automatically.", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Zoom_Logo.svg/1200px-Zoom_Logo.svg.png" },
+                { name: "Slack", description: "Get AI summaries of discussions and action items directly in Slack channels.", logo: "https://placehold.co/100x100?text=Slack" },
+                { name: "Microsoft Teams", description: "Integrate studdyhub AI with Teams for enhanced meeting insights.", logo: "https://placehold.co/100x100?text=Teams" },
+                { name: "Zoom", description: "Transcribe and analyze Zoom meeting recordings automatically.", logo: "https://placehold.co/100x100?text=Zoom" },
             ]
         },
         {
             name: "Calendar & Scheduling",
             icon: Calendar,
             integrations: [
-                { name: "Google Calendar", description: "Sync your calendar to get AI-powered schedule optimization and reminders.", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Google_Calendar_icon_%282020%29.svg/1200px-Google_Calendar_icon_%282020%29.svg.png" },
-                { name: "Outlook Calendar", description: "Connect with Outlook Calendar for seamless event and task management.", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/Microsoft_Outlook_Logo.svg/1200px-Microsoft_Outlook_Logo.svg.png" },
+                { name: "Google Calendar", description: "Sync your calendar to get AI-powered schedule optimization and reminders.", logo: "https://placehold.co/100x100?text=Google+Calendar" },
+                { name: "Outlook Calendar", description: "Connect with Outlook Calendar for seamless event and task management.", logo: "https://placehold.co/100x100?text=Outlook" },
             ]
         },
         {
             name: "Voice & Audio",
             icon: Mic,
             integrations: [
-                { name: "Voice Recorder Apps", description: "Upload audio from your favorite voice recording apps for transcription and analysis.", logo: "https://placehold.co/100x100/A78BFA/FFFFFF?text=Audio" }, // Placeholder
+                { name: "Voice Recorder Apps", description: "Upload audio from your favorite voice recording apps for transcription and analysis.", logo: "https://placehold.co/100x100?text=Audio" },
             ]
         }
     ];
@@ -68,24 +68,24 @@ const Integrations: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex flex-col">
             {/* Header */}
-            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md">
-                <Link to="/" className="flex items-center gap-3 group">
+            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md fixed top-0">
+                <Link to="/" className="flex items-center gap-3 group" aria-label="Home">
                     <img
-                        src="/siteimage.png"
+                        src="https://placehold.co/32x32?text=Logo"
                         alt="studdyhub AI Logo"
                         className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
+                        loading="lazy"
                     />
                     <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
                 </Link>
                 <div className="flex items-center gap-4">
                     <Link to="/auth">
-                        <Button type="button" className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
+                        <Button className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
                     </Link>
                     <Button
-                        type="button"
                         onClick={toggleDarkMode}
                         className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                        title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                        aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
                     >
                         {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                     </Button>
@@ -94,31 +94,28 @@ const Integrations: React.FC = () => {
 
             {/* Main Content */}
             <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
-                <h1 className="text-4xl md:text-5xl font-extrabold mb-8 text-blue-600 dark:text-blue-400 text-center">Integrations</h1>
-                <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto text-center mb-12">
-                    Connect studdyhub AI with your favorite apps and services to streamline your workflow.
-                </p>
-
-                <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 max-w-5xl mx-auto">
-                    <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Seamlessly Connect Your Tools</h2>
-                    <p className="mb-8 text-gray-700 dark:text-gray-300">
-                        studdyhub AI works with the tools you already use, making it easy to bring your notes, documents, and recordings into our intelligent platform.
+                <section className="text-center mb-16">
+                    <h1 className="text-4xl md:text-5xl font-extrabold mb-4 text-blue-600 dark:text-blue-400">Integrations</h1>
+                    <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto">
+                        Connect studdyhub AI with your favorite tools to streamline your workflow and enhance productivity.
                     </p>
+                </section>
 
-                    {integrationCategories.map((category, catIndex) => (
-                        <div key={catIndex} className="mb-10">
-                            <div className="flex items-center gap-3 mb-6">
-                                {React.createElement(category.icon, { className: "h-8 w-8 text-blue-600 dark:text-blue-400" })}
-                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{category.name}</h3>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                                {category.integrations.map((integration, intIndex) => (
-                                    <div key={intIndex} className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex items-center gap-4">
-                                        <div className="w-12 h-12 flex-shrink-0">
-                                            <img src={integration.logo} alt={`${integration.name} logo`} className="w-full h-full object-contain" onError={(e) => { e.currentTarget.src = 'https://placehold.co/48x48/e0e0e0/666666?text=Logo'; }} />
-                                        </div>
+                <section className="space-y-12">
+                    {integrationCategories.map((category, index) => (
+                        <div key={index} className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800">
+                            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><category.icon className="h-6 w-6 text-blue-600" /> {category.name}</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {category.integrations.map((integration, idx) => (
+                                    <div key={idx} className="flex items-start gap-4">
+                                        <img
+                                            src={integration.logo}
+                                            alt={`${integration.name} Logo`}
+                                            className="h-12 w-12 object-contain rounded-md"
+                                            loading="lazy"
+                                        />
                                         <div>
-                                            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">{integration.name}</h4>
+                                            <h3 className="text-lg font-semibold">{integration.name}</h3>
                                             <p className="text-gray-700 dark:text-gray-300 text-sm">{integration.description}</p>
                                         </div>
                                     </div>
@@ -126,34 +123,31 @@ const Integrations: React.FC = () => {
                             </div>
                         </div>
                     ))}
+                </section>
 
-                    <div className="text-center mt-12">
-                        <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Don't See Your Favorite App?</h2>
-                        <p className="text-lg text-gray-700 dark:text-gray-300 mb-6">
-                            We're constantly expanding our integration library. Let us know what you'd like to see!
-                        </p>
-                        <Link to="/contact">
-                            <Button variant="outline" className="text-blue-600 border-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-400 dark:hover:bg-blue-900">
-                                Suggest an Integration
-                            </Button>
-                        </Link>
-                        <Link to="/api" className="ml-4">
-                            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
-                                Build Your Own with Our API
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
+                <section className="text-center mt-16">
+                    <p className="text-lg text-gray-700 dark:text-gray-300 mb-6">
+                        Want to suggest a new integration or build your own?
+                    </p>
+                    <Link to="/contact">
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold mr-4">Suggest an Integration</Button>
+                    </Link>
+                    <Link to="/api">
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">Build Your Own with Our API</Button>
+                    </Link>
+                </section>
             </main>
 
+            {/* Footer */}
             <footer className="py-16 px-6 bg-gray-800 dark:bg-black text-gray-300">
                 <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
                     <div className="md:col-span-2">
                         <div className="flex items-center gap-3 mb-6">
                             <img
-                                src="/siteimage.png"
+                                src="https://placehold.co/48x48?text=Logo"
                                 alt="studdyhub AI Logo"
-                                className="h-12 w-12 object-contain group-hover:scale-110 transition-transform"
+                                className="h-12 w-12 object-contain"
+                                loading="lazy"
                             />
                             <span className="text-2xl font-extrabold text-white">studdyhub AI</span>
                         </div>
@@ -161,14 +155,15 @@ const Integrations: React.FC = () => {
                             Empowering students and professionals to achieve more with intelligent tools for notes, recordings, and schedules.
                         </p>
                         <div className="flex gap-4">
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
+                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors" aria-label="Global">
                                 <Globe className="h-5 w-5" />
                             </a>
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
+                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors" aria-label="Logo Link">
                                 <img
-                                    src="/siteimage.png"
+                                    src="https://placehold.co/32x32?text=Logo"
                                     alt="studdyhub AI Logo"
-                                    className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
+                                    className="h-8 w-8 object-contain"
+                                    loading="lazy"
                                 />
                             </a>
                         </div>
@@ -177,8 +172,6 @@ const Integrations: React.FC = () => {
                     <div>
                         <h3 className="text-white font-semibold mb-4">Product</h3>
                         <ul className="space-y-3 text-gray-400">
-                            {/* <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                            <li><a href="#cta" className="hover:text-white transition-colors">Pricing</a></li> */}
                             <li><a href="api" className="hover:text-white transition-colors">API</a></li>
                             <li><a href="integrations" className="hover:text-white transition-colors">Integrations</a></li>
                         </ul>

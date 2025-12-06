@@ -8,7 +8,7 @@ export interface DashboardStats {
   totalDocuments: number;
   totalMessages: number;
   totalScheduleItems: number;
-  totalStudyTime: number; // in seconds
+  totalStudyTime: number;
   currentStreak: number;
   maxStreak: number;
   todayTasks: number;
@@ -17,8 +17,6 @@ export interface DashboardStats {
   overdueTasks: number;
   notesWithAI: number;
   aiUsageRate: number;
-
-  // Time-based stats
   notesThisWeek: number;
   notesThisMonth: number;
   recordingsThisWeek: number;
@@ -26,24 +24,16 @@ export interface DashboardStats {
   studyTimeThisWeek: number;
   studyTimeThisMonth: number;
   avgDailyStudyTime: number;
-
-  // Productivity metrics
   mostProductiveDay: string;
   mostProductiveHour: number;
   avgNotesPerDay: number;
   totalQuizzesTaken: number;
   avgQuizScore: number;
-
-  // Document stats
   documentsProcessed: number;
   documentsPending: number;
   documentsFailed: number;
-  totalDocumentSize: number; // in bytes
-
-  // Category distribution
+  totalDocumentSize: number;
   categoryData: Array<{ name: string; value: number }>;
-
-  // Activity data (last 7 days and 30 days)
   activityData7Days: Array<{
     date: string;
     notes: number;
@@ -52,58 +42,33 @@ export interface DashboardStats {
     messages: number;
     total: number;
   }>;
-
   activityData30Days: Array<{
     date: string;
     notes: number;
     recordings: number;
     documents: number;
+    messages?: number;  // ← add this
     total: number;
   }>;
-
-  // Hourly activity pattern
-  hourlyActivity: Array<{
-    hour: number;
-    activity: number;
-  }>;
-
-  // Day of week activity
-  weekdayActivity: Array<{
-    day: string;
-    activity: number;
-  }>;
-
-  // Recent items (just IDs and minimal data for display)
+  hourlyActivity: Array<{ hour: number; activity: number }>;
+  weekdayActivity: Array<{ day: string; activity: number }>;
   recentNotes: Array<{ id: string; title: string; category: string; created_at: string }>;
   recentRecordings: Array<{ id: string; title: string; duration: number; created_at: string }>;
   recentDocuments: Array<{ id: string; title: string; type: string; created_at: string; processing_status: string }>;
-
-  // Top categories by usage
   topCategories: Array<{ category: string; count: number }>;
-
-  // Learning velocity (items created per week over time)
-  learningVelocity: Array<{
-    week: string;
-    items: number;
-  }>;
-
-  // Engagement score (0-100)
+  learningVelocity: Array<{ week: string; items: number }>;
   engagementScore: number;
-
-  // Cache metadata
   lastFetched: number;
 }
-
-// Cache duration in milliseconds (5 minutes)
-const CACHE_DURATION = 5 * 60 * 1000;
-
-// In-memory cache
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const statsCache: Record<string, { data: DashboardStats; timestamp: number }> = {};
 
+// Optimized: Batch queries and use database functions for complex calculations
 export const useDashboardStats = (userId: string | undefined) => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
   const isFetchingRef = useRef(false);
   const mountedRef = useRef(true);
 
@@ -114,263 +79,301 @@ export const useDashboardStats = (userId: string | undefined) => {
     };
   }, []);
 
+  // Optimized: Use database-side aggregation for activity data
+  const fetchActivityDataOptimized = async (days: number, userId: string) => {
+    try {
+      // Use a database function for better performance
+      const { data, error } = await supabase.rpc('get_user_activity_stats', {
+        p_user_id: userId,
+        p_days: days
+      });
+
+      if (error) throw error;
+
+      // Fallback to client-side processing if RPC not available
+      if (!data) {
+        return await fetchActivityDataFallback(days, userId);
+      }
+
+      return data;
+    } catch (error) {
+      console.warn('RPC failed, using fallback:', error);
+      return await fetchActivityDataFallback(days, userId);
+    }
+  };
+
+  // Fallback: Optimized client-side processing with date ranges
+  const fetchActivityDataFallback = async (days: number, userId: string) => {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days + 1);
+    const start = getStartOfDay(startDate);
+    const end = getEndOfDay(new Date());
+
+    // Single query per table with date range
+    const [notesData, recordingsData, documentsData, messagesData] = await Promise.all([
+      supabase
+        .from('notes')
+        .select('created_at')
+        .eq('user_id', userId)
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString()),
+
+      supabase
+        .from('class_recordings')
+        .select('created_at')
+        .eq('user_id', userId)
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString()),
+
+      supabase
+        .from('documents')
+        .select('created_at')
+        .eq('user_id', userId)
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString()),
+
+      supabase
+        .from('chat_messages')
+        .select('created_at')
+        .eq('user_id', userId)
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString()),
+    ]);
+
+    // Process data in memory - much faster than individual queries
+    const activityMap = new Map();
+
+    // Initialize all dates
+    for (let i = 0; i < days; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      const dateKey = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      activityMap.set(dateKey, { notes: 0, recordings: 0, documents: 0, messages: 0, total: 0 });
+    }
+
+    // Count activities by date
+    const countActivities = (data: any[], type: string) => {
+      data.forEach(item => {
+        const date = new Date(item.created_at);
+        const dateKey = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (activityMap.has(dateKey)) {
+          const current = activityMap.get(dateKey);
+          current[type] += 1;
+          current.total += 1;
+        }
+      });
+    };
+
+    countActivities(notesData.data || [], 'notes');
+    countActivities(recordingsData.data || [], 'recordings');
+    countActivities(documentsData.data || [], 'documents');
+    countActivities(messagesData.data || [], 'messages');
+
+    return Array.from(activityMap.entries()).map(([date, counts]) => ({
+      date,
+      ...counts
+    }));
+  };
+
+  // Optimized: Fetch only necessary fields and use limits
+  const fetchHourlyActivityOptimized = async (userId: string) => {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    // Single query with optimized fields
+    const { data, error } = await supabase
+      .from('notes')
+      .select('created_at')
+      .eq('user_id', userId)
+      .gte('created_at', weekAgo.toISOString())
+      .limit(1000); // Reasonable limit for hourly analysis
+
+    if (error) throw error;
+
+    const hourlyData = Array.from({ length: 24 }, (_, hour) => ({ hour, activity: 0 }));
+
+    (data || []).forEach(note => {
+      const hour = new Date(note.created_at).getHours();
+      hourlyData[hour].activity += 1;
+    });
+
+    return hourlyData;
+  };
+
+  // Optimized: Use materialized views or cached data for expensive operations
+  const fetchLearningVelocityOptimized = async (userId: string) => {
+    try {
+      // Try to use RPC for complex time-based aggregations
+      const { data, error } = await supabase.rpc('get_learning_velocity', {
+        p_user_id: userId,
+        p_weeks: 12
+      });
+
+      if (!error && data) {
+        return data;
+      }
+
+      // Fallback: Sample-based approach for large datasets
+      return await fetchLearningVelocitySampled(userId);
+    } catch (error) {
+      return await fetchLearningVelocitySampled(userId);
+    }
+  };
+
+  // Sample-based approach for large datasets
+  const fetchLearningVelocitySampled = async (userId: string) => {
+    const velocityData = [];
+    const now = new Date();
+
+    // Sample 4 weeks instead of 12 for performance
+    for (let i = 3; i >= 0; i--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - (i * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+
+      // Use count queries instead of fetching data
+      const notesCount = await supabase
+        .from('notes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('created_at', getStartOfDay(weekStart).toISOString())
+        .lte('created_at', getEndOfDay(weekEnd).toISOString());
+
+      velocityData.push({
+        week: `W${4 - i}`,
+        items: notesCount.count || 0
+      });
+    }
+
+    return velocityData;
+  };
+
+  // Progress tracking helper
+  const updateProgress = useCallback((current: number, total: number) => {
+    if (mountedRef.current) {
+      setProgress(Math.round((current / total) * 100));
+    }
+  }, []);
+
+  // Phased loading with progress updates
   const fetchDashboardStats = useCallback(async (forceRefresh = false) => {
     if (!userId) return;
 
-    // Check cache first
     const cached = statsCache[userId];
     const now = Date.now();
 
     if (!forceRefresh && cached && (now - cached.timestamp) < CACHE_DURATION) {
-      console.log('[Dashboard] Using cached stats');
       setStats(cached.data);
       setLoading(false);
       return;
     }
 
-    // Prevent multiple simultaneous fetches
-    if (isFetchingRef.current) {
-      console.log('[Dashboard] Fetch already in progress, skipping');
-      return;
-    }
+    if (isFetchingRef.current) return;
 
     isFetchingRef.current = true;
     setLoading(true);
     setError(null);
+    setProgress(0);
 
     try {
+      const totalPhases = 5;
+      let currentPhase = 0;
+
+      // Phase 1: Basic counts (fast)
+      updateProgress(++currentPhase, totalPhases);
+      const basicCounts = await Promise.all([
+        supabase.from('notes').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+        supabase.from('class_recordings').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+        supabase.from('documents').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+        supabase.from('chat_messages').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+        supabase.from('schedule_items').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+        supabase.from('notes').select('*', { count: 'exact', head: true }).eq('user_id', userId).not('ai_summary', 'is', null),
+      ]);
+
+      // Phase 2: Time-based aggregations (medium)
+      updateProgress(++currentPhase, totalPhases);
       const now = new Date();
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-      // Fetch all stats in parallel for better performance
-      const [
-        notesCount,
-        recordingsCount,
-        documentsCount,
-        messagesCount,
-        scheduleCount,
-        studyTimeResult,
-        notesWithAICount,
-        categoryDistribution,
-        allNotesData,
-        allRecordingsData,
-        allDocumentsData,
-        allMessagesData,
-        recentNotesData,
-        recentRecordingsData,
-        recentDocumentsData,
-        streakData,
-        scheduleData,
-        quizzesData,
-        notesThisWeekData,
-        notesThisMonthData,
-        recordingsThisWeekData,
-        recordingsThisMonthData,
-        studyTimeThisWeekData,
-        studyTimeThisMonthData,
-        documentStats
-      ] = await Promise.all([
-        // 1. Total counts
-        supabase
-          .from('notes')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId),
-
-        supabase
-          .from('class_recordings')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId),
-
-        supabase
-          .from('documents')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId),
-
-        supabase
-          .from('chat_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId),
-
-        supabase
-          .from('schedule_items')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId),
-
-        // 2. Study time (sum of recording durations)
-        supabase
-          .from('class_recordings')
-          .select('duration')
-          .eq('user_id', userId),
-
-        // 3. Notes with AI summaries
-        supabase
-          .from('notes')
-          .select('*', { count: 'exact', head: true })
+      const [studyTimeData, documentStats, activityData7Days, activityData30Days] = await Promise.all([
+        // Study time with aggregation
+        supabase.from('class_recordings')
+          .select('duration, created_at')
           .eq('user_id', userId)
-          .not('ai_summary', 'is', null)
-          .neq('ai_summary', ''),
+          .limit(500), // Reasonable limit
 
-        // 4. Category distribution
-        supabase
-          .from('notes')
-          .select('category')
-          .eq('user_id', userId),
-
-        // 5. All notes for analysis (last 90 days)
-        supabase
-          .from('notes')
-          .select('created_at, updated_at')
+        // Document stats
+        supabase.from('documents')
+          .select('processing_status, file_size, created_at')
           .eq('user_id', userId)
-          .gte('created_at', new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()),
+          .limit(500),
 
-        // 6. All recordings for analysis (last 90 days)
-        supabase
-          .from('class_recordings')
-          .select('created_at, duration')
-          .eq('user_id', userId)
-          .gte('created_at', new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()),
-
-        // 7. All documents for analysis (last 90 days)
-        supabase
-          .from('documents')
-          .select('created_at')
-          .eq('user_id', userId)
-          .gte('created_at', new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()),
-
-        // 8. All messages for analysis (last 90 days)
-        supabase
-          .from('chat_messages')
-          .select('timestamp')
-          .eq('user_id', userId)
-          .gte('timestamp', new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()),
-
-        // 9. Recent notes (just 8 for display)
-        supabase
-          .from('notes')
-          .select('id, title, category, created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(8),
-
-        // 10. Recent recordings (just 5 for display)
-        supabase
-          .from('class_recordings')
-          .select('id, title, duration, created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(5),
-
-        // 11. Recent documents (just 5 for display)
-        supabase
-          .from('documents')
-          .select('id, title, type, created_at, processing_status')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(5),
-
-        // 12. Streak calculation - get all note creation dates
-        supabase
-          .from('notes')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false }),
-
-        // 13. Schedule items for today and upcoming
-        supabase
-          .from('schedule_items')
-          .select('start_time, end_time')
-          .eq('user_id', userId),
-
-        // 14. Quizzes data
-        supabase
-          .from('quizzes')
-          .select('id, created_at')
-          .eq('user_id', userId),
-
-        // 15. Notes this week
-        supabase
-          .from('notes')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .gte('created_at', weekAgo.toISOString()),
-
-        // 16. Notes this month
-        supabase
-          .from('notes')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .gte('created_at', monthAgo.toISOString()),
-
-        // 17. Recordings this week
-        supabase
-          .from('class_recordings')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .gte('created_at', weekAgo.toISOString()),
-
-        // 18. Recordings this month
-        supabase
-          .from('class_recordings')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .gte('created_at', monthAgo.toISOString()),
-
-        // 19. Study time this week
-        supabase
-          .from('class_recordings')
-          .select('duration')
-          .eq('user_id', userId)
-          .gte('created_at', weekAgo.toISOString()),
-
-        // 20. Study time this month
-        supabase
-          .from('class_recordings')
-          .select('duration')
-          .eq('user_id', userId)
-          .gte('created_at', monthAgo.toISOString()),
-
-        // 21. Document processing stats
-        supabase
-          .from('documents')
-          .select('processing_status, file_size')
-          .eq('user_id', userId)
+        // Activity data
+        fetchActivityDataOptimized(7, userId),
+        fetchActivityDataOptimized(30, userId),
       ]);
 
-      // Process results (keeping existing logic)
+      // Phase 3: Charts and visual data (can be lazy loaded)
+      updateProgress(++currentPhase, totalPhases);
+      const [hourlyActivity, weekdayActivity, learningVelocity] = await Promise.all([
+        fetchHourlyActivityOptimized(userId),
+        fetchActivityDataFallback(7, userId), // Reuse for weekday
+        fetchLearningVelocityOptimized(userId),
+      ]);
+
+      // Phase 4: Additional data (lower priority)
+      updateProgress(++currentPhase, totalPhases);
+      const [recentNotesData, recentRecordingsData, recentDocumentsData, categoryDistribution] = await Promise.all([
+        supabase.from('notes').select('id, title, category, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(4),
+        supabase.from('class_recordings').select('id, title, duration, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(3),
+        supabase.from('documents').select('id, title, type, created_at, processing_status').eq('user_id', userId).order('created_at', { ascending: false }).limit(3),
+        supabase.from('notes').select('category').eq('user_id', userId).limit(100), // Increased limit for better distribution
+      ]);
+
+      // Phase 5: Calculations and final processing
+      updateProgress(++currentPhase, totalPhases);
+
+      // Process all the data (your existing processing logic)
+      const [
+        notesCount, recordingsCount, documentsCount, messagesCount, scheduleCount, notesWithAICount
+      ] = basicCounts;
+
+      // Complete data processing section - paste this in Phase 5
+
+      // Process basic counts
       const totalNotes = notesCount.count || 0;
       const totalRecordings = recordingsCount.count || 0;
       const totalDocuments = documentsCount.count || 0;
       const totalMessages = messagesCount.count || 0;
       const totalScheduleItems = scheduleCount.count || 0;
-
-      const totalStudyTime = (studyTimeResult.data || []).reduce(
-        (sum, rec) => sum + (rec.duration || 0),
-        0
-      );
-
-      const notesThisWeek = notesThisWeekData.count || 0;
-      const notesThisMonth = notesThisMonthData.count || 0;
-      const recordingsThisWeek = recordingsThisWeekData.count || 0;
-      const recordingsThisMonth = recordingsThisMonthData.count || 0;
-
-      const studyTimeThisWeek = (studyTimeThisWeekData.data || []).reduce(
-        (sum, rec) => sum + (rec.duration || 0),
-        0
-      );
-
-      const studyTimeThisMonth = (studyTimeThisMonthData.data || []).reduce(
-        (sum, rec) => sum + (rec.duration || 0),
-        0
-      );
-
-      const daysActive = Math.max(1, Math.floor(totalStudyTime / 86400) || 30);
-      const avgDailyStudyTime = totalStudyTime / daysActive;
-
       const notesWithAI = notesWithAICount.count || 0;
-      const aiUsageRate = totalNotes > 0 ? (notesWithAI / totalNotes) * 100 : 0;
 
+      // Process study time data
+      const totalStudyTime = (studyTimeData.data || []).reduce((sum, rec) => sum + (rec.duration || 0), 0);
+      const studyTimeThisWeek = (studyTimeData.data || []).filter((rec: any) =>
+        new Date(rec.created_at) >= weekAgo
+      ).reduce((sum, rec) => sum + (rec.duration || 0), 0);
+      const studyTimeThisMonth = (studyTimeData.data || []).filter((rec: any) =>
+        new Date(rec.created_at) >= monthAgo
+      ).reduce((sum, rec) => sum + (rec.duration || 0), 0);
+
+      // Process document stats
+      const documentsProcessed = (documentStats.data || []).filter((d: any) => d.processing_status === 'completed').length;
+      const documentsPending = (documentStats.data || []).filter((d: any) =>
+        d.processing_status === 'pending' || d.processing_status === 'processing'
+      ).length;
+      const documentsFailed = (documentStats.data || []).filter((d: any) => d.processing_status === 'failed').length;
+      const totalDocumentSize = (documentStats.data || []).reduce((sum: number, doc: any) => sum + (doc.file_size || 0), 0);
+
+      // Calculate time-based counts from activity data
+      const notesThisWeek = activityData7Days.reduce((sum, day) => sum + day.notes, 0);
+      const notesThisMonth = activityData30Days.reduce((sum, day) => sum + day.notes, 0);
+      const recordingsThisWeek = activityData7Days.reduce((sum, day) => sum + day.recordings, 0);
+      const recordingsThisMonth = activityData30Days.reduce((sum, day) => sum + day.recordings, 0);
+
+      // Process category data (only using category field)
       const categoryCounts: Record<string, number> = {};
       (categoryDistribution.data || []).forEach((note: any) => {
         const category = note.category || 'general';
@@ -387,218 +390,100 @@ export const useDashboardStats = (userId: string | undefined) => {
         .slice(0, 5)
         .map(([category, count]) => ({ category, count }));
 
-      const last7Days = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - (6 - i));
-        return date.toISOString().split('T')[0];
-      });
+      // Calculate streak - we need to fetch notes with created_at separately
+      const { data: streak } = await supabase.rpc('get_user_streak', { p_user_id: userId });
+      const currentStreak = streak?.[0]?.current_streak || 0;
+      const maxStreak = streak?.[0]?.max_streak || 0;
 
-      const activityData7Days = last7Days.map(date => {
-        const dayNotes = (allNotesData.data || []).filter(
-          (n: any) => new Date(n.created_at).toISOString().split('T')[0] === date
-        ).length;
 
-        const dayRecordings = (allRecordingsData.data || []).filter(
-          (r: any) => new Date(r.created_at).toISOString().split('T')[0] === date
-        ).length;
-
-        const dayDocuments = (allDocumentsData.data || []).filter(
-          (d: any) => new Date(d.created_at).toISOString().split('T')[0] === date
-        ).length;
-
-        const dayMessages = (allMessagesData.data || []).filter(
-          (m: any) => new Date(m.timestamp).toISOString().split('T')[0] === date
-        ).length;
-
-        return {
-          date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          notes: dayNotes,
-          recordings: dayRecordings,
-          documents: dayDocuments,
-          messages: dayMessages,
-          total: dayNotes + dayRecordings + dayDocuments + dayMessages
-        };
-      });
-
-      const last30Days = Array.from({ length: 30 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - (29 - i));
-        return date.toISOString().split('T')[0];
-      });
-
-      const activityData30Days = last30Days.map(date => {
-        const dayNotes = (allNotesData.data || []).filter(
-          (n: any) => new Date(n.created_at).toISOString().split('T')[0] === date
-        ).length;
-
-        const dayRecordings = (allRecordingsData.data || []).filter(
-          (r: any) => new Date(r.created_at).toISOString().split('T')[0] === date
-        ).length;
-
-        const dayDocuments = (allDocumentsData.data || []).filter(
-          (d: any) => new Date(d.created_at).toISOString().split('T')[0] === date
-        ).length;
-
-        return {
-          date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          notes: dayNotes,
-          recordings: dayRecordings,
-          documents: dayDocuments,
-          total: dayNotes + dayRecordings + dayDocuments
-        };
-      });
-
-      const hourlyActivityMap: Record<number, number> = {};
-      [...(allNotesData.data || []), ...(allRecordingsData.data || []), ...(allMessagesData.data || [])].forEach((item: any) => {
-        const hour = new Date(item.created_at || item.timestamp).getHours();
-        hourlyActivityMap[hour] = (hourlyActivityMap[hour] || 0) + 1;
-      });
-
-      const hourlyActivity = Array.from({ length: 24 }, (_, hour) => ({
-        hour,
-        activity: hourlyActivityMap[hour] || 0
-      }));
-
-      const mostProductiveHour = Object.entries(hourlyActivityMap)
-        .sort(([, a], [, b]) => b - a)[0]?.[0] || 0;
-
-      const weekdayMap: Record<number, number> = {};
-      [...(allNotesData.data || []), ...(allRecordingsData.data || [])].forEach((item: any) => {
-        const day = new Date(item.created_at).getDay();
-        weekdayMap[day] = (weekdayMap[day] || 0) + 1;
-      });
-
-      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const weekdayActivity = dayNames.map((day, index) => ({
-        day,
-        activity: weekdayMap[index] || 0
-      }));
-
-      const mostProductiveDayIndex = Object.entries(weekdayMap)
-        .sort(([, a], [, b]) => b - a)[0]?.[0];
-      const mostProductiveDay = dayNames[parseInt(mostProductiveDayIndex)];
-
-      const totalDays = Math.max(1, Math.floor((now.getTime() - new Date((allNotesData.data || [])[0]?.created_at || now).getTime()) / (1000 * 60 * 60 * 24)) || 30);
-      const avgNotesPerDay = totalNotes / totalDays;
-
-      const learningVelocity = Array.from({ length: 12 }, (_, i) => {
-        const weekStart = new Date(now.getTime() - (11 - i) * 7 * 24 * 60 * 60 * 1000);
-        const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-        const itemsThisWeek = [
-          ...(allNotesData.data || []),
-          ...(allRecordingsData.data || []),
-          ...(allDocumentsData.data || [])
-        ].filter((item: any) => {
-          const date = new Date(item.created_at);
-          return date >= weekStart && date < weekEnd;
-        }).length;
-
-        return {
-          week: `W${Math.floor(i / 4) + 1}`,
-          items: itemsThisWeek
-        };
-      });
-
-      const noteDates = (streakData.data || [])
-        .map((n: any) => new Date(n.created_at).toDateString())
-        .filter((date, index, self) => self.indexOf(date) === index)
-        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-
-      let currentStreak = 0;
-      let maxStreak = 0;
-      let tempStreak = 0;
-      let lastDate: Date | null = null;
-
-      for (const dateStr of noteDates) {
-        const date = new Date(dateStr);
-
-        if (!lastDate) {
-          tempStreak = 1;
-          lastDate = date;
-        } else {
-          const dayDiff = Math.floor((lastDate.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-
-          if (dayDiff === 1) {
-            tempStreak++;
-          } else {
-            maxStreak = Math.max(maxStreak, tempStreak);
-            tempStreak = 1;
-          }
-
-          lastDate = date;
-        }
-      }
-
-      maxStreak = Math.max(maxStreak, tempStreak);
-
-      const todayStr = new Date().toDateString();
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
-      currentStreak = (noteDates[0] === todayStr || noteDates[0] === yesterday) ? tempStreak : 0;
-
+      // Calculate schedule tasks
+      const today = new Date();
       const todayDateStr = today.toISOString().split('T')[0];
-      const todayTasks = (scheduleData.data || []).filter((item: any) => {
+
+      // Use existing schedule data from basic counts
+      const scheduleItemsData = await supabase
+        .from('schedule_items')
+        .select('start_time, end_time')
+        .eq('user_id', userId)
+        .gte('start_time', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // Last 30 days
+        .limit(100);
+
+      const todayTasks = (scheduleItemsData.data || []).filter((item: any) => {
         const itemDate = new Date(item.start_time).toISOString().split('T')[0];
         return itemDate === todayDateStr;
       }).length;
 
-      const upcomingTasks = (scheduleData.data || []).filter((item: any) => {
+      const upcomingTasks = (scheduleItemsData.data || []).filter((item: any) => {
         const itemDate = new Date(item.start_time);
-        return itemDate > now;
+        return itemDate > today;
       }).length;
 
-      const completedTasks = (scheduleData.data || []).filter((item: any) => {
+      const completedTasks = (scheduleItemsData.data || []).filter((item: any) => {
         const itemDate = new Date(item.end_time);
-        return itemDate < now;
+        return itemDate < today;
       }).length;
 
-      const overdueTasks = (scheduleData.data || []).filter((item: any) => {
+      const overdueTasks = (scheduleItemsData.data || []).filter((item: any) => {
         const itemDate = new Date(item.start_time);
-        return itemDate < now && itemDate.toISOString().split('T')[0] !== todayDateStr;
+        return itemDate < today && itemDate.toISOString().split('T')[0] !== todayDateStr;
       }).length;
 
-      const totalQuizzesTaken = quizzesData.count || 0;
-      const avgQuizScore = 0;
+      // Quiz data (fetch if needed)
+      let totalQuizzesTaken = 0;
+      let avgQuizScore = 0;
 
-      const documentsProcessed = (documentStats.data || []).filter(
-        (d: any) => d.processing_status === 'completed'
-      ).length;
+      try {
+        const quizData = await supabase
+          .from('quiz_attempts')
+          .select('score, total_questions')
+          .eq('user_id', userId)
+          .limit(50); // Reasonable limit
 
-      const documentsPending = (documentStats.data || []).filter(
-        (d: any) => d.processing_status === 'pending' || d.processing_status === 'processing'
-      ).length;
+        totalQuizzesTaken = quizData.data?.length || 0;
+        if (quizData.data && quizData.data.length > 0) {
+          avgQuizScore = quizData.data.reduce((sum: number, quiz: any) =>
+            sum + (quiz.score / quiz.total_questions * 100), 0) / quizData.data.length;
+        }
+      } catch (error) {
+        console.warn('Failed to fetch quiz data:', error);
+      }
 
-      const documentsFailed = (documentStats.data || []).filter(
-        (d: any) => d.processing_status === 'failed'
-      ).length;
+      // === FIXED ORDER: Calculate avgNotesPerDay FIRST ===
+      const aiUsageRate = totalNotes > 0 ? (notesWithAI / totalNotes) * 100 : 0;
 
-      const totalDocumentSize = (documentStats.data || []).reduce(
-        (sum: number, doc: any) => sum + (doc.file_size || 0),
-        0
-      );
+      // Estimate active days safely using total notes
+      const estimatedActiveDays = totalNotes > 5
+        ? Math.max(1, Math.round(totalNotes / 5))  // Conservative: assume ~5 notes/day average
+        : 30;
 
-      const recentNotes = (recentNotesData.data || []).map((note: any) => ({
-        id: note.id,
-        title: note.title || 'Untitled',
-        category: note.category || 'general',
-        created_at: note.created_at
-      }));
+      const daysActive = Math.max(1, Math.floor(totalStudyTime / 86400) || estimatedActiveDays);
+      const avgDailyStudyTime = Math.round(totalStudyTime / daysActive); // in seconds per day
+      const avgNotesPerDay = totalNotes > 0 ? Number((totalNotes / daysActive).toFixed(1)) : 0;
+      // Calculate productivity metrics from real data
+      const calculateProductivity = (weekdayData: any[], hourlyData: any[]) => {
+        if (weekdayData.length === 0 || hourlyData.length === 0) {
+          return { mostProductiveDay: 'Mon', mostProductiveHour: 14 };
+        }
 
-      const recentRecordings = (recentRecordingsData.data || []).map((rec: any) => ({
-        id: rec.id,
-        title: rec.title || 'Untitled',
-        duration: rec.duration || 0,
-        created_at: rec.created_at
-      }));
+        const mostProductiveDayIndex = weekdayData.reduce((maxIndex, day, index) =>
+          day.activity > weekdayData[maxIndex].activity ? index : maxIndex, 0
+        );
 
-      const recentDocuments = (recentDocumentsData.data || []).map((doc: any) => ({
-        id: doc.id,
-        title: doc.title || 'Untitled',
-        type: doc.type || 'unknown',
-        created_at: doc.created_at,
-        processing_status: doc.processing_status || 'pending'
-      }));
+        const mostProductiveHour = hourlyData.reduce((maxIndex, hour, index) =>
+          hour.activity > hourlyData[maxIndex].activity ? index : maxIndex, 0
+        );
 
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        return {
+          mostProductiveDay: days[mostProductiveDayIndex],
+          mostProductiveHour
+        };
+      };
+
+      const { mostProductiveDay, mostProductiveHour } = calculateProductivity(weekdayActivity, hourlyActivity);
+
+      // Engagement score calculation (updated with real metrics)
       const engagementFactors = {
         streak: Math.min(currentStreak / 30, 1) * 20,
         notesPerDay: Math.min(avgNotesPerDay / 5, 1) * 20,
@@ -612,6 +497,36 @@ export const useDashboardStats = (userId: string | undefined) => {
         Object.values(engagementFactors).reduce((sum, val) => sum + val, 0)
       );
 
+
+      // Add this helper
+      const getWeekdayFromDate = (dateStr: string): string => {
+        // dateStr is like "Dec 1"
+        const currentYear = new Date().getFullYear();
+        const date = new Date(`${dateStr} ${currentYear}`);
+        // Fix year rollover
+        if (date > new Date()) date.setFullYear(currentYear - 1);
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        return days[date.getDay()];
+      };
+
+      // Then replace formattedWeekdayActivity with:
+      const formattedWeekdayActivity = [
+        { day: 'Sun', activity: 0 },
+        { day: 'Mon', activity: 0 },
+        { day: 'Tue', activity: 0 },
+        { day: 'Wed', activity: 0 },
+        { day: 'Thu', activity: 0 },
+        { day: 'Fri', activity: 0 },
+        { day: 'Sat', activity: 0 }
+      ];
+
+      activityData7Days.forEach((day: any) => {
+        const weekday = getWeekdayFromDate(day.date);
+        const item = formattedWeekdayActivity.find(d => d.day === weekday);
+        if (item) item.activity += (day.total || 0);
+      });
+
+      // Assemble the final stats object
       const statsData: DashboardStats = {
         totalNotes,
         totalRecordings,
@@ -635,7 +550,7 @@ export const useDashboardStats = (userId: string | undefined) => {
         studyTimeThisMonth,
         avgDailyStudyTime,
         mostProductiveDay,
-        mostProductiveHour: parseInt(mostProductiveHour.toString()),
+        mostProductiveHour,
         avgNotesPerDay,
         totalQuizzesTaken,
         avgQuizScore,
@@ -647,32 +562,27 @@ export const useDashboardStats = (userId: string | undefined) => {
         activityData7Days,
         activityData30Days,
         hourlyActivity,
-        weekdayActivity,
-        recentNotes,
-        recentRecordings,
-        recentDocuments,
+        weekdayActivity: formattedWeekdayActivity,
+        recentNotes: recentNotesData.data || [],
+        recentRecordings: recentRecordingsData.data || [],
+        recentDocuments: recentDocumentsData.data || [],
         topCategories,
         learningVelocity,
         engagementScore,
         lastFetched: Date.now()
       };
 
-      // Cache the results
-      statsCache[userId] = {
-        data: statsData,
-        timestamp: Date.now()
-      };
-
+      statsCache[userId] = { data: statsData, timestamp: Date.now() };
       if (mountedRef.current) {
         setStats(statsData);
+        setProgress(100);
       }
-
-      console.log('[Dashboard] Stats fetched and cached');
 
     } catch (err: any) {
       console.error('Error fetching dashboard stats:', err);
       if (mountedRef.current) {
         setError(err.message || 'Failed to load dashboard statistics');
+        setProgress(0);
       }
     } finally {
       if (mountedRef.current) {
@@ -680,121 +590,64 @@ export const useDashboardStats = (userId: string | undefined) => {
       }
       isFetchingRef.current = false;
     }
-  }, [userId]);
+  }, [userId, updateProgress]);
+
+  // Lazy loading for non-critical data
+  const loadAdditionalData = useCallback(async (type: 'charts' | 'recent' | 'analytics') => {
+    if (!userId || !stats) return;
+
+    try {
+      switch (type) {
+        case 'charts':
+          // Load additional chart data on demand
+          const [detailedHourly, detailedWeekly] = await Promise.all([
+            fetchHourlyActivityOptimized(userId),
+            fetchActivityDataOptimized(30, userId),
+          ]);
+          // Update stats with new data
+          setStats(prev => prev ? {
+            ...prev,
+            hourlyActivity: detailedHourly,
+            activityData30Days: detailedWeekly
+          } : null);
+          break;
+        // Add other cases as needed
+      }
+    } catch (error) {
+      console.error('Error loading additional data:', error);
+    }
+  }, [userId, stats]);
 
   useEffect(() => {
-    if (userId) {
-      fetchDashboardStats(false);
-    }
+    if (userId) fetchDashboardStats(false);
   }, [userId, fetchDashboardStats]);
 
-  const refresh = useCallback(() => {
-    console.log('[Dashboard] Manual refresh triggered');
-    fetchDashboardStats(true);
-  }, [fetchDashboardStats]);
-
-  const clearCache = useCallback(() => {
-    if (userId) {
-      delete statsCache[userId];
-      console.log('[Dashboard] Cache cleared');
-    }
-  }, [userId]);
+  const refresh = useCallback(() => fetchDashboardStats(true), [fetchDashboardStats]);
+  const clearCache = useCallback(() => { if (userId) delete statsCache[userId]; }, [userId]);
 
   return {
     stats,
     loading,
     error,
+    progress,
     refresh,
     clearCache,
+    loadAdditionalData,
     isCached: !!(userId && statsCache[userId])
   };
 };
-
-export interface DashboardStats {
-  totalNotes: number;
-  totalRecordings: number;
-  totalDocuments: number;
-  totalMessages: number;
-  totalScheduleItems: number;
-  totalStudyTime: number; // in seconds
-  currentStreak: number;
-  maxStreak: number;
-  todayTasks: number;
-  upcomingTasks: number;
-  completedTasks: number;
-  overdueTasks: number;
-  notesWithAI: number;
-  aiUsageRate: number;
-
-  // Time-based stats
-  notesThisWeek: number;
-  notesThisMonth: number;
-  recordingsThisWeek: number;
-  recordingsThisMonth: number;
-  studyTimeThisWeek: number;
-  studyTimeThisMonth: number;
-  avgDailyStudyTime: number;
-
-  // Productivity metrics
-  mostProductiveDay: string;
-  mostProductiveHour: number;
-  avgNotesPerDay: number;
-  totalQuizzesTaken: number;
-  avgQuizScore: number;
-
-  // Document stats
-  documentsProcessed: number;
-  documentsPending: number;
-  documentsFailed: number;
-  totalDocumentSize: number; // in bytes
-
-  // Category distribution
-  categoryData: Array<{ name: string; value: number }>;
-
-  // Activity data (last 7 days and 30 days)
-  activityData7Days: Array<{
-    date: string;
-    notes: number;
-    recordings: number;
-    documents: number;
-    messages: number;
-    total: number;
-  }>;
-
-  activityData30Days: Array<{
-    date: string;
-    notes: number;
-    recordings: number;
-    documents: number;
-    total: number;
-  }>;
-
-  // Hourly activity pattern
-  hourlyActivity: Array<{
-    hour: number;
-    activity: number;
-  }>;
-
-  // Day of week activity
-  weekdayActivity: Array<{
-    day: string;
-    activity: number;
-  }>;
-
-  // Recent items (just IDs and minimal data for display)
-  recentNotes: Array<{ id: string; title: string; category: string; created_at: string }>;
-  recentRecordings: Array<{ id: string; title: string; duration: number; created_at: string }>;
-  recentDocuments: Array<{ id: string; title: string; type: string; created_at: string; processing_status: string }>;
-
-  // Top categories by usage
-  topCategories: Array<{ category: string; count: number }>;
-
-  // Learning velocity (items created per week over time)
-  learningVelocity: Array<{
-    week: string;
-    items: number;
-  }>;
-
-  // Engagement score (0-100)
-  engagementScore: number;
-}
+// In useDashboardStats.tsx - add this export function
+export const clearDashboardCache = (userId?: string) => {
+  if (userId) {
+    delete statsCache[userId];
+  } else {
+    // Clear all cached stats
+    Object.keys(statsCache).forEach(key => {
+      delete statsCache[key];
+    });
+  }
+  console.log('🧹 Dashboard cache cleared');
+};
+// Helper functions
+const getStartOfDay = (date: Date) => new Date(date.setHours(0, 0, 0, 0));
+const getEndOfDay = (date: Date) => new Date(date.setHours(23, 59, 59, 999));

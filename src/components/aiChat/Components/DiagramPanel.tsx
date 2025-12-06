@@ -10,11 +10,8 @@ import {
 import { toast } from 'sonner';
 import { Chart, registerables } from 'chart.js';
 import * as THREE from 'three';
-// import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-// import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-// import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -32,7 +29,6 @@ import { PlainTextRenderer } from './PlainTexRenderer';
 
 Chart.register(...registerables);
 
-
 interface DiagramPanelProps {
   diagramContent?: string;
   diagramType: 'mermaid' | 'dot' | 'chartjs' | 'code' | 'image' | 'unknown' | 'document-text' | 'threejs' | 'html' | 'slides';
@@ -46,6 +42,9 @@ interface DiagramPanelProps {
   liveContent?: string;
   isPhone: () => boolean;
   currentTheme: 'light' | 'dark';
+  // Add these two props
+  panelWidth?: number;
+  setPanelWidth?: React.Dispatch<React.SetStateAction<number>>;
 }
 
 interface ThreeJSRendererProps {
@@ -55,7 +54,6 @@ interface ThreeJSRendererProps {
   onSceneReady: (scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => void;
 }
 
-// DiagramPanel.tsx
 export const DiagramPanel = memo(({
   diagramContent,
   diagramType,
@@ -68,9 +66,16 @@ export const DiagramPanel = memo(({
   initialWidthPercentage = 65,
   liveContent,
   isPhone,
-  currentTheme
+  currentTheme,
+  // Add these props
+  panelWidth: externalPanelWidth,
+  setPanelWidth: externalSetPanelWidth
 }: DiagramPanelProps) => {
-  const [panelWidth, setPanelWidth] = useState(initialWidthPercentage);
+  // Use external props if provided, otherwise use local state
+  const [internalPanelWidth, setInternalPanelWidth] = useState(initialWidthPercentage);
+  const panelWidth = externalPanelWidth !== undefined ? externalPanelWidth : internalPanelWidth;
+  const setPanelWidth = externalSetPanelWidth || setInternalPanelWidth;
+
   const [isResizing, setIsResizing] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
@@ -99,9 +104,11 @@ export const DiagramPanel = memo(({
     }
     return diagramType;
   }, [diagramType, renderContent]);
+
   const isInteractiveContent = useMemo(() => {
     return ['mermaid', 'dot', 'chartjs', 'image'].includes(effectiveDiagramType);
   }, [effectiveDiagramType]);
+
   const onSceneReady = useCallback((scene: THREE.Scene, renderer: THREE.WebGLRenderer, cleanup: () => void) => {
     setThreeJsScene(scene);
     setThreeJsRenderer(renderer);
@@ -112,6 +119,7 @@ export const DiagramPanel = memo(({
       setThreeJsCleanup(null);
     });
   }, []);
+
   const sanitizeHtml = useCallback((html: string) => {
     return DOMPurify.sanitize(html, {
       USE_PROFILES: { html: true },
@@ -121,7 +129,6 @@ export const DiagramPanel = memo(({
   }, []);
 
   const handleNodeClick = useCallback((nodeId: string) => {
-    //console.log(`Node ${nodeId} clicked`);
     toast.success(`Node ${nodeId} clicked`);
   }, []);
 
@@ -140,12 +147,15 @@ export const DiagramPanel = memo(({
       setSlides([]);
     }
   }, [effectiveDiagramType, renderContent]);
+
   const goToNextSlide = useCallback(() => {
     setCurrentSlideIndex(prev => Math.min(slides.length - 1, prev + 1));
   }, [slides.length]);
+
   const goToPreviousSlide = useCallback(() => {
     setCurrentSlideIndex(prev => Math.max(0, prev - 1));
   }, [slides.length]);
+
   useEffect(() => {
     window.addEventListener('message', (event) => {
       if (event.data.type === 'nodeClick') {
@@ -153,6 +163,7 @@ export const DiagramPanel = memo(({
       }
     });
   }, [handleNodeClick]);
+
   useEffect(() => {
     if (!renderContent || !containerRef.current) return;
     const container = containerRef.current;
@@ -160,6 +171,7 @@ export const DiagramPanel = memo(({
     if (effectiveDiagramType === 'html' || effectiveDiagramType === 'mermaid' || effectiveDiagramType === 'slides' || effectiveDiagramType === 'threejs') {
       return;
     }
+
     const renderGraphviz = async () => {
       try {
         const graphviz = await import('@hpcc-js/wasm').then(m => m.Graphviz.load());
@@ -171,6 +183,7 @@ export const DiagramPanel = memo(({
         onMermaidError(renderContent, 'rendering');
       }
     };
+
     const renderChartjs = () => {
       try {
         const canvas = document.createElement('canvas');
@@ -190,17 +203,14 @@ export const DiagramPanel = memo(({
         onMermaidError(renderContent, 'rendering');
       }
     };
+
     const renderCode = () => {
-      // Clear container
       container.innerHTML = '';
-      // Create a wrapper div for the code block
       const wrapper = document.createElement('div');
       wrapper.className = 'relative w-full h-full overflow-auto modern-scrollbar';
-      // Create a container for the syntax highlighter
       const codeContainer = document.createElement('div');
       codeContainer.className = 'relative bg-white dark:bg-gray-900 w-full box-border';
       wrapper.appendChild(codeContainer);
-      // Render the SyntaxHighlighter component into the container
       const root = ReactDOMClient.createRoot(codeContainer);
       root.render(
         <SyntaxHighlighter
@@ -225,6 +235,7 @@ export const DiagramPanel = memo(({
       );
       container.appendChild(wrapper);
     };
+
     const renderPlainText = () => {
       const plainTextStyle = `
 .text-block-wrapper {
@@ -288,6 +299,7 @@ box-sizing: border-box;
       const numberedHtml = lines.map(line => `<div class="text-line">${line || '&nbsp;'}</div>`).join('');
       pre.innerHTML = numberedHtml;
     };
+
     switch (effectiveDiagramType) {
       case 'dot':
         renderGraphviz();
@@ -309,29 +321,61 @@ box-sizing: border-box;
         break;
     }
   }, [effectiveDiagramType, renderContent, imageUrl, onMermaidError, language, isInteractiveContent, sanitizeHtml]);
+
+  // Resizing functions
   const startResizing = useCallback((e: React.MouseEvent) => {
+    console.log('Start resizing');
     setIsResizing(true);
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
     e.preventDefault();
+    e.stopPropagation();
   }, []);
+
   const stopResizing = useCallback(() => {
+    console.log('Stop resizing');
     setIsResizing(false);
     localStorage.setItem('diagramPanelWidth', panelWidth.toString());
   }, [panelWidth]);
+
   const resizePanel = useCallback((e: MouseEvent) => {
-    if (isResizing && containerRef.current) {
-      const newWidth = window.innerWidth - e.clientX;
+    if (isResizing) {
+      e.preventDefault();
+      const newWidth = e.clientX;
       const percentage = (newWidth / window.innerWidth) * 100;
-      setPanelWidth(Math.max(30, Math.min(70, percentage)));
+      const clampedPercentage = Math.max(30, Math.min(70, percentage));
+      console.log('Resizing to:', clampedPercentage);
+      setPanelWidth(clampedPercentage);
     }
-  }, [isResizing]);
+  }, [isResizing, setPanelWidth]);
+
   useEffect(() => {
-    window.addEventListener('mousemove', resizePanel);
-    window.addEventListener('mouseup', stopResizing);
-    return () => {
-      window.removeEventListener('mousemove', resizePanel);
-      window.removeEventListener('mouseup', stopResizing);
+    console.log('Panel width changed:', panelWidth);
+  }, [panelWidth]);
+
+  // Event listeners for resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      resizePanel(e);
     };
-  }, [resizePanel, stopResizing]);
+
+    const handleMouseUp = () => {
+      stopResizing();
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing, resizePanel, stopResizing]);
 
   const downloadContent = useCallback(() => {
     if (!renderContent) {
@@ -391,6 +435,7 @@ box-sizing: border-box;
       toast.success('Content downloaded!');
     }
   }, [effectiveDiagramType, renderContent, imageUrl, language]);
+
   const exportPdf = useCallback(async () => {
     if (!containerRef.current && effectiveDiagramType !== 'slides' && effectiveDiagramType !== 'threejs') {
       toast.error('No content to export.');
@@ -433,7 +478,9 @@ box-sizing: border-box;
       toast.error('Failed to generate PDF. Please try again.');
     }
   }, [effectiveDiagramType]);
+
   const mobileFullScreen = isPhone();
+
   return (
     <motion.div
       className={`relative flex flex-col h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700
@@ -456,13 +503,14 @@ ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
     >
       {!isFullScreen && !mobileFullScreen && (
         <div
-          className="absolute left-0 top-0 h-full w-2 cursor-ew-resize -ml-1 z-30"
+          className="absolute left-0 top-0 h-full w-3 cursor-ew-resize -ml-1.5 z-50 hover:bg-blue-100/30 dark:hover:bg-blue-900/30 transition-colors"
           onMouseDown={startResizing}
           title="Resize panel"
         >
-          <div className="bg-blue-500 h-full w-0.5 mx-auto rounded-full opacity-0 hover:opacity-100 transition-opacity" />
+          <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-500 h-16 w-0.5 rounded-full opacity-70" />
         </div>
       )}
+
       <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50 dark:bg-gray-800">
         <div className="flex items-center gap-2">
           <Eye className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -542,16 +590,15 @@ ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
           </Button>
         </div>
       </div>
+
       <div
         className={`flex-1 modern-scrollbar relative flex ${isInteractiveContent ? 'items-center justify-center' : 'flex-col'} overflow-hidden
 ${isInteractiveContent ? 'cursor-grab' : ''}
 `}
-
       >
         <div
           ref={innerContentWrapperRef}
           className="w-full h-full flex items-center justify-center"
-
         >
           <ErrorBoundary>
             {effectiveDiagramType === 'html' && (
@@ -564,7 +611,7 @@ ${isInteractiveContent ? 'cursor-grab' : ''}
               <SlidesRenderer
                 slides={slides}
                 currentSlideIndex={currentSlideIndex}
-                theme={currentTheme} // Pass the current theme for consistent styling
+                theme={currentTheme}
               />
             )}
             {effectiveDiagramType === 'threejs' && (
@@ -597,6 +644,7 @@ ${isInteractiveContent ? 'cursor-grab' : ''}
           </ErrorBoundary>
         </div>
       </div>
+
       <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
         <div className="flex items-center gap-4">
           <span>Type: {effectiveDiagramType}</span>
@@ -608,7 +656,6 @@ ${isInteractiveContent ? 'cursor-grab' : ''}
           )}
         </div>
         <div className="flex items-center gap-2">
-
           {isInteractiveContent && (
             <div className="flex items-center">
               <MousePointer className="h-3 w-3 mr-1" />

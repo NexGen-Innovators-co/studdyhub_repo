@@ -58,16 +58,16 @@ interface SidebarProps {
   onCategoryChange: (category: string) => void;
   noteCount: number;
   activeTab:
-    | 'notes'
-    | 'recordings'
-    | 'quizzes'
-    | 'schedule'
-    | 'chat'
-    | 'documents'
-    | 'settings'
-    | 'dashboard'
-    | 'social'
-    | string;
+  | 'notes'
+  | 'recordings'
+  | 'quizzes'
+  | 'schedule'
+  | 'chat'
+  | 'documents'
+  | 'settings'
+  | 'dashboard'
+  | 'social'
+  | string;
   activeSocialTab?: string; // New prop for social sub-navigation
   onTabChange: (
     tab:
@@ -135,24 +135,21 @@ const CategoriesList = memo(
           <Button
             key={category.id}
             variant={isActive ? 'secondary' : 'ghost'}
-            className={`w-full justify-start h-9 text-sm ${
-              isActive
+            className={`w-full justify-start h-9 text-sm ${isActive
                 ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white'
                 : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
-            } ${!isOpen && 'px-2'}`}
+              } ${!isOpen && 'px-2'}`}
             onClick={() => onCategoryChange(category.id)}
           >
             <Icon
-              className={`h-3 w-3 ${
-                isOpen ? 'mr-2' : 'lg:group-hover:mr-2 lg:transition-all lg:duration-300'
-              }`}
+              className={`h-3 w-3 ${isOpen ? 'mr-2' : 'lg:group-hover:mr-2 lg:transition-all lg:duration-300'
+                }`}
             />
             <span
-              className={`truncate ${
-                isOpen
+              className={`truncate ${isOpen
                   ? ''
                   : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
-              }`}
+                }`}
             >
               {category.name}
             </span>
@@ -185,24 +182,21 @@ const SocialNavList = memo(
           <Button
             key={item.id}
             variant={isActive ? 'secondary' : 'ghost'}
-            className={`w-full justify-start h-9 text-sm ${
-              isActive
+            className={`w-full justify-start h-9 text-sm ${isActive
                 ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
                 : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
-            } ${!isOpen && 'px-2'}`}
+              } ${!isOpen && 'px-2'}`}
             onClick={() => onTabChange(item.path)}
           >
             <Icon
-              className={`h-4 w-4 ${
-                isOpen ? 'mr-2' : 'lg:group-hover:mr-2 lg:transition-all lg:duration-300'
-              }`}
+              className={`h-4 w-4 ${isOpen ? 'mr-2' : 'lg:group-hover:mr-2 lg:transition-all lg:duration-300'
+                }`}
             />
             <span
-              className={`truncate ${
-                isOpen
+              className={`truncate ${isOpen
                   ? ''
                   : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
-              }`}
+                }`}
             >
               {item.name}
             </span>
@@ -241,11 +235,10 @@ const TabsList = memo(
           <Button
             key={tab.id}
             variant={isActive ? 'default' : 'ghost'}
-            className={`w-full justify-start h-10 ${
-              isActive
+            className={`w-full justify-start h-10 ${isActive
                 ? 'bg-blue-600 text-white font-bold text-lg py-3 rounded-lg shadow-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-[1.005] disabled:opacity-50 disabled:cursor-not-allowed h-12'
                 : 'hover:bg-slate-100 text-slate-700 dark:text-gray-300 dark:hover:bg-gray-800'
-            } ${!isOpen && 'px-2'}`}
+              } ${!isOpen && 'px-2'}`}
             onClick={() => {
               if (isChatTab) {
                 onTabChange(
@@ -257,16 +250,14 @@ const TabsList = memo(
             }}
           >
             <Icon
-              className={`h-4 w-4 ${
-                isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
-              }`}
+              className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
+                }`}
             />
             <span
-              className={`truncate ${
-                isOpen
+              className={`truncate ${isOpen
                   ? ''
                   : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
-              }`}
+                }`}
             >
               {tab.name}
             </span>
@@ -316,50 +307,44 @@ const ChatSessionsList = memo(
           return (
             <div
               key={session.id}
-              className={`flex items-center justify-between group cursor-pointer rounded-lg transition-colors duration-200 ${
-                isActive
+              className={`flex items-center justify-between group cursor-pointer rounded-lg transition-colors duration-200 ${isActive
                   ? 'bg-slate-100 text-slate-800 dark:bg-gray-700 dark:text-white'
                   : 'hover:bg-slate-50 text-slate-600 dark:hover:bg-gray-800 dark:text-gray-300'
-              } ${isDeleting || isRenaming ? 'opacity-60 pointer-events-none' : ''}`}
+                } ${isDeleting || isRenaming ? 'opacity-60 pointer-events-none' : ''}`}
               onClick={() => !isDeleting && !isRenaming && onChatSessionSelect(session.id)}
             >
               <Button
                 variant="ghost"
-                className={`flex-1 justify-start h-10 text-sm truncate ${
-                  !isOpen && 'px-2'
-                }`}
+                className={`flex-1 justify-start h-10 text-sm truncate ${!isOpen && 'px-2'
+                  }`}
                 title={session.title}
                 style={{ maxWidth: '160px' }}
                 disabled={isDeleting || isRenaming}
               >
                 {isRenaming ? (
                   <Loader2
-                    className={`h-4 w-4 animate-spin ${
-                      isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
-                    }`}
+                    className={`h-4 w-4 animate-spin ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
+                      }`}
                   />
                 ) : (
                   <MessageCircle
-                    className={`h-4 w-4 ${
-                      isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
-                    }`}
+                    className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
+                      }`}
                   />
                 )}
                 <span
-                  className={`truncate ${
-                    isOpen
+                  className={`truncate ${isOpen
                       ? ''
                       : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
-                  }`}
+                    }`}
                 >
                   {session.title}
                 </span>
               </Button>
               {isOpen && (
                 <div
-                  className={`flex items-center gap-1 transition-opacity duration-300 mr-2 ${
-                    isDeleting || isRenaming ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                  }`}
+                  className={`flex items-center gap-1 transition-opacity duration-300 mr-2 ${isDeleting || isRenaming ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    }`}
                 >
                   {isDeleting ? (
                     <div className="h-7 w-14 flex items-center justify-center">
@@ -412,31 +397,27 @@ const ThemeToggle = memo(
   }) => (
     <Button
       variant="ghost"
-      className={`w-full justify-start h-10 text-slate-700 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${
-        !isOpen && 'px-2'
-      }`}
+      className={`w-full justify-start h-10 text-slate-700 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'
+        }`}
       onClick={onThemeChange}
       title="Toggle Theme"
     >
       {currentTheme === 'light' ? (
         <Moon
-          className={`h-4 w-4 ${
-            isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
-          }`}
+          className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
+            }`}
         />
       ) : (
         <Sun
-          className={`h-4 w-4 ${
-            isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
-          }`}
+          className={`h-4 w-4 ${isOpen ? 'mr-3' : 'lg:group-hover:mr-3 lg:transition-all lg:duration-300'
+            }`}
         />
       )}
       <span
-        className={`truncate ${
-          isOpen
+        className={`truncate ${isOpen
             ? ''
             : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
-        }`}
+          }`}
       >
         {currentTheme === 'light' ? 'Dark Mode' : 'Light Mode'}
       </span>
@@ -962,11 +943,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       <div
-        className={`bg-white border-r h-full border-slate-200 transition-transform duration-300 ease-in-out ${
-          isOpen
+        className={`bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 border-r h-full transition-transform duration-300 ease-in-out ${isOpen
             ? 'translate-x-0 w-72 md:w-64'
             : '-translate-x-full md:translate-x-0 md:w-14 md:hover:w-64'
-        } fixed inset-y-0 left-0 z-10 flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative md:translate-x-0 md:w-16 lg:shadow-none lg:translate-x-0 lg:relative lg:translate-x-0 lg:w-16 lg:hover:w-64 group overflow-hidden dark:bg-gray-900 dark:border-gray-600 overflow-y-scroll modern-scrollbar`}
+          } fixed inset-y-0 left-0 z-10 flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative md:w-16 lg:shadow-none lg:translate-x-0 lg:relative lg:w-16 lg:hover:w-64 group overflow-hidden overflow-y-scroll modern-scrollbar`}
       >
         <div className="p-6 sm:p-4 flex-1">
           {/* Toggle Button for Mobile */}
@@ -1000,7 +980,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
               {isOpen && (
                 <div className="mb-2 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
-                   <h2 className="font-semibold text-slate-800 dark:text-gray-200">
+                  <h2 className="font-semibold text-slate-800 dark:text-gray-200">
                     Social
                   </h2>
                 </div>
@@ -1022,9 +1002,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={handleNewChat}
-                  className={`text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${
-                    !isOpen && 'px-2'
-                  }`}
+                  className={`text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'
+                    }`}
                   title="New Chat"
                   disabled={isNewChatLoading}
                 >
@@ -1034,11 +1013,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <Plus className={`h-4 w-4 ${isOpen ? 'mr-2' : ''}`} />
                   )}
                   <span
-                    className={`${
-                      isOpen
+                    className={`${isOpen
                         ? ''
                         : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-9 lg:w-full lg:pl-1 lg:pointer-events-none'
-                    }`}
+                      }`}
                   >
                     New Chat
                   </span>
@@ -1046,11 +1024,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div
                 ref={chatSessionsRef}
-                className={`space-y-1 transition-all duration-300 ease-in-out ${
-                  isOpen
+                className={`space-y-1 transition-all duration-300 ease-in-out ${isOpen
                     ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
                     : 'max-h-0 overflow-hidden'
-                } lg:group-hover:max-h-[31vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar lg:max-h-0 lg:overflow-hidden`}
+                  } lg:group-hover:max-h-[31vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar lg:max-h-0 lg:overflow-hidden`}
               >
                 <ChatSessionsList {...chatSessionsListProps} />
                 {hasMoreChatSessions && (
@@ -1058,9 +1035,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     variant="ghost"
                     size="sm"
                     onClick={handleLoadMore}
-                    className={`w-full text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${
-                      !isOpen && 'px-2'
-                    }`}
+                    className={`w-full text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'
+                      }`}
                     disabled={isLoadingMore}
                   >
                     {isLoadingMore ? (
@@ -1093,9 +1069,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div
-          className={`flex-shrink-0 border-t border-slate-200 p-4 dark:border-gray-700 transition-all duration-300 ease-in-out ${
-            isOpen ? 'flex items-center gap-2' : 'flex justify-center'
-          } lg:group-hover:flex lg:group-hover:items-center lg:group-hover:gap-2 lg:flex lg:justify-center`}
+          className={`flex-shrink-0 border-t border-slate-200 p-4 dark:border-gray-700 transition-all duration-300 ease-in-out ${isOpen ? 'flex items-center gap-2' : 'flex justify-center'
+            } lg:group-hover:flex lg:group-hover:items-center lg:group-hover:gap-2 lg:flex lg:justify-center`}
         >
           <AvatarMenu {...avatarMenuProps} />
           <UserAvatar {...userAvatarProps} />

@@ -83,9 +83,9 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
           ...data,
           permissions: rawPerms ?? {},
         };
-        
+
         setAdminUser(admin);
-        
+
         // Update last login
         await supabase
           .from('admin_users')
@@ -95,6 +95,8 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
     } catch (error) {
       console.error('Error checking admin status:', error);
       setAdminUser(null);
+      setLoading(false)
+      window.location.pathname = 'auth'
     } finally {
       setLoading(false);
     }

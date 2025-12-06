@@ -26,7 +26,7 @@ export const GroupHeader: React.FC<GroupHeaderProps> = ({
       {/* Cover Photo */}
       <div className="h-48 lg:h-64 bg-gradient-to-r from-blue-600 to-blue-700 relative overflow-hidden flex items-center justify-center">
         {group.cover_image_url ? (
-                <img
+          <img
             src={group.cover_image_url}
             alt="Group cover"
             className="w-full h-full object-cover"
@@ -43,7 +43,7 @@ export const GroupHeader: React.FC<GroupHeaderProps> = ({
           variant="ghost"
           size="sm"
           onClick={() => navigate(-1)}
-          className="bg-white/20 backdrop-blur-md hover:bg-white/30 text-white border border-white/30"
+          className="bg-white/20 backdrop-blur-md hidden lg:block  hover:bg-white/30 text-white border border-white/30"
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -51,7 +51,7 @@ export const GroupHeader: React.FC<GroupHeaderProps> = ({
 
       {/* Settings Button (Admin/Mod only) */}
       {canManage && (
-        <div className="absolute top-4 right-4 ">
+        <div className="hidden lg:block absolute top-4 right-4 ">
           <Button
             variant="ghost"
             size="sm"
@@ -68,7 +68,7 @@ export const GroupHeader: React.FC<GroupHeaderProps> = ({
         <div className="flex items-end gap-4 lg:gap-6">
           <Avatar className="h-24 w-24 lg:h-32 lg:w-32 border-4 lg:border-8 border-white dark:border-slate-900 shadow-2xl">
             <AvatarImage src={group.avatar_url} />
-            <AvatarFallback className="text-3xl lg:text-5xl font-bold bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+            <AvatarFallback className="text-3xl lg:text-5xl font-bold bg-gradient-to-br from-blue-500 to-blue-600 text-white">
               {group.name[0]}
             </AvatarFallback>
           </Avatar>
