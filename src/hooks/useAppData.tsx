@@ -28,6 +28,7 @@ const LOAD_MORE_LIMITS = {
   quizzes: 12,
   folders: 100
 };
+
 // Type definitions
 export interface DataLoadingState {
   notes: boolean;
@@ -38,9 +39,11 @@ export interface DataLoadingState {
   profile: boolean;
   folders: boolean;
 }
+
 // In useAppData.tsx - Update timeout constants
 const API_TIMEOUT = 45000; // Increase from 30 to 45 seconds
 const LOADING_TIMEOUT = 30000; // Increase from 10 to 30 seconds for loading states
+
 // Priority-based loading with dependencies
 const LOADING_PRIORITIES = {
   profile: 1,
@@ -218,6 +221,7 @@ const useLoadingState = (initialState: DataLoadingState) => {
 
   return [loading, setLoadingWithTimeout] as const;
 };
+
 export const useAppData = () => {
   // State management with lazy initialization
   const [notes, setNotes] = useState<Note[]>([]);
@@ -288,6 +292,16 @@ export const useAppData = () => {
   const dataCacheRef = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
+  // Add ref to track loaded IDs for duplicate prevention
+  const loadedIdsRef = useRef<Record<string, Set<string>>>({
+    notes: new Set(),
+    recordings: new Set(),
+    scheduleItems: new Set(),
+    documents: new Set(),
+    quizzes: new Set(),
+    folders: new Set(),
+  });
+
   // Add this with your other refs
   const isCurrentlySendingRef = useRef(false);
 
@@ -303,6 +317,13 @@ export const useAppData = () => {
       return matchesSearch && matchesCategory;
     });
   }, [notes, searchQuery, selectedCategory]);
+
+  // Helper function to clear loaded IDs
+  const clearLoadedIds = useCallback(() => {
+    Object.keys(loadedIdsRef.current).forEach(key => {
+      loadedIdsRef.current[key as keyof typeof loadedIdsRef.current].clear();
+    });
+  }, []);
 
   // Enhanced auth listener with cleanup and timeout
   useEffect(() => {
@@ -427,7 +448,10 @@ export const useAppData = () => {
 
     setLoadingPhase({ phase: 'initial', progress: 0 });
     setLoading(false);
-  }, [cleanup, setDataLoading]);
+
+    // Clear loaded IDs
+    clearLoadedIds();
+  }, [cleanup, setDataLoading, clearLoadedIds]);
 
   // Cache management utilities
   const getCachedData = useCallback((key: string) => {
@@ -453,8 +477,6 @@ export const useAppData = () => {
   }, []);
 
   // Enhanced documents loading for chat dependency with timeout
-  // In useAppData.tsx - Update loadDocumentsPage
-  // In useAppData.tsx - Fix document loading
   const loadDocumentsPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.documents || !dataPagination.documents.hasMore) return;
 
@@ -478,7 +500,12 @@ export const useAppData = () => {
       if (error) throw error;
 
       if (data) {
-        const formattedDocuments: Document[] = data.map(doc => ({
+        // Filter out duplicates before formatting
+        const newDocsData = data.filter(doc =>
+          !loadedIdsRef.current.documents.has(doc.id)
+        );
+
+        const formattedDocuments: Document[] = newDocsData.map(doc => ({
           id: doc.id,
           title: doc.title,
           file_name: doc.file_name,
@@ -490,10 +517,9 @@ export const useAppData = () => {
           type: doc.type as Document['type'],
           processing_status: doc.processing_status || 'pending',
           processing_error: doc.processing_error || null,
-          created_at: doc.created_at, // Keep as string
-          updated_at: doc.updated_at, // Keep as string
+          created_at: doc.created_at,
+          updated_at: doc.updated_at,
           folder_ids: doc.folder_items?.map((item: any) => item.folder_id) || [],
-          // Add missing fields with defaults
           processing_started_at: doc.processing_started_at || null,
           processing_completed_at: doc.processing_completed_at || null,
           processing_metadata: doc.processing_metadata || null,
@@ -501,17 +527,24 @@ export const useAppData = () => {
           total_processing_time_ms: doc.total_processing_time_ms || null,
         }));
 
-        setDocuments(prev => isInitial ? formattedDocuments : [...prev, ...formattedDocuments]);
+        // Add new IDs to loaded set
+        formattedDocuments.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
 
-        const newOffset = offset + data.length;
-        const hasMore = data.length === limit;
+        if (isInitial) {
+          setDocuments(formattedDocuments);
+        } else {
+          setDocuments(prev => [...prev, ...formattedDocuments]);
+        }
+
+        const newOffset = offset + data.length; // Use original data length for offset
+        const hasMore = data.length === limit; // Use original data length for hasMore
 
         setDataPagination(prev => ({
           ...prev,
           documents: {
             hasMore,
             offset: newOffset,
-            total: prev.documents.total + data.length
+            total: prev.documents.total + formattedDocuments.length
           }
         }));
 
@@ -528,7 +561,8 @@ export const useAppData = () => {
       setDataLoading('documents', false);
     }
   }, [dataLoaded, dataLoading.documents, dataPagination.documents, setDataLoading]);
-  // Optimized recordings loading with timeout
+
+  // Optimized recordings loading with timeout and duplicate prevention
   const loadRecordingsPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.recordings) return;
     if (!isInitial && !dataPagination.recordings.hasMore) return;
@@ -553,7 +587,12 @@ export const useAppData = () => {
       if (error) throw error;
 
       if (data) {
-        const formattedRecordings: ClassRecording[] = data.map(recording => ({
+        // Filter out duplicates before formatting
+        const newRecordingsData = data.filter(recording =>
+          !loadedIdsRef.current.recordings.has(recording.id)
+        );
+
+        const formattedRecordings: ClassRecording[] = newRecordingsData.map(recording => ({
           id: recording.id,
           title: recording.title || 'Untitled Recording',
           subject: recording.subject || '',
@@ -567,31 +606,37 @@ export const useAppData = () => {
           document_id: recording.document_id
         }));
 
+        // Add new IDs to loaded set
+        formattedRecordings.forEach(recording => loadedIdsRef.current.recordings.add(recording.id));
+
         if (isInitial) {
           setRecordings(formattedRecordings);
         } else {
           setRecordings(prev => [...prev, ...formattedRecordings]);
         }
 
-        const newOffset = offset + formattedRecordings.length;
-        const hasMore = formattedRecordings.length === limit;
+        const newOffset = offset + data.length; // Use original data length
+        const hasMore = data.length === limit; // Use original data length
 
         setDataPagination(prev => ({
           ...prev,
-          recordings: { hasMore, offset: newOffset, total: prev.recordings.total + formattedRecordings.length }
+          recordings: {
+            hasMore,
+            offset: newOffset,
+            total: prev.recordings.total + formattedRecordings.length
+          }
         }));
       }
 
       setDataLoaded(prev => new Set([...prev, 'recordings']));
     } catch (error) {
       console.error('Error loading recordings:', error);
-      // Don't show error for background loading
     } finally {
       setDataLoading('recordings', false);
     }
   }, [dataLoading.recordings, dataPagination.recordings, setDataLoading]);
 
-  // Optimized schedule loading with timeout
+  // Optimized schedule loading with timeout and duplicate prevention
   const loadSchedulePage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.scheduleItems) return;
     if (!isInitial && !dataPagination.scheduleItems.hasMore) return;
@@ -616,7 +661,12 @@ export const useAppData = () => {
       if (error) throw error;
 
       if (data) {
-        const formattedItems: ScheduleItem[] = data.map(item => ({
+        // Filter out duplicates before formatting
+        const newScheduleData = data.filter(item =>
+          !loadedIdsRef.current.scheduleItems.has(item.id)
+        );
+
+        const formattedItems: ScheduleItem[] = newScheduleData.map(item => ({
           id: item.id,
           title: item.title || 'Untitled Event',
           subject: item.subject || '',
@@ -630,31 +680,37 @@ export const useAppData = () => {
           created_at: item.created_at
         }));
 
+        // Add new IDs to loaded set
+        formattedItems.forEach(item => loadedIdsRef.current.scheduleItems.add(item.id));
+
         if (isInitial) {
           setScheduleItems(formattedItems);
         } else {
           setScheduleItems(prev => [...prev, ...formattedItems]);
         }
 
-        const newOffset = offset + formattedItems.length;
-        const hasMore = formattedItems.length === limit;
+        const newOffset = offset + data.length; // Use original data length
+        const hasMore = data.length === limit; // Use original data length
 
         setDataPagination(prev => ({
           ...prev,
-          scheduleItems: { hasMore, offset: newOffset, total: prev.scheduleItems.total + formattedItems.length }
+          scheduleItems: {
+            hasMore,
+            offset: newOffset,
+            total: prev.scheduleItems.total + formattedItems.length
+          }
         }));
       }
 
       setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
     } catch (error) {
       console.error('Error loading schedule items:', error);
-      // Don't show error for background loading
     } finally {
       setDataLoading('scheduleItems', false);
     }
   }, [dataLoading.scheduleItems, dataPagination.scheduleItems, setDataLoading]);
 
-  // Optimized quizzes loading with timeout
+  // Optimized quizzes loading with timeout and duplicate prevention
   const loadQuizzesPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.quizzes) return;
     if (!isInitial && !dataPagination.quizzes.hasMore) return;
@@ -679,7 +735,12 @@ export const useAppData = () => {
       if (error) throw error;
 
       if (data) {
-        const formattedQuizzes: Quiz[] = data.map(quiz => ({
+        // Filter out duplicates before formatting
+        const newQuizzesData = data.filter(quiz =>
+          !loadedIdsRef.current.quizzes.has(quiz.id)
+        );
+
+        const formattedQuizzes: Quiz[] = newQuizzesData.map(quiz => ({
           id: quiz.id,
           title: quiz.title || 'Untitled Quiz',
           questions: (Array.isArray(quiz.questions) ? quiz.questions.map((q: any) => ({
@@ -694,38 +755,52 @@ export const useAppData = () => {
           created_at: quiz.created_at
         }));
 
+        // Add new IDs to loaded set
+        formattedQuizzes.forEach(quiz => loadedIdsRef.current.quizzes.add(quiz.id));
+
         if (isInitial) {
           setQuizzes(formattedQuizzes);
         } else {
           setQuizzes(prev => [...prev, ...formattedQuizzes]);
         }
 
-        const newOffset = offset + formattedQuizzes.length;
-        const hasMore = formattedQuizzes.length === limit;
+        const newOffset = offset + data.length; // Use original data length
+        const hasMore = data.length === limit; // Use original data length
 
         setDataPagination(prev => ({
           ...prev,
-          quizzes: { hasMore, offset: newOffset, total: prev.quizzes.total + formattedQuizzes.length }
+          quizzes: {
+            hasMore,
+            offset: newOffset,
+            total: prev.quizzes.total + formattedQuizzes.length
+          }
         }));
       }
 
       setDataLoaded(prev => new Set([...prev, 'quizzes']));
     } catch (error) {
       console.error('Error loading quizzes:', error);
-      // Don't show error for background loading
     } finally {
       setDataLoading('quizzes', false);
     }
   }, [dataLoading.quizzes, dataPagination.quizzes, setDataLoading]);
 
-  // Optimized folder loading with caching and timeout
+  // Optimized folder loading with caching, timeout and duplicate prevention
   const loadFolders = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.folders) return;
 
     const cacheKey = `folders_${userId}`;
     const cached = getCachedData(cacheKey);
     if (cached && isInitial) {
-      setFolders(cached.folders);
+      // Filter out duplicates
+      const uniqueFolders = cached.folders.filter(folder =>
+        !loadedIdsRef.current.folders.has(folder.id)
+      );
+      setFolders(uniqueFolders);
+
+      // Add to loaded IDs
+      uniqueFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
+
       setFolderTree(cached.tree);
       setDataLoaded(prev => new Set([...prev, 'folders']));
       return;
@@ -747,7 +822,12 @@ export const useAppData = () => {
       if (error) throw error;
 
       if (data) {
-        const formattedFolders: DocumentFolder[] = data.map(folder => ({
+        // Filter out duplicates before formatting
+        const newFoldersData = data.filter(folder =>
+          !loadedIdsRef.current.folders.has(folder.id)
+        );
+
+        const formattedFolders: DocumentFolder[] = newFoldersData.map(folder => ({
           id: folder.id,
           user_id: folder.user_id,
           name: folder.name,
@@ -758,6 +838,9 @@ export const useAppData = () => {
           updated_at: folder.updated_at,
           isExpanded: false,
         }));
+
+        // Add new IDs to loaded set
+        formattedFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
 
         const tree = buildFolderTree(formattedFolders);
 
@@ -916,8 +999,7 @@ export const useAppData = () => {
     }
   }, [dataLoaded, getCachedData, setCachedData, setDataLoading]);
 
-  // Optimized notes loading with batched queries and timeout
-  // Fix the notes loading function
+  // Optimized notes loading with batched queries, timeout and duplicate prevention
   const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.notes) return;
     if (!isInitial && !dataPagination.notes.hasMore) return;
@@ -928,7 +1010,15 @@ export const useAppData = () => {
     const cacheKey = `notes_${userId}_${isInitial ? 'initial' : dataPagination.notes.offset}`;
     const cached = getCachedData(cacheKey);
     if (cached && isInitial) {
-      setNotes(cached.notes);
+      // Filter out any duplicates from cache
+      const uniqueCachedNotes = cached.notes.filter(note =>
+        !loadedIdsRef.current.notes.has(note.id)
+      );
+      setNotes(prev => isInitial ? uniqueCachedNotes : [...prev, ...uniqueCachedNotes]);
+
+      // Add to loaded IDs
+      uniqueCachedNotes.forEach(note => loadedIdsRef.current.notes.add(note.id));
+
       if (cached.activeNote && !activeNote) setActiveNote(cached.activeNote);
       setDataPagination(prev => ({ ...prev, notes: cached.pagination }));
       setDataLoaded(prev => new Set([...prev, 'notes']));
@@ -956,7 +1046,12 @@ export const useAppData = () => {
       if (error) throw error;
 
       if (data) {
-        const formattedNotes: Note[] = data.map(note => ({
+        // Filter out duplicates before formatting
+        const newNotesData = data.filter(note =>
+          !loadedIdsRef.current.notes.has(note.id)
+        );
+
+        const formattedNotes: Note[] = newNotesData.map(note => ({
           id: note.id,
           title: note.title || 'Untitled Note',
           content: note.content || '',
@@ -968,6 +1063,9 @@ export const useAppData = () => {
           updated_at: note.updated_at,
           ai_summary: note.ai_summary || '',
         }));
+
+        // Add new IDs to loaded set
+        formattedNotes.forEach(note => loadedIdsRef.current.notes.add(note.id));
 
         let newActiveNote = activeNote;
         if (isInitial && formattedNotes.length > 0 && !activeNote) {
@@ -984,9 +1082,13 @@ export const useAppData = () => {
         }
 
         const newOffset = isInitial ? formattedNotes.length : offset + formattedNotes.length;
-        const hasMore = formattedNotes.length === limit;
+        const hasMore = data.length === limit; // Check original data length for pagination
 
-        const newPagination = { hasMore, offset: newOffset, total: dataPagination.notes.total + formattedNotes.length };
+        const newPagination = {
+          hasMore,
+          offset: newOffset,
+          total: dataPagination.notes.total + formattedNotes.length
+        };
         setDataPagination(prev => ({ ...prev, notes: newPagination }));
 
         if (isInitial) {
@@ -1011,11 +1113,8 @@ export const useAppData = () => {
       setDataLoading('notes', false);
     }
   }, [dataLoading.notes, dataPagination.notes, activeNote, getCachedData, setCachedData, setDataLoading]);
-  // [Rest of the real-time listener functions - setupDocumentListener, setupChatMessageListener, etc.]
-  // These would need to be implemented similarly with proper typing
 
   // Enhanced progressive loading with better error handling and timeouts
-  // In useAppData.tsx - Update startProgressiveDataLoading
   const startProgressiveDataLoading = useCallback(async (user: any) => {
     if (!user?.id) return;
 
@@ -1079,7 +1178,6 @@ export const useAppData = () => {
       setLoadingPhase({ phase: 'complete', progress: 100 });
     }
   }, [loadUserProfile, loadNotesPage, loadDocumentsPage, loadFolders, loadRecordingsPage, loadSchedulePage, loadQuizzesPage]);
-  // [Rest of the implementation continues...]
 
   // Enhanced loading state computation
   const enhancedLoading = loading || loadingPhase.phase !== 'complete';
@@ -1090,6 +1188,153 @@ export const useAppData = () => {
     'secondary': 'Loading additional content...',
     'complete': 'Ready!'
   }[loadingPhase.phase];
+
+  // Utility functions for merging data with duplicate prevention
+  const mergeDocuments = useCallback((prev: Document[], newDocs: Document[]): Document[] => {
+    const uniqueMap = new Map<string, Document>();
+
+    // Add all previous documents
+    prev.forEach(doc => uniqueMap.set(doc.id, doc));
+
+    // Add/overwrite with new documents, but skip if already in loaded IDs
+    newDocs.forEach(doc => {
+      if (!loadedIdsRef.current.documents.has(doc.id)) {
+        uniqueMap.set(doc.id, doc);
+        loadedIdsRef.current.documents.add(doc.id);
+      }
+    });
+
+    return Array.from(uniqueMap.values());
+  }, []);
+
+  const mergeNotes = useCallback((prev: Note[], newNotes: Note[]): Note[] => {
+    const uniqueMap = new Map<string, Note>();
+
+    // Add all previous notes
+    prev.forEach(note => uniqueMap.set(note.id, note));
+
+    // Add/overwrite with new notes, but skip if already in loaded IDs
+    newNotes.forEach(note => {
+      if (!loadedIdsRef.current.notes.has(note.id)) {
+        uniqueMap.set(note.id, note);
+        loadedIdsRef.current.notes.add(note.id);
+      }
+    });
+
+    return Array.from(uniqueMap.values());
+  }, []);
+
+  // Fix specific documents loading with duplicate prevention
+  const loadSpecificDocuments = useCallback(async (userId: string, ids: string[]) => {
+    if (!ids.length) return;
+
+    const cacheKey = `specific_docs_${userId}_${ids.sort().join('_')}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) {
+      setDocuments(prev => mergeDocuments(prev, cached));
+      return;
+    }
+
+    setDataLoading('documents', true);
+
+    try {
+      const { data, error } = await withTimeout<any[]>(
+        supabase
+          .from('documents')
+          .select('*')
+          .eq('user_id', userId)
+          .in('id', ids),
+        API_TIMEOUT,
+        'Failed to load specific documents'
+      );
+
+      if (error) throw error;
+
+      const newDocs: Document[] = (data || []).map(doc => ({
+        id: doc.id,
+        title: doc.title,
+        file_name: doc.file_name,
+        file_type: doc.file_type,
+        file_size: doc.file_size || 0,
+        file_url: doc.file_url,
+        content_extracted: doc.content_extracted || '',
+        user_id: doc.user_id,
+        type: doc.type,
+        processing_status: doc.processing_status || 'pending',
+        processing_error: doc.processing_error || null,
+        created_at: doc.created_at,
+        updated_at: doc.updated_at,
+        folder_ids: doc.folder_ids || [],
+        processing_started_at: doc.processing_started_at || null,
+        processing_completed_at: doc.processing_completed_at || null,
+        processing_metadata: doc.processing_metadata || null,
+        extraction_model_used: doc.extraction_model_used || null,
+        total_processing_time_ms: doc.total_processing_time_ms || null,
+      }));
+
+      setDocuments(prev => {
+        const merged = mergeDocuments(prev, newDocs);
+        setCachedData(cacheKey, newDocs);
+        return merged;
+      });
+    } catch (error) {
+      console.error('Error loading specific documents:', error);
+    } finally {
+      setDataLoading('documents', false);
+    }
+  }, [getCachedData, setCachedData, setDataLoading, mergeDocuments]);
+
+  // Fix specific notes loading with duplicate prevention
+  const loadSpecificNotes = useCallback(async (userId: string, ids: string[]) => {
+    if (!ids.length) return;
+
+    const cacheKey = `specific_notes_${userId}_${ids.sort().join('_')}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) {
+      setNotes(prev => mergeNotes(prev, cached));
+      return;
+    }
+
+    setDataLoading('notes', true);
+
+    try {
+      const { data, error } = await withTimeout<any[]>(
+        supabase
+          .from('notes')
+          .select('*')
+          .eq('user_id', userId)
+          .in('id', ids)
+          .order('updated_at', { ascending: false }),
+        API_TIMEOUT,
+        'Failed to load specific notes'
+      );
+
+      if (error) throw error;
+
+      const transformedNotes: Note[] = (data || []).map(item => ({
+        id: item.id,
+        document_id: item.document_id,
+        title: item.title,
+        content: item.content,
+        category: item.category,
+        ai_summary: item.ai_summary,
+        tags: item.tags,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        user_id: item.user_id,
+      }));
+
+      setNotes(prev => {
+        const merged = mergeNotes(prev, transformedNotes);
+        setCachedData(cacheKey, transformedNotes);
+        return merged;
+      });
+    } catch (error) {
+      console.error('Error loading specific notes:', error);
+    } finally {
+      setDataLoading('notes', false);
+    }
+  }, [getCachedData, setCachedData, setDataLoading, mergeNotes]);
 
   // Return optimized hook API
   return {
@@ -1137,9 +1382,11 @@ export const useAppData = () => {
     setFolders,
     clearAllData,
     dataErrors,
+
     clearError: useCallback((dataType: string) => {
       setDataErrors(prev => ({ ...prev, [dataType]: '' }));
     }, []),
+
     retryLoading: useCallback((dataType: keyof DataLoadingState) => {
       if (!currentUser?.id) return;
 
@@ -1151,11 +1398,13 @@ export const useAppData = () => {
         scheduleItems: () => loadSchedulePage(currentUser.id, true),
         documents: () => loadDocumentsPage(currentUser.id, true),
         quizzes: () => loadQuizzesPage(currentUser.id, true),
+        folders: () => loadFolders(currentUser.id, true),
       };
       if (loaders[dataType]) {
         loaders[dataType]();
       }
-    }, [currentUser, loadNotesPage, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage]),
+    }, [currentUser, loadNotesPage, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadFolders]),
+
     // Lazy loading functions
     loadDataIfNeeded: useCallback((dataType: keyof DataLoadingState) => {
       if (!currentUser?.id || dataLoaded.has(dataType) || dataLoading[dataType]) return;
@@ -1175,7 +1424,6 @@ export const useAppData = () => {
       }
     }, [currentUser, dataLoaded, dataLoading, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile, loadFolders]),
 
-
     // Load more functions
     loadMoreNotes: useCallback(() => currentUser?.id && loadNotesPage(currentUser.id, false), [currentUser, loadNotesPage]),
     loadMoreRecordings: useCallback(() => currentUser?.id && loadRecordingsPage(currentUser.id, false), [currentUser, loadRecordingsPage]),
@@ -1185,145 +1433,11 @@ export const useAppData = () => {
 
     // Utility functions
     loadFolders,
-    // Fix specific documents loading
-    loadSpecificDocuments: useCallback(async (userId: string, ids: string[]) => {
-      if (!ids.length) return;
-
-      const cacheKey = `specific_docs_${userId}_${ids.sort().join('_')}`;
-      const cached = getCachedData(cacheKey);
-      if (cached) {
-        setDocuments(prev => mergeDocuments(prev, cached));
-        return;
-      }
-
-      setDataLoading('documents', true);
-
-      try {
-        const { data, error } = await withTimeout<any[]>(
-          supabase
-            .from('documents')
-            .select('*')
-            .eq('user_id', userId)
-            .in('id', ids),
-          API_TIMEOUT,
-          'Failed to load specific documents'
-        );
-
-        if (error) throw error;
-
-        const newDocs: Document[] = (data || []).map(doc => ({
-          id: doc.id,
-          title: doc.title,
-          file_name: doc.file_name,
-          file_type: doc.file_type,
-          file_size: doc.file_size || 0,
-          file_url: doc.file_url,
-          content_extracted: doc.content_extracted || '',
-          user_id: doc.user_id,
-          type: doc.type,
-          processing_status: doc.processing_status || 'pending',
-          processing_error: doc.processing_error || null,
-          created_at: doc.created_at,
-          updated_at: doc.updated_at,
-          folder_ids: doc.folder_ids || [],
-          processing_started_at: doc.processing_started_at || null,
-          processing_completed_at: doc.processing_completed_at || null,
-          processing_metadata: doc.processing_metadata || null,
-          extraction_model_used: doc.extraction_model_used || null,
-          total_processing_time_ms: doc.total_processing_time_ms || null,
-        }));
-
-        setDocuments(prev => {
-          const merged = mergeDocuments(prev, newDocs);
-          setCachedData(cacheKey, newDocs);
-          return merged;
-        });
-      } catch (error) {
-        console.error('Error loading specific documents:', error);
-      } finally {
-        setDataLoading('documents', false);
-      }
-    }, [getCachedData, setCachedData, setDataLoading]),
-
-    // Fix specific notes loading
-    loadSpecificNotes: useCallback(async (userId: string, ids: string[]) => {
-      if (!ids.length) return;
-
-      const cacheKey = `specific_notes_${userId}_${ids.sort().join('_')}`;
-      const cached = getCachedData(cacheKey);
-      if (cached) {
-        setNotes(prev => mergeNotes(prev, cached));
-        return;
-      }
-
-      setDataLoading('notes', true);
-
-      try {
-        const { data, error } = await withTimeout<any[]>(
-          supabase
-            .from('notes')
-            .select('*')
-            .eq('user_id', userId)
-            .in('id', ids)
-            .order('updated_at', { ascending: false }),
-          API_TIMEOUT,
-          'Failed to load specific notes'
-        );
-
-        if (error) throw error;
-
-        const transformedNotes: Note[] = (data || []).map(item => ({
-          id: item.id,
-          document_id: item.document_id,
-          title: item.title,
-          content: item.content,
-          category: item.category,
-          ai_summary: item.ai_summary,
-          tags: item.tags,
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-          user_id: item.user_id,
-        }));
-
-        setNotes(prev => {
-          const merged = mergeNotes(prev, transformedNotes);
-          setCachedData(cacheKey, transformedNotes);
-          return merged;
-        });
-      } catch (error) {
-        console.error('Error loading specific notes:', error);
-      } finally {
-        setDataLoading('notes', false);
-      }
-    }, [getCachedData, setCachedData, setDataLoading]),
+    loadSpecificDocuments,
+    loadSpecificNotes,
+    clearLoadedIds,
   };
 };
-
-// Helper functions for merging data
-const mergeDocuments = (prev: Document[], newDocs: Document[]): Document[] => {
-  const uniqueMap = new Map<string, Document>();
-
-  // Add all previous documents
-  prev.forEach(doc => uniqueMap.set(doc.id, doc));
-
-  // Add/overwrite with new documents
-  newDocs.forEach(doc => uniqueMap.set(doc.id, doc));
-
-  return Array.from(uniqueMap.values());
-};
-
-const mergeNotes = (prev: Note[], newNotes: Note[]): Note[] => {
-  const uniqueMap = new Map<string, Note>();
-
-  // Add all previous notes
-  prev.forEach(note => uniqueMap.set(note.id, note));
-
-  // Add/overwrite with new notes
-  newNotes.forEach(note => uniqueMap.set(note.id, note));
-
-  return Array.from(uniqueMap.values());
-};
-
 
 interface DataPaginationState {
   notes: { hasMore: boolean; offset: number; total: number };

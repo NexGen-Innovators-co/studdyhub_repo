@@ -246,7 +246,7 @@ const AdminManagement = () => {
                 .from('profiles') // Replace with your user table name
                 .select('id, email, full_name') // Select relevant fields
                 .ilike('email', `%${searchTerm}%`) // Adjust search based on your needs
-                .limit(5); // Limit the number of results
+                .limit(1000); // Limit the number of results
 
             if (error) {
                 throw error;
