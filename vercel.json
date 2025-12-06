@@ -10,24 +10,29 @@
       ]
     },
     {
+      "source": "/favicon.ico",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "image/x-icon"
+        }
+      ]
+    },
+    {
       "source": "/sitemap.xml",
       "headers": [
         {
           "key": "Content-Type",
           "value": "application/xml"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600, s-maxage=3600"
         }
       ]
     },
     {
-      "source": "/static/(.*)",
+      "source": "/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
+          "value": "public, max-age=0, s-maxage=0, must-revalidate"
         }
       ]
     }
@@ -36,6 +41,54 @@
     {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
+    },
+    {
+      "source": "/privacy-policy",
+      "destination": "/privacy-policy"
+    },
+    {
+      "source": "/about-us",
+      "destination": "/about-us"
+    },
+    {
+      "source": "/contact",
+      "destination": "/contact"
+    },
+    {
+      "source": "/blogs",
+      "destination": "/blogs"
+    },
+    {
+      "source": "/integrations",
+      "destination": "/integrations"
+    },
+    {
+      "source": "/terms-of-service",
+      "destination": "/terms-of-service"
+    },
+    {
+      "source": "/careers",
+      "destination": "/careers"
+    },
+    {
+      "source": "/api",
+      "destination": "/api"
+    },
+    {
+      "source": "/documentation-page",
+      "destination": "/documentation-page"
+    },
+    {
+      "source": "/user-guide-page",
+      "destination": "/user-guide-page"
+    },
+    {
+      "source": "/auth",
+      "destination": "/auth"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/"
     }
   ]
 }
