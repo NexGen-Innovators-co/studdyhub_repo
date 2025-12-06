@@ -1,188 +1,189 @@
+// src/pages/Careers.tsx
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Sparkles, Sun, Moon, Briefcase, Users, Code, Award, Globe } from 'lucide-react';
+import { AppLayout, ContentContainer, PageHeader, Card } from '../components/layout/LayoutComponents';
+import { Briefcase, Users, Code, Palette, BarChart, Heart, MapPin, Clock, ChevronRight } from 'lucide-react';
 
 const Careers: React.FC = () => {
-    const [isDarkMode, setIsDarkMode] = React.useState(() => {
-        if (typeof window !== 'undefined') {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme) {
-                return savedTheme === 'dark';
-            }
-            return window.matchMedia('(prefers-color-scheme: dark)').matches;
-        }
-        return false;
-    });
-
-    React.useEffect(() => {
-        if (isDarkMode) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
-    }, [isDarkMode]);
-
-    const toggleDarkMode = () => {
-        setIsDarkMode(prevMode => !prevMode);
-    };
-
     const jobOpenings = [
         {
             id: 1,
             title: "Senior AI Engineer",
-            location: "Remote",
+            department: "Engineering",
             type: "Full-time",
+            location: "Remote",
             description: "Develop and implement advanced AI models for personalized learning experiences.",
-            icon: Code
+            icon: Code,
+            color: "from-blue-500 to-blue-700"
         },
         {
             id: 2,
             title: "Product Designer (UI/UX)",
-            location: "Accra, Ghana",
+            department: "Design",
             type: "Full-time",
-            description: "Design intuitive and engaging user interfaces for our web and mobile applications.",
-            icon: Sparkles
+            location: "Tarkwa, Ghana",
+            description: "Design intuitive and engaging interfaces for our web and mobile applications.",
+            icon: Palette,
+            color: "from-purple-500 to-purple-700"
         },
         {
             id: 3,
             title: "Frontend Developer (React)",
-            location: "Remote",
+            department: "Engineering",
             type: "Full-time",
-            description: "Build responsive and high-performance user interfaces using React and TypeScript.",
-            icon: Code
+            location: "Remote",
+            description: "Build responsive and high-performance user interfaces using modern frameworks.",
+            icon: Code,
+            color: "from-green-500 to-green-700"
         },
         {
             id: 4,
-            title: "Content Strategist",
-            location: "Remote",
+            title: "Growth Marketing Manager",
+            department: "Marketing",
             type: "Full-time",
-            description: "Develop engaging educational content and learning materials for our AI-powered platform.",
-            icon: Briefcase
+            location: "Remote",
+            description: "Develop and execute strategies to drive user acquisition and engagement.",
+            icon: BarChart,
+            color: "from-orange-500 to-orange-700"
+        },
+        {
+            id: 5,
+            title: "Content Strategist",
+            department: "Content",
+            type: "Full-time",
+            location: "Remote",
+            description: "Create engaging educational content and learning materials for our platform.",
+            icon: Briefcase,
+            color: "from-red-500 to-red-700"
+        },
+        {
+            id: 6,
+            title: "Customer Success Manager",
+            department: "Support",
+            type: "Full-time",
+            location: "Remote",
+            description: "Ensure customer satisfaction and help users maximize their learning experience.",
+            icon: Heart,
+            color: "from-pink-500 to-pink-700"
         }
     ];
 
+    const benefits = [
+        { icon: "💰", title: "Competitive Salary", description: "Market-rate compensation with equity options" },
+        { icon: "🏖️", title: "Flexible Time Off", description: "Unlimited PTO and flexible working hours" },
+        { icon: "🏠", title: "Remote Work", description: "Work from anywhere with flexible schedules" },
+        { icon: "📚", title: "Learning Budget", description: "Annual budget for courses and conferences" },
+        { icon: "🏥", title: "Health Benefits", description: "Comprehensive medical and dental coverage" },
+        { icon: "💻", title: "Tech Equipment", description: "Latest hardware and software for your work" }
+    ];
+
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex flex-col">
-            {/* Header */}
-            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md fixed top-0">
-                <Link to="/" className="flex items-center gap-3 group" aria-label="Home">
-                    <img
-                        src="https://placehold.co/32x32?text=Logo"
-                        alt="studdyhub AI Logo"
-                        className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
-                        loading="lazy"
-                    />
-                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
-                </Link>
-                <div className="flex items-center gap-4">
-                    <Link to="/auth">
-                        <Button className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
-                    </Link>
-                    <Button
-                        onClick={toggleDarkMode}
-                        className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                        aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                    >
-                        {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                    </Button>
-                </div>
-            </header>
+        <AppLayout>
+            <ContentContainer>
+                <PageHeader
+                    title="Join Our Team"
+                    subtitle="Careers at StuddyHub AI"
+                    description="Help us shape the future of AI-powered education. We're looking for passionate individuals to drive our mission forward."
+                />
 
-            {/* Main Content */}
-            <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
-                <section className="text-center mb-16">
-                    <h1 className="text-4xl md:text-5xl font-extrabold mb-4 text-blue-600 dark:text-blue-400">Careers at studdyhub AI</h1>
-                    <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto">
-                        Join our innovative team and help shape the future of AI-powered learning. We're looking for passionate individuals to drive our mission forward.
-                    </p>
-                </section>
-
-                <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-                    {jobOpenings.map((job) => (
-                        <article key={job.id} className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800">
-                            <job.icon className="h-8 w-8 text-blue-600 mb-4" />
-                            <h2 className="text-xl font-bold mb-2">{job.title}</h2>
-                            <p className="text-gray-700 dark:text-gray-300 mb-4">{job.description}</p>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                                <p><strong>Location:</strong> {job.location}</p>
-                                <p><strong>Type:</strong> {job.type}</p>
+                <div className="mb-12">
+                    <Card className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 mb-8">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="h-12 w-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                                <Users className="h-6 w-6 text-white" />
                             </div>
-                        </article>
-                    ))}
-                </section>
-
-                <section className="text-center">
-                    <p className="text-lg text-gray-700 dark:text-gray-300 mb-6">
-                        Don't see a role that fits? Send us your resume anyway! We're always looking for talented individuals.
-                    </p>
-                    <Link to="/contact">
-                        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">Contact Us</Button>
-                    </Link>
-                </section>
-            </main>
-
-            {/* Footer */}
-            <footer className="py-16 px-6 bg-gray-800 dark:bg-black text-gray-300">
-                <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
-                    <div className="md:col-span-2">
-                        <div className="flex items-center gap-3 mb-6">
-                            <img
-                                src="https://placehold.co/48x48?text=Logo"
-                                alt="studdyhub AI Logo"
-                                className="h-12 w-12 object-contain"
-                                loading="lazy"
-                            />
-                            <span className="text-2xl font-extrabold text-white">studdyhub AI</span>
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Why Join Us?</h2>
+                                <p className="text-gray-600 dark:text-gray-400">
+                                    We're building the future of education from Ghana to the world. Join us in making quality learning accessible to everyone.
+                                </p>
+                            </div>
                         </div>
-                        <p className="text-gray-400 leading-relaxed mb-6">
-                            Empowering students and professionals to achieve more with intelligent tools for notes, recordings, and schedules.
+                    </Card>
+
+                    <div className="mb-12">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Current Openings</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {jobOpenings.map((job) => (
+                                <Card key={job.id} className="group hover:shadow-xl transition-all hover:-translate-y-1">
+                                    <div className={`h-32 ${job.color} rounded-xl mb-4 flex items-center justify-center`}>
+                                        <job.icon className="h-12 w-12 text-white" />
+                                    </div>
+
+                                    <h3 className="font-bold text-gray-900 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                        {job.title}
+                                    </h3>
+
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">
+                                        {job.description}
+                                    </p>
+
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                            <Briefcase className="h-4 w-4" />
+                                            <span>{job.department}</span>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                            <MapPin className="h-4 w-4" />
+                                            <span>{job.location}</span>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                            <Clock className="h-4 w-4" />
+                                            <span>{job.type}</span>
+                                        </div>
+                                    </div>
+
+                                    <button className="w-full mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2">
+                                        Apply Now
+                                        <ChevronRight className="h-4 w-4" />
+                                    </button>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="mb-12">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Perks & Benefits</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {benefits.map((benefit, index) => (
+                                <Card key={index} className="hover:shadow-md transition-shadow">
+                                    <div className="text-3xl mb-3">{benefit.icon}</div>
+                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">{benefit.title}</h4>
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm">{benefit.description}</p>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
+                    <div className="text-center">
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                            Don't see the perfect role?
+                        </h3>
+                        <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-2xl mx-auto">
+                            We're always looking for talented individuals who are passionate about education technology.
+                            Send us your resume and tell us how you can contribute to our mission.
                         </p>
-                        <div className="flex gap-4">
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors" aria-label="Global">
-                                <Globe className="h-5 w-5" />
+                        <div className="flex flex-wrap gap-4 justify-center">
+                            <a
+                                href="mailto:careers@studdyhub.ai"
+                                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+                            >
+                                Send Your Resume
                             </a>
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors" aria-label="Logo Link">
-                                <img
-                                    src="https://placehold.co/32x32?text=Logo"
-                                    alt="studdyhub AI Logo"
-                                    className="h-8 w-8 object-contain"
-                                    loading="lazy"
-                                />
+                            <a
+                                href="/contact"
+                                className="px-6 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg font-medium"
+                            >
+                                Contact Our Team
                             </a>
                         </div>
                     </div>
-
-                    <div>
-                        <h3 className="text-white font-semibold mb-4">Product</h3>
-                        <ul className="space-y-3 text-gray-400">
-                            <li><a href="api" className="hover:text-white transition-colors">API</a></li>
-                            <li><a href="integrations" className="hover:text-white transition-colors">Integrations</a></li>
-                        </ul>
-                    </div>
-
-                    <div>
-                        <h3 className="text-white font-semibold mb-4">Company</h3>
-                        <ul className="space-y-3 text-gray-400">
-                            <li><a href="/about-us" className="hover:text-white transition-colors">About Us</a></li>
-                            <li><a href="/blogs" className="hover:text-white transition-colors">Blog</a></li>
-                            <li><a href="careers" className="hover:text-white transition-colors">Careers</a></li>
-                            <li><a href="/contact" className="hover:text-white transition-colors">Contact</a></li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div className="border-t border-gray-700 pt-8 mt-12 text-center text-gray-500 text-sm">
-                    <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
-                    <div className="flex justify-center gap-4 mt-2">
-                        <a href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</a>
-                        <a href="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</a>
-                    </div>
-                </div>
-            </footer>
-        </div>
+                </Card>
+            </ContentContainer>
+        </AppLayout>
     );
 };
 

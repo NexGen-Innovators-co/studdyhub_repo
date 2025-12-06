@@ -1,202 +1,168 @@
+// src/pages/Integrations.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Sparkles, Sun, Moon, Plug, LayoutDashboard, FileText, Mic, Calendar, Globe } from 'lucide-react';
+import { AppLayout, ContentContainer, PageHeader, Card } from '../components/layout/LayoutComponents';
+import { Cloud, MessageSquare, Calendar, FileText, Mic, Zap, CheckCircle, Plug } from 'lucide-react';
 
 const Integrations: React.FC = () => {
-    const [isDarkMode, setIsDarkMode] = React.useState(() => {
-        if (typeof window !== 'undefined') {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme) {
-                return savedTheme === 'dark';
-            }
-            return window.matchMedia('(prefers-color-scheme: dark)').matches;
-        }
-        return false;
-    });
-
-    React.useEffect(() => {
-        if (isDarkMode) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
-    }, [isDarkMode]);
-
-    const toggleDarkMode = () => {
-        setIsDarkMode(prevMode => !prevMode);
-    };
-
-    const integrationCategories = [
+    const integrations = [
         {
-            name: "Note-Taking & Document Management",
-            icon: FileText,
-            integrations: [
-                { name: "Google Drive", description: "Sync your documents and notes from Google Drive for AI analysis.", logo: "https://placehold.co/100x100?text=Google+Drive" },
-                { name: "Dropbox", description: "Connect your Dropbox account to easily import and analyze files.", logo: "https://placehold.co/100x100?text=Dropbox" },
-                { name: "Evernote", description: "Import your existing notes from Evernote for intelligent organization.", logo: "https://placehold.co/100x100?text=Evernote" },
+            category: "Cloud Storage",
+            icon: Cloud,
+            items: [
+                { name: "Google Drive", status: "Available", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
+                { name: "Dropbox", status: "Available", color: "bg-gradient-to-r from-blue-400 to-blue-500" },
+                { name: "OneDrive", status: "Coming Soon", color: "bg-gradient-to-r from-blue-600 to-blue-700" }
             ]
         },
         {
-            name: "Productivity & Collaboration",
-            icon: LayoutDashboard,
-            integrations: [
-                { name: "Slack", description: "Get AI summaries of discussions and action items directly in Slack channels.", logo: "https://placehold.co/100x100?text=Slack" },
-                { name: "Microsoft Teams", description: "Integrate studdyhub AI with Teams for enhanced meeting insights.", logo: "https://placehold.co/100x100?text=Teams" },
-                { name: "Zoom", description: "Transcribe and analyze Zoom meeting recordings automatically.", logo: "https://placehold.co/100x100?text=Zoom" },
+            category: "Communication",
+            icon: MessageSquare,
+            items: [
+                { name: "Slack", status: "Available", color: "bg-gradient-to-r from-purple-500 to-purple-600" },
+                { name: "Microsoft Teams", status: "Available", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
+                { name: "Discord", status: "Coming Soon", color: "bg-gradient-to-r from-indigo-500 to-indigo-600" }
             ]
         },
         {
-            name: "Calendar & Scheduling",
+            category: "Productivity",
             icon: Calendar,
-            integrations: [
-                { name: "Google Calendar", description: "Sync your calendar to get AI-powered schedule optimization and reminders.", logo: "https://placehold.co/100x100?text=Google+Calendar" },
-                { name: "Outlook Calendar", description: "Connect with Outlook Calendar for seamless event and task management.", logo: "https://placehold.co/100x100?text=Outlook" },
+            items: [
+                { name: "Google Calendar", status: "Available", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
+                { name: "Outlook Calendar", status: "Available", color: "bg-gradient-to-r from-blue-600 to-blue-700" },
+                { name: "Notion", status: "Available", color: "bg-gradient-to-r from-gray-800 to-black" }
             ]
         },
         {
-            name: "Voice & Audio",
-            icon: Mic,
-            integrations: [
-                { name: "Voice Recorder Apps", description: "Upload audio from your favorite voice recording apps for transcription and analysis.", logo: "https://placehold.co/100x100?text=Audio" },
+            category: "Documents",
+            icon: FileText,
+            items: [
+                { name: "Google Docs", status: "Available", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
+                { name: "Microsoft Word", status: "Coming Soon", color: "bg-gradient-to-r from-blue-600 to-blue-700" },
+                { name: "PDF Tools", status: "Available", color: "bg-gradient-to-r from-red-500 to-red-600" }
             ]
         }
     ];
 
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex flex-col">
-            {/* Header */}
-            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md fixed top-0">
-                <Link to="/" className="flex items-center gap-3 group" aria-label="Home">
-                    <img
-                        src="https://placehold.co/32x32?text=Logo"
-                        alt="studdyhub AI Logo"
-                        className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
-                        loading="lazy"
-                    />
-                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
-                </Link>
-                <div className="flex items-center gap-4">
-                    <Link to="/auth">
-                        <Button className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
-                    </Link>
-                    <Button
-                        onClick={toggleDarkMode}
-                        className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                        aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                    >
-                        {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                    </Button>
-                </div>
-            </header>
+        <AppLayout>
+            <ContentContainer>
+                <PageHeader
+                    title="Integrations"
+                    subtitle="Connect Your Tools"
+                    description="Seamlessly connect StuddyHub AI with your favorite productivity tools and services."
+                />
 
-            {/* Main Content */}
-            <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24">
-                <section className="text-center mb-16">
-                    <h1 className="text-4xl md:text-5xl font-extrabold mb-4 text-blue-600 dark:text-blue-400">Integrations</h1>
-                    <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto">
-                        Connect studdyhub AI with your favorite tools to streamline your workflow and enhance productivity.
-                    </p>
-                </section>
-
-                <section className="space-y-12">
-                    {integrationCategories.map((category, index) => (
-                        <div key={index} className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800">
-                            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><category.icon className="h-6 w-6 text-blue-600" /> {category.name}</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {category.integrations.map((integration, idx) => (
-                                    <div key={idx} className="flex items-start gap-4">
-                                        <img
-                                            src={integration.logo}
-                                            alt={`${integration.name} Logo`}
-                                            className="h-12 w-12 object-contain rounded-md"
-                                            loading="lazy"
-                                        />
-                                        <div>
-                                            <h3 className="text-lg font-semibold">{integration.name}</h3>
-                                            <p className="text-gray-700 dark:text-gray-300 text-sm">{integration.description}</p>
-                                        </div>
-                                    </div>
-                                ))}
+                <div className="mb-12">
+                    <Card className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 mb-8">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="h-12 w-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                                <Plug className="h-6 w-6 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Powerful Integration Ecosystem</h2>
+                                <p className="text-gray-600 dark:text-gray-400">
+                                    Extend StuddyHub AI's capabilities by connecting with your existing workflow tools
+                                </p>
                             </div>
                         </div>
-                    ))}
-                </section>
 
-                <section className="text-center mt-16">
-                    <p className="text-lg text-gray-700 dark:text-gray-300 mb-6">
-                        Want to suggest a new integration or build your own?
-                    </p>
-                    <Link to="/contact">
-                        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold mr-4">Suggest an Integration</Button>
-                    </Link>
-                    <Link to="/api">
-                        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">Build Your Own with Our API</Button>
-                    </Link>
-                </section>
-            </main>
-
-            {/* Footer */}
-            <footer className="py-16 px-6 bg-gray-800 dark:bg-black text-gray-300">
-                <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
-                    <div className="md:col-span-2">
-                        <div className="flex items-center gap-3 mb-6">
-                            <img
-                                src="https://placehold.co/48x48?text=Logo"
-                                alt="studdyhub AI Logo"
-                                className="h-12 w-12 object-contain"
-                                loading="lazy"
-                            />
-                            <span className="text-2xl font-extrabold text-white">studdyhub AI</span>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">50+</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Integrations</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">24/7</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Sync</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">99.9%</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Uptime</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">API</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Access</div>
+                            </div>
                         </div>
-                        <p className="text-gray-400 leading-relaxed mb-6">
-                            Empowering students and professionals to achieve more with intelligent tools for notes, recordings, and schedules.
+                    </Card>
+
+                    <div className="space-y-8">
+                        {integrations.map((category, index) => (
+                            <div key={index}>
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                        <category.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{category.category}</h3>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {category.items.map((item, idx) => (
+                                        <Card key={idx} className="hover:shadow-md transition-shadow">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${item.color}`}>
+                                                    <span className="text-white font-bold">{item.name.charAt(0)}</span>
+                                                </div>
+                                                <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${item.status === 'Available'
+                                                        ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                                                        : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400'
+                                                    }`}>
+                                                    {item.status === 'Available' && <CheckCircle className="h-3 w-3" />}
+                                                    {item.status}
+                                                </div>
+                                            </div>
+                                            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">{item.name}</h4>
+                                            <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                                {item.status === 'Available'
+                                                    ? 'Ready to connect'
+                                                    : 'Coming in next update'}
+                                            </p>
+                                        </Card>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <Card>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Custom Integration</h3>
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-400 mb-4">
+                            Need a specific integration that's not listed? Our API makes it easy to build custom connections.
                         </p>
-                        <div className="flex gap-4">
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors" aria-label="Global">
-                                <Globe className="h-5 w-5" />
-                            </a>
-                            <a href="#" className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors" aria-label="Logo Link">
-                                <img
-                                    src="https://placehold.co/32x32?text=Logo"
-                                    alt="studdyhub AI Logo"
-                                    className="h-8 w-8 object-contain"
-                                    loading="lazy"
-                                />
-                            </a>
+                        <Link to="/api">
+                            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">
+                                Explore API
+                            </button>
+                        </Link>
+                    </Card>
+
+                    <Card>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                <Mic className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Request Integration</h3>
                         </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-white font-semibold mb-4">Product</h3>
-                        <ul className="space-y-3 text-gray-400">
-                            <li><a href="api" className="hover:text-white transition-colors">API</a></li>
-                            <li><a href="integrations" className="hover:text-white transition-colors">Integrations</a></li>
-                        </ul>
-                    </div>
-
-                    <div>
-                        <h3 className="text-white font-semibold mb-4">Company</h3>
-                        <ul className="space-y-3 text-gray-400">
-                            <li><a href="/about-us" className="hover:text-white transition-colors">About Us</a></li>
-                            <li><a href="/blogs" className="hover:text-white transition-colors">Blog</a></li>
-                            <li><a href="careers" className="hover:text-white transition-colors">Careers</a></li>
-                            <li><a href="/contact" className="hover:text-white transition-colors">Contact</a></li>
-                        </ul>
-                    </div>
+                        <p className="text-gray-600 dark:text-gray-400 mb-4">
+                            Have a tool you'd like to see integrated? Let us know and we'll prioritize it.
+                        </p>
+                        <Link to="/contact">
+                            <button className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg font-medium">
+                                Submit Request
+                            </button>
+                        </Link>
+                    </Card>
                 </div>
-
-                <div className="border-t border-gray-700 pt-8 mt-12 text-center text-gray-500 text-sm">
-                    <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
-                    <div className="flex justify-center gap-4 mt-2">
-                        <a href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</a>
-                        <a href="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</a>
-                    </div>
-                </div>
-            </footer>
-        </div>
+            </ContentContainer>
+        </AppLayout>
     );
 };
 

@@ -1,166 +1,149 @@
-import React, { useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Sparkles, Sun, Moon, Book, Lightbulb, Zap, FileText, Mic, LayoutDashboard, Calendar, Code, Users, TrendingUp, ChevronRight, List, ScrollText, Settings, HelpCircle, MessageSquare, Plug } from 'lucide-react';
+// src/pages/TermsOfService.tsx
+import React from 'react';
+import { AppLayout, ContentContainer, PageHeader, Card } from '../components/layout/LayoutComponents';
+import { FileText, Scale, AlertCircle, CheckCircle, Book, Shield } from 'lucide-react';
 
-const UserGuidePage: React.FC = () => {
-    const [isDarkMode, setIsDarkMode] = React.useState(() => {
-        if (typeof window !== 'undefined') {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme) {
-                return savedTheme === 'dark';
-            }
-            return window.matchMedia('(prefers-color-scheme: dark)').matches;
+const TermsOfService: React.FC = () => {
+    const sections = [
+        {
+            icon: Book,
+            title: "Acceptance of Terms",
+            content: "By accessing or using StuddyHub AI, you agree to be bound by these Terms of Service. If you disagree with any part, you may not access the service."
+        },
+        {
+            icon: Shield,
+            title: "User Accounts",
+            content: "You are responsible for maintaining the confidentiality of your account and password. You agree to accept responsibility for all activities under your account."
+        },
+        {
+            icon: Scale,
+            title: "Intellectual Property",
+            content: "The service and its original content, features, and functionality are owned by StuddyHub AI and are protected by international copyright, trademark, and other laws."
+        },
+        {
+            icon: AlertCircle,
+            title: "User Content",
+            content: "You retain ownership of any content you submit, but grant us a license to use, modify, and display it for the purpose of providing our services."
+        },
+        {
+            icon: CheckCircle,
+            title: "Acceptable Use",
+            content: "You agree not to use the service for any illegal purpose, to violate any laws, or to infringe upon the rights of others."
+        },
+        {
+            icon: FileText,
+            title: "Termination",
+            content: "We may terminate or suspend your account immediately for any reason, including breach of these Terms, without prior notice or liability."
         }
-        return false;
-    });
-
-    const sectionRefs = {
-        introduction: useRef<HTMLDivElement>(null),
-        gettingStarted: useRef<HTMLDivElement>(null),
-        coreFeatures: useRef<HTMLDivElement>(null),
-        interactiveVisualizations: useRef<HTMLDivElement>(null),
-        integrations: useRef<HTMLDivElement>(null),
-        accountManagement: useRef<HTMLDivElement>(null),
-        troubleshooting: useRef<HTMLDivElement>(null),
-        tips: useRef<HTMLDivElement>(null),
-    };
-
-    const scrollToSection = (sectionId: keyof typeof sectionRefs) => {
-        sectionRefs[sectionId].current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    React.useEffect(() => {
-        if (isDarkMode) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
-    }, [isDarkMode]);
-
-    const toggleDarkMode = () => {
-        setIsDarkMode(prevMode => !prevMode);
-    };
+    ];
 
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex flex-col">
-            {/* Header */}
-            <header className="w-full px-6 py-4 flex justify-between items-center z-50 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md fixed top-0">
-                <Link to="/" className="flex items-center gap-3 group" aria-label="Home">
-                    <img
-                        src="https://placehold.co/32x32?text=Logo"
-                        alt="studdyhub AI Logo"
-                        className="h-8 w-8 object-contain group-hover:scale-110 transition-transform"
-                        loading="lazy"
-                    />
-                    <span className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">studdyhub AI</span>
-                </Link>
-                <div className="flex items-center gap-4">
-                    <Link to="/auth">
-                        <Button className="px-5 py-2 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Sign In</Button>
-                    </Link>
-                    <Button
-                        onClick={toggleDarkMode}
-                        className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                        aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                    >
-                        {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                    </Button>
-                </div>
-            </header>
+        <AppLayout>
+            <ContentContainer>
+                <PageHeader
+                    title="Terms of Service"
+                    subtitle="Legal Agreement"
+                    description="Last updated: July 30, 2025. Please read these terms carefully before using our services."
+                />
 
-            {/* Main Content */}
-            <main className="flex-1 container mx-auto px-6 py-12 mt-20 md:mt-24 flex flex-col lg:flex-row gap-8">
-                {/* Sticky Table of Contents */}
-                <aside className="lg:w-1/4 lg:sticky lg:top-24 h-fit bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 hidden lg:block">
-                    <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white flex items-center gap-2">
-                        <List className="h-6 w-6 text-blue-600 dark:text-blue-400" /> Table of Contents
-                    </h2>
-                    <nav>
-                        <ul className="space-y-3">
-                            <li>
-                                <button onClick={() => scrollToSection('introduction')} className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                    <ChevronRight className="h-4 w-4" /> 1. Introduction
-                                </button>
-                            </li>
-                            <li>
-                                <button onClick={() => scrollToSection('gettingStarted')} className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                    <ChevronRight className="h-4 w-4" /> 2. Getting Started
-                                </button>
-                            </li>
-                            <li>
-                                <button onClick={() => scrollToSection('coreFeatures')} className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                    <ChevronRight className="h-4 w-4" /> 3. Core Features
-                                </button>
-                            </li>
-                            <li>
-                                <button onClick={() => scrollToSection('interactiveVisualizations')} className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                    <ChevronRight className="h-4 w-4" /> 4. Interactive Visualizations
-                                </button>
-                            </li>
-                            <li>
-                                <button onClick={() => scrollToSection('integrations')} className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                    <ChevronRight className="h-4 w-4" /> 5. Integrations
-                                </button>
-                            </li>
-                            <li>
-                                <button onClick={() => scrollToSection('accountManagement')} className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                    <ChevronRight className="h-4 w-4" /> 6. Account Management
-                                </button>
-                            </li>
-                            <li>
-                                <button onClick={() => scrollToSection('troubleshooting')} className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                    <ChevronRight className="h-4 w-4" /> 7. Troubleshooting & Support
-                                </button>
-                            </li>
-                            <li>
-                                <button onClick={() => scrollToSection('tips')} className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                    <ChevronRight className="h-4 w-4" /> 8. Tips for Maximizing Learning
-                                </button>
-                            </li>
-                        </ul>
-                    </nav>
-                </aside>
+                <div className="mb-12">
+                    <Card className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 mb-8">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="h-12 w-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                                <FileText className="h-6 w-6 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Important Legal Agreement</h2>
+                                <p className="text-gray-600 dark:text-gray-400">
+                                    These Terms of Service govern your use of StuddyHub AI. By using our service,
+                                    you agree to these terms in full.
+                                </p>
+                            </div>
+                        </div>
 
-                {/* Content */}
-                <div className="lg:w-3/4 space-y-12">
-                    <section ref={sectionRefs.introduction} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
-                        <h1 className="text-4xl md:text-5xl font-extrabold mb-4 text-blue-600 dark:text-blue-400">User Guide</h1>
-                        <p className="text-lg text-gray-700 dark:text-gray-300">
-                            Welcome to the studdyhub AI User Guide. This comprehensive resource will help you make the most of our platform.
-                        </p>
-                    </section>
+                        <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                            <AlertCircle className="h-4 w-4" />
+                            <span>This is a legally binding agreement. Please read carefully.</span>
+                        </div>
+                    </Card>
 
-                    <section ref={sectionRefs.gettingStarted} className="mb-10 pb-6 border-b border-gray-200 dark:border-gray-700">
-                        <h2 className="text-3xl font-bold mb-4 flex items-center gap-3">
-                            <Book className="h-8 w-8 text-blue-600" /> 2. Getting Started
-                        </h2>
-                        <p>Sign up, log in, and customize your profile to start your learning journey.</p>
-                        <ul className="list-disc list-inside space-y-2">
-                            <li>Create an account using your email.</li>
-                            <li>Set your learning preferences in settings.</li>
-                        </ul>
-                    </section>
-
-                    {/* Add similar sections for coreFeatures, interactiveVisualizations, integrations, accountManagement, troubleshooting, tips based on your original content. I've abbreviated for brevity, but expand as needed. */}
-
-                </div>
-            </main>
-
-            {/* Footer */}
-            <footer className="py-10 px-6 bg-gray-800 dark:bg-black text-gray-300 text-center">
-                <div className="max-w-6xl mx-auto">
-                    <p>&copy; {new Date().getFullYear()} studdyhub AI. All rights reserved.</p>
-                    <div className="flex justify-center gap-4 mt-2">
-                        <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
-                        <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</Link>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        {sections.map((section, index) => (
+                            <Card key={index} className="hover:shadow-md transition-shadow">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                        <section.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                    <h3 className="font-bold text-gray-900 dark:text-white">{section.title}</h3>
+                                </div>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                    {section.content}
+                                </p>
+                            </Card>
+                        ))}
                     </div>
                 </div>
-            </footer>
-        </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <Card>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Service Modifications</h3>
+                        <div className="space-y-4">
+                            <p className="text-gray-600 dark:text-gray-400">
+                                We reserve the right to modify or discontinue, temporarily or permanently, the service
+                                (or any part thereof) with or without notice. We shall not be liable to you or any third
+                                party for any modification, suspension, or discontinuance of the service.
+                            </p>
+
+                            <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Updates to Terms</h4>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                    We may update these terms from time to time. We will notify you of any changes by
+                                    posting the new Terms of Service on this page and updating the "last updated" date.
+                                </p>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Contact Information</h3>
+
+                        <div className="space-y-4">
+                            <p className="text-gray-600 dark:text-gray-400">
+                                For questions about these Terms of Service, please contact us:
+                            </p>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-1">Legal Department</h4>
+                                    <p className="text-gray-600 dark:text-gray-400">legal@studdyhub.ai</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-1">Registered Office</h4>
+                                    <p className="text-gray-600 dark:text-gray-400">
+                                        StuddyHub AI<br />
+                                        University of Mines and Technology<br />
+                                        Tarkwa, Ghana
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-1">Phone</h4>
+                                    <p className="text-gray-600 dark:text-gray-400">+233 27 169 2568</p>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-blue-200 dark:border-blue-800">
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    All legal notices should be sent to the registered office address above.
+                                </p>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+            </ContentContainer>
+        </AppLayout>
     );
 };
 
-export default UserGuidePage;
+export default TermsOfService;
