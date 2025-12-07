@@ -1540,9 +1540,12 @@ export const useAppData = () => {
   }, []);
 
   // Fix specific documents loading with duplicate prevention
+
+  // Add batched loading for specific documents/notes
   const loadSpecificDocuments = useCallback(async (userId: string, ids: string[]) => {
     if (!ids.length) return;
 
+    // Check cache first
     const cacheKey = `specific_docs_${userId}_${ids.sort().join('_')}`;
     const cached = getCachedData(cacheKey);
     if (cached) {
@@ -1550,16 +1553,16 @@ export const useAppData = () => {
       return;
     }
 
-    setDataLoading('documents', true);
-
+    // Don't show loading spinner for background loads
     try {
+      // OPTIMIZATION: Batch load with minimal fields
       const { data, error } = await withTimeout<any[]>(
         supabase
           .from('documents')
-          .select('*')
+          .select('id, title, file_name, content_extracted, type, processing_status')
           .eq('user_id', userId)
           .in('id', ids),
-        API_TIMEOUT,
+        5000, // Shorter timeout for background loads
         'Failed to load specific documents'
       );
 
@@ -1569,22 +1572,22 @@ export const useAppData = () => {
         id: doc.id,
         title: doc.title,
         file_name: doc.file_name,
-        file_type: doc.file_type,
+        file_type: doc.file_type || '',
         file_size: doc.file_size || 0,
-        file_url: doc.file_url,
+        file_url: doc.file_url || '',
         content_extracted: doc.content_extracted || '',
-        user_id: doc.user_id,
+        user_id: userId,
         type: doc.type,
         processing_status: doc.processing_status || 'pending',
-        processing_error: doc.processing_error || null,
-        created_at: doc.created_at,
-        updated_at: doc.updated_at,
-        folder_ids: doc.folder_ids || [],
-        processing_started_at: doc.processing_started_at || null,
-        processing_completed_at: doc.processing_completed_at || null,
-        processing_metadata: doc.processing_metadata || null,
-        extraction_model_used: doc.extraction_model_used || null,
-        total_processing_time_ms: doc.total_processing_time_ms || null,
+        processing_error: null,
+        created_at: doc.created_at || new Date().toISOString(),
+        updated_at: doc.updated_at || new Date().toISOString(),
+        folder_ids: [],
+        processing_started_at: null,
+        processing_completed_at: null,
+        processing_metadata: null,
+        extraction_model_used: null,
+        total_processing_time_ms: null,
       }));
 
       setDocuments(prev => {
@@ -1593,11 +1596,10 @@ export const useAppData = () => {
         return merged;
       });
     } catch (error) {
-      console.error('Error loading specific documents:', error);
-    } finally {
-      setDataLoading('documents', false);
+      console.warn('Background document load failed:', error);
+      // Silently fail - documents will load eventually
     }
-  }, [getCachedData, setCachedData, setDataLoading, mergeDocuments]);
+  }, [getCachedData, setCachedData, mergeDocuments]);
 
   // Fix specific notes loading with duplicate prevention
   const loadSpecificNotes = useCallback(async (userId: string, ids: string[]) => {

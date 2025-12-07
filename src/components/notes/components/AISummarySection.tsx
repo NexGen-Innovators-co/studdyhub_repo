@@ -95,7 +95,7 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
           
 
           ${/* Mobile Styles */ ''}
-          fixed bottom-0 left-0 right-0 z-50 max-h-[45vh] 
+          fixed bottom-0 left-0 right-0 z-50 lg:z-0 max-h-[45vh] 
           
           bg-white dark:bg-gray-800
           
@@ -120,7 +120,7 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
                 AI Summary
               </h4>
             </div>
-            
+
             <div className="flex items-center gap-1">
               {/* Desktop Toggle - Hide Summary */}
               <Button

@@ -183,13 +183,19 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
   const fetchUserStats = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Get the most recent stats record
       const { data, error } = await supabase
         .from('user_stats')
         .select('*')
-        .single();
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
       if (error) throw error;
-      setStats(data);
+      setStats(data?.[0] || null);
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
@@ -421,25 +427,24 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     toast.success('Study preferences saved!');
   };
 
-  // Data & Privacy Functions
   const exportData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Fetch all user data
+      // Fetch all user data - use limit(1) for stats
       const [profileData, goalsData, achievementsData, statsData] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', user.id).single(),
         supabase.from('user_learning_goals').select('*').eq('user_id', user.id),
         supabase.from('achievements').select('*, badges(*)').eq('user_id', user.id),
-        supabase.from('user_stats').select('*').eq('user_id', user.id).single()
+        supabase.from('user_stats').select('*').eq('user_id', user.id).limit(1) // Changed from .single()
       ]);
 
       const userData = {
         profile: profileData.data,
         goals: goalsData.data,
         achievements: achievementsData.data,
-        stats: statsData.data,
+        stats: statsData.data?.[0] || null, // Take first record
         export_date: new Date().toISOString()
       };
 
@@ -739,24 +744,28 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
               </div>
 
               {/* Stats Overview */}
-              {stats && (
+              {stats ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                   <div className="text-center p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20">
-                    <div className="text-2xl font-bold text-blue-600">{stats.level}</div>
+                    <div className="text-2xl font-bold text-blue-600">{stats.level || 1}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-300">Level</div>
                   </div>
                   <div className="text-center p-4 rounded-xl bg-green-50 dark:bg-green-900/20">
-                    <div className="text-2xl font-bold text-green-600">{stats.total_xp}</div>
+                    <div className="text-2xl font-bold text-green-600">{stats.total_xp || 0}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-300">Total XP</div>
                   </div>
                   <div className="text-center p-4 rounded-xl bg-orange-50 dark:bg-orange-900/20">
-                    <div className="text-2xl font-bold text-orange-600">{stats.current_streak}</div>
+                    <div className="text-2xl font-bold text-orange-600">{stats.current_streak || 0}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-300">Day Streak</div>
                   </div>
                   <div className="text-center p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20">
-                    <div className="text-2xl font-bold text-blue-600">{achievements.length}</div>
+                    <div className="text-2xl font-bold text-blue-600">{achievements.length || 0}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-300">Badges</div>
                   </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  <p>Stats will appear here as you start using the app.</p>
                 </div>
               )}
 

@@ -313,7 +313,7 @@ export const useTypingAnimation = ({
         delay = 2;
       } else {
         // Normal text
-        delay = isActualWord ? (1000 / (wordsPerSecond * 3)) : 5;
+        delay = isActualWord ? (500 / (wordsPerSecond * 3)) : 5;
       }
 
       timeoutRef.current = window.setTimeout(typeNextWord, delay);

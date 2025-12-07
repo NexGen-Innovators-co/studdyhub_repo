@@ -4,7 +4,7 @@
 import { Brain, FileText, MessageSquare, Calendar, Upload } from 'lucide-react';
 import { TutorialConfig } from '../components/UniversalTutorial';
 
-export const getNoteEditorTutorial = (isMobile: boolean): TutorialConfig => ({
+export const getNoteEditorTutorial = (isMobile: boolean, isExpanded: boolean): TutorialConfig => ({
   id: 'note-editor',
   name: 'Note Editor Guide',
   description: 'Learn how to use the powerful note editor',
@@ -14,7 +14,7 @@ export const getNoteEditorTutorial = (isMobile: boolean): TutorialConfig => ({
   steps: [
     {
       id: 'welcome',
-      title: ' Welcome to Your Smart Note Editor!',
+      title: 'Welcome to Your Smart Note Editor!',
       description: 'This is your AI-powered note-taking workspace with advanced features for students and professionals.',
       position: 'center',
       tips: [
@@ -24,31 +24,165 @@ export const getNoteEditorTutorial = (isMobile: boolean): TutorialConfig => ({
       ],
     },
     {
-      id: 'formatting',
-      title: ' Rich Text Formatting',
+      id: 'expand-toolbar',
+      title: 'Expandable Toolbar',
       description: isMobile
-        ? 'Tap the formatting icons to style your text. Use the more options menu for advanced formatting.'
-        : 'Use the toolbar to format your text with bold, italics, headings, lists, and more.',
-      elementSelector: '.ProseMirror',
-      position: 'top',
-      highlightPadding: 12,
-      keyboardShortcuts: isMobile ? [] : [
-        { keys: 'Ctrl + B', action: 'Bold' },
-        { keys: 'Ctrl + I', action: 'Italic' },
-        { keys: 'Ctrl + U', action: 'Underline' },
-      ],
-      tips: ['Try typing and formatting as you go', 'Headings help organize long notes'],
+        ? 'The toolbar can be scrolled horizontally. Tap and drag to see more tools.'
+        : 'Click the expand button or scroll horizontally to access all tools. Some tools may be hidden on smaller screens.',
+      elementSelector: isMobile
+        ? '.lg\\:hidden.flex.items-center.overflow-x-scroll'
+        : '[data-tutorial="expand-toolbar-button"]',
+      position: isMobile ? 'bottom' : 'top',
+      highlightPadding: isMobile ? 20 : 12,
+      tips: ['Scroll or expand to see all tools', 'Frequently used tools are always visible'],
+      actions: !isMobile ? [
+        {
+          label: 'Expand Toolbar',
+          onClick: () => {
+            const expandBtn = document.querySelector('[data-tutorial="expand-toolbar-button"]') as HTMLElement;
+            if (expandBtn) {
+              expandBtn.click();
+            }
+          }
+        }
+      ] : []
+    },
+    {
+      id: 'basic-formatting',
+      title: 'Basic Text Formatting',
+      description: 'Bold, italic, underline, and other basic formatting tools.',
+      elementSelector: '[data-tutorial="bold-button"]',
+      position: 'right',
+      highlightPadding: 8,
+      tips: ['Select text first, then apply formatting', 'Multiple formats can be combined'],
+      actions: !isMobile ? [
+        {
+          label: 'Show Formatting Tools',
+          onClick: () => {
+            // Expand toolbar first
+            const expandBtn = document.querySelector('[data-tutorial="expand-toolbar-button"]') as HTMLElement;
+            if (expandBtn && !isExpanded) {
+              expandBtn.click();
+            }
+            // Scroll to formatting
+            setTimeout(() => {
+              const boldBtn = document.querySelector('[data-tutorial="bold-button"]');
+              if (boldBtn) {
+                boldBtn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+              }
+            }, 100);
+          }
+        }
+      ] : []
+    },
+    {
+      id: 'headings-lists',
+      title: 'Headings & Lists',
+      description: 'Use headings to organize content and lists for structured information.',
+      elementSelector: '[data-tutorial="heading1-button"]',
+      position: 'right',
+      highlightPadding: 8,
+      tips: ['H1 for main topics, H2 for subtopics', 'Use lists for step-by-step instructions'],
+      actions: !isMobile ? [
+        {
+          label: 'Show Headings & Lists',
+          onClick: () => {
+            const headingBtn = document.querySelector('[data-tutorial="heading1-button"]');
+            if (headingBtn) {
+              headingBtn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+          }
+        }
+      ] : []
+    },
+    {
+      id: 'insert-elements',
+      title: 'Insert Elements',
+      description: 'Add links, images, tables, code blocks, and diagrams.',
+      elementSelector: '[data-tutorial="insert-link-button"]',
+      position: 'right',
+      highlightPadding: 8,
+      tips: ['Insert images with URLs', 'Tables help organize data', 'Code blocks for programming'],
+      actions: !isMobile ? [
+        {
+          label: 'Show Insert Tools',
+          onClick: () => {
+            const insertBtn = document.querySelector('[data-tutorial="insert-link-button"]');
+            if (insertBtn) {
+              insertBtn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+          }
+        }
+      ] : []
+    },
+    {
+      id: 'diagrams-charts',
+      title: 'Diagrams & Charts',
+      description: 'Insert interactive charts, flowcharts, and graphs.',
+      elementSelector: '[data-tutorial="insert-chart-button"]',
+      position: 'right',
+      highlightPadding: 8,
+      tips: ['Perfect for visual learners', 'Supports Chart.js, Mermaid, and Graphviz'],
+      actions: !isMobile ? [
+        {
+          label: 'Show Diagram Tools',
+          onClick: () => {
+            const chartBtn = document.querySelector('[data-tutorial="insert-chart-button"]');
+            if (chartBtn) {
+              chartBtn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+          }
+        }
+      ] : []
+    },
+    {
+      id: 'document-tools',
+      title: 'Document Tools',
+      description: 'Upload documents, regenerate notes, and access original files.',
+      elementSelector: '[data-tutorial="upload-document-button"]',
+      position: 'right',
+      highlightPadding: 8,
+      tips: ['Upload PDFs, Word docs, or audio', 'AI extracts key information'],
+      actions: !isMobile ? [
+        {
+          label: 'Show Document Tools',
+          onClick: () => {
+            const uploadBtn = document.querySelector('[data-tutorial="upload-document-button"]');
+            if (uploadBtn) {
+              uploadBtn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+          }
+        }
+      ] : []
+    },
+    {
+      id: 'export-tools',
+      title: 'Export & Download',
+      description: 'Download your notes in various formats.',
+      elementSelector: '[data-tutorial="download-markdown-button"]',
+      position: 'right',
+      highlightPadding: 8,
+      tips: ['Keep backups of your notes', 'Share with others easily'],
+      actions: !isMobile ? [
+        {
+          label: 'Show Export Tools',
+          onClick: () => {
+            const downloadBtn = document.querySelector('[data-tutorial="download-markdown-button"]');
+            if (downloadBtn) {
+              downloadBtn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+          }
+        }
+      ] : []
     },
     {
       id: 'ai-assistant',
-      title: ' AI Writing Assistant',
+      title: 'AI Writing Assistant',
       description: isMobile
-        ? 'Select text and tap the sparkle icon to rewrite, expand, summarize, or translate with AI.'
-        : 'Select any text and click the sparkle icon to rewrite, expand, summarize, or translate.',
-      elementSelector: isMobile
-        ? "button:has(svg.lucide-sparkles)"
-        : "button[title='AI Assist']",
-      position: 'bottom',
+        ? 'Tap the sparkle icon to access AI features like rewrite, expand, summarize, or translate.'
+        : 'Select text and click the sparkle icon to rewrite, expand, summarize, or translate with AI.',
+      elementSelector: '[data-tutorial="ai-assistant-button"]',
+      position: isMobile ? 'top' : 'bottom',
       highlightPadding: 8,
       tips: [
         'Improves writing quality instantly',
@@ -58,165 +192,43 @@ export const getNoteEditorTutorial = (isMobile: boolean): TutorialConfig => ({
     },
     {
       id: 'flashcards',
-      title: ' Auto-Generate Flashcards',
+      title: 'Auto-Generate Flashcards',
       description: isMobile
         ? 'Tap the Brain icon to generate flashcards from your notes. Perfect for exam prep!'
-        : 'Click the Brain icon to turn your notes into study flashcards. Perfect for exam prep!',
-      elementSelector: "button:has(svg.lucide-brain)",
+        : 'Click the Brain icon to turn your notes into study flashcards.',
+      elementSelector: '[data-tutorial="flashcards-button"]',
       position: isMobile ? 'top' : 'left',
       highlightPadding: 8,
       tips: ['Creates question-answer pairs', 'Review anytime', 'Boosts retention'],
-      actions: [
-        {
-          label: 'Open Flashcards Menu',
-          onClick: () => {
-            // Find the flashcards button and click it
-            const flashcardsBtn = document.querySelector("button:has(svg.lucide-brain)") as HTMLElement;
-            if (flashcardsBtn) {
-              flashcardsBtn.click();
-              // Small delay to allow menu to open
-              setTimeout(() => {
-                const menu = document.querySelector('[class*="animate-slide-in-down"]');
-                if (menu) {
-                  menu.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-              }, 100);
-            }
-          }
-        }
-      ]
     },
     {
-      id: 'diagrams',
-      title: ' Insert Diagrams & Charts',
-      description: isMobile
-        ? 'Tap the more options menu (⋮) to insert charts, flowcharts, and graphs.'
-        : 'Add interactive charts, flowcharts, and graphs using Chart.js, Mermaid, and Graphviz.',
-      elementSelector: isMobile 
-        ? "button:has(svg.lucide-more-vertical)" 
-        : "button[title='Insert Chart']",
-      position: 'bottom',
-      highlightPadding: 8,
-      tips: ['Perfect for visual learners', 'Supports multiple diagram types', 'Edit anytime'],
-      actions: isMobile ? [
-        {
-          label: 'Show Diagram Options',
-          onClick: () => {
-            const mobileMenuBtn = document.querySelector("button:has(svg.lucide-more-vertical)") as HTMLElement;
-            if (mobileMenuBtn) {
-              mobileMenuBtn.click();
-              setTimeout(() => {
-                const menu = document.querySelector('[class*="animate-slide-in-down"]');
-                if (menu) {
-                  menu.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-              }, 100);
-            }
-          }
-        }
-      ] : undefined
-    },
-    {
-      id: 'uploads',
-      title: ' Upload Documents & Audio',
-      description: isMobile
-        ? 'Use the upload icons in the expanded menu to upload PDFs, Word docs, or audio recordings.'
-        : 'Upload PDFs, Word docs, or audio recordings to automatically generate notes using AI.',
-      elementSelector: isMobile
-        ? "button:has(svg.lucide-more-vertical)"
-        : "button:has(svg.lucide-upload-cloud)",
-      position: 'bottom',
-      highlightPadding: 8,
-      tips: ['Supports PDF, DOCX, TXT, MP3', 'AI extracts key information', 'Saves time on note-taking'],
-      actions: isMobile ? [
-        {
-          label: 'Show Upload Options',
-          onClick: () => {
-            const mobileMenuBtn = document.querySelector("button:has(svg.lucide-more-vertical)") as HTMLElement;
-            if (mobileMenuBtn) {
-              mobileMenuBtn.click();
-              setTimeout(() => {
-                const menu = document.querySelector('[class*="animate-slide-in-down"]');
-                if (menu) {
-                  menu.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-              }, 100);
-            }
-          }
-        }
-      ] : undefined
-    },
-    {
-      id: 'tts',
-      title: ' Text-to-Speech',
+      id: 'text-to-speech',
+      title: 'Text-to-Speech',
       description: 'Listen to your notes aloud. Great for proofreading or learning on the go.',
-      elementSelector: "button:has(svg.lucide-volume-2)",
-      position: 'bottom',
+      elementSelector: '[data-tutorial="tts-button"]',
+      position: isMobile ? 'bottom' : 'right',
       highlightPadding: 8,
       tips: ['Multiple voice options', 'Adjust speed', 'Learn while multitasking'],
     },
     {
-      id: 'tts-help',
-      title: ' Voice Guidance',
-      description: 'The tutorial can read instructions aloud. Make sure your volume is up and browser permissions allow audio.',
-      position: 'center',
-      tips: [
-        'Chrome, Edge, and Safari support text-to-speech',
-        'Check browser permissions for audio',
-        'Ensure your system volume is not muted',
-        'Click the volume icon in the tutorial header to toggle voice guidance',
-      ],
-    },
-    {
-      id: 'history',
-      title: ' Notes History',
-      description: 'Access previous versions of your notes and restore them if needed.',
-      elementSelector: "button:has(svg.lucide-book-open)",
-      position: isMobile ? 'bottom' : 'right',
-      highlightPadding: 8,
-      tips: ['View all changes over time', 'Restore previous versions', 'Never lose your work'],
-    },
-    {
-      id: 'save',
+      id: 'save-work',
       title: 'Save Your Work',
       description: isMobile
         ? 'Tap the Save icon to manually save your note. Auto-save is enabled by default.'
         : 'Click Save to manually save your note. Auto-save is enabled by default.',
-      elementSelector: "button:has(svg.lucide-save)",
-      position: 'bottom',
+      elementSelector: '[data-tutorial="save-button"]',
+      position: isMobile ? 'bottom' : 'right',
       highlightPadding: 8,
-      tips: ['Auto-save runs every few seconds', 'Manual save gives instant feedback', 'All changes are synced to the cloud'],
+      tips: ['Auto-save runs every few seconds', 'Manual save gives instant feedback'],
     },
     {
-      id: 'export',
-      title: ' Export & Share',
-      description: isMobile
-        ? 'Use the more options menu (⋮) to download your notes in various formats.'
-        : 'Download your notes as PDF, Markdown, HTML, or Word documents.',
-      elementSelector: isMobile
-        ? "button:has(svg.lucide-more-vertical)"
-        : "button:has(svg.lucide-download)",
-      position: 'bottom',
+      id: 'help-tutorial',
+      title: 'Need Help?',
+      description: 'You can always access this tutorial again by tapping the Help icon.',
+      elementSelector: '[data-tutorial="help-button"]',
+      position: isMobile ? 'bottom' : 'right',
       highlightPadding: 8,
-      tips: ['Keep backups', 'Share with others', 'Print for offline use'],
-      actions: isMobile ? [
-        {
-          label: 'Show Export Options',
-          onClick: () => {
-            const mobileMenuBtn = document.querySelector("button:has(svg.lucide-more-vertical)") as HTMLElement;
-            if (mobileMenuBtn) {
-              mobileMenuBtn.click();
-              setTimeout(() => {
-                // Find and highlight the export section
-                const exportSection = document.querySelector('[class*="animate-slide-in-down"]');
-                if (exportSection) {
-                  exportSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-              }, 100);
-            }
-          }
-        }
-      ] : undefined
+      tips: ['Restart tutorial anytime', 'Explore features at your own pace'],
     },
   ],
 });
