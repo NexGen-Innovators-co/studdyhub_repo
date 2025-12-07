@@ -73,8 +73,8 @@ const AppWithSEO = () => {
 
           {/* ==== AUTHENTICATED APP ROUTES (Non-Social) ==== */}
           <Route path="/dashboard" element={<Index />} />
-          <Route path="/notes" element={<Index />} />
-          <Route path="/note" element={<Index />} />
+          <Route path="/notes/:noteId?" element={<Index />} />
+          <Route path="/note/:noteId?" element={<Index />} />
           <Route path="/recordings" element={<Index />} />
           <Route path="/schedule" element={<Index />} />
           <Route path="/chat" element={<Index />} />

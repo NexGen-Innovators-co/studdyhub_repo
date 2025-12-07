@@ -413,6 +413,47 @@ const LandingPage: React.FC = () => {
           />
         </ContentContainer>
       </section>
+
+      {/* Demo Video Section */}
+      <section className="py-12 md:py-16 bg-gray-50 dark:bg-gray-950">
+        <ContentContainer>
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold mb-4 shadow-sm dark:bg-blue-900/30 dark:text-blue-300">
+              <Play className="h-4 w-4" />
+              <span>See It In Action</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900 dark:text-white">
+              Watch Our <span className="text-blue-600 dark:text-blue-400">Interactive Demo</span>
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+              See how StuddyHub AI transforms learning with intelligent note-taking, document analysis, and AI chat.
+            </p>
+          </div>
+
+          <div className="max-w-5xl mx-auto">
+            <div className="relative aspect-video rounded-xl overflow-hidden shadow-2xl border-4 border-white/20 dark:border-gray-800/20">
+              <iframe
+                src="https://app.supademo.com/embed/cmiuw8fc53q0ml821m200i3ra"
+                className="absolute inset-0 w-full h-full"
+                title="StuddyHub AI Demo"
+                allowFullScreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              />
+            </div>
+            <div className="mt-6 text-center">
+              <a
+                href="https://app.supademo.com/demo/cmiuw8fc53q0ml821m200i3ra?utm_source=link"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                <span>Open demo in full screen</span>
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </a>
+            </div>
+          </div>
+        </ContentContainer>
+      </section>
       {/* Testimonials Section */}
       <section id="testimonials" className="py-12 md:py-16 bg-white dark:bg-gray-900">
         <ContentContainer>

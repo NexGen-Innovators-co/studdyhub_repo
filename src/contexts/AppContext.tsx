@@ -131,7 +131,9 @@ interface AppContextType extends AppState {
   retryLoading: (dataType: string) => void;
   // ← Added socialData to the interface
   socialData: ReturnType<typeof useSocialData>;
-  // Add this with your other state declarations
+  refreshNotes: () => Promise<void>; // Add this
+  navigateToNote: (noteId: string | null) => void; // Fix the syntax error
+
 }
 
 // Create context
@@ -283,11 +285,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadFolders,
     loadSpecificDocuments,
     loadSpecificNotes,
-
+    refreshNotes
   } = appData;
   const addDocument = useCallback((document: AppDocument) => {
     setDocuments(prev => [document, ...prev]);
   }, [setDocuments]);
+
 
   // Update document function
   const updateDocument = useCallback((document: AppDocument) => {
@@ -325,6 +328,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFolders,
   });
   const socialData = useSocialData(userProfile, 'newest', 'all');
+  const navigateToNote = useCallback((noteId: string | null) => {
+    if (noteId) {
+      navigate(`/notes/${noteId}`, { replace: true });
+    } else {
+      navigate('/notes', { replace: true });
+    }
+  }, [navigate]);
   // Theme management
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -905,7 +915,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadChatSessions();
     }
   }, [user, loadChatSessions, state.chatSessionsLoadedCount]);
+  // Add this effect to handle note ID from URL
+  useEffect(() => {
+    if (user && notes.length > 0) {
+      const pathParts = location.pathname.split('/');
+      const isNotesRoute = pathParts[1] === 'notes' || pathParts[1] === 'note';
+      const noteIdFromUrl = isNotesRoute && pathParts[2] ? pathParts[2] : null;
 
+      if (noteIdFromUrl) {
+        // Find the note from the URL
+        const noteFromUrl = notes.find(note => note.id === noteIdFromUrl);
+        if (noteFromUrl && (!activeNote || activeNote.id !== noteIdFromUrl)) {
+          setActiveNote(noteFromUrl);
+          console.log('✅ Note loaded from URL:', noteIdFromUrl);
+        } else if (!noteFromUrl) {
+          console.log('❌ Note not found in URL:', noteIdFromUrl);
+          // Note not found, navigate to notes list
+          navigate('/notes', { replace: true });
+        }
+      }
+    }
+  }, [location.pathname, notes, user, activeNote, setActiveNote, navigate]);
   // Add these declarations with your other state declarations
   const [inputMessage, setInputMessage] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<FileData[]>([]);
@@ -1101,6 +1131,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isLoadingSession,
     setIsLoadingSession,
     socialData,
+    refreshNotes,
+    navigateToNote
   };
 
   return (

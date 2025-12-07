@@ -117,6 +117,9 @@ interface TabContentProps {
   onLoadMoreChatSessions: () => void;
   dispatch: React.Dispatch<any>;
   isLoadingChatSessions?: boolean;
+  onRefresh?: () => void;
+  refreshNotes?: () => Promise<void>;
+  navigateToNote: (noteId: string | null) => void; // Fix the syntax error
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -320,6 +323,9 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     hasMore: props.hasMoreNotes,
     isLoadingMore: props.isLoadingNotes,
     onLoadMore: props.onLoadMoreNotes,
+    onRefresh: props.refreshNotes,
+    isLoading: props.isLoadingNotes && !props.filteredNotes.length,
+    navigateToNote: props.navigateToNote
   }), [
     props.filteredNotes,
     props.activeNote,
@@ -330,7 +336,10 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onToggleNotesHistory,
     props.hasMoreNotes,
     props.isLoadingNotes,
-    props.onLoadMoreNotes
+    props.onLoadMoreNotes,
+    props.onRefresh,
+    props.refreshNotes,
+    props.navigateToNote
   ]);
 
   const dashboardProps = useMemo(() => ({
