@@ -171,7 +171,61 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
   const isCurrentlySendingRef = useRef(false);
   const prevSessionIdRef = useRef<string | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState<{
+    isLoading: boolean;
+    message: string;
+    progress: number;
+  }>({
+    isLoading: false,
+    message: '',
+    progress: 0
+  });
+  const ChatLoadingIndicator: React.FC<{
+    isLoadingSession: boolean;
+    messageCount: number;
+  }> = ({ isLoadingSession, messageCount }) => {
+    if (!isLoadingSession) return null;
 
+    return (
+      <div className="flex flex-col items-center justify-center py-8 space-y-4">
+        {/* Animated book loader */}
+        <BookPagesAnimation className="h-16 w-16 text-pink-500" showText={false} />
+
+        {/* Loading text with fade animation */}
+        <div className="space-y-2 text-center">
+          <p className="text-base text-gray-600 dark:text-gray-300 animate-pulse">
+            Loading conversation...
+          </p>
+          {messageCount > 0 && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {messageCount} message{messageCount !== 1 ? 's' : ''} loaded
+            </p>
+          )}
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-64 h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-pink-500 to-purple-500 animate-pulse"
+            style={{ width: '60%' }}
+          />
+        </div>
+      </div>
+    );
+  };
+  const MessageSkeleton: React.FC = () => (
+    <div className="space-y-4 animate-pulse">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex gap-3">
+          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
+            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
   const loadSessionDocuments = useCallback(async (sessionId: string) => {
     if (!userProfile?.id) return;
 
@@ -704,67 +758,87 @@ const AIChat: React.FC<AIChatProps> = ({
             transition: 'width 0.1s ease-in-out'
           }}
         >
-          {/* Chat content */}
-          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar pb-36 md:pb-6">
-            {isLoadingSessionMessages && (
-              <div className="flex justify-center items-center w-full py-10">
-                <Loader2 className="h-4 w-4 animate-spin text-pink-500" />
+          <div
+            ref={chatContainerRef}
+            className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar pb-36 md:pb-6"
+          >
+            {/* Enhanced Loading States */}
+            {isLoadingSessionMessages && messages.length === 0 ? (
+              <ChatLoadingIndicator
+                isLoadingSession={true}
+                messageCount={0}
+              />
+            ) : isLoadingSessionMessages && messages.length > 0 ? (
+              <div className="flex justify-center items-center py-4">
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <Loader2 className="h-4 w-4 animate-spin text-pink-500" />
+                  <span>Loading older messages...</span>
+                </div>
               </div>
-            )}
-            {!hasMoreMessages && messages.length === 0 && !isLoadingSessionMessages && !activeChatSessionId && (
+            ) : !activeChatSessionId && messages.length === 0 ? (
               <div className="text-center text-gray-500 dark:text-gray-400 mt-20 font-claude">
                 <BookPagesAnimation className="mx-auto mb-4 h-16 w-16 text-pink-500" showText={false} />
                 <p className="text-lg md:text-xl">Start the conversation by sending a message!</p>
               </div>
+            ) : null}
+
+            {/* Show skeleton only when loading first messages */}
+            {isLoadingSessionMessages && messages.length === 0 && (
+              <MessageSkeleton />
             )}
-            <MessageList
-              messages={messages}
-              isLoading={isLoading}
-              isLoadingSessionMessages={isLoadingSessionMessages}
-              isLoadingOlderMessages={isLoadingOlderMessages}
-              hasMoreMessages={hasMoreMessages}
-              mergedDocuments={mergedDocuments}
-              onDeleteClick={handleMessageDeleteClick}
-              onRegenerateClick={onRegenerateResponse}
-              onRetryClick={onRetryFailedMessage}
-              onViewContent={memoizedHandleViewContent}
-              onMermaidError={memoizedOnMermaidError}
-              onSuggestAiCorrection={memoizedOnSuggestAiCorrection}
-              onToggleUserMessageExpansion={handleToggleUserMessageExpansion}
-              expandedMessages={expandedMessages}
-              isSpeaking={isSpeaking}
-              speakingMessageId={speakingMessageId}
-              isPaused={isPaused}
-              speakMessage={speakMessage}
-              pauseSpeech={pauseSpeech}
-              resumeSpeech={resumeSpeech}
-              stopSpeech={stopSpeech}
-              isDiagramPanelOpen={isDiagramPanelOpen}
-              enableTypingAnimation={true}
-              onMarkMessageDisplayed={handleMarkMessageDisplayed}
-              autoTypeInPanel={autoTypeInPanel}
-              onBlockDetected={memoizedHandleBlockDetected}
-              onBlockUpdate={memoizedHandleBlockDetected}
-              onBlockEnd={memoizedHandleBlockDetected}
-              onDiagramCodeUpdate={handleDiagramCodeUpdate}
-            />
-            {isGeneratingImage && (
+
+            {/* Messages */}
+            {messages.length > 0 && (
+              <MessageList
+                messages={messages}
+                isLoading={isLoading}
+                isLoadingSessionMessages={isLoadingSessionMessages}
+                isLoadingOlderMessages={isLoadingOlderMessages}
+                hasMoreMessages={hasMoreMessages}
+                mergedDocuments={mergedDocuments}
+                onDeleteClick={handleMessageDeleteClick}
+                onRegenerateClick={onRegenerateResponse}
+                onRetryClick={onRetryFailedMessage}
+                onViewContent={memoizedHandleViewContent}
+                onMermaidError={memoizedOnMermaidError}
+                onSuggestAiCorrection={memoizedOnSuggestAiCorrection}
+                onToggleUserMessageExpansion={handleToggleUserMessageExpansion}
+                expandedMessages={expandedMessages}
+                isSpeaking={isSpeaking}
+                speakingMessageId={speakingMessageId}
+                isPaused={isPaused}
+                speakMessage={speakMessage}
+                pauseSpeech={pauseSpeech}
+                resumeSpeech={resumeSpeech}
+                stopSpeech={stopSpeech}
+                isDiagramPanelOpen={isDiagramPanelOpen}
+                enableTypingAnimation={true}
+                onMarkMessageDisplayed={handleMarkMessageDisplayed}
+                autoTypeInPanel={autoTypeInPanel}
+                onBlockDetected={memoizedHandleBlockDetected}
+                onBlockUpdate={memoizedHandleBlockDetected}
+                onBlockEnd={memoizedHandleBlockDetected}
+                onDiagramCodeUpdate={handleDiagramCodeUpdate}
+              />
+            )}
+
+            {/* AI Typing Indicator */}
+            {isAiTyping && messages.length > 0 && (
               <div className="flex justify-center font-sans">
-                <div className="w-full max-w-4xl flex gap-3 items-center justify-start">
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-pink-500 to-red-500 flex items-center justify-center">
-                    <img src="https://placehold.co/64x64/FF69B4/FFFFFF/png?text=AI" alt="Loading..." className="w-16 h-16 animate-spin" />
+                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700">
+                  <div className="flex gap-1">
+                    <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <div className="w-fit p-3 rounded-lg bg-white shadow-sm border border-slate-200 dark:bg-gray-800 dark:border-gray-700">
-                    <div className="flex gap-1">
-                      <Loader2 className="h-4 w-4 animate-spin text-pink-500" />
-                      <span className="text-base md:text-lg text-slate-500 dark:text-gray-400">Generating image...</span>
-                    </div>
-                  </div>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">AI is typing...</span>
                 </div>
               </div>
             )}
+
             <div ref={messagesEndRef} />
           </div>
+
 
           {/* Input area */}
           <div className={`fixed bottom-0 left-0 right-0 sm:pb-8 md:shadow-none md:static rounded-t-lg rounded-lg md:rounded-lg bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10

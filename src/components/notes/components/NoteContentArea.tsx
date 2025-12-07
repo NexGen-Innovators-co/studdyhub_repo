@@ -513,7 +513,9 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         },
       },
     });
-
+    const handleStartTutorial = () => {
+      startTutorial();
+    };
     useImperativeHandle(ref, () => ({
       getCurrentMarkdown: () => {
         if (!editor) return '';
@@ -564,7 +566,13 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showDiagramsMenu, setShowDiagramsMenu] = useState(false);
-    const { isOpen, startTutorial, closeTutorial, completeTutorial } = useTutorial('note-editor');
+    const {
+      isOpen,
+      startTutorial,
+      closeTutorial,
+      completeTutorial,
+      hasCompletedBefore
+    } = useTutorial('note-editor');
     const [isToolbarExpanded, setIsToolbarExpanded] = useState(true);
     const startAI = () => {
       if (!editor) return;
@@ -744,6 +752,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
       renderAllDiagrams();
     }, [editor?.getHTML()]);
+
     const useMobileDetection = () => {
       const [isMobile, setIsMobile] = useState(false);
 
@@ -762,8 +771,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
     const isMobile = useMobileDetection();
 
-    // Create dynamic tutorial config
-    const NOTE_EDITOR_TUTORIAL = getNoteEditorTutorial(isMobile);
+
     // UI State
     const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -776,17 +784,24 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [hasOverflow, setHasOverflow] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
 
+    const NOTE_EDITOR_TUTORIAL = getNoteEditorTutorial(isMobile, isExpanded);
     // Define your toolbar groups as React nodes
     const toolbarItems: React.ReactNode[] = [
       // Navigation
       <React.Fragment key="nav">
-        <button onClick={() => startTutorial()}>
+        <button
+          onClick={handleStartTutorial}
+          className="p-2 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-900 hover:text-yellow-600 dark:hover:text-yellow-400 transition-all duration-200"
+          title="Show Tutorial"
+          data-tutorial="help-button"
+        >
           <HelpCircle className="w-4 h-4" />
         </button>
         <button
           onClick={onToggleNotesHistory}
           className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md group"
           title="History"
+          data-tutorial="history-button"
         >
           <BookOpen className="w-4 h-4 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
         </button>
@@ -799,6 +814,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           disabled={!editor?.can().undo()}
           className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
           title="Undo"
+          data-tutorial="undo-button"
         >
           <Undo className="w-4 h-4" />
         </button>
@@ -807,6 +823,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           disabled={!editor?.can().redo()}
           className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-30 transition-all duration-200"
           title="Redo"
+          data-tutorial="redo-button"
         >
           <Redo className="w-4 h-4" />
         </button>
@@ -818,6 +835,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleBold().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('bold') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Bold"
+          data-tutorial="bold-button"
         >
           <Bold className="w-4 h-4" />
         </button>
@@ -825,6 +843,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleItalic().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('italic') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Italic"
+          data-tutorial="italic-button"
         >
           <Italic className="w-4 h-4" />
         </button>
@@ -832,6 +851,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleUnderline().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('underline') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Underline"
+          data-tutorial="underline-button"
         >
           <UnderlineIcon className="w-4 h-4" />
         </button>
@@ -839,6 +859,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleStrike().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('strike') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Strikethrough"
+          data-tutorial="strikethrough-button"
         >
           <Strikethrough className="w-4 h-4" />
         </button>
@@ -846,6 +867,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleCode().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('code') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Code"
+          data-tutorial="code-button"
         >
           <Code className="w-4 h-4" />
         </button>
@@ -857,6 +879,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 1 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Heading 1"
+          data-tutorial="heading1-button"
         >
           <Heading1 className="w-4 h-4" />
         </button>
@@ -864,6 +887,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 2 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Heading 2"
+          data-tutorial="heading2-button"
         >
           <Heading2 className="w-4 h-4" />
         </button>
@@ -871,6 +895,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('heading', { level: 3 }) ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Heading 3"
+          data-tutorial="heading3-button"
         >
           <Heading3 className="w-4 h-4" />
         </button>
@@ -882,6 +907,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleBulletList().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('bulletList') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Bullet List"
+          data-tutorial="bullet-list-button"
         >
           <List className="w-4 h-4" />
         </button>
@@ -889,6 +915,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleOrderedList().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('orderedList') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Ordered List"
+          data-tutorial="ordered-list-button"
         >
           <ListOrdered className="w-4 h-4" />
         </button>
@@ -896,6 +923,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleBlockquote().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('blockquote') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Quote"
+          data-tutorial="quote-button"
         >
           <Quote className="w-4 h-4" />
         </button>
@@ -907,6 +935,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().setTextAlign('left').run()}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Align Left"
+          data-tutorial="align-left-button"
         >
           <AlignLeft className="w-4 h-4" />
         </button>
@@ -914,6 +943,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().setTextAlign('center').run()}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Align Center"
+          data-tutorial="align-center-button"
         >
           <AlignCenter className="w-4 h-4" />
         </button>
@@ -921,6 +951,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().setTextAlign('right').run()}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Align Right"
+          data-tutorial="align-right-button"
         >
           <AlignRight className="w-4 h-4" />
         </button>
@@ -932,6 +963,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => { const url = prompt('Enter link URL:'); if (url) editor?.chain().focus().setLink({ href: url }).run(); }}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Insert Link"
+          data-tutorial="insert-link-button"
         >
           <LinkIcon className="w-4 h-4" />
         </button>
@@ -939,6 +971,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => { const url = prompt('Enter image URL:'); if (url) editor?.chain().focus().setImage({ src: url }).run(); }}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Insert Image"
+          data-tutorial="insert-image-button"
         >
           <ImageIcon className="w-4 h-4" />
         </button>
@@ -946,6 +979,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Insert Table"
+          data-tutorial="insert-table-button"
         >
           <TableIcon className="w-4 h-4" />
         </button>
@@ -957,6 +991,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => insertDiagram('chartjs')}
           className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200"
           title="Insert Chart"
+          data-tutorial="insert-chart-button"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -966,6 +1001,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => insertDiagram('mermaid')}
           className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200"
           title="Insert Mermaid"
+          data-tutorial="insert-mermaid-button"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -975,6 +1011,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => insertDiagram('dot')}
           className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200"
           title="Insert Graphviz"
+          data-tutorial="insert-graphviz-button"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -984,6 +1021,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('codeBlock') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
           title="Code Block"
+          data-tutorial="code-block-button"
         >
           <Code className="w-4 h-4" />
         </button>
@@ -995,6 +1033,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={handleSave}
           className="p-2 rounded-md hover:bg-green-100 dark:hover:bg-green-900 hover:text-green-600 dark:hover:text-green-400 transition-all duration-200"
           title="Save"
+          data-tutorial="save-button"
         >
           <Save className="w-4 h-4" />
         </button>
@@ -1003,6 +1042,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           disabled={isUploading || isGeneratingAI || isProcessingAudio || !userProfile}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           title="Upload Document"
+          data-tutorial="upload-document-button"
         >
           {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
         </button>
@@ -1011,6 +1051,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           disabled={isProcessingAudio || isUploading || isGeneratingAI || !userProfile}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           title="Upload Audio"
+          data-tutorial="upload-audio-button"
         >
           {isProcessingAudio ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
         </button>
@@ -1019,6 +1060,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           disabled={!documentId || isProcessingAudio}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           title="View Original"
+          data-tutorial="view-original-button"
         >
           <FileText className="w-4 h-4" />
         </button>
@@ -1027,6 +1069,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           disabled={isUploading || isGeneratingAI || isProcessingAudio || !documentId}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           title="Regenerate"
+          data-tutorial="regenerate-button"
         >
           {isGeneratingAI ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
         </button>
@@ -1038,6 +1081,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={handleDownloadNote}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Download Markdown"
+          data-tutorial="download-markdown-button"
         >
           <Download className="w-4 h-4" />
         </button>
@@ -1045,6 +1089,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={handleDownloadPdf}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Download PDF"
+          data-tutorial="download-pdf-button"
         >
           <FileText className="w-4 h-4" />
         </button>
@@ -1052,6 +1097,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={handleCopyNoteContent}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
           title="Copy Content"
+          data-tutorial="copy-content-button"
         >
           <Copy className="w-4 h-4" />
         </button>
@@ -1065,6 +1111,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           disabled={isSpeaking || voices.length === 0}
           className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all duration-200"
           title="Select Voice"
+          data-tutorial="voice-select"
         >
           <option value="">Default Voice</option>
           {voices.map((voice, index) => (
@@ -1078,6 +1125,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           disabled={isUploading || isGeneratingAI || isProcessingAudio}
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           title="Text to Speech"
+          data-tutorial="tts-button"
         >
           {isSpeaking ? <StopCircle className="w-4 h-4 text-red-500" /> : <Volume2 className="w-4 h-4" />}
         </button>
@@ -1089,6 +1137,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           onClick={startAI}
           className="p-2 rounded-md bg-gradient-to-r from-blue-500 to-blue-500 hover:from-blue-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
           title="AI Assist"
+          data-tutorial="ai-assistant-button"
         >
           <Sparkles className="w-4 h-4" />
         </button>
@@ -1102,6 +1151,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           }}
           className="px-3 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-medium shadow-md hover:shadow-lg transition-all duration-200"
           title="Flashcards Menu"
+          data-tutorial="flashcards-button"
         >
           <Brain className="w-4 h-4" />
           <span className="hidden xl:inline">Flashcards</span>
@@ -1111,7 +1161,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         </button>
       </React.Fragment>,
     ];
-
     useEffect(() => {
       if (!toolbarRef.current) return;
 
@@ -1153,11 +1202,19 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         window.removeEventListener('resize', checkOverflow);
       };
     }, [editor, savedCards.length, isToolbarExpanded, isSummaryVisible, isExpanded]);
+    // Add this useEffect in NoteContentArea.tsx component
+    useEffect(() => {
+      // Auto-start tutorial on mobile for first-time users
+      const isFirstVisit = localStorage.getItem('note-editor-first-visit');
+      if (isMobile && !isFirstVisit && !hasCompletedBefore) {
+        const timer = setTimeout(() => {
+          startTutorial();
+          localStorage.setItem('note-editor-first-visit', 'true');
+        }, 2000); // Start after 2 seconds
 
-    // Render empty state when there's no note
-
-
-    // Render normal editor when note exists
+        return () => clearTimeout(timer);
+      }
+    }, [isMobile, hasCompletedBefore, startTutorial]);
     return (
       <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-gray-900">
         {/* Hidden file inputs */}
@@ -1274,7 +1331,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
             {/* ========== MOBILE ESSENTIAL FORMATTING ========== */}
             <div className="flex items-center gap-1">
               <button
-                onClick={() => startTutorial}
+                onClick={handleStartTutorial}
                 className="p-2 rounded-md hover:bg-yellow-100 dark:hover:bg-yellow-900 hover:text-yellow-600 dark:hover:text-yellow-400 transition-all duration-200"
                 title="Show Tutorial"
               >

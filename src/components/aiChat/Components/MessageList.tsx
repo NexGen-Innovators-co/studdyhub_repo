@@ -505,14 +505,7 @@ export const MessageList = memo(({
                                             >
                                                 Retry
                                             </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => onDeleteClick(message[index]?.id)}
-                                                className="text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/50"
-                                            >
-                                                Delete
-                                            </Button>
+
                                         </div>)
                                     }
                                 </div>
@@ -636,14 +629,7 @@ export const MessageList = memo(({
                                                     >
                                                         <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
                                                     </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => onDeleteClick(message[index]?.id)}
-                                                        className="text-red-600 rounded-full h-5 w-5 sm:h-6 sm:w-6 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/50"
-                                                    >
-                                                        <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                                    </Button>
+
                                                 </>
                                             )}
                                             <Button

@@ -626,16 +626,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsLoadingSessionMessages(true);
 
     try {
+      const startTime = Date.now();
+
+      // OPTIMIZATION 1: Use single query with better indexing
+      // Only select necessary fields for initial load
       const { data, error } = await withTimeout<SupabaseChatMessage[]>(
         supabase
           .from('chat_messages')
-          .select('*')
+          .select('id, content, role, timestamp, is_error, attached_document_ids, attached_note_ids, session_id, has_been_displayed, files_metadata')
           .eq('session_id', sessionId)
           .order('timestamp', { ascending: false })
           .limit(CHAT_MESSAGES_PER_PAGE),
         API_TIMEOUT,
         'Failed to load session messages'
       );
+
+      const loadTime = Date.now() - startTime;
+      console.log(`✅ Loaded ${data?.length || 0} messages in ${loadTime}ms`);
 
       if (error) throw error;
 
@@ -647,22 +654,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isError: msg.is_error || false,
         attachedDocumentIds: msg.attached_document_ids || [],
         attachedNoteIds: msg.attached_note_ids || [],
-        imageUrl: msg.image_url || undefined,
-        imageMimeType: msg.image_mime_type || undefined,
         session_id: msg.session_id,
         has_been_displayed: msg.has_been_displayed || false,
         files_metadata: msg.files_metadata,
         isLoading: false
       }));
 
-      // Only load documents/notes if we have new messages
-      if (fetchedMessages.length > 0) {
-        loadSpecificDocuments(user.id, fetchedMessages.flatMap(m => m.attachedDocumentIds || []));
-        loadSpecificNotes(user.id, fetchedMessages.flatMap(m => m.attachedNoteIds || []));
+      // OPTIMIZATION 2: Lazy load documents/notes only if needed
+      const hasAttachments = fetchedMessages.some(m =>
+        (m.attachedDocumentIds?.length || 0) > 0 ||
+        (m.attachedNoteIds?.length || 0) > 0
+      );
+
+      if (hasAttachments) {
+        // Load in background without blocking UI
+        setTimeout(() => {
+          const allDocIds = [...new Set(fetchedMessages.flatMap(m => m.attachedDocumentIds || []))];
+          const allNoteIds = [...new Set(fetchedMessages.flatMap(m => m.attachedNoteIds || []))];
+
+          if (allDocIds.length > 0) {
+            loadSpecificDocuments(user.id, allDocIds);
+          }
+          if (allNoteIds.length > 0) {
+            loadSpecificNotes(user.id, allNoteIds);
+          }
+        }, 100);
       }
 
       setChatMessages(prevAllMessages => {
-        // Filter out optimistic messages for this session and merge with new messages
         const otherSessionMessages = prevAllMessages.filter(m =>
           m.session_id !== sessionId || !m.id.startsWith('optimistic-')
         );
@@ -679,8 +698,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: (data || []).length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
       console.error('Error loading session messages:', error);
-      return
-      // toast.error('Failed to load chat messages for this session.');
+      // Don't show error toast - let UI handle it gracefully
     } finally {
       setIsLoadingSessionMessages(false);
     }

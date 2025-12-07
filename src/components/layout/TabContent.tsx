@@ -372,20 +372,27 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         </div>
       );
 
-    // In TabContent.tsx 
     case 'notes':
       return (
         <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
           {/* Centered Container with max-width */}
           <div className="w-full h-full max-w-[1400px] mx-auto flex relative lg:shadow-2xl">
+            {/* Click overlay for mobile when sidebar is open */}
+            {isNotesHistoryOpen && (
+              <div
+                className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+                onClick={onToggleNotesHistory}
+              />
+            )}
+
             {/* Notes List - Sidebar */}
             <div className={`
-          ${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:static lg:w-80 lg:flex-shrink-0
-          fixed inset-y-0 left-0 z-10 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
-          transition-transform duration-300 ease-in-out lg:transition-none
-          lg:border-r lg:border-gray-200 lg:dark:border-gray-700
-        `}>
+                ${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
+                lg:translate-x-0 lg:static lg:w-80 lg:flex-shrink-0
+                fixed inset-y-0 left-0 lg:z-0 z-30 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
+                transition-transform duration-300 ease-in-out lg:transition-none
+                lg:border-r lg:border-gray-200 lg:dark:border-gray-700
+              `}>
               <NotesList
                 {...notesHistoryProps}
                 isOpen={isNotesHistoryOpen}
