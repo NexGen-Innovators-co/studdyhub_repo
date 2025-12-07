@@ -85,6 +85,8 @@ const Index = () => {
     dataErrors,
     retryLoading,
     clearError,
+    refreshNotes,
+    navigateToNote,
   } = useAppContext();
 
   const {
@@ -319,6 +321,9 @@ const Index = () => {
     onLoadMoreChatSessions: handleLoadMoreChatSessions,
     dispatch,                                         // ← from useAppContext()
     isLoadingChatSessions: isLoadingSessionMessages, // ← rename for clarity
+    onRefresh: () => retryLoading('notes'),
+    refreshNotes,
+    navigateToNote,
   }), [
     currentActiveTab,
     activeSocialTab,
@@ -361,6 +366,8 @@ const Index = () => {
     dataErrors,
     retryLoading,
     clearError,
+    refreshNotes,
+    navigateToNote,
   ]);
 
   // Auth redirect (existing)

@@ -1,4 +1,4 @@
-// useAppData.tsx - Highly Optimized version with enhanced performance and timeouts
+// useAppData.tsx - Highly Optimized version with enhanced performance, timeouts, and connection management
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz, QuizQuestion } from '../types/Class';
@@ -40,9 +40,17 @@ export interface DataLoadingState {
   folders: boolean;
 }
 
-// In useAppData.tsx - Update timeout constants
-const API_TIMEOUT = 60000; // Increase from 30 to 45 seconds
-const LOADING_TIMEOUT = 60000; // Increase from 10 to 30 seconds for loading states
+// Enhanced timeout constants with retry logic
+const API_TIMEOUT = 15000; // Reduce from 60s to 15s for better UX
+const LOADING_TIMEOUT = 30000; // Reduce from 60s to 30s
+const MAX_RETRIES = 2; // Maximum retry attempts
+const RETRY_DELAY = 2000; // Delay between retries in ms
+
+// Connection quality detection
+const CONNECTION_THRESHOLDS = {
+  SLOW: 5000, // Response time threshold for slow connection (ms)
+  TIMEOUT: 10000, // Response time threshold for timeout (ms)
+};
 
 // Priority-based loading with dependencies
 const LOADING_PRIORITIES = {
@@ -63,7 +71,6 @@ const CACHE_CONFIG = {
 };
 
 // Type definitions for Supabase responses
-// Update Supabase response types
 interface SupabaseDocument {
   id: string;
   title: string;
@@ -159,7 +166,47 @@ interface SupabaseProfile {
   updated_at: string;
 }
 
-// Helper function for timeout handling
+// Enhanced withTimeout helper with retry logic
+const withRetry = async <T,>(
+  supabaseQuery: () => Promise<{ data: T | null; error: any }>,
+  errorMessage: string,
+  dataType: string,
+  retries = MAX_RETRIES
+): Promise<{ data: T | null; error: any; retriesUsed: number }> => {
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const timeoutMs = API_TIMEOUT + (attempt * 2000); // Progressive timeout
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${errorMessage} (timeout after ${timeoutMs}ms)`)), timeoutMs)
+      );
+
+      const result = await Promise.race([supabaseQuery(), timeoutPromise]);
+      return { ...result, retriesUsed: attempt };
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry if it's not a timeout or network error
+      if (!error.message?.includes('timeout') && !error.message?.includes('network')) {
+        break;
+      }
+
+      // Exponential backoff for retries
+      if (attempt < retries) {
+        const delay = RETRY_DELAY * Math.pow(2, attempt);
+        console.log(`🔄 Retrying ${dataType} (attempt ${attempt + 1}/${retries}) after ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  console.error(`❌ Failed to load ${dataType} after ${retries} retries:`, lastError);
+  return { data: null, error: lastError, retriesUsed: retries };
+};
+
+// Original withTimeout helper (kept for compatibility)
+// Helper function for timeout handling - FIXED VERSION
 const withTimeout = async <T,>(
   supabaseQuery: any,
   timeoutMs: number,
@@ -172,15 +219,31 @@ const withTimeout = async <T,>(
     );
 
     // Execute the Supabase query and race it against the timeout
-    const result = await Promise.race([supabaseQuery, timeoutPromise]);
-    return result;
+    const result = await Promise.race([supabaseQuery, timeoutPromise]) as any;
+
+    // Check if result has the Supabase response structure
+    if (result && typeof result === 'object') {
+      // Supabase typically returns { data, error } structure
+      return {
+        data: result.data || null,
+        error: result.error || null
+      };
+    }
+
+    // If result doesn't match expected structure, return as data
+    return {
+      data: result as T,
+      error: null
+    };
   } catch (error) {
-    return { data: null, error };
+    return {
+      data: null,
+      error: error instanceof Error ? error : new Error(String(error))
+    };
   }
 };
 
 // Custom hook for managing loading states with timeouts
-// In useAppData.tsx - Enhanced useLoadingState
 const useLoadingState = (initialState: DataLoadingState) => {
   const [loading, setLoading] = useState<DataLoadingState>(initialState);
   const timeoutRefs = useRef<Map<keyof DataLoadingState, NodeJS.Timeout>>(new Map());
@@ -220,6 +283,115 @@ const useLoadingState = (initialState: DataLoadingState) => {
   }, []);
 
   return [loading, setLoadingWithTimeout] as const;
+};
+
+// Connection quality monitor hook
+const useConnectionMonitor = () => {
+  const connectionRef = useRef<'good' | 'slow' | 'poor'>('good');
+  const recentResponseTimesRef = useRef<number[]>([]);
+
+  const recordResponseTime = useCallback((responseTime: number) => {
+    recentResponseTimesRef.current.push(responseTime);
+    if (recentResponseTimesRef.current.length > 10) {
+      recentResponseTimesRef.current.shift();
+    }
+
+    const avgTime = recentResponseTimesRef.current.reduce((a, b) => a + b, 0) / recentResponseTimesRef.current.length;
+
+    if (avgTime > CONNECTION_THRESHOLDS.TIMEOUT) {
+      connectionRef.current = 'poor';
+    } else if (avgTime > CONNECTION_THRESHOLDS.SLOW) {
+      connectionRef.current = 'slow';
+    } else {
+      connectionRef.current = 'good';
+    }
+
+    return connectionRef.current;
+  }, []);
+
+  const getConnectionQuality = useCallback(() => connectionRef.current, []);
+
+  return { recordResponseTime, getConnectionQuality };
+};
+
+// Enhanced loading queue system - using Promise.allSettled
+const useLoadingQueue = () => {
+  const queueRef = useRef<Array<{
+    id: string;
+    priority: number;
+    execute: () => Promise<void>;
+    dataType: string;
+  }>>([]);
+
+  const isProcessingRef = useRef(false);
+  const concurrentLimitRef = useRef(2); // Start with 2 concurrent requests
+
+  const processQueue = useCallback(async () => {
+    if (isProcessingRef.current || queueRef.current.length === 0) return;
+
+    isProcessingRef.current = true;
+
+    try {
+      // Sort by priority
+      queueRef.current.sort((a, b) => a.priority - b.priority);
+
+      // Take items based on concurrent limit
+      const itemsToProcess = queueRef.current.splice(0, concurrentLimitRef.current);
+
+      // Execute in parallel but with controlled concurrency
+      const promises = itemsToProcess.map(async (item) => {
+        console.log(`🚀 Starting ${item.dataType} load (priority: ${item.priority})`);
+        try {
+          await item.execute();
+          console.log(`✅ Completed ${item.dataType} load`);
+        } catch (error) {
+          console.error(`❌ Failed ${item.dataType} load:`, error);
+          throw error; // Re-throw so Promise.allSettled can catch it
+        }
+      });
+
+      // Use Promise.allSettled to get results with status
+      const results = await Promise.allSettled(promises);
+
+      // Calculate success rate from settled results
+      const successful = results.filter(result => result.status === 'fulfilled').length;
+      const successRate = successful / itemsToProcess.length;
+
+      if (successRate > 0.8 && concurrentLimitRef.current < 4) {
+        concurrentLimitRef.current += 1; // Increase concurrency
+      } else if (successRate < 0.3 && concurrentLimitRef.current > 1) {
+        concurrentLimitRef.current -= 1; // Decrease concurrency
+      }
+
+    } finally {
+      isProcessingRef.current = false;
+
+      // Process next batch if any
+      if (queueRef.current.length > 0) {
+        setTimeout(() => processQueue(), 100);
+      }
+    }
+  }, []);
+
+  const addToQueue = useCallback((item: {
+    id: string;
+    priority: number;
+    execute: () => Promise<void>;
+    dataType: string;
+  }) => {
+    // Avoid duplicates
+    const exists = queueRef.current.some(existing => existing.id === item.id);
+    if (exists) return;
+
+    queueRef.current.push(item);
+
+    // Trigger processing if not already processing
+    if (!isProcessingRef.current) {
+      setTimeout(() => processQueue(), 50);
+    }
+  }, [processQueue]);
+
+  return { addToQueue };
 };
 
 export const useAppData = () => {
@@ -302,8 +474,9 @@ export const useAppData = () => {
     folders: new Set(),
   });
 
-  // Add this with your other refs
-  const isCurrentlySendingRef = useRef(false);
+  // Add connection monitoring and loading queue
+  const { recordResponseTime, getConnectionQuality } = useConnectionMonitor();
+  const { addToQueue } = useLoadingQueue();
 
   // Memoized selectors for better performance
   const filteredNotes = useMemo(() => {
@@ -374,6 +547,9 @@ export const useAppData = () => {
   useEffect(() => {
     if (currentUser?.id && currentUser.id !== lastUserId) {
       console.log('🔄 User changed, starting progressive data loading...');
+      console.log('👤 New user ID:', currentUser.id);
+      console.log('📧 User email:', currentUser.email);
+
       setLastUserId(currentUser.id);
 
       // Clear cache and data
@@ -476,7 +652,7 @@ export const useAppData = () => {
     });
   }, []);
 
-  // Enhanced documents loading for chat dependency with timeout
+  // Enhanced documents loading with retry logic
   const loadDocumentsPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.documents || !dataPagination.documents.hasMore) return;
 
@@ -486,18 +662,36 @@ export const useAppData = () => {
       const offset = isInitial ? 0 : dataPagination.documents.offset;
       const limit = isInitial ? INITIAL_LOAD_LIMITS.documents : LOAD_MORE_LIMITS.documents;
 
-      const { data, error } = await withTimeout<any[]>(
-        supabase
-          .from('documents')
-          .select(`*, folder_items:document_folder_items!document_folder_items_document_id_fkey (folder_id)`, { count: 'exact' })
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .range(offset, offset + limit - 1),
-        API_TIMEOUT,
-        'Failed to load documents'
+      const startTime = Date.now();
+
+      const { data, error, retriesUsed } = await withRetry<any[]>(
+        () => withTimeout<any[]>(
+          supabase
+            .from('documents')
+            .select(`*, folder_items:document_folder_items!document_folder_items_document_id_fkey (folder_id)`, { count: 'exact' })
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1),
+          API_TIMEOUT,
+          'Failed to load documents'
+        ),
+        'Failed to load documents',
+        'documents',
+        isInitial ? MAX_RETRIES : 1 // Only retry initial loads
       );
 
-      if (error) throw error;
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        // Check if it's a network error
+        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
+          console.warn('Network error loading documents, will retry later');
+          // Don't throw, just return - it will be retried by queue
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
         // Filter out duplicates before formatting
@@ -554,15 +748,16 @@ export const useAppData = () => {
       }
     } catch (error) {
       console.error('Error loading documents:', error);
-      if (isInitial) {
-        toast.error('Failed to load documents');
+      if (isInitial && !error.message?.includes('network')) {
+        toast.error('Failed to load documents. Please check your connection.');
+        setDataErrors(prev => ({ ...prev, documents: 'Failed to load documents' }));
       }
     } finally {
       setDataLoading('documents', false);
     }
-  }, [dataLoaded, dataLoading.documents, dataPagination.documents, setDataLoading]);
+  }, [dataLoaded, dataLoading.documents, dataPagination.documents, setDataLoading, recordResponseTime]);
 
-  // Optimized recordings loading with timeout and duplicate prevention
+  // Optimized recordings loading with retry logic
   const loadRecordingsPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.recordings) return;
     if (!isInitial && !dataPagination.recordings.hasMore) return;
@@ -573,18 +768,34 @@ export const useAppData = () => {
       const limit = isInitial ? INITIAL_LOAD_LIMITS.recordings : LOAD_MORE_LIMITS.recordings;
       const offset = isInitial ? 0 : dataPagination.recordings.offset;
 
-      const { data, error } = await withTimeout<SupabaseRecording[]>(
-        supabase
-          .from('class_recordings')
-          .select('*', { count: 'exact' })
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .range(offset, offset + limit - 1),
-        API_TIMEOUT,
-        'Failed to load recordings'
+      const startTime = Date.now();
+
+      const { data, error, retriesUsed } = await withRetry<SupabaseRecording[]>(
+        () => withTimeout<SupabaseRecording[]>(
+          supabase
+            .from('class_recordings')
+            .select('*', { count: 'exact' })
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1),
+          API_TIMEOUT,
+          'Failed to load recordings'
+        ),
+        'Failed to load recordings',
+        'recordings',
+        isInitial ? MAX_RETRIES : 1
       );
 
-      if (error) throw error;
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
+          console.warn('Network error loading recordings, will retry later');
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
         // Filter out duplicates before formatting
@@ -615,8 +826,8 @@ export const useAppData = () => {
           setRecordings(prev => [...prev, ...formattedRecordings]);
         }
 
-        const newOffset = offset + data.length; // Use original data length
-        const hasMore = data.length === limit; // Use original data length
+        const newOffset = offset + data.length;
+        const hasMore = data.length === limit;
 
         setDataPagination(prev => ({
           ...prev,
@@ -631,12 +842,15 @@ export const useAppData = () => {
       setDataLoaded(prev => new Set([...prev, 'recordings']));
     } catch (error) {
       console.error('Error loading recordings:', error);
+      if (isInitial && !error.message?.includes('network')) {
+        setDataErrors(prev => ({ ...prev, recordings: 'Failed to load recordings' }));
+      }
     } finally {
       setDataLoading('recordings', false);
     }
-  }, [dataLoading.recordings, dataPagination.recordings, setDataLoading]);
+  }, [dataLoading.recordings, dataPagination.recordings, setDataLoading, recordResponseTime]);
 
-  // Optimized schedule loading with timeout and duplicate prevention
+  // Optimized schedule loading with better error handling
   const loadSchedulePage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.scheduleItems) return;
     if (!isInitial && !dataPagination.scheduleItems.hasMore) return;
@@ -658,7 +872,17 @@ export const useAppData = () => {
         'Failed to load schedule items'
       );
 
-      if (error) throw error;
+      if (error) {
+        // Handle CORS/network errors gracefully
+        if (error.message?.includes('Failed to fetch') || error.message?.includes('CORS')) {
+          console.warn('Network/CORS error loading schedule items. Skipping for now.');
+          // Set empty data instead of throwing error
+          setScheduleItems(prev => isInitial ? [] : prev);
+          setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
         // Filter out duplicates before formatting
@@ -689,8 +913,8 @@ export const useAppData = () => {
           setScheduleItems(prev => [...prev, ...formattedItems]);
         }
 
-        const newOffset = offset + data.length; // Use original data length
-        const hasMore = data.length === limit; // Use original data length
+        const newOffset = offset + data.length;
+        const hasMore = data.length === limit;
 
         setDataPagination(prev => ({
           ...prev,
@@ -705,12 +929,15 @@ export const useAppData = () => {
       setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
     } catch (error) {
       console.error('Error loading schedule items:', error);
+      // Don't show error for network/CORS issues
+      if (!error.message?.includes('Failed to fetch') && !error.message?.includes('CORS')) {
+        setDataErrors(prev => ({ ...prev, scheduleItems: 'Failed to load schedule items' }));
+      }
     } finally {
       setDataLoading('scheduleItems', false);
     }
   }, [dataLoading.scheduleItems, dataPagination.scheduleItems, setDataLoading]);
-
-  // Optimized quizzes loading with timeout and duplicate prevention
+  // Optimized quizzes loading with retry logic
   const loadQuizzesPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.quizzes) return;
     if (!isInitial && !dataPagination.quizzes.hasMore) return;
@@ -721,18 +948,34 @@ export const useAppData = () => {
       const limit = isInitial ? INITIAL_LOAD_LIMITS.quizzes : LOAD_MORE_LIMITS.quizzes;
       const offset = isInitial ? 0 : dataPagination.quizzes.offset;
 
-      const { data, error } = await withTimeout<SupabaseQuiz[]>(
-        supabase
-          .from('quizzes')
-          .select('*', { count: 'exact' })
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .range(offset, offset + limit - 1),
-        API_TIMEOUT,
-        'Failed to load quizzes'
+      const startTime = Date.now();
+
+      const { data, error, retriesUsed } = await withRetry<SupabaseQuiz[]>(
+        () => withTimeout<SupabaseQuiz[]>(
+          supabase
+            .from('quizzes')
+            .select('*', { count: 'exact' })
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1),
+          API_TIMEOUT,
+          'Failed to load quizzes'
+        ),
+        'Failed to load quizzes',
+        'quizzes',
+        isInitial ? MAX_RETRIES : 1
       );
 
-      if (error) throw error;
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
+          console.warn('Network error loading quizzes, will retry later');
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
         // Filter out duplicates before formatting
@@ -764,8 +1007,8 @@ export const useAppData = () => {
           setQuizzes(prev => [...prev, ...formattedQuizzes]);
         }
 
-        const newOffset = offset + data.length; // Use original data length
-        const hasMore = data.length === limit; // Use original data length
+        const newOffset = offset + data.length;
+        const hasMore = data.length === limit;
 
         setDataPagination(prev => ({
           ...prev,
@@ -780,12 +1023,15 @@ export const useAppData = () => {
       setDataLoaded(prev => new Set([...prev, 'quizzes']));
     } catch (error) {
       console.error('Error loading quizzes:', error);
+      if (isInitial && !error.message?.includes('network')) {
+        setDataErrors(prev => ({ ...prev, quizzes: 'Failed to load quizzes' }));
+      }
     } finally {
       setDataLoading('quizzes', false);
     }
-  }, [dataLoading.quizzes, dataPagination.quizzes, setDataLoading]);
+  }, [dataLoading.quizzes, dataPagination.quizzes, setDataLoading, recordResponseTime]);
 
-  // Optimized folder loading with caching, timeout and duplicate prevention
+  // Optimized folder loading with retry logic
   const loadFolders = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.folders) return;
 
@@ -809,17 +1055,33 @@ export const useAppData = () => {
     setDataLoading('folders', true);
 
     try {
-      const { data, error } = await withTimeout<SupabaseFolder[]>(
-        supabase
-          .from('document_folders')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false }),
-        API_TIMEOUT,
-        'Failed to load folders'
+      const startTime = Date.now();
+
+      const { data, error, retriesUsed } = await withRetry<SupabaseFolder[]>(
+        () => withTimeout<SupabaseFolder[]>(
+          supabase
+            .from('document_folders')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false }),
+          API_TIMEOUT,
+          'Failed to load folders'
+        ),
+        'Failed to load folders',
+        'folders',
+        isInitial ? MAX_RETRIES : 1
       );
 
-      if (error) throw error;
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
+          console.warn('Network error loading folders, will retry later');
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
         // Filter out duplicates before formatting
@@ -854,70 +1116,55 @@ export const useAppData = () => {
       setDataLoaded(prev => new Set([...prev, 'folders']));
     } catch (error) {
       console.error('Error loading folders:', error);
+      if (isInitial && !error.message?.includes('network')) {
+        setDataErrors(prev => ({ ...prev, folders: 'Failed to load folders' }));
+      }
     } finally {
       setDataLoading('folders', false);
     }
-  }, [dataLoading.folders, getCachedData, setCachedData, setDataLoading]);
+  }, [dataLoading.folders, getCachedData, setCachedData, setDataLoading, recordResponseTime]);
 
-  // Optimized buildFolderTree with memoization
-  const buildFolderTree = useCallback((folders: DocumentFolder[]): FolderTreeNode[] => {
-    const folderMap = new Map<string, FolderTreeNode>();
-    const rootFolders: FolderTreeNode[] = [];
-
-    // First pass: create all nodes
-    folders.forEach(folder => {
-      folderMap.set(folder.id, {
-        ...folder,
-        children: [],
-        documents: [],
-        path: [],
-        level: 0,
-      });
-    });
-
-    // Second pass: build hierarchy
-    folders.forEach(folder => {
-      const node = folderMap.get(folder.id)!;
-
-      if (folder.parent_folder_id) {
-        const parent = folderMap.get(folder.parent_folder_id);
-        if (parent) {
-          parent.children.push(node);
-          node.path = [...parent.path, parent.id];
-          node.level = parent.level + 1;
-        }
-      } else {
-        rootFolders.push(node);
-      }
-    });
-
-    return rootFolders;
-  }, []);
-
-  // Enhanced user profile loading with better caching and timeout
+  // Enhanced user profile loading with retry logic
   const loadUserProfile = useCallback(async (user: any) => {
-    if (dataLoaded.has('profile')) return;
+    console.log('🔄 loadUserProfile called for user:', user?.id);
+
+    if (dataLoaded.has('profile')) {
+      console.log('📋 Profile already loaded, skipping');
+      return;
+    }
 
     const cacheKey = `profile_${user.id}`;
     const cached = getCachedData(cacheKey);
     if (cached) {
+      console.log('💾 Using cached profile data');
       setUserProfile(cached);
       setDataLoaded(prev => new Set([...prev, 'profile']));
       return;
     }
 
     setDataLoading('profile', true);
+    console.log('⏳ Loading profile from database...');
 
     try {
-      const { data: profileData, error: profileError } = await withTimeout<SupabaseProfile>(
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .maybeSingle(),
-        API_TIMEOUT,
-        'Failed to load user profile'
+      const startTime = Date.now();
+
+      const { data: profileData, error: profileError, retriesUsed } = await withRetry<SupabaseProfile>(
+        () => withTimeout<SupabaseProfile>(
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle(),
+          API_TIMEOUT,
+          'Failed to load user profile'
+        ),
+        'Failed to load user profile',
+        'profile',
+        1 // Only 1 retry for profile
       );
+
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
 
       if (profileError && profileError.code !== 'PGRST116') {
         console.error('Error loading user profile:', profileError);
@@ -976,7 +1223,7 @@ export const useAppData = () => {
       setDataLoaded(prev => new Set([...prev, 'profile']));
 
     } catch (error) {
-      console.error('Error in loadUserProfile:', error);
+      console.error('❌ Error in loadUserProfile:', error);
       // Fallback profile
       const fallbackProfile: UserProfile = {
         id: user.id,
@@ -999,7 +1246,7 @@ export const useAppData = () => {
     }
   }, [dataLoaded, getCachedData, setCachedData, setDataLoading]);
 
-  // Optimized notes loading with batched queries, timeout and duplicate prevention
+  // Optimized notes loading with retry logic
   const loadNotesPage = useCallback(async (userId: string, isInitial = false) => {
     if (dataLoading.notes) return;
     if (!isInitial && !dataPagination.notes.hasMore) return;
@@ -1032,18 +1279,34 @@ export const useAppData = () => {
       const limit = isInitial ? INITIAL_LOAD_LIMITS.notes : LOAD_MORE_LIMITS.notes;
       const offset = isInitial ? 0 : dataPagination.notes.offset;
 
-      const { data, error } = await withTimeout<any[]>(
-        supabase
-          .from('notes')
-          .select('*', { count: 'exact' })
-          .eq('user_id', userId)
-          .order('updated_at', { ascending: false })
-          .range(offset, offset + limit - 1),
-        API_TIMEOUT,
-        'Failed to load notes'
+      const startTime = Date.now();
+
+      const { data, error, retriesUsed } = await withRetry<any[]>(
+        () => withTimeout<any[]>(
+          supabase
+            .from('notes')
+            .select('*', { count: 'exact' })
+            .eq('user_id', userId)
+            .order('updated_at', { ascending: false })
+            .range(offset, offset + limit - 1),
+          API_TIMEOUT,
+          'Failed to load notes'
+        ),
+        'Failed to load notes',
+        'notes',
+        isInitial ? MAX_RETRIES : 1
       );
 
-      if (error) throw error;
+      const responseTime = Date.now() - startTime;
+      recordResponseTime(responseTime);
+
+      if (error) {
+        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
+          console.warn('Network error loading notes, will retry later');
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
         // Filter out duplicates before formatting
@@ -1082,7 +1345,7 @@ export const useAppData = () => {
         }
 
         const newOffset = isInitial ? formattedNotes.length : offset + formattedNotes.length;
-        const hasMore = data.length === limit; // Check original data length for pagination
+        const hasMore = data.length === limit;
 
         const newPagination = {
           hasMore,
@@ -1105,16 +1368,16 @@ export const useAppData = () => {
       console.error('Error loading notes:', error);
       setDataErrors(prev => ({ ...prev, notes: 'Failed to load notes' }));
 
-      if (isInitial) {
-        toast.error('Failed to load notes');
+      if (isInitial && !error.message?.includes('network')) {
+        toast.error('Failed to load notes. Please check your connection.');
       }
     } finally {
       abortControllersRef.current.delete(`notes_${userId}`);
       setDataLoading('notes', false);
     }
-  }, [dataLoading.notes, dataPagination.notes, activeNote, getCachedData, setCachedData, setDataLoading]);
+  }, [dataLoading.notes, dataPagination.notes, activeNote, getCachedData, setCachedData, setDataLoading, recordResponseTime]);
 
-  // Enhanced progressive loading with better error handling and timeouts
+  // Enhanced progressive loading with connection awareness - UPDATED
   const startProgressiveDataLoading = useCallback(async (user: any) => {
     if (!user?.id) return;
 
@@ -1122,64 +1385,81 @@ export const useAppData = () => {
     setLoadingPhase({ phase: 'initial', progress: 10 });
 
     try {
-      // Phase 1: Critical data (profile + real-time setup)
-      await Promise.race([
-        Promise.all([
-          loadUserProfile(user),
-          // setupRealTimeListeners(user)
-        ]),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Initial data loading timeout')), API_TIMEOUT)
-        )
-      ]);
+      console.log('👤 Starting profile load...');
 
+      // Phase 1: Critical data (profile MUST load first)
+      const profileResult = await loadUserProfile(user); // Use the existing function
+
+      console.log('✅ Profile loaded, moving to core data...');
       setLoadingPhase({ phase: 'core', progress: 30 });
 
-      // Phase 2: Core content (notes are critical, documents can load in background)
+      // Phase 2: Core content (notes are critical)
+      const notesPromise = loadNotesPage(user.id, true);
+      const foldersPromise = loadFolders(user.id, true);
+
       await Promise.race([
-        Promise.all([
-          loadNotesPage(user.id, true), // Critical
-          loadFolders(user.id, true),   // Critical for navigation
-        ]),
+        Promise.all([notesPromise, foldersPromise]),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Core data loading timeout')), API_TIMEOUT)
+          setTimeout(() => reject(new Error('Core data loading timeout')), API_TIMEOUT * 2)
         )
       ]);
 
+      console.log('✅ Core data loaded');
       setLoadingPhase({ phase: 'secondary', progress: 60 });
 
-      // Phase 3: Start documents loading but don't wait for it
+      // Phase 3: Load documents (important but not blocking)
       const documentsPromise = loadDocumentsPage(user.id, true).catch(error => {
-        console.warn('Documents loading failed or was slow:', error);
-        // Don't throw error here, just log it
+        console.warn('Documents load warning:', error.message);
+        // Continue even if documents fail
       });
 
-      // Phase 4: Secondary data (non-blocking)
-      setTimeout(() => {
-        Promise.allSettled([
-          documentsPromise,
-          loadRecordingsPage(user.id, true),
-          loadSchedulePage(user.id, true),
-          loadQuizzesPage(user.id, true)
-        ]).then(() => {
-          setLoadingPhase({ phase: 'complete', progress: 100 });
-        }).catch(() => {
-          setLoadingPhase({ phase: 'complete', progress: 100 });
-        });
-      }, 500); // Small delay to prioritize core data
+      // Phase 4: Load non-critical data in background
+      const backgroundPromises = [
+        loadRecordingsPage(user.id, true),
+        // Schedule items might fail due to CORS, so handle separately
+        loadSchedulePage(user.id, true).catch(error => {
+          console.warn('Schedule items load warning:', error.message);
+          return null; // Don't throw, just continue
+        }),
+        loadQuizzesPage(user.id, true)
+      ];
 
-      // UI is ready after core data (notes + folders)
+      // Don't wait for background promises to complete
+      Promise.allSettled(backgroundPromises).then(() => {
+        console.log('✅ All background data loaded or failed gracefully');
+      }).catch(() => {
+        // Ignore errors in background loading
+      });
+
+      // Phase 5: UI is ready after core data + documents
+      await Promise.race([
+        documentsPromise,
+        new Promise(resolve => setTimeout(resolve, 3000)) // Max 3s wait for documents
+      ]);
+
       setLoading(false);
+
+      // Set complete phase after a short delay
+      setTimeout(() => {
+        setLoadingPhase({ phase: 'complete', progress: 100 });
+      }, 1000);
 
     } catch (error) {
       console.error('❌ Error loading core user data:', error);
-      toast.error('Failed to load some data. Please refresh to try again.');
+
+      // Even if there's an error, try to show the UI with available data
+      const connectionQuality = getConnectionQuality();
+
+      if (connectionQuality === 'poor') {
+        toast.error('Network connection is poor. Some data may not load.');
+      } else {
+        toast.warning('Some data failed to load. You can still use the app.');
+      }
+
       setLoading(false);
       setLoadingPhase({ phase: 'complete', progress: 100 });
     }
-  }, [loadUserProfile, loadNotesPage, loadDocumentsPage, loadFolders, loadRecordingsPage, loadSchedulePage, loadQuizzesPage]);
-
-  // Enhanced loading state computation
+  }, [loadUserProfile, loadNotesPage, loadDocumentsPage, loadFolders, loadRecordingsPage, loadSchedulePage, loadQuizzesPage, getConnectionQuality]);// Enhanced loading state computation
   const enhancedLoading = loading || loadingPhase.phase !== 'complete';
   const loadingProgress = loadingPhase.progress;
   const loadingMessage = {
@@ -1222,6 +1502,41 @@ export const useAppData = () => {
     });
 
     return Array.from(uniqueMap.values());
+  }, []);
+
+  // Optimized buildFolderTree with memoization
+  const buildFolderTree = useCallback((folders: DocumentFolder[]): FolderTreeNode[] => {
+    const folderMap = new Map<string, FolderTreeNode>();
+    const rootFolders: FolderTreeNode[] = [];
+
+    // First pass: create all nodes
+    folders.forEach(folder => {
+      folderMap.set(folder.id, {
+        ...folder,
+        children: [],
+        documents: [],
+        path: [],
+        level: 0,
+      });
+    });
+
+    // Second pass: build hierarchy
+    folders.forEach(folder => {
+      const node = folderMap.get(folder.id)!;
+
+      if (folder.parent_folder_id) {
+        const parent = folderMap.get(folder.parent_folder_id);
+        if (parent) {
+          parent.children.push(node);
+          node.path = [...parent.path, parent.id];
+          node.level = parent.level + 1;
+        }
+      } else {
+        rootFolders.push(node);
+      }
+    });
+
+    return rootFolders;
   }, []);
 
   // Fix specific documents loading with duplicate prevention
@@ -1336,6 +1651,121 @@ export const useAppData = () => {
     }
   }, [getCachedData, setCachedData, setDataLoading, mergeNotes]);
 
+  // Add this function inside useAppData hook
+  const refreshNotes = useCallback(async () => {
+    if (!currentUser?.id) return;
+
+    console.log('🔄 Manually refreshing notes...');
+
+    // Clear notes and loaded IDs
+    setNotes([]);
+    loadedIdsRef.current.notes.clear();
+
+    // Reset pagination
+    setDataPagination(prev => ({
+      ...prev,
+      notes: { hasMore: true, offset: 0, total: 0 }
+    }));
+
+    // Clear any errors
+    setDataErrors(prev => ({ ...prev, notes: '' }));
+
+    // Reload notes
+    await loadNotesPage(currentUser.id, true);
+
+    toast.success('Notes refreshed!');
+  }, [currentUser, loadNotesPage, setNotes, setDataPagination, setDataErrors]);
+
+  // Add automatic retry for failed loads
+  useEffect(() => {
+    const failedLoads = Object.entries(dataErrors).filter(([_, error]) => error);
+
+    if (failedLoads.length > 0 && currentUser?.id) {
+      console.log(`🔄 Auto-retrying ${failedLoads.length} failed loads...`);
+
+      failedLoads.forEach(([dataType]) => {
+        // Clear the error first
+        setDataErrors(prev => ({ ...prev, [dataType]: '' }));
+
+        // Add to queue for retry
+        const retryMap: Record<string, () => Promise<void>> = {
+          notes: () => loadNotesPage(currentUser.id, true),
+          recordings: () => loadRecordingsPage(currentUser.id, true),
+          scheduleItems: () => loadSchedulePage(currentUser.id, true),
+          documents: () => loadDocumentsPage(currentUser.id, true),
+          quizzes: () => loadQuizzesPage(currentUser.id, true),
+          folders: () => loadFolders(currentUser.id, true),
+        };
+
+        if (retryMap[dataType]) {
+          addToQueue({
+            id: `retry_${dataType}_${currentUser.id}`,
+            priority: 5, // Low priority for retries
+            dataType,
+            execute: retryMap[dataType]
+          });
+        }
+      });
+    }
+  }, [dataErrors, currentUser, loadNotesPage, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadFolders, addToQueue]);
+
+  // Add a connection health check
+  const checkConnectionHealth = useCallback(async () => {
+    try {
+      const startTime = Date.now();
+      const { error } = await withTimeout(
+        supabase.from('profiles').select('id').limit(1),
+        5000,
+        'Connection health check timeout'
+      );
+      const responseTime = Date.now() - startTime;
+
+      recordResponseTime(responseTime);
+
+      if (error) {
+        console.warn('Connection health check failed:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.warn('Connection health check error:', error);
+      return false;
+    }
+  }, [recordResponseTime]);
+
+  // Enhanced loading state computation
+  const retryAllFailed = useCallback(() => {
+    if (!currentUser?.id) return;
+
+    Object.keys(dataErrors).forEach(dataType => {
+      if (dataErrors[dataType]) {
+        setDataErrors(prev => ({ ...prev, [dataType]: '' }));
+      }
+    });
+
+    // Trigger reload of all data types
+    const reloaders = [
+      { type: 'notes', loader: () => loadNotesPage(currentUser.id, true) },
+      { type: 'documents', loader: () => loadDocumentsPage(currentUser.id, true) },
+      { type: 'recordings', loader: () => loadRecordingsPage(currentUser.id, true) },
+      { type: 'scheduleItems', loader: () => loadSchedulePage(currentUser.id, true) },
+      { type: 'quizzes', loader: () => loadQuizzesPage(currentUser.id, true) },
+      { type: 'folders', loader: () => loadFolders(currentUser.id, true) },
+    ];
+
+    reloaders.forEach(({ type, loader }) => {
+      addToQueue({
+        id: `manual_retry_${type}_${currentUser.id}`,
+        priority: 1, // High priority for manual retry
+        dataType: type,
+        execute: loader
+      });
+    });
+
+    toast.success('Retrying all failed loads...');
+  }, [currentUser, dataErrors, loadNotesPage, loadDocumentsPage, loadRecordingsPage, loadSchedulePage, loadQuizzesPage, loadFolders, addToQueue]);
+
   // Return optimized hook API
   return {
     // State
@@ -1382,7 +1812,7 @@ export const useAppData = () => {
     setFolders,
     clearAllData,
     dataErrors,
-
+    refreshNotes,
     clearError: useCallback((dataType: string) => {
       setDataErrors(prev => ({ ...prev, [dataType]: '' }));
     }, []),
@@ -1392,18 +1822,47 @@ export const useAppData = () => {
 
       setDataErrors(prev => ({ ...prev, [dataType]: '' }));
 
+      // Clear loaded IDs for this data type
+      loadedIdsRef.current[dataType].clear();
+
+      // Reset pagination for this data type
+      setDataPagination(prev => ({
+        ...prev,
+        [dataType]: { hasMore: true, offset: 0, total: 0 }
+      }));
+
       const loaders = {
-        notes: () => loadNotesPage(currentUser.id, true),
-        recordings: () => loadRecordingsPage(currentUser.id, true),
-        scheduleItems: () => loadSchedulePage(currentUser.id, true),
-        documents: () => loadDocumentsPage(currentUser.id, true),
-        quizzes: () => loadQuizzesPage(currentUser.id, true),
-        folders: () => loadFolders(currentUser.id, true),
+        notes: () => {
+          // Clear notes state first
+          setNotes([]);
+          loadNotesPage(currentUser.id, true);
+        },
+        recordings: () => {
+          setRecordings([]);
+          loadRecordingsPage(currentUser.id, true);
+        },
+        scheduleItems: () => {
+          setScheduleItems([]);
+          loadSchedulePage(currentUser.id, true);
+        },
+        documents: () => {
+          setDocuments([]);
+          loadDocumentsPage(currentUser.id, true);
+        },
+        quizzes: () => {
+          setQuizzes([]);
+          loadQuizzesPage(currentUser.id, true);
+        },
+        folders: () => {
+          setFolders([]);
+          loadFolders(currentUser.id, true);
+        },
       };
+
       if (loaders[dataType]) {
         loaders[dataType]();
       }
-    }, [currentUser, loadNotesPage, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadFolders]),
+    }, [currentUser, loadNotesPage, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadFolders, setNotes, setRecordings, setScheduleItems, setDocuments, setQuizzes, setFolders]),
 
     // Lazy loading functions
     loadDataIfNeeded: useCallback((dataType: keyof DataLoadingState) => {
@@ -1436,6 +1895,11 @@ export const useAppData = () => {
     loadSpecificDocuments,
     loadSpecificNotes,
     clearLoadedIds,
+
+    // Enhanced functions
+    checkConnectionHealth,
+    getConnectionQuality: () => getConnectionQuality(),
+    retryAllFailed,
   };
 };
 

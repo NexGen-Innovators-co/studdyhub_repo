@@ -123,11 +123,35 @@ const AIChat: React.FC<AIChatProps> = ({
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState('');
 
-  // Enhanced document synchronization
-  const [mergedDocuments, setMergedDocuments] = useState<Document[]>([]);
-  const prevSessionIdRef = useRef<string | null>(null);
-  const prevDocumentsRef = useRef<Document[]>([]);
-  const prevNotesRef = useRef<Note[]>([]);
+  // Use useMemo for merged documents instead of state
+  const mergedDocuments = useMemo(() => {
+    return [
+      ...documents,
+      ...notes.map(note => ({
+        id: note.id,
+        title: note.title || 'Untitled Note',
+        file_name: note.title || 'Untitled Note',
+        file_type: 'text/plain',
+        file_size: new Blob([note.content]).size,
+        file_url: '',
+        content_extracted: note.content,
+        user_id: note.user_id,
+        type: 'text' as const,
+        processing_status: 'completed' as const,
+        processing_error: null,
+        created_at: note.created_at,
+        processing_started_at: null,
+        processing_completed_at: null,
+        processing_metadata: null,
+        extraction_model_used: null,
+        updated_at: note.created_at,
+        folder_ids: [],
+        total_processing_time_ms: 0,
+        page_count: 0,
+        vector_store_id: null,
+      }))
+    ];
+  }, [documents, notes]);
 
   const [autoTypeInPanel, setAutoTypeInPanel] = useState(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
@@ -146,50 +170,7 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
   const isCurrentlySendingRef = useRef(false);
-
-  useEffect(() => {
-    const documentsChanged = documents !== prevDocumentsRef.current;
-    const notesChanged = notes !== prevNotesRef.current;
-
-    if (documentsChanged || notesChanged) {
-      console.log('🔄 Documents or notes changed, updating merged documents');
-
-      const timer = setTimeout(() => {
-        const allDocuments: Document[] = [
-          ...documents,
-          ...notes.map(note => ({
-            id: note.id,
-            title: note.title || 'Untitled Note',
-            file_name: note.title || 'Untitled Note',
-            file_type: 'text/plain',
-            file_size: new Blob([note.content]).size,
-            file_url: '',
-            content_extracted: note.content,
-            user_id: note.user_id,
-            type: 'text' as const,
-            processing_status: 'completed' as const,
-            processing_error: null,
-            created_at: note.created_at,
-            processing_started_at: null,
-            processing_completed_at: null,
-            processing_metadata: null,
-            extraction_model_used: null,
-            updated_at: note.created_at,
-            folder_ids: [],
-            total_processing_time_ms: 0,
-            page_count: 0,
-            vector_store_id: null,
-          }))
-        ];
-
-        setMergedDocuments(allDocuments);
-        prevDocumentsRef.current = documents;
-        prevNotesRef.current = notes;
-      }, 100);
-
-      return () => clearTimeout(timer);
-    }
-  }, [documents, notes]);
+  const prevSessionIdRef = useRef<string | null>(null);
 
   const loadSessionDocuments = useCallback(async (sessionId: string) => {
     if (!userProfile?.id) return;
@@ -208,7 +189,6 @@ const AIChat: React.FC<AIChatProps> = ({
       }
 
       if (sessionData?.document_ids) {
-        console.log('📄 Loaded session documents:', sessionData.document_ids);
         onSelectionChange(sessionData.document_ids);
       }
     } catch (error) {
@@ -314,8 +294,6 @@ const AIChat: React.FC<AIChatProps> = ({
 
         if (error) {
           console.error('Error updating session documents:', error);
-        } else {
-          console.log('💾 Session documents updated:', selectedDocumentIds);
         }
       }
 
@@ -325,12 +303,6 @@ const AIChat: React.FC<AIChatProps> = ({
       const noteIds = selectedDocumentIds.filter(id =>
         notes.some(note => note.id === id)
       );
-
-      console.log('📤 Sending message with context:', {
-        documents: documentIds.length,
-        notes: noteIds.length,
-        files: attachedFiles.length
-      });
 
       const filesForBackend = await Promise.all(
         attachedFiles.map(async (attachedFile) => {
@@ -483,84 +455,33 @@ const AIChat: React.FC<AIChatProps> = ({
         messages[messages.length - 1].role === 'assistant') {
         setIsLastAiMessageDisplayed(true);
       }
-      setMergedDocuments(mergedDocuments => {
-        return mergedDocuments.map(doc => {
-          if (selectedDocumentIds.includes(doc.id)) {
-            return { ...doc, last_used_at: new Date().toISOString() };
-          }
-          return doc;
-        })
-      })
-      setExpandedMessages(new Set());
-      setIsLoading(false);
-      isSubmittingUserMessage = false;
-      setIsAiTyping(false);
-      setAttachedFiles([]);
-      setInputMessage('');
     } catch (error) {
       console.error('Unexpected error marking message as displayed:', error);
     }
   }, [userProfile?.id, activeChatSessionId, messages, onMessageUpdate]);
 
-  const handleBlockDetected = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
+  // Memoized handlers for better performance
+  const memoizedHandleBlockDetected = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
     if (autoTypeInPanel && isFirstBlock) {
-      setActiveDiagram(prev => {
-        if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
-          return prev;
-        }
-        return { type: blockType, content, language };
+      requestAnimationFrame(() => {
+        setActiveDiagram(prev => {
+          if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
+            return prev;
+          }
+          return { type: blockType, content, language };
+        });
       });
     }
   }, [autoTypeInPanel]);
 
-  const handleBlockUpdate = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
-    if (autoTypeInPanel && isFirstBlock) {
-      setActiveDiagram(prev => {
-        if (prev && prev.type === blockType && prev.content === content && prev.language === language) {
-          return prev;
-        }
-        return { type: blockType, content, language };
-      });
-    }
-  }, [autoTypeInPanel]);
-
-  const handleBlockEnd = useCallback((blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => {
-    if (autoTypeInPanel && isFirstBlock) {
-    }
-  }, [autoTypeInPanel]);
-
-  const handleViewContent = useCallback((type, content, language, imageUrl) => {
+  const memoizedHandleViewContent = useCallback((type, content, language, imageUrl) => {
     setActiveDiagram(null);
-    setTimeout(() => {
-      setActiveDiagram({ type, content, language, imageUrl });
-    }, 0);
-  }, []);
-
-  const memoizedOnMermaidError = useCallback((code: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => {
-    console.error("Mermaid error in DiagramPanel:", code, errorType);
-    toast.error(`Mermaid rendering issue: ${errorType}${code ? ` - Code: ${code.substring(0, 50)}...` : ''}`);
-  }, []);
-
-  const memoizedOnSuggestAiCorrection = useCallback((prompt: string) => {
-    setInputMessage(prompt);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-    toast.info("AI correction prepared in input. Review and send to apply.");
-  }, []);
-
-  const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth', force = false) => {
-    if (!isAutoScrolling && !force) return;
-
     requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({
-        behavior,
-        block: 'end',
-        inline: 'nearest'
-      });
+      setActiveDiagram({ type, content, language, imageUrl });
     });
-  }, [isAutoScrolling]);
+  }, []);
 
+  // Combined scroll and typing effect for better performance
   useEffect(() => {
     if (messages.length === 0) return;
 
@@ -572,36 +493,52 @@ const AIChat: React.FC<AIChatProps> = ({
 
       if (lastMessage.role === 'assistant') {
         setIsAiTyping(true);
-        scrollToBottom('smooth', true);
-      } else if (lastMessage.role === 'user') {
-        scrollToBottom('smooth', true);
+      }
+
+      // Smooth scroll to bottom
+      if (isAutoScrolling) {
+        requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'end',
+            inline: 'nearest'
+          });
+        });
       }
     }
 
     if (lastMessage.role === 'assistant' && !lastMessage.content.includes('█') && !isLoading) {
       setIsAiTyping(false);
     }
-  }, [messages, isLoading, scrollToBottom]);
+  }, [messages, isLoading, isAutoScrolling]);
 
+  // Session change effect - optimized
   useEffect(() => {
     const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
 
-    if (isSessionChange && activeChatSessionId && !isLoadingSessionMessages && !isLoadingSession) {
-      setIsLoadingSession(true);
+    if (isSessionChange && activeChatSessionId) {
+      console.log('🔄 Chat session changed');
 
-      setTimeout(() => {
-        scrollToBottom('auto', true);
-        prevSessionIdRef.current = activeChatSessionId;
-        setIsLoadingSession(false);
-      }, 100);
-
+      // Batch state updates
       setInputMessage('');
       setAttachedFiles([]);
       setExpandedMessages(new Set());
       setIsCurrentlySending(false);
       setIsAiTyping(false);
+      setActiveDiagram(null);
+      setIsFullScreen(false);
+      setZoomLevel(1);
+      setPanOffset({ x: 0, y: 0 });
+
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+
+      // Load session documents
+      loadSessionDocuments(activeChatSessionId);
+
+      prevSessionIdRef.current = activeChatSessionId;
     }
-  }, [messages, isLoadingSessionMessages, activeChatSessionId, scrollToBottom, isLoadingSession]);
+  }, [activeChatSessionId, loadSessionDocuments]);
 
   const handleMessageDeleteClick = useCallback((messageId: string) => {
     setMessageToDelete(messageId);
@@ -722,50 +659,26 @@ const AIChat: React.FC<AIChatProps> = ({
   });
 
   const handleDocumentUpdatedLocally = useCallback((updatedDoc: Document) => {
-    setMergedDocuments(prevDocs => {
-      const existingIndex = prevDocs.findIndex(doc => doc.id === updatedDoc.id);
-      if (existingIndex > -1) {
-        const newDocs = [...prevDocs];
-        newDocs[existingIndex] = updatedDoc;
-        return newDocs;
-      } else {
-        return [...prevDocs, updatedDoc];
-      }
-    });
     onDocumentUpdated(updatedDoc);
   }, [onDocumentUpdated]);
-
-  useEffect(() => {
-    const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
-
-    if (isSessionChange && activeChatSessionId) {
-      console.log('🔄 Chat session changed, loading session documents');
-      loadSessionDocuments(activeChatSessionId);
-      prevSessionIdRef.current = activeChatSessionId;
-    }
-
-    if (isSessionChange) {
-      setInputMessage('');
-      setAttachedFiles([]);
-      setExpandedMessages(new Set());
-      setIsCurrentlySending(false);
-      setIsAiTyping(false);
-      setActiveDiagram(null);
-      setIsFullScreen(false);
-      setZoomLevel(1);
-      setPanOffset({ x: 0, y: 0 });
-      stopSpeech()
-
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      if (cameraInputRef.current) cameraInputRef.current.value = '';
-      stopSpeech();
-    }
-  }, [activeChatSessionId, stopSpeech]);
 
   function handleDiagramCodeUpdate(messageId: string, newCode: string): Promise<void> {
     toast.info('Diagram code updated. You can regenerate the response to see changes.');
     return Promise.resolve();
   }
+
+  const memoizedOnMermaidError = useCallback((code: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => {
+    console.error("Mermaid error in DiagramPanel:", code, errorType);
+    toast.error(`Mermaid rendering issue: ${errorType}${code ? ` - Code: ${code.substring(0, 50)}...` : ''}`);
+  }, []);
+
+  const memoizedOnSuggestAiCorrection = useCallback((prompt: string) => {
+    setInputMessage(prompt);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+    toast.info("AI correction prepared in input. Review and send to apply.");
+  }, []);
 
   return (
     <>
@@ -775,7 +688,7 @@ const AIChat: React.FC<AIChatProps> = ({
       >
         <DragOverlay isDragging={isDragging} />
 
-        {/* Chat Panel - Remove motion animation and use inline style for width */}
+        {/* Chat Panel */}
         <div
           className={`relative flex flex-col h-full rounded-lg panel-transition
             ${isDiagramPanelOpen
@@ -814,7 +727,7 @@ const AIChat: React.FC<AIChatProps> = ({
               onDeleteClick={handleMessageDeleteClick}
               onRegenerateClick={onRegenerateResponse}
               onRetryClick={onRetryFailedMessage}
-              onViewContent={handleViewContent}
+              onViewContent={memoizedHandleViewContent}
               onMermaidError={memoizedOnMermaidError}
               onSuggestAiCorrection={memoizedOnSuggestAiCorrection}
               onToggleUserMessageExpansion={handleToggleUserMessageExpansion}
@@ -830,9 +743,9 @@ const AIChat: React.FC<AIChatProps> = ({
               enableTypingAnimation={true}
               onMarkMessageDisplayed={handleMarkMessageDisplayed}
               autoTypeInPanel={autoTypeInPanel}
-              onBlockDetected={handleBlockDetected}
-              onBlockUpdate={handleBlockUpdate}
-              onBlockEnd={handleBlockEnd}
+              onBlockDetected={memoizedHandleBlockDetected}
+              onBlockUpdate={memoizedHandleBlockDetected}
+              onBlockEnd={memoizedHandleBlockDetected}
               onDiagramCodeUpdate={handleDiagramCodeUpdate}
             />
             {isGeneratingImage && (

@@ -102,7 +102,6 @@ export const useDashboardStats = (userId: string | undefined) => {
     }
   };
 
-  // Fallback: Optimized client-side processing with date ranges
   const fetchActivityDataFallback = async (days: number, userId: string) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days + 1);
@@ -125,19 +124,13 @@ export const useDashboardStats = (userId: string | undefined) => {
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString()),
 
-      supabase
-        .from('documents')
-        .select('created_at')
-        .eq('user_id', userId)
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString()),
-
+      supabase.from('documents').select('id', { count: 'exact', head: true }),
       supabase
         .from('chat_messages')
-        .select('created_at')
+        .select('timestamp')
         .eq('user_id', userId)
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString()),
+        .gte('timestamp', start.toISOString())
+        .lte('timestamp', end.toISOString()),
     ]);
 
     // Process data in memory - much faster than individual queries
@@ -154,7 +147,11 @@ export const useDashboardStats = (userId: string | undefined) => {
     // Count activities by date
     const countActivities = (data: any[], type: string) => {
       data.forEach(item => {
-        const date = new Date(item.created_at);
+        // ✅ FIX: Check for both 'created_at' AND 'timestamp'
+        const dateStr = item.created_at || item.timestamp;
+        if (!dateStr) return;
+
+        const date = new Date(dateStr);
         const dateKey = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         if (activityMap.has(dateKey)) {
           const current = activityMap.get(dateKey);

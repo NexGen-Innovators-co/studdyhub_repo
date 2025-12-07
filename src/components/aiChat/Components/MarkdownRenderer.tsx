@@ -129,7 +129,6 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
         />
       );
     },
-    // Modern heading styles
     h1: (props) => (
       <h1
         className={`text-2xl sm:text-3xl font-display font-semibold ${headingColorClass} mb-4 leading-tight tracking-tight`}
@@ -166,7 +165,6 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
         {...props}
       />
     ),
-    // Modern paragraph styles
     p: (props) => (
       <p
         className={`${textColorClass} leading-relaxed mb-4 last:mb-0 text-xl lg:text-xl font-claude`}

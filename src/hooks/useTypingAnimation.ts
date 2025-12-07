@@ -22,7 +22,83 @@ interface CodeBlock {
   language?: string;
   isFirstBlock: boolean;
   blockIndex: number;
+  lastUpdate?: number; // Added for batch updates
 }
+
+// Memoized block detection function
+const memoizedDetectBlocks = (() => {
+  let lastText = '';
+  let lastResult: CodeBlock[] = [];
+
+  return (text: string): CodeBlock[] => {
+    if (text === lastText) return lastResult;
+
+    // Quick check for potential blocks
+    const hasPotentialBlocks = /```|<[^>]+>[\s\S]*<\/[^>]+>|<[^>]+\/>/.test(text);
+    if (!hasPotentialBlocks) {
+      lastText = text;
+      lastResult = [];
+      return [];
+    }
+
+    const blocks: CodeBlock[] = [];
+    let blockIndex = 0;
+
+    // Combined regex for all block types
+    const combinedRegex = /```(\w*)\n([\s\S]*?)\n```|(<[^>]+>[\s\S]*?<\/[^>]+>|<[^>]+\/>)/gi;
+    let match;
+
+    while ((match = combinedRegex.exec(text)) !== null) {
+      const fullContent = match[0];
+      const start = match.index;
+      const end = start + fullContent.length;
+
+      if (fullContent.startsWith('```')) {
+        const language = match[1] || 'text';
+        const innerContent = match[2];
+
+        if (language === 'mermaid' || language === 'mmd') {
+          blocks.push({
+            type: 'mermaid',
+            start,
+            end,
+            content: fullContent,
+            innerContent,
+            isFirstBlock: blockIndex === 0,
+            blockIndex
+          });
+        } else {
+          blocks.push({
+            type: 'code',
+            start,
+            end,
+            content: fullContent,
+            innerContent,
+            language,
+            isFirstBlock: blockIndex === 0,
+            blockIndex
+          });
+        }
+        blockIndex++;
+      } else if (fullContent.length > 20 && /^<[^>]+>[\s\S]*<\/[^>]+>|<[^>]+\/>$/.test(fullContent)) {
+        blocks.push({
+          type: 'html',
+          start,
+          end,
+          content: fullContent,
+          innerContent: fullContent,
+          isFirstBlock: blockIndex === 0,
+          blockIndex
+        });
+        blockIndex++;
+      }
+    }
+
+    lastText = text;
+    lastResult = blocks.sort((a, b) => a.start - b.start);
+    return lastResult;
+  };
+})();
 
 export const useTypingAnimation = ({
   text,
@@ -49,8 +125,8 @@ export const useTypingAnimation = ({
   const durationRef = useRef<number>(0);
   const isPanelInitializingRef = useRef(false);
   const blockStartIndexRef = useRef<number>(-1);
+  const blockUpdateTimerRef = useRef<number>();
 
-  // Store callbacks in refs to prevent re-renders
   const onBlockDetectedRef = useRef(onBlockDetected);
   const onBlockUpdateRef = useRef(onBlockUpdate);
   const onBlockEndRef = useRef(onBlockEnd);
@@ -65,64 +141,7 @@ export const useTypingAnimation = ({
 
   const detectBlocks = useCallback(
     (text: string): CodeBlock[] => {
-      const blocks: CodeBlock[] = [];
-      let blockIndex = 0;
-
-      const codeBlockRegex = /```([a-z]*)\n([\s\S]*?)\n```/gi;
-      let match;
-      while ((match = codeBlockRegex.exec(text)) !== null) {
-        const language = match[1] || 'text';
-        const innerContent = match[2];
-        const fullContent = match[0];
-        blocks.push({
-          type: 'code',
-          start: match.index,
-          end: match.index + fullContent.length,
-          content: fullContent,
-          innerContent,
-          language,
-          isFirstBlock: blockIndex === 0,
-          blockIndex
-        });
-        blockIndex++;
-      }
-
-      const mermaidRegex = /(```mermaid\n[\s\S]*?\n```|```mmd\n[\s\S]*?\n```)/gi;
-      let mermaidMatch;
-      while ((mermaidMatch = mermaidRegex.exec(text)) !== null) {
-        const fullContent = mermaidMatch[0];
-        const innerContent = fullContent.slice(fullContent.indexOf('\n') + 1, fullContent.lastIndexOf('\n```'));
-        blocks.push({
-          type: 'mermaid',
-          start: mermaidMatch.index,
-          end: mermaidMatch.index + fullContent.length,
-          content: fullContent,
-          innerContent,
-          isFirstBlock: blockIndex === 0,
-          blockIndex
-        });
-        blockIndex++;
-      }
-
-      const htmlRegex = /(<[^>]+>[\s\S]*?<\/[^>]+>|<[^>]+\/>)/gi;
-      let htmlMatch;
-      while ((htmlMatch = htmlRegex.exec(text)) !== null) {
-        if (htmlMatch[0].length > 20) {
-          const fullContent = htmlMatch[0];
-          blocks.push({
-            type: 'html',
-            start: htmlMatch.index,
-            end: htmlMatch.index + fullContent.length,
-            content: fullContent,
-            innerContent: fullContent,
-            isFirstBlock: blockIndex === 0,
-            blockIndex
-          });
-          blockIndex++;
-        }
-      }
-
-      return blocks.sort((a, b) => a.start - b.start);
+      return memoizedDetectBlocks(text);
     },
     []
   );
@@ -134,7 +153,10 @@ export const useTypingAnimation = ({
       return;
     }
 
-    const blocks = detectBlocks(text);
+    // Skip expensive operations if possible
+    const shouldSkipDetection = text.length < 100 || (!text.includes('```') && !text.includes('<'));
+
+    const blocks = shouldSkipDetection ? [] : detectBlocks(text);
     blocksRef.current = blocks;
 
     const words = text.split(/(\s+)/);
@@ -154,13 +176,12 @@ export const useTypingAnimation = ({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
+    if (blockUpdateTimerRef.current) {
+      clearTimeout(blockUpdateTimerRef.current);
+    }
 
     const typeNextWord = () => {
-      {isTyping && (
-        `<span className="inline-block w-5 h-3 bg-gray-600 dark:bg-gray-400 ml-0.5 animate-pulse" />`
-      )}
       if (indexRef.current >= words.length) {
-        //console.log('🏁 [useTypingAnimation] Typing completed for message:', messageId);
         setIsTyping(false);
         setCurrentBlock(null);
         setBlockText('');
@@ -184,82 +205,85 @@ export const useTypingAnimation = ({
       );
 
       if (upcomingBlock) {
-        // console.log('🚪 [useTypingAnimation] Block detected:', {
-        //   type: upcomingBlock.type,
-        //   language: upcomingBlock.language,
-        //   isFirstBlock: upcomingBlock.isFirstBlock,
-        //   autoTypeInPanel
-        // });
-
         detectedBlocksRef.current.add(`${upcomingBlock.start}-${upcomingBlock.end}`);
         setCurrentBlock(upcomingBlock);
         blockStartIndexRef.current = indexRef.current;
 
-        // For first block with autoTypeInPanel
         if (upcomingBlock.isFirstBlock && autoTypeInPanel && onBlockDetectedRef.current) {
-          //console.log('🎯 [useTypingAnimation] Initializing panel with empty content');
           isPanelInitializingRef.current = true;
-
-          // CRITICAL FIX: Call onBlockDetected with empty string first
-          // The panel will show "Typing..." state
           onBlockDetectedRef.current(
             upcomingBlock.type,
-            '', // Start with empty content
+            '',
             upcomingBlock.language,
             upcomingBlock.isFirstBlock,
             upcomingBlock.blockIndex
           );
 
-          // Wait for panel to initialize
           setTimeout(() => {
-            console.log('▶️ [useTypingAnimation] Panel ready - starting content typing');
             isPanelInitializingRef.current = false;
-          }, 150);
-
+          }, 100); // Reduced from 150ms
         }
 
-        // Skip to next iteration
-        timeoutRef.current = window.setTimeout(typeNextWord, 50);
+        timeoutRef.current = window.setTimeout(typeNextWord, 30);
         return;
       }
 
       const isActualWord = nextWord?.trim().length > 0;
 
-      // Check if we're inside a block (must be after block start was detected)
+      // Check if we're inside a block
       const isInCodeBlock = currentBlock &&
         blockStartIndexRef.current >= 0 &&
         indexRef.current >= blockStartIndexRef.current &&
         currentPosition < currentBlock.end &&
         autoTypeInPanel;
 
+      // FAST PATH FOR CODE BLOCKS
       if (isInCodeBlock && currentBlock) {
-        // CRITICAL: Type in panel - accumulate ALL content including delimiters
-        //console.log('📄 [useTypingAnimation] Typing in panel');
+        // Process multiple words at once for faster typing
+        const remainingWordsInBlock = Math.min(
+          autoTypeInPanel ? 10 : 3, // More words for panel typing
+          words.length - indexRef.current
+        );
+
+        let wordsToAdd = '';
+        for (let i = 0; i < remainingWordsInBlock; i++) {
+          if (indexRef.current + i >= words.length) break;
+          wordsToAdd += words[indexRef.current + i];
+        }
 
         setBlockText(prev => {
-          const newText = prev + nextWord;
+          const newText = prev + wordsToAdd;
 
-          // CRITICAL FIX: Always send updates to panel for first block
-          // This includes the opening delimiter and all content
-          if (onBlockUpdateRef.current && currentBlock.isFirstBlock) {
-           
-            onBlockUpdateRef.current(
-              currentBlock.type,
-              newText,
-              currentBlock.language,
-              currentBlock.isFirstBlock,
-              currentBlock.blockIndex
-            );
+          // Batch updates - only send updates every 30ms
+          const now = Date.now();
+          if (!currentBlock.lastUpdate || now - currentBlock.lastUpdate > 30) {
+            if (blockUpdateTimerRef.current) {
+              clearTimeout(blockUpdateTimerRef.current);
+            }
+
+            blockUpdateTimerRef.current = window.setTimeout(() => {
+              if (onBlockUpdateRef.current && currentBlock.isFirstBlock) {
+                onBlockUpdateRef.current(
+                  currentBlock.type,
+                  newText,
+                  currentBlock.language,
+                  currentBlock.isFirstBlock,
+                  currentBlock.blockIndex
+                );
+              }
+            }, 30);
           }
+
           return newText;
         });
 
+        indexRef.current += remainingWordsInBlock;
+
         // Check if we've reached the end of the block
-        const newPosition = words.slice(0, indexRef.current + 1).join('').length;
+        const newPosition = words.slice(0, indexRef.current).join('').length;
         if (newPosition >= currentBlock.end) {
-          //console.log('🏁 [useTypingAnimation] Block complete');
           if (onBlockEndRef.current && currentBlock.isFirstBlock) {
-            const finalContent = blockText + nextWord;
+            const finalContent = blockText + wordsToAdd;
             onBlockEndRef.current(
               currentBlock.type,
               finalContent,
@@ -273,35 +297,37 @@ export const useTypingAnimation = ({
           blockStartIndexRef.current = -1;
         }
 
-        // Don't add to displayed text
-        //console.log('⏭️ [useTypingAnimation] Skipping main chat display');
-
-      } else {
-        // Type in main text area
-        //console.log('💬 [useTypingAnimation] Typing in main area');
-        setDisplayedText(prev => prev + nextWord);
+        // ULTRA-FAST TYPING for code blocks
+        timeoutRef.current = window.setTimeout(typeNextWord, autoTypeInPanel ? 2 : 10);
+        return;
       }
 
+      // Normal text typing (not in code block)
+      setDisplayedText(prev => prev + nextWord);
       indexRef.current++;
 
-      // Calculate delay - FASTER for code blocks, NATURAL for text
+      // Calculate delay - optimized for performance
       let delay;
       if (isInCodeBlock) {
-        // Code blocks type 3x faster than normal text
-        delay = isActualWord ? (1000 / (wordsPerSecond * 7)) : 10;
+        // Code blocks type extremely fast
+        delay = 2;
       } else {
-        // Normal text at natural speed
-        delay = isActualWord ? (wordsPerSecond) : 20;
+        // Normal text
+        delay = isActualWord ? (1000 / (wordsPerSecond * 3)) : 5;
       }
 
       timeoutRef.current = window.setTimeout(typeNextWord, delay);
     };
 
-    timeoutRef.current = window.setTimeout(typeNextWord, 100);
+    // Start faster
+    timeoutRef.current = window.setTimeout(typeNextWord, 50);
 
     return () => {
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current);
+      }
+      if (blockUpdateTimerRef.current) {
+        clearTimeout(blockUpdateTimerRef.current);
       }
     };
   }, [text, messageId, wordsPerSecond, enabled, isAlreadyComplete, autoTypeInPanel, detectBlocks]);

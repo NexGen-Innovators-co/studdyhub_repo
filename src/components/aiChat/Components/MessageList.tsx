@@ -78,127 +78,6 @@ const formatFileSize = (bytes: number): string => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-const FilePreview: React.FC<{
-    file: AttachedFile;
-    onPreview: (file: AttachedFile) => void;
-    className?: string;
-    showLabel?: boolean;
-}> = ({ file, onPreview, className, showLabel = true }) => {
-    const isImage = file.type === 'image';
-    const imageUrl = file.url || (file.data ? `data:${file.mimeType};base64,${file.data}` : 'https://placehold.co/400x300/e0e0e0/555555?text=Image+Load+Error');
-    const hasError = file.processing_error || file.error;
-    const isProcessing = file.processing_status === 'processing' || file.status === 'processing';
-
-    return (
-        <div
-            className={cn(
-                "relative group cursor-pointer transition-all duration-200 hover:scale-105",
-                className
-            )}
-            onClick={() => {
-                if (isProcessing) {
-                    toast.info('File is still processing, please wait.');
-                    return;
-                }
-                if (hasError) {
-                    toast.error('Cannot preview file due to processing error.');
-                    return;
-                }
-                onPreview(file);
-            }}
-            title={`${file.name} ${file.size ? `(${formatFileSize(file.size)})` : ''}`}
-        >
-            {isImage && imageUrl ? (
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm">
-                    <img
-                        src={imageUrl}
-                        alt={file.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = 'https://placehold.co/400x300/e0e0e0/555555?text=Image+Load+Error';
-                        }}
-                    />
-                </div>
-            ) : (
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-700 flex items-center justify-center shadow-sm">
-                    {getFileIcon(file)}
-                </div>
-            )}
-
-            {/* Status indicators */}
-            {isProcessing && (
-                <div className="absolute top-1 right-1">
-                    <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-                </div>
-            )}
-            {hasError && (
-                <div className="absolute top-1 right-1">
-                    <X className="h-3 w-3 text-red-500" />
-                </div>
-            )}
-
-            {/* File label */}
-            {showLabel && (
-                <div className="mt-2 text-center">
-                    <div className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[80px]" title={file.name}>
-                        {file.name.length > 12 ? `${file.name.substring(0, 12)}...` : file.name}
-                    </div>
-                    {file.size && (
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
-                            {formatFileSize(file.size)}
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
-
-const AttachmentSection: React.FC<{
-    title: string;
-    icon: React.ReactNode;
-    children: React.ReactNode;
-    count: number;
-    className?: string;
-}> = ({ title, icon, children, count, className }) => {
-    return (
-        <div className={cn("mb-3", className)}>
-            <div className="flex items-center gap-2 mb-2">
-                {icon}
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {title} ({count})
-                </span>
-            </div>
-            <div className="pl-6">
-                {children}
-            </div>
-        </div>
-    );
-};
-
-const AttachmentList: React.FC<{
-    items: Array<{
-        id: string;
-        name: string;
-        onClick: () => void;
-    }>;
-}> = ({ items }) => {
-    return (
-        <div className="space-y-1">
-            {items.map((item, idx) => (
-                <button
-                    key={`${item.id}-${idx}`}
-                    onClick={item.onClick}
-                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/30 px-2 py-1 rounded-md transition-colors w-full text-left"
-                >
-                    <span className="truncate">{item.name}</span>
-                </button>
-            ))}
-        </div>
-    );
-};
-
 const parseAttachedFiles = (message: Message): AttachedFile[] => {
     let files: AttachedFile[] = [];
     if (message.files_metadata) {
@@ -208,7 +87,6 @@ const parseAttachedFiles = (message: Message): AttachedFile[] => {
                 : message.files_metadata;
             const metadataArray = Array.isArray(metadata) ? metadata : [metadata];
             files = metadataArray.map((file: any) => {
-                //console.log('Parsing file metadata:', file); // Add this line
                 return {
                     id: file.id,
                     name: file.name || 'Unknown file',
@@ -312,7 +190,7 @@ export const MessageList = memo(({
             const docIds = Array.isArray(ids) ? ids : [ids];
             const docs = mergedDocuments.filter(doc => docIds.includes(doc.id));
             if (docs.length > 0) {
-                const doc = docs[0]; // Show first document for simplicity
+                const doc = docs[0];
 
                 if (doc.processing_status === 'processing') {
                     toast.info('Document is still processing, please wait.');
@@ -362,7 +240,6 @@ export const MessageList = memo(({
         }
     }, [onViewContent, mergedDocuments]);
 
-    // 
     const handleFilePreview = useCallback((file: AttachedFile) => {
         if (file.type === 'image') {
             const imageUrl = file.url || (file.data ? `data:${file.mimeType};base64,${file.data}` : null);
@@ -372,7 +249,7 @@ export const MessageList = memo(({
                 toast.error('No image data available for preview.');
             }
         } else if (file.type === 'document' && file.content) {
-            onViewContent('document-text', file.content, 'text'); // Use document-text type
+            onViewContent('document-text', file.content, 'text');
         } else {
             const fileInfo = `File: ${file.name}\n${file.size ? `Size: ${formatFileSize(file.size)}\n` : ''}Type: ${file.mimeType}`;
             onViewContent('document-text', fileInfo, 'text');
@@ -440,7 +317,6 @@ export const MessageList = memo(({
             <div className="min-w-0 max-w-sm overflow-scroll justify-end ">
                 <div className="flex flex-row gap-3">
                     {allAttachments.map((attachment, idx) => {
-                        // FIX: Use a more unique key by combining message.id and index
                         const uniqueKey = `${message.id}-attachment-${attachment.id}-${idx}`;
 
                         if (attachment.type === 'file' && attachment.file?.type === 'image') {
@@ -449,7 +325,7 @@ export const MessageList = memo(({
 
                             return (
                                 <div
-                                    key={uniqueKey} // Use the unique key here
+                                    key={uniqueKey}
                                     className="relative flex-shrink-0 cursor-pointer group"
                                     onClick={() => {
                                         if (attachment.processing) {
@@ -482,7 +358,6 @@ export const MessageList = memo(({
                                         )}
                                     </div>
 
-                                    {/* Status indicators */}
                                     {attachment.processing && (
                                         <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
                                             <Loader2 className="h-2 w-2 animate-spin text-white" />
@@ -499,7 +374,7 @@ export const MessageList = memo(({
 
                         return (
                             <div
-                                key={uniqueKey} // Use the unique key here
+                                key={uniqueKey}
                                 className="relative flex-shrink-0 cursor-pointer group"
                                 onClick={() => {
                                     if (attachment.processing) {
@@ -518,7 +393,6 @@ export const MessageList = memo(({
                                         {attachment.name.length > 12 ? `${attachment.name.substring(0, 12)}...` : attachment.name}
                                     </span>
 
-                                    {/* Type badge */}
                                     {attachment.type !== 'file' && (
                                         <div className="flex-shrink-0">
                                             <Badge
@@ -531,7 +405,6 @@ export const MessageList = memo(({
                                     )}
                                 </div>
 
-                                {/* Status indicators */}
                                 {attachment.processing && (
                                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
                                         <Loader2 className="h-2 w-2 animate-spin text-white" />
@@ -546,7 +419,6 @@ export const MessageList = memo(({
         );
     }, [mergedDocuments, handleFilePreview, handleViewAttachedFile, getFileIcon]);
 
-    // MessageList.tsx
     const renderMessage = useCallback((message: Message, index: number) => {
         const isUserMessage = message.role === 'user';
         const isLastMessage = index === messages.length - 1;
@@ -554,6 +426,11 @@ export const MessageList = memo(({
         const messageDate = formatDate(message.timestamp);
         const showDateHeader = lastDateRef.current !== messageDate;
         lastDateRef.current = messageDate;
+
+        // Skip rendering loading states for non-last messages for performance
+        if (message.isLoading && index !== messages.length - 1) {
+            return null;
+        }
 
         let contentToRender;
 
@@ -674,7 +551,6 @@ export const MessageList = memo(({
         }
 
         return (
-            // FIX: Add index to the key to ensure uniqueness
             <React.Fragment key={`${message.id}-${index}`}>
                 {showDateHeader && (
                     <div className="flex justify-center my-3 sm:my-4">
@@ -788,7 +664,15 @@ export const MessageList = memo(({
                 </div>
             </React.Fragment>
         );
-    }, [formatDate, formatTime, onToggleUserMessageExpansion, expandedMessages, onMermaidError, onSuggestAiCorrection, onViewContent, enableTypingAnimation, isLoading, onMarkMessageDisplayed, autoTypeInPanel, onBlockDetected, onBlockUpdate, onBlockEnd, isDiagramPanelOpen, handleDiagramCodeUpdate, onRegenerateClick, copy, onDeleteClick, isSpeaking, speakingMessageId, isPaused, resumeSpeech, pauseSpeech, stopSpeech, speakMessage, renderAttachments, messages]); return (
+    }, [
+        formatDate, formatTime, onToggleUserMessageExpansion, expandedMessages, onMermaidError, onSuggestAiCorrection,
+        onViewContent, enableTypingAnimation, isLoading, onMarkMessageDisplayed, autoTypeInPanel, onBlockDetected,
+        onBlockUpdate, onBlockEnd, isDiagramPanelOpen, handleDiagramCodeUpdate, onRegenerateClick, copy, onDeleteClick,
+        isSpeaking, speakingMessageId, isPaused, resumeSpeech, pauseSpeech, stopSpeech, speakMessage, renderAttachments,
+        messages
+    ]);
+
+    return (
         <div
             className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8 bg-transparent px-2 sm:px-4 md:px-0"
             style={{ position: 'relative', zIndex: 1 }}
@@ -815,10 +699,8 @@ const arePropsEqual = (prevProps: MessageListProps, nextProps: MessageListProps)
     const messagesChanged = prevProps.messages !== nextProps.messages;
 
     if (documentsChanged) {
-        //console.log('[MessageList] Props changed: mergedDocuments updated');
     }
     if (messagesChanged) {
-        //console.log('[MessageList] Props changed: messages updated');
     }
 
     const isEqual = (
@@ -836,12 +718,6 @@ const arePropsEqual = (prevProps: MessageListProps, nextProps: MessageListProps)
         prevProps.enableTypingAnimation === nextProps.enableTypingAnimation &&
         prevProps.autoTypeInPanel === nextProps.autoTypeInPanel
     );
-
-    if (isEqual) {
-        //console.log('[MessageList] Props unchanged, skipping re-render');
-    } else {
-        //console.log('[MessageList] Props changed, re-rendering');
-    }
 
     return isEqual;
 };

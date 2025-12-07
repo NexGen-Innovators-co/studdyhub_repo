@@ -39,19 +39,48 @@ export const useChatData = (currentUserId: string | null) => {
         );
     };
 
+    // ✅ Helper to robustly extract bucket and path from URL
+    const extractStorageDetails = (fileUrl: string) => {
+        try {
+            // Handle full URLs
+            if (fileUrl.startsWith('http')) {
+                const url = new URL(fileUrl);
+                const pathParts = url.pathname.split('/');
+                // Expected format: /storage/v1/object/public/{bucket}/{path...}
+                const publicIndex = pathParts.indexOf('public');
+
+                if (publicIndex !== -1 && publicIndex + 1 < pathParts.length) {
+                    const bucket = pathParts[publicIndex + 1];
+                    const path = pathParts.slice(publicIndex + 2).join('/');
+                    return { bucket, path };
+                }
+            }
+
+            // Fallback for legacy relative paths
+            if (fileUrl.includes('/documents/')) {
+                return { bucket: 'documents', path: fileUrl.split('/documents/')[1] };
+            }
+
+            // Default fallback
+            return { bucket: 'documents', path: fileUrl };
+        } catch (e) {
+            return { bucket: 'documents', path: fileUrl };
+        }
+    };
+
     const enrichResource = async (res: any) => {
         let fullResource: any = { ...res };
         let signedFileUrl: string | null = null;
 
         if (res.resource_type === 'note') {
+            // ✅ FIX: Use maybeSingle() to avoid 406 errors if note is deleted
             const { data: note, error } = await supabase
                 .from('notes')
                 .select('id, title, content, category, tags, created_at, updated_at, ai_summary, document_id')
                 .eq('id', res.resource_id)
-                .single();
+                .maybeSingle();
 
             if (error || !note) {
-                //console.error('Error fetching shared note:', error);
                 return { ...res, error: 'Note not found or access denied' };
             }
 
@@ -62,15 +91,19 @@ export const useChatData = (currentUserId: string | null) => {
                 const { data: doc } = await supabase
                     .from('documents')
                     .select('id, title, file_name, file_type, file_size, file_url, content_extracted, processing_status')
-                    .eq('id', note.document_id)  // ← Fixed: was res.resource_id!
-                    .single();
+                    .eq('id', note.document_id)
+                    .maybeSingle();
 
                 if (doc?.file_url && !canDisplayDocumentInline(doc)) {
-                    const path = doc.file_url.split('/documents/')[1] || doc.file_url;
-                    const { data: signed } = await supabase.storage
-                        .from('documents')
-                        .createSignedUrl(path, 3600);
-                    signedFileUrl = signed?.signedUrl || null;
+                    // ✅ FIX: Use robust path extraction
+                    const { bucket, path } = extractStorageDetails(doc.file_url);
+
+                    if (path && !path.startsWith('http')) {
+                        const { data: signed } = await supabase.storage
+                            .from(bucket)
+                            .createSignedUrl(path, 3600);
+                        signedFileUrl = signed?.signedUrl || null;
+                    }
                 }
 
                 fullResource.associatedDocument = doc || null;
@@ -84,24 +117,24 @@ export const useChatData = (currentUserId: string | null) => {
                 .from('documents')
                 .select('id, title, file_name, file_type, file_size, file_url, content_extracted, processing_status')
                 .eq('id', res.resource_id)
-                .single();
+                .maybeSingle();
 
             if (error || !doc) {
-                //console.error('Error fetching shared document:', error);
                 return { ...res, error: 'Document not found or access denied' };
             }
 
             fullResource = { ...res, ...doc };
 
             if (doc.file_url && !canDisplayDocumentInline(doc)) {
-                const path = doc.file_url.includes('/documents/')
-                    ? doc.file_url.split('/documents/')[1]
-                    : doc.file_url;
+                // ✅ FIX: Use robust path extraction
+                const { bucket, path } = extractStorageDetails(doc.file_url);
 
-                const { data: signed } = await supabase.storage
-                    .from('documents')
-                    .createSignedUrl(path, 3600);
-                signedFileUrl = signed?.signedUrl || null;
+                if (path && !path.startsWith('http')) {
+                    const { data: signed } = await supabase.storage
+                        .from(bucket)
+                        .createSignedUrl(path, 3600);
+                    signedFileUrl = signed?.signedUrl || null;
+                }
             }
 
             fullResource.signedFileUrl = signedFileUrl;

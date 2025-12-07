@@ -1,6 +1,6 @@
 // NotesList.tsx
 import React, { useRef, useEffect, useState } from 'react';
-import { Trash2, X, Edit, Save, X as CloseIcon } from 'lucide-react';
+import { Trash2, X, Edit, Save, X as CloseIcon, RefreshCw } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Note, NoteCategory } from '../../../types/Note';
 import { formatDate, getCategoryColor } from '../../classRecordings/utils/helpers';
@@ -20,6 +20,9 @@ interface NotesListProps {
   onLoadMore?: () => void;
   // Add new prop to track initial loading state
   isLoading?: boolean;
+  // Add refresh prop
+  onRefresh?: () => void;
+  navigateToNote?: (noteId: string | null) => void;
 }
 
 export const NotesList: React.FC<NotesListProps> = ({
@@ -33,7 +36,9 @@ export const NotesList: React.FC<NotesListProps> = ({
   hasMore,
   isLoadingMore,
   onLoadMore,
-  isLoading = false // Default to false for backward compatibility
+  isLoading = false, // Default to false for backward compatibility
+  onRefresh, // New refresh prop
+  navigateToNote
 }) => {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -43,6 +48,8 @@ export const NotesList: React.FC<NotesListProps> = ({
   const [editTags, setEditTags] = useState('');
   // Track if we've loaded any notes yet
   const [hasInitialNotes, setHasInitialNotes] = useState(false);
+  // Track refresh loading state
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Reset hasInitialNotes when notes change
   useEffect(() => {
@@ -54,11 +61,6 @@ export const NotesList: React.FC<NotesListProps> = ({
   }, [notes]);
 
   useEffect(() => {
-    // Don't set up observer if:
-    // 1. No load more function provided
-    // 2. No more data to load
-    // 3. Currently loading more
-    // 4. Still in initial loading state
     if (!onLoadMore || !hasMore || isLoadingMore || isLoading || !hasInitialNotes) {
       // Clean up existing observer
       if (observerRef.current && loadMoreRef.current) {
@@ -105,8 +107,14 @@ export const NotesList: React.FC<NotesListProps> = ({
 
   const handleNoteSelect = (note: Note) => {
     if (editingNoteId === note.id) return;
+
+    // Call the original onNoteSelect
     onNoteSelect(note);
-    if (onClose && window.innerWidth < 1024) {
+
+    // Use navigateToNote if available, otherwise use onClose
+    if (navigateToNote) {
+      navigateToNote(note.id);
+    } else if (onClose && window.innerWidth < 1024) {
       onClose();
     }
   };
@@ -149,6 +157,19 @@ export const NotesList: React.FC<NotesListProps> = ({
     }
   };
 
+  // Handle refresh button click
+  const handleRefresh = async () => {
+    if (!onRefresh) return;
+
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      // Reset refreshing state after a short delay for visual feedback
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
   // Handle null notes by providing default empty array
   const safeNotes = notes || [];
 
@@ -163,9 +184,25 @@ export const NotesList: React.FC<NotesListProps> = ({
       {/* Mobile Header with Close Button */}
       <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-gray-800">
         <div className="flex items-center justify-between">
-          <h3 className="font-medium text-slate-800 text-sm sm:text-base dark:text-gray-100">
-            {showLoading ? 'Loading...' : `${safeNotes.length} ${safeNotes.length === 1 ? 'Note' : 'Notes'}`}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-slate-800 text-sm sm:text-base dark:text-gray-100">
+              {showLoading ? 'Loading...' : `${safeNotes.length} ${safeNotes.length === 1 ? 'Note' : 'Notes'}`}
+            </h3>
+
+            {/* Manual Refresh Button */}
+            {onRefresh && !showLoading && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing || isLoadingMore}
+                className="h-6 w-6 p-0 hover:bg-slate-100 dark:hover:bg-gray-800 dark:text-gray-400"
+                title="Refresh notes list"
+              >
+                <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+            )}
+          </div>
           {onClose && (
             <Button
               variant="ghost"
@@ -177,6 +214,13 @@ export const NotesList: React.FC<NotesListProps> = ({
             </Button>
           )}
         </div>
+
+        {/* Refresh loading indicator */}
+        {isRefreshing && (
+          <div className="mt-2 text-xs text-blue-600 dark:text-blue-400 animate-pulse">
+            Refreshing...
+          </div>
+        )}
       </div>
 
       {/* Notes List */}
@@ -202,15 +246,18 @@ export const NotesList: React.FC<NotesListProps> = ({
               <p className="text-xs sm:text-sm">
                 {notes === null ? 'Please try again later' : 'Create your first note to get started'}
               </p>
-              {notes === null && onLoadMore && (
-                <Button
-                  onClick={() => onLoadMore()}
-                  className="mt-4"
-                  variant="outline"
-                  size="sm"
-                >
-                  Retry
-                </Button>
+              {(notes === null || safeNotes.length === 0) && onRefresh && (
+                <div className="mt-4 flex gap-2 justify-center">
+                  <Button
+                    onClick={handleRefresh}
+                    variant="outline"
+                    size="sm"
+                    disabled={isRefreshing}
+                  >
+                    <RefreshCw className={`h-3 w-3 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                  </Button>
+                </div>
               )}
             </div>
           ) : (
