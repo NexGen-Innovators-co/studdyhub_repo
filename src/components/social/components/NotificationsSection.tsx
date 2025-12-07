@@ -129,7 +129,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
       await fetchNotifications();
       setPage(prev => prev + 1);
     } catch (error) {
-      console.error('Error loading more notifications:', error);
+      //console.error('Error loading more notifications:', error);
       toast.error('Failed to load more notifications');
     } finally {
       setIsLoadingMore(false);

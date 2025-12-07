@@ -91,7 +91,7 @@ Make sure the JSON is valid and follows the exact structure above.`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenAI API error:', errorText);
+      //console.error('OpenAI API error:', errorText);
       throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
 
@@ -132,8 +132,8 @@ Make sure the JSON is valid and follows the exact structure above.`;
       ('Quiz validation passed');
 
     } catch (parseError) {
-      console.error('Failed to parse quiz JSON:', parseError);
-      console.error('Raw content:', generatedContent);
+      //console.error('Failed to parse quiz JSON:', parseError);
+      //console.error('Raw content:', generatedContent);
 
       // Fallback: create a simple quiz based on the content
       quizData = {
@@ -162,7 +162,7 @@ Make sure the JSON is valid and follows the exact structure above.`;
     });
 
   } catch (error) {
-    console.error('Error in generate-quiz function:', error);
+    //console.error('Error in generate-quiz function:', error);
     return new Response(
       JSON.stringify({
         error: error.message,

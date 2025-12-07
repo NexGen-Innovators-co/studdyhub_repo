@@ -35,8 +35,8 @@ export const fixDiagram = async (request: DiagramFixRequest): Promise<DiagramFix
       suggestions: data.suggestions || ['Try simplifying the content', 'Check for syntax errors']
     };
   } catch (error) {
-    console.error('Error fixing diagram:', error);
-    
+    //console.error('Error fixing diagram:', error);
+
     // Fallback fixes based on diagram type
     return generateFallbackFix(request);
   }
@@ -44,7 +44,7 @@ export const fixDiagram = async (request: DiagramFixRequest): Promise<DiagramFix
 
 const generateFallbackFix = (request: DiagramFixRequest): DiagramFixResponse => {
   const { diagramType, originalContent, errorMessage } = request;
-  
+
   let fixedContent = originalContent;
   let explanation = '';
   let suggestions: string[] = [];
@@ -62,7 +62,7 @@ const generateFallbackFix = (request: DiagramFixRequest): DiagramFixResponse => 
         ];
       }
       break;
-      
+
     case 'html':
       // Common HTML fixes
       if (errorMessage.includes('script') || errorMessage.includes('security')) {
@@ -75,7 +75,7 @@ const generateFallbackFix = (request: DiagramFixRequest): DiagramFixResponse => 
         ];
       }
       break;
-      
+
     case 'code':
       // Common code fixes
       fixedContent = fixCodeSyntax(originalContent);
@@ -93,47 +93,47 @@ const generateFallbackFix = (request: DiagramFixRequest): DiagramFixResponse => 
 
 const fixMermaidSyntax = (content: string): string => {
   let fixed = content;
-  
+
   // Fix common issues
   fixed = fixed.replace(/[""]/g, '"'); // Replace smart quotes
   fixed = fixed.replace(/'/g, "'"); // Replace smart apostrophes
   fixed = fixed.replace(/–/g, '-'); // Replace en-dash with hyphen
   fixed = fixed.replace(/—/g, '--'); // Replace em-dash with double hyphen
-  
+
   // Ensure proper spacing around arrows
   fixed = fixed.replace(/([A-Za-z0-9])(-->|->)([A-Za-z0-9])/g, '$1 $2 $3');
-  
+
   // Fix node IDs with spaces
   fixed = fixed.replace(/\[([^\]]*)\s+([^\]]*)\]/g, '["$1 $2"]');
-  
+
   return fixed;
 };
 
 const sanitizeHtml = (content: string): string => {
   // Remove potentially problematic elements
   let fixed = content;
-  
+
   // Remove script tags
   fixed = fixed.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-  
+
   // Remove event handlers
   fixed = fixed.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '');
-  
+
   // Remove dangerous attributes
   fixed = fixed.replace(/\s*(javascript:|data:)[^"'\s>]*/gi, '');
-  
+
   return fixed;
 };
 
 const fixCodeSyntax = (content: string): string => {
   let fixed = content;
-  
+
   // Add missing semicolons at end of lines (JavaScript-like)
   fixed = fixed.replace(/^(\s*)([^;\s{}]+)(\s*)$/gm, '$1$2;$3');
-  
+
   // Fix common quote issues
   fixed = fixed.replace(/[""]/g, '"');
   fixed = fixed.replace(/'/g, "'");
-  
+
   return fixed;
 };

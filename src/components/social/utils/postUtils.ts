@@ -2,7 +2,7 @@ import { SocialPostWithDetails } from '../../../integrations/supabase/socialType
 
 // Base URL for the application, configurable via environment variable
 const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://studdyhub.vercel.app.com';
-//console.log('BASE_URL:', BASE_URL);
+////console.log('BASE_URL:', BASE_URL);
 
 export const extractHashtags = (content: string): string[] => {
   const hashtagRegex = /#(\w+)/g;

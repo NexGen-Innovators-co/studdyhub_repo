@@ -71,7 +71,7 @@ export const UserProfile: React.FC<any> = ({
     } catch (error) {
       // Revert on error
       setIsFollowing(isFollowing);
-      console.error('Error toggling follow:', error);
+      //console.error('Error toggling follow:', error);
     } finally {
       setIsFollowLoading(false);
     }
@@ -87,8 +87,8 @@ export const UserProfile: React.FC<any> = ({
           if (id === 'saved') onRefreshBookmarkedPosts?.();
         }}
         className={`flex items-center justify-center gap-2 flex-1 pb-4 border-b-2 transition-colors font-medium text-sm ${activeTab === id
-            ? 'border-blue-600 text-blue-600'
-            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          ? 'border-blue-600 text-blue-600'
+          : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
           }`}
       >
         <Icon className="h-4 w-4" />
@@ -133,8 +133,8 @@ export const UserProfile: React.FC<any> = ({
                   variant={isFollowing ? "outline" : "default"}
                   disabled={isFollowLoading}
                   className={`rounded-full font-medium transition-all relative overflow-hidden group ${isFollowing
-                      ? "border-slate-300 hover:border-red-300 dark:hover:border-red-800"
-                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                    ? "border-slate-300 hover:border-red-300 dark:hover:border-red-800"
+                    : "bg-blue-600 hover:bg-blue-700 text-white"
                     } ${isFollowLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {isFollowLoading ? (

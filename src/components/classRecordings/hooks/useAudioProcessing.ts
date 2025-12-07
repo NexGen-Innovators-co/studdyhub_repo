@@ -36,7 +36,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
       audioPlayerRef.current.play().then(() => {
         setIsPlayingAudio(true);
       }).catch(e => {
-        console.error("Error playing audio:", e);
+        //console.error("Error playing audio:", e);
         toast.error('Failed to play audio. Please try again.');
         setIsPlayingAudio(false);
       });
@@ -80,7 +80,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
     navigator.clipboard.writeText(audioPlayerRef.current.src).then(() => {
       toast.success('Audio URL copied to clipboard!');
     }).catch(err => {
-      console.error('Failed to copy audio URL:', err);
+      //console.error('Failed to copy audio URL:', err);
       toast.error('Failed to copy audio URL.');
     });
   }, []);
@@ -116,7 +116,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         .eq('user_id', user.id);
 
       if (updateDocError) {
-        console.error('Error updating document with processed audio:', updateDocError);
+        //console.error('Error updating document with processed audio:', updateDocError);
         throw new Error(`Failed to update document: ${updateDocError.message}`);
       }
 
@@ -131,7 +131,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         .eq('user_id', user.id);
 
       if (updateRecordingError) {
-        console.error('Error updating class recording with processed audio:', updateRecordingError);
+        //console.error('Error updating class recording with processed audio:', updateRecordingError);
         throw new Error(`Failed to update recording: ${updateRecordingError.message}`);
       }
 
@@ -158,7 +158,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         };
         onUpdateRecording(updatedRecording);
       } else {
-        console.error('Failed to refetch updated recording after processing:', fetchError?.message);
+        //console.error('Failed to refetch updated recording after processing:', fetchError?.message);
       }
 
       setTranslatedContent(data.translated_content || null);
@@ -178,7 +178,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         }
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error during audio processing:', error);
+      //console.error('Error during audio processing:', error);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -303,7 +303,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         errorMessage = error.message;
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error during audio upload:', error);
+      //console.error('Error during audio upload:', error);
       setIsProcessingAudio(false);
     } finally {
       if (event.target) event.target.value = '';
@@ -402,7 +402,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         errorMessage = error.message;
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error in handleRecordingComplete:', error);
+      //console.error('Error in handleRecordingComplete:', error);
       setIsProcessingAudio(false);
     }
   }, [onAddRecording, triggerAudioProcessing]);
@@ -464,7 +464,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         .eq('user_id', user.id);
 
       if (updateRecordingError) {
-        console.error('Failed to update class recording with generated note:', updateRecordingError.message);
+        //console.error('Failed to update class recording with generated note:', updateRecordingError.message);
         toast.error('Note generated, but failed to update recording details.', { id: toastId });
       } else {
         toast.success('Note generated and recording updated!', { id: toastId });
@@ -491,7 +491,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
           };
           onUpdateRecording(updatedRecording);
         } else {
-          console.error('Failed to refetch updated recording:', fetchError?.message);
+          //console.error('Failed to refetch updated recording:', fetchError?.message);
         }
       }
 
@@ -509,7 +509,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         }
       }
       toast.error(errorMessage, { id: toastId });
-      console.error('Error initiating audio note generation:', error);
+      //console.error('Error initiating audio note generation:', error);
     } finally {
       setIsGeneratingNote(false);
     }

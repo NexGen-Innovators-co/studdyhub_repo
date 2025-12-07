@@ -54,7 +54,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          //console.log('🔽 Loading more documents...');
+          ////console.log('🔽 Loading more documents...');
           onLoadMoreDocuments();
         }
       },
@@ -76,17 +76,6 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
       }
     };
   }, [isOpen, hasMoreDocuments, isLoadingDocuments, onLoadMoreDocuments]);
-  useEffect(() => {
-    console.log('DocumentSelector State:', {
-      isOpen,
-      hasMoreDocuments,
-      isLoadingDocuments,
-      documentsCount: documents.length,
-      notesCount: notes.length,
-      scrollViewport: scrollViewportRef.current,
-      loadMoreTrigger: loadMoreTriggerRef.current
-    });
-  }, [isOpen, hasMoreDocuments, isLoadingDocuments, documents, notes]);
   const handleSelectionChange = (id: string, isChecked: boolean) => {
     setLocalSelectedIds((prev) => {
       const newIds = isChecked ? [...prev, id] : prev.filter((itemId) => itemId !== id);
@@ -106,7 +95,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
           .eq('id', activeChatSessionId);
 
         if (error) {
-          console.error('Error updating chat session:', error);
+          //console.error('Error updating chat session:', error);
           toast.error(`Failed to update chat session documents: ${error.message}`);
           return;
         }
@@ -116,7 +105,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
       onSelectionChange(localSelectedIds);
       onClose();
     } catch (error: any) {
-      console.error('Error confirming selection:', error);
+      //console.error('Error confirming selection:', error);
       toast.error(`Error: ${error.message || 'Failed to update selections.'}`);
     }
   };

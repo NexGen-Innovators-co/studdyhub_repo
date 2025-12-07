@@ -27,11 +27,11 @@ export const ThreeJsRenderer = memo(({ codeContent, canvasRef, onInvalidCode, on
         }
 
         sceneInitializedRef.current = true;
-        //console.log("[ThreeJSRenderer] Initializing Three.js scene.");
+        ////console.log("[ThreeJSRenderer] Initializing Three.js scene.");
 
         // Cleanup previous scene
         if (cleanupRef.current) {
-            //console.log("[ThreeJSRenderer] Cleaning up previous scene.");
+            ////console.log("[ThreeJSRenderer] Cleaning up previous scene.");
             cleanupRef.current();
             cleanupRef.current = null;
         }
@@ -144,7 +144,7 @@ export const ThreeJsRenderer = memo(({ codeContent, canvasRef, onInvalidCode, on
 
                         rendererRef.current.render(sceneRef.current, cameraRef.current);
                     } catch (renderError) {
-                        console.error("[ThreeJSRenderer] Rendering error:", renderError);
+                        //console.error("[ThreeJSRenderer] Rendering error:", renderError);
                         cancelAnimationFrame(animationFrameIdRef.current!);
                         animationFrameIdRef.current = null;
                         onInvalidCode(`Error during rendering: ${renderError.message}`);
@@ -177,11 +177,11 @@ export const ThreeJsRenderer = memo(({ codeContent, canvasRef, onInvalidCode, on
 
             onSceneReady(scene, renderer, cleanup);
             onInvalidCode(null);
-            //console.log("[ThreeJSRenderer] Scene initialized successfully.");
+            ////console.log("[ThreeJSRenderer] Scene initialized successfully.");
 
             // Return cleanup function
             return () => {
-                //console.log("[ThreeJSRenderer] Cleaning up on unmount.");
+                ////console.log("[ThreeJSRenderer] Cleaning up on unmount.");
                 if (animationFrameIdRef.current) {
                     cancelAnimationFrame(animationFrameIdRef.current);
                     animationFrameIdRef.current = null;
@@ -199,7 +199,7 @@ export const ThreeJsRenderer = memo(({ codeContent, canvasRef, onInvalidCode, on
             };
 
         } catch (error) {
-            console.error("[ThreeJSRenderer] Error initializing Three.js scene:", error);
+            //console.error("[ThreeJSRenderer] Error initializing Three.js scene:", error);
             onInvalidCode(`Error rendering 3D scene: ${error.message}`);
 
             if (canvasRef.current) {
@@ -210,7 +210,7 @@ export const ThreeJsRenderer = memo(({ codeContent, canvasRef, onInvalidCode, on
                     ctx.font = '16px Arial';
                     ctx.textAlign = 'center';
                     ctx.fillText('Error rendering 3D scene.', canvasRef.current.width / 2, canvasRef.current.height / 2);
-                    ctx.fillText('Check console for details.', canvasRef.current.width / 2, canvasRef.current.height / 2 + 20);
+                    ctx.fillText('Check //console for details.', canvasRef.current.width / 2, canvasRef.current.height / 2 + 20);
                 }
             }
             sceneInitializedRef.current = false;

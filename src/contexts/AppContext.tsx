@@ -212,7 +212,7 @@ const useLoadingWithTimeout = (initialState = false) => {
     if (loading) {
       timeoutRef.current = setTimeout(() => {
         setIsLoading(false);
-        //console.warn('Loading state timeout - resetting loading state');
+        ////console.warn('Loading state timeout - resetting loading state');
       }, LOADING_TIMEOUT);
     }
   }, []);
@@ -351,7 +351,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user) {
       // User logged out, clear cache
       clearCache();
-      console.log('🔴 User logged out - social cache cleared');
+      //console.log('🔴 User logged out - social cache cleared');
     }
   }, [user]);
   const handleThemeChange = useCallback((theme: 'light' | 'dark') => {
@@ -475,7 +475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         payload: formattedSessions.length === state.chatSessionsLoadedCount
       });
     } catch (error) {
-      //console.error('Error loading chat sessions:', error);
+      ////console.error('Error loading chat sessions:', error);
       // toast.error('Failed to load chat sessions.');
     } finally {
       setIsLoadingChatSessions(false);
@@ -535,7 +535,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast.success('New chat session created!');
       return newSession.id;
     } catch (error: any) {
-      //console.error('Error creating new session:', error);
+      ////console.error('Error creating new session:', error);
       toast.error(`Failed to create new chat session: ${error.message || 'Unknown error'}`);
       return null;
     }
@@ -584,7 +584,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       toast.success('Chat session deleted.');
     } catch (error: any) {
-      //console.error('Error deleting session:', error);
+      ////console.error('Error deleting session:', error);
       toast.error(`Failed to delete chat session: ${error.message || 'Unknown error'}`);
     }
   }, [user, state.chatSessions, state.activeChatSessionId, loadChatSessions, navigate]);
@@ -611,7 +611,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       toast.success('Chat session renamed.');
     } catch (error) {
-      //console.error('Error renaming session:', error);
+      ////console.error('Error renaming session:', error);
       toast.error('Failed to rename chat session');
     }
   }, [user]);
@@ -642,7 +642,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
 
       const loadTime = Date.now() - startTime;
-      console.log(`✅ Loaded ${data?.length || 0} messages in ${loadTime}ms`);
+      //console.log(`✅ Loaded ${data?.length || 0} messages in ${loadTime}ms`);
 
       if (error) throw error;
 
@@ -697,7 +697,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: (data || []).length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
-      console.error('Error loading session messages:', error);
+      //console.error('Error loading session messages:', error);
       // Don't show error toast - let UI handle it gracefully
     } finally {
       setIsLoadingSessionMessages(false);
@@ -750,7 +750,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       dispatch({ type: 'SET_HAS_MORE_MESSAGES', payload: (data || []).length === CHAT_MESSAGES_PER_PAGE });
     } catch (error) {
-      //console.error('Error loading older messages:', error);
+      ////console.error('Error loading older messages:', error);
       toast.error('Failed to load older messages.');
     } finally {
       setIsLoadingSessionMessages(false);
@@ -781,14 +781,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
 
       if (error) {
-        //console.error('Error deleting message from DB:', error);
+        ////console.error('Error deleting message from DB:', error);
         toast.error('Failed to delete message from database.');
         loadSessionMessages(state.activeChatSessionId);
       } else {
         toast.success('Message deleted successfully.');
       }
     } catch (error: any) {
-      //console.error('Error in handleDeleteMessage:', error);
+      ////console.error('Error in handleDeleteMessage:', error);
       toast.error(`Error deleting message: ${error.message || 'Unknown error'}`);
       if (state.activeChatSessionId) {
         loadSessionMessages(state.activeChatSessionId);
@@ -830,9 +830,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // This would call the message submission handler
       // For now, we'll just show a placeholder implementation
-      ////console.log('Regenerating response for:', lastUserMessageContent);
+      //////console.log('Regenerating response for:', lastUserMessageContent);
     } catch (error) {
-      //console.error('Error regenerating response:', error);
+      ////console.error('Error regenerating response:', error);
       toast.error('Failed to regenerate response');
 
       setChatMessages(prevAllMessages =>
@@ -875,9 +875,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // This would call the message submission handler
       // For now, we'll just show a placeholder implementation
-      ////console.log('Retrying failed message:', originalUserMessageContent);
+      //////console.log('Retrying failed message:', originalUserMessageContent);
     } catch (error) {
-      //console.error('Error retrying message:', error);
+      ////console.error('Error retrying message:', error);
       toast.error('Failed to retry message');
 
       setChatMessages(prevAllMessages =>
@@ -945,9 +945,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const noteFromUrl = notes.find(note => note.id === noteIdFromUrl);
         if (noteFromUrl && (!activeNote || activeNote.id !== noteIdFromUrl)) {
           setActiveNote(noteFromUrl);
-          console.log('✅ Note loaded from URL:', noteIdFromUrl);
+          //console.log('✅ Note loaded from URL:', noteIdFromUrl);
         } else if (!noteFromUrl) {
-          console.log('❌ Note not found in URL:', noteIdFromUrl);
+          //console.log('❌ Note not found in URL:', noteIdFromUrl);
           // Note not found, navigate to notes list
           navigate('/notes', { replace: true });
         }
@@ -968,7 +968,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Handle URL session restoration first
     if (sessionIdFromUrl && sessionIdFromUrl !== state.activeChatSessionId && user) {
-      //console.log('🔄 Session restored from URL:', sessionIdFromUrl);
+      ////console.log('🔄 Session restored from URL:', sessionIdFromUrl);
       dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionIdFromUrl });
       loadSessionMessages(sessionIdFromUrl);
       return;

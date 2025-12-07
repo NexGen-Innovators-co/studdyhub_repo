@@ -97,7 +97,7 @@ export const useDashboardStats = (userId: string | undefined) => {
 
       return data;
     } catch (error) {
-      console.warn('RPC failed, using fallback:', error);
+      //console.warn('RPC failed, using fallback:', error);
       return await fetchActivityDataFallback(days, userId);
     }
   };
@@ -442,7 +442,7 @@ export const useDashboardStats = (userId: string | undefined) => {
             sum + (quiz.score / quiz.total_questions * 100), 0) / quizData.data.length;
         }
       } catch (error) {
-        console.warn('Failed to fetch quiz data:', error);
+        //console.warn('Failed to fetch quiz data:', error);
       }
 
       // === FIXED ORDER: Calculate avgNotesPerDay FIRST ===
@@ -576,7 +576,7 @@ export const useDashboardStats = (userId: string | undefined) => {
       }
 
     } catch (err: any) {
-      console.error('Error fetching dashboard stats:', err);
+      //console.error('Error fetching dashboard stats:', err);
       if (mountedRef.current) {
         setError(err.message || 'Failed to load dashboard statistics');
         setProgress(0);
@@ -611,7 +611,7 @@ export const useDashboardStats = (userId: string | undefined) => {
         // Add other cases as needed
       }
     } catch (error) {
-      console.error('Error loading additional data:', error);
+      //console.error('Error loading additional data:', error);
     }
   }, [userId, stats]);
 
@@ -643,7 +643,7 @@ export const clearDashboardCache = (userId?: string) => {
       delete statsCache[key];
     });
   }
-  console.log('🧹 Dashboard cache cleared');
+  //console.log('🧹 Dashboard cache cleared');
 };
 // Helper functions
 const getStartOfDay = (date: Date) => new Date(date.setHours(0, 0, 0, 0));

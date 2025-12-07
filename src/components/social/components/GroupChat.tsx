@@ -25,7 +25,7 @@ interface GroupChatProps {
 export const GroupChat: React.FC<GroupChatProps> = ({
   groupId,
   currentUser,
-  
+
   isMember = false,
 
 }) => {
@@ -54,7 +54,7 @@ export const GroupChat: React.FC<GroupChatProps> = ({
         if (error) throw error;
         setMessages((data as ChatMessageWithSender[]) || []);
       } catch (error) {
-        console.error('Error fetching messages:', error);
+        //console.error('Error fetching messages:', error);
         toast.error('Failed to load chat messages');
         setMessages([]);
       } finally {
@@ -83,7 +83,7 @@ export const GroupChat: React.FC<GroupChatProps> = ({
             .single();
 
           if (senderError) {
-            console.error('Error fetching sender:', senderError);
+            //console.error('Error fetching sender:', senderError);
             return;
           }
 
@@ -119,7 +119,7 @@ export const GroupChat: React.FC<GroupChatProps> = ({
       setNewMessage('');
       inputRef.current?.focus();
     } catch (error) {
-      console.error('Error sending message:', error);
+      //console.error('Error sending message:', error);
       toast.error('Failed to send message');
     }
   };
@@ -149,14 +149,12 @@ export const GroupChat: React.FC<GroupChatProps> = ({
               messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex ${
-                    msg.sender_id === currentUser?.id ? 'justify-end' : 'justify-start'
-                  } mb-3`}
+                  className={`flex ${msg.sender_id === currentUser?.id ? 'justify-end' : 'justify-start'
+                    } mb-3`}
                 >
                   <div
-                    className={`max-w-[70%] sm:max-w-[60%] lg:max-w-[50%] flex flex-col ${
-                      msg.sender_id === currentUser?.id ? 'items-end' : 'items-start'
-                    }`}
+                    className={`max-w-[70%] sm:max-w-[60%] lg:max-w-[50%] flex flex-col ${msg.sender_id === currentUser?.id ? 'items-end' : 'items-start'
+                      }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       {msg.sender_id !== currentUser?.id && (
@@ -169,11 +167,10 @@ export const GroupChat: React.FC<GroupChatProps> = ({
                       )}
                     </div>
                     <div
-                      className={`p-3 rounded-2xl text-sm lg:text-base break-words ${
-                        msg.sender_id === currentUser?.id
+                      className={`p-3 rounded-2xl text-sm lg:text-base break-words ${msg.sender_id === currentUser?.id
                           ? 'bg-blue-600 text-white'
                           : 'bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 border border-slate-200 dark:border-slate-700'
-                      }`}
+                        }`}
                     >
                       {msg.content}
                     </div>

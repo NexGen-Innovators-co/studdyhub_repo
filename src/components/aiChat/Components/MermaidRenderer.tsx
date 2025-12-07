@@ -381,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const nodeElement = target.classList.contains('node') ? target : target.closest('.node');
                     const nodeId = nodeElement.id || nodeElement.getAttribute('data-id');
                     if (nodeId) {
-                        //console.log('Clicked node:', nodeId);
+                        ////console.log('Clicked node:', nodeId);
                         window.parent.postMessage({ type: 'nodeClick', nodeId: encodeURIComponent(nodeId) }, '*');
                     }
                 }
@@ -391,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const target = event.target;
                 if (target.classList.contains('node') || target.closest('.node')) {
                     const nodeElement = target.classList.contains('node') ? target : target.closest('.node');
-                    //console.log('Mouse over node:', nodeElement.id);
+                    ////console.log('Mouse over node:', nodeElement.id);
                 }
             });
         }

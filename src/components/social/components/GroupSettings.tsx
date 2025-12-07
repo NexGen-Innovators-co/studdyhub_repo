@@ -75,7 +75,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
   const fetchPendingMembers = async () => {
     try {
       setIsLoadingPending(true);
-      console.log('Fetching pending members for group:', groupId);
+      //console.log('Fetching pending members for group:', groupId);
 
       const { data, error } = await supabase
         .from('social_group_members')
@@ -92,18 +92,18 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
         .order('joined_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching pending members:', error);
+        //console.error('Error fetching pending members:', error);
         toast.error('Failed to load pending members');
         return;
       }
 
-      console.log('Pending members data:', data);
+      //console.log('Pending members data:', data);
 
       if (data) {
         setPendingMembers(data);
       }
     } catch (error) {
-      console.error('Error fetching pending members:', error);
+      //console.error('Error fetching pending members:', error);
       toast.error('Failed to load pending members');
     } finally {
       setIsLoadingPending(false);
@@ -128,14 +128,14 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
         setReportedContent(data);
       }
     } catch (error) {
-      console.error('Error fetching reports:', error);
+      //console.error('Error fetching reports:', error);
     }
   };
 
   // Debug function to see all members
   const fetchAllMembers = async () => {
     try {
-      console.log('Fetching ALL members for debugging...');
+      //console.log('Fetching ALL members for debugging...');
       const { data, error } = await supabase
         .from('social_group_members')
         .select(`
@@ -150,26 +150,26 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
         .order('joined_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching all members:', error);
+        //console.error('Error fetching all members:', error);
         toast.error('Debug: Failed to fetch all members');
         return;
       }
 
-      console.log('ALL members in database:', data);
+      //console.log('ALL members in database:', data);
 
       // Separate by status
       const pending = data.filter(m => m.status === 'pending');
       const active = data.filter(m => m.status === 'active');
       const other = data.filter(m => !['pending', 'active'].includes(m.status));
 
-      console.log('Pending members:', pending);
-      console.log('Active members:', active);
-      console.log('Other status members:', other);
+      //console.log('Pending members:', pending);
+      //console.log('Active members:', active);
+      //console.log('Other status members:', other);
 
       toast.success(`Debug: Found ${data.length} total members (${pending.length} pending, ${active.length} active)`);
 
     } catch (error) {
-      console.error('Error in fetchAllMembers:', error);
+      //console.error('Error in fetchAllMembers:', error);
       toast.error('Debug: Error fetching members');
     }
   };
@@ -201,7 +201,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
 
       return publicUrl;
     } catch (error) {
-      console.error('Error uploading avatar:', error);
+      //console.error('Error uploading avatar:', error);
       toast.error('Failed to upload image');
       return null;
     }
@@ -243,7 +243,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
       setSelectedFile(null);
       setPreviewUrl(null);
     } catch (error) {
-      console.error('Error updating group:', error);
+      //console.error('Error updating group:', error);
       toast.error('Failed to update group settings');
     } finally {
       setIsSaving(false);
@@ -285,7 +285,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
       toast.success('Group deleted successfully');
       navigate('/social/groups');
     } catch (error) {
-      console.error('Error deleting group:', error);
+      //console.error('Error deleting group:', error);
       toast.error('Failed to delete group');
     } finally {
       setIsDeleting(false);
@@ -293,7 +293,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
   };
   const handleApproveMember = async (membershipId: string, userId: string) => {
     try {
-      console.log('Approving member via RPC:', { membershipId, userId, groupId });
+      //console.log('Approving member via RPC:', { membershipId, userId, groupId });
 
       // Call the PostgreSQL function that bypasses RLS
       const { data, error } = await supabase.rpc('approve_group_member', {
@@ -304,12 +304,12 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
       });
 
       if (error) {
-        console.error('RPC error:', error);
+        //console.error('RPC error:', error);
         toast.error(`Failed: ${error.message}`);
         return;
       }
 
-      console.log('RPC result:', data);
+      //console.log('RPC result:', data);
 
       if (!data?.success) {
         toast.error(data?.error || 'Failed to approve member');
@@ -334,7 +334,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
             .eq('id', groupId);
         }
       } catch (countError) {
-        console.error('Error updating count:', countError);
+        //console.error('Error updating count:', countError);
       }
 
       // Remove from pending list
@@ -349,13 +349,13 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
       }, 500);
 
     } catch (error: any) {
-      console.error('Error approving member:', error);
+      //console.error('Error approving member:', error);
       toast.error(`Failed: ${error.message || 'Unknown error'}`);
     }
   };
   const debugTriggers = async () => {
     try {
-      console.log('Debugging triggers for social_group_members...');
+      //console.log('Debugging triggers for social_group_members...');
 
       // Check current group members count
       const { data: groupData } = await supabase
@@ -364,7 +364,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
         .eq('id', groupId)
         .single();
 
-      console.log('Current group members_count:', groupData?.members_count);
+      //console.log('Current group members_count:', groupData?.members_count);
 
       // Count active members manually - correct syntax
       const { count } = await supabase
@@ -373,7 +373,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
         .eq('group_id', groupId)
         .eq('status', 'active');
 
-      console.log('Manual count of active members:', count);
+      //console.log('Manual count of active members:', count);
 
       // Check all members
       const { data: allMembers } = await supabase
@@ -381,10 +381,10 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
         .select('user_id, status')
         .eq('group_id', groupId);
 
-      console.log('All members in group:', allMembers);
+      //console.log('All members in group:', allMembers);
 
     } catch (error) {
-      console.error('Debug error:', error);
+      //console.error('Debug error:', error);
     }
   };
   const handleRejectMember = async (membershipId: string, userId: string) => {
@@ -410,7 +410,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
 
       toast.success('Request declined');
     } catch (error) {
-      console.error('Error rejecting member:', error);
+      //console.error('Error rejecting member:', error);
       toast.error('Failed to reject member');
     }
   };
@@ -431,7 +431,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
       setReportedContent(prev => prev.filter(r => r.id !== reportId));
       toast.success(`Report ${action === 'dismiss' ? 'dismissed' : 'resolved'}`);
     } catch (error) {
-      console.error('Error resolving report:', error);
+      //console.error('Error resolving report:', error);
       toast.error('Failed to update report');
     }
   };
@@ -589,7 +589,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
             className="w-full gap-2"
           >
             <RefreshCw className="h-4 w-4" />
-            Fetch All Members (Console)
+            Fetch All Members (//console)
           </Button>
           <Button
             variant="outline"
@@ -611,7 +611,7 @@ export const GroupSettings: React.FC<GroupSettingsProps> = ({
           <div className="text-xs text-gray-500 p-2 bg-gray-50 dark:bg-gray-800 rounded">
             <p>Pending members count: {pendingMembers.length}</p>
             <p>Group ID: {groupId}</p>
-            <p>Check browser console for debug logs</p>
+            <p>Check browser //console for debug logs</p>
           </div>
         </CardContent>
       </Card> */}

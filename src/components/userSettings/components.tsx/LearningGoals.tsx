@@ -50,7 +50,7 @@ export const LearningGoals: React.FC<LearningGoalsProps> = ({ userId }) => {
       if (error) throw error;
       setGoals(data || []);
     } catch (error) {
-      console.error('Error fetching goals:', error);
+      //console.error('Error fetching goals:', error);
       toast.error('Failed to load goals');
     } finally {
       setIsLoading(false);
@@ -85,7 +85,7 @@ export const LearningGoals: React.FC<LearningGoalsProps> = ({ userId }) => {
       setTargetDate('');
       toast.success('Goal added successfully!');
     } catch (error) {
-      console.error('Error adding goal:', error);
+      //console.error('Error adding goal:', error);
       toast.error('Failed to add goal');
     }
   };
@@ -106,7 +106,7 @@ export const LearningGoals: React.FC<LearningGoalsProps> = ({ userId }) => {
       setGoals(goals.map(g => g.id === goalId ? { ...g, progress, is_completed: progress === 100 } : g));
       toast.success('Progress updated!');
     } catch (error) {
-      console.error('Error updating progress:', error);
+      //console.error('Error updating progress:', error);
       toast.error('Failed to update progress');
     }
   };
@@ -123,7 +123,7 @@ export const LearningGoals: React.FC<LearningGoalsProps> = ({ userId }) => {
       setGoals(goals.filter(g => g.id !== goalId));
       toast.success('Goal deleted!');
     } catch (error) {
-      console.error('Error deleting goal:', error);
+      //console.error('Error deleting goal:', error);
       toast.error('Failed to delete goal');
     }
   };

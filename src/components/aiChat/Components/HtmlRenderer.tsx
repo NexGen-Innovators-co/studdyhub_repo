@@ -11,14 +11,14 @@ export const HtmlRenderer: React.FC<HtmlRendererProps> = ({ htmlContent }) => {
         if (iframeRef.current) {
             const iframe = iframeRef.current;
             const doc = iframe.contentDocument || iframe.contentWindow?.document;
-            
+
             if (doc) {
                 doc.open();
-                
+
                 // Add base tag to prevent relative URLs from resolving to your app
                 // Using a data URL as base to keep everything contained
                 const baseTag = '<base target="_top" href="data:text/html,">';
-                
+
                 // Inject the HTML content with base tag
                 doc.write(`${baseTag}${htmlContent}`);
                 doc.close();
@@ -27,10 +27,10 @@ export const HtmlRenderer: React.FC<HtmlRendererProps> = ({ htmlContent }) => {
                 const handleClick = (e: Event) => {
                     const target = e.target as HTMLElement;
                     const link = target.closest('a');
-                    
+
                     if (link && link.href) {
                         // Allow internal navigation (hash links, same-origin)
-                        if (link.href.startsWith('about:') || 
+                        if (link.href.startsWith('about:') ||
                             link.href.startsWith('data:') ||
                             link.hash ||
                             link.getAttribute('href')?.startsWith('#') ||
@@ -38,13 +38,13 @@ export const HtmlRenderer: React.FC<HtmlRendererProps> = ({ htmlContent }) => {
                             // Allow default behavior for internal navigation
                             return true;
                         }
-                        
+
                         // Block external navigation and show message
                         e.preventDefault();
                         e.stopPropagation();
-                        
-                        console.log('External navigation blocked:', link.href);
-                        
+
+                        //console.log('External navigation blocked:', link.href);
+
                         // Optional: show message to user
                         if (iframe.contentWindow) {
                             iframe.contentWindow.alert('External links are disabled in preview mode. This link would navigate to: ' + link.href);
@@ -59,7 +59,7 @@ export const HtmlRenderer: React.FC<HtmlRendererProps> = ({ htmlContent }) => {
                 const handleSubmit = (e: Event) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('Form submission blocked in HTML preview');
+                    //console.log('Form submission blocked in HTML preview');
                     // Optional: show success message since forms often trigger navigation
                     if (iframe.contentWindow) {
                         iframe.contentWindow.alert('Form submitted successfully (demo mode)');

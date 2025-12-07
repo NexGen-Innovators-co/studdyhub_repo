@@ -160,7 +160,7 @@ const extractContentWithGemini = async (
     }
 
     if (finishReason === 'MAX_TOKENS') {
-        console.warn('Gemini extraction hit token limit. Content might be truncated. Consider client-side chunking for extremely large documents.');
+        //console.warn('Gemini extraction hit token limit. Content might be truncated. Consider client-side chunking for extremely large documents.');
     }
 
     (`Successfully extracted ${extractedText.length} characters using Gemini for ${fileType}.`);
@@ -210,7 +210,7 @@ const extractTextWithOptimalStrategy = async (
         return await extractContentWithGemini(fileContentBase64, fileType, geminiApiKey);
     } else {
         const errorMessage = `Content extraction not supported for file type: ${fileType}.`;
-        console.warn(`Edge Function: Fallback for unexpected file type ${fileType}.`);
+        //console.warn(`Edge Function: Fallback for unexpected file type ${fileType}.`);
         throw new Error(errorMessage);
     }
 };
@@ -378,7 +378,7 @@ serve(async (req) => {
         });
 
     } catch (error) {
-        console.error('Document extraction error:', error);
+        //console.error('Document extraction error:', error);
 
         const errorMessage = error?.message || 'Unknown error occurred during text extraction';
 
@@ -392,7 +392,7 @@ serve(async (req) => {
                 }).eq('id', documentId);
             }
         } catch (updateErr) {
-            console.error("Failed to update document status to failed:", updateErr);
+            //console.error("Failed to update document status to failed:", updateErr);
         }
 
         return new Response(JSON.stringify({

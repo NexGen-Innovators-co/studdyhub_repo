@@ -85,7 +85,7 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
 
             setUser(data);
         } catch (error) {
-            console.error('Error fetching user profile:', error);
+            //console.error('Error fetching user profile:', error);
             toast.error('Failed to load user profile');
         } finally {
             setIsLoading(false);
@@ -109,7 +109,7 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
             .maybeSingle();
 
         if (error && error.code !== 'PGRST116') {
-            console.error('Error checking follow status:', error);
+            //console.error('Error checking follow status:', error);
             return;
         }
 
@@ -180,7 +180,7 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
             setUserPosts(prev => reset ? transformedPosts : [...prev, ...transformedPosts]);
             setHasMore(postsData.length === POSTS_PER_PAGE);
         } catch (error) {
-            console.error('Error fetching user posts:', error);
+            //console.error('Error fetching user posts:', error);
             toast.error('Failed to load posts');
         } finally {
             loadingState(false);
@@ -188,18 +188,18 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
     };
     const handleToggleFollow = async () => {
         if (!userId || isFollowLoading) return;
-        
+
         // Optimistically update UI first
         const newFollowingState = !isFollowing;
         setIsFollowing(newFollowingState);
         setIsFollowLoading(true);
-        
+
         try {
             await props.onFollow(userId);
             // If successful, refresh data
             fetchUserProfile();
         } catch (error) {
-            console.error('Error toggling follow:', error);
+            //console.error('Error toggling follow:', error);
             toast.error('Failed to update follow status');
             // Revert on error
             setIsFollowing(!newFollowingState);
@@ -253,7 +253,7 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
             <UserProfile
                 user={user}
                 isOwnProfile={isOwnProfile}
-                onEditProfile={() => {}}
+                onEditProfile={() => { }}
                 posts={userPosts}
                 isLoadingPosts={isLoadingPosts}
                 onLike={props.onLike}

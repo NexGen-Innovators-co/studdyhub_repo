@@ -114,7 +114,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
 
       resetForm();
     } catch (error) {
-      console.error('Error saving schedule item:', error);
+      //console.error('Error saving schedule item:', error);
       toast.error('Failed to save schedule item');
     } finally {
       setIsSubmitting(false);
@@ -146,7 +146,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
         await onDeleteItem(id);
         toast.success('Schedule item deleted');
       } catch (error) {
-        console.error('Error deleting schedule item:', error);
+        //console.error('Error deleting schedule item:', error);
         toast.error('Failed to delete schedule item');
       }
     }

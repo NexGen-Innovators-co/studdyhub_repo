@@ -50,25 +50,25 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
       setError(null);
       chartInstanceRef.current?.destroy();
       if (containerRef.current) containerRef.current.innerHTML = '';
-  
+
       try {
         if (type === 'chartjs') {
           const canvas = document.createElement('canvas');
           canvas.style.maxWidth = '100%';
           canvas.style.height = '400px';
           containerRef.current?.appendChild(canvas);
-  
+
           let config: ChartConfiguration;
           try {
             config = JSON.parse(code);
           } catch {
             throw new Error('Invalid JSON');
           }
-  
+
           const ctx = canvas.getContext('2d');
           if (!ctx) throw new Error('Canvas context failed');
           chartInstanceRef.current = new Chart(ctx, config);
-  
+
         } else if (type === 'mermaid') {
           // ✅ Safe, isolated Mermaid rendering
           mermaid.initialize({
@@ -79,23 +79,23 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
             fontFamily: 'system-ui, -apple-system, sans-serif',
             flowchart: { curve: 'basis' },
           });
-  
+
           const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
           const codeTrimmed = code.trim();
-  
+
           try {
             // --- Create a shadow DOM sandbox ---
             const shadowHost = document.createElement('div');
             const shadowRoot = shadowHost.attachShadow({ mode: 'open' });
             containerRef.current!.innerHTML = '';
             containerRef.current!.appendChild(shadowHost);
-  
+
             // --- Render off-DOM (isolated) ---
             const { svg } = await mermaid.render(id, codeTrimmed);
-  
+
             // Inject SVG safely inside shadow root
             shadowRoot.innerHTML = svg;
-  
+
             // Style for responsiveness
             const svgEl = shadowRoot.querySelector('svg');
             if (svgEl) {
@@ -103,21 +103,21 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
               svgEl.style.height = 'auto';
               svgEl.style.display = 'block';
             }
-  
+
             setError(null);
           } catch (mermaidErr: any) {
-            //console.warn('⚠️ Mermaid isolated render error:', mermaidErr);
-  
+            ////console.warn('⚠️ Mermaid isolated render error:', mermaidErr);
+
             // Cleanup any leftover global SVG nodes (Mermaid sometimes leaks)
             Array.from(document.querySelectorAll('.mermaid, [id^="mermaid-"]')).forEach((el) => {
               if (el.textContent?.includes('Syntax error')) el.remove();
             });
-  
+
             // --- Graceful fallback UI ---
             const msg =
               mermaidErr?.message?.replace(/</g, '&lt;').replace(/>/g, '&gt;') ||
               'Minor Mermaid syntax issue (safe to ignore).';
-  
+
             containerRef.current!.innerHTML = `
               <div style="
                 border: 1px solid #ef4444;
@@ -135,7 +135,7 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
               </div>
             `;
           }
-  
+
         } else if (type === 'dot') {
           if (!(window as any).Viz) {
             const script = document.createElement('script');
@@ -145,7 +145,7 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
               script.onload = resolve;
               document.head.appendChild(script);
             });
-  
+
             const renderScript = document.createElement('script');
             renderScript.src = 'https://cdn.jsdelivr.net/npm/viz.js@2.1.2/full.render.js';
             renderScript.async = true;
@@ -154,7 +154,7 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
               document.head.appendChild(renderScript);
             });
           }
-  
+
           const viz = new (window as any).Viz();
           const svg = await viz.renderSVGElement(code);
           containerRef.current!.appendChild(svg);
@@ -178,10 +178,10 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
         }
       }
     };
-  
+
     render();
   }, [code, type]);
-  
+
 
   const handleSave = () => {
     if (!code.trim()) {
@@ -219,9 +219,8 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
     <NodeViewWrapper className="relative my-4">
       {/* Highlight selected state */}
       <div
-        className={`border rounded-lg overflow-hidden bg-white dark:bg-gray-900 shadow-sm ${
-          selected ? 'ring-2 ring-blue-500' : 'border-gray-200 dark:border-gray-700'
-        }`}
+        className={`border rounded-lg overflow-hidden bg-white dark:bg-gray-900 shadow-sm ${selected ? 'ring-2 ring-blue-500' : 'border-gray-200 dark:border-gray-700'
+          }`}
       >
         {/* Action buttons */}
         <div className="absolute top-2 right-2 flex gap-1 z-10">
@@ -286,8 +285,8 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
                   type === 'chartjs'
                     ? '{\n  "type": "bar",\n  "data": {...}\n}'
                     : type === 'mermaid'
-                    ? 'flowchart TD\n    A --> B'
-                    : 'digraph G {\n    A -> B\n}'
+                      ? 'flowchart TD\n    A --> B'
+                      : 'digraph G {\n    A -> B\n}'
                 }
               />
 

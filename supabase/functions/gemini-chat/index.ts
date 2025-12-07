@@ -73,26 +73,26 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
   const executedActions: any[] = [];
   let modifiedResponse = aiResponse;
 
-  console.log(`[ActionExecution] Processing AI response for actions...`);
+  //console.log(`[ActionExecution] Processing AI response for actions...`);
 
   // 1. Parse actions from the text
   const action = actionsService.parseActionFromText(aiResponse);
 
   // 2. Execute parsed action if found
   if (action) {
-    console.log(`[ActionExecution] Found action: ${action.action} with confidence ${action.confidence}`);
+    //console.log(`[ActionExecution] Found action: ${action.action} with confidence ${action.confidence}`);
 
     try {
       let result: any;
 
       switch (action.action) {
         case 'CREATE_NOTE':
-          console.log(`[ActionExecution] Creating note: ${action.params.title}`);
+          //console.log(`[ActionExecution] Creating note: ${action.params.title}`);
           result = await actionsService.createNote(userId, action.params);
           break;
 
         case 'UPDATE_NOTE':
-          console.log(`[ActionExecution] Updating note: ${action.params.noteTitle}`);
+          //console.log(`[ActionExecution] Updating note: ${action.params.noteTitle}`);
           result = await actionsService.updateNote(userId, action.params.noteTitle, {
             title: action.params.title,
             content: action.params.content,
@@ -102,26 +102,26 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'DELETE_NOTE':
-          console.log(`[ActionExecution] Deleting note: ${action.params.noteTitle}`);
+          //console.log(`[ActionExecution] Deleting note: ${action.params.noteTitle}`);
           result = await actionsService.deleteNote(userId, action.params.noteTitle);
           break;
 
         case 'LINK_DOCUMENT_TO_NOTE':
-          console.log(`[ActionExecution] Linking document to note`);
+          //console.log(`[ActionExecution] Linking document to note`);
           result = await actionsService.linkDocumentToNote(
-            userId, 
-            action.params.noteTitle, 
+            userId,
+            action.params.noteTitle,
             action.params.documentTitle
           );
           break;
 
         case 'CREATE_FOLDER':
-          console.log(`[ActionExecution] Creating folder: ${action.params.name}`);
+          //console.log(`[ActionExecution] Creating folder: ${action.params.name}`);
           result = await actionsService.createDocumentFolder(userId, action.params);
           break;
 
         case 'ADD_DOCUMENT_TO_FOLDER':
-          console.log(`[ActionExecution] Adding document to folder`);
+          //console.log(`[ActionExecution] Adding document to folder`);
           result = await actionsService.addDocumentToFolder(
             userId,
             action.params.documentTitle,
@@ -130,7 +130,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'CREATE_SCHEDULE':
-          console.log(`[ActionExecution] Creating schedule: ${action.params.title}`);
+          //console.log(`[ActionExecution] Creating schedule: ${action.params.title}`);
           result = await actionsService.createScheduleItem(userId, {
             title: action.params.title,
             subject: action.params.subject,
@@ -144,7 +144,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'UPDATE_SCHEDULE':
-          console.log(`[ActionExecution] Updating schedule item`);
+          //console.log(`[ActionExecution] Updating schedule item`);
           result = await actionsService.updateScheduleItem(
             userId,
             action.params.itemTitle,
@@ -153,12 +153,12 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'DELETE_SCHEDULE':
-          console.log(`[ActionExecution] Deleting schedule item: ${action.params.itemTitle}`);
+          //console.log(`[ActionExecution] Deleting schedule item: ${action.params.itemTitle}`);
           result = await actionsService.deleteScheduleItem(userId, action.params.itemTitle);
           break;
 
         case 'CREATE_FLASHCARDS_FROM_NOTE':
-          console.log(`[ActionExecution] Creating flashcards from note: ${action.params.noteTitle}`);
+          //console.log(`[ActionExecution] Creating flashcards from note: ${action.params.noteTitle}`);
           result = await actionsService.createFlashcardsFromNote(
             userId,
             action.params.noteTitle,
@@ -167,7 +167,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'CREATE_FLASHCARD':
-          console.log(`[ActionExecution] Creating flashcard`);
+          //console.log(`[ActionExecution] Creating flashcard`);
           result = await actionsService.createFlashcard(userId, {
             front: action.params.front,
             back: action.params.back,
@@ -178,7 +178,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'CREATE_LEARNING_GOAL':
-          console.log(`[ActionExecution] Creating learning goal: ${action.params.goal_text}`);
+          //console.log(`[ActionExecution] Creating learning goal: ${action.params.goal_text}`);
           result = await actionsService.createLearningGoal(userId, {
             goal_text: action.params.goal_text,
             target_date: action.params.target_date,
@@ -188,7 +188,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'UPDATE_LEARNING_GOAL':
-          console.log(`[ActionExecution] Updating learning goal: ${action.params.goalText}`);
+          //console.log(`[ActionExecution] Updating learning goal: ${action.params.goalText}`);
           result = await actionsService.updateLearningGoalProgress(
             userId,
             action.params.goalText,
@@ -197,7 +197,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'CREATE_QUIZ':
-          console.log(`[ActionExecution] Creating quiz: ${action.params.title}`);
+          //console.log(`[ActionExecution] Creating quiz: ${action.params.title}`);
           // Generate questions based on count
           const questions = Array(action.params.question_count || 5).fill(0).map((_, i) => ({
             question: `Question ${i + 1} about the topic?`,
@@ -215,7 +215,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'RECORD_QUIZ_ATTEMPT':
-          console.log(`[ActionExecution] Recording quiz attempt`);
+          //console.log(`[ActionExecution] Recording quiz attempt`);
           result = await actionsService.recordQuizAttempt(userId, action.params.quizTitle, {
             score: action.params.score,
             total_questions: action.params.total_questions,
@@ -227,7 +227,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'CREATE_RECORDING':
-          console.log(`[ActionExecution] Creating recording: ${action.params.title}`);
+          //console.log(`[ActionExecution] Creating recording: ${action.params.title}`);
           result = await actionsService.createClassRecording(userId, {
             title: action.params.title,
             subject: action.params.subject,
@@ -239,22 +239,22 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'UPDATE_PROFILE':
-          console.log(`[ActionExecution] Updating profile`);
+          //console.log(`[ActionExecution] Updating profile`);
           result = await actionsService.updateUserProfile(userId, action.params.updates);
           break;
 
         case 'UPDATE_STATS':
-          console.log(`[ActionExecution] Updating stats`);
+          //console.log(`[ActionExecution] Updating stats`);
           result = await actionsService.updateUserStats(userId, action.params.updates);
           break;
 
         case 'AWARD_ACHIEVEMENT':
-          console.log(`[ActionExecution] Awarding achievement: ${action.params.badgeName}`);
+          //console.log(`[ActionExecution] Awarding achievement: ${action.params.badgeName}`);
           result = await actionsService.awardAchievement(userId, action.params.badgeName);
           break;
 
         case 'CREATE_POST':
-          console.log(`[ActionExecution] Creating social post`);
+          //console.log(`[ActionExecution] Creating social post`);
           result = await actionsService.createSocialPost(userId, {
             content: action.params.content,
             privacy: action.params.privacy,
@@ -263,7 +263,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         case 'UPDATE_USER_MEMORY':
-          console.log(`[ActionExecution] Updating user memory`);
+          //console.log(`[ActionExecution] Updating user memory`);
           result = await actionsService.updateUserMemory(userId, {
             fact_type: action.params.fact_type,
             fact_key: action.params.fact_key,
@@ -274,7 +274,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           break;
 
         default:
-          console.log(`[ActionExecution] Unknown action: ${action.action}`);
+          //console.log(`[ActionExecution] Unknown action: ${action.action}`);
           result = { success: false, error: `Unknown action: ${action.action}` };
       }
 
@@ -297,7 +297,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
         }
       }
     } catch (error: any) {
-      console.error(`[ActionExecution] Error executing action ${action.action}:`, error);
+      //console.error(`[ActionExecution] Error executing action ${action.action}:`, error);
       executedActions.push({
         type: action.action,
         success: false,
@@ -316,9 +316,9 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
   if (executedActions.length > 0) {
     const successCount = executedActions.filter(a => a.success).length;
     const totalCount = executedActions.length;
-    console.log(`[ActionExecution] Summary: ${successCount}/${totalCount} actions executed successfully`);
+    //console.log(`[ActionExecution] Summary: ${successCount}/${totalCount} actions executed successfully`);
   } else {
-    console.log(`[ActionExecution] No actions found to execute`);
+    //console.log(`[ActionExecution] No actions found to execute`);
   }
 
   return { executedActions, modifiedResponse };
@@ -328,7 +328,7 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
 async function updateSessionTokenCount(sessionId: string, userId: string, messageContent: string, operation = 'add'): Promise<{ success: boolean, tokenCount: number }> {
   try {
     const messageTokens = await calculateTokenCount(messageContent);
-    console.log(`[updateSessionTokenCount] Message tokens: ${messageTokens}`);
+    //console.log(`[updateSessionTokenCount] Message tokens: ${messageTokens}`);
 
     if (operation === 'add') {
       const { data: sessionData, error: fetchError } = await supabase
@@ -339,7 +339,7 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
         .maybeSingle();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('[updateSessionTokenCount] Error fetching current token count:', fetchError);
+        //console.error('[updateSessionTokenCount] Error fetching current token count:', fetchError);
         return {
           success: false,
           tokenCount: 0
@@ -347,7 +347,7 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
       }
 
       if (!sessionData) {
-        console.log(`[updateSessionTokenCount] Session not found yet, will be created with initial tokens: ${messageTokens}`);
+        //console.log(`[updateSessionTokenCount] Session not found yet, will be created with initial tokens: ${messageTokens}`);
         return {
           success: true,
           tokenCount: messageTokens
@@ -367,14 +367,14 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
         .eq('user_id', userId);
 
       if (updateError) {
-        console.error('[updateSessionTokenCount] Error updating token count:', updateError);
+        //console.error('[updateSessionTokenCount] Error updating token count:', updateError);
         return {
           success: false,
           tokenCount: currentTokenCount
         };
       }
 
-      console.log(`[updateSessionTokenCount] Updated token count: ${currentTokenCount} -> ${newTokenCount}`);
+      //console.log(`[updateSessionTokenCount] Updated token count: ${currentTokenCount} -> ${newTokenCount}`);
       return {
         success: true,
         tokenCount: newTokenCount
@@ -390,21 +390,21 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
         .eq('user_id', userId);
 
       if (updateError) {
-        console.error('[updateSessionTokenCount] Error setting token count:', updateError);
+        //console.error('[updateSessionTokenCount] Error setting token count:', updateError);
         return {
           success: false,
           tokenCount: 0
         };
       }
 
-      console.log(`[updateSessionTokenCount] Set token count to: ${messageTokens}`);
+      //console.log(`[updateSessionTokenCount] Set token count to: ${messageTokens}`);
       return {
         success: true,
         tokenCount: messageTokens
       };
     }
   } catch (error) {
-    console.error('[updateSessionTokenCount] Exception:', error);
+    //console.error('[updateSessionTokenCount] Exception:', error);
     return {
       success: false,
       tokenCount: 0
@@ -422,20 +422,20 @@ async function getSessionTokenCount(sessionId: string, userId: string): Promise<
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') {
-      console.error('[getSessionTokenCount] Error fetching token count:', error);
+      //console.error('[getSessionTokenCount] Error fetching token count:', error);
       return 0;
     }
 
     if (!data) {
-      console.log(`[getSessionTokenCount] Session ${sessionId} not found yet`);
+      //console.log(`[getSessionTokenCount] Session ${sessionId} not found yet`);
       return 0;
     }
 
     const tokenCount = data?.token_count || 0;
-    console.log(`[getSessionTokenCount] Session ${sessionId} token count: ${tokenCount}`);
+    //console.log(`[getSessionTokenCount] Session ${sessionId} token count: ${tokenCount}`);
     return tokenCount;
   } catch (error) {
-    console.error('[getSessionTokenCount] Exception:', error);
+    //console.error('[getSessionTokenCount] Exception:', error);
     return 0;
   }
 }
@@ -477,11 +477,11 @@ async function updateConversationSummary(sessionId: string, userId: string, rece
         .eq('id', sessionId)
         .eq('user_id', userId);
 
-      console.log(`[updateConversationSummary] Updated summary for session ${sessionId}`);
+      //console.log(`[updateConversationSummary] Updated summary for session ${sessionId}`);
       return summary;
     }
   } catch (error) {
-    console.error('Error updating conversation summary:', error);
+    //console.error('Error updating conversation summary:', error);
   }
 
   return null;
@@ -504,7 +504,7 @@ async function buildIntelligentContext(
 }> {
   const logPrefix = `[buildIntelligentContext][Session:${sessionId}]`;
   const storedTokenCount = await getSessionTokenCount(sessionId, userId);
-  console.log(`${logPrefix} Retrieved stored token count: ${storedTokenCount}`);
+  //console.log(`${logPrefix} Retrieved stored token count: ${storedTokenCount}`);
 
   const conversationHistory = await getConversationHistory(userId, sessionId);
 
@@ -519,14 +519,14 @@ async function buildIntelligentContext(
 
     if (sessionData?.context_summary) {
       conversationSummary = `Session "${sessionData.title}" (last active: ${new Date(sessionData.last_message_at).toLocaleDateString()}): ${sessionData.context_summary}`;
-      console.log(`${logPrefix} Using enhanced summary with session info`);
+      //console.log(`${logPrefix} Using enhanced summary with session info`);
     }
   } catch (error) {
-    console.error(`${logPrefix} Error fetching summary:`, error);
+    //console.error(`${logPrefix} Error fetching summary:`, error);
   }
 
   if (conversationHistory.length <= initialContextWindow) {
-    console.log(`${logPrefix} Using all ${conversationHistory.length} messages`);
+    //console.log(`${logPrefix} Using all ${conversationHistory.length} messages`);
     return {
       recentMessages: conversationHistory,
       relevantOlderMessages: [],
@@ -538,7 +538,7 @@ async function buildIntelligentContext(
   }
 
   const recentMessages = conversationHistory.slice(-initialContextWindow);
-  console.log(`${logPrefix} Using last ${recentMessages.length} messages (skipping relevance scoring)`);
+  //console.log(`${logPrefix} Using last ${recentMessages.length} messages (skipping relevance scoring)`);
 
   return {
     recentMessages,
@@ -552,7 +552,7 @@ async function buildIntelligentContext(
 
 async function getConversationHistory(userId: string, sessionId: string, maxMessages = ENHANCED_PROCESSING_CONFIG.MAX_CONVERSATION_HISTORY): Promise<any[]> {
   try {
-    console.log(`Retrieving conversation history for session ${sessionId}`);
+    //console.log(`Retrieving conversation history for session ${sessionId}`);
 
     const { data: messages, error } = await supabase
       .from('chat_messages')
@@ -566,19 +566,19 @@ async function getConversationHistory(userId: string, sessionId: string, maxMess
       .limit(maxMessages);
 
     if (error) {
-      console.error('Error fetching conversation history:', error);
+      //console.error('Error fetching conversation history:', error);
       return [];
     }
 
     if (!messages || messages.length === 0) {
-      console.log('No conversation history found');
+      //console.log('No conversation history found');
       return [];
     }
 
-    console.log(`Retrieved ${messages.length} messages`);
+    //console.log(`Retrieved ${messages.length} messages`);
     return messages;
   } catch (error) {
-    console.error('Error in getConversationHistory:', error);
+    //console.error('Error in getConversationHistory:', error);
     return [];
   }
 }
@@ -594,7 +594,7 @@ async function buildAttachedContext(documentIds: string[], noteIds: string[], us
       .in('id', documentIds);
 
     if (error) {
-      console.error('Error fetching documents:', error);
+      //console.error('Error fetching documents:', error);
     } else if (documents) {
       context += 'DOCUMENTS:\n';
       for (const doc of documents) {
@@ -626,7 +626,7 @@ async function buildAttachedContext(documentIds: string[], noteIds: string[], us
       .in('id', noteIds);
 
     if (error) {
-      console.error('Error fetching notes:', error);
+      //console.error('Error fetching notes:', error);
     } else if (notes) {
       context += 'NOTES:\n';
       for (const note of notes) {
@@ -699,7 +699,7 @@ async function saveChatMessage({
       .single();
 
     if (error) {
-      console.error('Error saving chat message:', error);
+      //console.error('Error saving chat message:', error);
       return null;
     }
 
@@ -708,7 +708,7 @@ async function saveChatMessage({
       timestamp: data.timestamp
     };
   } catch (error) {
-    console.error('Database error when saving chat message:', error);
+    //console.error('Database error when saving chat message:', error);
     return null;
   }
 }
@@ -748,7 +748,7 @@ const generateChatTitle = async (sessionId: string, userId: string, initialMessa
       return words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
     }
   } catch (error) {
-    console.error('Error generating chat title:', error);
+    //console.error('Error generating chat title:', error);
     const words = initialMessage.split(' ');
     return words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
   }
@@ -764,7 +764,7 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching chat session:', fetchError);
+      //console.error('Error fetching chat session:', fetchError);
       return;
     }
 
@@ -791,7 +791,7 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
         .eq('id', sessionId);
 
       if (updateError) {
-        console.error('Error updating chat session:', updateError);
+        //console.error('Error updating chat session:', updateError);
       }
     } else {
       const newTitle = initialMessage ? await generateChatTitle(sessionId, userId, initialMessage) : 'New Chat';
@@ -811,11 +811,11 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
         .single();
 
       if (insertError) {
-        console.error('Error creating chat session:', insertError);
+        //console.error('Error creating chat session:', insertError);
       }
     }
   } catch (error) {
-    console.error('Database error when ensuring chat session:', error);
+    //console.error('Database error when ensuring chat session:', error);
   }
 }
 
@@ -836,9 +836,9 @@ async function updateSessionLastMessage(sessionId: string, contextSummary: strin
       .update(update)
       .eq('id', sessionId);
 
-    if (error) console.error('Error updating session last message time:', error);
+    if (error) //console.error('Error updating session last message time:', error);
   } catch (error) {
-    console.error('Database error when updating session:', error);
+    //console.error('Database error when updating session:', error);
   }
 }
 
@@ -967,23 +967,23 @@ function buildUserMemoryContext(userContext: any): string | null {
 
 function buildActionableContextText(actionableContext: any): string {
   const sections: string[] = [];
-  
+
   if (actionableContext.notes?.length > 0) {
     sections.push(`📝 Available Notes: ${actionableContext.notes.map((n: any) => n.title).join(', ')}`);
   }
-  
+
   if (actionableContext.documents?.length > 0) {
     sections.push(`📄 Available Documents: ${actionableContext.documents.map((d: any) => d.title).join(', ')}`);
   }
-  
+
   if (actionableContext.folders?.length > 0) {
     sections.push(`📁 Available Folders: ${actionableContext.folders.map((f: any) => f.name).join(', ')}`);
   }
-  
+
   if (actionableContext.goals?.length > 0) {
     sections.push(`🎯 Active Goals: ${actionableContext.goals.map((g: any) => g.goal_text).join(', ')}`);
   }
-  
+
   return sections.join('\n');
 }
 
@@ -1001,7 +1001,7 @@ async function buildEnhancedGeminiConversation(
   queryType: string;
 }> {
   const logPrefix = `[buildEnhancedGeminiConversation][Session:${sessionId}]`;
-  console.log(`${logPrefix} Starting enhanced conversation build`);
+  //console.log(`${logPrefix} Starting enhanced conversation build`);
 
   try {
     // Get comprehensive user context
@@ -1009,7 +1009,7 @@ async function buildEnhancedGeminiConversation(
     const crossSessionContext = await contextService.getCrossSessionContext(userId, sessionId, currentMessage);
     const actionableContext = await contextService.getActionableContext(userId);
     const actionableContextText = buildActionableContextText(actionableContext);
-    
+
     const userProfile = userContext.profile;
     let userName = 'User';
 
@@ -1089,7 +1089,7 @@ ${actionableContextText}
     let recentMessages = conversationData.recentMessages;
     if (recentMessages.length > 15) {
       recentMessages = recentMessages.slice(-15);
-      console.log(`${logPrefix} Truncated to last 15 messages`);
+      //console.log(`${logPrefix} Truncated to last 15 messages`);
     }
 
     if (recentMessages && recentMessages.length > 0) {
@@ -1163,7 +1163,7 @@ ${actionableContextText}
       }
     }
 
-    console.log(`${logPrefix} Built enhanced conversation with ${geminiContents.length} parts`);
+    //console.log(`${logPrefix} Built enhanced conversation with ${geminiContents.length} parts`);
 
     return {
       contents: geminiContents,
@@ -1176,7 +1176,7 @@ ${actionableContextText}
       queryType: queryType
     };
   } catch (error) {
-    console.error(`${logPrefix} Error:`, error);
+    //console.error(`${logPrefix} Error:`, error);
     throw error;
   }
 }
@@ -1227,7 +1227,7 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string): Pro
         }
       } else {
         const errorText = await response.text();
-        console.error(`Gemini API error (attempt ${attempt + 1}): ${response.status} - ${errorText}`);
+        //console.error(`Gemini API error (attempt ${attempt + 1}): ${response.status} - ${errorText}`);
 
         if (response.status === 429) {
           if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
@@ -1235,7 +1235,7 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string): Pro
               Math.pow(ENHANCED_PROCESSING_CONFIG.EXPONENTIAL_BACKOFF_MULTIPLIER, attempt);
             const delay = Math.min(baseDelay, ENHANCED_PROCESSING_CONFIG.MAX_RETRY_DELAY);
 
-            console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS})...`);
+            //console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS})...`);
             await sleep(delay);
             continue;
           } else {
@@ -1248,7 +1248,7 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string): Pro
         } else if (response.status === 503) {
           if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
             const delay = ENHANCED_PROCESSING_CONFIG.INITIAL_RETRY_DELAY * (attempt + 1);
-            console.log(`Service unavailable, retrying in ${delay}ms...`);
+            //console.log(`Service unavailable, retrying in ${delay}ms...`);
             await sleep(delay);
             continue;
           } else {
@@ -1267,7 +1267,7 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string): Pro
         }
       }
     } catch (error) {
-      console.error(`Network error (attempt ${attempt + 1}):`, error);
+      //console.error(`Network error (attempt ${attempt + 1}):`, error);
 
       if (attempt === ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
         return {
@@ -1405,7 +1405,7 @@ serve(async (req) => {
       try {
         requestData = JSON.parse(responseBody);
       } catch (e) {
-        console.error("Failed to parse JSON", e);
+        //console.error("Failed to parse JSON", e);
         return new Response(JSON.stringify({
           error: 'Invalid JSON in request body'
         }), {
@@ -1496,7 +1496,7 @@ serve(async (req) => {
 
       if (!processorResponse.ok) {
         const errorBody = await processorResponse.text();
-        console.error(`File processor error: ${processorResponse.status} - ${errorBody}`);
+        //console.error(`File processor error: ${processorResponse.status} - ${errorBody}`);
 
         const errorMessageData = {
           userId,
@@ -1622,7 +1622,7 @@ serve(async (req) => {
           }
         } else {
           const errorBody = await response.text();
-          console.error(`Gemini API error (attempt ${attempt + 1}): ${response.status} - ${errorBody}`);
+          //console.error(`Gemini API error (attempt ${attempt + 1}): ${response.status} - ${errorBody}`);
 
           if (response.status === 429) {
             if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
@@ -1630,7 +1630,7 @@ serve(async (req) => {
                 Math.pow(ENHANCED_PROCESSING_CONFIG.EXPONENTIAL_BACKOFF_MULTIPLIER, attempt);
               const delay = Math.min(baseDelay, ENHANCED_PROCESSING_CONFIG.MAX_RETRY_DELAY);
 
-              console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt + 1})...`);
+              //console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt + 1})...`);
               await sleep(delay);
               continue;
             } else {
@@ -1640,7 +1640,7 @@ serve(async (req) => {
           } else if (response.status === 503) {
             if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
               const delay = ENHANCED_PROCESSING_CONFIG.INITIAL_RETRY_DELAY * (attempt + 1);
-              console.log(`Service unavailable, retrying in ${delay}ms...`);
+              //console.log(`Service unavailable, retrying in ${delay}ms...`);
               await sleep(delay);
               continue;
             } else {
@@ -1653,7 +1653,7 @@ serve(async (req) => {
           }
         }
       } catch (error) {
-        console.error(`Network error during API call (attempt ${attempt + 1}):`, error);
+        //console.error(`Network error during API call (attempt ${attempt + 1}):`, error);
         if (attempt === ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
           generatedText = `I'm having trouble connecting to process your request. Please check your connection and try again.`;
           break;
@@ -1665,18 +1665,18 @@ serve(async (req) => {
     if (!generatedText) {
       generatedText = `I apologize, but I wasn't able to generate a response at this time. Your message has been saved, and you can try asking again.`;
     }
-    
-    console.log(`[Main] Checking for actions in AI response...`);
+
+    //console.log(`[Main] Checking for actions in AI response...`);
     const actionResult = await executeAIActions(userId, sessionId, generatedText);
     generatedText = actionResult.modifiedResponse;
 
     if (actionResult.executedActions.length > 0) {
-      console.log(`[Main] Executed ${actionResult.executedActions.length} actions`);
+      //console.log(`[Main] Executed ${actionResult.executedActions.length} actions`);
       actionResult.executedActions.forEach((action: any) => {
-        console.log(`  - ${action.type}: ${action.success ? '✅' : '❌'} ${action.error || ''}`);
+        //console.log(`  - ${action.type}: ${action.success ? '✅' : '❌'} ${action.error || ''}`);
       });
     }
-    
+
     if (apiCallSuccess && generatedText) {
       try {
         const extractedFacts = await extractUserFacts(message, generatedText, userId, sessionId);
@@ -1684,7 +1684,7 @@ serve(async (req) => {
           await contextService.updateUserMemory(userId, extractedFacts);
         }
       } catch (factError) {
-        console.error('Error extracting user facts:', factError);
+        //console.error('Error extracting user facts:', factError);
       }
     }
 
@@ -1708,165 +1708,165 @@ serve(async (req) => {
             })
             .eq('id', sessionId)
             .eq('user_id', userId)
-            .then(() => console.log(`Title generated: ${title}`))
-            .catch((err) => console.error('Error updating title:', err));
-        }).catch((err) => console.error('Error generating title:', err));
+            .then(() => //console.log(`Title generated: ${title}`))
+            .catch((err) => //console.error('Error updating title:', err));
+        }).catch((err) => //console.error('Error generating title:', err));
 
         const words = message.split(' ');
-        aiGeneratedTitle = words.slice(0, 5).join(' ') + (message.split(' ').length > 5 ? '...' : '');
-      }
+              aiGeneratedTitle = words.slice(0, 5).join(' ') + (message.split(' ').length > 5 ? '...' : '');
+            }
     } else {
-      const { data: existingSession } = await supabase
-        .from('chat_sessions')
-        .select('title')
-        .eq('id', sessionId)
-        .eq('user_id', userId)
-        .single();
+        const { data: existingSession } = await supabase
+          .from('chat_sessions')
+          .select('title')
+          .eq('id', sessionId)
+          .eq('user_id', userId)
+          .single();
 
-      if (existingSession?.title) {
-        aiGeneratedTitle = existingSession.title;
+        if (existingSession?.title) {
+          aiGeneratedTitle = existingSession.title;
+        }
       }
+
+      const assistantMessageData = {
+        userId,
+        sessionId,
+        content: generatedText,
+        role: 'assistant',
+        attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
+        attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
+        imageUrl: userMessageImageUrl || imageUrl,
+        imageMimeType: userMessageImageMimeType || imageMimeType,
+        isError: !apiCallSuccess,
+        conversationContext: {
+          totalMessages: (conversationData.contextInfo?.totalMessages || 0) + 1,
+          recentMessages: conversationData.contextInfo?.recentMessages?.length || 0,
+          summarizedMessages: conversationData.contextInfo?.summarizedMessages || 0,
+          hasSummary: !!conversationData.contextInfo?.conversationSummary
+        }
+      };
+
+      if (aiMessageIdToUpdate) {
+        await supabase
+          .from('chat_messages')
+          .update({
+            content: generatedText,
+            is_updating: false,
+            is_error: !apiCallSuccess,
+            conversation_context: assistantMessageData.conversationContext
+          })
+          .eq('id', aiMessageIdToUpdate)
+          .eq('session_id', sessionId)
+          .eq('user_id', userId);
+
+        aiMessageId = aiMessageIdToUpdate;
+        aiMessageTimestamp = new Date().toISOString();
+      } else {
+        const savedAiMessage = await saveChatMessage(assistantMessageData);
+        if (savedAiMessage) {
+          aiMessageId = savedAiMessage.id;
+          aiMessageTimestamp = savedAiMessage.timestamp;
+          //console.log(`[gemini-chat] Saved AI message with ID: ${aiMessageId}`);
+        }
+      }
+
+      if (generatedText) {
+        await updateSessionTokenCount(sessionId, userId, generatedText, 'add');
+      }
+
+      const summaryToSave = conversationData.contextInfo?.conversationSummary || null;
+      await updateSessionLastMessage(sessionId, summaryToSave, aiGeneratedTitle);
+
+      if (conversationData.contextInfo?.recentMessages &&
+        conversationData.contextInfo.recentMessages.length >= ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
+        updateConversationSummary(sessionId, userId, conversationData.contextInfo.recentMessages)
+          .catch((err) => //console.error('Summary update failed:', err));
     }
 
-    const assistantMessageData = {
-      userId,
-      sessionId,
-      content: generatedText,
-      role: 'assistant',
-      attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
-      attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
-      imageUrl: userMessageImageUrl || imageUrl,
-      imageMimeType: userMessageImageMimeType || imageMimeType,
-      isError: !apiCallSuccess,
-      conversationContext: {
-        totalMessages: (conversationData.contextInfo?.totalMessages || 0) + 1,
-        recentMessages: conversationData.contextInfo?.recentMessages?.length || 0,
-        summarizedMessages: conversationData.contextInfo?.summarizedMessages || 0,
-        hasSummary: !!conversationData.contextInfo?.conversationSummary
+      const processingTime = Date.now() - startTime;
+
+      return new Response(JSON.stringify({
+        response: generatedText,
+        userId,
+        sessionId,
+        title: aiGeneratedTitle,
+        timestamp: new Date().toISOString(),
+        userMessageId,
+        userMessageTimestamp,
+        aiMessageId,
+        aiMessageTimestamp,
+        processingTime,
+        filesProcessed: hasFiles ? rawFiles.length || jsonFiles.length : 0,
+        documentIds: allDocumentIds,
+        contextInfo: {
+          totalMessages: conversationData.contextInfo?.totalMessages || 0,
+          recentMessages: conversationData.contextInfo?.recentMessages?.length || 0,
+          relevantOlderMessages: conversationData.contextInfo?.relevantOlderMessages?.length || 0,
+          summarizedMessages: conversationData.contextInfo?.summarizedMessages || 0,
+          hasSummary: !!conversationData.contextInfo?.conversationSummary,
+          crossSessionReferences: conversationData.contextInfo?.crossSessionContext?.length || 0,
+          userMemoryUsed: userContext.userMemory?.length || 0
+        },
+        processingResults,
+        success: apiCallSuccess,
+        executedActions: actionResult.executedActions.map((a: any) => ({
+          type: a.type,
+          success: a.success,
+          timestamp: a.timestamp
+        }))
+      }), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      });
+    } catch (error: any) {
+      const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
+      const processingTime = Date.now() - startTime;
+      //console.error('Error in ai-chat function:', error);
+
+      let userFriendlyMessage = 'I apologize, but I encountered an unexpected error while processing your request. Please try again.';
+
+      if (error.message?.includes('GEMINI_API_KEY')) {
+        userFriendlyMessage = 'The AI service is not properly configured. Please contact support.';
+      } else if (error.message?.includes('FILE_PROCESSOR')) {
+        userFriendlyMessage = 'I had trouble processing your files. Please try uploading them again.';
+      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        userFriendlyMessage = 'I\'m having trouble connecting to the AI service. Please check your internet connection and try again.';
+      } else if (error.message?.includes('timeout')) {
+        userFriendlyMessage = 'The request took too long to process. Please try again with a shorter message or fewer files.';
       }
-    };
 
-    if (aiMessageIdToUpdate) {
-      await supabase
-        .from('chat_messages')
-        .update({
-          content: generatedText,
-          is_updating: false,
-          is_error: !apiCallSuccess,
-          conversation_context: assistantMessageData.conversationContext
-        })
-        .eq('id', aiMessageIdToUpdate)
-        .eq('session_id', sessionId)
-        .eq('user_id', userId);
-
-      aiMessageId = aiMessageIdToUpdate;
-      aiMessageTimestamp = new Date().toISOString();
-    } else {
-      const savedAiMessage = await saveChatMessage(assistantMessageData);
-      if (savedAiMessage) {
-        aiMessageId = savedAiMessage.id;
-        aiMessageTimestamp = savedAiMessage.timestamp;
-        console.log(`[gemini-chat] Saved AI message with ID: ${aiMessageId}`);
+      if (requestData?.userId && requestData?.sessionId) {
+        try {
+          await saveChatMessage({
+            userId: requestData.userId,
+            sessionId: requestData.sessionId,
+            content: userFriendlyMessage,
+            role: 'assistant',
+            isError: true,
+            attachedDocumentIds: uploadedDocumentIds.length > 0 ? uploadedDocumentIds : null,
+            attachedNoteIds: requestData.attachedNoteIds?.length > 0 ? requestData.attachedNoteIds : null,
+            imageUrl: userMessageImageUrl || requestData.imageUrl,
+            imageMimeType: userMessageImageMimeType || requestData.imageMimeType
+          });
+        } catch (dbError) {
+          //console.error('Failed to save error message to database:', dbError);
+        }
       }
+
+      return new Response(JSON.stringify({
+        error: userFriendlyMessage,
+        errorDetails: error.message || 'Internal Server Error',
+        processingTime,
+        filesProcessed: hasFiles ? rawFiles.length || jsonFiles.length : 0,
+        success: false
+      }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      });
     }
-
-    if (generatedText) {
-      await updateSessionTokenCount(sessionId, userId, generatedText, 'add');
-    }
-
-    const summaryToSave = conversationData.contextInfo?.conversationSummary || null;
-    await updateSessionLastMessage(sessionId, summaryToSave, aiGeneratedTitle);
-
-    if (conversationData.contextInfo?.recentMessages &&
-      conversationData.contextInfo.recentMessages.length >= ENHANCED_PROCESSING_CONFIG.SUMMARY_THRESHOLD) {
-      updateConversationSummary(sessionId, userId, conversationData.contextInfo.recentMessages)
-        .catch((err) => console.error('Summary update failed:', err));
-    }
-
-    const processingTime = Date.now() - startTime;
-
-    return new Response(JSON.stringify({
-      response: generatedText,
-      userId,
-      sessionId,
-      title: aiGeneratedTitle,
-      timestamp: new Date().toISOString(),
-      userMessageId,
-      userMessageTimestamp,
-      aiMessageId,
-      aiMessageTimestamp,
-      processingTime,
-      filesProcessed: hasFiles ? rawFiles.length || jsonFiles.length : 0,
-      documentIds: allDocumentIds,
-      contextInfo: {
-        totalMessages: conversationData.contextInfo?.totalMessages || 0,
-        recentMessages: conversationData.contextInfo?.recentMessages?.length || 0,
-        relevantOlderMessages: conversationData.contextInfo?.relevantOlderMessages?.length || 0,
-        summarizedMessages: conversationData.contextInfo?.summarizedMessages || 0,
-        hasSummary: !!conversationData.contextInfo?.conversationSummary,
-        crossSessionReferences: conversationData.contextInfo?.crossSessionContext?.length || 0,
-        userMemoryUsed: userContext.userMemory?.length || 0
-      },
-      processingResults,
-      success: apiCallSuccess,
-      executedActions: actionResult.executedActions.map((a: any) => ({
-        type: a.type,
-        success: a.success,
-        timestamp: a.timestamp
-      }))
-    }), {
-      headers: {
-        'Content-Type': 'application/json',
-        ...corsHeaders
-      }
-    });
-  } catch (error: any) {
-    const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
-    const processingTime = Date.now() - startTime;
-    console.error('Error in ai-chat function:', error);
-
-    let userFriendlyMessage = 'I apologize, but I encountered an unexpected error while processing your request. Please try again.';
-
-    if (error.message?.includes('GEMINI_API_KEY')) {
-      userFriendlyMessage = 'The AI service is not properly configured. Please contact support.';
-    } else if (error.message?.includes('FILE_PROCESSOR')) {
-      userFriendlyMessage = 'I had trouble processing your files. Please try uploading them again.';
-    } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-      userFriendlyMessage = 'I\'m having trouble connecting to the AI service. Please check your internet connection and try again.';
-    } else if (error.message?.includes('timeout')) {
-      userFriendlyMessage = 'The request took too long to process. Please try again with a shorter message or fewer files.';
-    }
-
-    if (requestData?.userId && requestData?.sessionId) {
-      try {
-        await saveChatMessage({
-          userId: requestData.userId,
-          sessionId: requestData.sessionId,
-          content: userFriendlyMessage,
-          role: 'assistant',
-          isError: true,
-          attachedDocumentIds: uploadedDocumentIds.length > 0 ? uploadedDocumentIds : null,
-          attachedNoteIds: requestData.attachedNoteIds?.length > 0 ? requestData.attachedNoteIds : null,
-          imageUrl: userMessageImageUrl || requestData.imageUrl,
-          imageMimeType: userMessageImageMimeType || requestData.imageMimeType
-        });
-      } catch (dbError) {
-        console.error('Failed to save error message to database:', dbError);
-      }
-    }
-
-    return new Response(JSON.stringify({
-      error: userFriendlyMessage,
-      errorDetails: error.message || 'Internal Server Error',
-      processingTime,
-      filesProcessed: hasFiles ? rawFiles.length || jsonFiles.length : 0,
-      success: false
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        ...corsHeaders
-      }
-    });
-  }
-});
+  });

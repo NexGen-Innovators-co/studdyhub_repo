@@ -78,7 +78,7 @@ export const NotesList: React.FC<NotesListProps> = ({
     observerRef.current = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !isLoadingMore && !isLoading) {
-          console.log('Load more triggered!');
+          //console.log('Load more triggered!');
           onLoadMore();
         }
       },

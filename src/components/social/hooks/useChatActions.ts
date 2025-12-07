@@ -49,7 +49,7 @@ export const useChatActions = (currentUserId: string | null) => {
             toast.success('Chat session created');
             return newSession.id;
         } catch (error) {
-            //console.error('Error creating chat session:', error);
+            ////console.error('Error creating chat session:', error);
             toast.error('Failed to create chat session');
             return null;
         } finally {
@@ -101,8 +101,8 @@ export const useChatActions = (currentUserId: string | null) => {
                         type: file.type.startsWith('image/')
                             ? 'image'
                             : file.type.startsWith('video/')
-                            ? 'video'
-                            : 'document',
+                                ? 'video'
+                                : 'document',
                         url: publicUrl,
                         filename: file.name,
                         size_bytes: file.size,
@@ -135,7 +135,7 @@ export const useChatActions = (currentUserId: string | null) => {
                         })
                         .select()
                         .single();
-                    
+
                     if (mediaRecord) mediaRecords.push(mediaRecord);
                 }
 
@@ -170,7 +170,7 @@ export const useChatActions = (currentUserId: string | null) => {
                 };
             }
         } catch (error) {
-            //console.error('Error sending message:', error);
+            ////console.error('Error sending message:', error);
             toast.error('Failed to send message');
             return null;
         } finally {
@@ -209,7 +209,7 @@ export const useChatActions = (currentUserId: string | null) => {
             toast.success(`${typeNames[resourceType] || 'Resource'} shared`);
             return true;
         } catch (error) {
-            //console.error('Error sharing resource:', error);
+            ////console.error('Error sharing resource:', error);
             toast.error('Failed to share resource');
             return false;
         }
@@ -271,7 +271,7 @@ export const useChatActions = (currentUserId: string | null) => {
                 resources: resourceRecord ? [resourceRecord] : [],
             };
         } catch (error) {
-            //console.error('Error sending message with resource:', error);
+            ////console.error('Error sending message with resource:', error);
             toast.error('Failed to send message');
             return null;
         } finally {

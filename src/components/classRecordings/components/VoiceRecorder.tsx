@@ -112,7 +112,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
 
       return true; // If permissions API not available, assume we can try
     } catch (err) {
-      console.error('Error checking microphone permission:', err);
+      //console.error('Error checking microphone permission:', err);
       return false;
     }
   };
@@ -127,7 +127,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
       }
       return true;
     } catch (err) {
-      console.error('Error checking devices:', err);
+      //console.error('Error checking devices:', err);
       return false;
     }
   };
@@ -224,7 +224,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
       };
 
       mediaRecorderRef.current.onerror = (event) => {
-        console.error('MediaRecorder error:', event);
+        //console.error('MediaRecorder error:', event);
         toast.error('Recording error occurred. Please try again.');
         setIsRecording(false);
         stopTimer();
@@ -239,12 +239,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
       startTimer();
       toast.info('Recording started...');
     } catch (err: any) {
-      console.error('Failed to start recording:', {
-        name: err.name,
-        message: err.message,
-        browser: browserSupport.browserName,
-        userAgent: navigator.userAgent,
-      });
 
       let errorMessage = 'Failed to start recording. ';
 
@@ -280,7 +274,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
   const playRecording = () => {
     if (audioUrl && audioPlayerRef.current) {
       audioPlayerRef.current.play().catch(err => {
-        console.error('Error playing audio:', err);
+        //console.error('Error playing audio:', err);
         toast.error('Could not play recording. Try downloading it instead.');
       });
       setIsPlaying(true);
@@ -339,7 +333,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
         clearRecording();
         toast.success('Recording saved and sent for processing!');
       } catch (error) {
-        console.error('Error saving recording:', error);
+        //console.error('Error saving recording:', error);
         toast.error('Failed to save recording.');
       } finally {
         setIsSaving(false);

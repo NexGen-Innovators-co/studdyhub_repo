@@ -223,7 +223,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   // Enhanced save handler
   // Enhanced save handler
   const handleSave = useCallback(() => {
-    //console.log("Save triggered - Getting current markdown from editor...");
+    ////console.log("Save triggered - Getting current markdown from editor...");
     if (!content) {
       toast.error("No content to save");
       return;
@@ -231,7 +231,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     // Use the markdown from the ref (which includes diagrams) or fallback to content state
     setIsloading(true);
     const markdownToSave = content;
-    //console.log("Markdown to save length:", markdownToSave.length);
+    ////console.log("Markdown to save length:", markdownToSave.length);
 
     const updatedNote: Note = {
       ...note,
@@ -258,14 +258,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   // Enhanced content change handler
   const handleContentChange = useCallback((newContent: string) => {
-    //console.log("Content changed in editor, length:", newContent.length);
+    ////console.log("Content changed in editor, length:", newContent.length);
     setContent(newContent);
     setIsContentModified(true);
   }, []);
 
   // Add a useEffect to log content changes for debugging
   useEffect(() => {
-    //console.log("Content state updated, length:", content.length);
+    ////console.log("Content state updated, length:", content.length);
   }, [content]);
 
   // Add auto-save or manual save indicator in the UI if needed
@@ -338,12 +338,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    //console.log("🚀 handleFileSelect triggered!");
+    ////console.log("🚀 handleFileSelect triggered!");
     const file = event.target.files?.[0];
 
     if (!file || !userProfile) {
       if (!userProfile) {
-        console.error("❌ User profile is missing");
+        //console.error("❌ User profile is missing");
         toast.error("Cannot upload: User profile is missing.");
       }
       return;
@@ -368,14 +368,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     // Route to audio handler if audio file
     if (allowedAudioTypes.includes(file.type)) {
-      //console.log("🎵 Routing to audio file handler");
+      ////console.log("🎵 Routing to audio file handler");
       handleAudioFileSelect(event);
       return;
     }
 
     // Validate document type
     if (!allowedDocumentTypes.includes(file.type)) {
-      console.error("❌ Unsupported file type:", file.type);
+      //console.error("❌ Unsupported file type:", file.type);
       toast.error('Unsupported file type. Please upload a PDF, TXT, Word document, or an audio file.');
       if (event.target) event.target.value = '';
       return;
@@ -793,7 +793,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     if (typeof window.html2pdf === 'undefined') {
       toast.error('PDF generation library not loaded. Please try again later.', { id: 'pdf-download' });
-      console.error('html2pdf.js is not loaded. Please ensure it is included in your project.');
+      //console.error('html2pdf.js is not loaded. Please ensure it is included in your project.');
       return;
     }
 
@@ -929,7 +929,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       })
       .catch((error: any) => {
         toast.error('Failed to generate PDF.', { id: 'pdf-download' });
-        console.error('Error generating PDF:', error);
+        //console.error('Error generating PDF:', error);
         if (document.body.contains(tempContainer)) {
           document.body.removeChild(tempContainer);
         }
@@ -1011,7 +1011,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleAudioFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    //console.log("handleAudioFileSelect triggered!");
+    ////console.log("handleAudioFileSelect triggered!");
     toast.info("Audio file selected, starting upload...");
     const file = event.target.files?.[0];
     if (!file || !userProfile) {

@@ -74,7 +74,7 @@ const CreateGroupFormDialog: React.FC<{
 
     try {
       // In a real app, you would use a toast notification library here.
-      // For this environment, we rely on console logs or state update.
+      // For this environment, we rely on //console logs or state update.
       const newGroup = await onCreate({ name, description, privacy });
       if (newGroup) {
         // toast.success(`Group "${newGroup.name}" created successfully!`);
@@ -224,16 +224,16 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
         {currentUser && (
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button 
-                onClick={() => setIsCreateDialogOpen(true)} 
+              <Button
+                onClick={() => setIsCreateDialogOpen(true)}
                 className="bg-white text-blue-600 hover:bg-blue-50 border-none shadow-none rounded-full"
               >
                 <Plus className="mr-2 h-4 w-4" /> Create Group
               </Button>
             </DialogTrigger>
-            <CreateGroupFormDialog 
-              onCreate={onCreateGroup} 
-              onClose={() => setIsCreateDialogOpen(false)} 
+            <CreateGroupFormDialog
+              onCreate={onCreateGroup}
+              onClose={() => setIsCreateDialogOpen(false)}
             />
           </Dialog>
         )}

@@ -113,7 +113,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
   const isMobile = useMobileDetection();
   const speechQueueRef = useRef<string[]>([]);
   const isSpeakingRef = useRef(false);
-  
+
   // TTS State with availability check
   const [tts, setTts] = useState<TTSState>({
     isSpeaking: false,
@@ -127,19 +127,19 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
   useEffect(() => {
     const checkTTSAvailability = () => {
       const isAvailable = 'speechSynthesis' in window;
-      console.log('TTS Available:', isAvailable);
+      //console.log('TTS Available:', isAvailable);
       setTts(prev => ({ ...prev, isAvailable }));
 
       if (isAvailable) {
         // Preload voices
         const voices = window.speechSynthesis.getVoices();
-        console.log('Available voices:', voices);
+        //console.log('Available voices:', voices);
 
         // If voices aren't loaded yet, wait for them
         if (voices.length === 0) {
           window.speechSynthesis.onvoiceschanged = () => {
             const loadedVoices = window.speechSynthesis.getVoices();
-            console.log('Voices loaded:', loadedVoices);
+            //console.log('Voices loaded:', loadedVoices);
             setTts(prev => ({ ...prev, isAvailable: loadedVoices.length > 0 }));
           };
         }
@@ -155,19 +155,19 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
   // Improved TTS function with queue system
   const speakText = useCallback((text: string) => {
     if (!tts.isEnabled || !tts.isAvailable || !window.speechSynthesis) {
-      console.log('TTS not available or disabled');
+      //console.log('TTS not available or disabled');
       return;
     }
-    
+
     // Add to queue
     speechQueueRef.current.push(text);
-    
+
     // If already speaking, just add to queue and return
     if (isSpeakingRef.current) {
-      console.log('Added to speech queue:', text.substring(0, 50) + '...');
+      //console.log('Added to speech queue:', text.substring(0, 50) + '...');
       return;
     }
-    
+
     // Process the queue
     processSpeechQueue();
   }, [tts.isEnabled, tts.isAvailable]);
@@ -184,47 +184,47 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
 
     try {
       const utterance = new SpeechSynthesisUtterance(text);
-      
+
       // Configure voice settings
       utterance.rate = 0.9; // Slightly slower for better comprehension
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
-      
+
       // Get available voices
       const voices = window.speechSynthesis.getVoices();
-      
+
       // Voice selection logic
-      const preferredVoice = voices.find(voice => 
-        voice.lang.includes('en') && 
-        (voice.name.includes('Google') || 
-         voice.name.includes('Samantha') || 
-         voice.name.includes('Microsoft') ||
-         voice.name.includes('Karen') ||
-         voice.name.includes('Daniel'))
+      const preferredVoice = voices.find(voice =>
+        voice.lang.includes('en') &&
+        (voice.name.includes('Google') ||
+          voice.name.includes('Samantha') ||
+          voice.name.includes('Microsoft') ||
+          voice.name.includes('Karen') ||
+          voice.name.includes('Daniel'))
       );
-      
+
       if (preferredVoice) {
         utterance.voice = preferredVoice;
-        console.log('Using voice:', preferredVoice.name);
+        //console.log('Using voice:', preferredVoice.name);
       } else if (voices.length > 0) {
         // Use first available English voice
         const englishVoice = voices.find(voice => voice.lang.includes('en'));
         if (englishVoice) {
           utterance.voice = englishVoice;
-          console.log('Using English voice:', englishVoice.name);
+          //console.log('Using English voice:', englishVoice.name);
         } else {
           utterance.voice = voices[0];
-          console.log('Using default voice:', voices[0].name);
+          //console.log('Using default voice:', voices[0].name);
         }
       }
 
       utterance.onstart = () => {
-        console.log('Speech started successfully');
+        //console.log('Speech started successfully');
         setTts(prev => ({ ...prev, isSpeaking: true, currentUtterance: utterance, isPaused: false }));
       };
 
       utterance.onend = () => {
-        console.log('Speech ended normally');
+        //console.log('Speech ended normally');
         // Remove the completed speech from queue
         speechQueueRef.current.shift();
         // Process next in queue
@@ -232,7 +232,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
       };
 
       utterance.onerror = (event) => {
-        console.error('Speech error:', event.error, event.type);
+        //console.error('Speech error:', event.error, event.type);
         // Remove the failed speech from queue
         speechQueueRef.current.shift();
         // Process next in queue after a delay
@@ -247,11 +247,11 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
         setTts(prev => ({ ...prev, isPaused: false }));
       };
 
-      console.log('Attempting to speak text:', text.substring(0, 50) + '...');
+      //console.log('Attempting to speak text:', text.substring(0, 50) + '...');
       window.speechSynthesis.speak(utterance);
-      
+
     } catch (error) {
-      console.error('Error with speech synthesis:', error);
+      //console.error('Error with speech synthesis:', error);
       speechQueueRef.current.shift();
       setTimeout(() => processSpeechQueue(), 100);
     }
@@ -328,7 +328,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
     if (isOpen && isPlaying && currentStepData && tts.isEnabled) {
       // Clear any existing speech
       stopSpeaking();
-      
+
       // Small delay to ensure DOM is updated
       setTimeout(() => {
         const textToSpeak = `${currentStepData.title}. ${currentStepData.description}`;
@@ -427,7 +427,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
   // Recalculate position when step changes or window resizes
   useEffect(() => {
     calculatePosition();
-    
+
     const handleResize = () => {
       calculatePosition();
     };
@@ -614,7 +614,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
                   >
                     {tts.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
                   </Button>
-                  
+
                 </>
               )}
 
@@ -623,8 +623,8 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
                 size="sm"
                 onClick={toggleTTS}
                 className={`h-8 w-8 p-0 ${tts.isEnabled && tts.isAvailable
-                    ? 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900'
-                    : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  ? 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900'
+                  : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                   }`}
                 title={tts.isAvailable
                   ? (tts.isEnabled ? 'Disable Voice' : 'Enable Voice')
@@ -648,7 +648,7 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
                 </Button>
               )}
 
-              
+
               <Button
                 variant="ghost"
                 size="sm"
@@ -816,10 +816,10 @@ export const UniversalTutorial: React.FC<UniversalTutorialProps> = ({
                       setCurrentStep(index);
                     }}
                     className={`h-2 rounded-full transition-all duration-300 ${index === currentStep
-                        ? 'w-8 bg-blue-600'
-                        : index < currentStep
-                          ? 'w-2 bg-green-500'
-                          : 'w-2 bg-gray-300 dark:bg-gray-600'
+                      ? 'w-8 bg-blue-600'
+                      : index < currentStep
+                        ? 'w-2 bg-green-500'
+                        : 'w-2 bg-gray-300 dark:bg-gray-600'
                       }`}
                     title={`Step ${index + 1}`}
                   />

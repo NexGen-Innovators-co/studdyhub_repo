@@ -36,7 +36,7 @@ export default async function handler(req, res) {
         res.setHeader('Content-Type', 'application/json');
         res.status(200).json(seoData);
     } catch (error) {
-        console.error('SEO data fetch error:', error);
+        //console.error('SEO data fetch error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 }

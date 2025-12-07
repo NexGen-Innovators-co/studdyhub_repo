@@ -56,7 +56,7 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
       if (error) throw error;
       setNotes(data || []);
     } catch (error) {
-      console.error('Error fetching notes:', error);
+      //console.error('Error fetching notes:', error);
     } finally {
       setIsLoading(false);
     }
@@ -190,8 +190,8 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p className="font-medium">No notes found</p>
               <p className="text-sm mt-1">
-                {searchQuery || selectedCategory !== 'all' 
-                  ? 'Try adjusting your search or filters' 
+                {searchQuery || selectedCategory !== 'all'
+                  ? 'Try adjusting your search or filters'
                   : 'Create some notes first to generate quizzes'
                 }
               </p>
@@ -202,25 +202,23 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
               const isExpanded = expandedNote === note.id;
 
               return (
-                <Card 
-                  key={note.id} 
-                  className={`cursor-pointer transition-all border-2 ${
-                    isSelected 
-                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
+                <Card
+                  key={note.id}
+                  className={`cursor-pointer transition-all border-2 ${isSelected
+                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
-                  }`}
+                    }`}
                   onClick={() => toggleNoteSelection(note)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-1 ${
-                        isSelected 
-                          ? 'bg-green-500 border-green-500 text-white' 
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-1 ${isSelected
+                          ? 'bg-green-500 border-green-500 text-white'
                           : 'border-gray-300'
-                      }`}>
+                        }`}>
                         {isSelected && <Check className="h-3 w-3" />}
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between mb-2">
                           <div>
@@ -250,8 +248,8 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
                           <div className="mt-2">
                             {previewMode === 'rendered' ? (
                               <div className="border rounded-lg p-3 bg-white dark:bg-gray-800 max-h-48 overflow-y-auto">
-                                <MarkdownRenderer 
-                                  content={note.content} 
+                                <MarkdownRenderer
+                                  content={note.content}
                                   className="text-sm"
                                 />
                               </div>
@@ -260,7 +258,7 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
                                 {note.content}
                               </pre>
                             )}
-                            
+
                             {note.ai_summary && (
                               <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs">
                                 <strong>AI Summary:</strong> {note.ai_summary}

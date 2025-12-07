@@ -44,7 +44,7 @@ try {
     lowlight.registerLanguage('typescript', typescript as LanguageFn);
     lowlight.registerLanguage('ts', typescript as LanguageFn);
 } catch (error) {
-    console.warn('Error registering syntax highlighting languages in MarkdownRenderer:', error);
+    //console.warn('Error registering syntax highlighting languages in MarkdownRenderer:', error);
 }
 
 Chart.register(...registerables);
@@ -63,7 +63,7 @@ export class CodeBlockErrorBoundary extends React.Component<
     }
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-        console.error('CodeBlock error:', error, errorInfo);
+        //console.error('CodeBlock error:', error, errorInfo);
     }
 
     render() {

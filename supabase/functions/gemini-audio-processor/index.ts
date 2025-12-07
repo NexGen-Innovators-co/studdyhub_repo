@@ -147,7 +147,7 @@ serve(async (req) => {
 
       if (!translationResponse.ok) {
         const errorText = await translationResponse.text();
-        console.error(`Gemini translation failed: ${translationResponse.status} - ${errorText}`);
+        //console.error(`Gemini translation failed: ${translationResponse.status} - ${errorText}`);
         // Don't throw, just log and proceed without translation
       } else {
         const translationResult = await translationResponse.json();
@@ -162,7 +162,7 @@ serve(async (req) => {
     });
 
   } catch (error: any) { // Explicitly type error as 'any' for easier access to .message
-    console.error('Error processing audio:', error);
+    //console.error('Error processing audio:', error);
     return new Response(JSON.stringify({ error: error.message || 'An unknown error occurred' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,

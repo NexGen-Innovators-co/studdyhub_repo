@@ -106,7 +106,7 @@ Do NOT interpret the meaning, provide educational context, highlight key concept
             updated_at: new Date().toISOString()
         }).eq('id', documentId).eq('user_id', userId).select().single();
         if (error) {
-            console.error('Error updating document with image description:', error);
+            //console.error('Error updating document with image description:', error);
             await supabaseServiceRoleClient.from('documents').update({
                 processing_status: 'failed',
                 processing_error: error.message,
@@ -127,7 +127,7 @@ Do NOT interpret the meaning, provide educational context, highlight key concept
             }
         });
     } catch (error) {
-        console.error('Error in image-analyzer function:', error);
+        //console.error('Error in image-analyzer function:', error);
         let errorResponse = {
             error: error.message || 'Internal Server Error',
             timestamp: new Date().toISOString()

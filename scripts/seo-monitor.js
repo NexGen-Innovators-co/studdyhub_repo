@@ -80,7 +80,7 @@ async function generateSEOReport() {
         JSON.stringify(report, null, 2)
     );
 
-    console.log('SEO Report Generated:', report);
+    //console.log('SEO Report Generated:', report);
 }
 
 // Run weekly via cron job

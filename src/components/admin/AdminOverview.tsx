@@ -106,7 +106,7 @@ const AdminOverview = () => {
         engagementRate: totalUsers > 0 ? ((activeUsers7d.count || 0) / totalUsers) * 100 : 0,
       });
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      //console.error('Error fetching stats:', error);
     } finally {
       setLoading(false);
     }
@@ -181,7 +181,7 @@ const AdminOverview = () => {
         activityTrend
       });
     } catch (error) {
-      console.error('Error fetching chart data:', error);
+      //console.error('Error fetching chart data:', error);
     }
   };
 
@@ -317,8 +317,8 @@ const AdminOverview = () => {
                 key={range}
                 onClick={() => setTimeRange(range)}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${timeRange === range
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                   }`}
               >
                 {range}
@@ -360,8 +360,8 @@ const AdminOverview = () => {
                     <p className="text-xs text-gray-500 dark:text-gray-500">{card.subtitle}</p>
                     {card.trend !== 0 && (
                       <div className={`flex items-center gap-1 text-xs font-medium ${card.trend > 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
                         }`}>
                         {card.trend > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
                         {Math.abs(card.trend).toFixed(1)}%

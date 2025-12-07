@@ -241,7 +241,7 @@ export const useSocialData = (
         setHasMorePosts(false);
       }
     } catch (error) {
-      //console.error('Error fetching posts:', error);
+      ////console.error('Error fetching posts:', error);
       toast.error('Failed to load posts');
     } finally {
       setIsLoading(false);
@@ -312,7 +312,7 @@ export const useSocialData = (
         setHasMoreTrendingPosts(false);
       }
     } catch (error) {
-      //console.error('Error fetching trending posts:', error);
+      ////console.error('Error fetching trending posts:', error);
       toast.error('Failed to load trending posts');
     } finally {
       setIsLoading(false);
@@ -375,7 +375,7 @@ export const useSocialData = (
         setHasMoreUserPosts(false);
       }
     } catch (error) {
-      //console.error('Error fetching user posts:', error);
+      ////console.error('Error fetching user posts:', error);
       toast.error('Failed to load user posts');
     } finally {
       setIsLoadingUserPosts(false);
@@ -461,7 +461,7 @@ export const useSocialData = (
 
       setLikedPosts(transformedPosts);
     } catch (error) {
-      //console.error('Error fetching liked posts:', error);
+      ////console.error('Error fetching liked posts:', error);
       toast.error('Failed to load liked posts');
     } finally {
       setIsLoadingLikedPosts(false);
@@ -547,7 +547,7 @@ export const useSocialData = (
 
       setBookmarkedPosts(transformedPosts);
     } catch (error) {
-      //console.error('Error fetching bookmarked posts:', error);
+      ////console.error('Error fetching bookmarked posts:', error);
       toast.error('Failed to load bookmarked posts');
     } finally {
       setIsLoadingBookmarkedPosts(false);
@@ -604,7 +604,7 @@ export const useSocialData = (
 
       saveToCache(CACHE_KEYS.GROUPS, reset ? groupsWithDetails : [...groups, ...groupsWithDetails]);
     } catch (err) {
-      //console.error('Error fetching groups:', err);
+      ////console.error('Error fetching groups:', err);
       toast.error('Failed to load groups');
     } finally {
       setIsLoadingGroups(false);
@@ -656,7 +656,7 @@ export const useSocialData = (
             .single();
 
           if (createError) {
-            //console.error('Error creating social user:', createError);
+            ////console.error('Error creating social user:', createError);
             toast.error('Failed to initialize social profile');
             setIsLoading(false);
             setIsLoadingGroups(false);
@@ -670,7 +670,7 @@ export const useSocialData = (
           setIsLoadingGroups(false);
         }
       } catch (error) {
-        //console.error('Error initializing social user:', error);
+        ////console.error('Error initializing social user:', error);
         setIsLoading(false);
         setIsLoadingGroups(false);
       }
@@ -693,7 +693,7 @@ export const useSocialData = (
 
         setViewedPostIds(new Set(data.map((view: { post_id: string }) => view.post_id)));
       } catch (err) {
-        //console.error('Error fetching viewed posts:', err);
+        ////console.error('Error fetching viewed posts:', err);
       }
     };
 
@@ -809,7 +809,7 @@ export const useSocialData = (
                 toast.info('You have a new notification!');
               }
             } catch (error) {
-              //console.error('Error fetching notification details:', error);
+              ////console.error('Error fetching notification details:', error);
               if (onNotificationReceived) {
                 onNotificationReceived(payload.new);
               }
@@ -876,7 +876,7 @@ export const useSocialData = (
               });
             }
           } catch (err) {
-            //console.error('Realtime posts handler error:', err);
+            ////console.error('Realtime posts handler error:', err);
           }
         }
       )
@@ -1046,7 +1046,7 @@ export const useSocialData = (
         is_bookmarked: isBookmarked
       };
     } catch (error) {
-      //console.error('Error fetching post details:', error);
+      ////console.error('Error fetching post details:', error);
       return null;
     }
   };
@@ -1201,7 +1201,7 @@ export const useSocialData = (
   //       setHasMorePosts(false);
   //     }
   //   } catch (error) {
-  //     console.error('Error fetching posts:', error);
+  //     //console.error('Error fetching posts:', error);
   //     toast.error('Failed to load posts');
   //   } finally {
   //     setIsLoading(false);
@@ -1319,10 +1319,10 @@ export const useSocialData = (
 
   //     if (selectedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
   //       setHasMoreTrendingPosts(false);
-  //       console.log('No more trending posts to load.');
+  //       //console.log('No more trending posts to load.');
   //     }
   //   } catch (error) {
-  //     console.error('Error fetching trending posts:', error);
+  //     //console.error('Error fetching trending posts:', error);
   //     toast.error('Failed to load trending posts');
   //   } finally {
   //     setIsLoading(false);
@@ -1362,7 +1362,7 @@ export const useSocialData = (
   //     if (!postsData || postsData.length === 0) {
   //       setHasMoreUserPosts(false);
   //       setIsLoadingUserPosts(false);
-  //       console.log('No more user posts to load.');
+  //       //console.log('No more user posts to load.');
   //       return;
   //     }
 
@@ -1414,17 +1414,17 @@ export const useSocialData = (
   //       setUserPosts(prev => uniqueById([...prev, ...transformedPosts]));
   //       setUserPostsOffset(prev => prev + transformedPosts.length);
   //     }
-  //     console.log('Fetched user posts:', transformedPosts.length);
+  //     //console.log('Fetched user posts:', transformedPosts.length);
   //     if (transformedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
   //       setHasMoreUserPosts(false);
-  //       console.log('No more user posts to load.');
+  //       //console.log('No more user posts to load.');
   //     }
   //   } catch (error) {
-  //     console.error('Error fetching user posts:', error);
+  //     //console.error('Error fetching user posts:', error);
   //     toast.error('Failed to load user posts');
   //   } finally {
   //     setIsLoadingUserPosts(false);
-  //     console.log('Finished fetching user posts.');
+  //     //console.log('Finished fetching user posts.');
   //   }
   // }, [hasMoreUserPosts, isLoadingUserPosts, userPostsOffset]);
 
@@ -1477,12 +1477,12 @@ export const useSocialData = (
 
   //     saveToCache(CACHE_KEYS.GROUPS, reset ? groupsWithDetails : [...groups, ...groupsWithDetails]);
   //   } catch (err) {
-  //     console.error('Error fetching groups:', err);
+  //     //console.error('Error fetching groups:', err);
   //     toast.error('Failed to load groups');
   //   } finally {
   //     setIsLoadingGroups(false);
   //     setIsLoadingMoreGroups(false);
-  //     console.log('Finished fetching groups.');
+  //     //console.log('Finished fetching groups.');
   //   }
   // }, [groupsOffset, groups]);
   const fetchTrendingHashtags = async () => {
@@ -1497,7 +1497,7 @@ export const useSocialData = (
         setTrendingHashtags(data);
       }
     } catch (error) {
-      //console.error('Error fetching trending hashtags:', error);
+      ////console.error('Error fetching trending hashtags:', error);
     }
   };
   // const fetchLikedPosts = useCallback(async () => {
@@ -1579,7 +1579,7 @@ export const useSocialData = (
 
   //     setLikedPosts(transformedPosts);
   //   } catch (error) {
-  //     console.error('Error fetching liked posts:', error);
+  //     //console.error('Error fetching liked posts:', error);
   //     toast.error('Failed to load liked posts');
   //   } finally {
   //     setIsLoadingLikedPosts(false);
@@ -1666,7 +1666,7 @@ export const useSocialData = (
 
   //     setBookmarkedPosts(transformedPosts);
   //   } catch (error) {
-  //     console.error('Error fetching bookmarked posts:', error);
+  //     //console.error('Error fetching bookmarked posts:', error);
   //     toast.error('Failed to load bookmarked posts');
   //   } finally {
   //     setIsLoadingBookmarkedPosts(false);
@@ -1743,7 +1743,7 @@ export const useSocialData = (
           setHasMoreSuggestedUsers(false);
         }
       } catch (err) {
-        //console.error('Error fetching suggested users:', err);
+        ////console.error('Error fetching suggested users:', err);
         if (reset || suggestedUsers.length === 0) {
           toast.error('Failed to load suggested users');
         }

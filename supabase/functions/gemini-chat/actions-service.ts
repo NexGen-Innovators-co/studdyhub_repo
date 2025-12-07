@@ -26,12 +26,12 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('title', `%${noteTitle}%`)
                     .limit(1);
-                
+
                 return notes?.[0]?.id || null;
             }
             return note.id;
         } catch (error) {
-            console.error('[ActionService] Error finding note:', error);
+            //console.error('[ActionService] Error finding note:', error);
             return null;
         }
     }
@@ -53,12 +53,12 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('title', `%${documentTitle}%`)
                     .limit(1);
-                
+
                 return documents?.[0]?.id || null;
             }
             return document.id;
         } catch (error) {
-            console.error('[ActionService] Error finding document:', error);
+            //console.error('[ActionService] Error finding document:', error);
             return null;
         }
     }
@@ -79,12 +79,12 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('name', `%${folderName}%`)
                     .limit(1);
-                
+
                 return folders?.[0]?.id || null;
             }
             return folder.id;
         } catch (error) {
-            console.error('[ActionService] Error finding folder:', error);
+            //console.error('[ActionService] Error finding folder:', error);
             return null;
         }
     }
@@ -105,12 +105,12 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('title', `%${quizTitle}%`)
                     .limit(1);
-                
+
                 return quizzes?.[0]?.id || null;
             }
             return quiz.id;
         } catch (error) {
-            console.error('[ActionService] Error finding quiz:', error);
+            //console.error('[ActionService] Error finding quiz:', error);
             return null;
         }
     }
@@ -131,12 +131,12 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('goal_text', `%${goalText}%`)
                     .limit(1);
-                
+
                 return goals?.[0] || null;
             }
             return goal;
         } catch (error) {
-            console.error('[ActionService] Error finding learning goal:', error);
+            //console.error('[ActionService] Error finding learning goal:', error);
             return null;
         }
     }
@@ -157,12 +157,12 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('title', `%${itemTitle}%`)
                     .limit(1);
-                
+
                 return items?.[0] || null;
             }
             return item;
         } catch (error) {
-            console.error('[ActionService] Error finding schedule item:', error);
+            //console.error('[ActionService] Error finding schedule item:', error);
             return null;
         }
     }
@@ -193,11 +193,11 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error creating note:', error);
+                //console.error('[ActionService] Error creating note:', error);
                 return { success: false, error: error.message };
             }
 
-            console.log(`[ActionService] Created note: "${data.title}" for user ${userId}`);
+            //console.log(`[ActionService] Created note: "${data.title}" for user ${userId}`);
             return {
                 success: true,
                 note: data,
@@ -205,7 +205,7 @@ export class StuddyHubActionsService {
                 xp_reward: 10
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception creating note:', error);
+            //console.error('[ActionService] Exception creating note:', error);
             return { success: false, error: 'Failed to create note' };
         }
     }
@@ -234,13 +234,13 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error updating note:', error);
+                //console.error('[ActionService] Error updating note:', error);
                 return { success: false, error: error.message };
             }
 
             return { success: true, note: data, message: `✏️ Updated note: "${data.title}"` };
         } catch (error: any) {
-            console.error('[ActionService] Exception updating note:', error);
+            //console.error('[ActionService] Exception updating note:', error);
             return { success: false, error: 'Failed to update note' };
         }
     }
@@ -259,13 +259,13 @@ export class StuddyHubActionsService {
                 .eq('user_id', userId);
 
             if (error) {
-                console.error('[ActionService] Error deleting note:', error);
+                //console.error('[ActionService] Error deleting note:', error);
                 return { success: false, error: error.message };
             }
 
             return { success: true, message: `🗑️ Deleted note: "${noteTitle}"`, xp_reward: 5 };
         } catch (error: any) {
-            console.error('[ActionService] Exception deleting note:', error);
+            //console.error('[ActionService] Exception deleting note:', error);
             return { success: false, error: 'Failed to delete note' };
         }
     }
@@ -274,7 +274,7 @@ export class StuddyHubActionsService {
         try {
             const noteId = await this.getNoteIdByTitle(userId, noteTitle);
             const documentId = await this.getDocumentIdByTitle(userId, documentTitle);
-            
+
             if (!noteId) return { success: false, error: `Note "${noteTitle}" not found` };
             if (!documentId) return { success: false, error: `Document "${documentTitle}" not found` };
 
@@ -290,7 +290,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error linking document:', error);
+                //console.error('[ActionService] Error linking document:', error);
                 return { success: false, error: error.message };
             }
 
@@ -300,7 +300,7 @@ export class StuddyHubActionsService {
                 xp_reward: 5
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception linking document:', error);
+            //console.error('[ActionService] Exception linking document:', error);
             return { success: false, error: 'Failed to link document' };
         }
     }
@@ -333,7 +333,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error creating folder:', error);
+                //console.error('[ActionService] Error creating folder:', error);
                 return { success: false, error: error.message };
             }
 
@@ -344,7 +344,7 @@ export class StuddyHubActionsService {
                 xp_reward: 15
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception creating folder:', error);
+            //console.error('[ActionService] Exception creating folder:', error);
             return { success: false, error: 'Failed to create folder' };
         }
     }
@@ -353,7 +353,7 @@ export class StuddyHubActionsService {
         try {
             const documentId = await this.getDocumentIdByTitle(userId, documentTitle);
             const folderId = await this.getFolderIdByName(userId, folderName);
-            
+
             if (!documentId) return { success: false, error: `Document "${documentTitle}" not found` };
             if (!folderId) return { success: false, error: `Folder "${folderName}" not found` };
 
@@ -382,7 +382,7 @@ export class StuddyHubActionsService {
                 .eq('user_id', userId);
 
             if (error) {
-                console.error('[ActionService] Error adding document to folder:', error);
+                //console.error('[ActionService] Error adding document to folder:', error);
                 return { success: false, error: error.message };
             }
 
@@ -392,7 +392,7 @@ export class StuddyHubActionsService {
                 xp_reward: 5
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception adding document to folder:', error);
+            //console.error('[ActionService] Exception adding document to folder:', error);
             return { success: false, error: 'Failed to add document to folder' };
         }
     }
@@ -427,7 +427,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error creating schedule item:', error);
+                //console.error('[ActionService] Error creating schedule item:', error);
                 return { success: false, error: error.message };
             }
 
@@ -438,7 +438,7 @@ export class StuddyHubActionsService {
                 xp_reward: 20
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception creating schedule item:', error);
+            //console.error('[ActionService] Exception creating schedule item:', error);
             return { success: false, error: 'Failed to create schedule item' };
         }
     }
@@ -462,13 +462,13 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error updating schedule item:', error);
+                //console.error('[ActionService] Error updating schedule item:', error);
                 return { success: false, error: error.message };
             }
 
             return { success: true, item: data, message: `✏️ Updated schedule item: "${data.title}"` };
         } catch (error: any) {
-            console.error('[ActionService] Exception updating schedule item:', error);
+            //console.error('[ActionService] Exception updating schedule item:', error);
             return { success: false, error: 'Failed to update schedule item' };
         }
     }
@@ -487,13 +487,13 @@ export class StuddyHubActionsService {
                 .eq('user_id', userId);
 
             if (error) {
-                console.error('[ActionService] Error deleting schedule item:', error);
+                //console.error('[ActionService] Error deleting schedule item:', error);
                 return { success: false, error: error.message };
             }
 
             return { success: true, message: `🗑️ Deleted schedule item: "${itemTitle}"`, xp_reward: 5 };
         } catch (error: any) {
-            console.error('[ActionService] Exception deleting schedule item:', error);
+            //console.error('[ActionService] Exception deleting schedule item:', error);
             return { success: false, error: 'Failed to delete schedule item' };
         }
     }
@@ -520,7 +520,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error creating quiz:', error);
+                //console.error('[ActionService] Error creating quiz:', error);
                 return { success: false, error: error.message };
             }
 
@@ -531,7 +531,7 @@ export class StuddyHubActionsService {
                 xp_reward: 25
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception creating quiz:', error);
+            //console.error('[ActionService] Exception creating quiz:', error);
             return { success: false, error: 'Failed to create quiz' };
         }
     }
@@ -567,7 +567,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error recording quiz attempt:', error);
+                //console.error('[ActionService] Error recording quiz attempt:', error);
                 return { success: false, error: error.message };
             }
 
@@ -585,7 +585,7 @@ export class StuddyHubActionsService {
                 xp_reward: attemptData.xp_earned
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception recording quiz attempt:', error);
+            //console.error('[ActionService] Exception recording quiz attempt:', error);
             return { success: false, error: 'Failed to record quiz attempt' };
         }
     }
@@ -634,7 +634,7 @@ export class StuddyHubActionsService {
                 .select();
 
             if (error) {
-                console.error('[ActionService] Error creating flashcards:', error);
+                //console.error('[ActionService] Error creating flashcards:', error);
                 return { success: false, error: error.message };
             }
 
@@ -645,7 +645,7 @@ export class StuddyHubActionsService {
                 xp_reward: 15
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception creating flashcards:', error);
+            //console.error('[ActionService] Exception creating flashcards:', error);
             return { success: false, error: 'Failed to create flashcards' };
         }
     }
@@ -681,7 +681,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error creating flashcard:', error);
+                //console.error('[ActionService] Error creating flashcard:', error);
                 return { success: false, error: error.message };
             }
 
@@ -692,7 +692,7 @@ export class StuddyHubActionsService {
                 xp_reward: 5
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception creating flashcard:', error);
+            //console.error('[ActionService] Exception creating flashcard:', error);
             return { success: false, error: 'Failed to create flashcard' };
         }
     }
@@ -745,13 +745,13 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error updating flashcard review:', error);
+                //console.error('[ActionService] Error updating flashcard review:', error);
                 return { success: false, error: error.message };
             }
 
             return { success: true, flashcard: data };
         } catch (error: any) {
-            console.error('[ActionService] Exception updating flashcard review:', error);
+            //console.error('[ActionService] Exception updating flashcard review:', error);
             return { success: false, error: 'Failed to update flashcard review' };
         }
     }
@@ -780,7 +780,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error creating learning goal:', error);
+                //console.error('[ActionService] Error creating learning goal:', error);
                 return { success: false, error: error.message };
             }
 
@@ -791,7 +791,7 @@ export class StuddyHubActionsService {
                 xp_reward: 10
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception creating learning goal:', error);
+            //console.error('[ActionService] Exception creating learning goal:', error);
             return { success: false, error: 'Failed to create learning goal' };
         }
     }
@@ -816,7 +816,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error updating learning goal:', error);
+                //console.error('[ActionService] Error updating learning goal:', error);
                 return { success: false, error: error.message };
             }
 
@@ -827,14 +827,14 @@ export class StuddyHubActionsService {
                 xpReward = 10; // XP for significant progress
             }
 
-            return { 
-                success: true, 
-                goal: data, 
+            return {
+                success: true,
+                goal: data,
                 message: `🎯 Updated goal progress to ${progress}%`,
                 xp_reward: xpReward
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception updating learning goal:', error);
+            //console.error('[ActionService] Exception updating learning goal:', error);
             return { success: false, error: 'Failed to update learning goal' };
         }
     }
@@ -873,7 +873,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error creating recording:', error);
+                //console.error('[ActionService] Error creating recording:', error);
                 return { success: false, error: error.message };
             }
 
@@ -884,7 +884,7 @@ export class StuddyHubActionsService {
                 xp_reward: 30
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception creating recording:', error);
+            //console.error('[ActionService] Exception creating recording:', error);
             return { success: false, error: 'Failed to create recording' };
         }
     }
@@ -949,7 +949,7 @@ export class StuddyHubActionsService {
 
             return { success: true, stats: result };
         } catch (error: any) {
-            console.error('[ActionService] Exception updating user stats:', error);
+            //console.error('[ActionService] Exception updating user stats:', error);
             return { success: false, error: 'Failed to update user stats' };
         }
     }
@@ -972,17 +972,17 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error updating profile:', error);
+                //console.error('[ActionService] Error updating profile:', error);
                 return { success: false, error: error.message };
             }
 
-            return { 
-                success: true, 
+            return {
+                success: true,
                 profile: data,
                 message: `👤 Updated profile preferences`
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception updating profile:', error);
+            //console.error('[ActionService] Exception updating profile:', error);
             return { success: false, error: 'Failed to update profile' };
         }
     }
@@ -1044,7 +1044,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error creating social post:', error);
+                //console.error('[ActionService] Error creating social post:', error);
                 return { success: false, error: error.message };
             }
 
@@ -1055,7 +1055,7 @@ export class StuddyHubActionsService {
                 xp_reward: 20
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception creating social post:', error);
+            //console.error('[ActionService] Exception creating social post:', error);
             return { success: false, error: 'Failed to create social post' };
         }
     }
@@ -1085,7 +1085,7 @@ export class StuddyHubActionsService {
                 .single();
 
             if (error) {
-                console.error('[ActionService] Error awarding achievement:', error);
+                //console.error('[ActionService] Error awarding achievement:', error);
                 return { success: false, error: error.message };
             }
 
@@ -1103,7 +1103,7 @@ export class StuddyHubActionsService {
                 xp_reward: data.badges?.xp_reward || 0
             };
         } catch (error: any) {
-            console.error('[ActionService] Exception awarding achievement:', error);
+            //console.error('[ActionService] Exception awarding achievement:', error);
             return { success: false, error: 'Failed to award achievement' };
         }
     }
@@ -1164,7 +1164,7 @@ export class StuddyHubActionsService {
                 return { success: true, memory: data };
             }
         } catch (error: any) {
-            console.error('[ActionService] Exception updating user memory:', error);
+            //console.error('[ActionService] Exception updating user memory:', error);
             return { success: false, error: 'Failed to update user memory' };
         }
     }
@@ -1217,14 +1217,14 @@ export class StuddyHubActionsService {
         const words = content.toLowerCase().split(/\s+/);
         const commonWords = new Set(['the', 'and', 'for', 'with', 'this', 'that', 'have', 'from']);
         const terms = new Set<string>();
-        
+
         for (const word of words) {
             const cleaned = word.replace(/[^\w]/g, '');
             if (cleaned.length > 4 && !commonWords.has(cleaned)) {
                 terms.add(cleaned);
             }
         }
-        
+
         return Array.from(terms).slice(0, 10);
     }
 
@@ -1285,7 +1285,7 @@ export class StuddyHubActionsService {
                     documentTitle: match[2].trim()
                 })
             },
-            
+
             // FOLDER ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_FOLDER\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
@@ -1305,7 +1305,7 @@ export class StuddyHubActionsService {
                     folderName: match[2].trim()
                 })
             },
-            
+
             // SCHEDULE ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_SCHEDULE\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
@@ -1336,7 +1336,7 @@ export class StuddyHubActionsService {
                     itemTitle: match[1].trim()
                 })
             },
-            
+
             // FLASHCARD ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_FLASHCARDS_FROM_NOTE\|([^|]+)\|(\d+)/,
@@ -1357,7 +1357,7 @@ export class StuddyHubActionsService {
                     hint: match[5].trim() || null
                 })
             },
-            
+
             // LEARNING GOAL ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_LEARNING_GOAL\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
@@ -1377,7 +1377,7 @@ export class StuddyHubActionsService {
                     progress: parseInt(match[2].trim())
                 })
             },
-            
+
             // QUIZ ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_QUIZ\|([^|]+)\|(\d+)\|([^|]*)\|([^|]*)/,
@@ -1400,7 +1400,7 @@ export class StuddyHubActionsService {
                     xp_earned: parseInt(match[5].trim())
                 })
             },
-            
+
             // RECORDING ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_RECORDING\|([^|]+)\|([^|]+)\|(\d+)\|([^|]*)\|([^|]*)\|([^|]*)/,
@@ -1414,7 +1414,7 @@ export class StuddyHubActionsService {
                     document_title: match[6].trim()
                 })
             },
-            
+
             // PROFILE & STATS ACTIONS
             {
                 pattern: /ACTION:\s*UPDATE_PROFILE\|([^|]+)/,
@@ -1437,7 +1437,7 @@ export class StuddyHubActionsService {
                     badgeName: match[1].trim()
                 })
             },
-            
+
             // SOCIAL ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_POST\|([^|]+)\|([^|]*)\|([^|]*)/,
@@ -1448,7 +1448,7 @@ export class StuddyHubActionsService {
                     group_name: match[3].trim() || null
                 })
             },
-            
+
             // MEMORY ACTIONS
             {
                 pattern: /ACTION:\s*UPDATE_USER_MEMORY\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]*)/,
@@ -1466,7 +1466,7 @@ export class StuddyHubActionsService {
         for (const pattern of actionPatterns) {
             const match = text.match(pattern.pattern);
             if (match) {
-                console.log(`[ActionParser] Found explicit action: ${pattern.action}`);
+                //console.log(`[ActionParser] Found explicit action: ${pattern.action}`);
                 return {
                     action: pattern.action,
                     params: pattern.extractor(match),
@@ -1492,7 +1492,7 @@ export class StuddyHubActionsService {
         if (lowerText.includes('make flashcards') && lowerText.includes('from note')) {
             const noteMatch = text.match(/from (?:my )?note[:\s]+"?([^"\n]+)"?/i);
             const countMatch = text.match(/(\d+)\s+(?:flashcards?|cards?)/i);
-            
+
             return {
                 action: 'CREATE_FLASHCARDS_FROM_NOTE',
                 params: {

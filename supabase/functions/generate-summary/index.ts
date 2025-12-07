@@ -62,7 +62,7 @@ Please provide a summary that highlights the most important information and lear
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error in generate-summary function:', error);
+    //console.error('Error in generate-summary function:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -47,7 +47,7 @@ export const useSocialNotifications = () => {
   // Optimized: Memoized fetch function with pagination
   const fetchNotifications = useCallback(async (page: number = 0, loadMore: boolean = false) => {
     if (!userId) return;
-    
+
     try {
       if (loadMore) {
         setIsLoadingMore(true);
@@ -82,7 +82,7 @@ export const useSocialNotifications = () => {
 
       if (data) {
         const newNotifications = data as SocialNotification[];
-        
+
         if (loadMore) {
           // Prevent duplicates when loading more
           setNotifications(prev => addNotificationWithoutDuplicates(prev, newNotifications));
@@ -99,13 +99,13 @@ export const useSocialNotifications = () => {
 
         // Check if there are more notifications to load
         setHasMore(count ? count > (page + 1) * NOTIFICATIONS_PER_PAGE : false);
-        
+
         if (loadMore) {
           setCurrentPage(prev => prev + 1);
         }
       }
     } catch (error) {
-      //console.error('Error fetching notifications:', error);
+      ////console.error('Error fetching notifications:', error);
       toast.error('Failed to load notifications');
     } finally {
       setIsLoading(false);
@@ -162,13 +162,13 @@ export const useSocialNotifications = () => {
                 setNotifications(prev => {
                   const exists = prev.find(n => n.id === notificationData.id);
                   if (exists) return prev; // Skip if already exists
-                  
+
                   const newNotification = notificationData as SocialNotification;
                   return [newNotification, ...prev];
                 });
-                
+
                 setUnreadCount(prev => prev + 1);
-                
+
                 // Show toast only for important notifications
                 if (!notificationData.is_read) {
                   const message = getNotificationMessage(notificationData as SocialNotification);
@@ -177,19 +177,19 @@ export const useSocialNotifications = () => {
                     action: {
                       label: 'View',
                       onClick: () => {
-                        //console.log('Navigate to notification:', notificationData.id);
+                        ////console.log('Navigate to notification:', notificationData.id);
                       }
                     }
                   });
                 }
               }
             } catch (error) {
-              //console.error('Error processing real-time notification:', error);
+              ////console.error('Error processing real-time notification:', error);
             }
           }
         )
         .on('system', { event: 'disconnect' }, () => {
-          //console.log('Notification channel disconnected');
+          ////console.log('Notification channel disconnected');
           // Attempt to reconnect with exponential backoff
           if (retryCount < maxRetries) {
             const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
@@ -201,7 +201,7 @@ export const useSocialNotifications = () => {
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            //console.log('Notification channel subscribed');
+            ////console.log('Notification channel subscribed');
             retryCount = 0;
           }
         });
@@ -223,7 +223,7 @@ export const useSocialNotifications = () => {
         const { data: { user } } = await supabase.auth.getUser();
         setUserId(user?.id || null);
       } catch (error) {
-        //console.error('Error getting user:', error);
+        ////console.error('Error getting user:', error);
       }
     };
     getUser();
@@ -276,7 +276,7 @@ export const useSocialNotifications = () => {
               if (notificationData) {
                 setNotifications(prev => [notificationData as SocialNotification, ...prev]);
                 setUnreadCount(prev => prev + 1);
-                
+
                 // Show toast only for important notifications
                 if (!notificationData.is_read) {
                   const message = getNotificationMessage(notificationData as SocialNotification);
@@ -286,19 +286,19 @@ export const useSocialNotifications = () => {
                       label: 'View',
                       onClick: () => {
                         // You can add navigation logic here
-                        //console.log('Navigate to notification:', notificationData.id);
+                        ////console.log('Navigate to notification:', notificationData.id);
                       }
                     }
                   });
                 }
               }
             } catch (error) {
-              //console.error('Error processing real-time notification:', error);
+              ////console.error('Error processing real-time notification:', error);
             }
           }
         )
         .on('system', { event: 'disconnect' }, () => {
-          //console.log('Notification channel disconnected');
+          ////console.log('Notification channel disconnected');
           // Attempt to reconnect with exponential backoff
           if (retryCount < maxRetries) {
             const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
@@ -310,7 +310,7 @@ export const useSocialNotifications = () => {
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            //console.log('Notification channel subscribed');
+            ////console.log('Notification channel subscribed');
             retryCount = 0;
           }
         });
@@ -325,7 +325,7 @@ export const useSocialNotifications = () => {
     };
   }, [userId]);
 
-  
+
   // Initial fetch when userId changes
   useEffect(() => {
     if (userId) {
@@ -352,7 +352,7 @@ export const useSocialNotifications = () => {
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
-      //console.error('Error marking notification as read:', error);
+      ////console.error('Error marking notification as read:', error);
       toast.error('Failed to mark notification as read');
     }
   }, []);
@@ -375,7 +375,7 @@ export const useSocialNotifications = () => {
       setUnreadCount(0);
       toast.success('All notifications marked as read');
     } catch (error) {
-      //console.error('Error marking all notifications as read:', error);
+      ////console.error('Error marking all notifications as read:', error);
       toast.error('Failed to mark notifications as read');
     }
   }, [userId]);
@@ -390,16 +390,16 @@ export const useSocialNotifications = () => {
       if (error) throw error;
 
       setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
-      
+
       // Update unread count if the deleted notification was unread
       const deletedNotif = notifications.find(n => n.id === notificationId);
       if (deletedNotif && !deletedNotif.is_read) {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
-      
+
       toast.success('Notification deleted');
     } catch (error) {
-      //console.error('Error deleting notification:', error);
+      ////console.error('Error deleting notification:', error);
       toast.error('Failed to delete notification');
     }
   }, [notifications]);
@@ -407,7 +407,7 @@ export const useSocialNotifications = () => {
   // Helper function for notification messages
   const getNotificationMessage = (notification: SocialNotification): string => {
     const actorName = notification.actor?.display_name || 'Someone';
-    
+
     switch (notification.type) {
       case 'like':
         return `${actorName} liked your post`;
@@ -427,7 +427,7 @@ export const useSocialNotifications = () => {
   // Group notifications by date
   const groupedNotifications = useCallback(() => {
     const groups: { [key: string]: SocialNotification[] } = {};
-    
+
     notifications.forEach(notification => {
       const date = new Date(notification.created_at).toDateString();
       if (!groups[date]) {
@@ -435,7 +435,7 @@ export const useSocialNotifications = () => {
       }
       groups[date].push(notification);
     });
-    
+
     return groups;
   }, [notifications]);
 

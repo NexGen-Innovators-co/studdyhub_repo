@@ -26,18 +26,18 @@ export function calculateTypingSpeed(
   const targetSeconds = (targetMinSeconds + targetMaxSeconds) / 2;
   let idealWPS = estimatedWords / targetSeconds;
 
-  //console.log("calculateTypingSpeed - initial idealWPS:", idealWPS);
+  ////console.log("calculateTypingSpeed - initial idealWPS:", idealWPS);
 
   idealWPS = Math.max(minWPS, Math.min(maxWPS, idealWPS)); // Clamp
-  //console.log("calculateTypingSpeed - clamped idealWPS:", idealWPS);
+  ////console.log("calculateTypingSpeed - clamped idealWPS:", idealWPS);
 
   // Adjust for short messages: Force a *minimum* time
   if (estimatedWords < 125) {
     const minWPSForShort = estimatedWords / shortMessageMinSeconds;
     idealWPS = Math.min(idealWPS, minWPSForShort); // *Reduce* WPS to meet min time
-    //console.log("calculateTypingSpeed - short message adjusted idealWPS:", idealWPS);
+    ////console.log("calculateTypingSpeed - short message adjusted idealWPS:", idealWPS);
   }
 
-  //console.log("calculateTypingSpeed - final idealWPS:", idealWPS);
+  ////console.log("calculateTypingSpeed - final idealWPS:", idealWPS);
   return Number(idealWPS.toFixed(2));
 }

@@ -1,3 +1,4 @@
+
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Message } from '../../../types/Class';
@@ -107,6 +108,7 @@ export const useTextToSpeech = ({
   const lastSpokenChunkRef = useRef<string>('');
   const blockAutoSpeakRef = useRef<boolean>(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
+  const currentSessionIdRef = useRef<string | null>(null);
 
   const stopSpeech = useCallback(() => {
     if (speechSynthesisRef.current) {
@@ -118,6 +120,29 @@ export const useTextToSpeech = ({
       lastSpokenChunkRef.current = '';
       blockAutoSpeakRef.current = true;
     }
+  }, []);
+
+  // Stop speech when messages change (session change detection)
+  useEffect(() => {
+    const currentSessionId = messages.length > 0 ? messages[0]?.session_id : null;
+
+    // If session changed, stop speech
+    if (currentSessionIdRef.current && currentSessionId !== currentSessionIdRef.current) {
+      //console.log('🔇 Session changed, stopping speech');
+      stopSpeech();
+    }
+
+    currentSessionIdRef.current = currentSessionId;
+  }, [messages, stopSpeech]);
+
+  // Cleanup speech on unmount (when leaving chat interface)
+  useEffect(() => {
+    return () => {
+      //console.log('🔇 Component unmounting, stopping speech');
+      if (speechSynthesisRef.current) {
+        speechSynthesisRef.current.cancel();
+      }
+    };
   }, []);
 
   const pauseSpeech = useCallback(() => {
@@ -150,7 +175,7 @@ export const useTextToSpeech = ({
       return;
     }
 
-    console.log('🔊 Speaking cleaned text:', cleanedContent.substring(0, 100) + '...');
+    //console.log('🔊 Speaking cleaned text:', cleanedContent.substring(0, 100) + '...');
 
     const utterance = new SpeechSynthesisUtterance(cleanedContent);
     utterance.lang = 'en-US';
@@ -170,7 +195,7 @@ export const useTextToSpeech = ({
 
     utterance.onerror = (event) => {
       if (event.error === 'interrupted') return;
-      console.error('Speech synthesis error:', event.error);
+      //console.error('Speech synthesis error:', event.error);
       toast.error(`Speech synthesis failed: ${event.error}`);
       setIsSpeaking(false);
       setSpeakingMessageId(null);
@@ -224,7 +249,7 @@ export const useTextToSpeech = ({
       const cleanedContent = cleanContentForSpeech(lastMessage.content, stripCodeBlocks);
 
       if (cleanedContent && cleanedContent.length >= 3) {
-        console.log('🔊 Auto-speaking cleaned text:', cleanedContent.substring(0, 100) + '...');
+        //console.log('🔊 Auto-speaking cleaned text:', cleanedContent.substring(0, 100) + '...');
 
         const utterance = new SpeechSynthesisUtterance(cleanedContent);
         utterance.lang = 'en-US';
@@ -244,7 +269,7 @@ export const useTextToSpeech = ({
 
         utterance.onerror = (event) => {
           if (event.error === 'interrupted') return;
-          console.error('Speech synthesis error:', event.error);
+          //console.error('Speech synthesis error:', event.error);
           toast.error(`Speech synthesis failed: ${event.error}`);
           setIsSpeaking(false);
           setSpeakingMessageId(null);

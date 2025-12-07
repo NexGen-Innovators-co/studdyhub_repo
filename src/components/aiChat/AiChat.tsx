@@ -238,7 +238,7 @@ const AIChat: React.FC<AIChatProps> = ({
         .single();
 
       if (error) {
-        console.error('Error loading session documents:', error);
+        //console.error('Error loading session documents:', error);
         return;
       }
 
@@ -246,7 +246,7 @@ const AIChat: React.FC<AIChatProps> = ({
         onSelectionChange(sessionData.document_ids);
       }
     } catch (error) {
-      console.error('Error loading session documents:', error);
+      //console.error('Error loading session documents:', error);
     }
   }, [userProfile?.id, onSelectionChange]);
 
@@ -347,7 +347,7 @@ const AIChat: React.FC<AIChatProps> = ({
           .eq('user_id', userId);
 
         if (error) {
-          console.error('Error updating session documents:', error);
+          //console.error('Error updating session documents:', error);
         }
       }
 
@@ -385,11 +385,11 @@ const AIChat: React.FC<AIChatProps> = ({
                 });
                 content = await textPromise;
               } catch (textError) {
-                console.warn('Could not extract text content from file:', textError);
+                //console.warn('Could not extract text content from file:', textError);
               }
             }
           } catch (error) {
-            console.error('Error processing file:', attachedFile.file.name, error);
+            //console.error('Error processing file:', attachedFile.file.name, error);
             toast.error(`Failed to process file: ${attachedFile.file.name}`);
             throw error;
           }
@@ -423,7 +423,7 @@ const AIChat: React.FC<AIChatProps> = ({
       setExpandedMessages(new Set());
 
     } catch (error: any) {
-      console.error("Error sending message:", error);
+      //console.error("Error sending message:", error);
       let errorMessage = 'Failed to send message.';
 
       if (error.message.includes('Too Many Requests')) {
@@ -478,7 +478,7 @@ const AIChat: React.FC<AIChatProps> = ({
 
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {
-      console.warn("User or session ID missing, cannot mark message as displayed.");
+      //console.warn("User or session ID missing, cannot mark message as displayed.");
       return;
     }
 
@@ -495,7 +495,7 @@ const AIChat: React.FC<AIChatProps> = ({
         .eq('user_id', userProfile.id);
 
       if (error) {
-        console.error('Error marking message as displayed:', error);
+        //console.error('Error marking message as displayed:', error);
         return;
       }
 
@@ -510,7 +510,7 @@ const AIChat: React.FC<AIChatProps> = ({
         setIsLastAiMessageDisplayed(true);
       }
     } catch (error) {
-      console.error('Unexpected error marking message as displayed:', error);
+      //console.error('Unexpected error marking message as displayed:', error);
     }
   }, [userProfile?.id, activeChatSessionId, messages, onMessageUpdate]);
 
@@ -571,7 +571,7 @@ const AIChat: React.FC<AIChatProps> = ({
     const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
 
     if (isSessionChange && activeChatSessionId) {
-      console.log('🔄 Chat session changed');
+      //console.log('🔄 Chat session changed');
 
       // Batch state updates
       setInputMessage('');
@@ -668,14 +668,14 @@ const AIChat: React.FC<AIChatProps> = ({
     inputMessage,
     requestNotificationPermission: useCallback(async (): Promise<boolean> => {
       if (!("Notification" in window)) {
-        console.warn("Notification API not supported in this browser.");
+        //console.warn("Notification API not supported in this browser.");
         return false;
       }
       try {
         const permission = await Notification.requestPermission();
         return permission === "granted";
       } catch (error) {
-        console.error("Error requesting notification permission:", error);
+        //console.error("Error requesting notification permission:", error);
         return false;
       }
     }, []),
@@ -685,7 +685,7 @@ const AIChat: React.FC<AIChatProps> = ({
         stream.getTracks().forEach(track => track.stop());
         return true;
       } catch (error: any) {
-        console.error('Error requesting microphone permission:', error);
+        //console.error('Error requesting microphone permission:', error);
         toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
         return false;
       }
@@ -698,7 +698,7 @@ const AIChat: React.FC<AIChatProps> = ({
         }
         return 'unknown';
       } catch (error) {
-        console.error('Error checking microphone permission:', error);
+        //console.error('Error checking microphone permission:', error);
         return 'unknown';
       }
     }, []),
@@ -722,7 +722,7 @@ const AIChat: React.FC<AIChatProps> = ({
   }
 
   const memoizedOnMermaidError = useCallback((code: string | null, errorType: 'syntax' | 'rendering' | 'timeout' | 'network') => {
-    console.error("Mermaid error in DiagramPanel:", code, errorType);
+    //console.error("Mermaid error in DiagramPanel:", code, errorType);
     toast.error(`Mermaid rendering issue: ${errorType}${code ? ` - Code: ${code.substring(0, 50)}...` : ''}`);
   }, []);
 

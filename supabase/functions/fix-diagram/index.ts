@@ -19,11 +19,11 @@ serve(async (req) => {
   }
 
   try {
-    const { 
-      diagramType, 
-      originalContent, 
-      errorMessage, 
-      userProfile 
+    const {
+      diagramType,
+      originalContent,
+      errorMessage,
+      userProfile
     }: DiagramFixRequest = await req.json()
 
     const apiKey = Deno.env.get('GEMINI_API_KEY')
@@ -93,7 +93,7 @@ Please analyze the error and provide a fixed version with explanation and sugges
         explanation: "I analyzed the content but had trouble providing a structured fix. Please try the manual suggestions below.",
         suggestions: [
           "Check for syntax errors and typos",
-          "Ensure proper formatting and indentation", 
+          "Ensure proper formatting and indentation",
           "Verify all brackets and quotes are balanced",
           "Test with simpler versions first"
         ]
@@ -113,30 +113,30 @@ Please analyze the error and provide a fixed version with explanation and sugges
 
     return new Response(
       JSON.stringify(fixResult),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
+      {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
       }
     )
 
   } catch (error) {
-    console.error('Error in fix-diagram function:', error)
-    
+    //console.error('Error in fix-diagram function:', error)
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error.message,
-        fixedContent: '', 
+        fixedContent: '',
         explanation: 'Unable to process fix request',
         suggestions: ['Please try again or check the content manually']
       }),
-      { 
+      {
         status: 500,
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
       }
     )
   }

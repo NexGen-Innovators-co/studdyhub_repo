@@ -295,7 +295,7 @@ const Auth = () => {
       setNameError(exists ? 'This name is already taken' : '');
       return exists;
     } catch (error) {
-      console.error('Error checking full name existence:', error);
+      //console.error('Error checking full name existence:', error);
       setNameError('Error checking name availability');
       return true;
     } finally {
@@ -395,42 +395,42 @@ const Auth = () => {
 
   // In Auth.tsx, update handleSignIn function:
 
-const handleSignIn = async (e: React.FormEvent) => {
-  e.preventDefault();
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  if (!validateEmail(email)) {
-    return;
-  }
-
-  setIsLoading(true);
-
-  try {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.toLowerCase().trim(),
-      password,
-    });
-
-    if (error) {
-      if (error.message.includes('Invalid login credentials')) {
-        toast.error('Invalid email or password. Please try again.');
-      } else if (error.message.includes('Email not confirmed')) {
-        toast.error('Please check your email and confirm your account before signing in.');
-        setPendingVerificationEmail(email.toLowerCase().trim());
-        setShowResendVerification(true);
-      } else {
-        toast.error(error.message);
-      }
-    } else {
-      
-      toast.success('Welcome back!');
-      navigate('/dashboard', { replace: true });
+    if (!validateEmail(email)) {
+      return;
     }
-  } catch (error) {
-    toast.error('An unexpected error occurred during sign-in.');
-  } finally {
-    setIsLoading(false);
-  }
-};
+
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
+        password,
+      });
+
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          toast.error('Invalid email or password. Please try again.');
+        } else if (error.message.includes('Email not confirmed')) {
+          toast.error('Please check your email and confirm your account before signing in.');
+          setPendingVerificationEmail(email.toLowerCase().trim());
+          setShowResendVerification(true);
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+
+        toast.success('Welcome back!');
+        navigate('/dashboard', { replace: true });
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred during sign-in.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
