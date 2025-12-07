@@ -46,10 +46,10 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
     currentUser,
     posts,
     setPosts,
-    () => {}, // setSuggestedUsers - not needed here
+    () => { }, // setSuggestedUsers - not needed here
     [], // groups
-    () => {}, // setGroups
-    () => {}  // setCurrentUser
+    () => { }, // setGroups
+    () => { }  // setCurrentUser
   );
 
   // Chat hooks
@@ -149,7 +149,7 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
 
       setPosts(transformedPosts);
     } catch (error) {
-      console.error('Error fetching group posts:', error);
+      //console.error('Error fetching group posts:', error);
       toast.error('Failed to load posts');
     } finally {
       setIsLoading(false);
@@ -163,7 +163,7 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
   const fetchComments = async (postId: string) => {
     try {
       setIsLoadingComments(prev => ({ ...prev, [postId]: true }));
-      
+
       const { data, error } = await supabase
         .from('social_comments')
         .select('*, author:social_users(*)')
@@ -174,7 +174,7 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
 
       setPostComments(prev => ({ ...prev, [postId]: data || [] }));
     } catch (error) {
-      console.error('Error fetching comments:', error);
+      //console.error('Error fetching comments:', error);
       toast.error('Failed to load comments');
     } finally {
       setIsLoadingComments(prev => ({ ...prev, [postId]: false }));
@@ -223,7 +223,7 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
 
       toast.success('Comment added');
     } catch (error) {
-      console.error('Error submitting comment:', error);
+      //console.error('Error submitting comment:', error);
       toast.error('Failed to add comment');
     }
   };
@@ -336,16 +336,16 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
       {/* Share to Chat Dialog */}
       {postToShare && (
         <SharePostToChatModal
-        isOpen={showSharePostModal}
-        onClose={() => {
-          setShowSharePostModal(false);
-          setPostToShare(null);
-        }}
-        post={postToShare}
-        chatSessions={chatSessions}
-        currentUserId={currentUser?.id || ''}
-        onShare={handleSharePostMessage}
-        isSharing={isSendingMessage}
+          isOpen={showSharePostModal}
+          onClose={() => {
+            setShowSharePostModal(false);
+            setPostToShare(null);
+          }}
+          post={postToShare}
+          chatSessions={chatSessions}
+          currentUserId={currentUser?.id || ''}
+          onShare={handleSharePostMessage}
+          isSharing={isSendingMessage}
 
         />
       )}

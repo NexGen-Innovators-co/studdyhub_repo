@@ -15,7 +15,7 @@ export const useQuizTracking = (userId: string) => {
     const scoreMultiplier = score / totalQuestions;
     const timeBonus = timeTaken < 300 ? 5 : 0; // Bonus for completing under 5 minutes
     const perfectBonus = score === totalQuestions ? 20 : 0;
-    
+
     return Math.floor(baseXP * totalQuestions * scoreMultiplier + timeBonus + perfectBonus);
   };
 
@@ -27,10 +27,10 @@ export const useQuizTracking = (userId: string) => {
   // Fetch user stats
   const fetchUserStats = useCallback(async () => {
     if (!userId) return;
-    
+
     try {
       setIsLoadingStats(true);
-      
+
       const { data, error } = await supabase
         .from('user_stats')
         .select('*')
@@ -69,7 +69,7 @@ export const useQuizTracking = (userId: string) => {
         setUserStats(newStats);
       }
     } catch (error) {
-      //console.error('Error fetching user stats:', error);
+      ////console.error('Error fetching user stats:', error);
       toast.error('Failed to load user statistics');
     } finally {
       setIsLoadingStats(false);
@@ -85,7 +85,7 @@ export const useQuizTracking = (userId: string) => {
     timeTaken: number
   ): Promise<QuizAttempt | null> => {
     if (!userId) return null;
-    
+
     try {
       const percentage = Math.round((score / totalQuestions) * 100);
       const xpEarned = calculateXP(score, totalQuestions, timeTaken);
@@ -116,10 +116,10 @@ export const useQuizTracking = (userId: string) => {
       await checkAchievements();
 
       toast.success(`Quiz completed! +${xpEarned} XP earned! 🎉`);
-      
+
       return data;
     } catch (error) {
-      //console.error('Error recording quiz attempt:', error);
+      ////console.error('Error recording quiz attempt:', error);
       toast.error('Failed to save quiz results');
       return null;
     }
@@ -140,13 +140,13 @@ export const useQuizTracking = (userId: string) => {
 
     const today = new Date().toISOString().split('T')[0];
     const lastActivityDate = userStats.last_activity_date?.split('T')[0];
-    
+
     let newStreak = userStats.current_streak;
     if (lastActivityDate) {
       const daysDiff = Math.floor(
         (new Date(today).getTime() - new Date(lastActivityDate).getTime()) / (1000 * 60 * 60 * 24)
       );
-      
+
       if (daysDiff === 0) {
         // Same day, keep streak
       } else if (daysDiff === 1) {
@@ -267,7 +267,7 @@ export const useQuizTracking = (userId: string) => {
 
           if (!insertError && achievement) {
             newAchievements.push(achievement);
-            
+
             // Award badge XP
             await supabase
               .from('user_stats')
@@ -289,7 +289,7 @@ export const useQuizTracking = (userId: string) => {
         await fetchUserStats();
       }
     } catch (error) {
-      //console.error('Error checking achievements:', error);
+      ////console.error('Error checking achievements:', error);
     }
   };
 
@@ -309,7 +309,7 @@ export const useQuizTracking = (userId: string) => {
       if (error) throw error;
       return data;
     } catch (error) {
-      //console.error('Error fetching quiz history:', error);
+      ////console.error('Error fetching quiz history:', error);
       return [];
     }
   };

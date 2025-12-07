@@ -122,7 +122,7 @@ const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFu
         [index]: { ...prev[index], isPlaying: true }
       }));
     } catch (err) {
-      console.log('Autoplay prevented:', err);
+      //console.log('Autoplay prevented:', err);
     }
   };
 
@@ -370,7 +370,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
             toast.info('Share cancelled');
             return;
           }
-          console.warn('Native share error', err);
+          //console.warn('Native share error', err);
         }
       }
       toast.error('Native share not available');
@@ -486,7 +486,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
           if (entries[0].isIntersecting && !hasTrackedView) {
             try {
               onPostView(post.id);
-              //console.log(`👁️ Post ${post.id} viewed`);
+              ////console.log(`👁️ Post ${post.id} viewed`);
             } catch (e) {
               // ignore
             }

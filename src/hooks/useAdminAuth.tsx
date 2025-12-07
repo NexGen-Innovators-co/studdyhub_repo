@@ -73,7 +73,7 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
 
       if (error) {
         if (error.code !== 'PGRST116') {
-          console.error('Error fetching admin status:', error);
+          //console.error('Error fetching admin status:', error);
         }
         setAdminUser(null);
       } else {
@@ -93,7 +93,7 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
           .eq('id', data.id);
       }
     } catch (error) {
-      console.error('Error checking admin status:', error);
+      //console.error('Error checking admin status:', error);
       setAdminUser(null);
       setLoading(false)
       window.location.pathname = 'auth'

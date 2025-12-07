@@ -139,7 +139,7 @@ export const DiagramPanel = memo(({
         setSlides(parsedSlides);
         setCurrentSlideIndex(0);
       } catch (error) {
-        console.error('Error parsing slide JSON:', error);
+        //console.error('Error parsing slide JSON:', error);
         setSlides([]);
         toast.error('Failed to parse slide content. Invalid JSON format.');
       }
@@ -178,7 +178,7 @@ export const DiagramPanel = memo(({
         const svg = graphviz.layout(renderContent, 'svg', 'dot');
         container.innerHTML = svg;
       } catch (error: any) {
-        console.error('Graphviz rendering error:', error);
+        //console.error('Graphviz rendering error:', error);
         container.innerHTML = `<div class="text-red-500 dark:text-red-400">DOT render error.</div>`;
         onMermaidError(renderContent, 'rendering');
       }
@@ -198,7 +198,7 @@ export const DiagramPanel = memo(({
           new Chart(ctx, chartData);
         }
       } catch (error: any) {
-        console.error('Chart.js rendering error:', error);
+        //console.error('Chart.js rendering error:', error);
         container.innerHTML = `<div class="text-red-500 dark:text-red-400">Chart.js render error. Invalid JSON or chart configuration.</div>`;
         onMermaidError(renderContent, 'rendering');
       }
@@ -324,7 +324,7 @@ box-sizing: border-box;
 
   // Resizing functions
   const startResizing = useCallback((e: React.MouseEvent) => {
-    console.log('Start resizing');
+    //console.log('Start resizing');
     setIsResizing(true);
     lastMousePos.current = { x: e.clientX, y: e.clientY };
     e.preventDefault();
@@ -332,7 +332,7 @@ box-sizing: border-box;
   }, []);
 
   const stopResizing = useCallback(() => {
-    console.log('Stop resizing');
+    //console.log('Stop resizing');
     setIsResizing(false);
     localStorage.setItem('diagramPanelWidth', panelWidth.toString());
   }, [panelWidth]);
@@ -343,13 +343,13 @@ box-sizing: border-box;
       const newWidth = e.clientX;
       const percentage = (newWidth / window.innerWidth) * 100;
       const clampedPercentage = Math.max(30, Math.min(70, percentage));
-      console.log('Resizing to:', clampedPercentage);
+      //console.log('Resizing to:', clampedPercentage);
       setPanelWidth(clampedPercentage);
     }
   }, [isResizing, setPanelWidth]);
 
   useEffect(() => {
-    console.log('Panel width changed:', panelWidth);
+    //console.log('Panel width changed:', panelWidth);
   }, [panelWidth]);
 
   // Event listeners for resizing
@@ -413,7 +413,7 @@ box-sizing: border-box;
               toast.success('Image downloaded!');
             })
             .catch(error => {
-              console.error('Error downloading image:', error);
+              //console.error('Error downloading image:', error);
               toast.error('Failed to download image.');
             });
           return;
@@ -474,7 +474,7 @@ box-sizing: border-box;
       pdf.save(`diagram-${effectiveDiagramType}.pdf`);
       toast.success('PDF exported successfully!');
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      //console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
     }
   }, [effectiveDiagramType]);

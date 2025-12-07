@@ -123,7 +123,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy Mermaid code:', err);
+      //console.error('Failed to copy Mermaid code:', err);
     }
   };
 
@@ -133,7 +133,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, onMermaidError, onSuggestAiCor
       setSourceCodeCopied(true);
       setTimeout(() => setSourceCodeCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy source code:', err);
+      //console.error('Failed to copy source code:', err);
     }
   };
 
@@ -293,7 +293,7 @@ Here's the error message received: "${error}". Please provide only the corrected
         } else if (result && result.svg) {
           generatedSvg = result.svg;
         } else {
-          console.error('Unexpected mermaid render result:', result);
+          //console.error('Unexpected mermaid render result:', result);
           throw new Error("Mermaid returned unexpected result format");
         }
 
@@ -301,7 +301,7 @@ Here's the error message received: "${error}". Please provide only the corrected
           throw new Error("Mermaid rendered empty SVG");
         }
 
-        //console.log('Mermaid SVG generated, length:', generatedSvg.length);
+        ////console.log('Mermaid SVG generated, length:', generatedSvg.length);
         setSvg(generatedSvg);
         setLastRenderedChart(chart);
 
@@ -364,13 +364,13 @@ Here's the error message received: "${error}". Please provide only the corrected
               iframeDoc.close();
 
               // Log for debugging
-              //console.log('Iframe content updated');
+              ////console.log('Iframe content updated');
             }
           }
         }, 50);
       } catch (e: any) {
         const errorMessage = e.message || "An unknown error occurred during rendering.";
-        console.error('Mermaid rendering error:', errorMessage, e);
+        //console.error('Mermaid rendering error:', errorMessage, e);
         onMermaidError(chart, 'rendering');
         setError(errorMessage);
         setSvg(null);

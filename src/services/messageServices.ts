@@ -57,7 +57,7 @@ export const insertUserMessage = async (
       isError: false
     };
   } catch (error) {
-    console.error('Error inserting user message:', error);
+    //console.error('Error inserting user message:', error);
     throw new Error('Failed to save user message');
   }
 };
@@ -85,11 +85,11 @@ export const requestAIResponse = async (
     });
 
     if (error) {
-      console.error('AI chat error:', error);
+      //console.error('AI chat error:', error);
       throw new Error(error.message || 'AI response failed');
     }
   } catch (error) {
-    console.error('Error requesting AI response:', error);
+    //console.error('Error requesting AI response:', error);
     throw error;
   }
 };

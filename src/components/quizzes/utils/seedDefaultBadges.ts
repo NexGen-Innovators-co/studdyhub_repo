@@ -97,7 +97,7 @@ export const seedDefaultBadges = async (): Promise<boolean> => {
 
     // If badges exist, don't seed again
     if (existingBadges && existingBadges.length > 0) {
-      console.log('Badges already seeded');
+      //console.log('Badges already seeded');
       return true;
     }
 
@@ -108,10 +108,10 @@ export const seedDefaultBadges = async (): Promise<boolean> => {
 
     if (insertError) throw insertError;
 
-    console.log('Default badges seeded successfully');
+    //console.log('Default badges seeded successfully');
     return true;
   } catch (error) {
-    console.error('Error seeding default badges:', error);
+    //console.error('Error seeding default badges:', error);
     return false;
   }
 };
@@ -126,7 +126,7 @@ export const getAllBadges = async (): Promise<Badge[]> => {
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('Error fetching badges:', error);
+    //console.error('Error fetching badges:', error);
     return [];
   }
 };
@@ -142,7 +142,7 @@ export const getUserAchievements = async (userId: string) => {
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('Error fetching user achievements:', error);
+    //console.error('Error fetching user achievements:', error);
     return [];
   }
 };
@@ -212,7 +212,7 @@ export const checkAndAwardBadges = async (userId: string): Promise<Achievement[]
 
         if (!insertError && achievement) {
           newAchievements.push(achievement);
-          
+
           // Award badge XP
           await supabase
             .from('user_stats')
@@ -227,7 +227,7 @@ export const checkAndAwardBadges = async (userId: string): Promise<Achievement[]
 
     return newAchievements;
   } catch (error) {
-    console.error('Error checking and awarding badges:', error);
+    //console.error('Error checking and awarding badges:', error);
     return [];
   }
 };

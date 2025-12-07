@@ -247,7 +247,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
       setShowPreview(false);
       await onGenerate(selectedText, currentActionType, customInstruction);
     } catch (err) {
-      console.error('Generation failed:', err);
+      //console.error('Generation failed:', err);
     }
   }, [selectedText, currentActionType, customInstruction, onGenerate, isLoading, onClearError]);
 

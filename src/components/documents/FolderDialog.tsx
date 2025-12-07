@@ -63,7 +63,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
       setColor('#3B82F6');
       onOpenChange(false);
     } catch (error) {
-      console.error('Error creating folder:', error);
+      //console.error('Error creating folder:', error);
     } finally {
       setIsCreating(false);
     }
@@ -126,8 +126,8 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
                   type="button"
                   onClick={() => setColor(c.value)}
                   className={`w-8 h-8 rounded-lg transition-all ${color === c.value
-                      ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-                      : 'hover:scale-105'
+                    ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                    : 'hover:scale-105'
                     }`}
                   style={{ backgroundColor: c.value }}
                   title={c.name}
@@ -205,7 +205,7 @@ export const RenameFolderDialog: React.FC<RenameFolderDialogProps> = ({
       });
       onOpenChange(false);
     } catch (error) {
-      console.error('Error renaming folder:', error);
+      //console.error('Error renaming folder:', error);
     } finally {
       setIsRenaming(false);
     }
@@ -254,8 +254,8 @@ export const RenameFolderDialog: React.FC<RenameFolderDialogProps> = ({
                   type="button"
                   onClick={() => setColor(c.value)}
                   className={`w-8 h-8 rounded-lg transition-all ${color === c.value
-                      ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-                      : 'hover:scale-105'
+                    ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                    : 'hover:scale-105'
                     }`}
                   style={{ backgroundColor: c.value }}
                   title={c.name}

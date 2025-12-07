@@ -109,7 +109,7 @@ const parseAttachedFiles = (message: Message): AttachedFile[] => {
                 };
             });
         } catch (error) {
-            console.error('Error parsing files_metadata:', error);
+            //console.error('Error parsing files_metadata:', error);
             toast.error('Failed to parse file metadata.');
         }
     }
@@ -120,7 +120,7 @@ const parseAttachedFiles = (message: Message): AttachedFile[] => {
                 : message.attachedFiles;
             files = Array.isArray(attachedFiles) ? attachedFiles : [attachedFiles];
         } catch (error) {
-            console.error('Error parsing attachedFiles:', error);
+            //console.error('Error parsing attachedFiles:', error);
             toast.error('Failed to parse attached files.');
         }
     }
@@ -261,7 +261,7 @@ export const MessageList = memo(({
             await onDiagramCodeUpdate(messageId, newCode);
             toast.success('Diagram code updated successfully!');
         } catch (error: any) {
-            console.error('Error updating diagram code:', error);
+            //console.error('Error updating diagram code:', error);
             toast.error(`Failed to update diagram code: ${error.message || 'Unknown error'}`);
         }
     }, [onDiagramCodeUpdate]);

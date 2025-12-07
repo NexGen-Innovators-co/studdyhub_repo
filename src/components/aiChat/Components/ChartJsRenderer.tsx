@@ -20,7 +20,7 @@ export const ChartJsRenderer: React.FC<ChartJsRendererProps> = ({ chartJsContent
                 const chartData = JSON.parse(chartJsContent);
                 new Chart(ctx, chartData);
             } catch (error: any) {
-                console.error('Chart.js rendering error:', error);
+                //console.error('Chart.js rendering error:', error);
                 canvas.innerHTML = `<div class="text-red-500 dark:text-red-400">Chart.js render error. Invalid JSON or chart configuration.</div>`;
                 onMermaidError(chartJsContent, 'rendering');
             }

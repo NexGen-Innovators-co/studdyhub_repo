@@ -178,7 +178,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           { folder_id: targetFolderId, document_id: documentId, }
         ]);
         if (error) {
-          console.error('Error moving document:', error);
+          //console.error('Error moving document:', error);
           toast.error('Failed to move document');
           return;
         }
@@ -196,7 +196,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
       toast.success('Document moved successfully!');
     } catch (error: any) {
-      console.error('Error moving document:', error);
+      //console.error('Error moving document:', error);
       toast.error(`Failed to move document: ${error.message}`);
     }
   }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
@@ -227,7 +227,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('Error adding document to folder:', error);
+        //console.error('Error adding document to folder:', error);
         toast.error('Failed to add document to folder');
         return;
       }
@@ -239,7 +239,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
       toast.success('Document added to folder!');
     } catch (error: any) {
-      console.error('Error adding document to folder:', error);
+      //console.error('Error adding document to folder:', error);
       toast.error(`Failed to add document to folder: ${error.message}`);
     }
   }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
@@ -262,7 +262,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('Error removing document from folder:', error);
+        //console.error('Error removing document from folder:', error);
         toast.error('Failed to remove document from folder');
         return;
       }
@@ -274,7 +274,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
       toast.success('Document removed from folder!');
     } catch (error: any) {
-      console.error('Error removing document from folder:', error);
+      //console.error('Error removing document from folder:', error);
       toast.error(`Failed to remove document from folder: ${error.message}`);
     }
   }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
@@ -316,7 +316,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('Error moving folder:', error);
+        //console.error('Error moving folder:', error);
         toast.error('Failed to move folder');
         return;
       }
@@ -326,7 +326,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
       toast.success('Folder moved successfully!');
     } catch (error: any) {
-      console.error('Error moving folder:', error);
+      //console.error('Error moving folder:', error);
       toast.error(`Failed to move folder: ${error.message}`);
     }
   }, [folders, user, loadDataIfNeeded]);
@@ -752,7 +752,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 }
               }
             } catch (urlError) {
-              console.warn('Invalid file URL format:', fileUrl, urlError);
+              //console.warn('Invalid file URL format:', fileUrl, urlError);
             }
 
             if (storagePath) {
@@ -761,11 +761,11 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 .remove([storagePath]);
 
               if (storageError) {
-                console.warn('Failed to delete file from storage:', storageError.message);
+                //console.warn('Failed to delete file from storage:', storageError.message);
                 toast.warning(`File might not have been removed from storage. Error: ${storageError.message}`);
               }
             } else {
-              console.warn('Could not derive storage path from file URL:', fileUrl);
+              //console.warn('Could not derive storage path from file URL:', fileUrl);
               toast.warning('Could not derive storage path from file URL. File will not be deleted from storage.');
             }
 
@@ -781,7 +781,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             toast.success('Document deleted successfully!');
             onDocumentDeleted(documentId);
           } catch (error: any) {
-            console.error('Error deleting document:', error);
+            //console.error('Error deleting document:', error);
             toast.error(`Failed to delete document: ${error.message}`);
           }
         }
@@ -959,18 +959,14 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   // Enhanced document synchronization and duplicate prevention
   useEffect(() => {
     // Log for debugging
-    //console.log('📄 Documents count:', documents.length);
+    ////console.log('📄 Documents count:', documents.length);
 
     // Check for duplicates
     const documentIds = documents.map(doc => doc.id);
     const uniqueIds = new Set(documentIds);
 
     if (documentIds.length !== uniqueIds.size) {
-      console.warn('⚠️ Duplicate documents detected:', {
-        total: documentIds.length,
-        unique: uniqueIds.size,
-        duplicates: documentIds.length - uniqueIds.size
-      });
+
 
       // Remove duplicates if found
       const uniqueDocuments = documents.filter((doc, index) =>
@@ -978,7 +974,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       );
 
       if (uniqueDocuments.length !== documents.length) {
-        //console.log('🔄 Removing duplicate documents');
+        ////console.log('🔄 Removing duplicate documents');
         // You might want to update the parent state here
         // or handle this in your data loading logic
       }
@@ -991,13 +987,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       .filter((id, index, ids) => ids.indexOf(id) !== index);
 
     if (duplicateIds.length > 0) {
-      console.error('🚨 DUPLICATE DOCUMENT IDs FOUND:', duplicateIds);
-      //console.log('📋 All documents:', documents.map(d => ({ id: d.id, title: d.title })));
+      //console.error('🚨 DUPLICATE DOCUMENT IDs FOUND:', duplicateIds);
+      ////console.log('📋 All documents:', documents.map(d => ({ id: d.id, title: d.title })));
 
       // Log the duplicate documents
       duplicateIds.forEach(dupId => {
         const duplicates = documents.filter(d => d.id === dupId);
-        //console.log(`📄 Duplicate for ${dupId}:`, duplicates);
+        ////console.log(`📄 Duplicate for ${dupId}:`, duplicates);
       });
     }
   }, [documents]);

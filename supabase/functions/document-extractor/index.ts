@@ -721,7 +721,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
         chunks.push(chunkInfo + chunk + chunkEndInfo);
         currentPos = chunkEnd;
     }
-    console.log(`Created ${chunks.length} intelligent chunks for ${fileType} content (${content.length} chars)`);
+    //console.log(`Created ${chunks.length} intelligent chunks for ${fileType} content (${content.length} chars)`);
     return chunks;
 }
 /**
@@ -807,7 +807,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
                 const errorText = await response.text();
                 if (response.status === 429 && attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
                     const delay = Math.pow(2, attempt) * ENHANCED_PROCESSING_CONFIG.RATE_LIMIT_DELAY + Math.random() * 1000;
-                    console.log(`Rate limited, retrying in ${delay}ms...`);
+                    //console.log(`Rate limited, retrying in ${delay}ms...`);
                     await new Promise((resolve) => setTimeout(resolve, delay));
                     continue;
                 }
@@ -868,11 +868,11 @@ ${chunk}`;
                     await new Promise((resolve) => setTimeout(resolve, ENHANCED_PROCESSING_CONFIG.RATE_LIMIT_DELAY));
                 }
             } else {
-                console.error(`Failed to process chunk ${i + 1}:`, response.error);
+                //console.error(`Failed to process chunk ${i + 1}:`, response.error);
                 processedChunks.push(`[ERROR PROCESSING CHUNK ${i + 1}: ${response.error}]`);
             }
         } catch (error) {
-            console.error(`Error processing chunk ${i + 1}:`, error);
+            //console.error(`Error processing chunk ${i + 1}:`, error);
             processedChunks.push(`[ERROR PROCESSING CHUNK ${i + 1}: ${error.message}]`);
         }
     }
@@ -891,7 +891,7 @@ ${chunk}`;
         const pdf = await loadingTask.promise;
         let fullText = '';
         const totalPages = pdf.numPages;
-        console.log(`Processing PDF with ${totalPages} pages using PDF.js`);
+        //console.log(`Processing PDF with ${totalPages} pages using PDF.js`);
         // Process each page
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
             try {
@@ -922,7 +922,7 @@ ${chunk}`;
                 // Clean up page resources
                 page.cleanup();
             } catch (pageError) {
-                console.error(`Error processing page ${pageNum}:`, pageError);
+                //console.error(`Error processing page ${pageNum}:`, pageError);
                 fullText += `\n[Error processing page ${pageNum}: ${pageError.message}]\n`;
             }
         }
@@ -930,7 +930,7 @@ ${chunk}`;
         pdf.cleanup();
         return fullText.trim();
     } catch (error) {
-        console.error('PDF.js extraction failed:', error);
+        //console.error('PDF.js extraction failed:', error);
         throw new Error(`PDF.js extraction failed: ${error.message}`);
     }
 }
@@ -1005,7 +1005,7 @@ ${chunk}`;
         }
         return extractedText;
     } catch (error) {
-        console.error('Enhanced DOCX extraction failed:', error);
+        //console.error('Enhanced DOCX extraction failed:', error);
         // Fallback to mammoth
         const result = await mammoth.extractRawText({
             arrayBuffer: buffer
@@ -1030,7 +1030,7 @@ ${chunk}`;
             }
         });
         if (results.errors.length > 0) {
-            console.warn('CSV parsing warnings:', results.errors);
+            //console.warn('CSV parsing warnings:', results.errors);
         }
         let structuredText = `[CSV DATA - ${results.data.length} rows]\n\n`;
         // Add headers
@@ -1050,7 +1050,7 @@ ${chunk}`;
         }
         return structuredText;
     } catch (error) {
-        console.error('Enhanced CSV processing failed:', error);
+        //console.error('Enhanced CSV processing failed:', error);
         return content; // Return original content as fallback
     }
 }
@@ -1107,7 +1107,7 @@ ${chunk}`;
         });
         return extractedText.trim();
     } catch (error) {
-        console.error('Enhanced HTML processing failed:', error);
+        //console.error('Enhanced HTML processing failed:', error);
         // Fallback to simple text extraction
         return content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     }
@@ -1123,7 +1123,7 @@ ${chunk}`;
             .replace(/\s+/g, ' ') // Normalize whitespace
             .trim();
     } catch (error) {
-        console.error('RTF processing failed:', error);
+        //console.error('RTF processing failed:', error);
         return content;
     }
 }
@@ -1159,7 +1159,7 @@ ${chunk}`;
         }
         return text.trim();
     } catch (error) {
-        console.error('Error extracting PPTX text:', error);
+        //console.error('Error extracting PPTX text:', error);
         return '[Error extracting text from PPTX]';
     }
 }
@@ -1176,9 +1176,9 @@ ${chunk}`;
                     // Try PDF.js first for most complete extraction
                     extractedText = await extractPdfTextWithPdfjs(buffer);
                     processingMethod = 'pdfjs';
-                    console.log(`PDF processed with PDF.js: ${extractedText.length} characters`);
+                    //console.log(`PDF processed with PDF.js: ${extractedText.length} characters`);
                 } catch (pdfError) {
-                    console.log('PDF.js failed, falling back to Gemini API');
+                    //console.log('PDF.js failed, falling back to Gemini API');
                     // Fallback to Gemini API
                     return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
                 }
@@ -1189,7 +1189,7 @@ ${chunk}`;
                     extractedText = await extractDocxTextEnhanced(buffer);
                     processingMethod = 'enhanced_docx';
                 } catch (docxError) {
-                    console.log('Enhanced DOCX failed, trying mammoth');
+                    //console.log('Enhanced DOCX failed, trying mammoth');
                     try {
                         const result = await mammoth.extractRawText({
                             arrayBuffer: buffer
@@ -1197,7 +1197,7 @@ ${chunk}`;
                         extractedText = result.value;
                         processingMethod = 'mammoth';
                     } catch (mammothError) {
-                        console.log('Mammoth failed, falling back to Gemini API');
+                        //console.log('Mammoth failed, falling back to Gemini API');
                         return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
                     }
                 }
@@ -1208,7 +1208,7 @@ ${chunk}`;
                     extractedText = await processCsvEnhanced(csvContent);
                     processingMethod = 'papaparse';
                 } catch (csvError) {
-                    console.log('Enhanced CSV processing failed, using raw content');
+                    //console.log('Enhanced CSV processing failed, using raw content');
                     extractedText = new TextDecoder().decode(buffer);
                     processingMethod = 'raw_text';
                 }
@@ -1219,7 +1219,7 @@ ${chunk}`;
                     extractedText = await processHtmlEnhanced(htmlContent);
                     processingMethod = 'cheerio';
                 } catch (htmlError) {
-                    console.log('Enhanced HTML processing failed, using raw content');
+                    //console.log('Enhanced HTML processing failed, using raw content');
                     extractedText = new TextDecoder().decode(buffer);
                     processingMethod = 'raw_text';
                 }
@@ -1230,7 +1230,7 @@ ${chunk}`;
                     extractedText = await processRtfEnhanced(rtfContent);
                     processingMethod = 'rtf_parser';
                 } catch (rtfError) {
-                    console.log('RTF processing failed, using simple cleanup');
+                    //console.log('RTF processing failed, using simple cleanup');
                     const rtfContent = new TextDecoder().decode(buffer);
                     extractedText = rtfContent.replace(/\{[^}]*\}/g, '').replace(/\\[a-z]+\d*\s?/gi, '').trim();
                     processingMethod = 'simple_rtf_cleanup';
@@ -1265,7 +1265,7 @@ ${chunk}`;
                     });
                     processingMethod = 'xlsx_enhanced';
                 } catch (xlsxError) {
-                    console.log('Enhanced XLSX processing failed, falling back to basic');
+                    //console.log('Enhanced XLSX processing failed, falling back to basic');
                     const workbook = XLSX.read(buffer, {
                         type: 'array'
                     });
@@ -1284,7 +1284,7 @@ ${chunk}`;
                     extractedText = await extractPptxText(buffer);
                     processingMethod = 'pptx_xml';
                 } catch (pptxError) {
-                    console.log('PPTX processing failed, falling back to Gemini API');
+                    //console.log('PPTX processing failed, falling back to Gemini API');
                     return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
                 }
                 break;
@@ -1294,7 +1294,7 @@ ${chunk}`;
         }
         // If extraction was successful but content is very large, chunk it for processing
         if (extractedText.length > ENHANCED_PROCESSING_CONFIG.INTELLIGENT_CHUNK_SIZE) {
-            console.log(`Large extracted content (${extractedText.length} chars), applying intelligent chunking`);
+            //console.log(`Large extracted content (${extractedText.length} chars), applying intelligent chunking`);
             const chunks = createIntelligentChunks(extractedText, file.type);
             const prompt = `${EXTRACTION_PROMPTS[file.type] || EXTRACTION_PROMPTS.document}
 
@@ -1316,9 +1316,9 @@ PROCESSING INSTRUCTIONS:
             contentLength: file.content.length,
             originalContentLength: extractedText.length
         };
-        console.log(`Successfully processed ${file.name} using ${processingMethod}: ${file.content.length} characters`);
+        //console.log(`Successfully processed ${file.name} using ${processingMethod}: ${file.content.length} characters`);
     } catch (error) {
-        console.error(`All library processing failed for ${file.name}:`, error);
+        //console.error(`All library processing failed for ${file.name}:`, error);
         // Final fallback to Gemini API
         return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
     }
@@ -1434,7 +1434,7 @@ CSV CONTENT TO PROCESS:`;
     if (response.success && response.content) {
         // Check if we got complete extraction or if it was truncated
         if (response.content.includes('[TRUNCATED') || response.content.length < file.size * 0.001) {
-            console.log(`Initial extraction may be incomplete for ${file.name}, attempting advanced processing...`);
+            //console.log(`Initial extraction may be incomplete for ${file.name}, attempting advanced processing...`);
         }
         file.content = response.content;
     } else {
@@ -1580,13 +1580,13 @@ This is an archive file that contains compressed data. Without extraction capabi
             geminiApiCalls: 1,
             contentLength: file.content?.length || 0
         };
-        console.log(`Successfully processed ${file.name}: ${file.content?.length || 0} characters extracted`);
+        //console.log(`Successfully processed ${file.name}: ${file.content?.length || 0} characters extracted`);
     } catch (error) {
         file.processing_View_status = 'failed';
         file.processing_error = `Processing error: ${error.message}`;
         file.processing_completed_at = new Date().toISOString();
         file.total_processing_time_ms = Date.now() - startTime;
-        console.error(`Error processing file ${file.name}:`, error);
+        //console.error(`Error processing file ${file.name}:`, error);
     }
 }
 /**
@@ -1603,7 +1603,7 @@ This is an archive file that contains compressed data. Without extraction capabi
         }
         return a.size - b.size; // Smaller files first within same priority
     });
-    console.log(`Processing ${filesToProcess.length} files with enhanced zero-truncation system`);
+    //console.log(`Processing ${filesToProcess.length} files with enhanced zero-truncation system`);
     // Process files in batches to manage API rate limits
     for (let i = 0; i < filesToProcess.length; i += ENHANCED_PROCESSING_CONFIG.BATCH_SIZE) {
         const batch = filesToProcess.slice(i, i + ENHANCED_PROCESSING_CONFIG.BATCH_SIZE);
@@ -1613,7 +1613,7 @@ This is an archive file that contains compressed data. Without extraction capabi
             await new Promise((resolve) => setTimeout(resolve, ENHANCED_PROCESSING_CONFIG.RATE_LIMIT_DELAY * 2));
         }
     }
-    console.log('Enhanced file processing completed with zero truncation');
+    //console.log('Enhanced file processing completed with zero truncation');
 }
 /**
 * Process file from multipart/form-data (if needed)
@@ -1621,13 +1621,13 @@ This is an archive file that contains compressed data. Without extraction capabi
     const mimeType = file.type;
     const fileConfig = ENHANCED_FILE_TYPES[mimeType];
     if (!fileConfig) {
-        console.warn(`Unsupported file type: ${mimeType}`);
+        //console.warn(`Unsupported file type: ${mimeType}`);
         return null;
     }
     try {
         const validation = validateFile(file, fileConfig.type);
         if (!validation.valid) {
-            console.warn(`File validation failed for ${file.name}: ${validation.error}`);
+            //console.warn(`File validation failed for ${file.name}: ${validation.error}`);
             return {
                 name: file.name,
                 type: fileConfig.type,
@@ -1689,7 +1689,7 @@ This is an archive file that contains compressed data. Without extraction capabi
             };
         }
     } catch (error) {
-        console.error(`Error processing file ${file.name}:`, error);
+        //console.error(`Error processing file ${file.name}:`, error);
         return {
             name: file.name,
             type: fileConfig.type,
@@ -1711,17 +1711,17 @@ This is an archive file that contains compressed data. Without extraction capabi
 * Process file from JSON payload
 */ async function processBase64File(fileData) {
     if (!fileData.name || !fileData.mimeType) {
-        console.warn('Invalid file data structure');
+        //console.warn('Invalid file data structure');
         return null;
     }
     const fileConfig = ENHANCED_FILE_TYPES[fileData.mimeType];
     if (!fileConfig) {
-        console.warn(`Unsupported file type: ${fileData.mimeType}`);
+        //console.warn(`Unsupported file type: ${fileData.mimeType}`);
         return null;
     }
     const validation = validateFile(fileData, fileConfig.type);
     if (!validation.valid) {
-        console.warn(`File validation failed for ${fileData.name}: ${validation.error}`);
+        //console.warn(`File validation failed for ${fileData.name}: ${validation.error}`);
         return {
             name: fileData.name,
             type: fileConfig.type,
@@ -1751,7 +1751,7 @@ This is an archive file that contains compressed data. Without extraction capabi
         try {
             decodedContent = atob(fileData.data);
         } catch (error) {
-            console.warn(`Failed to decode base64 data for ${fileData.name}`);
+            //console.warn(`Failed to decode base64 data for ${fileData.name}`);
         }
     }
     return {
@@ -1798,7 +1798,7 @@ This is an archive file that contains compressed data. Without extraction capabi
                 type: file.mimeType
             });
         } else {
-            console.warn(`No data or content to upload for file: ${file.name}`);
+            //console.warn(`No data or content to upload for file: ${file.name}`);
             return null;
         }
         const { data, error } = await supabase.storage.from(bucketName).upload(filePath, fileDataToUpload, {
@@ -1806,13 +1806,13 @@ This is an archive file that contains compressed data. Without extraction capabi
             upsert: false
         });
         if (error) {
-            console.error('Error uploading file to Supabase Storage:', error);
+            //console.error('Error uploading file to Supabase Storage:', error);
             return null;
         }
         const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
         return publicUrlData?.publicUrl || null;
     } catch (error) {
-        console.error('Error in uploadFileToStorage:', error);
+        //console.error('Error in uploadFileToStorage:', error);
         return null;
     }
 }
@@ -1838,7 +1838,7 @@ This is an archive file that contains compressed data. Without extraction capabi
         if (!fileUrl) {
             processingStatus = 'failed';
             processingError = processingError || 'Failed to upload file to storage';
-            console.error(`Failed to upload file ${file.name} to storage.`);
+            //console.error(`Failed to upload file ${file.name} to storage.`);
             return null;
         }
     }
@@ -1856,14 +1856,14 @@ This is an archive file that contains compressed data. Without extraction capabi
             processing_error: processingError
         }).select('id').single();
         if (error) {
-            console.error('Error saving file metadata to database:', error);
+            //console.error('Error saving file metadata to database:', error);
             return null;
         }
         file.id = data.id;
         file.file_url = fileUrl || '';
         return data.id;
     } catch (error) {
-        console.error('Database error when saving file:', error);
+        //console.error('Database error when saving file:', error);
         return null;
     }
 }
@@ -1928,7 +1928,7 @@ This is an archive file that contains compressed data. Without extraction capabi
         if (!geminiApiKey) {
             throw new Error('GEMINI_API_KEY environment variable is not configured.');
         }
-        console.log(`Starting enhanced processing of ${files.length} files for user ${userId}...`);
+        //console.log(`Starting enhanced processing of ${files.length} files for user ${userId}...`);
         // Use enhanced batch processing with zero truncation
         await enhancedBatchProcessing(files, geminiApiKey, userId);
         // Save all files to database
@@ -1971,7 +1971,7 @@ This is an archive file that contains compressed data. Without extraction capabi
             }
         }
         const processingTime = Date.now() - startTime;
-        console.log(`Enhanced document processing for user ${userId} completed in ${processingTime}ms.`);
+        //console.log(`Enhanced document processing for user ${userId} completed in ${processingTime}ms.`);
         return new Response(JSON.stringify({
             message: 'Files processed with enhanced zero-truncation system.',
             processingTime,
@@ -1998,7 +1998,7 @@ This is an archive file that contains compressed data. Without extraction capabi
         });
     } catch (error) {
         const processingTime = Date.now() - startTime;
-        console.error('Error in enhanced document-processor function:', error);
+        //console.error('Error in enhanced document-processor function:', error);
         return new Response(JSON.stringify({
             error: error.message || 'Internal Server Error',
             processingTime,

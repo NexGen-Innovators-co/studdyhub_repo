@@ -19,13 +19,13 @@ export const useInfiniteScroll = ({
 
   const handleObserver = useCallback(async (entries: IntersectionObserverEntry[]) => {
     const [target] = entries;
-    
+
     if (target.isIntersecting && hasMore && !isLoading && !isLoadingMore) {
       setIsLoadingMore(true);
       try {
         await loadMore();
       } catch (error) {
-        console.error('Error loading more items:', error);
+        //console.error('Error loading more items:', error);
       } finally {
         setIsLoadingMore(false);
       }

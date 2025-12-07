@@ -11,7 +11,7 @@ export const markMessageAsDisplayed = async (messageId: string) => {
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error('Error marking message as displayed:', error);
+    //console.error('Error marking message as displayed:', error);
     return false;
   }
 };

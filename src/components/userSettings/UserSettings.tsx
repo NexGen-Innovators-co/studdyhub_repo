@@ -158,7 +158,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       if (error) throw error;
       setGoals(data || []);
     } catch (error) {
-      console.error('Error fetching goals:', error);
+      //console.error('Error fetching goals:', error);
       toast.error('Failed to load goals');
     }
   };
@@ -176,7 +176,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       if (error) throw error;
       setAchievements(data || []);
     } catch (error) {
-      console.error('Error fetching achievements:', error);
+      //console.error('Error fetching achievements:', error);
       toast.error('Failed to load achievements');
     }
   };
@@ -197,7 +197,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       if (error) throw error;
       setStats(data?.[0] || null);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      //console.error('Error fetching stats:', error);
     }
   };
 
@@ -333,7 +333,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       setTimeout(() => setSaveSuccess(false), 3000);
       toast.success('Profile and preferences saved!');
     } catch (error) {
-      console.error('Error saving preferences:', error);
+      //console.error('Error saving preferences:', error);
       toast.error('Failed to save preferences or update password');
     } finally {
       setIsLoading(false);
@@ -368,7 +368,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       setNewGoal('');
       toast.success('Goal added!');
     } catch (error) {
-      console.error('Error adding goal:', error);
+      //console.error('Error adding goal:', error);
       toast.error('Failed to add goal');
     }
   };
@@ -389,7 +389,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       setGoals(goals.map(g => g.id === goalId ? { ...g, progress } : g));
       toast.success('Progress updated!');
     } catch (error) {
-      console.error('Error updating progress:', error);
+      //console.error('Error updating progress:', error);
       toast.error('Failed to update progress');
     }
   };
@@ -406,7 +406,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       setGoals(goals.filter(g => g.id !== goalId));
       toast.success('Goal deleted!');
     } catch (error) {
-      console.error('Error deleting goal:', error);
+      //console.error('Error deleting goal:', error);
       toast.error('Failed to delete goal');
     }
   };
@@ -460,7 +460,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
       toast.success('Data exported successfully!');
     } catch (error) {
-      console.error('Error exporting data:', error);
+      //console.error('Error exporting data:', error);
       toast.error('Failed to export data');
     }
   };
@@ -481,7 +481,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       // if (error) throw error;
       // toast.success('Account deletion scheduled');
     } catch (error) {
-      console.error('Error deleting account:', error);
+      //console.error('Error deleting account:', error);
       toast.error('Failed to delete account');
     }
   };

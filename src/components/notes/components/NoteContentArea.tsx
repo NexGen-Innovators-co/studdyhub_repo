@@ -472,7 +472,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
         return tempDiv.innerHTML;
       } catch (error) {
-        console.error('Error converting markdown to HTML:', error);
+        //console.error('Error converting markdown to HTML:', error);
         return markdown;
       }
     };
@@ -532,8 +532,8 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       if (!editor) return;
 
       const html = editor.getHTML();
-      console.log("=== EDITOR STATE DEBUG ===");
-      console.log("Editor HTML:", html);
+      //console.log("=== EDITOR STATE DEBUG ===");
+      //console.log("Editor HTML:", html);
     };
 
     const handleSave = () => {

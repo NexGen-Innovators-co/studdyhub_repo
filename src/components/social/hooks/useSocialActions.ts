@@ -43,7 +43,7 @@ export const useSocialActions = (
 
       return publicUrl;
     } catch (error) {
-      //console.error('Error uploading file:', error);
+      ////console.error('Error uploading file:', error);
       toast.error('File upload failed.');
       return null;
     }
@@ -95,15 +95,15 @@ export const useSocialActions = (
         .from('social_group_members')
         .select('count', { count: 'exact' })
         .eq('group_id', newGroup.id);
-      
-      
+
+
       await supabase
         .from('social_groups')
         .update({ members_count: count })
         .eq('id', newGroup.id);
-      
+
       toast.success(`Group "${newGroup.name}" created successfully!`);
-      
+
       // Update local state with members_count
       const newGroupWithDetails: SocialGroupWithDetails = {
         ...newGroup,
@@ -118,7 +118,7 @@ export const useSocialActions = (
       return newGroupWithDetails;
 
     } catch (error) {
-      //console.error('Error creating group:', error);
+      ////console.error('Error creating group:', error);
       toast.error('Failed to create group. Please try again.');
       return null;
     }
@@ -142,22 +142,22 @@ export const useSocialActions = (
           status: status
         });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        // If active, update members_count on server
-        if (status === 'active') {
-          const { count, error: countError } = await supabase
-            .from('social_group_members')
-            .select('count', { count: 'exact' })
-            .eq('group_id', groupId);
-        
-          if (countError) throw countError;
-        
-          await supabase
-            .from('social_groups')
-            .update({ members_count: count })
-            .eq('id', groupId);
-        }
+      // If active, update members_count on server
+      if (status === 'active') {
+        const { count, error: countError } = await supabase
+          .from('social_group_members')
+          .select('count', { count: 'exact' })
+          .eq('group_id', groupId);
+
+        if (countError) throw countError;
+
+        await supabase
+          .from('social_groups')
+          .update({ members_count: count })
+          .eq('id', groupId);
+      }
 
       // Update the local state for the specific group
       setGroups(prev => prev.map(g => g.id === groupId ? {
@@ -176,7 +176,7 @@ export const useSocialActions = (
       return true;
 
     } catch (error) {
-      //console.error('Error joining group:', error);
+      ////console.error('Error joining group:', error);
       toast.error('Failed to join group. You might already have a pending request.');
       return false;
     }
@@ -196,23 +196,23 @@ export const useSocialActions = (
         .eq('group_id', groupId)
         .eq('user_id', currentUser.id);
 
-        if (error) throw error;
+      if (error) throw error;
 
-        // If was active, update members_count on server
-        const group = groups.find(group => group.id === groupId);
-        if (group?.member_status === 'active') {  // Ensure group is fetched and check member_status
-          const { count, error: countError } = await supabase
-            .from('social_group_members')
-            .select('count', { count: 'exact' })
-            .eq('group_id', groupId);
-        
-          if (countError) throw countError;
-        
-          await supabase
-            .from('social_groups')
-            .update({ members_count: count })
-            .eq('id', groupId);
-        }
+      // If was active, update members_count on server
+      const group = groups.find(group => group.id === groupId);
+      if (group?.member_status === 'active') {  // Ensure group is fetched and check member_status
+        const { count, error: countError } = await supabase
+          .from('social_group_members')
+          .select('count', { count: 'exact' })
+          .eq('group_id', groupId);
+
+        if (countError) throw countError;
+
+        await supabase
+          .from('social_groups')
+          .update({ members_count: count })
+          .eq('id', groupId);
+      }
       // Update the local state for the specific group
       setGroups(prev => prev.map(g => g.id === groupId ? {
         ...g,
@@ -226,7 +226,7 @@ export const useSocialActions = (
       return true;
 
     } catch (error) {
-      //console.error('Error leaving group:', error);
+      ////console.error('Error leaving group:', error);
       toast.error('Failed to leave group. Please try again.');
       return false;
     }
@@ -276,7 +276,7 @@ export const useSocialActions = (
       toast.success('Profile updated successfully!');
       return true;
     } catch (error) {
-      //console.error('Error updating profile:', error);
+      ////console.error('Error updating profile:', error);
       toast.error('Failed to update profile');
       return false;
     } finally {
@@ -378,12 +378,12 @@ export const useSocialActions = (
       toast.success('Post created successfully!');
       return true;
     } catch (error) {
-      //console.error('Error creating post:', error);
+      ////console.error('Error creating post:', error);
       toast.error('Failed to create post');
       return false;
     } finally {
       setIsUploading(false);
-      
+
     }
   };
   const toggleLike = async (postId: string, isLiked: boolean) => {
@@ -420,7 +420,7 @@ export const useSocialActions = (
         return post;
       }));
     } catch (error) {
-      //console.error('Error toggling like:', error);
+      ////console.error('Error toggling like:', error);
       toast.error('Failed to update like');
     }
   };
@@ -447,7 +447,7 @@ export const useSocialActions = (
         return post;
       }));
     } catch (error) {
-      //console.error('Error toggling bookmark:', error);
+      ////console.error('Error toggling bookmark:', error);
       toast.error('Failed to update bookmark');
     }
   };
@@ -467,7 +467,7 @@ export const useSocialActions = (
       return true;
     } catch (error) {
       toast.error('Failed to record share');
-      //console.error('Error recording share:', error);
+      ////console.error('Error recording share:', error);
       return false;
     }
   };
@@ -579,7 +579,7 @@ export const useSocialActions = (
         return { isNowFollowing: true };
       }
     } catch (error) {
-      //console.error('Error toggling follow:', error);
+      ////console.error('Error toggling follow:', error);
       toast.error('Failed to update follow status');
       throw error; // Re-throw so the UI can handle the error
     }
@@ -644,7 +644,7 @@ export const useSocialActions = (
       toast.success('Post deleted successfully');
       return true;
     } catch (error) {
-      //console.error('Error deleting post:', error);
+      ////console.error('Error deleting post:', error);
       toast.error('Failed to delete post');
       return false;
     }
@@ -723,7 +723,7 @@ export const useSocialActions = (
       toast.success('Post updated successfully');
       return true;
     } catch (error) {
-      //console.error('Error editing post:', error);
+      ////console.error('Error editing post:', error);
       toast.error('Failed to update post');
       return false;
     }

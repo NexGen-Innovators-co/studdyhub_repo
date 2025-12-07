@@ -291,7 +291,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
 
   const handleStartChat = async (userId: string) => {
     const sessionId = await createP2PChatSession(userId);
-    console.log(sessionId)
+    //console.log(sessionId)
 
     if (sessionId) {
       try {
@@ -300,7 +300,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
         setShowChatList(true);
         await setActiveSession(sessionId);
       } catch (error) {
-        console.error('Error refetching chat sessions:', error);
+        //console.error('Error refetching chat sessions:', error);
       }
     }
 
@@ -385,7 +385,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
       await fetchNotifications();
     } catch (err) {
       setError('Failed to refresh data');
-      console.error('Refresh error:', err);
+      //console.error('Refresh error:', err);
     } finally {
       setIsRefreshing(false);
     }

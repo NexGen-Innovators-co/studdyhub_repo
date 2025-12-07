@@ -15,7 +15,7 @@ export const saveToCache = (key: string, data: any) => {
     sessionStorage.setItem(key, JSON.stringify(data));
     sessionStorage.setItem(CACHE_KEYS.TIMESTAMP, Date.now().toString());
   } catch (e) {
-    console.warn('Failed to save to cache:', e);
+    //console.warn('Failed to save to cache:', e);
   }
 };
 
@@ -32,7 +32,7 @@ export const loadFromCache = (key: string) => {
     const data = sessionStorage.getItem(key);
     return data ? JSON.parse(data) : null;
   } catch (e) {
-    console.warn('Failed to load from cache:', e);
+    //console.warn('Failed to load from cache:', e);
     return null;
   }
 };
@@ -44,7 +44,7 @@ export const clearCache = () => {
     Object.values(CACHE_KEYS).forEach(key => {
       sessionStorage.removeItem(key);
     });
-    
+
     // Also clear any other social-related items from sessionStorage
     const keysToRemove: string[] = [];
     for (let i = 0; i < sessionStorage.length; i++) {
@@ -54,9 +54,9 @@ export const clearCache = () => {
       }
     }
     keysToRemove.forEach(key => sessionStorage.removeItem(key));
-    
-    console.log('✅ Social cache cleared');
+
+    //console.log('✅ Social cache cleared');
   } catch (error) {
-    console.error('Error clearing cache:', error);
+    //console.error('Error clearing cache:', error);
   }
 };

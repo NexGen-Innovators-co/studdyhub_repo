@@ -177,7 +177,7 @@ const extractSummary = (markdown) => {
         }
         return summary.trim() || 'No summary could be extracted.';
     } catch (e) {
-        console.error('Error extracting summary:', e);
+        //console.error('Error extracting summary:', e);
         return 'No summary could be extracted.';
     }
 };
@@ -203,7 +203,7 @@ const processImagePlaceholders = async (content, userId, supabaseServiceRoleClie
                 }
             });
             if (imageError) {
-                console.error(`Error generating image for "${description}":`, imageError.message);
+                //console.error(`Error generating image for "${description}":`, imageError.message);
                 // If image generation fails, replace with a broken image or a message
                 updatedContent = updatedContent.replace(fullMatch, `![${description} - Image Generation Failed](broken-image.png)`); // Use a generic broken image
             } else if (imageData && imageData.imageUrl) {
@@ -214,7 +214,7 @@ const processImagePlaceholders = async (content, userId, supabaseServiceRoleClie
                 updatedContent = updatedContent.replace(fullMatch, `![${description} - No Image URL Returned](no-image-url.png)`); // Use a generic no-image-url
             }
         } catch (e) {
-            console.error(`Unexpected error during image generation for "${description}":`, e.message);
+            //console.error(`Unexpected error during image generation for "${description}":`, e.message);
             updatedContent = updatedContent.replace(fullMatch, `![${description} - Unexpected Error](unexpected-error.png)`); // Use a generic error image
         }
     }
@@ -273,7 +273,7 @@ serve(async (req) => {
         // 5. Fetch document content securely
         const { data: document, error: docError } = await supabaseClient.from('documents').select('title, content_extracted').eq('id', documentId).eq('user_id', user.id).single();
         if (docError || !document) {
-            console.error('Document fetch error:', docError?.message);
+            //console.error('Document fetch error:', docError?.message);
             return new Response(JSON.stringify({
                 error: 'Document not found or access denied'
             }), {
@@ -323,7 +323,7 @@ serve(async (req) => {
 
         const { data: newNote, error: insertError } = await supabaseClient.from('notes').insert(newNotePayload).select().single();
         if (insertError) {
-            console.error('Note insert error:', insertError.message);
+            //console.error('Note insert error:', insertError.message);
             throw new Error('Failed to save the generated note. Check database constraints.');
         }
 
@@ -336,7 +336,7 @@ serve(async (req) => {
             }
         });
     } catch (error) {
-        console.error('Edge function error:', error.message);
+        //console.error('Edge function error:', error.message);
         return new Response(JSON.stringify({
             error: error.message
         }), {

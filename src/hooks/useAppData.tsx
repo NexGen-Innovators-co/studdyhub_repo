@@ -195,13 +195,13 @@ const withRetry = async <T,>(
       // Exponential backoff for retries
       if (attempt < retries) {
         const delay = RETRY_DELAY * Math.pow(2, attempt);
-        console.log(`🔄 Retrying ${dataType} (attempt ${attempt + 1}/${retries}) after ${delay}ms...`);
+        //console.log(`🔄 Retrying ${dataType} (attempt ${attempt + 1}/${retries}) after ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
 
-  console.error(`❌ Failed to load ${dataType} after ${retries} retries:`, lastError);
+  //console.error(`❌ Failed to load ${dataType} after ${retries} retries:`, lastError);
   return { data: null, error: lastError, retriesUsed: retries };
 };
 
@@ -262,7 +262,7 @@ const useLoadingState = (initialState: DataLoadingState) => {
       const timeout = setTimeout(() => {
         // Only log warning for critical operations or if it's really stuck
         if (isCritical) {
-          console.warn(`Loading state timeout for ${key} - resetting loading state`);
+          //console.warn(`Loading state timeout for ${key} - resetting loading state`);
         }
         setLoading(prev => ({ ...prev, [key]: false }));
         timeoutRefs.current.delete(key);
@@ -340,12 +340,12 @@ const useLoadingQueue = () => {
 
       // Execute in parallel but with controlled concurrency
       const promises = itemsToProcess.map(async (item) => {
-        console.log(`🚀 Starting ${item.dataType} load (priority: ${item.priority})`);
+        //console.log(`🚀 Starting ${item.dataType} load (priority: ${item.priority})`);
         try {
           await item.execute();
-          console.log(`✅ Completed ${item.dataType} load`);
+          //console.log(`✅ Completed ${item.dataType} load`);
         } catch (error) {
-          console.error(`❌ Failed ${item.dataType} load:`, error);
+          //console.error(`❌ Failed ${item.dataType} load:`, error);
           throw error; // Re-throw so Promise.allSettled can catch it
         }
       });
@@ -529,9 +529,9 @@ export const useAppData = () => {
           authListener.subscription.unsubscribe();
         };
       } catch (error) {
-        console.error('Auth setup error:', error);
+        //console.error('Auth setup error:', error);
         if (error instanceof Error && error.message.includes('timeout')) {
-          console.warn('Auth check timed out, continuing with current state');
+          //console.warn('Auth check timed out, continuing with current state');
         }
       }
     };
@@ -546,9 +546,9 @@ export const useAppData = () => {
   // Optimized user change detection with debouncing
   useEffect(() => {
     if (currentUser?.id && currentUser.id !== lastUserId) {
-      console.log('🔄 User changed, starting progressive data loading...');
-      console.log('👤 New user ID:', currentUser.id);
-      console.log('📧 User email:', currentUser.email);
+      //console.log('🔄 User changed, starting progressive data loading...');
+      //console.log('👤 New user ID:', currentUser.id);
+      //console.log('📧 User email:', currentUser.email);
 
       setLastUserId(currentUser.id);
 
@@ -560,7 +560,7 @@ export const useAppData = () => {
       // Start progressive loading
       startProgressiveDataLoading(currentUser);
     } else if (!currentUser && lastUserId !== null) {
-      console.log('🚪 User logged out, clearing data...');
+      //console.log('🚪 User logged out, clearing data...');
       setLastUserId(null);
       clearAllData();
       clearCache();
@@ -686,7 +686,7 @@ export const useAppData = () => {
       if (error) {
         // Check if it's a network error
         if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          console.warn('Network error loading documents, will retry later');
+          //console.warn('Network error loading documents, will retry later');
           // Don't throw, just return - it will be retried by queue
           return;
         }
@@ -747,7 +747,7 @@ export const useAppData = () => {
         }
       }
     } catch (error) {
-      console.error('Error loading documents:', error);
+      //console.error('Error loading documents:', error);
       if (isInitial && !error.message?.includes('network')) {
         toast.error('Failed to load documents. Please check your connection.');
         setDataErrors(prev => ({ ...prev, documents: 'Failed to load documents' }));
@@ -791,7 +791,7 @@ export const useAppData = () => {
 
       if (error) {
         if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          console.warn('Network error loading recordings, will retry later');
+          //console.warn('Network error loading recordings, will retry later');
           return;
         }
         throw error;
@@ -841,7 +841,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'recordings']));
     } catch (error) {
-      console.error('Error loading recordings:', error);
+      //console.error('Error loading recordings:', error);
       if (isInitial && !error.message?.includes('network')) {
         setDataErrors(prev => ({ ...prev, recordings: 'Failed to load recordings' }));
       }
@@ -875,7 +875,7 @@ export const useAppData = () => {
       if (error) {
         // Handle CORS/network errors gracefully
         if (error.message?.includes('Failed to fetch') || error.message?.includes('CORS')) {
-          console.warn('Network/CORS error loading schedule items. Skipping for now.');
+          //console.warn('Network/CORS error loading schedule items. Skipping for now.');
           // Set empty data instead of throwing error
           setScheduleItems(prev => isInitial ? [] : prev);
           setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
@@ -928,7 +928,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
     } catch (error) {
-      console.error('Error loading schedule items:', error);
+      //console.error('Error loading schedule items:', error);
       // Don't show error for network/CORS issues
       if (!error.message?.includes('Failed to fetch') && !error.message?.includes('CORS')) {
         setDataErrors(prev => ({ ...prev, scheduleItems: 'Failed to load schedule items' }));
@@ -971,7 +971,7 @@ export const useAppData = () => {
 
       if (error) {
         if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          console.warn('Network error loading quizzes, will retry later');
+          //console.warn('Network error loading quizzes, will retry later');
           return;
         }
         throw error;
@@ -1022,7 +1022,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'quizzes']));
     } catch (error) {
-      console.error('Error loading quizzes:', error);
+      //console.error('Error loading quizzes:', error);
       if (isInitial && !error.message?.includes('network')) {
         setDataErrors(prev => ({ ...prev, quizzes: 'Failed to load quizzes' }));
       }
@@ -1077,7 +1077,7 @@ export const useAppData = () => {
 
       if (error) {
         if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          console.warn('Network error loading folders, will retry later');
+          //console.warn('Network error loading folders, will retry later');
           return;
         }
         throw error;
@@ -1115,7 +1115,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'folders']));
     } catch (error) {
-      console.error('Error loading folders:', error);
+      //console.error('Error loading folders:', error);
       if (isInitial && !error.message?.includes('network')) {
         setDataErrors(prev => ({ ...prev, folders: 'Failed to load folders' }));
       }
@@ -1126,24 +1126,24 @@ export const useAppData = () => {
 
   // Enhanced user profile loading with retry logic
   const loadUserProfile = useCallback(async (user: any) => {
-    console.log('🔄 loadUserProfile called for user:', user?.id);
+    //console.log('🔄 loadUserProfile called for user:', user?.id);
 
     if (dataLoaded.has('profile')) {
-      console.log('📋 Profile already loaded, skipping');
+      //console.log('📋 Profile already loaded, skipping');
       return;
     }
 
     const cacheKey = `profile_${user.id}`;
     const cached = getCachedData(cacheKey);
     if (cached) {
-      console.log('💾 Using cached profile data');
+      //console.log('💾 Using cached profile data');
       setUserProfile(cached);
       setDataLoaded(prev => new Set([...prev, 'profile']));
       return;
     }
 
     setDataLoading('profile', true);
-    console.log('⏳ Loading profile from database...');
+    //console.log('⏳ Loading profile from database...');
 
     try {
       const startTime = Date.now();
@@ -1167,7 +1167,7 @@ export const useAppData = () => {
       recordResponseTime(responseTime);
 
       if (profileError && profileError.code !== 'PGRST116') {
-        console.error('Error loading user profile:', profileError);
+        //console.error('Error loading user profile:', profileError);
       }
 
       let finalProfile: UserProfile;
@@ -1213,7 +1213,7 @@ export const useAppData = () => {
               'Failed to create profile'
             );
           } catch (error) {
-            console.error('Error creating default profile:', error);
+            //console.error('Error creating default profile:', error);
           }
         }, 0);
       }
@@ -1223,7 +1223,7 @@ export const useAppData = () => {
       setDataLoaded(prev => new Set([...prev, 'profile']));
 
     } catch (error) {
-      console.error('❌ Error in loadUserProfile:', error);
+      //console.error('❌ Error in loadUserProfile:', error);
       // Fallback profile
       const fallbackProfile: UserProfile = {
         id: user.id,
@@ -1302,7 +1302,7 @@ export const useAppData = () => {
 
       if (error) {
         if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          console.warn('Network error loading notes, will retry later');
+          //console.warn('Network error loading notes, will retry later');
           return;
         }
         throw error;
@@ -1365,7 +1365,7 @@ export const useAppData = () => {
 
       setDataLoaded(prev => new Set([...prev, 'notes']));
     } catch (error) {
-      console.error('Error loading notes:', error);
+      //console.error('Error loading notes:', error);
       setDataErrors(prev => ({ ...prev, notes: 'Failed to load notes' }));
 
       if (isInitial && !error.message?.includes('network')) {
@@ -1385,12 +1385,12 @@ export const useAppData = () => {
     setLoadingPhase({ phase: 'initial', progress: 10 });
 
     try {
-      console.log('👤 Starting profile load...');
+      //console.log('👤 Starting profile load...');
 
       // Phase 1: Critical data (profile MUST load first)
       const profileResult = await loadUserProfile(user); // Use the existing function
 
-      console.log('✅ Profile loaded, moving to core data...');
+      //console.log('✅ Profile loaded, moving to core data...');
       setLoadingPhase({ phase: 'core', progress: 30 });
 
       // Phase 2: Core content (notes are critical)
@@ -1404,12 +1404,12 @@ export const useAppData = () => {
         )
       ]);
 
-      console.log('✅ Core data loaded');
+      //console.log('✅ Core data loaded');
       setLoadingPhase({ phase: 'secondary', progress: 60 });
 
       // Phase 3: Load documents (important but not blocking)
       const documentsPromise = loadDocumentsPage(user.id, true).catch(error => {
-        console.warn('Documents load warning:', error.message);
+        //console.warn('Documents load warning:', error.message);
         // Continue even if documents fail
       });
 
@@ -1418,7 +1418,7 @@ export const useAppData = () => {
         loadRecordingsPage(user.id, true),
         // Schedule items might fail due to CORS, so handle separately
         loadSchedulePage(user.id, true).catch(error => {
-          console.warn('Schedule items load warning:', error.message);
+          //console.warn('Schedule items load warning:', error.message);
           return null; // Don't throw, just continue
         }),
         loadQuizzesPage(user.id, true)
@@ -1426,7 +1426,7 @@ export const useAppData = () => {
 
       // Don't wait for background promises to complete
       Promise.allSettled(backgroundPromises).then(() => {
-        console.log('✅ All background data loaded or failed gracefully');
+        //console.log('✅ All background data loaded or failed gracefully');
       }).catch(() => {
         // Ignore errors in background loading
       });
@@ -1445,7 +1445,7 @@ export const useAppData = () => {
       }, 1000);
 
     } catch (error) {
-      console.error('❌ Error loading core user data:', error);
+      //console.error('❌ Error loading core user data:', error);
 
       // Even if there's an error, try to show the UI with available data
       const connectionQuality = getConnectionQuality();
@@ -1596,7 +1596,7 @@ export const useAppData = () => {
         return merged;
       });
     } catch (error) {
-      console.warn('Background document load failed:', error);
+      //console.warn('Background document load failed:', error);
       // Silently fail - documents will load eventually
     }
   }, [getCachedData, setCachedData, mergeDocuments]);
@@ -1647,7 +1647,7 @@ export const useAppData = () => {
         return merged;
       });
     } catch (error) {
-      console.error('Error loading specific notes:', error);
+      //console.error('Error loading specific notes:', error);
     } finally {
       setDataLoading('notes', false);
     }
@@ -1657,7 +1657,7 @@ export const useAppData = () => {
   const refreshNotes = useCallback(async () => {
     if (!currentUser?.id) return;
 
-    console.log('🔄 Manually refreshing notes...');
+    //console.log('🔄 Manually refreshing notes...');
 
     // Clear notes and loaded IDs
     setNotes([]);
@@ -1683,7 +1683,7 @@ export const useAppData = () => {
     const failedLoads = Object.entries(dataErrors).filter(([_, error]) => error);
 
     if (failedLoads.length > 0 && currentUser?.id) {
-      console.log(`🔄 Auto-retrying ${failedLoads.length} failed loads...`);
+      //console.log(`🔄 Auto-retrying ${failedLoads.length} failed loads...`);
 
       failedLoads.forEach(([dataType]) => {
         // Clear the error first
@@ -1725,13 +1725,13 @@ export const useAppData = () => {
       recordResponseTime(responseTime);
 
       if (error) {
-        console.warn('Connection health check failed:', error);
+        //console.warn('Connection health check failed:', error);
         return false;
       }
 
       return true;
     } catch (error) {
-      console.warn('Connection health check error:', error);
+      //console.warn('Connection health check error:', error);
       return false;
     }
   }, [recordResponseTime]);

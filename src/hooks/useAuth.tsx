@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
         // Clear cache when user signs out
         if (event === 'SIGNED_OUT') {
-          console.log('🔴 Auth state: SIGNED_OUT - clearing cache');
+          //console.log('🔴 Auth state: SIGNED_OUT - clearing cache');
           clearCache();
         }
 
@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     try {
-      console.log('🔴 Starting sign out process...');
+      //console.log('🔴 Starting sign out process...');
 
       // Clear all caches BEFORE signing out
       clearCache(); // Social cache
@@ -82,9 +82,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Sign out from Supabase
       await supabase.auth.signOut();
 
-      console.log('✅ Sign out completed successfully');
+      //console.log('✅ Sign out completed successfully');
     } catch (error) {
-      console.error('❌ Error during sign out:', error);
+      //console.error('❌ Error during sign out:', error);
       // Still try to clear caches even if signout fails
       clearCache();
       clearDashboardCache();

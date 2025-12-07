@@ -114,7 +114,7 @@ export const ShareToChatDialog: React.FC<ShareToChatDialogProps> = ({
 
       // Filter to only show sessions where user is a member (for groups)
       const validSessions: ChatSession[] = [];
-      
+
       for (const session of allSessions) {
         if (session.chat_type === 'group' && session.group_id) {
           // Check if user is a member of the group
@@ -137,7 +137,7 @@ export const ShareToChatDialog: React.FC<ShareToChatDialogProps> = ({
       setChatSessions(validSessions);
       setFilteredSessions(validSessions);
     } catch (error) {
-      console.error('Error fetching chat sessions:', error);
+      //console.error('Error fetching chat sessions:', error);
       toast.error('Failed to load chats');
     } finally {
       setIsLoading(false);
@@ -148,9 +148,8 @@ export const ShareToChatDialog: React.FC<ShareToChatDialogProps> = ({
     try {
       setIsSending(true);
 
-      const shareMessage = `Check out this post: ${post.content.slice(0, 100)}${
-        post.content.length > 100 ? '...' : ''
-      }`;
+      const shareMessage = `Check out this post: ${post.content.slice(0, 100)}${post.content.length > 100 ? '...' : ''
+        }`;
 
       const result = await sendMessageWithResource(
         session.id,
@@ -166,7 +165,7 @@ export const ShareToChatDialog: React.FC<ShareToChatDialogProps> = ({
         toast.error('Failed to share post');
       }
     } catch (error) {
-      console.error('Error sharing post:', error);
+      //console.error('Error sharing post:', error);
       toast.error('Failed to share post');
     } finally {
       setIsSending(false);

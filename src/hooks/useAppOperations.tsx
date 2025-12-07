@@ -72,7 +72,7 @@ export const useAppOperations = ({
       await withRetry(async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
-  
+
         const newNote = {
           title: 'Untitled Note',
           content: '',
@@ -81,15 +81,15 @@ export const useAppOperations = ({
           user_id: user.id,
           ai_summary: ''
         };
-  
+
         const { data, error } = await supabase
           .from('notes')
           .insert(newNote)
           .select()
           .single();
-  
+
         if (error) throw error;
-  
+
         if (!isRealtimeConnected) {
           const formattedNote: Note = {
             id: data.id,
@@ -106,26 +106,26 @@ export const useAppOperations = ({
           setNotes(prev => [formattedNote, ...prev]);
           setActiveNote(formattedNote);
         }
-  
+
         setActiveTab('notes');
       });
     } catch (error) {
-      console.error('Error creating note:', error);
+      //console.error('Error creating note:', error);
       toast.error('Failed to create note after multiple attempts');
       if (!isRealtimeConnected) refreshData();
     }
   }, [isRealtimeConnected, refreshData, setActiveNote, setActiveTab, setNotes]);
-  
+
   const updateNote = useCallback(async (updatedNote: Note) => {
     try {
       if (!updatedNote.id) {
         throw new Error('Note ID is required for update');
       }
-  
+
       await withRetry(async () => {
         const { data: { user } = {} } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
-  
+
         const { error } = await supabase
           .from('notes')
           .update({
@@ -138,9 +138,9 @@ export const useAppOperations = ({
           })
           .eq('id', updatedNote.id)
           .eq('user_id', user.id);
-  
+
         if (error) throw error;
-  
+
         if (!isRealtimeConnected) {
           const noteWithUpdatedTime = {
             ...updatedNote,
@@ -155,7 +155,7 @@ export const useAppOperations = ({
         }
       });
     } catch (error) {
-      console.error('Error updating note:', error);
+      //console.error('Error updating note:', error);
       toast.error('Failed to update note after multiple attempts');
       if (!isRealtimeConnected) refreshData();
     }
@@ -184,7 +184,7 @@ export const useAppOperations = ({
         }
       });
     } catch (error) {
-      console.error('Error deleting note:', error);
+      //console.error('Error deleting note:', error);
       toast.error('Failed to delete note after multiple attempts');
       if (!isRealtimeConnected) refreshData();
     }
@@ -196,7 +196,7 @@ export const useAppOperations = ({
         setRecordings(prev => [recording, ...prev]);
       });
     } catch (error) {
-      console.error('Error adding recording to state:', error);
+      //console.error('Error adding recording to state:', error);
       toast.error('Failed to update recordings state');
     }
   }, [setRecordings]);
@@ -209,7 +209,7 @@ export const useAppOperations = ({
         );
       });
     } catch (error) {
-      console.error('Error updating recording in state:', error);
+      //console.error('Error updating recording in state:', error);
       toast.error('Failed to update recording state');
     }
   }, [setRecordings]);
@@ -241,7 +241,7 @@ export const useAppOperations = ({
             .eq('id', documentId)
             .eq('user_id', user.id);
 
-          if (documentError) console.error('Failed to delete linked document:', documentError);
+          // if (documentError) 
         }
 
         // 3. Delete audio file if exists
@@ -252,7 +252,7 @@ export const useAppOperations = ({
               .from('documents')
               .remove([filePath]);
 
-            if (storageError) console.error('Failed to delete audio file:', storageError);
+            // if (storageError) 
           }
         }
 
@@ -261,7 +261,7 @@ export const useAppOperations = ({
         }
       });
     } catch (error: any) {
-      console.error('Error deleting recording:', error);
+      //console.error('Error deleting recording:', error);
       toast.error(`Failed to delete recording: ${error.message || 'Unknown error'}`);
       if (!isRealtimeConnected) refreshData();
     }
@@ -288,7 +288,7 @@ export const useAppOperations = ({
       toast.success(`Folder "${input.name}" created successfully`);
       return data;
     } catch (error: any) {
-      console.error('Error creating folder:', error);
+      //console.error('Error creating folder:', error);
       toast.error(`Failed to create folder: ${error.message}`);
       return null;
     }
@@ -310,7 +310,7 @@ export const useAppOperations = ({
       toast.success('Folder updated successfully');
       return true;
     } catch (error: any) {
-      console.error('Error updating folder:', error);
+      //console.error('Error updating folder:', error);
       toast.error(`Failed to update folder: ${error.message}`);
       return false;
     }
@@ -332,7 +332,7 @@ export const useAppOperations = ({
       toast.success('Folder deleted successfully');
       return true;
     } catch (error: any) {
-      console.error('Error deleting folder:', error);
+      //console.error('Error deleting folder:', error);
       toast.error(`Failed to delete folder: ${error.message}`);
       return false;
     }
@@ -349,7 +349,7 @@ export const useAppOperations = ({
       toast.success('Document added to folder');
       return true;
     } catch (error: any) {
-      console.error('Error adding document to folder:', error);
+      //console.error('Error adding document to folder:', error);
       toast.error(`Failed to add document to folder: ${error.message}`);
       return false;
     }
@@ -368,7 +368,7 @@ export const useAppOperations = ({
       toast.success('Document removed from folder');
       return true;
     } catch (error: any) {
-      console.error('Error removing document from folder:', error);
+      //console.error('Error removing document from folder:', error);
       toast.error(`Failed to remove document from folder: ${error.message}`);
       return false;
     }
@@ -378,7 +378,7 @@ export const useAppOperations = ({
   //     // Recording is already inserted by ClassRecordings.tsx; only update local state
   //     setRecordings(prev => [recording, ...prev]);
   //   } catch (error) {
-  //     console.error('Error adding recording to state:', error);
+  //     //console.error('Error adding recording to state:', error);
   //     toast.error('Failed to update recordings state');
   //   }
   // }, [setRecordings]);
@@ -389,7 +389,7 @@ export const useAppOperations = ({
   //       prev.map(rec => (rec.id === updatedRecording.id ? updatedRecording : rec))
   //     );
   //   } catch (error) {
-  //     console.error('Error updating recording in state:', error);
+  //     //console.error('Error updating recording in state:', error);
   //     toast.error('Failed to update recording state');
   //   }
   // }, [setRecordings]);
@@ -417,7 +417,7 @@ export const useAppOperations = ({
   //         .eq('id', documentId)
   //         .eq('user_id', user.id);
 
-  //       if (documentError) console.error(`Failed to delete linked document ${documentId}: ${documentError.message}`);
+  //       if (documentError) //console.error(`Failed to delete linked document ${documentId}: ${documentError.message}`);
   //     }
 
   //     // 3. Delete audio file from storage if audioUrl is present
@@ -428,14 +428,14 @@ export const useAppOperations = ({
   //           .from('documents')
   //           .remove([filePath]);
 
-  //         if (storageError) console.error(`Failed to delete audio file from storage: ${storageError.message}`);
+  //         if (storageError) //console.error(`Failed to delete audio file from storage: ${storageError.message}`);
   //       }
   //     }
 
   //     setRecordings(prev => prev.filter(rec => rec.id !== recordingId));
   //     toast.success('Recording deleted successfully!');
   //   } catch (error: any) {
-  //     console.error('Error deleting recording:', error);
+  //     //console.error('Error deleting recording:', error);
   //     toast.error(`Failed to delete recording: ${error.message || 'Unknown error'}`);
   //   }
   // }, [setRecordings]);
@@ -448,7 +448,7 @@ export const useAppOperations = ({
       // and the recording itself is updated via onUpdateRecording if needed.
       // This function is kept for consistency with the prop signature, but its body is empty.
     } catch (error) {
-      console.error('Error generating quiz (operation hook):', error);
+      //console.error('Error generating quiz (operation hook):', error);
       toast.error('Failed to generate quiz (operation hook)');
     }
   };
@@ -457,7 +457,7 @@ export const useAppOperations = ({
     try {
       const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-  
+
       const { data, error } = await supabase
         .from('schedule_items')
         .insert({
@@ -473,9 +473,9 @@ export const useAppOperations = ({
         })
         .select()
         .single();
-  
+
       if (error) throw error;
-  
+
       // Create the complete schedule item with the returned data
       const newScheduleItem: ScheduleItem = {
         id: data.id,
@@ -490,20 +490,20 @@ export const useAppOperations = ({
         userId: data.user_id,
         created_at: data.created_at
       };
-  
+
       setScheduleItems(prev => [...prev, newScheduleItem]);
       toast.success('Schedule item added successfully');
     } catch (error) {
-      console.error('Error adding schedule item:', error);
+      //console.error('Error adding schedule item:', error);
       toast.error('Failed to add schedule item');
     }
   }, [setScheduleItems]);
-  
+
   const updateScheduleItem = useCallback(async (item: ScheduleItem) => {
     try {
       const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-  
+
       const { error } = await supabase
         .from('schedule_items')
         .update({
@@ -518,34 +518,34 @@ export const useAppOperations = ({
         })
         .eq('id', item.id)
         .eq('user_id', user.id);
-  
+
       if (error) throw error;
-  
+
       setScheduleItems(prev => prev.map(i => i.id === item.id ? item : i));
       toast.success('Schedule item updated successfully');
     } catch (error) {
-      console.error('Error updating schedule item:', error);
+      //console.error('Error updating schedule item:', error);
       toast.error('Failed to update schedule item');
     }
   }, [setScheduleItems]);
-  
+
   const deleteScheduleItem = useCallback(async (id: string) => {
     try {
       const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-  
+
       const { error } = await supabase
         .from('schedule_items')
         .delete()
         .eq('id', id)
         .eq('user_id', user.id);
-  
+
       if (error) throw error;
-  
+
       setScheduleItems(prev => prev.filter(i => i.id !== id));
       toast.success('Schedule item deleted successfully');
     } catch (error) {
-      console.error('Error deleting schedule item:', error);
+      //console.error('Error deleting schedule item:', error);
       toast.error('Failed to delete schedule item');
     }
   }, [setScheduleItems]);
@@ -561,9 +561,9 @@ export const useAppOperations = ({
       await withRetry(async () => {
         const { data: { user } = {} } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
-  
+
         const userMessageId = generateId();
-  
+
         const { error: insertError } = await supabase
           .from('chat_messages')
           .insert({
@@ -579,9 +579,9 @@ export const useAppOperations = ({
             session_id: session_id || null,
             has_been_displayed: false,
           });
-  
+
         if (insertError) throw insertError;
-  
+
         if (!isRealtimeConnected) {
           const newMessage: Message = {
             id: userMessageId,
@@ -598,12 +598,12 @@ export const useAppOperations = ({
           };
           setChatMessages(prev => [...prev, newMessage]);
         }
-  
+
         toast.success('Message sent!');
       });
     } catch (error) {
       toast.error('Failed to send message after multiple attempts');
-      console.error('Error in sendChatMessage:', error);
+      //console.error('Error in sendChatMessage:', error);
       if (!isRealtimeConnected) refreshData();
     }
   }, [isRealtimeConnected, refreshData, setChatMessages]);
@@ -636,7 +636,7 @@ export const useAppOperations = ({
       setDocuments(prev => [document, ...prev]);
       toast.success('Document uploaded successfully');
     } catch (error) {
-      console.error('Error saving document:', error);
+      //console.error('Error saving document:', error);
       toast.error('Failed to save document');
     }
   };
@@ -664,7 +664,7 @@ export const useAppOperations = ({
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       toast.success('Document deleted successfully');
     } catch (error) {
-      console.error('Error deleting document:', error);
+      //console.error('Error deleting document:', error);
       toast.error('Failed to delete document');
     }
   };
@@ -691,7 +691,7 @@ export const useAppOperations = ({
       setUserProfile({ ...profile, updated_at: new Date() });
       toast.success('Profile updated successfully');
     } catch (error) {
-      console.error('Error updating profile:', error);
+      //console.error('Error updating profile:', error);
       toast.error('Failed to update profile');
     }
   };

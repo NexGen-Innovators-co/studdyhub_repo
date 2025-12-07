@@ -65,7 +65,7 @@ export default async function handler(req, res) {
         }
 
       } catch (supabaseError) {
-        console.log('Supabase fetch failed:', supabaseError.message);
+        //console.log('Supabase fetch failed:', supabaseError.message);
         // Continue with static routes only
       }
     }
@@ -104,7 +104,7 @@ ${allRoutes.map(url => {
     res.status(200).send(xml);
 
   } catch (error) {
-    console.error('Sitemap generation error:', error);
+    //console.error('Sitemap generation error:', error);
 
     // Fallback to a minimal sitemap
     const fallbackXml = `<?xml version="1.0" encoding="UTF-8"?>

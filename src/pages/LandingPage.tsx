@@ -114,7 +114,7 @@ const LandingPage: React.FC = () => {
             .insert([defaultStats]);
 
           if (insertError) {
-            console.error("Error inserting default app stats:", insertError);
+            //console.error("Error inserting default app stats:", insertError);
             setAppStats({
               activeUsers: '50K+',
               notesProcessed: '1M+',
@@ -130,7 +130,7 @@ const LandingPage: React.FC = () => {
             });
           }
         } else if (error) {
-          console.error("Error fetching app stats from Supabase:", error);
+          //console.error("Error fetching app stats from Supabase:", error);
           setAppStats({
             activeUsers: '50K+',
             notesProcessed: '1M+',
@@ -146,7 +146,7 @@ const LandingPage: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error("Unexpected error fetching app stats:", error);
+        //console.error("Unexpected error fetching app stats:", error);
         setAppStats({
           activeUsers: '50K+',
           notesProcessed: '1M+',
@@ -561,7 +561,7 @@ const LandingPage: React.FC = () => {
           </div>
         </ContentContainer>
       </section>
-    </AppLayout>
+    </AppLayout >
   );
 };
 

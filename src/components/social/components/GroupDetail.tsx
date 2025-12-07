@@ -194,7 +194,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
       setGroupChatSession(newSession);
       toast.success('Group chat initialized');
     } catch (error) {
-      console.error('Error loading group chat session:', error);
+      //console.error('Error loading group chat session:', error);
       toast.error('Failed to load group chat');
     } finally {
       setIsLoadingChatSession(false);

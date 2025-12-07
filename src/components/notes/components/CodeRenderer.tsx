@@ -8,27 +8,27 @@ import { Button } from '../../ui/button';
 /* ---------- Syntax Highlighting ---------- */
 import { lowlight } from 'lowlight';                     // default export only
 import javascript from 'highlight.js/lib/languages/javascript';
-import python    from 'highlight.js/lib/languages/python';
-import java      from 'highlight.js/lib/languages/java';
-import cpp       from 'highlight.js/lib/languages/cpp';
-import sql       from 'highlight.js/lib/languages/sql';
-import xml       from 'highlight.js/lib/languages/xml';
-import bash      from 'highlight.js/lib/languages/bash';
+import python from 'highlight.js/lib/languages/python';
+import java from 'highlight.js/lib/languages/java';
+import cpp from 'highlight.js/lib/languages/cpp';
+import sql from 'highlight.js/lib/languages/sql';
+import xml from 'highlight.js/lib/languages/xml';
+import bash from 'highlight.js/lib/languages/bash';
 import typescript from 'highlight.js/lib/languages/typescript';
-import json      from 'highlight.js/lib/languages/json';
-import css       from 'highlight.js/lib/languages/css';
+import json from 'highlight.js/lib/languages/json';
+import css from 'highlight.js/lib/languages/css';
 
 /* lowlight is already an instance – just register the languages */
 lowlight.registerLanguage('javascript', javascript as any);
-lowlight.registerLanguage('python',    python    as any);
-lowlight.registerLanguage('java',      java      as any);
-lowlight.registerLanguage('cpp',       cpp       as any);
-lowlight.registerLanguage('sql',       sql       as any);
-lowlight.registerLanguage('xml',       xml       as any);
-lowlight.registerLanguage('bash',      bash      as any);
+lowlight.registerLanguage('python', python as any);
+lowlight.registerLanguage('java', java as any);
+lowlight.registerLanguage('cpp', cpp as any);
+lowlight.registerLanguage('sql', sql as any);
+lowlight.registerLanguage('xml', xml as any);
+lowlight.registerLanguage('bash', bash as any);
 lowlight.registerLanguage('typescript', typescript as any);
-lowlight.registerLanguage('json',      json      as any);
-lowlight.registerLanguage('css',       css       as any);
+lowlight.registerLanguage('json', json as any);
+lowlight.registerLanguage('css', css as any);
 
 // Direct import for Graphviz
 import { Graphviz } from '@hpcc-js/wasm';
@@ -147,7 +147,7 @@ const highlightCode = (code: string, language: string) => {
     const result = lowlight.highlight(language, code);
     return toHtml(result);
   } catch (error) {
-    console.warn('Syntax highlighting failed:', error);
+    //console.warn('Syntax highlighting failed:', error);
     return escapeHtml(code);
   }
 };
@@ -188,7 +188,7 @@ export const CodeRenderer: React.FC<CodeRendererProps> = memo(({ inline, classNa
           const svg = gv.layout(codeContent, 'svg', 'dot');
           setDotSvgContent(svg);
         } catch (e: any) {
-          console.error("DOT rendering error:", e);
+          //console.error("DOT rendering error:", e);
           setDotError(`Failed to render DOT graph: ${e.message || 'Invalid DOT syntax.'}`);
         } finally {
           setIsDotLoading(false);
@@ -239,7 +239,7 @@ export const CodeRenderer: React.FC<CodeRendererProps> = memo(({ inline, classNa
           }
         }
       } catch (e: any) {
-        console.error("Chart.js rendering error:", e);
+        //console.error("Chart.js rendering error:", e);
         setChartJsError(`Failed to render Chart.js graph: ${e.message || 'Invalid JSON configuration.'}`);
       } finally {
         setIsChartJsLoading(false);

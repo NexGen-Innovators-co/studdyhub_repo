@@ -82,7 +82,7 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
       if (docsError) throw docsError;
       setDocuments(docsData || []);
     } catch (error) {
-      console.error('Error fetching resources:', error);
+      //console.error('Error fetching resources:', error);
       toast.error('Failed to load resources');
     } finally {
       setIsLoading(false);
@@ -112,7 +112,7 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
       setSearchQuery('');
       onClose();
     } catch (error) {
-      console.error('Error sharing resource:', error);
+      //console.error('Error sharing resource:', error);
     } finally {
       setIsSharing(false);
     }
@@ -179,11 +179,10 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
                           title: note.title,
                         })
                       }
-                      className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                        selectedResource?.id === note.id
+                      className={`p-3 rounded-lg cursor-pointer transition-colors ${selectedResource?.id === note.id
                           ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500'
                           : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start gap-3">
                         <StickyNote className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
@@ -224,11 +223,10 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
                           title: doc.title,
                         })
                       }
-                      className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                        selectedResource?.id === doc.id
+                      className={`p-3 rounded-lg cursor-pointer transition-colors ${selectedResource?.id === doc.id
                           ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500'
                           : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start gap-3">
                         <FileText className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />

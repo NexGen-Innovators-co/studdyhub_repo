@@ -74,14 +74,14 @@ serve(async (req) => {
         try {
             structure = JSON.parse(text);
         } catch (jsonError) {
-            console.error('Error parsing AI response as JSON:', jsonError);
+            //console.error('Error parsing AI response as JSON:', jsonError);
             // Attempt to find JSON within the text if it's not pure JSON
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 try {
                     structure = JSON.parse(jsonMatch[0]);
                 } catch (innerJsonError) {
-                    console.error('Error parsing extracted JSON:', innerJsonError);
+                    //console.error('Error parsing extracted JSON:', innerJsonError);
                     return new Response(JSON.stringify({
                         error: 'AI response was not valid JSON and could not be parsed.'
                     }), {
@@ -112,7 +112,7 @@ serve(async (req) => {
             }
         });
     } catch (error) {
-        console.error('Error analyzing document structure:', error.message);
+        //console.error('Error analyzing document structure:', error.message);
         return new Response(JSON.stringify({
             error: error.message
         }), {

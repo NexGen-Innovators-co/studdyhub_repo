@@ -115,7 +115,7 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
 
       setEvents(eventsWithDetails as Event[]);
     } catch (error) {
-      console.error('Error fetching events:', error);
+      //console.error('Error fetching events:', error);
       toast.error('Failed to load events');
     } finally {
       setIsLoading(false);
@@ -180,7 +180,7 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
       });
       fetchEvents();
     } catch (error) {
-      console.error('Error creating event:', error);
+      //console.error('Error creating event:', error);
       toast.error('Failed to create event');
     } finally {
       setIsSubmitting(false);
@@ -229,7 +229,7 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
 
       toast.success(`RSVP updated to ${status}`);
     } catch (error) {
-      console.error('Error updating RSVP:', error);
+      //console.error('Error updating RSVP:', error);
       toast.error('Failed to update RSVP');
     }
   };
@@ -244,7 +244,7 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
       setEvents(prev => prev.filter(e => e.id !== eventId));
       toast.success('Event deleted');
     } catch (error) {
-      console.error('Error deleting event:', error);
+      //console.error('Error deleting event:', error);
       toast.error('Failed to delete event');
     }
   };
@@ -274,8 +274,8 @@ export const GroupEvents: React.FC<GroupEventsProps> = ({
   const handleJoinMeeting = (e: React.MouseEvent, meetingUrl: string) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    window.open('https://' + meetingUrl,'_blank');
+
+    window.open('https://' + meetingUrl, '_blank');
   };
 
   if (isLoading) {

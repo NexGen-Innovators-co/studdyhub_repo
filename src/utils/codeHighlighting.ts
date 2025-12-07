@@ -38,11 +38,11 @@ const registerLanguage = (name: string, language: LanguageFn, aliases: string[] 
       try {
         lowlight.registerLanguage(alias, language);
       } catch (error) {
-        console.warn(`Failed to register language alias "${alias}":`, error);
+        //console.warn(`Failed to register language alias "${alias}":`, error);
       }
     });
   } catch (error) {
-    console.warn(`Failed to register language "${name}":`, error);
+    //console.warn(`Failed to register language "${name}":`, error);
   }
 };
 
@@ -591,7 +591,7 @@ export const formatCode = (code: string, language?: string): string => {
 
   const { type, size } = detectIndentation(code);
   const lines = code.split('\n');
-  
+
   // Basic formatting for common languages
   if (language === 'json') {
     try {
@@ -613,14 +613,14 @@ export const formatCode = (code: string, language?: string): string => {
       if (trimmed.includes('}') && !trimmed.includes('{')) {
         indentLevel = Math.max(0, indentLevel - 1);
       }
-      
+
       const indent = type === 'tabs' ? '\t'.repeat(indentLevel) : ' '.repeat(indentLevel * size);
       const result = indent + trimmed;
-      
+
       if (trimmed.includes('{') && !trimmed.includes('}')) {
         indentLevel++;
       }
-      
+
       return result;
     }
 
@@ -642,7 +642,7 @@ export const toHtml = (result: any, theme: typeof themes[ThemeName]): string => 
 
       let style = '';
       const classList = classNames.split(' ');
-      
+
       // Apply theme colors
       classList.forEach(cls => {
         if (theme.colors[cls as keyof typeof theme.colors]) {
@@ -655,7 +655,7 @@ export const toHtml = (result: any, theme: typeof themes[ThemeName]): string => 
       if (classList.includes('hljs-keyword') || classList.includes('hljs-built_in')) {
         style += 'font-weight: 600; ';
       }
-      
+
       // Add text decoration for links and meta
       if (classList.includes('hljs-link') || classList.includes('hljs-meta')) {
         style += 'text-decoration: underline; ';
@@ -663,19 +663,19 @@ export const toHtml = (result: any, theme: typeof themes[ThemeName]): string => 
 
       const childrenHtml = children?.map(nodeToHtml).join('') || '';
       const styleAttr = style ? ` style="${style.trim()}"` : '';
-      
+
       return `<${tagName}${styleAttr}>${childrenHtml}</${tagName}>`;
     }
     return '';
   };
-  
+
   return result.children.map(nodeToHtml).join('');
 };
 
 // Enhanced syntax highlighting function with better error handling and formatting
 export const highlightCode = (
-  code: string, 
-  language: string, 
+  code: string,
+  language: string,
   theme: typeof themes[ThemeName],
   options: {
     format?: boolean;
@@ -689,21 +689,21 @@ export const highlightCode = (
     return '';
   }
 
-  
-  
+
+
   // Format code if requested
   if (format) {
     try {
       code = formatCode(code, language);
     } catch (error) {
-      console.warn('Code formatting failed:', error);
+      //console.warn('Code formatting failed:', error);
     }
   }
 
   try {
     // Normalize language name
     const normalizedLang = language.toLowerCase().replace(/[^a-z0-9]/g, '');
-    
+
     // Try to highlight with the specified language
     let result;
     try {
@@ -712,15 +712,15 @@ export const highlightCode = (
       // Fallback to auto-detection
       result = lowlight.highlightAuto(code);
     }
-    
+
     return toHtml(result, theme);
   } catch (error) {
-    console.warn('Syntax highlighting failed:', error);
-    
+    //console.warn('Syntax highlighting failed:', error);
+
     if (showErrors) {
       return `<span style="color: ${theme.colors['hljs-comment'] || '#888'};">/* Syntax highlighting failed: ${error} */</span>\n${escapeHtml(code)}`;
     }
-    
+
     return escapeHtml(code);
   }
 };
@@ -731,7 +731,7 @@ export const detectLanguage = (code: string, filename?: string): string => {
     const ext = filename.split('.').pop()?.toLowerCase();
     const extensionMap: { [key: string]: string } = {
       'js': 'javascript',
-      'jsx': 'javascript', 
+      'jsx': 'javascript',
       'ts': 'typescript',
       'tsx': 'typescript',
       'py': 'python',
@@ -766,7 +766,7 @@ export const detectLanguage = (code: string, filename?: string): string => {
       'ps1': 'powershell',
       'dockerfile': 'dockerfile'
     };
-    
+
     if (ext && extensionMap[ext]) {
       return extensionMap[ext];
     }
@@ -778,27 +778,27 @@ export const detectLanguage = (code: string, filename?: string): string => {
       return 'javascript';
     }
   }
-  
+
   if (code.includes('def ') && code.includes(':')) {
     return 'python';
   }
-  
+
   if (code.includes('public class') || code.includes('import java.')) {
     return 'java';
   }
-  
+
   if (code.includes('#include') || code.includes('std::')) {
     return 'cpp';
   }
-  
+
   if (code.includes('SELECT') || code.includes('FROM') || code.includes('WHERE')) {
     return 'sql';
   }
-  
+
   if (code.includes('<?php') || code.includes('<?=')) {
     return 'php';
   }
-  
+
   if (code.startsWith('{') && code.endsWith('}')) {
     try {
       JSON.parse(code);

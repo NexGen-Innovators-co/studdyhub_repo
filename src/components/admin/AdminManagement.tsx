@@ -94,7 +94,7 @@ const AdminManagement = () => {
                 });
 
                 if (authErr) {
-                    console.error("Supabase Auth Error:", authErr); // Log the full error
+                    //console.error("Supabase Auth Error:", authErr); // Log the full error
                     if (authErr.message.includes("Password should be at least")) {
                         toast.error("Password error: Password does not meet complexity requirements. Please check Supabase Auth settings.");
                     } else {
@@ -113,7 +113,7 @@ const AdminManagement = () => {
                     });
 
                 if (profileError) {
-                    console.error("Error creating profile:", profileError);
+                    //console.error("Error creating profile:", profileError);
                     toast.error(`Error creating profile: ${profileError.message}`);
                     // Consider deleting the auth user if profile creation fails.
                     await supabase.auth.admin.deleteUser(authData.user.id);
@@ -240,7 +240,7 @@ const AdminManagement = () => {
         }
 
         try {
-            console.log("Searching for users with term:", searchTerm); // Debugging
+            //console.log("Searching for users with term:", searchTerm); // Debugging
 
             const { data, error } = await supabase
                 .from('profiles') // Replace with your user table name
@@ -252,7 +252,7 @@ const AdminManagement = () => {
                 throw error;
             }
 
-            console.log("Search results:", data); // Debugging
+            //console.log("Search results:", data); // Debugging
             setSearchResults(data || []);
         } catch (err) {
             toast.error(`Error searching users: ${err}`);

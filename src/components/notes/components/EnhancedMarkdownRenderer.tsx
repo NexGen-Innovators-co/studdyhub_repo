@@ -47,7 +47,7 @@ export const EnhancedMarkdownRenderer = memo(({
   const hasProcessedTypingRef = useRef(false);
 
   const handleBlockEnter = useCallback((block: any) => {
-    // console.log('Entering block:', block.type);
+    // //console.log('Entering block:', block.type);
     if (onViewDiagram) {
       // Auto-toggle to panel when typing code/mermaid/html blocks
       onViewDiagram(block.type === 'code' ? 'code' : block.type, block.content, block.language);
@@ -55,7 +55,7 @@ export const EnhancedMarkdownRenderer = memo(({
   }, [onViewDiagram]);
 
   const handleBlockExit = useCallback((block: any) => {
-    // console.log('Exiting block:', block.type);
+    // //console.log('Exiting block:', block.type);
     // Could auto-switch back to main content here if needed
   }, []);
 
@@ -122,7 +122,7 @@ export const EnhancedMarkdownRenderer = memo(({
       try {
         return <div {...props} />;
       } catch (error) {
-        console.warn('HTML rendering error:', error);
+        //console.warn('HTML rendering error:', error);
         return (
           <div className="bg-red-50 border border-red-200 rounded p-3 my-2 dark:bg-red-900/20 dark:border-red-800">
             <p className="text-red-600 dark:text-red-400 text-sm">

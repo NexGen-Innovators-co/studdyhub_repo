@@ -116,7 +116,7 @@ export const useMessageHandlers = () => {
           .single();
 
         if (sessionError || !sessionData) {
-          console.warn('Invalid session ID. Creating a new session.');
+          //console.warn('Invalid session ID. Creating a new session.');
           currentSessionId = null; // Reset session ID to force creation of a new one
         }
       }
@@ -162,7 +162,7 @@ export const useMessageHandlers = () => {
         (attachedFiles || []).map(async (file) => {
           return new Promise<FileData>((resolve) => {
             setTimeout(() => {
-              //console.log(`Processing file: ${file.name}`);
+              ////console.log(`Processing file: ${file.name}`);
               resolve(file);
             }, 200);
           });
@@ -273,7 +273,7 @@ export const useMessageHandlers = () => {
       });
 
       if (error) {
-        //console.error('Edge function error:', error);
+        ////console.error('Edge function error:', error);
         throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
       }
 
@@ -281,7 +281,7 @@ export const useMessageHandlers = () => {
         throw new Error('Empty response from AI service');
       }
 
-      //console.log('[handleSubmitMessage] Backend response:', data);
+      ////console.log('[handleSubmitMessage] Backend response:', data);
 
       // **Replace optimistic messages with real messages from response**
       // Backend should return userMessageId and aiMessageId
@@ -312,7 +312,7 @@ export const useMessageHandlers = () => {
         has_been_displayed: false,
       };
 
-      // console.log('[handleSubmitMessage] Replacing optimistic messages with real IDs:', {
+      // //console.log('[handleSubmitMessage] Replacing optimistic messages with real IDs:', {
       //   userMessageId: realUserMessage.id,
       //   aiMessageId: realAiMessage.id
       // });
@@ -357,7 +357,7 @@ export const useMessageHandlers = () => {
       }
 
     } catch (error: any) {
-      //console.error('Error in handleSubmitMessage:', error);
+      ////console.error('Error in handleSubmitMessage:', error);
 
       // Remove optimistic messages on error
       setChatMessages(prev => {
@@ -426,14 +426,14 @@ export const useMessageHandlers = () => {
         .eq('user_id', user.id);
 
       if (error) {
-        //console.error('Error deleting message from DB:', error);
+        ////console.error('Error deleting message from DB:', error);
         toast.error('Failed to delete message from database.');
         // Could reload messages here to restore state
       } else {
         toast.success('Message deleted successfully.');
       }
     } catch (error: any) {
-      //console.error('Error in handleDeleteMessage:', error);
+      ////console.error('Error in handleDeleteMessage:', error);
       toast.error(`Error deleting message: ${error.message || 'Unknown error'}`);
     }
   }, [user, activeChatSessionId, setChatMessages]);
@@ -482,7 +482,7 @@ export const useMessageHandlers = () => {
         undefined,
       );
     } catch (error) {
-      //console.error('Error regenerating response:', error);
+      ////console.error('Error regenerating response:', error);
       toast.error('Failed to regenerate response');
 
       setChatMessages(prevAllMessages =>
@@ -535,7 +535,7 @@ export const useMessageHandlers = () => {
         undefined,
       );
     } catch (error) {
-      //console.error('Error retrying message:', error);
+      ////console.error('Error retrying message:', error);
       toast.error('Failed to retry message');
 
       setChatMessages(prevAllMessages =>
@@ -623,7 +623,7 @@ export const useSessionHelpers = () => {
 
       return true;
     } catch (error) {
-      console.error('Error updating session title:', error);
+      //console.error('Error updating session title:', error);
       return false;
     }
   }, [user, dispatch]);

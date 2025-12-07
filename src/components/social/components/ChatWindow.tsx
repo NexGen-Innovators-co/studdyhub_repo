@@ -591,7 +591,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const copyMessage = (content: string) => {
     navigator.clipboard.writeText(content);
     toast.success('Copied to clipboard');
-    console.log('Copied message:', content);
+    //console.log('Copied message:', content);
   };
 
   const confirmDelete = async (messageId: string) => {

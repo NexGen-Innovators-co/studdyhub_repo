@@ -116,7 +116,7 @@ export const highlightCode = (code: string, language: string) => {
 
     return `<div class="code-block-wrapper" style="font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace; font-size: 14px; line-height: 1.5; background: #1f2937; color: #e5e7eb; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; border: 1px solid #374151;">${numberedLines}</div>`;
   } catch (error) {
-    console.warn('Syntax highlighting failed:', error);
+    //console.warn('Syntax highlighting failed:', error);
     return `<pre style="background: #1f2937; color: #e5e7eb; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; border: 1px solid #374151;"><code>${escapeHtml(code)}</code></pre>`;
   }
 };
