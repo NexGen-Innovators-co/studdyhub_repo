@@ -1,17 +1,8 @@
 // src/integrations/supabase/client.ts
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  //console.error('Missing Supabase env vars:')
-  //console.error('VITE_SUPABASE_URL:', supabaseUrl)
-  //console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'present' : 'missing')
-  throw new Error('Supabase URL and anon key are required. Check your .env file.')
-}
+// Hardcoded Supabase configuration (VITE_* env vars don't work in Lovable)
+const supabaseUrl = 'https://kegsrvnywshxyucgjxml.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlZ3Nydm55d3NoeHl1Y2dqeG1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzMzAxNTgsImV4cCI6MjA2NjkwNjE1OH0.uzLKKEp7mRk8cqg2ezVDpcYMVpOlgZjxkNMrpFigDf8'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-// Debug: Remove this after confirming it works
-//console.log('Supabase connected to:', supabaseUrl)
