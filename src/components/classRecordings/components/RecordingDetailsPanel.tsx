@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { CardContent } from '../../ui/card';
 import { Button } from '../../ui/button';
-import { Label } from '../../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { ClassRecording } from '../../../types/Class';
 import {
   Clipboard,
   Check,
-  Lightbulb,
   X,
   RefreshCw,
   Trash2,
@@ -28,7 +25,6 @@ import { toast } from 'sonner';
 interface RecordingDetailsPanelProps {
   recording: ClassRecording;
   onUpdateRecording: (recording: ClassRecording) => void;
-  onGenerateQuiz: (recording: ClassRecording, numQuestions: number, difficulty: string) => void;
   onGenerateNote: (recording: ClassRecording) => Promise<void>;
   onReprocessAudio: (recording: ClassRecording) => Promise<void>;
   onDeleteRecording: (recording: ClassRecording) => Promise<void>;
@@ -46,7 +42,6 @@ interface RecordingDetailsPanelProps {
 export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
   recording,
   onUpdateRecording,
-  onGenerateQuiz,
   onGenerateNote,
   onReprocessAudio,
   onDeleteRecording,
@@ -61,8 +56,6 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
   onCopyAudioUrl,
 }) => {
   const [copySuccess, setCopySuccess] = useState(false);
-  const [numQuestions, setNumQuestions] = useState<number>(5);
-  const [difficulty, setDifficulty] = useState<string>('medium');
   const [activeSection, setActiveSection] = useState<string>('transcript');
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -72,7 +65,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
     const audio = audioPlayerRef.current;
     if (!audio || !audioUrl) return;
 
-    // Set audio source if it’s different
+    // Set audio source if it's different
     if (audio.src !== audioUrl) {
       audio.src = audioUrl;
     }
@@ -87,7 +80,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
     };
 
     const handleError = (e: Event) => {
-      ////console.error('Audio error:', e);
+      console.error('Audio error:', e);
       toast.error('Failed to load audio. Please try again.');
       onPauseAudio();
     };
@@ -129,7 +122,7 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
         toast.success('Transcript copied to clipboard!');
         setTimeout(() => setCopySuccess(false), 2000);
       }).catch(err => {
-        ////console.error('Failed to copy transcript:', err);
+        console.error('Failed to copy transcript:', err);
         toast.error('Failed to copy transcript.');
       });
     }
@@ -374,67 +367,6 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Quiz Generation */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-4 sm:p-5 rounded-2xl border border-blue-200/50 dark:border-blue-800/50">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                <Lightbulb className="h-4 w-4 text-white" />
-              </div>
-              <h4 className="text-base sm:text-lg font-semibold text-blue-800 dark:text-blue-200">Generate Quiz</h4>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div className="space-y-2">
-                <Label htmlFor="num-questions" className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300">
-                  Questions
-                </Label>
-                <Select value={String(numQuestions)} onValueChange={(value) => setNumQuestions(Number(value))}>
-                  <SelectTrigger className="bg-white/80 dark:bg-gray-800/80 border-blue-200 dark:border-blue-700">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[3, 5, 10, 15].map(num => (
-                      <SelectItem key={num} value={String(num)}>{num} questions</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="difficulty" className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300">
-                  Difficulty
-                </Label>
-                <Select value={difficulty} onValueChange={setDifficulty}>
-                  <SelectTrigger className="bg-white/80 dark:bg-gray-800/80 border-blue-200 dark:border-blue-700">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['easy', 'medium', 'hard'].map(level => (
-                      <SelectItem key={level} value={level}>
-                        {level.charAt(0).toUpperCase() + level.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <Button
-              onClick={() => onGenerateQuiz(recording, numQuestions, difficulty)}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg transition-all duration-200 transform hover:scale-[1.02]"
-              disabled={!recording.transcript || getWordCount(recording.transcript) < 50}
-            >
-              <Lightbulb className="h-4 w-4 mr-2" />
-              Generate Quiz
-            </Button>
-
-            {(!recording.transcript || getWordCount(recording.transcript) < 50) && (
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 text-center">
-                {!recording.transcript ? 'Transcript required' : 'Need more content for quiz generation'}
-              </p>
-            )}
           </div>
 
           {/* Actions */}

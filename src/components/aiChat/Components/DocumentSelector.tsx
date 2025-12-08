@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../../ui/button';
 import { Checkbox } from '../../ui/checkbox';
+import { Input } from '../../ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../ui/dialog';
 import { ScrollArea } from '../../ui/scroll-area';
-import { FileText, StickyNote, X, Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
+import {
+  FileText, StickyNote, Loader2, Layers, Search, Filter, XCircle
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Document } from '../../../types/Document';
 import { Note } from '../../../types/Note';
@@ -17,12 +21,13 @@ interface DocumentSelectorProps {
   onSelectionChange: (ids: string[]) => void;
   isOpen: boolean;
   onClose: () => void;
-  onDocumentUpdated: (updatedDocument: Document) => void;
   activeChatSessionId: string | null;
   onLoadMoreDocuments: () => void;
   hasMoreDocuments: boolean;
   isLoadingDocuments: boolean;
 }
+
+type FilterMode = 'all' | 'selected' | 'unselected';
 
 export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   documents,
@@ -31,56 +36,93 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   onSelectionChange,
   isOpen,
   onClose,
-  onDocumentUpdated,
   activeChatSessionId,
   onLoadMoreDocuments,
   hasMoreDocuments,
   isLoadingDocuments,
 }) => {
   const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(selectedDocumentIds);
+  const [activeTab, setActiveTab] = useState<string>('documents');
+
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // Refs
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
 
-  // Reset local state when dialog opens/closes or selectedDocumentIds changes
+  // Reset state when dialog opens
   useEffect(() => {
     setLocalSelectedIds(selectedDocumentIds);
+    setSearchQuery('');
+    setFilterMode('all');
   }, [selectedDocumentIds, isOpen]);
 
-  // Set up Intersection Observer for infinite scroll
+  // --- FILTERING LOGIC ---
+  const filterItems = <T extends { id: string }>(items: T[], getText: (item: T) => string) => {
+    return items.filter(item => {
+      // 1. Search Query Check
+      const matchesSearch = searchQuery === '' ||
+        getText(item).toLowerCase().includes(searchQuery.toLowerCase());
+
+      // 2. Filter Mode Check
+      const isSelected = localSelectedIds.includes(item.id);
+      const matchesFilter =
+        filterMode === 'all' ? true :
+          filterMode === 'selected' ? isSelected :
+            !isSelected; // 'unselected'
+
+      return matchesSearch && matchesFilter;
+    });
+  };
+
+  const filteredDocuments = useMemo(() =>
+    filterItems(documents, (d) => (d.title || d.file_name || '')),
+    [documents, searchQuery, filterMode, localSelectedIds]);
+
+  const filteredNotes = useMemo(() =>
+    filterItems(notes, (n) => (n.title || '') + (n.content || '')),
+    [notes, searchQuery, filterMode, localSelectedIds]);
+
+  // --- INFINITE SCROLL (Only active if not searching) ---
   useEffect(() => {
-    if (!isOpen || !hasMoreDocuments || isLoadingDocuments) return;
+    // Disable infinite scroll while searching to avoid confusion
+    if (!isOpen || activeTab !== 'documents' || !hasMoreDocuments || isLoadingDocuments || searchQuery) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          ////console.log('🔽 Loading more documents...');
-          onLoadMoreDocuments();
+    const timeoutId = setTimeout(() => {
+      if (!scrollViewportRef.current) return;
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            onLoadMoreDocuments();
+          }
+        },
+        {
+          root: scrollViewportRef.current,
+          threshold: 0.1,
+          rootMargin: '100px'
         }
-      },
-      {
-        threshold: 0.1,
-        rootMargin: '50px' // Load more when 50px from bottom
-      }
-    );
+      );
 
-    if (loadMoreTriggerRef.current) {
-      observer.observe(loadMoreTriggerRef.current);
-    }
-
-    observerRef.current = observer;
+      if (loadMoreTriggerRef.current) observer.observe(loadMoreTriggerRef.current);
+      observerRef.current = observer;
+    }, 100);
 
     return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
+      clearTimeout(timeoutId);
+      if (observerRef.current) observerRef.current.disconnect();
     };
-  }, [isOpen, hasMoreDocuments, isLoadingDocuments, onLoadMoreDocuments]);
+  }, [isOpen, activeTab, hasMoreDocuments, isLoadingDocuments, onLoadMoreDocuments, searchQuery]);
+
+  // --- HANDLERS ---
   const handleSelectionChange = (id: string, isChecked: boolean) => {
-    setLocalSelectedIds((prev) => {
-      const newIds = isChecked ? [...prev, id] : prev.filter((itemId) => itemId !== id);
-      return newIds;
-    });
+    setLocalSelectedIds((prev) =>
+      isChecked ? [...prev, id] : prev.filter((itemId) => itemId !== id)
+    );
   };
 
   const handleConfirmSelection = async () => {
@@ -94,266 +136,241 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
           })
           .eq('id', activeChatSessionId);
 
-        if (error) {
-          //console.error('Error updating chat session:', error);
-          toast.error(`Failed to update chat session documents: ${error.message}`);
-          return;
-        }
-        toast.success('Chat session documents updated successfully!');
+        if (error) throw error;
+        toast.success('Context updated successfully');
       }
-
       onSelectionChange(localSelectedIds);
       onClose();
     } catch (error: any) {
-      //console.error('Error confirming selection:', error);
-      toast.error(`Error: ${error.message || 'Failed to update selections.'}`);
+      toast.error(`Error: ${error.message}`);
     }
   };
 
-  const handleCancel = () => {
-    setLocalSelectedIds(selectedDocumentIds);
-    onClose();
-  };
+  const handleSelectAllVisible = () => {
+    const items = activeTab === 'documents' ? filteredDocuments : filteredNotes;
+    const ids = items.map(i => i.id);
+    const allSelected = ids.every(id => localSelectedIds.includes(id));
 
-  // Enhanced select all functionality
-  const handleSelectAllDocuments = () => {
-    const allDocumentIds = documents.map(doc => doc.id);
-    const currentDocumentIds = localSelectedIds.filter(id =>
-      documents.some(doc => doc.id === id)
+    setLocalSelectedIds(prev =>
+      allSelected
+        ? prev.filter(id => !ids.includes(id))
+        : [...new Set([...prev, ...ids])]
     );
-
-    if (currentDocumentIds.length === allDocumentIds.length) {
-      // Deselect all documents
-      setLocalSelectedIds(prev => prev.filter(id =>
-        !documents.some(doc => doc.id === id)
-      ));
-    } else {
-      // Select all documents
-      const newIds = [...new Set([...localSelectedIds, ...allDocumentIds])];
-      setLocalSelectedIds(newIds);
-    }
   };
 
-  const handleSelectAllNotes = () => {
-    const allNoteIds = notes.map(note => note.id);
-    const currentNoteIds = localSelectedIds.filter(id =>
-      notes.some(note => note.id === id)
-    );
-
-    if (currentNoteIds.length === allNoteIds.length) {
-      // Deselect all notes
-      setLocalSelectedIds(prev => prev.filter(id =>
-        !notes.some(note => note.id === id)
-      ));
-    } else {
-      // Select all notes
-      const newIds = [...new Set([...localSelectedIds, ...allNoteIds])];
-      setLocalSelectedIds(newIds);
-    }
-  };
-
-  // Calculate selection counts for UI
-  const selectedDocumentsCount = localSelectedIds.filter(id =>
-    documents.some(doc => doc.id === id)
-  ).length;
-
-  const selectedNotesCount = localSelectedIds.filter(id =>
-    notes.some(note => note.id === id)
-  ).length;
-
-  const totalItemsCount = documents.length + notes.length;
-  const totalSelectedCount = selectedDocumentsCount + selectedNotesCount;
+  const totalSelected = localSelectedIds.length; // Simplified for header
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleCancel}>
-      <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col p-0">
-        <DialogHeader className="flex-shrink-0 p-6 pb-4">
-          <DialogTitle className="text-xl font-semibold flex items-center justify-between">
-            <span>Select Documents and Notes</span>
-          </DialogTitle>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[600px] h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
 
-          {/* Selection Summary */}
-          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-            <span>Selected: {totalSelectedCount} of {totalItemsCount}</span>
-            {totalSelectedCount > 0 && (
-              <span className="text-blue-600 font-medium">
-                ({selectedDocumentsCount} documents, {selectedNotesCount} notes)
+        {/* HEADER AREA */}
+        <div className="flex-shrink-0 border-b bg-background/95 backdrop-blur z-10">
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle className="text-xl font-semibold flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-primary" />
+                Select Context
               </span>
-            )}
-          </div>
-        </DialogHeader>
-
-        {/* Scrollable Content */}
-        <ScrollArea className="flex-1 px-6 overflow-y-auto modern-scrollbar">
-          <div className="space-y-6 pb-4">
-            {/* Documents Section */}
-            {documents.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold">
-                    Documents ({documents.length})
-                  </h3>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleSelectAllDocuments}
-                    className="text-xs h-7 px-2 text-blue-600 hover:text-blue-700"
-                  >
-                    {selectedDocumentsCount === documents.length ? 'Deselect All' : 'Select All'}
-                  </Button>
-                </div>
-
-                <div className="space-y-1">
-                  {documents.map((doc, index) => (
-                    <motion.div
-                      key={`doc-${doc.id}-${index}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2, delay: index * 0.05 }}
-                      className="flex items-center gap-3 p-3 hover:bg-accent rounded-lg border border-transparent hover:border-border transition-colors"
-                    >
-                      <Checkbox
-                        id={`doc-${doc.id}`}
-                        checked={localSelectedIds.includes(doc.id)}
-                        onCheckedChange={(checked) => handleSelectionChange(doc.id, checked as boolean)}
-                        className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                      />
-                      <label
-                        htmlFor={`doc-${doc.id}`}
-                        className="flex items-center gap-3 text-sm cursor-pointer flex-1 min-w-0"
-                      >
-                        <FileText className="h-4 w-4 flex-shrink-0 text-blue-600" />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium truncate">{doc.title || doc.file_name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {doc.content_extracted ?
-                              `${doc.content_extracted.substring(0, 60)}...` :
-                              'No content extracted'
-                            }
-                          </p>
-                        </div>
-                      </label>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Notes Section */}
-            {notes.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold">
-                    Notes ({notes.length})
-                  </h3>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleSelectAllNotes}
-                    className="text-xs h-7 px-2 text-green-600 hover:text-green-700"
-                  >
-                    {selectedNotesCount === notes.length ? 'Deselect All' : 'Select All'}
-                  </Button>
-                </div>
-
-                <div className="space-y-1">
-                  {notes.map((note, index) => (
-                    <motion.div
-                      key={`note-${note.id}-${index}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2, delay: index * 0.05 }}
-                      className="flex items-center gap-3 p-3 hover:bg-accent rounded-lg border border-transparent hover:border-border transition-colors"
-                    >
-                      <Checkbox
-                        id={`note-${note.id}`}
-                        checked={localSelectedIds.includes(note.id)}
-                        onCheckedChange={(checked) => handleSelectionChange(note.id, checked as boolean)}
-                        className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
-                      />
-                      <label
-                        htmlFor={`note-${note.id}`}
-                        className="flex items-center gap-3 text-sm cursor-pointer flex-1 min-w-0"
-                      >
-                        <StickyNote className="h-4 w-4 flex-shrink-0 text-green-600" />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium truncate">{note.title}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {note.content ?
-                              `${note.content.substring(0, 60)}...` :
-                              'Empty note'
-                            }
-                          </p>
-                        </div>
-                      </label>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Loading Indicator */}
-            {isLoadingDocuments && (
-              <div className="flex items-center justify-center py-4">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Loading more documents...</span>
-                </div>
-              </div>
-            )}
-
-            {/* Load More Trigger (for Intersection Observer) */}
-            {hasMoreDocuments && !isLoadingDocuments && (
-              <div
-                ref={loadMoreTriggerRef}
-                className="h-4 flex items-center justify-center"
-              >
-                <div className="text-xs text-muted-foreground">
-                  Scroll for more...
-                </div>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {!isLoadingDocuments && documents.length === 0 && notes.length === 0 && (
-              <div className="text-center py-8">
-                <FileText className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
-                <p className="text-base text-muted-foreground">
-                  No documents or notes available.
-                </p>
-                <p className="text-sm text-muted-foreground/70 mt-1">
-                  Upload some documents or create notes to get started.
-                </p>
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-
-        {/* Footer */}
-        <DialogFooter className="flex-shrink-0 p-6 pt-4 border-t">
-          <div className="flex items-center justify-between w-full">
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-            >
-              Cancel
-            </Button>
-
-            <div className="flex items-center gap-3">
-              {totalSelectedCount > 0 && (
-                <span className="text-sm text-muted-foreground">
-                  {totalSelectedCount} selected
+              {totalSelected > 0 && (
+                <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">
+                  {totalSelected} Selected
                 </span>
               )}
-              <Button
-                onClick={handleConfirmSelection}
-                disabled={localSelectedIds.length === 0}
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* SEARCH & FILTER BAR */}
+          <div className="px-6 pb-4 flex gap-2">
+            <div className="relative flex-1">
+              <Search className={`absolute left-2.5 top-2.5 h-4 w-4 transition-colors ${isSearchFocused ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Input
+                placeholder="Search titles or content..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                className="pl-9 bg-muted/30 border-muted-foreground/20 dark:bg-slate-600 dark:text-white focus-visible:ring-1"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Toggle */}
+            <div className="flex bg-muted/30 p-1 rounded-md border border-muted-foreground/20">
+              <button
+                onClick={() => setFilterMode('all')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-all ${filterMode === 'all' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                Save Changes
-              </Button>
+                All
+              </button>
+              <button
+                onClick={() => setFilterMode('selected')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-all ${filterMode === 'selected' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Selected
+              </button>
             </div>
           </div>
+
+          {/* TABS LIST */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <div className="px-6">
+              <TabsList className="w-full grid grid-cols-2">
+                <TabsTrigger value="documents" className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Documents <span className="opacity-50 text-xs">({filteredDocuments.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="flex items-center gap-2">
+                  <StickyNote className="w-4 h-4" />
+                  Notes <span className="opacity-50 text-xs">({filteredNotes.length})</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </Tabs>
+        </div>
+
+        {/* CONTENT AREA */}
+        <div className="flex-1 min-h-0 bg-muted/5">
+          <Tabs value={activeTab} className="h-full">
+
+            {/* DOCUMENTS TAB */}
+            <TabsContent value="documents" className="h-full m-0 data-[state=inactive]:hidden">
+              <ScrollArea ref={scrollViewportRef} className="h-full px-6">
+                <div className="space-y-1 py-4">
+                  <div className="flex justify-end mb-2">
+                    <Button variant="ghost" size="sm" onClick={handleSelectAllVisible} className="text-xs h-6 px-2 text-primary/80">
+                      {filteredDocuments.every(d => localSelectedIds.includes(d.id)) && filteredDocuments.length > 0 ? 'Deselect All' : 'Select All Visible'}
+                    </Button>
+                  </div>
+
+                  <AnimatePresence mode='popLayout'>
+                    {filteredDocuments.map((doc, index) => (
+                      <motion.div
+                        key={`doc-${doc.id}`}
+                        layout
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                        transition={{ duration: 0.2 }}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer group
+                          ${localSelectedIds.includes(doc.id)
+                            ? 'bg-primary/5 border-primary/20'
+                            : 'bg-card border-transparent hover:border-border hover:bg-accent/50'
+                          }`}
+                        onClick={() => handleSelectionChange(doc.id, !localSelectedIds.includes(doc.id))}
+                      >
+                        <Checkbox
+                          checked={localSelectedIds.includes(doc.id)}
+                          onCheckedChange={(c) => handleSelectionChange(doc.id, c as boolean)}
+                          className="data-[state=checked]:bg-primary border-muted-foreground/30"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className={`font-medium text-sm truncate ${localSelectedIds.includes(doc.id) ? 'text-primary' : 'text-foreground'}`}>
+                            {doc.title || doc.file_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate opacity-70">
+                            {doc.content_extracted ? doc.content_extracted.substring(0, 60) : 'PDF Document'}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  {/* Empty States */}
+                  {filteredDocuments.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                      <Filter className="h-8 w-8 mb-2 opacity-20" />
+                      <p>No documents found matching filters.</p>
+                    </div>
+                  )}
+
+                  {/* Infinite Scroll Trigger (Only if not searching) */}
+                  {!searchQuery && hasMoreDocuments && !isLoadingDocuments && (
+                    <div ref={loadMoreTriggerRef} className="h-12 flex items-center justify-center opacity-50">
+                      <span className="text-xs">Scroll for more...</span>
+                    </div>
+                  )}
+                  {isLoadingDocuments && (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+
+            {/* NOTES TAB */}
+            <TabsContent value="notes" className="h-full m-0 data-[state=inactive]:hidden">
+              <ScrollArea className="h-full px-6">
+                <div className="space-y-1 py-4">
+                  <div className="flex justify-end mb-2">
+                    <Button variant="ghost" size="sm" onClick={handleSelectAllVisible} className="text-xs h-6 px-2 text-primary/80">
+                      {filteredNotes.every(n => localSelectedIds.includes(n.id)) && filteredNotes.length > 0 ? 'Deselect All' : 'Select All Visible'}
+                    </Button>
+                  </div>
+
+                  <AnimatePresence mode='popLayout'>
+                    {filteredNotes.map((note) => (
+                      <motion.div
+                        key={`note-${note.id}`}
+                        layout
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer group
+                          ${localSelectedIds.includes(note.id)
+                            ? 'bg-green-500/10 border-green-500/20'
+                            : 'bg-card border-transparent hover:border-border hover:bg-accent/50'
+                          }`}
+                        onClick={() => handleSelectionChange(note.id, !localSelectedIds.includes(note.id))}
+                      >
+                        <Checkbox
+                          checked={localSelectedIds.includes(note.id)}
+                          onCheckedChange={(c) => handleSelectionChange(note.id, c as boolean)}
+                          className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600 border-muted-foreground/30"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className={`font-medium text-sm truncate ${localSelectedIds.includes(note.id) ? 'text-green-700 dark:text-green-400' : 'text-foreground'}`}>
+                            {note.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate opacity-70">
+                            {note.content ? note.content.substring(0, 60) : 'Text Note'}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  {filteredNotes.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                      <Filter className="h-8 w-8 mb-2 opacity-20" />
+                      <p>No notes found matching filters.</p>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+
+          </Tabs>
+        </div>
+
+        {/* FOOTER */}
+        <DialogFooter className="flex-shrink-0 p-6 pt-4 border-t bg-background z-10">
+          <div className="flex items-center justify-between w-full">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={handleConfirmSelection} disabled={localSelectedIds.length === 0}>
+              Attach {totalSelected} Items
+            </Button>
+          </div>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );

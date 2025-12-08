@@ -10,67 +10,48 @@ interface UseTextToSpeechProps {
   isPhone: () => boolean;
   stripCodeBlocks: (content: string) => string;
 }
-
 const stripMarkdownForSpeech = (content: string): string => {
-  let text = content;
+  if (!content) return '';
 
-  // 1. Remove code blocks FIRST (triple backticks with content)
-  text = text.replace(/```[\s\S]*?```/g, ' '); // Block code with space replacement
-  text = text.replace(/`[^`]+`/g, ' '); // Inline code with space replacement
+  // 1. SPLIT: Divide content into an array by Code Blocks
+  // The capturing group () keeps the delimiter in the array
+  const parts = content.split(/(```[\s\S]*?```)/g);
 
-  // 2. Remove HTML tags
-  text = text.replace(/<[^>]*>/g, ' ');
+  return parts.map(part => {
+    // 2. CHECK: Is this a Code Block?
+    if (part.startsWith('```')) {
+      return ' code block '; // Replace massive blocks with a simple phrase
+    }
 
-  // 3. Remove ALL # symbols (headers) - more aggressive approach
-  text = text.replace(/#/g, ''); // Remove ALL hash symbols
+    // 3. PROCESS: This is normal text (Safe Zone)
+    let text = part;
 
-  // 4. Remove bold/italic/strikethrough markers - more aggressive
-  text = text.replace(/[*_~]{1,3}/g, ''); // Remove all asterisks, underscores, tildes
+    // Remove Images
+    text = text.replace(/!\[.*?\]\(.*?\)/g, '');
 
-  // 5. Convert links to readable format
-  text = text.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1'); // [text](url) → text
-  text = text.replace(/<(https?:\/\/[^\s>]+)>/g, ' '); // Remove <url>
-  text = text.replace(/https?:\/\/[^\s]+/g, ' '); // Remove bare URLs
+    // Unwrap Inline Code (Safe now because we removed the ``` blocks)
+    // `const x` -> const x
+    text = text.replace(/`([^`]+)`/g, '$1');
 
-  // 6. Remove images
-  text = text.replace(/!\[([^\]]*)\]\([^\)]+\)/g, ''); // ![alt](url)
+    // Unwrap Links
+    // [Google](https://google.com) -> Google
+    text = text.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
 
-  // 7. Convert lists to readable format - remove ALL list markers
-  text = text.replace(/^\s*[-*+•]\s+/gm, ''); // Unordered lists
-  text = text.replace(/^\s*\d+\.\s+/gm, ''); // Ordered lists
+    // Remove HTML tags (Safe version)
+    // Only removes tags that look like <div... or </span... 
+    // Preserves math like "x < 5"
+    text = text.replace(/<\/?([a-z][a-z0-9]*)\b[^>]*>/gi, '');
 
-  // 8. Remove blockquote markers
-  text = text.replace(/^\s*>\s*/gm, '');
+    // Remove formatting (*, _, #)
+    text = text.replace(/[*_~#]+/g, '');
 
-  // 9. Remove horizontal rules
-  text = text.replace(/^[\s]*[-*_]{3,}[\s]*$/gm, ' ');
-
-  // 10. Remove table formatting
-  text = text.replace(/\|/g, ' '); // Remove pipe characters
-  text = text.replace(/^[\s]*:?-+:?[\s]*$/gm, ''); // Remove table separators
-
-  // 11. Remove emojis
-  const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2B50}\u{2B55}\u{2934}\u{2935}\u{2B05}\u{2B06}\u{27A1}\u{1F1E6}-\u{1F1FF}]/gu;
-  text = text.replace(emojiRegex, ' ');
-
-  // 12. Remove special markdown characters
-  text = text.replace(/[`~]/g, ''); // Remove backticks and tildes
-  text = text.replace(/\\/g, ''); // Remove escape characters
-
-  // 13. Clean up excessive whitespace and punctuation
-  text = text.replace(/\n{3,}/g, '\n\n'); // Max 2 newlines
-  text = text.replace(/[ \t]{2,}/g, ' '); // Multiple spaces to single space
-  text = text.replace(/\s*:\s*/g, ': '); // Clean up colons
-  text = text.replace(/\s*\(\s*/g, ' ('); // Clean up parentheses
-  text = text.replace(/\s*\)\s*/g, ') ');
-
-  // 14. Final cleanup
-  text = text.trim();
-  text = text.replace(/\s+/g, ' '); // Collapse all whitespace to single space
-
-  return text;
+    return text;
+  })
+    // 4. JOIN: Stitch it all back together
+    .join(' ')
+    // 5. CLEANUP: Fix whitespace
+    .replace(/\s+/g, ' ').trim();
 };
-
 const removeEmojis = (text: string): string => {
   const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2B50}\u{2B55}\u{2934}\u{2935}\u{2B05}\u{2B06}\u{27A1}\u{1F1E6}-\u{1F1FF}]/gu;
   return text.replace(emojiRegex, '');

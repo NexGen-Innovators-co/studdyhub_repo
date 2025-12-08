@@ -1,37 +1,27 @@
 // Updated src/components/classRecordings/ClassRecordings.tsx
-// Note: This is the full updated component with integrations.
-// I've added the necessary imports, hooks usage, and StatsPanel integration.
-// Also integrated useQuizTracking, seedDefaultBadges, useRealtimeSync, and adjusted useQuizManagement to useEnhancedQuizManagement if needed.
-// Assuming useQuizManagement is aliased or renamed appropriately.
+// Removed all quiz-related functionality
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { Clock, BookOpen, FileText, History, Lightbulb, Mic, Download, Trash2, RefreshCw } from 'lucide-react';
-import { ClassRecording, Quiz } from '../../types/Class';
+import { Clock, BookOpen, FileText, Mic, Download, Trash2 } from 'lucide-react';
+import { ClassRecording } from '../../types/Class';
 import { formatDate } from './utils/helpers';
 import { VoiceRecorder } from './components/VoiceRecorder';
 import { AudioUploadSection } from './components/AudioUploadSection';
-import { QuizModal } from './components/QuizModal';
-import { QuizHistory } from './components/QuizHistory';
 import { useAudioProcessing } from './hooks/useAudioProcessing';
-import { useQuizManagement } from './hooks/useQuizManagement'; // Adjust if it's useEnhancedQuizManagement
 import { RecordingSidePanel } from './components/RecordingSidePanel';
 import { toast } from 'sonner';
-import { useRealtimeSync } from './hooks/useRealTimeSync'; // Newly created
-import { StatsPanel } from './components/StatsPanel'; // Newly created
-import { useQuizTracking } from './hooks/useQuizTracking';
-import { seedDefaultBadges } from './utils/seedBefaultBadges';
+import { useRealtimeSync } from './hooks/useRealTimeSync';
+import { StatsPanel } from './components/StatsPanel';
 import { supabase } from '../../integrations/supabase/client';
 import { UserStats } from '../../types/EnhancedClasses';
 
 interface ClassRecordingsProps {
   recordings?: ClassRecording[];
-  quizzes: Quiz[];
   onAddRecording: (recording: ClassRecording) => void;
   onUpdateRecording: (recording: ClassRecording) => void;
-  onGenerateQuiz: (recording: ClassRecording, quiz: Quiz) => void;
   onGenerateNote: (recording: ClassRecording) => Promise<void>;
   onDeleteRecording: (recordingId: string, documentId: string | null, audioUrl: string | null) => Promise<void>;
   onReprocessAudio: (fileUrl: string, documentId: string, targetLang?: string) => Promise<void>;
@@ -39,16 +29,16 @@ interface ClassRecordingsProps {
 
 export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   recordings = [],
-  quizzes = [],
   onAddRecording,
   onUpdateRecording,
-  onGenerateQuiz,
   onGenerateNote,
   onDeleteRecording,
   onReprocessAudio,
 }) => {
   const [selectedRecording, setSelectedRecording] = useState<ClassRecording | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   // Fetch user ID
   useEffect(() => {
@@ -59,10 +49,27 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     fetchUser();
   }, []);
 
-  // Seed default badges on mount
-  useEffect(() => {
-    seedDefaultBadges();
-  }, []);
+  // Fetch user stats
+  const fetchUserStats = useCallback(async () => {
+    if (!userId) return;
+
+    setIsLoadingStats(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_stats')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) throw error;
+      setUserStats(data);
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+      setUserStats(null);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [userId]);
 
   // Audio processing hook
   const {
@@ -72,47 +79,12 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     handlePlayAudio,
     handlePauseAudio,
     handleAudioEnded,
-    handleDownloadAudio,
-    handleCopyAudioUrl,
   } = useAudioProcessing({ onAddRecording, onUpdateRecording });
 
-  // Quiz tracking
-  const {
-    userStats,
-    isLoadingStats,
-    recordQuizAttempt,
-    fetchUserStats,
-  } = useQuizTracking(userId || '');
-
-  // Enhanced quiz management
-  const {
-    quizMode,
-    currentQuestionIndex,
-    userAnswers,
-    showResults,
-    handleGenerateQuizFromRecording,
-    handleAnswerSelect,
-    handleNextQuestion,
-    handlePreviousQuestion,
-    handleExitQuizMode,
-    calculateScore,
-    setQuizMode,
-    handleSubmitQuiz, // If available in your version
-  } = useQuizManagement({
-    onGenerateQuiz,
-    recordQuizAttempt,
-    fetchUserStats,
-  });
-
-  // Realtime sync
+  // Realtime sync for recordings only
   useRealtimeSync({
     userId: userId || '',
     onRecordingUpdate: onUpdateRecording,
-    onQuizUpdate: (quiz) => {
-      // Handle quiz update, perhaps refresh quizzes list
-      // For now, assuming quizzes are props, might need to lift state
-    },
-    onStatsUpdate: fetchUserStats,
   });
 
   const formatDuration = (seconds: number | null) => {
@@ -120,20 +92,6 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}m ${secs}s`;
-  };
-
-  const handleGenerateQuizFromPanel = (recording: ClassRecording, numQuestions: number, difficulty: string) => {
-    handleGenerateQuizFromRecording(recording, numQuestions, difficulty);
-  };
-
-  const handleViewHistoricalQuiz = (quiz: Quiz) => {
-    const associatedRecording = recordings.find(rec => rec.id === quiz.classId);
-    if (associatedRecording) {
-      setQuizMode({ recording: associatedRecording, quiz: quiz });
-    } else {
-      setQuizMode({ recording: {} as ClassRecording, quiz: quiz });
-      toast.info("Associated recording not found, but quiz details are displayed.");
-    }
   };
 
   const handleReprocessAudioClick = useCallback(async (recording: ClassRecording) => {
@@ -197,8 +155,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 dark:bg-gray-800 dark:border-gray-700">
               <CardHeader className="p-4 sm:pb-4">
-                <CardTitle className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                  <Lightbulb className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" /> Upload Audio
+                <CardTitle className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-100">
+                  Upload Audio
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -208,8 +166,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
             <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 dark:bg-gray-800 dark:border-gray-700">
               <CardHeader className="p-4 sm:pb-4">
-                <CardTitle className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                  <Mic className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" /> Record New Class
+                <CardTitle className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-100">
+                  Record New Class
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -218,11 +176,11 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             </Card>
           </div>
 
-          {/* Add StatsPanel here */}
-          <StatsPanel stats={userStats as UserStats} isLoading={isLoadingStats} />
+          {/* Stats Panel */}
+          <StatsPanel stats={userStats} isLoading={isLoadingStats} />
 
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-6 sm:mt-10 mb-4 flex items-center gap-2">
-            <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" /> All Class Recordings
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-6 sm:mt-10 mb-4">
+            All Class Recordings
           </h3>
           <div className="grid gap-4">
             {Array.isArray(recordings) && recordings.length > 0 ? (
@@ -235,9 +193,13 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                   <CardHeader className="p-4">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                       <div className="flex-1">
-                        <CardTitle className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-100">{recording.title}</CardTitle>
+                        <CardTitle className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-100">
+                          {recording.title}
+                        </CardTitle>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">{recording.subject}</Badge>
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                            {recording.subject}
+                          </Badge>
                           <div className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             {formatDuration(recording.duration)}
@@ -293,18 +255,15 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
               <Card className="text-center py-8 bg-white shadow-sm dark:bg-gray-800 dark:border-gray-700">
                 <CardContent>
                   <BookOpen className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-base sm:text-lg font-medium text-gray-500 mb-2 dark:text-gray-300">No recordings yet</h3>
-                  <p className="text-xs sm:text-sm text-gray-400">Start recording or uploading audio to get AI-powered summaries and transcripts</p>
+                  <h3 className="text-base sm:text-lg font-medium text-gray-500 mb-2 dark:text-gray-300">
+                    No recordings yet
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-400">
+                    Start recording or uploading audio to get AI-powered summaries and transcripts
+                  </p>
                 </CardContent>
               </Card>
             )}
-          </div>
-
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-6 sm:mt-10 mb-4 flex items-center gap-2">
-            <History className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" /> Your Quiz History
-          </h3>
-          <div className="overflow-y-auto max-h-[40vh] sm:max-h-[50vh]">
-            <QuizHistory quizzes={quizzes} onSelectQuiz={handleViewHistoricalQuiz} />
           </div>
         </div>
 
@@ -328,10 +287,9 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                 }
               }}
               onUpdateRecording={onUpdateRecording}
-              onGenerateQuiz={handleGenerateQuizFromPanel}
+              onGenerateNote={onGenerateNote}
               onReprocessAudio={handleReprocessAudioClick}
               onDeleteRecording={handleDeleteRecordingClick}
-              onGenerateNote={onGenerateNote}
               audioUrl={selectedRecording.audioUrl}
               audioPlayerRef={audioPlayerRef}
               isPlayingAudio={isPlayingAudio}
@@ -350,18 +308,6 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             />
           </>
         )}
-
-        <QuizModal
-          quizMode={quizMode}
-          currentQuestionIndex={currentQuestionIndex}
-          userAnswers={userAnswers}
-          showResults={showResults}
-          onAnswerSelect={handleAnswerSelect}
-          onNextQuestion={handleNextQuestion}
-          onPreviousQuestion={handlePreviousQuestion}
-          onExitQuizMode={handleExitQuizMode}
-          calculateScore={calculateScore}
-        />
       </div>
     </div>
   );
