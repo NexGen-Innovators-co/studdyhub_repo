@@ -17,7 +17,7 @@ import {
     Clock as ClockIcon, Star, FileWarning, FileCheck, FileX,
     BarChart2, PieChart as PieIcon, LineChart as LineIcon,
     List, Users, Brain as BrainIcon, Bot, Plus, Database, BarChart3,
-    Info, Lightbulb, FolderOpen
+    Info, Lightbulb, FolderOpen, LayoutDashboard
 } from 'lucide-react';
 import { useDashboardStats } from './hooks/useDashboardStats';
 import BookPagesAnimation from '../ui/bookloader';
@@ -32,8 +32,26 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onCreateNew }) => {
-    const [selectedTab, setSelectedTab] = useState<'activity' | 'insights' | 'recent'>('activity');
+    const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'activity'>('overview');
     const { stats, loading, error, refresh } = useDashboardStats(userProfile?.id);
+
+    // Sync tab changes with global header
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('section-tab-active', {
+            detail: { section: 'dashboard', tab: activeTab }
+        }));
+    }, [activeTab]);
+
+    useEffect(() => {
+        const handler = (event: Event) => {
+            const detail = (event as CustomEvent).detail;
+            if (detail?.section === 'dashboard' && detail?.tab) {
+                setActiveTab(detail.tab as any);
+            }
+        };
+        window.addEventListener('section-tab-change', handler as EventListener);
+        return () => window.removeEventListener('section-tab-change', handler as EventListener);
+    }, []);
 
     const formatFileSize = (bytes: number) => {
         if (!bytes) return '0 B';
@@ -276,23 +294,24 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                 <>
                     {/* Tabs */}
                     <div className="flex gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-2xl p-2 shadow-xl mb-8">
-                        {(['activity', 'insights', 'recent'] as const).map(tab => (
+                        {(['overview', 'analytics', 'activity'] as const).map(tab => (
                             <Button
                                 key={tab}
-                                variant={selectedTab === tab ? "default" : "ghost"}
-                                className={`flex-1 rounded-xl ${selectedTab === tab ? 'shadow-lg' : ''}`}
-                                onClick={() => setSelectedTab(tab)}
+                                variant={activeTab === tab ? "default" : "ghost"}
+                                className={`flex-1 rounded-xl ${activeTab === tab ? 'shadow-lg' : ''}`}
+                                onClick={() => setActiveTab(tab)}
                             >
-                                {tab === 'activity' ? <Activity className="h-5 w-5 mr-2" /> :
-                                    tab === 'insights' ? <Sparkles className="h-5 w-5 mr-2" /> :
-                                        <List className="h-5 w-5 mr-2" />}
-                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                {tab === 'overview' ? <LayoutDashboard className="h-5 w-5 mr-2" /> :
+                                    tab === 'analytics' ? <BarChart3 className="h-5 w-5 mr-2" /> :
+                                        <TrendingUp className="h-5 w-5 mr-2" />}
+                                {tab === 'overview' ? 'Overview' :
+                                    tab === 'analytics' ? 'Analytics' : 'Activity'}
                             </Button>
                         ))}
                     </div>
 
-                    {/* Activity Tab */}
-                    {selectedTab === 'activity' && (
+                    {/* Overview Tab */}
+                    {activeTab === 'overview' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Weekly Activity */}
                             <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
@@ -415,7 +434,12 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                     )}
                                 </CardContent>
                             </Card>
+                        </div>
+                    )}
 
+                    {/* Analytics Tab */}
+                    {activeTab === 'analytics' && (
+                        <div className="space-y-6">
                             {/* Weekday Activity */}
                             <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
                                 <CardHeader>
@@ -468,27 +492,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                     )}
                                 </CardContent>
                             </Card>
-                        </div>
-                    )}
-
-                    {/* Insights Tab */}
-                    {selectedTab === 'insights' && (
-                        <div className="space-y-6">
-                            {stats.currentStreak > 0 ? (
-                                <Card className="bg-gradient-to-r from-blue-600 to-blue-600 text-white border-0 shadow-2xl">
-                                    <CardContent className="p-6 sm:p-8 text-center">
-                                        <h2 className="text-2xl sm:text-4xl font-bold mb-4">You're in the top 5% of learners!</h2>
-                                        <p className="text-base sm:text-xl opacity-90">With {stats.currentStreak} day streak and {Math.round(stats.avgDailyStudyTime / 60)} mins/day</p>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <Card className="bg-gradient-to-r from-gray-600 to-gray-700 text-white border-0 shadow-2xl">
-                                    <CardContent className="p-6 sm:p-8 text-center">
-                                        <h2 className="text-2xl sm:text-4xl font-bold mb-4">Ready to build your streak?</h2>
-                                        <p className="text-base sm:text-xl opacity-90">Create your first note or recording to start your learning journey</p>
-                                    </CardContent>
-                                </Card>
-                            )}
 
                             {/* Productivity Metrics */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -513,6 +516,27 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                     <p className="text-gray-600 dark:text-gray-400">Avg Daily Study</p>
                                 </Card>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Activity Tab */}
+                    {activeTab === 'activity' && (
+                        <div className="space-y-6">
+                            {stats.currentStreak > 0 ? (
+                                <Card className="bg-gradient-to-r from-blue-600 to-blue-600 text-white border-0 shadow-2xl">
+                                    <CardContent className="p-6 sm:p-8 text-center">
+                                        <h2 className="text-2xl sm:text-4xl font-bold mb-4">You're in the top 5% of learners!</h2>
+                                        <p className="text-base sm:text-xl opacity-90">With {stats.currentStreak} day streak and {Math.round(stats.avgDailyStudyTime / 60)} mins/day</p>
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                <Card className="bg-gradient-to-r from-gray-600 to-gray-700 text-white border-0 shadow-2xl">
+                                    <CardContent className="p-6 sm:p-8 text-center">
+                                        <h2 className="text-2xl sm:text-4xl font-bold mb-4">Ready to build your streak?</h2>
+                                        <p className="text-base sm:text-xl opacity-90">Create your first note or recording to start your learning journey</p>
+                                    </CardContent>
+                                </Card>
+                            )}
 
                             {/* This Week / Month Stats */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -637,129 +661,99 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                     </CardContent>
                                 </Card>
                             )}
-                        </div>
-                    )}
 
-                    {/* Recent Tab */}
-                    {selectedTab === 'recent' && (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            {hasRecentData ? (
-                                <>
-                                    {/* Recent Notes */}
-                                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                        <CardHeader>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <BookOpen className="h-6 w-6 text-blue-600" />
-                                                Recent Notes
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            {stats.recentNotes && stats.recentNotes.length > 0 ? (
-                                                <ul className="space-y-4">
-                                                    {stats.recentNotes.map(note => (
-                                                        <li key={note.id} className="border-b pb-2">
-                                                            <p className="font-semibold">{note.title}</p>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-400">{note.category} - {formatDate(note.created_at)}</p>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <EmptyStateCard
-                                                    title="No notes yet"
-                                                    description="Start capturing your thoughts and ideas"
-                                                    icon={BookOpen}
-                                                    onCreate={() => onCreateNew('note')}
-                                                    type="note"
-                                                />
-                                            )}
-                                        </CardContent>
-                                    </Card>
+                            {/* Recent Content */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Recent Notes */}
+                                <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <BookOpen className="h-6 w-6 text-blue-600" />
+                                            Recent Notes
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {stats.recentNotes && stats.recentNotes.length > 0 ? (
+                                            <ul className="space-y-4">
+                                                {stats.recentNotes.map(note => (
+                                                    <li key={note.id} className="border-b pb-2">
+                                                        <p className="font-semibold">{note.title}</p>
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400">{note.category} - {formatDate(note.created_at)}</p>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <EmptyStateCard
+                                                title="No notes yet"
+                                                description="Start capturing your thoughts and ideas"
+                                                icon={BookOpen}
+                                                onCreate={() => onCreateNew('note')}
+                                                type="note"
+                                            />
+                                        )}
+                                    </CardContent>
+                                </Card>
 
-                                    {/* Recent Recordings */}
-                                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                        <CardHeader>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <Play className="h-6 w-6 text-green-600" />
-                                                Recent Recordings
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            {stats.recentRecordings && stats.recentRecordings.length > 0 ? (
-                                                <ul className="space-y-4">
-                                                    {stats.recentRecordings.map(rec => (
-                                                        <li key={rec.id} className="border-b pb-2">
-                                                            <p className="font-semibold">{rec.title}</p>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-400">Duration: {formatTime(rec.duration)} - {formatDate(rec.created_at)}</p>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <EmptyStateCard
-                                                    title="No recordings yet"
-                                                    description="Record your thoughts, lectures, or meetings"
-                                                    icon={Play}
-                                                    onCreate={() => onCreateNew('recording')}
-                                                    type="recording"
-                                                />
-                                            )}
-                                        </CardContent>
-                                    </Card>
+                                {/* Recent Recordings */}
+                                <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Play className="h-6 w-6 text-green-600" />
+                                            Recent Recordings
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {stats.recentRecordings && stats.recentRecordings.length > 0 ? (
+                                            <ul className="space-y-4">
+                                                {stats.recentRecordings.map(rec => (
+                                                    <li key={rec.id} className="border-b pb-2">
+                                                        <p className="font-semibold">{rec.title}</p>
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400">Duration: {formatTime(rec.duration)} - {formatDate(rec.created_at)}</p>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <EmptyStateCard
+                                                title="No recordings yet"
+                                                description="Record your thoughts, lectures, or meetings"
+                                                icon={Play}
+                                                onCreate={() => onCreateNew('recording')}
+                                                type="recording"
+                                            />
+                                        )}
+                                    </CardContent>
+                                </Card>
 
-                                    {/* Recent Documents */}
-                                    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
-                                        <CardHeader>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <FileText className="h-6 w-6 text-yellow-600" />
-                                                Recent Documents
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            {stats.recentDocuments && stats.recentDocuments.length > 0 ? (
-                                                <ul className="space-y-4">
-                                                    {stats.recentDocuments.map(doc => (
-                                                        <li key={doc.id} className="border-b pb-2">
-                                                            <p className="font-semibold">{doc.title}</p>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-400">{doc.type} - {doc.processing_status} - {formatDate(doc.created_at)}</p>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <EmptyStateCard
-                                                    title="No documents yet"
-                                                    description="Upload PDFs, images, or text files"
-                                                    icon={FileText}
-                                                    onCreate={() => onCreateNew('document')}
-                                                    type="document"
-                                                />
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                </>
-                            ) : (
-                                <div className="col-span-3">
-                                    <Card className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-0 shadow-xl">
-                                        <CardContent className="p-8 text-center">
-                                            <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-full flex items-center justify-center">
-                                                <Database className="h-12 w-12 text-gray-400 dark:text-gray-500" />
-                                            </div>
-                                            <h3 className="text-2xl font-bold mb-2">No recent activity</h3>
-                                            <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                                                Your recent activity will appear here. Start creating content to build your knowledge base.
-                                            </p>
-                                            <div className="flex flex-wrap gap-3 justify-center">
-                                                <Button onClick={() => onCreateNew('note')} className="bg-blue-600 hover:bg-blue-700">
-                                                    <BookOpen className="h-4 w-4 mr-2" />
-                                                    Create First Note
-                                                </Button>
-                                                <Button onClick={() => onCreateNew('recording')} variant="outline">
-                                                    <Play className="h-4 w-4 mr-2" />
-                                                    Start Recording
-                                                </Button>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </div>
-                            )}
+                                {/* Recent Documents */}
+                                <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <FileText className="h-6 w-6 text-yellow-600" />
+                                            Recent Documents
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {stats.recentDocuments && stats.recentDocuments.length > 0 ? (
+                                            <ul className="space-y-4">
+                                                {stats.recentDocuments.map(doc => (
+                                                    <li key={doc.id} className="border-b pb-2">
+                                                        <p className="font-semibold">{doc.title}</p>
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400">{doc.type} - {doc.processing_status} - {formatDate(doc.created_at)}</p>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <EmptyStateCard
+                                                title="No documents yet"
+                                                description="Upload PDFs, images, or text files"
+                                                icon={FileText}
+                                                onCreate={() => onCreateNew('document')}
+                                                type="document"
+                                            />
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </div>
                         </div>
                     )}
                 </>

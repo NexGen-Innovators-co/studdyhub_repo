@@ -18,6 +18,7 @@ import {
   Trophy,
   Clock,
   Shield,
+  Zap,
   Download,
   Trash2,
   Calendar,
@@ -32,6 +33,11 @@ import { supabase } from '../../integrations/supabase/client';
 import { toast } from 'sonner';
 import { UserProfile } from '../../types/Document';
 import { LearningGoals } from './components.tsx/LearningGoals';
+import { AppShell } from '../layout/AppShell';
+import { StickyRail } from '../layout/StickyRail';
+import { HeroHeader } from '../layout/HeroHeader';
+import { QuickActionsCard } from '../layout/QuickActionsCard';
+import { StatsCard } from '../layout/StatsCard';
 
 interface UserSettingsProps {
   profile: UserProfile | null;
@@ -85,6 +91,9 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   profile,
   onProfileUpdate
 }) => {
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'profile' | 'learning' | 'goals' | 'achievements' | 'study' | 'privacy' | 'security'>('profile');
+
   // Original form states
   const [learningStyle, setLearningStyle] = useState<UserProfile['learning_style']>('visual');
   const [explanationStyle, setExplanationStyle] = useState<'simple' | 'detailed' | 'comprehensive'>('detailed');
@@ -106,7 +115,6 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [activeSection, setActiveSection] = useState<'profile' | 'learning' | 'goals' | 'achievements' | 'study' | 'privacy' | 'security'>('profile');
 
   // New feature states
   const [goals, setGoals] = useState<UserLearningGoal[]>([]);
@@ -119,6 +127,24 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   const [dataCollection, setDataCollection] = useState(true);
   const [analytics, setAnalytics] = useState(true);
 
+  // Sync tab changes with global header
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('section-tab-active', {
+      detail: { section: 'settings', tab: activeTab }
+    }));
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.section === 'settings' && detail?.tab) {
+        setActiveTab(detail.tab as any);
+      }
+    };
+    window.addEventListener('section-tab-change', handler as EventListener);
+    return () => window.removeEventListener('section-tab-change', handler as EventListener);
+  }, []);
+
   useEffect(() => {
     if (profile) {
       setLearningStyle(profile.learning_style);
@@ -130,9 +156,9 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     }
   }, [profile]);
 
-  // Load additional data when section changes
+  // Load additional data when tab changes
   useEffect(() => {
-    switch (activeSection) {
+    switch (activeTab) {
       case 'goals':
         fetchUserGoals();
         break;
@@ -146,7 +172,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       default:
         break;
     }
-  }, [activeSection]);
+  }, [activeTab]);
 
   const fetchUserGoals = async () => {
     try {
@@ -203,7 +229,6 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
   const loadStudyPreferences = async () => {
     // Load from user profile or preferences
-    // This is a placeholder - you might want to store these in a separate table
     const savedTimes = localStorage.getItem('preferredStudyTimes');
     if (savedTimes) {
       setPreferredStudyTimes(JSON.parse(savedTimes));
@@ -437,14 +462,14 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         supabase.from('profiles').select('*').eq('id', user.id).single(),
         supabase.from('user_learning_goals').select('*').eq('user_id', user.id),
         supabase.from('achievements').select('*, badges(*)').eq('user_id', user.id),
-        supabase.from('user_stats').select('*').eq('user_id', user.id).limit(1) // Changed from .single()
+        supabase.from('user_stats').select('*').eq('user_id', user.id).limit(1)
       ]);
 
       const userData = {
         profile: profileData.data,
         goals: goalsData.data,
         achievements: achievementsData.data,
-        stats: statsData.data?.[0] || null, // Take first record
+        stats: statsData.data?.[0] || null,
         export_date: new Date().toISOString()
       };
 
@@ -471,15 +496,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     }
 
     try {
-      // Note: This is a simplified version. In production, you might want to:
-      // 1. Send a confirmation email
-      // 2. Schedule deletion after a grace period
-      // 3. Use proper cascade deletion
-
       toast.info('Account deletion feature would be implemented here');
-      // const { error } = await supabase.rpc('delete_user_account');
-      // if (error) throw error;
-      // toast.success('Account deletion scheduled');
     } catch (error) {
       //console.error('Error deleting account:', error);
       toast.error('Failed to delete account');
@@ -500,54 +517,91 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     'Night (9PM-12AM)'
   ];
 
+  const navItems = [
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'learning', label: 'Learning', icon: Brain },
+    { id: 'goals', label: 'Goals', icon: Target },
+    { id: 'achievements', label: 'Achievements', icon: Trophy },
+    { id: 'study', label: 'Study', icon: Clock },
+    { id: 'privacy', label: 'Privacy', icon: Shield },
+    { id: 'security', label: 'Security', icon: Lock }
+  ];
+
+  const leftRail = (
+    <StickyRail>
+      {/* <div className="p-1 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+        <div className="flex flex-wrap">
+          {navItems.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id as any)}
+              className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 px-4 rounded-lg transition-all ${activeTab === id
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div> */}
+
+      <QuickActionsCard
+        actions={[
+          { label: "Save Changes", icon: <Save className="h-4 w-4 text-blue-600" />, onClick: handleSave },
+          { label: "Export Data", icon: <Download className="h-4 w-4 text-green-600" />, onClick: exportData },
+        ]}
+      />
+    </StickyRail>
+  );
+
+  const rightRail = (
+    <StickyRail>
+      <StatsCard
+        title="Profile Snapshot"
+        items={[
+          { label: "Level", value: stats?.level || 1, icon: <Trophy className="h-4 w-4 text-yellow-500" /> },
+          { label: "Total XP", value: stats?.total_xp || 0, icon: <Zap className="h-4 w-4 text-blue-500" /> },
+          { label: "Current Streak", value: stats?.current_streak || 0, icon: <Clock className="h-4 w-4 text-orange-500" /> },
+          { label: "Badges", value: achievements.length, icon: <Target className="h-4 w-4 text-indigo-500" /> },
+        ]}
+      />
+    </StickyRail>
+  );
+
   return (
-    <div className="min-h-screen p-6 transition-colors duration-300 dark: bg-transparent">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-600 rounded-xl">
-              <Settings className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold">Settings</h1>
-              <p className="text-gray-600 dark:text-gray-300">Customize your learning experience</p>
-            </div>
-          </div>
-        </div>
+    <AppShell left={leftRail} right={rightRail}>
+      <div className="px-4 pb-12">
+        <HeroHeader
+          title="Settings"
+          subtitle="Customize your learning experience"
+          icon={<Settings className="h-6 w-6" />}
+          gradient="from-blue-600 to-indigo-600"
+          actions={
+            <Button
+              onClick={handleSave}
+              disabled={isLoading}
+              className="bg-white text-blue-700 hover:bg-blue-50"
+            >
+              {isLoading ? (
+                <>
+                  <Settings className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save
+                </>
+              )}
+            </Button>
+          }
+        />
 
-        {/* Navigation Tabs */}
-        <div className="p-1 rounded-xl border mb-8 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-          <div className="flex flex-wrap">
-            {[
-              { id: 'profile', label: 'Profile', icon: User },
-              { id: 'learning', label: 'Learning', icon: Brain },
-              { id: 'goals', label: 'Goals', icon: Target },
-              { id: 'achievements', label: 'Achievements', icon: Trophy },
-              { id: 'study', label: 'Study', icon: Clock },
-              { id: 'privacy', label: 'Privacy', icon: Shield },
-              { id: 'security', label: 'Security', icon: Lock }
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveSection(id as any)}
-                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 px-4 rounded-lg transition-all ${activeSection === id
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span className="hidden sm:inline">{label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Content Sections */}
         <Card className="rounded-2xl border shadow-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-
           {/* Profile Section */}
-          {activeSection === 'profile' && (
+          {activeTab === 'profile' && (
             <CardContent className="p-8">
               <div className="flex items-center gap-3 mb-6">
                 <User className="h-5 w-5 text-blue-500" />
@@ -625,7 +679,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
           )}
 
           {/* Learning Section */}
-          {activeSection === 'learning' && (
+          {activeTab === 'learning' && (
             <CardContent className="p-8">
               <div className="flex items-center gap-3 mb-6">
                 <Brain className="h-5 w-5 text-blue-500" />
@@ -732,11 +786,12 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
           )}
 
           {/* Goals Section */}
-          {activeSection === 'goals' && (
-            <LearningGoals userId={profile.id} />
+          {activeTab === 'goals' && (
+            <LearningGoals userId={profile?.id || ''} />
           )}
+
           {/* Achievements Section */}
-          {activeSection === 'achievements' && (
+          {activeTab === 'achievements' && (
             <CardContent className="p-8">
               <div className="flex items-center gap-3 mb-6">
                 <Trophy className="h-5 w-5 text-blue-500" />
@@ -797,8 +852,8 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
           )}
 
           {/* Study Preferences Section */}
-          {activeSection === 'study' && (
-            <CardContent className="p-8">
+          {activeTab === 'study' && (
+            <CardContent className="p-8 ">
               <div className="flex items-center gap-3 mb-6">
                 <Clock className="h-5 w-5 text-blue-500" />
                 <h2 className="text-xl font-semibold">Study Preferences</h2>
@@ -867,7 +922,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
           )}
 
           {/* Privacy Section */}
-          {activeSection === 'privacy' && (
+          {activeTab === 'privacy' && (
             <CardContent className="p-8">
               <div className="flex items-center gap-3 mb-6">
                 <Shield className="h-5 w-5 text-blue-500" />
@@ -929,7 +984,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
           )}
 
           {/* Security Section */}
-          {activeSection === 'security' && (
+          {activeTab === 'security' && (
             <CardContent className="p-8">
               <div className="flex items-center gap-3 mb-6">
                 <Lock className="h-5 w-5 text-blue-500" />
@@ -1018,8 +1073,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
             </CardContent>
           )}
 
-          {/* Save Button (only show for profile, learning, and security sections) */}
-          {(activeSection === 'profile' || activeSection === 'learning' || activeSection === 'security') && (
+          {(activeTab === 'profile' || activeTab === 'learning' || activeTab === 'security') && (
             <CardContent className="px-8 pb-8">
               <div className="flex items-center gap-4">
                 <Button
@@ -1051,6 +1105,6 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
           )}
         </Card>
       </div>
-    </div>
+    </AppShell>
   );
 };

@@ -15,6 +15,11 @@ import { useQuizTracking } from './hooks/useQuizTracking';
 import { useRealtimeSyncForQuizzes } from './hooks/useRealtimeSyncForQuizzes';
 import { seedDefaultBadges, getAllBadges, getUserAchievements } from './utils/seedDefaultBadges';
 import { Badge, Achievement } from '../../types/EnhancedClasses';
+import { AppShell } from '../layout/AppShell';
+import { StickyRail } from '../layout/StickyRail';
+import { HeroHeader } from '../layout/HeroHeader';
+import { QuickActionsCard } from '../layout/QuickActionsCard';
+import { StatsCard } from '../layout/StatsCard';
 import {
   Sparkles,
   BookOpen,
@@ -73,6 +78,22 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
     },
     onStatsUpdate: fetchUserStats,
   });
+
+  // Sync tab changes with global header
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('section-tab-active', { detail: { section: 'quizzes', tab: activeTab } }));
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.section === 'quizzes' && detail?.tab) {
+        setActiveTab(detail.tab);
+      }
+    };
+    window.addEventListener('section-tab-change', handler as EventListener);
+    return () => window.removeEventListener('section-tab-change', handler as EventListener);
+  }, []);
 
   useEffect(() => {
     const initBadges = async () => {
@@ -205,201 +226,191 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
     </Card>
   );
 
+  const leftRail = (
+    <StickyRail>
+      <QuickActions />
+      <StatsCard
+        title="Progress"
+        items={[
+          { label: "Level", value: userStats?.level || 1, icon: <Trophy className="h-4 w-4 text-yellow-500" /> },
+          { label: "Total XP", value: userStats?.total_xp || 0, icon: <Zap className="h-4 w-4 text-blue-500" /> },
+          { label: "Quizzes", value: userStats?.total_quizzes_completed || 0, icon: <Brain className="h-4 w-4 text-green-500" /> },
+          { label: "Badges", value: earnedAchievements.length, icon: <Target className="h-4 w-4 text-blue-500" /> },
+        ]}
+      />
+    </StickyRail>
+  );
+
+  const rightRail = (
+    <StickyRail>
+      <StatsCard
+        title="At a glance"
+        items={[
+          { label: "Level", value: userStats?.level || 1, icon: <Trophy className="h-4 w-4 text-yellow-500" /> },
+          { label: "Total XP", value: userStats?.total_xp || 0, icon: <Zap className="h-4 w-4 text-blue-500" /> },
+          { label: "Quizzes Done", value: userStats?.total_quizzes_completed || 0, icon: <Brain className="h-4 w-4 text-green-500" /> },
+          { label: "Badges", value: earnedAchievements.length, icon: <Target className="h-4 w-4 text-indigo-500" /> },
+        ]}
+      />
+    </StickyRail>
+  );
+
   return (
-    <div className="h-full max-w-5xl mx-auto overflow-y-auto modern-scrollbar pb-12 ">
-      <div className=" mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6 px-4">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Sparkles className="h-8 w-8 text-yellow-500" />
-              Quiz Center
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Test your knowledge and track your learning progress
-            </p>
-          </div>
-        </div>
-
-        {/* Main Content with Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 pb-12">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="recordings" className="flex items-center gap-2">
-              <Play className="h-4 w-4" />
-              Recordings
-            </TabsTrigger>
-            <TabsTrigger value="notes" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Notes
-            </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-2">
-              <History className="h-4 w-4" />
-              History
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            <QuickStats />
-            <QuickActions />
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <StatsPanel stats={userStats} isLoading={isLoadingStats} />
-              <BadgesPanel
-                allBadges={allBadges}
-                earnedAchievements={earnedAchievements}
-                isLoading={isLoadingBadges}
-              />
-            </div>
-
-
-          </TabsContent>
-
-          {/* Recordings Tab */}
-          <TabsContent value="recordings" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Play className="h-5 w-5 text-blue-500" />
-                  Generate Quiz from Recording
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Select Recording</label>
-                    <select
-                      value={selectedRecording}
-                      onChange={(e) => setSelectedRecording(e.target.value)}
-                      className="w-full px-3 py-2  rounded-lg bg-white dark:bg-gray-800 "
-                    >
-                      <option value="">Choose a recording</option>
-                      {recordings.map((rec) => (
-                        <option key={rec.id} value={rec.id}>
-                          {rec.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Questions</label>
-                    <select
-                      value={numQuestions}
-                      onChange={(e) => setNumQuestions(parseInt(e.target.value))}
-                      className="w-full px-3 py-2  rounded-lg bg-white dark:bg-gray-800  "
-                    >
-                      <option value="5">5 Questions</option>
-                      <option value="10">10 Questions</option>
-                      <option value="15">15 Questions</option>
-                      <option value="20">20 Questions</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Difficulty</label>
-                    <select
-                      value={difficulty}
-                      onChange={(e) => setDifficulty(e.target.value)}
-                      className="w-full px-3 py-2  rounded-lg bg-white dark:bg-gray-800 "
-                    >
-                      <option value="easy">Easy</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="hard">Hard</option>
-                    </select>
-                  </div>
-                </div>
-                <Button
-                  onClick={handleGenerateQuiz}
-                  disabled={!selectedRecording}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                >
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  Generate Quiz from Recording
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Available Recordings */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Available Recordings ({recordings.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {recordings.map((recording) => (
-                    <div
-                      key={recording.id}
-                      className="flex items-center justify-between p-3  rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                      onClick={() => setSelectedRecording(recording.id)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Play className="h-4 w-4 text-blue-500" />
-                        <div>
-                          <p className="font-medium">{recording.title}</p>
-                          <p className="text-sm text-gray-500">
-                            {Math.round(recording.duration / 60)} min • {recording.subject}
-                          </p>
-                        </div>
-                      </div>
-                      {selectedRecording === recording.id && (
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Notes Tab */}
-          <TabsContent value="notes">
-            <NotesQuizGenerator
-              onGenerateQuizFromNotes={handleGenerateQuizFromNotes}
-              isLoading={false}
-            />
-          </TabsContent>
-
-          {/* AI Quiz Tab */}
-          <TabsContent value="ai">
-            <AutoAIQuizGenerator
-              onGenerateAIQuiz={handleGenerateAIQuiz}
-              userStats={userStats}
-              isLoading={false}
-            />
-          </TabsContent>
-
-          {/* History Tab */}
-          <TabsContent value="history">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <History className="h-5 w-5" />
-                  Quiz History
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <QuizHistory quizzes={quizzes} onSelectQuiz={handleSelectQuiz} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        {/* Quiz Modal */}
-        <QuizModal
-          quizMode={quizMode}
-          currentQuestionIndex={currentQuestionIndex}
-          userAnswers={userAnswers}
-          showResults={showResults}
-          onAnswerSelect={handleAnswerSelect}
-          onNextQuestion={handleNextQuestion}
-          onPreviousQuestion={handlePreviousQuestion}
-          onExitQuizMode={handleExitQuizMode}
-          calculateScore={calculateScore}
+    <AppShell left={leftRail} right={rightRail}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 pb-12 px-2 lg:px-0">
+        <HeroHeader
+          title="Quiz Center"
+          subtitle="Test your knowledge and track your learning progress"
+          icon={<Sparkles className="h-8 w-8 text-yellow-300" />}
+          gradient="from-blue-600 to-indigo-600"
         />
-      </div>
-    </div>
+
+        <TabsContent value="overview" className="space-y-6">
+          <QuickStats />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <StatsPanel stats={userStats} isLoading={isLoadingStats} />
+            <BadgesPanel
+              allBadges={allBadges}
+              earnedAchievements={earnedAchievements}
+              isLoading={isLoadingBadges}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="recordings" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Play className="h-5 w-5 text-blue-500" />
+                Generate Quiz from Recording
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Select Recording</label>
+                  <select
+                    value={selectedRecording}
+                    onChange={(e) => setSelectedRecording(e.target.value)}
+                    className="w-full px-3 py-2  rounded-lg bg-white dark:bg-gray-800 "
+                  >
+                    <option value="">Choose a recording</option>
+                    {recordings.map((rec) => (
+                      <option key={rec.id} value={rec.id}>
+                        {rec.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Questions</label>
+                  <select
+                    value={numQuestions}
+                    onChange={(e) => setNumQuestions(parseInt(e.target.value))}
+                    className="w-full px-3 py-2  rounded-lg bg-white dark:bg-gray-800  "
+                  >
+                    <option value="5">5 Questions</option>
+                    <option value="10">10 Questions</option>
+                    <option value="15">15 Questions</option>
+                    <option value="20">20 Questions</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Difficulty</label>
+                  <select
+                    value={difficulty}
+                    onChange={(e) => setDifficulty(e.target.value)}
+                    className="w-full px-3 py-2  rounded-lg bg-white dark:bg-gray-800 "
+                  >
+                    <option value="easy">Easy</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+              </div>
+              <Button
+                onClick={handleGenerateQuiz}
+                disabled={!selectedRecording}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                <BookOpen className="h-4 w-4 mr-2" />
+                Generate Quiz from Recording
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Available Recordings ({recordings.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {recordings.map((recording) => (
+                  <div
+                    key={recording.id}
+                    className="flex items-center justify-between p-3  rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+                    onClick={() => setSelectedRecording(recording.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Play className="h-4 w-4 text-blue-500" />
+                      <div>
+                        <p className="font-medium">{recording.title}</p>
+                        <p className="text-sm text-gray-500">
+                          {Math.round(recording.duration / 60)} min • {recording.subject}
+                        </p>
+                      </div>
+                    </div>
+                    {selectedRecording === recording.id && (
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notes">
+          <NotesQuizGenerator
+            onGenerateQuizFromNotes={handleGenerateQuizFromNotes}
+            isLoading={false}
+          />
+        </TabsContent>
+
+        <TabsContent value="ai">
+          <AutoAIQuizGenerator
+            onGenerateAIQuiz={handleGenerateAIQuiz}
+            userStats={userStats}
+            isLoading={false}
+          />
+        </TabsContent>
+
+        <TabsContent value="history">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Quiz History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <QuizHistory quizzes={quizzes} onSelectQuiz={handleSelectQuiz} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <QuizModal
+        quizMode={quizMode}
+        currentQuestionIndex={currentQuestionIndex}
+        userAnswers={userAnswers}
+        showResults={showResults}
+        onAnswerSelect={handleAnswerSelect}
+        onNextQuestion={handleNextQuestion}
+        onPreviousQuestion={handlePreviousQuestion}
+        onExitQuizMode={handleExitQuizMode}
+        calculateScore={calculateScore}
+      />
+    </AppShell>
   );
 };
