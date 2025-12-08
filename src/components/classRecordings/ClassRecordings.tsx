@@ -200,6 +200,24 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       audio.removeEventListener('timeupdate', handleTimeUpdate);
     };
   }, [audioPlayerRef, selectedRecording]);
+  // Sync tab changes with global header
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('section-tab-active', {
+      detail: { section: 'recordings', tab: activeTab }
+    }));
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.section === 'recordings' && detail?.tab) {
+        setActiveTab(detail.tab as any);
+      }
+    };
+    window.addEventListener('section-tab-change', handler as EventListener);
+    return () => window.removeEventListener('section-tab-change', handler as EventListener);
+  }, []);
+
 
   return (
     <div className="min-h-screen bg-transparent max-w-[1440px] mx-auto px-0">
@@ -213,7 +231,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
             {/* Stats Card */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-4">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-xl">
                     <Headphones className="h-6 w-6 text-white" />
@@ -236,7 +254,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                 <div className="h-px bg-border" />
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">This Week</span>
-                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                     {recordings.filter(r => {
                       const date = new Date(r.date || r.created_at || '');
                       const weekAgo = new Date();
@@ -257,7 +275,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                   className="w-full justify-start bg-white dark:bg-slate-800"
                   onClick={() => setActiveTab('record')}
                 >
-                  <Mic className="h-4 w-4 mr-2 text-emerald-500" /> Record New
+                  <Mic className="h-4 w-4 mr-2 text-blue-500" /> Record New
                 </Button>
                 <Button
                   variant="outline"
@@ -284,8 +302,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                       }}
                     >
                       <div className={`p-2 rounded-lg ${selectedRecording?.id === rec.id
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                         }`}>
                         <Play className="h-3 w-3" />
                       </div>
@@ -305,7 +323,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         <main className="col-span-1 lg:col-span-5 max-h-screen overflow-y-auto modern-scrollbar pb-20 lg:pb-20 px-2 lg:px-0">
 
           {/* Hero Header */}
-          <div className="relative overflow-hidden rounded-2xl my-4 p-6 bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xl">
+          <div className="relative overflow-hidden rounded-2xl my-4 p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl">
             <div className="absolute inset-0 bg-black opacity-10" />
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-2">
@@ -327,7 +345,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                 placeholder="Search recordings..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
             </div>
           </div>
@@ -354,15 +372,15 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
               {filteredRecordings.length === 0 ? (
                 <Card className="bg-white dark:bg-slate-900 border-dashed border-2">
                   <CardContent className="flex flex-col items-center justify-center py-12">
-                    <div className="p-4 bg-emerald-100 dark:bg-emerald-900/30 rounded-full mb-4">
-                      <Headphones className="h-10 w-10 text-emerald-600 dark:text-emerald-400" />
+                    <div className="p-4 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
+                      <Headphones className="h-10 w-10 text-blue-600 dark:text-blue-400" />
                     </div>
                     <h3 className="text-lg font-semibold mb-2">No recordings yet</h3>
                     <p className="text-muted-foreground text-center text-sm mb-4 max-w-sm">
                       Start by recording a lecture or uploading an audio file to get AI-powered transcripts and summaries
                     </p>
                     <div className="flex gap-2">
-                      <Button onClick={() => setActiveTab('record')} className="bg-emerald-600 hover:bg-emerald-700">
+                      <Button onClick={() => setActiveTab('record')} className="bg-blue-600 hover:bg-blue-700">
                         <Mic className="h-4 w-4 mr-2" /> Start Recording
                       </Button>
                       <Button variant="outline" onClick={() => setActiveTab('upload')}>
@@ -378,7 +396,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                       key={recording.id}
                       className={`bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer group border-2
                         ${selectedRecording?.id === recording.id
-                          ? 'border-emerald-500 shadow-lg bg-emerald-50/30 dark:bg-emerald-900/10'
+                          ? 'border-blue-500 shadow-lg bg-blue-50/30 dark:bg-blue-900/10'
                           : 'border-slate-100 dark:border-slate-800'}`}
                       onClick={() => {
                         if (selectedRecording?.id !== recording.id && isPlayingAudio) {
@@ -392,8 +410,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                           {/* Play Button / Avatar */}
                           <div className="relative">
                             <div className={`p-3 rounded-xl transition-colors ${selectedRecording?.id === recording.id
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-900/50'
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50'
                               }`}>
                               {recording.audioUrl ? (
                                 <Play className="h-5 w-5" />
@@ -407,11 +425,11 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <div>
-                                <h3 className="font-semibold text-base truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                                <h3 className="font-semibold text-base truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                   {recording.title}
                                 </h3>
                                 <div className="flex flex-wrap items-center gap-2 mt-1">
-                                  <Badge variant="secondary" className="text-xs bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                  <Badge variant="secondary" className="text-xs bg-blue-100/80 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                                     {recording.subject}
                                   </Badge>
                                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -490,7 +508,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                                   {recording.transcript}
                                 </p>
                                 {recording.transcript.length > 100 && (
-                                  <button className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline mt-1">
+                                  <button className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1">
                                     Show more
                                   </button>
                                 )}
@@ -530,7 +548,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
           <div className="space-y-4 w-full max-w-[400px] max-h-[90vh] overflow-y-auto modern-scrollbar">
             {selectedRecording ? (
               <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-800 overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-4">
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-white/20 rounded-xl">
                       <Headphones className="h-5 w-5 text-white" />
@@ -549,7 +567,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                       <div className="flex items-center gap-3 mb-3">
                         <Button
                           size="sm"
-                          className="h-10 w-10 rounded-full bg-emerald-500 hover:bg-emerald-600"
+                          className="h-10 w-10 rounded-full bg-blue-500 hover:bg-blue-600"
                           onClick={() => {
                             if (audioPlayerRef.current && selectedRecording.audioUrl) {
                               if (audioPlayerRef.current.src !== selectedRecording.audioUrl) {
@@ -581,7 +599,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                           <span>{formatDuration(selectedRecording.duration || 0)}</span>
                         </div>
                         <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                          <div className="h-full w-full bg-emerald-500 transition-all duration-300"
+                          <div className="h-full w-full bg-blue-500 transition-all duration-300"
                             style={{ width: `${audioProgress}%` }}></div>
                         </div>
                       </div>
@@ -594,7 +612,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                       <button
                         onClick={() => setActiveContentTab('transcript')}
                         className={`px-3 py-2 text-sm font-medium transition-colors ${activeContentTab === 'transcript'
-                          ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                          ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
                           : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
                           }`}
                       >
@@ -611,7 +629,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                       <button
                         onClick={() => setActiveContentTab('summary')}
                         className={`px-3 py-2 text-sm font-medium transition-colors ${activeContentTab === 'summary'
-                          ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                          ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
                           : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
                           }`}
                       >
@@ -728,7 +746,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                   <div className="space-y-2">
                     <Button
                       onClick={() => onGenerateNote(selectedRecording)}
-                      className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg transition-all duration-200"
+                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg transition-all duration-200"
                       disabled={!selectedRecording.transcript}
                     >
                       <FileText className="h-4 w-4 mr-2" />

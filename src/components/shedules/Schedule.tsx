@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Calendar, Clock, MapPin, Edit2, Trash2, Loader2, RefreshCw } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Plus, Calendar, Clock, MapPin, Edit2, Trash2, Loader2, RefreshCw, Sparkles, History } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
@@ -8,6 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { ScheduleItem } from '../../types/Class';
 import { toast } from 'sonner';
+import { AppShell } from '../layout/AppShell';
+import { StickyRail } from '../layout/StickyRail';
+import { HeroHeader } from '../layout/HeroHeader';
+import { QuickActionsCard } from '../layout/QuickActionsCard';
+import { StatsCard } from '../layout/StatsCard';
 
 interface ScheduleProps {
   scheduleItems: ScheduleItem[];
@@ -42,6 +47,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
   isLoading = false,
   onRefresh
 }) => {
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'today' | 'past'>('upcoming');
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,6 +61,24 @@ export const Schedule: React.FC<ScheduleProps> = ({
     location: '',
     description: ''
   });
+
+  // Sync tab changes with global header
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('section-tab-active', {
+      detail: { section: 'schedule', tab: activeTab }
+    }));
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.section === 'schedule' && detail?.tab) {
+        setActiveTab(detail.tab as any);
+      }
+    };
+    window.addEventListener('section-tab-change', handler as EventListener);
+    return () => window.removeEventListener('section-tab-change', handler as EventListener);
+  }, []);
 
   const resetForm = () => {
     setFormData({
@@ -181,14 +205,27 @@ export const Schedule: React.FC<ScheduleProps> = ({
   };
 
   // Memoized filtered and sorted items
-  const { upcomingItems, pastItems } = useMemo(() => {
+  const { upcomingItems, todayItems, pastItems } = useMemo(() => {
     const now = new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
     const upcoming: ScheduleItem[] = [];
+    const todayItems: ScheduleItem[] = [];
     const past: ScheduleItem[] = [];
 
     scheduleItems.forEach(item => {
-      if (new Date(item.startTime) >= now) {
+      const itemDate = new Date(item.startTime);
+
+      if (itemDate >= now) {
         upcoming.push(item);
+
+        // Check if it's today
+        if (itemDate >= today && itemDate < tomorrow) {
+          todayItems.push(item);
+        }
       } else {
         past.push(item);
       }
@@ -196,359 +233,404 @@ export const Schedule: React.FC<ScheduleProps> = ({
 
     upcoming.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     past.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+    todayItems.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-    return { upcomingItems: upcoming, pastItems: past };
+    return { upcomingItems: upcoming, todayItems, pastItems: past };
   }, [scheduleItems]);
 
   // Get minimum date for date input (today)
   const minDate = new Date().toISOString().split('T')[0];
 
+  const getItemsForCurrentTab = () => {
+    switch (activeTab) {
+      case 'today':
+        return todayItems;
+      case 'past':
+        return pastItems;
+      default:
+        return upcomingItems;
+    }
+  };
+
+  const currentItems = getItemsForCurrentTab();
+
+  const leftRail = (
+    <StickyRail>
+      <QuickActionsCard
+        title="Quick Actions"
+        actions={[
+          {
+            label: "Add Schedule Item",
+            icon: <Plus className="h-4 w-4 text-blue-600" />,
+            onClick: () => setShowForm(true),
+          },
+          ...(onRefresh ? [{
+            label: isLoading ? "Refreshing..." : "Refresh",
+            icon: <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />,
+            onClick: () => onRefresh?.(),
+          }] : [])
+        ]}
+      />
+      <StatsCard
+        title="Schedule Stats"
+        items={[
+          { label: "Upcoming", value: upcomingItems.length, icon: <Calendar className="h-4 w-4 text-blue-500" /> },
+          { label: "Today", value: todayItems.length, icon: <Clock className="h-4 w-4 text-green-500" /> },
+          { label: "Past", value: pastItems.length, icon: <History className="h-4 w-4 text-slate-500" /> },
+        ]}
+      />
+    </StickyRail>
+  );
+
+  const rightRail = (
+    <StickyRail>
+      <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-2xl p-4 border border-amber-200 dark:border-amber-800">
+        <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">💡 Tips</h4>
+        <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
+          <li>• Add start/end times to avoid overlaps</li>
+          <li>• Use types to color-code events</li>
+          <li>• Refresh to sync latest changes</li>
+          <li>• Keep descriptions short and clear</li>
+        </ul>
+      </Card>
+    </StickyRail>
+  );
+
   return (
-    <div className="space-y-6 w-full max-w-4xl mx-auto p-4 rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-gray-200">
-            Schedule & Timetable
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
-            {upcomingItems.length} upcoming {upcomingItems.length === 1 ? 'event' : 'events'}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {onRefresh && (
+    <AppShell left={leftRail} right={rightRail}>
+      <div className="px-3 lg:px-0">
+        <HeroHeader
+          title="Schedule & Timetable"
+          subtitle={`${currentItems.length} ${activeTab} ${currentItems.length === 1 ? 'event' : 'events'}`}
+          icon={<Sparkles className="h-7 w-7 text-yellow-300" />}
+          gradient="from-blue-600 to-indigo-600"
+          actions={
+            <div className="flex gap-2">
+              {onRefresh && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onRefresh}
+                  disabled={isLoading}
+                >
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                </Button>
+              )}
+              <Button
+                onClick={() => setShowForm(true)}
+                className="bg-white text-blue-700 hover:bg-blue-50"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+            </div>
+          }
+        />
+
+        {/* Tabs */}
+        {/* <div className="flex gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-2xl p-2 shadow-xl mb-6">
+          {(['upcoming', 'today', 'past'] as const).map(tab => (
             <Button
-              variant="outline"
-              size="sm"
-              onClick={onRefresh}
-              disabled={isLoading}
+              key={tab}
+              variant={activeTab === tab ? "default" : "ghost"}
+              className={`flex-1 rounded-xl ${activeTab === tab ? 'shadow-lg' : ''}`}
+              onClick={() => setActiveTab(tab)}
             >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              {tab === 'upcoming' ? <Calendar className="h-5 w-5 mr-2" /> :
+                tab === 'today' ? <Clock className="h-5 w-5 mr-2" /> :
+                  <History className="h-5 w-5 mr-2" />}
+              {tab === 'upcoming' ? 'Upcoming' :
+                tab === 'today' ? 'Today' : 'Past'}
             </Button>
+          ))}
+        </div> */}
+
+        <div className="space-y-6 w-full">
+
+          {/* Form */}
+          {showForm && (
+            <Card className="border-2 border-blue-500 dark:border-blue-400">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900/20">
+                <CardTitle className="flex items-center justify-between">
+                  <span>{editingItem ? 'Edit' : 'Add'} Schedule Item</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetForm}
+                    disabled={isSubmitting}
+                  >
+                    ✕
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Title *</label>
+                      <Input
+                        placeholder="e.g., Linear Algebra Lecture"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        required
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Subject</label>
+                      <Input
+                        placeholder="e.g., Mathematics"
+                        value={formData.subject}
+                        onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Type *</label>
+                      <Select
+                        value={formData.type}
+                        onValueChange={(value: ScheduleItem['type']) => setFormData({ ...formData, type: value })}
+                        disabled={isSubmitting}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="class">{typeIcons.class} Class</SelectItem>
+                          <SelectItem value="study">{typeIcons.study} Study Session</SelectItem>
+                          <SelectItem value="assignment">{typeIcons.assignment} Assignment</SelectItem>
+                          <SelectItem value="exam">{typeIcons.exam} Exam</SelectItem>
+                          <SelectItem value="other">{typeIcons.other} Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Date *</label>
+                      <Input
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        min={minDate}
+                        required
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Location</label>
+                      <Input
+                        placeholder="e.g., Room 301"
+                        value={formData.location}
+                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Start Time *</label>
+                      <Input
+                        type="time"
+                        value={formData.startTime}
+                        onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                        required
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">End Time *</label>
+                      <Input
+                        type="time"
+                        value={formData.endTime}
+                        onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                        required
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Description</label>
+                    <Textarea
+                      placeholder="Additional notes or details..."
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      rows={3}
+                      disabled={isSubmitting}
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          {editingItem ? 'Updating...' : 'Adding...'}
+                        </>
+                      ) : (
+                        <>
+                          {editingItem ? 'Update' : 'Add'} Item
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={resetForm}
+                      disabled={isSubmitting}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           )}
-          <Button
-            onClick={() => setShowForm(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Schedule Item
-          </Button>
+
+          {/* Loading State */}
+          {isLoading && scheduleItems.length === 0 ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center">
+                  <Loader2 className="h-12 w-12 animate-spin text-blue-600 dark:text-blue-400 mb-4" />
+                  <p className="text-slate-600 dark:text-gray-300">Loading schedule...</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Current Tab Items */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 flex items-center gap-2">
+                  {activeTab === 'upcoming' ? <Calendar className="h-5 w-5" /> :
+                    activeTab === 'today' ? <Clock className="h-5 w-5" /> :
+                      <History className="h-5 w-5" />}
+                  {activeTab === 'upcoming' ? 'Upcoming Events' :
+                    activeTab === 'today' ? "Today's Events" : 'Past Events'}
+                </h3>
+                {currentItems.length === 0 ? (
+                  <Card className="text-center py-12 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-800 dark:to-gray-900">
+                    <CardContent>
+                      {activeTab === 'upcoming' ? (
+                        <Calendar className="h-16 w-16 mx-auto text-slate-400 dark:text-gray-500 mb-4" />
+                      ) : activeTab === 'today' ? (
+                        <Clock className="h-16 w-16 mx-auto text-slate-400 dark:text-gray-500 mb-4" />
+                      ) : (
+                        <History className="h-16 w-16 mx-auto text-slate-400 dark:text-gray-500 mb-4" />
+                      )}
+                      <h3 className="text-lg font-medium text-slate-600 dark:text-gray-300 mb-2">
+                        {activeTab === 'upcoming' ? 'No upcoming events' :
+                          activeTab === 'today' ? 'No events scheduled for today' :
+                            'No past events'}
+                      </h3>
+                      <p className="text-slate-500 dark:text-gray-400 mb-4">
+                        {activeTab === 'upcoming' ? 'Add your first schedule item to start organizing your time' :
+                          activeTab === 'today' ? 'Schedule events for today to see them here' :
+                            'Completed events will appear here'}
+                      </p>
+                      <Button
+                        onClick={() => setShowForm(true)}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Schedule Item
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid gap-4">
+                    {currentItems.map((item) => (
+                      <Card
+                        key={item.id}
+                        className="hover:shadow-lg transition-all duration-200 border-l-4"
+                        style={{ borderLeftColor: item.color }}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">{typeIcons[item.type]}</span>
+                                <h3 className="font-semibold text-lg text-slate-800 dark:text-gray-200">
+                                  {item.title}
+                                </h3>
+                                <Badge className={typeColors[item.type]}>
+                                  {item.type}
+                                </Badge>
+                              </div>
+
+                              <div className="space-y-2 text-sm text-slate-600 dark:text-gray-300">
+                                {item.subject && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">Subject:</span>
+                                    <span>{item.subject}</span>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="h-4 w-4 text-blue-500" />
+                                  <span className="font-medium">{formatDate(new Date(item.startTime))}</span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-4 w-4 text-green-500" />
+                                  <span>
+                                    {formatTime(new Date(item.startTime))} - {formatTime(new Date(item.endTime))}
+                                  </span>
+                                </div>
+
+                                {item.location && (
+                                  <div className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 text-red-500" />
+                                    <span>{item.location}</span>
+                                  </div>
+                                )}
+
+                                {item.description && (
+                                  <p className="text-slate-500 dark:text-gray-400 mt-2 pl-6 italic">
+                                    {item.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex gap-1 ml-4">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(item)}
+                                title="Edit"
+                                className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                              >
+                                <Edit2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(item.id, item.title)}
+                                title="Delete"
+                                className="hover:bg-red-50 dark:hover:bg-red-900/20"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
-
-      {/* Form */}
-      {showForm && (
-        <Card className="border-2 border-blue-500 dark:border-blue-400">
-          <CardHeader className="bg-blue-50 dark:bg-blue-900/20">
-            <CardTitle className="flex items-center justify-between">
-              <span>{editingItem ? 'Edit' : 'Add'} Schedule Item</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetForm}
-                disabled={isSubmitting}
-              >
-                ✕
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Title *</label>
-                  <Input
-                    placeholder="e.g., Linear Algebra Lecture"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Subject</label>
-                  <Input
-                    placeholder="e.g., Mathematics"
-                    value={formData.subject}
-                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Type *</label>
-                  <Select
-                    value={formData.type}
-                    onValueChange={(value: ScheduleItem['type']) => setFormData({ ...formData, type: value })}
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="class">{typeIcons.class} Class</SelectItem>
-                      <SelectItem value="study">{typeIcons.study} Study Session</SelectItem>
-                      <SelectItem value="assignment">{typeIcons.assignment} Assignment</SelectItem>
-                      <SelectItem value="exam">{typeIcons.exam} Exam</SelectItem>
-                      <SelectItem value="other">{typeIcons.other} Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Date *</label>
-                  <Input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    min={minDate}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Location</label>
-                  <Input
-                    placeholder="e.g., Room 301"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Start Time *</label>
-                  <Input
-                    type="time"
-                    value={formData.startTime}
-                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">End Time *</label>
-                  <Input
-                    type="time"
-                    value={formData.endTime}
-                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Description</label>
-                <Textarea
-                  placeholder="Additional notes or details..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      {editingItem ? 'Updating...' : 'Adding...'}
-                    </>
-                  ) : (
-                    <>
-                      {editingItem ? 'Update' : 'Add'} Item
-                    </>
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={resetForm}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Loading State */}
-      {isLoading && scheduleItems.length === 0 ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="flex flex-col items-center justify-center">
-              <Loader2 className="h-12 w-12 animate-spin text-blue-600 dark:text-blue-400 mb-4" />
-              <p className="text-slate-600 dark:text-gray-300">Loading schedule...</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {/* Upcoming Items */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Upcoming Events
-            </h3>
-            {upcomingItems.length === 0 ? (
-              <Card className="text-center py-12 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-800 dark:to-gray-900">
-                <CardContent>
-                  <Calendar className="h-16 w-16 mx-auto text-slate-400 dark:text-gray-500 mb-4" />
-                  <h3 className="text-lg font-medium text-slate-600 dark:text-gray-300 mb-2">
-                    No upcoming events
-                  </h3>
-                  <p className="text-slate-500 dark:text-gray-400 mb-4">
-                    Add your first schedule item to start organizing your time
-                  </p>
-                  <Button
-                    onClick={() => setShowForm(true)}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Schedule Item
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {upcomingItems.map((item) => (
-                  <Card
-                    key={item.id}
-                    className="hover:shadow-lg transition-all duration-200 border-l-4"
-                    style={{ borderLeftColor: item.color }}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-2xl">{typeIcons[item.type]}</span>
-                            <h3 className="font-semibold text-lg text-slate-800 dark:text-gray-200">
-                              {item.title}
-                            </h3>
-                            <Badge className={typeColors[item.type]}>
-                              {item.type}
-                            </Badge>
-                          </div>
-
-                          <div className="space-y-2 text-sm text-slate-600 dark:text-gray-300">
-                            {item.subject && (
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">Subject:</span>
-                                <span>{item.subject}</span>
-                              </div>
-                            )}
-
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-blue-500" />
-                              <span className="font-medium">{formatDate(new Date(item.startTime))}</span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-green-500" />
-                              <span>
-                                {formatTime(new Date(item.startTime))} - {formatTime(new Date(item.endTime))}
-                              </span>
-                            </div>
-
-                            {item.location && (
-                              <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-red-500" />
-                                <span>{item.location}</span>
-                              </div>
-                            )}
-
-                            {item.description && (
-                              <p className="text-slate-500 dark:text-gray-400 mt-2 pl-6 italic">
-                                {item.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex gap-1 ml-4">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(item)}
-                            title="Edit"
-                            className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          >
-                            <Edit2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(item.id, item.title)}
-                            title="Delete"
-                            className="hover:bg-red-50 dark:hover:bg-red-900/20"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Past Items (Optional - collapsed by default) */}
-          {pastItems.length > 0 && (
-            <details className="space-y-4">
-              <summary className="text-lg font-semibold text-slate-600 dark:text-gray-400 cursor-pointer hover:text-slate-800 dark:hover:text-gray-200 flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Past Events ({pastItems.length})
-              </summary>
-              <div className="grid gap-4 mt-4 opacity-60">
-                {pastItems.slice(0, 10).map((item) => (
-                  <Card
-                    key={item.id}
-                    className="hover:shadow-md transition-shadow border-l-4"
-                    style={{ borderLeftColor: item.color }}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span>{typeIcons[item.type]}</span>
-                            <h4 className="font-medium text-sm">{item.title}</h4>
-                            <Badge className={typeColors[item.type]} variant="outline">
-                              {item.type}
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-slate-500 dark:text-gray-400">
-                            {formatDate(new Date(item.startTime))} • {formatTime(new Date(item.startTime))}
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(item.id, item.title)}
-                          className="hover:bg-red-50 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </details>
-          )}
-        </>
-      )}
-    </div>
+    </AppShell>
   );
 };
