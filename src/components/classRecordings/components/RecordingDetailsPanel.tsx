@@ -155,62 +155,6 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
   return (
     <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-slate-200/50 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 dark:border-gray-700/50">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
-              <AudioWaveform className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-gray-100">Recording Details</h3>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-gray-400">Manage and analyze your recording</p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="rounded-full hover:bg-slate-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <X className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500 dark:text-gray-400" />
-          </Button>
-        </div>
-
-        {/* Recording Info Cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 p-3 rounded-xl border border-blue-100 dark:border-blue-800/50">
-            <div className="flex items-center gap-2 mb-1">
-              <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Date</span>
-            </div>
-            <p className="text-xs sm:text-sm font-semibold text-blue-900 dark:text-blue-100">
-              {new Date(recording.date).toLocaleDateString()}
-            </p>
-          </div>
-
-          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-teal-950/50 p-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50">
-            <div className="flex items-center gap-2 mb-1">
-              <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Duration</span>
-            </div>
-            <p className="text-xs sm:text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-              {formatDuration(recording.duration)}
-            </p>
-          </div>
-        </div>
-
-        {/* Title and Subject */}
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <Book className="h-4 w-4 text-slate-600 dark:text-gray-400" />
-            <span className="text-xs sm:text-sm font-medium text-slate-700 dark:text-gray-300">Subject:</span>
-            <span className="text-xs sm:text-sm text-slate-900 dark:text-gray-100 font-semibold">{recording.subject}</span>
-          </div>
-          <h4 className="text-base sm:text-lg font-bold text-slate-900 dark:text-gray-100 leading-tight">
-            {recording.title}
-          </h4>
-        </div>
-      </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 modern-scrollbar">
