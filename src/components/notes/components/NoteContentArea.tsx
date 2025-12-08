@@ -1202,19 +1202,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         window.removeEventListener('resize', checkOverflow);
       };
     }, [editor, savedCards.length, isToolbarExpanded, isSummaryVisible, isExpanded]);
-    // Add this useEffect in NoteContentArea.tsx component
-    useEffect(() => {
-      // Auto-start tutorial on mobile for first-time users
-      const isFirstVisit = localStorage.getItem('note-editor-first-visit');
-      if (isMobile && !isFirstVisit && !hasCompletedBefore) {
-        const timer = setTimeout(() => {
-          startTutorial();
-          localStorage.setItem('note-editor-first-visit', 'true');
-        }, 2000); // Start after 2 seconds
-
-        return () => clearTimeout(timer);
-      }
-    }, [isMobile, hasCompletedBefore, startTutorial]);
     return (
       <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-gray-900">
         {/* Hidden file inputs */}

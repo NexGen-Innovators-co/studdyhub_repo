@@ -718,7 +718,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                   <Label className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     Explanation Style
                   </Label>
-                  <div className="grid grid-cols-3 gap-3 mt-3">
+                  <div className="grid grid-cols-2 gap-3 mt-3">
                     {[
                       { value: 'simple', label: 'Simple', desc: 'Brief and to the point' },
                       { value: 'detailed', label: 'Detailed', desc: 'Thorough explanations' },
@@ -744,7 +744,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                   <Label className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     Difficulty Level
                   </Label>
-                  <div className="grid grid-cols-3 gap-3 mt-3">
+                  <div className="grid grid-cols-2 gap-3 mt-3">
                     {[
                       { value: 'beginner', label: 'Beginner', desc: 'Basic concepts' },
                       { value: 'intermediate', label: 'Intermediate', desc: 'Moderate complexity' },

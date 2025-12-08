@@ -263,11 +263,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setIsContentModified(true);
   }, []);
 
-  // Add a useEffect to log content changes for debugging
-  useEffect(() => {
-    ////console.log("Content state updated, length:", content.length);
-  }, [content]);
-
   // Add auto-save or manual save indicator in the UI if needed
 
   const regenerateNoteFromDocument = async () => {

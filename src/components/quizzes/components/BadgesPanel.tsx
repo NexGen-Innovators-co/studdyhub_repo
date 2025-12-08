@@ -12,10 +12,10 @@ interface BadgesPanelProps {
   isLoading?: boolean;
 }
 
-export const BadgesPanel: React.FC<BadgesPanelProps> = ({ 
-  allBadges, 
+export const BadgesPanel: React.FC<BadgesPanelProps> = ({
+  allBadges,
   earnedAchievements,
-  isLoading 
+  isLoading
 }) => {
   const earnedBadgeIds = new Set(earnedAchievements.map(a => a.badge_id));
 
@@ -40,7 +40,7 @@ export const BadgesPanel: React.FC<BadgesPanelProps> = ({
   }
 
   return (
-    <Card className="w-full shadow-lg">
+    <Card className="w-full shadow-lg rounded-2xl">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-xl">
@@ -53,7 +53,7 @@ export const BadgesPanel: React.FC<BadgesPanelProps> = ({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-2 gap-3 max-h-screen-50 overflow-y-scroll">
           {allBadges.map((badge) => {
             const isEarned = earnedBadgeIds.has(badge.id);
             const achievement = earnedAchievements.find(a => a.badge_id === badge.id);
@@ -65,8 +65,8 @@ export const BadgesPanel: React.FC<BadgesPanelProps> = ({
                     <div
                       className={`
                         relative p-4 rounded-lg border-2 transition-all cursor-pointer
-                        ${isEarned 
-                          ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 hover:shadow-lg' 
+                        ${isEarned
+                          ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 hover:shadow-lg'
                           : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 opacity-60'
                         }
                       `}
@@ -94,7 +94,7 @@ export const BadgesPanel: React.FC<BadgesPanelProps> = ({
                       )}
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
+                  <TooltipContent className="max-w-xs dark:bg-slate- bg-slate-50">
                     <div className="space-y-1">
                       <p className="font-semibold">{badge.name}</p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
