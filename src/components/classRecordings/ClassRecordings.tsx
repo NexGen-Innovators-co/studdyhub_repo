@@ -8,7 +8,8 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import {
   Clock, BookOpen, FileText, Mic, Download, Trash2, Play, Pause,
   Upload, Plus, Headphones, Calendar, MoreHorizontal, Search,
-  RefreshCw, Loader2, ChevronRight
+  RefreshCw, Loader2, ChevronRight, Volume2, Sparkles, Clipboard,
+  CheckCircle2
 } from 'lucide-react';
 import { ClassRecording } from '../../types/Class';
 import { formatDate } from './utils/helpers';
@@ -50,6 +51,9 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'record' | 'upload'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeContentTab, setActiveContentTab] = useState<'transcript' | 'summary'>('transcript');
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Fetch user ID
   useEffect(() => {
@@ -108,11 +112,11 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     const date = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const handleReprocessAudioClick = useCallback(async (recording: ClassRecording) => {
@@ -150,6 +154,21 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     }
   }, [onDeleteRecording, selectedRecording, isPlayingAudio, handlePauseAudio]);
 
+  const handleCopyTranscript = useCallback((transcript: string) => {
+    if (!transcript) {
+      toast.error('No transcript available to copy.');
+      return;
+    }
+    navigator.clipboard.writeText(transcript).then(() => {
+      setCopySuccess(true);
+      toast.success('Transcript copied to clipboard!');
+      setTimeout(() => setCopySuccess(false), 2000);
+    }).catch(err => {
+      console.error('Failed to copy transcript:', err);
+      toast.error('Failed to copy transcript.');
+    });
+  }, []);
+
   // Filter recordings
   const filteredRecordings = recordings.filter(rec =>
     rec.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -160,16 +179,38 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   const totalDuration = recordings.reduce((acc, rec) => acc + (rec.duration || 0), 0);
   const totalRecordings = recordings.length;
 
+  // Get word count for transcript
+  const getWordCount = (text: string) => {
+    return text ? text.split(/\s+/).filter(word => word.length > 0).length : 0;
+  };
+
+  // Audio progress update
+  useEffect(() => {
+    const audio = audioPlayerRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => {
+      if (audio.duration) {
+        setAudioProgress((audio.currentTime / audio.duration) * 100);
+      }
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [audioPlayerRef, selectedRecording]);
+
   return (
-    <div className="min-h-screen bg-transparent max-w-[1240px] mx-auto px-0">
+    <div className="min-h-screen bg-transparent max-w-[1440px] mx-auto px-0">
       <audio ref={audioPlayerRef} className="hidden" onEnded={handleAudioEnded} />
-      
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8 relative max-h-screen overflow-y-auto modern-scrollbar">
-        
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-6 relative max-h-screen overflow-y-auto modern-scrollbar">
+
         {/* Left Sidebar - Stats & Quick Actions */}
         <div className="hidden lg:block lg:col-span-3 sticky top-0 h-screen lg:pt-3 overflow-y-auto scrollbar-hide pr-4 modern-scrollbar">
           <div className="space-y-6 w-full max-w-[350px]">
-            
+
             {/* Stats Card */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
               <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-4">
@@ -234,13 +275,19 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                 <h3 className="font-semibold text-sm text-muted-foreground mb-3">Recent Activity</h3>
                 <div className="space-y-3">
                   {recordings.slice(0, 3).map((rec) => (
-                    <div 
-                      key={rec.id} 
+                    <div
+                      key={rec.id}
                       className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => setSelectedRecording(rec)}
+                      onClick={() => {
+                        setSelectedRecording(rec);
+                        if (isPlayingAudio) handlePauseAudio();
+                      }}
                     >
-                      <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
-                        <Play className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                      <div className={`p-2 rounded-lg ${selectedRecording?.id === rec.id
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                        }`}>
+                        <Play className="h-3 w-3" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{rec.title}</p>
@@ -255,8 +302,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         </div>
 
         {/* Main Content */}
-        <main className="col-span-1 lg:col-span-6 max-h-screen overflow-y-auto modern-scrollbar pb-20 lg:pb-20 px-2 lg:px-0">
-          
+        <main className="col-span-1 lg:col-span-5 max-h-screen overflow-y-auto modern-scrollbar pb-20 lg:pb-20 px-2 lg:px-0">
+
           {/* Hero Header */}
           <div className="relative overflow-hidden rounded-2xl my-4 p-6 bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xl">
             <div className="absolute inset-0 bg-black opacity-10" />
@@ -329,8 +376,10 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                   {filteredRecordings.map((recording) => (
                     <Card
                       key={recording.id}
-                      className={`bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer group
-                        ${selectedRecording?.id === recording.id ? 'ring-2 ring-emerald-500 shadow-lg' : 'border-slate-100 dark:border-slate-800'}`}
+                      className={`bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer group border-2
+                        ${selectedRecording?.id === recording.id
+                          ? 'border-emerald-500 shadow-lg bg-emerald-50/30 dark:bg-emerald-900/10'
+                          : 'border-slate-100 dark:border-slate-800'}`}
                       onClick={() => {
                         if (selectedRecording?.id !== recording.id && isPlayingAudio) {
                           handlePauseAudio();
@@ -342,11 +391,10 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                         <div className="flex items-start gap-4">
                           {/* Play Button / Avatar */}
                           <div className="relative">
-                            <div className={`p-3 rounded-xl transition-colors ${
-                              selectedRecording?.id === recording.id 
-                                ? 'bg-emerald-500 text-white' 
-                                : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-900/50'
-                            }`}>
+                            <div className={`p-3 rounded-xl transition-colors ${selectedRecording?.id === recording.id
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-900/50'
+                              }`}>
                               {recording.audioUrl ? (
                                 <Play className="h-5 w-5" />
                               ) : (
@@ -383,6 +431,20 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                                   variant="ghost"
                                   size="sm"
                                   className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => {
+                                    if (selectedRecording?.id !== recording.id && isPlayingAudio) {
+                                      handlePauseAudio();
+                                    }
+                                    setSelectedRecording(recording);
+                                  }}
+                                  title="View Details"
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                                   onClick={() => handleDownloadRecording(recording)}
                                   disabled={!recording.audioUrl}
                                 >
@@ -399,10 +461,18 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => {
+                                      if (selectedRecording?.id !== recording.id && isPlayingAudio) {
+                                        handlePauseAudio();
+                                      }
+                                      setSelectedRecording(recording);
+                                    }}>
+                                      <FileText className="h-4 w-4 mr-2" /> View Details
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleDownloadRecording(recording)}>
                                       <Download className="h-4 w-4 mr-2" /> Download
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem 
+                                    <DropdownMenuItem
                                       className="text-destructive"
                                       onClick={() => handleDeleteRecordingClick(recording)}
                                     >
@@ -415,9 +485,16 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
                             {/* Transcript Preview */}
                             {recording.transcript && (
-                              <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                                {recording.transcript}
-                              </p>
+                              <div className="mt-2">
+                                <p className="text-sm text-muted-foreground line-clamp-2">
+                                  {recording.transcript}
+                                </p>
+                                {recording.transcript.length > 100 && (
+                                  <button className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline mt-1">
+                                    Show more
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -449,64 +526,244 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
         </main>
 
         {/* Right Sidebar - Selected Recording Details */}
-        <div className="hidden lg:block lg:col-span-3 sticky top-0 lg:pb-20 lg:pt-3">
-          <div className="space-y-4 w-full max-w-[350px] max-h-[90vh] overflow-y-auto modern-scrollbar">
+        <div className="hidden lg:block lg:col-span-4 sticky top-0 lg:pb-20 lg:pt-3">
+          <div className="space-y-4 w-full max-w-[400px] max-h-[90vh] overflow-y-auto modern-scrollbar">
             {selectedRecording ? (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-800 overflow-hidden">
                 <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-4">
-                  <h3 className="font-bold text-white truncate">{selectedRecording.title}</h3>
-                  <p className="text-sm text-white/80">{selectedRecording.subject}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/20 rounded-xl">
+                      <Headphones className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-white truncate text-lg">{selectedRecording.title}</h3>
+                      <p className="text-sm text-white/80">{selectedRecording.subject}</p>
+                    </div>
+                  </div>
                 </div>
+
                 <div className="p-4 space-y-4">
-                  {/* Audio Player */}
+                  {/* Audio Player - Enhanced */}
                   {selectedRecording.audioUrl && (
-                    <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
-                      <Button
-                        size="sm"
-                        className="h-10 w-10 rounded-full bg-emerald-500 hover:bg-emerald-600"
-                        onClick={() => {
-                          if (audioPlayerRef.current && selectedRecording.audioUrl) {
-                            if (audioPlayerRef.current.src !== selectedRecording.audioUrl) {
-                              audioPlayerRef.current.src = selectedRecording.audioUrl;
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Button
+                          size="sm"
+                          className="h-10 w-10 rounded-full bg-emerald-500 hover:bg-emerald-600"
+                          onClick={() => {
+                            if (audioPlayerRef.current && selectedRecording.audioUrl) {
+                              if (audioPlayerRef.current.src !== selectedRecording.audioUrl) {
+                                audioPlayerRef.current.src = selectedRecording.audioUrl;
+                              }
+                              isPlayingAudio ? handlePauseAudio() : handlePlayAudio();
                             }
-                            isPlayingAudio ? handlePauseAudio() : handlePlayAudio();
-                          }
-                        }}
-                      >
-                        {isPlayingAudio ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                      </Button>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">Audio Recording</p>
-                        <p className="text-xs text-muted-foreground">{formatDuration(selectedRecording.duration)}</p>
+                          }}
+                        >
+                          {isPlayingAudio ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                        </Button>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">Audio Recording</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-muted-foreground">{formatDuration(selectedRecording.duration)}</p>
+                            {selectedRecording.duration && (
+                              <span className="text-xs text-slate-500 dark:text-slate-400">
+                                • {Math.floor(selectedRecording.duration / 60)} min
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Audio Progress Bar */}
+                      <div className="mt-2">
+                        <div className="flex justify-between text-xs text-slate-500 mb-1">
+                          <span>0:00</span>
+                          <span>{formatDuration(selectedRecording.duration || 0)}</span>
+                        </div>
+                        <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div className="h-full w-full bg-emerald-500 transition-all duration-300"
+                            style={{ width: `${audioProgress}%` }}></div>
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Summary */}
-                  {selectedRecording.summary && (
-                    <div>
-                      <h4 className="text-sm font-semibold mb-2">Summary</h4>
-                      <p className="text-sm text-muted-foreground line-clamp-4">{selectedRecording.summary}</p>
+                  {/* Content Tabs */}
+                  <div className="border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => setActiveContentTab('transcript')}
+                        className={`px-3 py-2 text-sm font-medium transition-colors ${activeContentTab === 'transcript'
+                          ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                          : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                          }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Clipboard className="h-4 w-4" />
+                          Transcript
+                          {selectedRecording.transcript && (
+                            <span className="text-xs bg-slate-200 dark:bg-slate-600 px-2 py-0.5 rounded-full">
+                              {getWordCount(selectedRecording.transcript)} words
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setActiveContentTab('summary')}
+                        className={`px-3 py-2 text-sm font-medium transition-colors ${activeContentTab === 'summary'
+                          ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                          : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                          }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4" />
+                          AI Summary
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Transcript Content */}
+                  {activeContentTab === 'transcript' && (
+                    <div className="bg-slate-50 dark:bg-slate-800/30 p-3 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-semibold flex items-center gap-2">
+                          <Clipboard className="h-4 w-4" />
+                          Transcript
+                        </h4>
+                        {selectedRecording.transcript && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopyTranscript(selectedRecording.transcript || '')}
+                            className="h-6 w-6 p-0"
+                            title="Copy Transcript"
+                          >
+                            {copySuccess ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <Clipboard className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      {selectedRecording.transcript ? (
+                        <div className="max-h-60 overflow-y-auto modern-scrollbar">
+                          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                            {selectedRecording.transcript}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <Clipboard className="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                          <p className="text-sm text-slate-500 dark:text-slate-400">No transcript available</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2"
+                            onClick={() => handleReprocessAudioClick(selectedRecording)}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-2" />
+                            Generate Transcript
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
 
+                  {/* Summary Content */}
+                  {activeContentTab === 'summary' && (
+                    <div>
+                      {selectedRecording.summary ? (
+                        <div className="bg-slate-50 dark:bg-slate-800/30 p-3 rounded-lg">
+                          <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                            <Sparkles className="h-4 w-4" />
+                            AI Summary
+                          </h4>
+                          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                            {selectedRecording.summary}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <Sparkles className="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                          <p className="text-sm text-slate-500 dark:text-slate-400">No AI summary available</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2"
+                            onClick={() => onGenerateNote(selectedRecording)}
+                          >
+                            <FileText className="h-3 w-3 mr-2" />
+                            Generate Summary
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 dark:bg-slate-800/30 p-3 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-slate-500" />
+                        <span className="text-xs text-slate-500">Recorded</span>
+                      </div>
+                      <p className="text-sm font-medium mt-1">
+                        {formatRecordingDate(selectedRecording.date || selectedRecording.created_at)}
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/30 p-3 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-slate-500" />
+                        <span className="text-xs text-slate-500">Duration</span>
+                      </div>
+                      <p className="text-sm font-medium mt-1">
+                        {formatDuration(selectedRecording.duration)}
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Actions */}
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="flex-1"
+                  <div className="space-y-2">
+                    <Button
                       onClick={() => onGenerateNote(selectedRecording)}
+                      className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg transition-all duration-200"
+                      disabled={!selectedRecording.transcript}
                     >
-                      <FileText className="h-4 w-4 mr-2" /> Generate Note
+                      <FileText className="h-4 w-4 mr-2" />
+                      {selectedRecording.transcript ? 'Generate Note' : 'Transcript Needed'}
                     </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleDownloadRecording(selectedRecording)}
+                        disabled={!selectedRecording.audioUrl}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleReprocessAudioClick(selectedRecording)}
+                        disabled={!selectedRecording.audioUrl}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Reprocess
+                      </Button>
+                    </div>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDownloadRecording(selectedRecording)}
-                      disabled={!selectedRecording.audioUrl}
+                      className="w-full text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      onClick={() => handleDeleteRecordingClick(selectedRecording)}
                     >
-                      <Download className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Recording
                     </Button>
                   </div>
                 </div>
@@ -516,10 +773,24 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                 <div className="p-4 bg-slate-200 dark:bg-slate-700 rounded-full w-fit mx-auto mb-4">
                   <Headphones className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h3 className="font-semibold mb-2">No Recording Selected</h3>
+                <h3 className="font-semibold mb-2">Select a Recording</h3>
                 <p className="text-sm text-muted-foreground">
-                  Click on a recording to view details and play audio
+                  Click on any recording to view details, transcript, and summary
                 </p>
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                    <ChevronRight className="h-3 w-3" />
+                    <span>Click recording cards to view details</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                    <Play className="h-3 w-3" />
+                    <span>Play audio directly in the sidebar</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                    <FileText className="h-3 w-3" />
+                    <span>View transcripts and AI summaries</span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -527,9 +798,11 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-2xl p-4 border border-amber-200 dark:border-amber-800">
               <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">💡 Pro Tips</h4>
               <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
-                <li>• Record in a quiet environment</li>
-                <li>• Keep recordings under 30 minutes</li>
+                <li>• Click on any recording to view details</li>
+                <li>• Play audio directly from the sidebar</li>
                 <li>• Generate notes for better retention</li>
+                <li>• Use search to find recordings quickly</li>
+                <li>• Download recordings for offline access</li>
               </ul>
             </div>
           </div>
@@ -538,7 +811,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
       {/* Mobile Side Panel Overlay */}
       {selectedRecording && (
-        <>
+        <div className='lg:hidden'>
           <div
             className="fixed inset-0 bg-black/50 z-30 lg:hidden"
             onClick={() => {
@@ -572,7 +845,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             onPauseAudio={handlePauseAudio}
             onAudioEnded={handleAudioEnded}
           />
-        </>
+        </div>
       )}
     </div>
   );
