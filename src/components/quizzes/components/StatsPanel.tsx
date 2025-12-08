@@ -39,7 +39,7 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({ stats, isLoading }) => {
   const progressToNextLevel = (stats.total_xp / nextLevelXP) * 100;
 
   return (
-    <Card className="shadow-lg dark:bg-gray-800">
+    <Card className="shadow-lg dark:bg-gray-800 rounded-2xl">
       <CardHeader>
         <CardTitle className="text-xl font-bold flex items-center gap-2">
           <Trophy className="h-5 w-5 text-yellow-500" />
