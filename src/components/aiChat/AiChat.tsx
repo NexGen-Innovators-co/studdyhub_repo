@@ -464,18 +464,6 @@ const AIChat: React.FC<AIChatProps> = ({
     isCurrentlySending,
     messages
   ]);
-
-  const resizeTextarea = useCallback(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, []);
-
-  useEffect(() => {
-    resizeTextarea();
-  }, [inputMessage, resizeTextarea]);
-
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {
       //console.warn("User or session ID missing, cannot mark message as displayed.");
@@ -821,9 +809,7 @@ const AIChat: React.FC<AIChatProps> = ({
                 onDiagramCodeUpdate={handleDiagramCodeUpdate}
               />
             )}
-
-            {/* AI Typing Indicator */}
-            {isAiTyping && messages.length > 0 && (
+            {isCurrentlySending && isAiTyping && messages.length > 0 && (
               <div className="flex justify-center font-sans">
                 <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700">
                   <div className="flex gap-1">
@@ -831,7 +817,7 @@ const AIChat: React.FC<AIChatProps> = ({
                     <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                     <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <span className="text-sm text-gray-600 dark:text-gray-300">AI is typing...</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">sending...</span>
                 </div>
               </div>
             )}
@@ -865,9 +851,17 @@ const AIChat: React.FC<AIChatProps> = ({
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
+                // REPLACE existing onChange with this:
                 onChange={(e) => {
                   e.preventDefault();
-                  setInputMessage(e.target.value);
+                  const newValue = e.target.value;
+                  setInputMessage(newValue);
+
+                  // Direct resize (Performance Fix)
+                  if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+                  }
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -1023,7 +1017,6 @@ const AIChat: React.FC<AIChatProps> = ({
               onLoadMoreDocuments={onLoadMoreDocuments}
               hasMoreDocuments={hasMoreDocuments}
               isLoadingDocuments={isLoadingDocuments}
-              onDocumentUpdated={handleDocumentUpdatedLocally}
               activeChatSessionId={activeChatSessionId}
             />
           )}

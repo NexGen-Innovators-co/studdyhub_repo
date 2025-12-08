@@ -6,8 +6,8 @@ import { ClassRecording, Quiz } from '../../../types/Class';
 interface UseRealtimeSyncProps {
   userId: string;
   onRecordingUpdate: (recording: ClassRecording) => void;
-  onQuizUpdate: (quiz: Quiz) => void;
-  onStatsUpdate: () => void;
+  onQuizUpdate?: (quiz: Quiz) => void;
+  onStatsUpdate?: () => void;
 }
 
 export const useRealtimeSync = ({

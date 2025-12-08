@@ -9,12 +9,11 @@ interface RecordingSidePanelProps {
   recording: ClassRecording;
   onClose: () => void;
   onUpdateRecording: (recording: ClassRecording) => void;
-  onGenerateQuiz: (recording: ClassRecording, numQuestions: number, difficulty: string) => void;
   onReprocessAudio: (recording: ClassRecording) => Promise<void>;
   onDeleteRecording: (recording: ClassRecording) => Promise<void>;
   onGenerateNote: (recording: ClassRecording) => Promise<void>;
   audioUrl: string | null | undefined;
-  audioPlayerRef: React.RefObject<HTMLAudioElement>; // Add audioPlayerRef prop
+  audioPlayerRef: React.RefObject<HTMLAudioElement>;
   isPlayingAudio: boolean;
   onPlayAudio: () => void;
   onPauseAudio: () => void;
@@ -25,12 +24,11 @@ export const RecordingSidePanel: React.FC<RecordingSidePanelProps> = ({
   recording,
   onClose,
   onUpdateRecording,
-  onGenerateQuiz,
   onReprocessAudio,
   onDeleteRecording,
   onGenerateNote,
   audioUrl,
-  audioPlayerRef, // Receive audioPlayerRef
+  audioPlayerRef,
   isPlayingAudio,
   onPlayAudio,
   onPauseAudio,
@@ -101,13 +99,12 @@ export const RecordingSidePanel: React.FC<RecordingSidePanelProps> = ({
           <RecordingDetailsPanel
             recording={recording}
             onUpdateRecording={onUpdateRecording}
-            onGenerateQuiz={onGenerateQuiz}
             onReprocessAudio={onReprocessAudio}
             onDeleteRecording={onDeleteRecording}
             onGenerateNote={onGenerateNote}
             onClose={onClose}
             audioUrl={audioUrl}
-            audioPlayerRef={audioPlayerRef} // Pass audioPlayerRef to RecordingDetailsPanel
+            audioPlayerRef={audioPlayerRef}
             isPlayingAudio={isPlayingAudio}
             onPlayAudio={onPlayAudio}
             onPauseAudio={onPauseAudio}

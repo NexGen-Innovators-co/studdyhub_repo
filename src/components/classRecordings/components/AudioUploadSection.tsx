@@ -1,4 +1,3 @@
-// components/AudioUploadSection.tsx
 import React from 'react';
 import { Button } from '../../ui/button';
 import { Card, CardContent } from '../../ui/card';
@@ -120,7 +119,19 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({ onAddRec
             <div className="flex items-center gap-2 flex-wrap">
               <Button
                 size="sm"
-                onClick={() => handleGenerateNoteFromAudio({ ...uploadedAudioDetails, audioUrl: uploadedAudioDetails.url, title: uploadedAudioDetails.name, subject: 'Uploaded Audio', transcript: '', summary: '', duration: 0, date: new Date().toISOString(), created_at: new Date().toISOString(), userId: '', id: '' })} // Pass a dummy recording for type compatibility
+                onClick={() => handleGenerateNoteFromAudio({
+                  ...uploadedAudioDetails,
+                  audioUrl: uploadedAudioDetails.url,
+                  title: uploadedAudioDetails.name,
+                  subject: 'Uploaded Audio',
+                  transcript: '',
+                  summary: '',
+                  duration: 0,
+                  date: new Date().toISOString(),
+                  created_at: new Date().toISOString(),
+                  userId: '',
+                  id: ''
+                })}
                 disabled={isGeneratingNote || isProcessingAudio}
                 className="bg-gradient-to-r from-blue-600 to-blue-600 text-white shadow-md hover:from-blue-700 hover:to-blue-700"
               >
