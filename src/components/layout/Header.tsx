@@ -8,7 +8,8 @@ import {
   History, BarChart3, Clipboard,
   Clock, Filter, X, Hash, Brain, Target, Trophy, Shield, Zap,
   Smartphone, CheckCircle, AlertCircle,
-  MapPin
+  MapPin,
+  Lock
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../ui/button';
