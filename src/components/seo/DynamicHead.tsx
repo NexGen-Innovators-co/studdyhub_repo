@@ -36,7 +36,7 @@ const DynamicHead: React.FC<DynamicHeadProps> = ({ pathname }) => {
             <meta name="robots" content={seoData.robots} />
 
             {/* Structured Data */}
-            {seoData.structuredData && (
+            {'structuredData' in seoData && seoData.structuredData && (
                 <script type="application/ld+json">
                     {JSON.stringify(seoData.structuredData)}
                 </script>
