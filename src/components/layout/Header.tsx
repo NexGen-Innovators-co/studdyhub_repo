@@ -1,4 +1,4 @@
-// src/components/layout/Header.tsx - Enhanced with dynamic section tabs and universal search
+// src/components/layout/Header.tsx - Updated with Web to Mobile install API
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Search, Plus, Menu, Bell, LogOut, Users, TrendingUp, User, Home,
@@ -7,8 +7,8 @@ import {
   Users2, MessageCircle, Loader2, Sun, Moon, Download, Play,
   History, BarChart3, Clipboard,
   Clock, Filter, X, Hash, Brain, Target, Trophy, Shield, Zap,
-  MapPin,
-  Lock
+  Smartphone, CheckCircle, AlertCircle,
+  MapPin
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../ui/button';
@@ -204,7 +204,6 @@ export const Header: React.FC<HeaderProps> = ({
   currentTheme,
   onThemeChange,
 }) => {
-  const mobileAppUrl = import.meta.env.VITE_MOBILE_APP_URL || 'https://notemind.ai/mobile-app';
   const navigate = useNavigate();
   const location = useLocation();
   const { signOut } = useAuth();
@@ -219,10 +218,66 @@ export const Header: React.FC<HeaderProps> = ({
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const avatarRef = useRef<HTMLDivElement>(null);
   const appMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  // Check if PWA is already installed
+  useEffect(() => {
+    const checkPWAInstall = () => {
+      // Check if running in standalone mode (installed PWA)
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+        setIsPwaInstalled(true);
+      }
+
+      // TypeScript-safe check for iOS standalone mode
+      const nav = window.navigator as any;
+      if (nav.standalone === true) {
+        setIsPwaInstalled(true);
+      }
+    };
+
+    checkPWAInstall();
+  }, []);
+
+  // Listen for beforeinstallprompt event
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      // Prevent Chrome 67 and earlier from automatically showing the prompt
+      e.preventDefault();
+      // Stash the event so it can be triggered later
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+
+      // Update UI to notify user they can install
+      toast.info('You can install StuddyHub as a mobile app!', {
+        action: {
+          label: 'Install',
+          onClick: () => handleInstallApp(),
+        },
+      });
+    };
+
+    const handleAppInstalled = () => {
+      setIsPwaInstalled(true);
+      setShowInstallPrompt(false);
+      setDeferredPrompt(null);
+      toast.success('StuddyHub installed successfully! 🎉');
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
 
   // Listen for section tab changes
   useEffect(() => {
@@ -287,6 +342,80 @@ export const Header: React.FC<HeaderProps> = ({
 
     setSearchSuggestions(generateSuggestions());
   }, [activeTab]);
+
+  // Handle Web App installation
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) {
+      // Show instructions for manual installation
+      showInstallInstructions();
+      return;
+    }
+
+    setIsInstalling(true);
+
+    try {
+      // Show the install prompt
+      deferredPrompt.prompt();
+
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredPrompt.userChoice;
+
+      if (outcome === 'accepted') {
+        toast.success('Installing StuddyHub as a mobile app...');
+        setIsPwaInstalled(true);
+      } else {
+        toast.info('Installation cancelled. You can install later from the menu.');
+      }
+
+      // Clear the deferred prompt
+      setDeferredPrompt(null);
+      setShowInstallPrompt(false);
+    } catch (error) {
+      console.error('Error installing app:', error);
+      toast.error('Failed to install app. Please try manual installation.');
+      showInstallInstructions();
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  // Show installation instructions
+  const showInstallInstructions = () => {
+    toast(
+      <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+        <h3 className="font-bold text-lg mb-2">Install StuddyHub on Mobile</h3>
+        <div className="space-y-2 text-sm">
+          <p className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-blue-500" />
+            <strong>iOS (Safari):</strong> Tap Share → Add to Home Screen
+          </p>
+          <p className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-green-500" />
+            <strong>Android (Chrome):</strong> Tap Menu → Install App
+          </p>
+          <p className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-purple-500" />
+            <strong>Other Browsers:</strong> Look for "Install" in the menu
+          </p>
+        </div>
+        {/* <Button
+          onClick={() => window.open('https://notemind.ai/install-guide', '_blank')}
+          className="w-full mt-3"
+        >
+          View Detailed Guide
+        </Button> */}
+      </div>,
+      {
+        duration: 10000,
+        position: 'bottom-center',
+      }
+    );
+  };
+
+  // Check if device is mobile
+  const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
 
   // Handle section tab clicks
   const handleSectionTabClick = (tabId: string, path?: string) => {
@@ -553,6 +682,45 @@ export const Header: React.FC<HeaderProps> = ({
     </div>
   );
 
+  // Install App Button Component
+  const InstallAppButton = () => {
+    if (isPwaInstalled) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          className="hidden sm:inline-flex bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-200 dark:border-emerald-800 hover:from-green-500/20 hover:to-emerald-500/20 text-green-700 dark:text-emerald-200 rounded-full cursor-default"
+          disabled
+        >
+          <CheckCircle className="h-4 w-4 mr-2" />
+          Installed
+        </Button>
+      );
+    }
+
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          if (isInstalling) return;
+          handleInstallApp
+        }}
+        disabled={isInstalling}
+        className="hidden sm:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full"
+      >
+        {isInstalling ? (
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        ) : isMobileDevice() ? (
+          <Smartphone className="h-4 w-4 mr-2" />
+        ) : (
+          <Download className="h-4 w-4 mr-2" />
+        )}
+        {isInstalling ? 'Installing...' : isMobileDevice() ? 'Add to Home' : 'Install App'}
+      </Button>
+    );
+  };
+
   return (
     <>
       <header className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 z-50">
@@ -597,6 +765,27 @@ export const Header: React.FC<HeaderProps> = ({
                       {activeTab === tab && <div className="ml-auto w-2 h-2 bg-blue-600 rounded-full" />}
                     </button>
                   ))}
+
+                  {/* Install App in Menu */}
+                  <div className="p-3 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                      onClick={handleInstallApp}
+                      disabled={isInstalling || isPwaInstalled}
+                      className={`w-full px-4 py-3 flex items-center gap-3 transition-colors rounded-lg ${isPwaInstalled
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 cursor-default'
+                        : 'hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                    >
+                      {isPwaInstalled ? (
+                        <CheckCircle className="h-5 w-5 text-green-500" />
+                      ) : isInstalling ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <Download className="h-5 w-5" />
+                      )}
+                      <span>{isPwaInstalled ? 'App Installed' : isInstalling ? 'Installing...' : 'Install App'}</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -649,17 +838,10 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Right: Create Button + Mobile App + Avatar */}
+          {/* Right: Install App + Create Button + Avatar */}
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(mobileAppUrl, '_blank')}
-              className="hidden sm:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Get mobile app
-            </Button>
+            {/* Install App Button */}
+            <InstallAppButton />
 
             {/* Create Button */}
             <div>
@@ -703,6 +885,26 @@ export const Header: React.FC<HeaderProps> = ({
                       )}
                       {currentTheme === 'light' ? 'Dark Mode' : 'Light Mode'}
                     </button>
+
+                    {/* Install App in Avatar Menu */}
+                    {!isPwaInstalled && (
+                      <button
+                        onClick={() => {
+                          handleInstallApp();
+                          setIsAvatarMenuOpen(false);
+                        }}
+                        disabled={isInstalling}
+                        className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      >
+                        {isInstalling ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Smartphone className="h-5 w-5" />
+                        )}
+                        {isInstalling ? 'Installing...' : 'Install App'}
+                      </button>
+                    )}
+
                     <hr className="my-2 border-slate-200 dark:border-slate-700" />
                     <button
                       onClick={() => { setShowLogoutConfirm(true); setIsAvatarMenuOpen(false); }}
@@ -721,7 +923,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Mobile Section Tabs (for sections that have tabs) */}
         {showSectionTabs && (
           <div className="lg:hidden border-t border-slate-200 dark:border-slate-700">
-            <div className="px-4 py-2 overflow-x-auto modern-scrollbar">
+            <div className="px-4 py-2 overflow-x-auto">
               <div className="flex gap-2 min-w-max">
                 {currentSectionTabs.map((tab) => {
                   const Icon = tab.icon;
@@ -757,6 +959,42 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
       </header>
+
+      {/* Install Prompt Toast (when browser prompts) */}
+      {showInstallPrompt && !isPwaInstalled && (
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 max-w-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <Smartphone className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-lg">Install StuddyHub</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                  Install as a mobile app for better experience and offline access.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    onClick={handleInstallApp}
+                    disabled={isInstalling}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    size="sm"
+                  >
+                    {isInstalling ? 'Installing...' : 'Install Now'}
+                  </Button>
+                  <Button
+                    onClick={() => setShowInstallPrompt(false)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Later
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmationModal
         isOpen={showLogoutConfirm}
