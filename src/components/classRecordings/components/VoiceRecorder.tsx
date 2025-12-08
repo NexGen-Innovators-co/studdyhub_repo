@@ -1,8 +1,7 @@
-// components/VoiceRecorder.tsx
+// Redesigned VoiceRecorder with modern UI
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '../../ui/button';
-import { Mic, StopCircle, Play, Pause, Download, Trash2, Loader2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Mic, Square, Play, Pause, Download, Trash2, Loader2, Radio } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface VoiceRecorderProps {
@@ -29,7 +28,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
     issues: string[];
   }>({ isSupported: true, browserName: '', issues: [] });
 
-  // Enhanced browser detection
   const detectBrowser = useCallback(() => {
     const userAgent = navigator.userAgent;
     const issues: string[] = [];
@@ -38,10 +36,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
 
     if (/Edg\//.test(userAgent)) {
       browserName = 'Microsoft Edge';
-      // Check Edge version
       const edgeVersion = userAgent.match(/Edg\/(\d+)/);
       const version = edgeVersion ? parseInt(edgeVersion[1]) : 0;
-
       if (version < 79) {
         isSupported = false;
         issues.push('Edge version is too old. Please update to Edge 79 or later.');
@@ -52,27 +48,23 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
       browserName = 'Firefox';
     } else if (/Safari\//.test(userAgent) && !/Chrome\//.test(userAgent)) {
       browserName = 'Safari';
-      // Safari has some MediaRecorder limitations
       if (!window.MediaRecorder) {
         isSupported = false;
-        issues.push('Safari does not support MediaRecorder API. Please use Chrome, Firefox, or Edge.');
+        issues.push('Safari does not support MediaRecorder API.');
       }
     }
 
-    // Check for required APIs
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       isSupported = false;
       issues.push('getUserMedia API is not supported.');
     }
-
     if (!window.MediaRecorder) {
       isSupported = false;
       issues.push('MediaRecorder API is not supported.');
     }
-
     if (!window.isSecureContext) {
       isSupported = false;
-      issues.push('Secure context (HTTPS) is required for audio recording.');
+      issues.push('Secure context (HTTPS) is required.');
     }
 
     return { isSupported, browserName, issues };
@@ -80,39 +72,29 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
 
   const checkMicrophonePermission = async () => {
     try {
-      // For Edge and other browsers, try to get permission first
       if (browserSupport.browserName === 'Microsoft Edge') {
         try {
-          // Try to get user media first to trigger permission prompt
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           stream.getTracks().forEach(track => track.stop());
           return true;
         } catch (err: any) {
           if (err.name === 'NotAllowedError') {
-            toast.error('Microphone access denied. Please click the microphone icon in your address bar and allow access, then reload the page.');
+            toast.error('Microphone access denied. Please allow access and reload.');
             return false;
           }
           throw err;
         }
       }
-
-      // For other browsers, use permissions API if available
       if (navigator.permissions && navigator.permissions.query) {
         const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
         if (permissionStatus.state === 'denied') {
-          toast.error(
-            browserSupport.browserName === 'Microsoft Edge'
-              ? 'Microphone access is blocked. Please click the microphone icon in your address bar, allow access, and reload the page.'
-              : 'Microphone access is blocked. Please enable it in your browser settings and reload the page.'
-          );
+          toast.error('Microphone access is blocked. Please enable it in your browser settings.');
           return false;
         }
         return permissionStatus.state === 'granted' || permissionStatus.state === 'prompt';
       }
-
-      return true; // If permissions API not available, assume we can try
+      return true;
     } catch (err) {
-      //console.error('Error checking microphone permission:', err);
       return false;
     }
   };
@@ -122,33 +104,22 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
       const devices = await navigator.mediaDevices.enumerateDevices();
       const hasMic = devices.some(device => device.kind === 'audioinput');
       if (!hasMic) {
-        toast.error('No microphone detected. Please connect a microphone and try again.');
+        toast.error('No microphone detected. Please connect a microphone.');
         return false;
       }
       return true;
     } catch (err) {
-      //console.error('Error checking devices:', err);
       return false;
     }
   };
 
   const getSupportedMimeType = () => {
-    // Check supported MIME types in order of preference
-    const mimeTypes = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/mp4',
-      'audio/ogg;codecs=opus',
-      'audio/wav'
-    ];
-
+    const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/wav'];
     for (const mimeType of mimeTypes) {
       if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mimeType)) {
         return mimeType;
       }
     }
-
-    // Fallback - let MediaRecorder choose
     return undefined;
   };
 
@@ -168,7 +139,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
   const formatTime = (totalSeconds: number) => {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    return `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const startRecording = async () => {
@@ -178,40 +149,22 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
         toast.error(`Recording not supported: ${browserSupport.issues.join(' ')}`);
         return;
       }
-
       const hasMic = await checkMicrophoneAvailability();
-      if (!hasMic) {
-        return;
-      }
-
+      if (!hasMic) return;
       const canAccessMic = await checkMicrophonePermission();
-      if (!canAccessMic) {
-        return;
-      }
+      if (!canAccessMic) return;
 
-      // Get audio stream with constraints optimized for speech
       const constraints = {
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 44100
-        }
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 44100 }
       };
-
       stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-      // Get the best supported MIME type
       const mimeType = getSupportedMimeType();
       const options = mimeType ? { mimeType } : undefined;
-
       mediaRecorderRef.current = new MediaRecorder(stream, options);
       audioChunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorderRef.current.onstop = () => {
@@ -223,15 +176,13 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
         stopTimer();
       };
 
-      mediaRecorderRef.current.onerror = (event) => {
-        //console.error('MediaRecorder error:', event);
+      mediaRecorderRef.current.onerror = () => {
         toast.error('Recording error occurred. Please try again.');
         setIsRecording(false);
         stopTimer();
       };
 
-      // Start recording with timeslice for Edge compatibility
-      mediaRecorderRef.current.start(1000); // 1 second timeslice
+      mediaRecorderRef.current.start(1000);
       setIsRecording(true);
       setAudioBlob(null);
       setAudioUrl(null);
@@ -239,24 +190,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
       startTimer();
       toast.info('Recording started...');
     } catch (err: any) {
-
       let errorMessage = 'Failed to start recording. ';
-
-      if (err.name === 'NotAllowedError') {
-        errorMessage = 'Microphone access denied. Please allow microphone access and try again.';
-      } else if (err.name === 'NotFoundError') {
-        errorMessage = 'No microphone found. Please connect a microphone and try again.';
-      } else if (err.name === 'NotReadableError') {
-        errorMessage = 'Microphone is being used by another application. Please close other applications and try again.';
-      } else if (browserSupport.browserName === 'Microsoft Edge') {
-        errorMessage += 'If you\'re using Edge, please ensure you\'re using the latest version and have allowed microphone access.';
-      }
-
+      if (err.name === 'NotAllowedError') errorMessage = 'Microphone access denied.';
+      else if (err.name === 'NotFoundError') errorMessage = 'No microphone found.';
+      else if (err.name === 'NotReadableError') errorMessage = 'Microphone is in use by another app.';
       toast.error(errorMessage);
-
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
+      if (stream) stream.getTracks().forEach(track => track.stop());
       setIsRecording(false);
       stopTimer();
     }
@@ -273,10 +212,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
 
   const playRecording = () => {
     if (audioUrl && audioPlayerRef.current) {
-      audioPlayerRef.current.play().catch(err => {
-        //console.error('Error playing audio:', err);
-        toast.error('Could not play recording. Try downloading it instead.');
-      });
+      audioPlayerRef.current.play().catch(() => toast.error('Could not play recording.'));
       setIsPlaying(true);
     }
   };
@@ -292,13 +228,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
     if (audioUrl && audioBlob) {
       const a = document.createElement('a');
       a.href = audioUrl;
-
-      // Get file extension based on blob type
-      const extension = audioBlob.type.includes('webm') ? 'webm' :
-        audioBlob.type.includes('mp4') ? 'mp4' :
-          audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
-
-      a.download = `${recordingTitle || 'recorded_audio'}.${extension}`;
+      const extension = audioBlob.type.includes('webm') ? 'webm' : audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
+      a.download = `${recordingTitle || 'recording'}.${extension}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -312,9 +243,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
     setAudioBlob(null);
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl);
-    }
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioUrl(null);
     setIsRecording(false);
     setIsPlaying(false);
@@ -333,20 +262,18 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
         clearRecording();
         toast.success('Recording saved and sent for processing!');
       } catch (error) {
-        //console.error('Error saving recording:', error);
         toast.error('Failed to save recording.');
       } finally {
         setIsSaving(false);
       }
     } else {
-      toast.error('Please record audio and provide a title and subject before saving.');
+      toast.error('Please provide a title and subject before saving.');
     }
   };
 
   useEffect(() => {
     const support = detectBrowser();
     setBrowserSupport(support);
-
     if (support.isSupported) {
       checkMicrophonePermission().then((canAccess) => {
         setMicPermissionStatus(canAccess ? 'granted' : 'denied');
@@ -357,9 +284,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
 
     return () => {
       stopTimer();
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
         mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
@@ -368,74 +293,96 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
   }, [detectBrowser, stopTimer]);
 
   return (
-    <Card className="shadow-sm dark:bg-gray-800 dark:border-gray-700">
-      <CardHeader>
-        <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          <Mic className="h-6 w-6 text-green-600" /> Voice Recorder
-        </CardTitle>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Browser: {browserSupport.browserName}
-        </p>
-        {!browserSupport.isSupported && (
-          <div className="text-red-500 text-sm space-y-1">
-            <p className="font-medium">Recording not supported:</p>
-            {browserSupport.issues.map((issue, index) => (
-              <p key={index}>• {issue}</p>
-            ))}
-          </div>
-        )}
-        {micPermissionStatus === 'denied' && browserSupport.isSupported && (
-          <p className="text-red-500 text-sm">
-            Microphone access is blocked.
-            {browserSupport.browserName === 'Microsoft Edge' ? (
-              <> Please click the microphone icon in your address bar, allow access, and reload the page.</>
-            ) : (
-              <> Please enable it in your browser settings and reload the page.</>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="text-center">
+        <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-full text-sm mb-2">
+          <Radio className="h-3 w-3" />
+          {browserSupport.browserName}
+        </div>
+        <h3 className="text-xl font-bold">Voice Recorder</h3>
+        <p className="text-sm text-muted-foreground">Record lectures and let AI transcribe them</p>
+      </div>
+
+      {/* Recording Visualization */}
+      <div className="flex flex-col items-center justify-center py-8">
+        <div className={`relative ${isRecording ? 'animate-pulse' : ''}`}>
+          <div className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
+            isRecording 
+              ? 'bg-red-100 dark:bg-red-900/30' 
+              : audioUrl 
+                ? 'bg-emerald-100 dark:bg-emerald-900/30' 
+                : 'bg-muted'
+          }`}>
+            {isRecording && (
+              <>
+                <div className="absolute inset-0 rounded-full bg-red-400/20 animate-ping" />
+                <div className="absolute inset-2 rounded-full bg-red-400/20 animate-ping" style={{ animationDelay: '0.2s' }} />
+              </>
             )}
-          </p>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-center gap-4">
+            <Mic className={`h-12 w-12 ${
+              isRecording 
+                ? 'text-red-500' 
+                : audioUrl 
+                  ? 'text-emerald-500' 
+                  : 'text-muted-foreground'
+            }`} />
+          </div>
+        </div>
+
+        {/* Timer */}
+        <div className="mt-4 text-4xl font-mono font-bold text-foreground">
+          {formatTime(timer)}
+        </div>
+
+        {/* Recording Controls */}
+        <div className="flex items-center gap-3 mt-6">
           {!isRecording && !audioUrl && (
             <Button
               onClick={startRecording}
-              className="bg-green-600 text-white hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
+              size="lg"
+              className="rounded-full h-14 px-8 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg"
               disabled={isSaving || !browserSupport.isSupported || micPermissionStatus === 'denied'}
             >
               <Mic className="h-5 w-5 mr-2" /> Start Recording
             </Button>
           )}
+          
           {isRecording && (
             <Button
               onClick={stopRecording}
-              className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600"
+              size="lg"
+              className="rounded-full h-14 px-8 bg-red-500 hover:bg-red-600 text-white shadow-lg"
             >
-              <StopCircle className="h-5 w-5 mr-2" /> Stop Recording
+              <Square className="h-5 w-5 mr-2" /> Stop
             </Button>
           )}
+          
           {audioUrl && (
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
+                size="lg"
                 onClick={isPlaying ? pauseRecording : playRecording}
-                className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+                className="rounded-full h-12 w-12 p-0"
                 disabled={isSaving}
               >
                 {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
               </Button>
               <Button
                 variant="outline"
+                size="lg"
                 onClick={downloadRecording}
-                className="text-slate-600 border-slate-200 hover:bg-slate-50 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+                className="rounded-full h-12 w-12 p-0"
                 disabled={isSaving}
               >
                 <Download className="h-5 w-5" />
               </Button>
               <Button
-                variant="ghost"
+                variant="outline"
+                size="lg"
                 onClick={clearRecording}
-                className="text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900"
+                className="rounded-full h-12 w-12 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
                 disabled={isSaving}
               >
                 <Trash2 className="h-5 w-5" />
@@ -443,46 +390,70 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplet
             </div>
           )}
         </div>
+      </div>
 
-        <div className="text-center text-2xl font-mono text-gray-700 dark:text-gray-300">
-          {formatTime(timer)}
-        </div>
-
-        {audioUrl && (
-          <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Recording Title (e.g., 'Lecture on AI')"
-              value={recordingTitle}
-              onChange={(e) => setRecordingTitle(e.target.value)}
-              className="w-full p-2 border border-slate-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 placeholder:dark:text-gray-400"
-              disabled={isSaving}
-            />
-            <input
-              type="text"
-              placeholder="Subject (e.g., 'Computer Science')"
-              value={recordingSubject}
-              onChange={(e) => setRecordingSubject(e.target.value)}
-              className="w-full p-2 border border-slate-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 placeholder:dark:text-gray-400"
-              disabled={isSaving}
-            />
-            <Button
-              onClick={saveRecording}
-              className="w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
-              disabled={isSaving || !recordingTitle || !recordingSubject}
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" /> Saving & Processing...
-                </>
-              ) : (
-                'Save Recording'
-              )}
-            </Button>
+      {/* Save Form */}
+      {audioUrl && (
+        <div className="space-y-4 pt-4 border-t">
+          <div className="grid gap-4">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Title</label>
+              <input
+                type="text"
+                placeholder="e.g., Lecture on Machine Learning"
+                value={recordingTitle}
+                onChange={(e) => setRecordingTitle(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                disabled={isSaving}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Subject</label>
+              <input
+                type="text"
+                placeholder="e.g., Computer Science"
+                value={recordingSubject}
+                onChange={(e) => setRecordingSubject(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                disabled={isSaving}
+              />
+            </div>
           </div>
-        )}
-        <audio ref={audioPlayerRef} onEnded={() => setIsPlaying(false)} />
-      </CardContent>
-    </Card>
+          <Button
+            onClick={saveRecording}
+            className="w-full h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg"
+            disabled={isSaving || !recordingTitle || !recordingSubject}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" /> Processing...
+              </>
+            ) : (
+              'Save & Process Recording'
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* Warnings */}
+      {!browserSupport.isSupported && (
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+          <p className="text-sm text-red-600 dark:text-red-400 font-medium">Recording not supported:</p>
+          {browserSupport.issues.map((issue, index) => (
+            <p key={index} className="text-sm text-red-500 dark:text-red-300">• {issue}</p>
+          ))}
+        </div>
+      )}
+
+      {micPermissionStatus === 'denied' && browserSupport.isSupported && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            Microphone access is blocked. Please enable it in your browser settings and reload the page.
+          </p>
+        </div>
+      )}
+
+      <audio ref={audioPlayerRef} onEnded={() => setIsPlaying(false)} />
+    </div>
   );
 };
