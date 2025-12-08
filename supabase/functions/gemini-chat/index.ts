@@ -836,7 +836,9 @@ async function updateSessionLastMessage(sessionId: string, contextSummary: strin
       .update(update)
       .eq('id', sessionId);
 
-    if (error) //console.error('Error updating session last message time:', error);
+    if (error) {
+      // Error updating session last message time
+    }
   } catch (error) {
     //console.error('Database error when updating session:', error);
   }
