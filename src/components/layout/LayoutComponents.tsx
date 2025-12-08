@@ -1,8 +1,9 @@
 // src/components/layout/AppLayout.tsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
-import { Sun, Moon, Menu, X, LocateIcon, MapIcon, PhoneCallIcon } from 'lucide-react';
+import { Sun, Moon, Menu, X, LocateIcon, MapIcon, PhoneCallIcon, Download, Smartphone, CheckCircle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Header component extracted from LandingPage
 export const AppHeader: React.FC<{
@@ -13,12 +14,195 @@ export const AppHeader: React.FC<{
 }> = ({ isDarkMode, toggleDarkMode, isMenuOpen, setIsMenuOpen }) => {
   const [scrollY, setScrollY] = React.useState(0);
   const navigate = useNavigate();
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   React.useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Check if PWA is already installed
+  useEffect(() => {
+    const checkPWAInstall = () => {
+      // Check if running in standalone mode (installed PWA)
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+        setIsPwaInstalled(true);
+      }
+
+      // TypeScript-safe check for iOS standalone mode
+      const nav = window.navigator as any;
+      if (nav.standalone === true) {
+        setIsPwaInstalled(true);
+      }
+    };
+
+    checkPWAInstall();
+  }, []);
+
+  // Listen for beforeinstallprompt event
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      // Prevent Chrome 67 and earlier from automatically showing the prompt
+      e.preventDefault();
+
+      // Stash the event so it can be triggered later
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+
+      // Show notification
+      if (!sessionStorage.getItem('install-toast-shown')) {
+        toast.info('Install StuddyHub as a mobile app for better experience!', {
+          duration: 5000,
+        });
+        sessionStorage.setItem('install-toast-shown', 'true');
+      }
+    };
+
+    const handleAppInstalled = () => {
+      setIsPwaInstalled(true);
+      setShowInstallPrompt(false);
+      setDeferredPrompt(null);
+      toast.success('StuddyHub installed successfully! 🎉');
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  // Handle Web App installation
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) {
+      // Show instructions for manual installation
+      showInstallInstructions();
+      return;
+    }
+
+    // Prevent multiple clicks
+    if (isInstalling) {
+      toast.info('Installation in progress...');
+      return;
+    }
+
+    setIsInstalling(true);
+    setShowInstallPrompt(false);
+
+    try {
+      // Show the install prompt
+      deferredPrompt.prompt();
+
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredPrompt.userChoice;
+
+      if (outcome === 'accepted') {
+        toast.success('🎉 StuddyHub installed successfully!');
+        setIsPwaInstalled(true);
+        setDeferredPrompt(null);
+      } else {
+        toast.info('Installation cancelled. You can install later from the menu.');
+        setTimeout(() => setShowInstallPrompt(true), 3000);
+      }
+    } catch (error) {
+      console.error('Error installing app:', error);
+      toast.error('Failed to install app. Please try manual installation.');
+      showInstallInstructions();
+      setTimeout(() => setShowInstallPrompt(true), 3000);
+    } finally {
+      setIsInstalling(false);
+      setDeferredPrompt(null);
+    }
+  };
+
+  // Show installation instructions
+  const showInstallInstructions = () => {
+    toast(
+      <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+        <h3 className="font-bold text-lg mb-2">Install StuddyHub on Mobile</h3>
+        <div className="space-y-2 text-sm">
+          <p className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-blue-500" />
+            <strong>iOS (Safari):</strong> Tap Share → Add to Home Screen
+          </p>
+          <p className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-green-500" />
+            <strong>Android (Chrome):</strong> Tap Menu → Install App
+          </p>
+        </div>
+        <Button
+          onClick={() => window.open('https://studdyhub.vercel.app/install-guide', '_blank')}
+          className="w-full mt-3"
+        >
+          View Detailed Guide
+        </Button>
+      </div>,
+      {
+        duration: 10000,
+        position: 'bottom-center',
+      }
+    );
+  };
+
+  // Check if device is mobile
+  const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
+  // Install App Button Component
+  const InstallAppButton = () => {
+    if (isPwaInstalled) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          className="hidden md:inline-flex bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-200 dark:border-emerald-800 text-green-700 dark:text-emerald-200 rounded-full cursor-default"
+          disabled
+        >
+          <CheckCircle className="h-4 w-4 mr-2" />
+          Installed
+        </Button>
+      );
+    }
+
+    if (!showInstallPrompt) return null;
+
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleInstallApp}
+        disabled={isInstalling}
+        className={`hidden md:inline-flex rounded-full transition-all duration-300 ${isInstalling
+          ? 'opacity-50 cursor-not-allowed'
+          : 'hover:scale-105 active:scale-95'
+          } bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200`}
+      >
+        {isInstalling ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Installing...
+          </>
+        ) : isMobileDevice() ? (
+          <>
+            <Smartphone className="h-4 w-4 mr-2" />
+            Add to Home
+          </>
+        ) : (
+          <>
+            <Download className="h-4 w-4 mr-2" />
+            Install App
+          </>
+        )}
+      </Button>
+    );
+  };
 
   return (
     <header className={`fixed w-full px-4 md:px-8 py-4 flex justify-between items-center z-50 transition-all duration-300 ${scrollY > 50
@@ -41,7 +225,9 @@ export const AppHeader: React.FC<{
       </Link>
 
       {/* Desktop Navigation */}
-      <nav className="hidden md:flex items-center gap-6">
+      <nav className="hidden md:flex items-center gap-4">
+        <InstallAppButton />
+
         <a href="/#features" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
           Features
         </a>
@@ -72,6 +258,21 @@ export const AppHeader: React.FC<{
 
       {/* Mobile Menu Button */}
       <div className="flex items-center md:hidden gap-2">
+        {showInstallPrompt && !isPwaInstalled && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleInstallApp}
+            disabled={isInstalling}
+            className="rounded-full"
+          >
+            {isInstalling ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Smartphone className="h-4 w-4" />
+            )}
+          </Button>
+        )}
         <Button
           onClick={toggleDarkMode}
           className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -91,6 +292,30 @@ export const AppHeader: React.FC<{
       {isMenuOpen && (
         <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-900 shadow-lg md:hidden">
           <nav className="flex flex-col gap-4 p-6">
+            {/* Install App in Mobile Menu */}
+            {showInstallPrompt && !isPwaInstalled && (
+              <Button
+                onClick={() => {
+                  handleInstallApp();
+                  setIsMenuOpen(false);
+                }}
+                disabled={isInstalling}
+                className="w-full mb-2"
+              >
+                {isInstalling ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Installing...
+                  </>
+                ) : (
+                  <>
+                    <Smartphone className="h-4 w-4 mr-2" />
+                    Install App
+                  </>
+                )}
+              </Button>
+            )}
+
             <a
               href="/#features"
               className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"

@@ -159,7 +159,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
 
   // Quick Actions Panel
   const QuickActions = () => (
-    <Card className="mb-6">
+    <Card className="mb-6 rounded-2xl">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Zap className="h-5 w-5 text-yellow-500" />
@@ -171,17 +171,12 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
           {/* From Recording */}
           <Card className="">
             <CardContent className="p-4 text-center">
-              <Play className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-2">From Recording</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                Generate quiz from your class recordings
-              </p>
               <Button
                 onClick={() => setActiveTab('recordings')}
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 size="sm"
               >
-                Choose Recording
+                <Play className="h-8 w-8 text-blue-500 mx-auto mb-2" />
               </Button>
             </CardContent>
           </Card>
@@ -189,17 +184,14 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
           {/* From Notes */}
           <Card className="">
             <CardContent className="p-4 text-center">
-              <FileText className="h-8 w-8 text-green-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-2">From Notes</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                Convert your study notes into a quiz
-              </p>
+
+
               <Button
                 onClick={() => setActiveTab('notes')}
                 className="w-full bg-green-600 hover:bg-green-700"
                 size="sm"
               >
-                Use Notes
+                <FileText className="h-8 w-8 text-green-500 mx-auto mb-2" />
               </Button>
             </CardContent>
           </Card>
@@ -207,17 +199,15 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
           {/* AI Smart Quiz */}
           <Card className="">
             <CardContent className="p-4 text-center">
-              <Brain className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-2">AI Smart Quiz</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                Personalized quiz based on your learning
-              </p>
+
               <Button
                 onClick={() => setActiveTab('ai')}
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 size="sm"
+                variant='outline'
               >
-                Smart Quiz
+                <Brain className="h-8 w-8 text-white mx-auto mb-2" />
+
               </Button>
             </CardContent>
           </Card>

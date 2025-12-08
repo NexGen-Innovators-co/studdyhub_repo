@@ -797,13 +797,13 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Center: Search + Section Tabs */}
           <div className="flex-1 flex items-center justify-center px-4 lg:px-8">
             {showSectionTabs ? (
-              <div className="hidden lg:flex items-center bg-slate-100 dark:bg-slate-800 rounded-full p-2 gap-3 max-w-4xl w-full">
+              <div className="hidden lg:flex items-center bg-slate-100 dark:bg-slate-800 rounded-full p-2 gap-3 w-full">
                 {/* Search Bar */}
                 <div className="relative flex-1">
                   <EnhancedSearchBar />
                 </div>
 
-                <div className="h-8 w-px bg-slate-300 dark:bg-slate-600" />
+                <div className="h-8  bg-slate-300 dark:bg-slate-600 " />
 
                 {/* Section Tabs */}
                 <div className="flex gap-1">
