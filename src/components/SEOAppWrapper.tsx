@@ -1,19 +1,18 @@
 // components/SEOAppWrapper.tsx
 import React from 'react';
 import { HelmetProvider } from 'react-helmet-async';
+import { useLocation } from 'react-router-dom';
 import DynamicHead from './seo/DynamicHead';
-import App from '@/App';
 
 export const SEOAppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const location = useLocation();
+    
     return (
         <HelmetProvider>
-            <DynamicHead />
+            <DynamicHead pathname={location.pathname} />
             {children}
         </HelmetProvider>
     );
 };
 
-// Then wrap your app in App.tsx
-<SEOAppWrapper>
-    <App />
-</SEOAppWrapper>
+export default SEOAppWrapper;

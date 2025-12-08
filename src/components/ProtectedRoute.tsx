@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { verifyResourceAccess } from '../utils/varifyAccess';
+import { verifyResourceAccess } from '../utils/verifyAccess';
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
