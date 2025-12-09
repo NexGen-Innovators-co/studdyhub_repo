@@ -942,6 +942,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          bonus_ai_credits: number | null
           created_at: string | null
           email: string | null
           full_name: string | null
@@ -949,12 +950,16 @@ export type Database = {
           is_public: boolean | null
           learning_preferences: Json | null
           learning_style: string | null
+          points_balance: number | null
           quiz_preferences: Json | null
+          referral_code: string | null
+          referral_count: number | null
           updated_at: string | null
           username: string | null
         }
         Insert: {
           avatar_url?: string | null
+          bonus_ai_credits?: number | null
           created_at?: string | null
           email?: string | null
           full_name?: string | null
@@ -962,12 +967,16 @@ export type Database = {
           is_public?: boolean | null
           learning_preferences?: Json | null
           learning_style?: string | null
+          points_balance?: number | null
           quiz_preferences?: Json | null
+          referral_code?: string | null
+          referral_count?: number | null
           updated_at?: string | null
           username?: string | null
         }
         Update: {
           avatar_url?: string | null
+          bonus_ai_credits?: number | null
           created_at?: string | null
           email?: string | null
           full_name?: string | null
@@ -975,7 +984,10 @@ export type Database = {
           is_public?: boolean | null
           learning_preferences?: Json | null
           learning_style?: string | null
+          points_balance?: number | null
           quiz_preferences?: Json | null
+          referral_code?: string | null
+          referral_count?: number | null
           updated_at?: string | null
           username?: string | null
         }
@@ -1067,6 +1079,48 @@ export type Database = {
           {
             foreignKeyName: "quizzes_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          created_at: string
+          id: string
+          referee_id: string
+          referrer_id: string
+          reward_granted: boolean | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          referee_id: string
+          referrer_id: string
+          reward_granted?: boolean | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          referee_id?: string
+          referrer_id?: string
+          reward_granted?: boolean | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referee_id_fkey"
+            columns: ["referee_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -2255,6 +2309,42 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          created_at: string
+          current_period_end: string | null
+          id: string
+          paystack_customer_code: string | null
+          paystack_sub_code: string | null
+          plan_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          paystack_customer_code?: string | null
+          paystack_sub_code?: string | null
+          plan_type?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          paystack_customer_code?: string | null
+          paystack_sub_code?: string | null
+          plan_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_learning_goals: {
         Row: {
           category: string | null
@@ -2487,6 +2577,7 @@ export type Database = {
         }
         Returns: Json
       }
+      generate_referral_code: { Args: never; Returns: string }
       generate_unique_username: { Args: { p_email: string }; Returns: string }
       get_due_flashcards: {
         Args: { p_limit?: number; p_user_id: string }
@@ -2607,6 +2698,10 @@ export type Database = {
       mark_session_messages_read: {
         Args: { p_session_id: string; p_user_id: string }
         Returns: number
+      }
+      process_referral_reward: {
+        Args: { p_referee_id: string; p_referral_code: string }
+        Returns: Json
       }
       review_flashcard: {
         Args: { p_flashcard_id: string; p_quality: number; p_user_id: string }
