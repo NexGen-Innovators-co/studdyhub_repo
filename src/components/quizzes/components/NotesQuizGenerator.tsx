@@ -8,6 +8,7 @@ import { Textarea } from '../../ui/textarea';
 import { FileText, Sparkles, Upload, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { NotesSelector } from './NoteSelector';
+import { SubscriptionGuard } from '@/components/subscription/SubscriptionGuard';
 
 interface Note {
   id: string;
@@ -21,11 +22,13 @@ interface Note {
 interface NotesQuizGeneratorProps {
   onGenerateQuizFromNotes: (notesContent: string, numQuestions: number, difficulty: string) => Promise<void>;
   isLoading?: boolean;
+  dailyCount?: number; // Add prop
 }
 
 export const NotesQuizGenerator: React.FC<NotesQuizGeneratorProps> = ({
   onGenerateQuizFromNotes,
-  isLoading = false
+  isLoading = false,
+  dailyCount = 0// Add prop
 }) => {
   const [activeTab, setActiveTab] = useState<'saved' | 'paste'>('saved');
   const [notesText, setNotesText] = useState('');
@@ -42,7 +45,7 @@ export const NotesQuizGenerator: React.FC<NotesQuizGeneratorProps> = ({
         return;
       }
       // Combine selected notes content
-      notesContent = selectedNotes.map(note => 
+      notesContent = selectedNotes.map(note =>
         `=== ${note.title} (${note.category}) ===\n${note.content}${note.ai_summary ? `\n\nAI Summary: ${note.ai_summary}` : ''}`
       ).join('\n\n');
     } else {
@@ -59,7 +62,7 @@ export const NotesQuizGenerator: React.FC<NotesQuizGeneratorProps> = ({
     }
 
     await onGenerateQuizFromNotes(notesContent, numQuestions, difficulty);
-    
+
     // Reset form
     if (activeTab === 'paste') {
       setNotesText('');
@@ -164,26 +167,32 @@ export const NotesQuizGenerator: React.FC<NotesQuizGeneratorProps> = ({
             <Sparkles className="h-4 w-4" />
             <div>
               <strong>Ready to generate:</strong> {getWordCount()} words from {
-                activeTab === 'saved' 
-                  ? `${selectedNotes.length} note${selectedNotes.length !== 1 ? 's' : ''}` 
+                activeTab === 'saved'
+                  ? `${selectedNotes.length} note${selectedNotes.length !== 1 ? 's' : ''}`
                   : 'pasted text'
               }
             </div>
           </div>
         </div>
-        
-        <Button
-          onClick={handleGenerate}
-          disabled={
-            isLoading || 
-            (activeTab === 'saved' && selectedNotes.length === 0) ||
-            (activeTab === 'paste' && !notesText.trim())
-          }
-          className="w-full bg-green-600 hover:bg-green-700"
+        <SubscriptionGuard
+          feature="Notes Quizzes"
+          limitFeature="maxDailyQuizzes"
+          currentCount={dailyCount}
+          message="You've reached your daily limit for Notes Quizzes (1/day on Free)."
         >
-          <Sparkles className="h-4 w-4 mr-2" />
-          {isLoading ? 'Generating Quiz...' : 'Generate Quiz from Notes'}
-        </Button>
+          <Button
+            onClick={handleGenerate}
+            disabled={
+              isLoading ||
+              (activeTab === 'saved' && selectedNotes.length === 0) ||
+              (activeTab === 'paste' && !notesText.trim())
+            }
+            className="w-full bg-green-600 hover:bg-green-700"
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            {isLoading ? 'Generating Quiz...' : 'Generate Quiz from Notes'}
+          </Button>
+        </SubscriptionGuard>
       </CardContent>
     </Card>
   );

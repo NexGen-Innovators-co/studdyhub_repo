@@ -4,17 +4,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Brain, Zap, Target } from 'lucide-react';
+import { SubscriptionGuard } from '@/components/subscription/SubscriptionGuard';
 
 interface AutoAIQuizProps {
   onGenerateAIQuiz: (topics: string[], focusAreas: string[]) => Promise<void>;
   userStats: any;
   isLoading?: boolean;
+  dailyCount?: number;
 }
 
 export const AutoAIQuizGenerator: React.FC<AutoAIQuizProps> = ({
   onGenerateAIQuiz,
   userStats,
-  isLoading = false
+  isLoading = false,
+  dailyCount = 0
 }) => {
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
@@ -96,16 +99,21 @@ export const AutoAIQuizGenerator: React.FC<AutoAIQuizProps> = ({
             ))}
           </div>
         </div>
-
-        <Button
-          onClick={handleGenerate}
-          disabled={isLoading}
-          className="w-full bg-gradient-to-r from-blue-600 to-pink-600 hover:from-blue-700 hover:to-pink-700"
+        <SubscriptionGuard
+          feature="Notes Quizzes"
+          limitFeature="maxDailyQuizzes"
+          currentCount={dailyCount}
+          message="You've reached your daily limit for Notes Quizzes (1/day on Free)."
         >
-          <Brain className="h-4 w-4 mr-2" />
-          {isLoading ? 'Creating Smart Quiz...' : 'Generate AI Quiz'}
-        </Button>
-
+          <Button
+            onClick={handleGenerate}
+            disabled={isLoading}
+            className="w-full bg-gradient-to-r from-blue-600 to-pink-600 hover:from-blue-700 hover:to-pink-700"
+          >
+            <Brain className="h-4 w-4 mr-2" />
+            {isLoading ? 'Creating Smart Quiz...' : 'Generate AI Quiz'}
+          </Button>
+        </SubscriptionGuard>
         <p className="text-xs text-gray-500 text-center">
           AI will analyze your learning patterns and create personalized questions
         </p>

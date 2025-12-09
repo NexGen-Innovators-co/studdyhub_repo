@@ -18,6 +18,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAppContext } from '../../hooks/useAppContext';
 import { DocumentFolder, CreateFolderInput, UpdateFolderInput } from '../../types/Folder';
 import { Skeleton } from '../ui/skeleton';
+import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+
 interface DocumentUploadProps {
   documents: Document[];
   onDocumentDeleted: (documentId: string) => void;
@@ -131,7 +133,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [uploadFolderSelectorOpen, setUploadFolderSelectorOpen] = useState(false);
   const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | null>(null);
 
-
   // 2. Lazy load folder dialogs
   const LazyMoveDocumentDialog = lazy(() =>
     import('./MoveDocumentDialog').then((m) => ({ default: m.MoveDocumentDialog }))
@@ -178,25 +179,17 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           { folder_id: targetFolderId, document_id: documentId, }
         ]);
         if (error) {
-          //console.error('Error moving document:', error);
           toast.error('Failed to move document');
           return;
         }
       }
 
-
-
-
       // Update local state
       const updatedDocument = { ...document, folder_ids: newFolderIds };
       onDocumentUpdated(updatedDocument);
 
-      // Refresh documents to update counts
-      // await loadDataIfNeeded('documents');
-
       toast.success('Document moved successfully!');
     } catch (error: any) {
-      //console.error('Error moving document:', error);
       toast.error(`Failed to move document: ${error.message}`);
     }
   }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
@@ -227,7 +220,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         .eq('user_id', user.id);
 
       if (error) {
-        //console.error('Error adding document to folder:', error);
         toast.error('Failed to add document to folder');
         return;
       }
@@ -239,7 +231,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
       toast.success('Document added to folder!');
     } catch (error: any) {
-      //console.error('Error adding document to folder:', error);
       toast.error(`Failed to add document to folder: ${error.message}`);
     }
   }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
@@ -262,7 +253,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         .eq('user_id', user.id);
 
       if (error) {
-        //console.error('Error removing document from folder:', error);
         toast.error('Failed to remove document from folder');
         return;
       }
@@ -274,7 +264,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
       toast.success('Document removed from folder!');
     } catch (error: any) {
-      //console.error('Error removing document from folder:', error);
       toast.error(`Failed to remove document from folder: ${error.message}`);
     }
   }, [documents, user, onDocumentUpdated, loadDataIfNeeded]);
@@ -316,7 +305,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         .eq('user_id', user.id);
 
       if (error) {
-        //console.error('Error moving folder:', error);
         toast.error('Failed to move folder');
         return;
       }
@@ -326,10 +314,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
       toast.success('Folder moved successfully!');
     } catch (error: any) {
-      //console.error('Error moving folder:', error);
       toast.error(`Failed to move folder: ${error.message}`);
     }
   }, [folders, user, loadDataIfNeeded]);
+
   // Utility functions
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -368,7 +356,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       case 'audio': return FileAudio;
       case 'document': return FileText;
       case 'spreadsheet': return FileBarChart;
-      case 'presentation': return FileBarChart; // Changed to FileBarChart
+      case 'presentation': return FileBarChart;
       case 'archive': return Archive;
       case 'code': return Code;
       default: return File;
@@ -382,7 +370,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       case 'audio': return 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-500/20 border-pink-200 dark:border-pink-500/20';
       case 'document': return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/20';
       case 'spreadsheet': return 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/20';
-      case 'presentation': return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-500/20 border-orange-200 dark:border-orange-500/20'; // Changed to FileBarChart
+      case 'presentation': return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-500/20 border-orange-200 dark:border-orange-500/20';
       case 'archive': return 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-500/20 border-yellow-200 dark:border-yellow-500/20';
       case 'code': return 'text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-500/20 border-indigo-200 dark:border-indigo-500/20';
       default: return 'text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-500/20 border-gray-200 dark:border-gray-500/20';
@@ -628,7 +616,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       if (fileInputRef.current) fileInputRef.current.value = '';
 
     } catch (error: any) {
-
       toast.error(`Failed to process file: ${error.message}`);
     } finally {
       clearInterval(progressInterval);
@@ -636,6 +623,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       setUploadProgress(0);
     }
   };
+
   const triggerAnalysis = async (doc: Document): Promise<void> => {
     if (!user?.id) {
       toast.error('User not authenticated.');
@@ -761,11 +749,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 .remove([storagePath]);
 
               if (storageError) {
-                //console.warn('Failed to delete file from storage:', storageError.message);
                 toast.warning(`File might not have been removed from storage. Error: ${storageError.message}`);
               }
             } else {
-              //console.warn('Could not derive storage path from file URL:', fileUrl);
               toast.warning('Could not derive storage path from file URL. File will not be deleted from storage.');
             }
 
@@ -781,7 +767,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             toast.success('Document deleted successfully!');
             onDocumentDeleted(documentId);
           } catch (error: any) {
-            //console.error('Error deleting document:', error);
             toast.error(`Failed to delete document: ${error.message}`);
           }
         }
@@ -841,38 +826,28 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const observer = useRef<IntersectionObserver | null>(null);
   const lastDocumentElementRef = useCallback(
     (node: HTMLDivElement | null) => {
-      // 1. If we are already fetching do nothing (prevents duplicate calls)
-
       if (dataLoading) {
-
         return;
       }
 
-      // 2. Clean previous observer
       if (observer.current) {
-
         observer.current.disconnect();
       }
 
-      // 3. Create new observer
       observer.current = new IntersectionObserver(
         (entries) => {
-
           if (
-            entries[0].isIntersecting && // element is visible
-            dataPagination.documents.hasMore && // there is more data
-            !dataLoading // NOT already loading
+            entries[0].isIntersecting &&
+            dataPagination.documents.hasMore &&
+            !dataLoading
           ) {
-
-            loadMoreDocuments(); // trigger load-more
+            loadMoreDocuments();
           }
         },
-        { threshold: 0.1 } // fire a bit before the bottom
+        { threshold: 0.1 }
       );
 
-      // 4. Observe the node
       if (node) {
-
         observer.current.observe(node);
       }
     },
@@ -882,7 +857,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       dataLoading,
     ]
   );
-
 
   // Calculate document counts per folder
   const documentCounts = useMemo(() => {
@@ -921,7 +895,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const handleCreateFolderSubmit = useCallback(async (input: CreateFolderInput) => {
     const result = await appOperations.createFolder(input);
     if (result) {
-      // Refresh folders
       if (user?.id) {
         await loadDataIfNeeded('folders');
       }
@@ -966,37 +939,18 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     const uniqueIds = new Set(documentIds);
 
     if (documentIds.length !== uniqueIds.size) {
-
-
       // Remove duplicates if found
       const uniqueDocuments = documents.filter((doc, index) =>
         documents.findIndex(d => d.id === doc.id) === index
       );
 
       if (uniqueDocuments.length !== documents.length) {
-        ////console.log('🔄 Removing duplicate documents');
         // You might want to update the parent state here
         // or handle this in your data loading logic
       }
     }
   }, [documents]);
-  // Debug duplicate documents
-  useEffect(() => {
-    const duplicateIds = documents
-      .map(doc => doc.id)
-      .filter((id, index, ids) => ids.indexOf(id) !== index);
 
-    if (duplicateIds.length > 0) {
-      //console.error('🚨 DUPLICATE DOCUMENT IDs FOUND:', duplicateIds);
-      ////console.log('📋 All documents:', documents.map(d => ({ id: d.id, title: d.title })));
-
-      // Log the duplicate documents
-      duplicateIds.forEach(dupId => {
-        const duplicates = documents.filter(d => d.id === dupId);
-        ////console.log(`📄 Duplicate for ${dupId}:`, duplicates);
-      });
-    }
-  }, [documents]);
   // Filter documents by selected folder with deduplication
   const filteredDocumentsByFolder = useMemo(() => {
     if (!selectedFolderId) {
@@ -1072,14 +1026,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg font-semibold">Folders</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCreateFolder(null)}
-                    className="h-8 w-8 p-0"
+                  <SubscriptionGuard
+                    feature="Folders"
+                    limitFeature="maxFolders"
+                    currentCount={folders.length}
                   >
-                    <Plus className="h-4 w-4" />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCreateFolder(null)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </SubscriptionGuard>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1103,7 +1063,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
           {/* Main Content - Documents */}
           <div className="col-span-12 lg:col-span-9">
-            {/* Enhanced Upload Area - Keep your existing upload card here */}
+            {/* Enhanced Upload Area */}
             <Card className="overflow-hidden border-0 shadow-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
               <CardContent className="p-0">
                 <div
@@ -1226,14 +1186,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
                 {selectedFile && !isUploading && (
                   <div className="p-6 bg-slate-50 dark:bg-slate-700/50 border-t">
-                    <Button
-                      onClick={handleUpload}
-                      disabled={!selectedFile || isUploading || !user?.id}
-                      className="w-full py-3 text-base font-semibold bg-gradient-to-r from-blue-600 via-blue-400 to-blue-200 hover:from-blue-700 hover:via-green-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    <SubscriptionGuard
+                      feature="Documents"
+                      limitFeature="maxDocUploads"
+                      currentCount={documents.length}
                     >
-                      <UploadCloud className="h-5 w-5 mr-2" />
-                      Upload & Analyze with AI
-                    </Button>
+                      <Button
+                        onClick={handleUpload}
+                        disabled={!selectedFile || isUploading || !user?.id}
+                        className="w-full py-3 text-base font-semibold bg-gradient-to-r from-blue-600 via-blue-400 to-blue-200 hover:from-blue-700 hover:via-green-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <UploadCloud className="h-5 w-5 mr-2" />
+                        Upload & Analyze with AI
+                      </Button>
+                    </SubscriptionGuard>
                   </div>
                 )}
               </CardContent>
@@ -1268,7 +1234,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 </CardContent>
               </Card>
             )}
-            {/* Enhanced Controls and Filters - Keep your existing controls */}
+
+            {/* Enhanced Controls and Filters */}
             <div className="mb-8">
               <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm">
                 <CardContent className="p-6">
@@ -1343,7 +1310,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
               </Card>
             </div>
 
-            {/* Documents Display - Update to use filteredDocumentsByFolder */}
+            {/* Documents Display */}
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-200">
@@ -1379,6 +1346,19 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                           ? 'Try adjusting your search terms or filters'
                           : 'Upload your first document or image to get started with AI analysis'}
                     </p>
+                    <SubscriptionGuard
+                      feature="Documents"
+                      limitFeature="maxDocUploads"
+                      currentCount={documents.length}
+                    >
+                      <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        <UploadCloud className="h-4 w-4 mr-2" />
+                        Upload First Document
+                      </Button>
+                    </SubscriptionGuard>
                   </CardContent>
                 </Card>
               ) : (
@@ -1402,12 +1382,11 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
                       return (
                         <Card
-                          key={uniqueKey} // Use unique key with index
+                          key={uniqueKey}
                           ref={isLast ? lastDocumentElementRef : null}
                           className={`group border-0 shadow-lg hover:shadow-xl animate-in slide-in-from-top-2 fade-in duration-500 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
                             }`}
                         >
-                          {/* Add folder badges to show which folders the document is in */}
                           <CardContent className="p-0 ">
                             {viewMode === 'grid' ? (
                               <>
@@ -1922,7 +1901,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             </div>
           </Suspense>
         )}
-        {/* Loading More / No More Indicator - exactly like NotesList */}
+        {/* Loading More / No More Indicator */}
         {(dataPagination?.documents?.hasMore || dataLoading) && (
           <div
             key="loading-indicator"

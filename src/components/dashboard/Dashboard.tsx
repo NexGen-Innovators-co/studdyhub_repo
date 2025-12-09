@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useDashboardStats } from './hooks/useDashboardStats';
 import BookPagesAnimation from '../ui/bookloader';
+import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 const GRADIENT_ID = 'engagementGradient';
@@ -140,14 +141,30 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
             <h3 className="text-lg font-semibold mb-2">{title}</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">{description}</p>
             {onCreate && type && (
-                <Button
-                    onClick={() => onCreateNew(type)}
-                    variant="outline"
-                    className="border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                <SubscriptionGuard
+                    feature={type.charAt(0).toUpperCase() + type.slice(1)}
+                    limitFeature={
+                        type === 'note' ? 'maxNotes' :
+                            type === 'recording' ? 'maxRecordings' :
+                                type === 'document' ? 'maxDocuments' :
+                                    type === 'schedule' ? 'maxScheduleItems' : 'maxNotes'
+                    }
+                    currentCount={
+                        type === 'note' ? stats.totalNotes || 0 :
+                            type === 'recording' ? stats.totalRecordings || 0 :
+                                type === 'document' ? stats.totalDocuments || 0 :
+                                    type === 'schedule' ? stats.totalScheduleItems || 0 : 0
+                    }
                 >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create {type.charAt(0).toUpperCase() + type.slice(1)}
-                </Button>
+                    <Button
+                        onClick={() => onCreateNew(type)}
+                        variant="outline"
+                        className="border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                    >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </Button>
+                </SubscriptionGuard>
             )}
         </div>
     );
@@ -237,19 +254,35 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                     <stat.icon className="h-6 w-6 sm:h-8 sm:w-8 text-gray-700 dark:text-gray-300" />
                                 </div>
                             </div>
-                            {stat.value === 0 || stat.value === '0 B' || stat.value === '0h 0m' && stat.type && (
-                                <Button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onCreateNew(stat.type!);
-                                    }}
-                                    variant="ghost"
-                                    size="sm"
-                                    className="w-full mt-2 text-xs"
+                            {stat.value === 0 && stat.type && (
+                                <SubscriptionGuard
+                                    feature={stat.title}
+                                    limitFeature={
+                                        stat.type === 'note' ? 'maxNotes' :
+                                            stat.type === 'recording' ? 'maxRecordings' :
+                                                stat.type === 'document' ? 'maxDocuments' :
+                                                    stat.type === 'schedule' ? 'maxScheduleItems' : 'maxNotes'
+                                    }
+                                    currentCount={
+                                        stat.type === 'note' ? stats.totalNotes || 0 :
+                                            stat.type === 'recording' ? stats.totalRecordings || 0 :
+                                                stat.type === 'document' ? stats.totalDocuments || 0 :
+                                                    stat.type === 'schedule' ? stats.totalScheduleItems || 0 : 0
+                                    }
                                 >
-                                    <Plus className="h-3 w-3 mr-1" />
-                                    Add first {stat.title.toLowerCase()}
-                                </Button>
+                                    <Button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onCreateNew(stat.type!);
+                                        }}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="w-full mt-2 text-xs"
+                                    >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Add first {stat.title.toLowerCase()}
+                                    </Button>
+                                </SubscriptionGuard>
                             )}
                         </CardContent>
                     </Card>
@@ -267,18 +300,38 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                         Start building your knowledge base by creating notes, recordings, or uploading documents.
                                     </p>
                                     <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                                        <Button onClick={() => onCreateNew('note')} className="bg-blue-600 hover:bg-blue-700">
-                                            <BookOpen className="h-4 w-4 mr-2" />
-                                            Create Note
-                                        </Button>
-                                        <Button onClick={() => onCreateNew('recording')} variant="outline">
-                                            <Play className="h-4 w-4 mr-2" />
-                                            Start Recording
-                                        </Button>
-                                        <Button onClick={() => onCreateNew('document')} variant="outline">
-                                            <FileText className="h-4 w-4 mr-2" />
-                                            Upload Document
-                                        </Button>
+                                        <SubscriptionGuard
+                                            feature="Notes"
+                                            limitFeature="maxNotes"
+                                            currentCount={stats.totalNotes || 0}
+                                        >
+                                            <Button onClick={() => onCreateNew('note')} className="bg-blue-600 hover:bg-blue-700">
+                                                <BookOpen className="h-4 w-4 mr-2" />
+                                                Create Note
+                                            </Button>
+                                        </SubscriptionGuard>
+
+                                        <SubscriptionGuard
+                                            feature="Recordings"
+                                            limitFeature="maxRecordings"
+                                            currentCount={stats.totalRecordings || 0}
+                                        >
+                                            <Button onClick={() => onCreateNew('recording')} variant="outline">
+                                                <Play className="h-4 w-4 mr-2" />
+                                                Start Recording
+                                            </Button>
+                                        </SubscriptionGuard>
+
+                                        <SubscriptionGuard
+                                            feature="Documents"
+                                            limitFeature="maxDocuments"
+                                            currentCount={stats.totalDocuments || 0}
+                                        >
+                                            <Button onClick={() => onCreateNew('document')} variant="outline">
+                                                <FileText className="h-4 w-4 mr-2" />
+                                                Upload Document
+                                            </Button>
+                                        </SubscriptionGuard>
                                     </div>
                                 </div>
                                 <div className="w-48 h-48">

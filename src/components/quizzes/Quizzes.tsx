@@ -32,6 +32,8 @@ import {
   Trophy,
   BarChart3
 } from 'lucide-react';
+import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { useDailyQuizTracker } from '../../hooks/useDailyQuizTracker';
 
 interface QuizzesProps {
   quizzes: Quiz[];
@@ -78,6 +80,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
     },
     onStatsUpdate: fetchUserStats,
   });
+  const { dailyCounts } = useDailyQuizTracker();
 
   // Sync tab changes with global header
   useEffect(() => {
@@ -318,14 +321,21 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
                   </select>
                 </div>
               </div>
-              <Button
-                onClick={handleGenerateQuiz}
-                disabled={!selectedRecording}
-                className="w-full bg-blue-600 hover:bg-blue-700"
+              <SubscriptionGuard
+                feature="Recording Quizzes"
+                limitFeature="maxDailyQuizzes"
+                currentCount={dailyCounts.recording}
+                message="You've reached your daily limit for Recording Quizzes."
               >
-                <BookOpen className="h-4 w-4 mr-2" />
-                Generate Quiz from Recording
-              </Button>
+                <Button
+                  onClick={handleGenerateQuiz}
+                  disabled={!selectedRecording}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                >
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Generate Quiz from Recording
+                </Button>
+              </SubscriptionGuard>
             </CardContent>
           </Card>
 
@@ -364,6 +374,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
           <NotesQuizGenerator
             onGenerateQuizFromNotes={handleGenerateQuizFromNotes}
             isLoading={false}
+            dailyCount={dailyCounts.notes}
           />
         </TabsContent>
 
@@ -372,6 +383,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
             onGenerateAIQuiz={handleGenerateAIQuiz}
             userStats={userStats}
             isLoading={false}
+            dailyCount={dailyCounts.ai}
           />
         </TabsContent>
 

@@ -25,6 +25,7 @@ import { DocumentFolder, FolderTreeNode } from '@/types/Folder';
 import { DataLoadingState } from '../hooks/useAppData';
 import { useSocialData } from '../hooks/useSocialData';
 import { clearCache } from '../utils/socialCache'
+import { PlanType, SubscriptionLimits, Subscription, useSubscription, } from '@/hooks/useSubscription';
 
 // Context interface
 interface AppContextType extends AppState {
@@ -133,7 +134,14 @@ interface AppContextType extends AppState {
   socialData: ReturnType<typeof useSocialData>;
   refreshNotes: () => Promise<void>; // Add this
   navigateToNote: (noteId: string | null) => void; // Fix the syntax error
-
+  subscription: Subscription | null;
+  subscriptionLoading: boolean;
+  subscriptionTier: PlanType;
+  subscriptionLimits: SubscriptionLimits;
+  checkSubscriptionAccess: (feature: keyof SubscriptionLimits) => boolean;
+  refreshSubscription: () => Promise<void>;
+  daysRemaining: number;
+  bonusAiCredits: number;
 }
 
 // Create context
@@ -239,7 +247,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Use loading states with timeouts
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useLoadingWithTimeout(false);
   const [isLoadingChatSessions, setIsLoadingChatSessions] = useLoadingWithTimeout(false);
-
+  const {
+    subscription,
+    tier: subscriptionTier,
+    limits: subscriptionLimits,
+    daysRemaining,
+    isLoading: subscriptionLoading,
+    bonusAiCredits,
+    checkAccess,
+    checkAccess: checkSubscriptionAccess,
+    refreshSubscription,
+  } = useSubscription();
   // Get all data from useAppData hook
   const appData = useAppData();
   const {
@@ -326,6 +344,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsAILoading,
     folders,
     setFolders,
+    subscriptionTier,
+    subscriptionLimits,
+    checkSubscriptionAccess,
+    refreshSubscription,
   });
   const socialData = useSocialData(userProfile, 'newest', 'all');
   const navigateToNote = useCallback((noteId: string | null) => {
@@ -1150,7 +1172,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsLoadingSession,
     socialData,
     refreshNotes,
-    navigateToNote
+    navigateToNote,
+    subscription,
+    subscriptionLoading,
+    subscriptionTier,
+    subscriptionLimits,
+    checkSubscriptionAccess: checkAccess,
+    refreshSubscription,
+    daysRemaining,
+    bonusAiCredits,
   };
 
   return (

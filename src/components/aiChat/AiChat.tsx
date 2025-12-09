@@ -22,6 +22,8 @@ import { DragOverlay } from './Components/DragOverlay';
 import { state } from 'mermaid/dist/rendering-util/rendering-elements/shapes/state.js';
 import { AppContext } from '@/contexts/AppContext';
 import { initialAppState } from '@/contexts/appReducer';
+import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { useAiMessageTracker } from '@/hooks/useAiMessageTracker';
 
 export interface AttachedFile {
   file: File;
@@ -294,10 +296,14 @@ const AIChat: React.FC<AIChatProps> = ({
     const userAgent = navigator.userAgent.toLowerCase();
     return /mobile|android|iphone|ipad|tablet/i.test(userAgent) && window.innerWidth <= 768;
   }, []);
-
+  const userMessagesToday = useAiMessageTracker().messagesToday;
+  const limit = useAiMessageTracker().limit;
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-
+    if (userMessagesToday >= limit) {
+      toast.message('you have exceeded your message limit for today. Please try again tomorrow.')
+      return;
+    }
     if (isCurrentlySendingRef.current) {
       return;
     }
@@ -763,7 +769,7 @@ const AIChat: React.FC<AIChatProps> = ({
                   <span>Loading older messages...</span>
                 </div>
               </div>
-            ) : !activeChatSessionId && messages.length === 0 ? (
+            ) : activeChatSessionId && messages.length === 0 ? (
               <div className="text-center text-gray-500 dark:text-gray-400 mt-20 font-claude">
                 <BookPagesAnimation className="mx-auto mb-4 h-16 w-16 text-pink-500" showText={false} />
                 <p className="text-lg md:text-xl">Start the conversation by sending a message!</p>
@@ -832,173 +838,181 @@ const AIChat: React.FC<AIChatProps> = ({
               ? (isPhone() ? 'hidden' : `md:pr-[calc(${panelWidth}%+1.5rem)]`)
               : ''
             }`}>
+
             <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2">
-              {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
-                <div className="mb-2">
-                  <ContextBadges
-                    attachedFiles={attachedFiles}
-                    selectedImageDocuments={selectedImageDocuments}
-                    selectedDocumentTitles={selectedDocumentTitles}
-                    selectedNoteTitles={selectedNoteTitles}
-                    handleRemoveAllFiles={handleRemoveAllFiles}
-                    onSelectionChange={onSelectionChange}
-                    selectedDocumentIds={selectedDocumentIds}
-                    documents={documents}
-                    notes={notes}
-                  />
-                </div>
-              ) : null}
-              <textarea
-                ref={textareaRef}
-                value={inputMessage}
-                // REPLACE existing onChange with this:
-                onChange={(e) => {
-                  e.preventDefault();
-                  const newValue = e.target.value;
-                  setInputMessage(newValue);
-
-                  // Direct resize (Performance Fix)
-                  if (textareaRef.current) {
-                    textareaRef.current.style.height = 'auto';
-                    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+              <SubscriptionGuard
+                feature="AI Chat"
+                limitFeature="maxAiMessages"
+                currentCount={useAiMessageTracker().messagesToday} // from useAiMessageTracker
+                message="You've reached your daily AI message limit."
+              >
+                {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
+                  <div className="mb-2">
+                    <ContextBadges
+                      attachedFiles={attachedFiles}
+                      selectedImageDocuments={selectedImageDocuments}
+                      selectedDocumentTitles={selectedDocumentTitles}
+                      selectedNoteTitles={selectedNoteTitles}
+                      handleRemoveAllFiles={handleRemoveAllFiles}
+                      onSelectionChange={onSelectionChange}
+                      selectedDocumentIds={selectedDocumentIds}
+                      documents={documents}
+                      notes={notes}
+                    />
+                  </div>
+                ) : null}
+                <textarea
+                  ref={textareaRef}
+                  value={inputMessage}
+                  // REPLACE existing onChange with this:
+                  onChange={(e) => {
                     e.preventDefault();
-                    handleSendMessage(e);
-                  }
-                }}
-                placeholder="What do you want to know? (You can also drag and drop files here)"
-                className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px] bg-gray-700 placeholder-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
-                disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                rows={1}
-              />
+                    const newValue = e.target.value;
+                    setInputMessage(newValue);
 
-              <div className="flex items-center gap-2 mt-2 justify-between">
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={isRecognizing ? stopRecognition : startRecognition}
-                    className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 relative transition-all duration-200 ${isRecognizing
-                      ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800 scale-105'
-                      : micPermissionStatus === 'denied'
-                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
-                      }`}
-                    title={
-                      isRecognizing
-                        ? 'Stop Speech Recognition'
-                        : micPermissionStatus === 'denied'
-                          ? 'Microphone access denied - check browser settings'
-                          : micPermissionStatus === 'checking'
-                            ? 'Checking microphone permissions...'
-                            : 'Start Speech Recognition'
+                    // Direct resize (Performance Fix)
+                    if (textareaRef.current) {
+                      textareaRef.current.style.height = 'auto';
+                      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
                     }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
+                  placeholder="What do you want to know? (You can also drag and drop files here)"
+                  className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px]  dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
+                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
+                  rows={1}
+                />
+
+                <div className="flex items-center gap-2 mt-2 justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={isRecognizing ? stopRecognition : startRecognition}
+                      className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 relative transition-all duration-200 ${isRecognizing
+                        ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800 scale-105'
+                        : micPermissionStatus === 'denied'
+                          ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                          : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
+                        }`}
+                      title={
+                        isRecognizing
+                          ? 'Stop Speech Recognition'
+                          : micPermissionStatus === 'denied'
+                            ? 'Microphone access denied - check browser settings'
+                            : micPermissionStatus === 'checking'
+                              ? 'Checking microphone permissions...'
+                              : 'Start Speech Recognition'
+                      }
+                      disabled={
+                        isLoading ||
+                        isSubmittingUserMessage ||
+                        isGeneratingImage ||
+                        isUpdatingDocuments ||
+                        micPermissionStatus === 'checking' ||
+                        isAiTyping
+                      }
+                    >
+                      <Mic className={`h-5 w-5 ${isRecognizing ? 'animate-pulse' : ''}`} />
+                      {isRecognizing && (
+                        <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse">
+                          <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-75"></div>
+                        </div>
+                      )}
+                      {micPermissionStatus === 'checking' && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      )}
+                    </Button>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      ref={cameraInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className=" dark:text-gray-400 text-gray-600 hover:bg-gray-300 dark:hover:bg-gray-600  h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                      title="Take Picture"
+                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
+                    >
+                      <Camera className="h-5 w-5" />
+                    </Button>
+                    <input
+                      type="file"
+                      accept="*/*"
+                      multiple
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-gray-400 dark:text-gray-400   dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                      title="Upload Files"
+                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
+                    >
+                      <Paperclip className="h-5 w-5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowDocumentSelector(true)}
+                      className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
+                      title="Select Documents/Notes for Context"
+                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
+                    >
+                      {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
+                    </Button>
+                    <Button
+                      onClick={() => setAutoTypeInPanel(prev => !prev)}
+                      variant="outline"
+                      className="text-sm text-gray-600 dark:text-gray-400 bg-transparent  dark:hover:bg-gray-600 hover:bg-gray-300 flex-shrink-0"
+                      title="Toggle code typing in panel"
+                    >
+                      {autoTypeInPanel ? 'Panel On' : 'Panel Off'}
+                    </Button>
+                  </div>
+                  <Button
+                    type="submit"
+                    onClick={handleSendMessage}
                     disabled={
                       isLoading ||
                       isSubmittingUserMessage ||
                       isGeneratingImage ||
                       isUpdatingDocuments ||
-                      micPermissionStatus === 'checking' ||
-                      isAiTyping
+                      (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) ||
+                      !isLastAiMessageDisplayed ||
+                      isCurrentlySending ||
+                      isAiTyping ||
+                      messages.some(msg => msg.id.startsWith('optimistic-'))
                     }
+                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
                   >
-                    <Mic className={`h-5 w-5 ${isRecognizing ? 'animate-pulse' : ''}`} />
-                    {isRecognizing && (
-                      <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse">
-                        <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-75"></div>
-                      </div>
+                    {isSubmittingUserMessage || isCurrentlySending || isAiTyping ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
                     )}
-                    {micPermissionStatus === 'checking' && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </div>
-                    )}
-                  </Button>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    ref={cameraInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => cameraInputRef.current?.click()}
-                    className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                    title="Take Picture"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                  >
-                    <Camera className="h-5 w-5" />
-                  </Button>
-                  <input
-                    type="file"
-                    accept="*/*"
-                    multiple
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-gray-400 dark:text-gray-400 text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                    title="Upload Files"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                  >
-                    <Paperclip className="h-5 w-5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowDocumentSelector(true)}
-                    className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
-                    title="Select Documents/Notes for Context"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                  >
-                    {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
-                  </Button>
-                  <Button
-                    onClick={() => setAutoTypeInPanel(prev => !prev)}
-                    variant="outline"
-                    className="text-sm text-gray-400 dark:text-gray-400 bg-transparent text-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 hover:bg-gray-300 flex-shrink-0"
-                    title="Toggle code typing in panel"
-                  >
-                    {autoTypeInPanel ? 'Panel On' : 'Panel Off'}
                   </Button>
                 </div>
-                <Button
-                  type="submit"
-                  onClick={handleSendMessage}
-                  disabled={
-                    isLoading ||
-                    isSubmittingUserMessage ||
-                    isGeneratingImage ||
-                    isUpdatingDocuments ||
-                    (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) ||
-                    !isLastAiMessageDisplayed ||
-                    isCurrentlySending ||
-                    isAiTyping ||
-                    messages.some(msg => msg.id.startsWith('optimistic-'))
-                  }
-                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                >
-                  {isSubmittingUserMessage || isCurrentlySending || isAiTyping ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
+              </SubscriptionGuard>
             </div>
           </div>
 

@@ -1,3 +1,4 @@
+// components/Schedule.tsx
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Calendar, Clock, MapPin, Edit2, Trash2, Loader2, RefreshCw, Sparkles, History } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -13,6 +14,7 @@ import { StickyRail } from '../layout/StickyRail';
 import { HeroHeader } from '../layout/HeroHeader';
 import { QuickActionsCard } from '../layout/QuickActionsCard';
 import { StatsCard } from '../layout/StatsCard';
+import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 
 interface ScheduleProps {
   scheduleItems: ScheduleItem[];
@@ -138,7 +140,6 @@ export const Schedule: React.FC<ScheduleProps> = ({
 
       resetForm();
     } catch (error) {
-      //console.error('Error saving schedule item:', error);
       toast.error('Failed to save schedule item');
     } finally {
       setIsSubmitting(false);
@@ -170,7 +171,6 @@ export const Schedule: React.FC<ScheduleProps> = ({
         await onDeleteItem(id);
         toast.success('Schedule item deleted');
       } catch (error) {
-        //console.error('Error deleting schedule item:', error);
         toast.error('Failed to delete schedule item');
       }
     }
@@ -316,37 +316,24 @@ export const Schedule: React.FC<ScheduleProps> = ({
                   <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 </Button>
               )}
-              <Button
-                onClick={() => setShowForm(true)}
-                className="bg-white text-blue-700 hover:bg-blue-50"
+              <SubscriptionGuard
+                feature="Schedule Items"
+                limitFeature="maxScheduleItems"
+                currentCount={scheduleItems.length}
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Item
-              </Button>
+                <Button
+                  onClick={() => setShowForm(true)}
+                  className="bg-white text-blue-700 hover:bg-blue-50"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+              </SubscriptionGuard>
             </div>
           }
         />
 
-        {/* Tabs */}
-        {/* <div className="flex gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-2xl p-2 shadow-xl mb-6">
-          {(['upcoming', 'today', 'past'] as const).map(tab => (
-            <Button
-              key={tab}
-              variant={activeTab === tab ? "default" : "ghost"}
-              className={`flex-1 rounded-xl ${activeTab === tab ? 'shadow-lg' : ''}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab === 'upcoming' ? <Calendar className="h-5 w-5 mr-2" /> :
-                tab === 'today' ? <Clock className="h-5 w-5 mr-2" /> :
-                  <History className="h-5 w-5 mr-2" />}
-              {tab === 'upcoming' ? 'Upcoming' :
-                tab === 'today' ? 'Today' : 'Past'}
-            </Button>
-          ))}
-        </div> */}
-
         <div className="space-y-6 w-full">
-
           {/* Form */}
           {showForm && (
             <Card className="border-2 border-blue-500 dark:border-blue-400">
@@ -464,22 +451,28 @@ export const Schedule: React.FC<ScheduleProps> = ({
                   </div>
 
                   <div className="flex gap-2 pt-2">
-                    <Button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="bg-blue-600 hover:bg-blue-700"
+                    <SubscriptionGuard
+                      feature="Schedule Items"
+                      limitFeature="maxScheduleItems"
+                      currentCount={scheduleItems.length}
                     >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          {editingItem ? 'Updating...' : 'Adding...'}
-                        </>
-                      ) : (
-                        <>
-                          {editingItem ? 'Update' : 'Add'} Item
-                        </>
-                      )}
-                    </Button>
+                      <Button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            {editingItem ? 'Updating...' : 'Adding...'}
+                          </>
+                        ) : (
+                          <>
+                            {editingItem ? 'Update' : 'Add'} Item
+                          </>
+                        )}
+                      </Button>
+                    </SubscriptionGuard>
                     <Button
                       type="button"
                       variant="outline"
@@ -535,13 +528,19 @@ export const Schedule: React.FC<ScheduleProps> = ({
                           activeTab === 'today' ? 'Schedule events for today to see them here' :
                             'Completed events will appear here'}
                       </p>
-                      <Button
-                        onClick={() => setShowForm(true)}
-                        className="bg-blue-600 hover:bg-blue-700"
+                      <SubscriptionGuard
+                        feature="Schedule Items"
+                        limitFeature="maxScheduleItems"
+                        currentCount={scheduleItems.length}
                       >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Schedule Item
-                      </Button>
+                        <Button
+                          onClick={() => setShowForm(true)}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Schedule Item
+                        </Button>
+                      </SubscriptionGuard>
                     </CardContent>
                   </Card>
                 ) : (
