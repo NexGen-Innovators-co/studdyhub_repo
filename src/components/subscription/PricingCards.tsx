@@ -1,3 +1,4 @@
+// components/subscription/PricingCards.tsx
 import { useState } from 'react';
 import { Check, Sparkles, Crown, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -123,7 +124,7 @@ function PaystackButton({ plan, email, onSuccess, isLoading }: PaystackButtonPro
   return (
     <Button
       onClick={handlePayment}
-      className="w-full"
+      className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600"
       variant={plan.popular ? 'default' : 'outline'}
       disabled={isLoading}
     >
@@ -178,45 +179,61 @@ export function PricingCards() {
         return (
           <Card
             key={plan.id}
-            className={`relative flex flex-col ${plan.popular
-                ? 'border-primary shadow-lg shadow-primary/20'
-                : 'border-border'
-              }`}
+            className={`relative flex flex-col border-2 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl ${plan.popular
+                ? 'border-blue-500 shadow-lg shadow-blue-500/20 bg-gradient-to-b from-blue-50 to-white dark:from-blue-950/30 dark:to-gray-900'
+                : 'border-gray-200 dark:border-gray-800'
+              } ${isCurrentPlan ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
           >
             {plan.popular && (
-              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
+              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-blue-500 text-white border-0 px-4 py-1 shadow-lg">
                 Most Popular
               </Badge>
             )}
 
-            <CardHeader className="text-center pb-4">
-              <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${plan.popular
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground'
-                }`}>
+            <CardHeader className="text-center pb-4 pt-8">
+              <div
+                className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${plan.popular
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg'
+                    : plan.id === 'genius'
+                      ? 'bg-gradient-to-r from-blue-700 to-blue-600 text-white'
+                      : 'bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 text-gray-600 dark:text-gray-400'
+                  }`}
+              >
                 {plan.icon}
               </div>
 
-              <CardTitle className="text-xl">{plan.name}</CardTitle>
-              <CardDescription>{plan.description}</CardDescription>
+              <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
+              <CardDescription className="text-gray-600 dark:text-gray-400">
+                {plan.description}
+              </CardDescription>
 
-              <div className="mt-4">
-                <span className="text-4xl font-bold">{plan.currency} {plan.price}</span>
-                <span className="text-muted-foreground">{plan.period}</span>
+              <div className="mt-6">
+                <span className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
+                  {plan.currency} {plan.price}
+                </span>
+                <span className="text-gray-500 dark:text-gray-400 ml-2">{plan.period}</span>
               </div>
             </CardHeader>
 
             <CardContent className="flex-1 flex flex-col">
-              <ul className="space-y-3 flex-1 mb-6">
+              <ul className="space-y-4 flex-1 mb-8">
                 {plan.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-center gap-3">
-                    <Check
-                      className={`h-4 w-4 flex-shrink-0 ${feature.included
-                          ? 'text-green-500'
-                          : 'text-muted-foreground/30'
+                  <li key={idx} className="flex items-start gap-3">
+                    <div
+                      className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5 ${feature.included
+                          ? 'bg-gradient-to-r from-blue-500 to-blue-400 text-white'
+                          : 'bg-gray-200 dark:bg-gray-700'
                         }`}
-                    />
-                    <span className={feature.included ? '' : 'text-muted-foreground/50 line-through'}>
+                    >
+                      {feature.included && <Check className="h-3 w-3" />}
+                    </div>
+                    <span
+                      className={
+                        feature.included
+                          ? 'text-gray-800 dark:text-gray-200'
+                          : 'text-gray-500 dark:text-gray-500 line-through'
+                      }
+                    >
                       {feature.text}
                     </span>
                   </li>
@@ -224,7 +241,12 @@ export function PricingCards() {
               </ul>
 
               {isCurrentPlan ? (
-                <Button variant="secondary" disabled className="w-full">
+                <Button
+                  variant="outline"
+                  disabled
+                  className="w-full border-blue-300 text-blue-600 dark:text-blue-400"
+                >
+                  <Check className="h-4 w-4 mr-2" />
                   Current Plan
                 </Button>
               ) : plan.id === 'free' ? (
