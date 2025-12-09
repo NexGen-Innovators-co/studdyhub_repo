@@ -87,6 +87,14 @@ const Index = () => {
     clearError,
     refreshNotes,
     navigateToNote,
+    subscription,
+    subscriptionLoading,
+    subscriptionTier,
+    subscriptionLimits,
+    checkSubscriptionAccess,
+    refreshSubscription,
+    daysRemaining,
+    bonusAiCredits,
   } = useAppContext();
 
   const {
@@ -197,7 +205,11 @@ const Index = () => {
     // Add error indicators
     hasDataErrors: Object.keys(dataErrors || {}).length > 0,
     currentTheme: currentTheme,
-  }), [
+    subscriptionTier,
+    subscriptionLoading,
+    daysRemaining,
+    onNavigateToSubscription: () => handleNavigateToTab('subscription'),
+  }), [subscriptionTier, subscriptionLoading, daysRemaining,
     searchQuery, appOperations.createNewNote, isSidebarOpen, setIsSidebarOpen,
     currentActiveTab, userProfile, activeSocialTab, socialPostId,
     socialGroupId, socialSearchQuery, navigate, dataErrors,
@@ -324,6 +336,9 @@ const Index = () => {
     onRefresh: () => retryLoading('notes'),
     refreshNotes,
     navigateToNote,
+    subscriptionTier,
+    subscriptionLimits,
+    checkSubscriptionAccess,
   }), [
     currentActiveTab,
     activeSocialTab,
@@ -368,6 +383,9 @@ const Index = () => {
     clearError,
     refreshNotes,
     navigateToNote,
+    subscriptionTier,
+    subscriptionLimits,
+    checkSubscriptionAccess
   ]);
 
   // Auth redirect (existing)

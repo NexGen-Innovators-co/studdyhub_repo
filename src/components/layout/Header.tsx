@@ -1,4 +1,4 @@
-// src/components/layout/Header.tsx - Updated with Web to Mobile install API
+// src/components/layout/Header.tsx - Updated with SubscriptionGuard on all buttons
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Search, Plus, Menu, Bell, LogOut, Users, TrendingUp, User, Home,
@@ -18,6 +18,9 @@ import { toast } from 'sonner';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppContext } from '@/hooks/useAppContext';
+import { PlanType } from '@/hooks/useSubscription';
+import { Badge } from '../ui/badge';
+import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 
 interface HeaderProps {
   searchQuery: string;
@@ -37,6 +40,10 @@ interface HeaderProps {
   onNewChat?: () => void;
   currentTheme: 'light' | 'dark';
   onThemeChange: (theme: 'light' | 'dark') => void;
+  subscriptionTier: PlanType;
+  subscriptionLoading: boolean;
+  daysRemaining: number;
+  onNavigateToSubscription: () => void;
 }
 
 const tabNames: Record<HeaderProps['activeTab'], string> = {
@@ -204,6 +211,10 @@ export const Header: React.FC<HeaderProps> = ({
   onNewChat,
   currentTheme,
   onThemeChange,
+  subscriptionTier,
+  subscriptionLoading,
+  daysRemaining,
+  onNavigateToSubscription,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -399,12 +410,6 @@ export const Header: React.FC<HeaderProps> = ({
             <strong>Other Browsers:</strong> Look for "Install" in the menu
           </p>
         </div>
-        {/* <Button
-          onClick={() => window.open('https://notemind.ai/install-guide', '_blank')}
-          className="w-full mt-3"
-        >
-          View Detailed Guide
-        </Button> */}
       </div>,
       {
         duration: 10000,
@@ -454,77 +459,121 @@ export const Header: React.FC<HeaderProps> = ({
     onThemeChange(newTheme);
     toast.success(`Switched to ${newTheme} mode`);
   };
+  const {
+    notes,
+    recordings,
+    documents,
+    scheduleItems,
+    chatSessions
+  } = useAppContext();
 
   const getPrimaryAction = () => {
     switch (activeTab) {
       case 'notes':
         return (
-          <Button
-            onClick={onNewNote}
-            className="bg-gradient-to-r from-orange-500 to-blue-500 hover:from-orange-600 hover:to-blue-600"
-            size="sm"
+          <SubscriptionGuard
+            feature="Notes"
+            limitFeature="maxNotes"
+            currentCount={notes?.length || 0}
+            message="You've reached the limit of notes for your plan."
           >
-            <Plus className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">New Note</span>
-          </Button>
+            <Button
+              onClick={onNewNote}
+              className="bg-gradient-to-r from-orange-500 to-blue-500 hover:from-orange-600 hover:to-blue-600"
+              size="sm"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">New Note</span>
+            </Button>
+          </SubscriptionGuard>
         );
       case 'recordings':
         return (
-          <Button
-            onClick={() => onNewRecording?.()}
-            className="bg-green-600 hover:bg-green-700"
-            size="sm"
+          <SubscriptionGuard
+            feature="Class Recordings"
+            limitFeature="maxRecordings"
+            currentCount={recordings?.length || 0}
           >
-            <Mic className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">Record</span>
-          </Button>
+            <Button
+              onClick={() => onNewRecording?.()}
+              className="bg-green-600 hover:bg-green-700"
+              size="sm"
+            >
+              <Mic className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Record</span>
+            </Button>
+          </SubscriptionGuard>
         );
       case 'documents':
         return (
-          <Button
-            onClick={() => onUploadDocument?.()}
-            className="bg-blue-600 hover:bg-blue-700"
-            size="sm"
+          <SubscriptionGuard
+            feature="Documents"
+            limitFeature="maxDocUploads"
+            currentCount={documents?.length || 0}
           >
-            <Upload className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">Upload</span>
-          </Button>
+            <Button
+              onClick={() => onUploadDocument?.()}
+              className="bg-blue-600 hover:bg-blue-700"
+              size="sm"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Upload</span>
+            </Button>
+          </SubscriptionGuard>
         );
       case 'schedule':
         return (
-          <Button
-            onClick={() => onNewSchedule?.()}
-            className="bg-blue-600 hover:bg-blue-700"
-            size="sm"
+          <SubscriptionGuard
+            feature="Schedule Items"
+            limitFeature="maxScheduleItems"
+            currentCount={scheduleItems?.length || 0}
           >
-            <Plus className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">Add Event</span>
-          </Button>
+            <Button
+              onClick={() => onNewSchedule?.()}
+              className="bg-blue-600 hover:bg-blue-700"
+              size="sm"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Add Event</span>
+            </Button>
+          </SubscriptionGuard>
         );
       case 'chat':
         return (
-          <Button
-            onClick={async () => {
-              const id = await createNewChatSession?.();
-              if (id) navigate(`/chat/${id}`);
-            }}
-            className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
-            size="sm"
+          <SubscriptionGuard
+            feature="Chat Sessions"
+            limitFeature="maxChatSessions"
+            currentCount={chatSessions?.length || 0}
           >
-            <MessageCircle className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">New Chat</span>
-          </Button>
+            <Button
+              onClick={async () => {
+                const id = await createNewChatSession?.();
+                if (id) navigate(`/chat/${id}`);
+              }}
+              className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
+              size="sm"
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">New Chat</span>
+            </Button>
+          </SubscriptionGuard>
         );
       case 'social':
         return (
-          <Button
-            onClick={onOpenCreatePostDialog}
-            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
-            size="sm"
+          <SubscriptionGuard
+            feature="Social Posts"
+            limitFeature="canPostSocials"
+            currentCount={0}
           >
-            <Plus className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">Post</span>
-          </Button>
+            <Button
+              onClick={onOpenCreatePostDialog}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+              size="sm"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Post</span>
+            </Button>
+          </SubscriptionGuard>
         );
       default:
         return null;
@@ -566,6 +615,38 @@ export const Header: React.FC<HeaderProps> = ({
   const handleSuggestionClick = (suggestion: string) => {
     handleSearchWithFilter(suggestion);
     setShowSearchFilters(false);
+  };
+
+  const SubscriptionBadge = () => {
+    if (subscriptionLoading) {
+      return (
+        <Badge variant="outline" className="animate-pulse">
+          Loading...
+        </Badge>
+      );
+    }
+
+    const tierConfig = {
+      free: { label: 'Free', color: 'bg-gray-100 text-gray-800' },
+      scholar: { label: 'Scholar', color: 'bg-blue-100 text-blue-800' },
+      genius: { label: 'Genius', color: 'bg-amber-100 text-amber-800' },
+    };
+
+    const config = tierConfig[subscriptionTier];
+
+    return (
+      <button
+        onClick={onNavigateToSubscription}
+        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${config.color} hover:opacity-90 transition-opacity`}
+      >
+        {config.label}
+        {subscriptionTier !== 'free' && daysRemaining > 0 && (
+          <span className="ml-1 text-xs opacity-75">
+            • {daysRemaining}d
+          </span>
+        )}
+      </button>
+    );
   };
 
   // Clear search
@@ -703,10 +784,7 @@ export const Header: React.FC<HeaderProps> = ({
       <Button
         variant="outline"
         size="sm"
-        onClick={() => {
-          if (isInstalling) return;
-          handleInstallApp
-        }}
+        onClick={handleInstallApp}
         disabled={isInstalling}
         className="hidden sm:inline-flex bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800 hover:from-indigo-500/20 hover:to-blue-500/20 text-indigo-700 dark:text-indigo-200 rounded-full"
       >
@@ -803,7 +881,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <EnhancedSearchBar />
                 </div>
 
-                <div className="h-8  bg-slate-300 dark:bg-slate-600 " />
+                <div className="h-8 bg-slate-300 dark:bg-slate-600" />
 
                 {/* Section Tabs */}
                 <div className="flex gap-1">
@@ -843,7 +921,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-3">
             {/* Install App Button */}
             <InstallAppButton />
-
+            <SubscriptionBadge />
             {/* Create Button */}
             <div>
               {getPrimaryAction()}
@@ -963,7 +1041,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Install Prompt Toast (when browser prompts) */}
       {showInstallPrompt && !isPwaInstalled && (
-        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom">
+        <div className="fixed bottom-52 right-4 z-50 animate-in slide-in-from-bottom">
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 max-w-sm">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">

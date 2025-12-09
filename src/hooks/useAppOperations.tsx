@@ -6,6 +6,8 @@ import { generateId } from '../components/classRecordings/utils/helpers';
 import { toast } from 'sonner';
 import { supabase } from '../integrations/supabase/client';
 import { CreateFolderInput, DocumentFolder, UpdateFolderInput } from '@/types/Folder';
+import { PlanType, SubscriptionLimits } from './useSubscription';
+import { useNavigate } from 'react-router-dom';
 
 interface UseAppOperationsProps {
   notes: Note[];
@@ -28,7 +30,11 @@ interface UseAppOperationsProps {
   refreshData?: () => void;
   folders: DocumentFolder[];
   setFolders: (folders: DocumentFolder[] | ((prev: DocumentFolder[]) => DocumentFolder[])) => void;
-
+  // Add subscription props
+  subscriptionTier: PlanType;
+  subscriptionLimits: SubscriptionLimits;
+  checkSubscriptionAccess: (feature: keyof SubscriptionLimits) => boolean;
+  refreshSubscription: () => Promise<void>;
 }
 
 export const useAppOperations = ({
@@ -47,6 +53,10 @@ export const useAppOperations = ({
   setIsAILoading,
   isRealtimeConnected = false,
   refreshData = () => { },
+  subscriptionTier,
+  subscriptionLimits,
+  checkSubscriptionAccess,
+  refreshSubscription,
 }: UseAppOperationsProps) => {
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 1000;
@@ -67,8 +77,23 @@ export const useAppOperations = ({
       }
     }
   };
+  const navigate = useNavigate()
   const createNewNote = useCallback(async () => {
     try {
+      // Check if user can create more notes
+      if (!checkSubscriptionAccess('maxNotes')) {
+        const noteCount = notes.length;
+        if (noteCount >= subscriptionLimits.maxNotes) {
+          toast.error(`Note limit reached (${subscriptionLimits.maxNotes}). Upgrade to create more notes.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            }
+          });
+          return;
+        }
+      }
+
       await withRetry(async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
@@ -114,7 +139,7 @@ export const useAppOperations = ({
       toast.error('Failed to create note after multiple attempts');
       if (!isRealtimeConnected) refreshData();
     }
-  }, [isRealtimeConnected, refreshData, setActiveNote, setActiveTab, setNotes]);
+  }, [isRealtimeConnected, refreshData, setActiveNote, setActiveTab, setNotes, navigate]);
 
   const updateNote = useCallback(async (updatedNote: Note) => {
     try {
@@ -558,6 +583,15 @@ export const useAppOperations = ({
     imageMimeType?: string
   ) => {
     try {
+      // Check AI message limit for free users
+      if (subscriptionTier === 'free') {
+        // You might want to track daily AI messages
+        // For now, we'll just check the limit
+        if (subscriptionLimits.maxAiMessages !== Infinity) {
+          // You should implement daily message tracking here
+          toast.info(`Free users get ${subscriptionLimits.maxAiMessages} AI messages per day.`);
+        }
+      }
       await withRetry(async () => {
         const { data: { user } = {} } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
@@ -610,6 +644,21 @@ export const useAppOperations = ({
 
   const handleDocumentUploaded = async (document: Document) => {
     try {
+      // Check if user can upload more documents
+      if (!checkSubscriptionAccess('maxDocUploads')) return
+
+      // Check file size limit
+      const fileSizeMB = (document.file_size || 0) / (1024 * 1024);
+      if (fileSizeMB > subscriptionLimits.maxDocSize) {
+        toast.error(`File too large (${fileSizeMB.toFixed(1)}MB). Maximum allowed: ${subscriptionLimits.maxDocSize}MB.`, {
+          action: {
+            label: 'Upgrade',
+            onClick: () => navigate('/subscription')
+          }
+        });
+        return;
+      }
+
       const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
