@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 // Paystack public key - replace with your actual public key
-const PAYSTACK_PUBLIC_KEY = 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+const PAYSTACK_PUBLIC_KEY = 'pk_live_693d54327546195c15b987f6f2f94c0676904bba';
 
 interface PlanFeature {
   text: string;
@@ -121,9 +121,9 @@ function PaystackButton({ plan, email, onSuccess, isLoading }: PaystackButtonPro
   };
 
   return (
-    <Button 
-      onClick={handlePayment} 
-      className="w-full" 
+    <Button
+      onClick={handlePayment}
+      className="w-full"
       variant={plan.popular ? 'default' : 'outline'}
       disabled={isLoading}
     >
@@ -174,50 +174,47 @@ export function PricingCards() {
     <div className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto">
       {plans.map((plan) => {
         const isCurrentPlan = tier === plan.id;
-        
+
         return (
-          <Card 
-            key={plan.id} 
-            className={`relative flex flex-col ${
-              plan.popular 
-                ? 'border-primary shadow-lg shadow-primary/20' 
+          <Card
+            key={plan.id}
+            className={`relative flex flex-col ${plan.popular
+                ? 'border-primary shadow-lg shadow-primary/20'
                 : 'border-border'
-            }`}
+              }`}
           >
             {plan.popular && (
               <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
                 Most Popular
               </Badge>
             )}
-            
+
             <CardHeader className="text-center pb-4">
-              <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
-                plan.popular 
-                  ? 'bg-primary text-primary-foreground' 
+              <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${plan.popular
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-muted-foreground'
-              }`}>
+                }`}>
                 {plan.icon}
               </div>
-              
+
               <CardTitle className="text-xl">{plan.name}</CardTitle>
               <CardDescription>{plan.description}</CardDescription>
-              
+
               <div className="mt-4">
                 <span className="text-4xl font-bold">{plan.currency} {plan.price}</span>
                 <span className="text-muted-foreground">{plan.period}</span>
               </div>
             </CardHeader>
-            
+
             <CardContent className="flex-1 flex flex-col">
               <ul className="space-y-3 flex-1 mb-6">
                 {plan.features.map((feature, idx) => (
                   <li key={idx} className="flex items-center gap-3">
-                    <Check 
-                      className={`h-4 w-4 flex-shrink-0 ${
-                        feature.included 
-                          ? 'text-green-500' 
+                    <Check
+                      className={`h-4 w-4 flex-shrink-0 ${feature.included
+                          ? 'text-green-500'
                           : 'text-muted-foreground/30'
-                      }`} 
+                        }`}
                     />
                     <span className={feature.included ? '' : 'text-muted-foreground/50 line-through'}>
                       {feature.text}
@@ -225,7 +222,7 @@ export function PricingCards() {
                   </li>
                 ))}
               </ul>
-              
+
               {isCurrentPlan ? (
                 <Button variant="secondary" disabled className="w-full">
                   Current Plan
