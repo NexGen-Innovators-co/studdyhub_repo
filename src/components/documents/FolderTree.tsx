@@ -1,3 +1,4 @@
+// components/FolderTree.tsx
 import React, { useState, useCallback } from 'react';
 import {
   Folder,
@@ -22,6 +23,7 @@ import {
 } from '../ui/dropdown-menu';
 import { DocumentFolder, FolderTreeNode } from '../../types/Folder';
 import { cn } from '../../lib/utils';
+import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 
 export interface FolderTreeProps {
   folderTree: FolderTreeNode[];
@@ -34,6 +36,7 @@ export interface FolderTreeProps {
   expandedFolders: Set<string>;
   onToggleExpand: (folderId: string) => void;
   documentCounts?: Record<string, number>;
+  currentFolderCount?: number;
 }
 
 export const FolderTree: React.FC<FolderTreeProps> = ({
@@ -47,6 +50,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
   expandedFolders,
   onToggleExpand,
   documentCounts = {},
+  currentFolderCount = 0,
 }) => {
   const [hoveredFolderId, setHoveredFolderId] = useState<string | null>(null);
 
@@ -129,10 +133,16 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => onCreateFolder(node.id)}>
-                <FolderPlus className="h-4 w-4 mr-2" />
-                New Subfolder
-              </DropdownMenuItem>
+              <SubscriptionGuard
+                feature="Folders"
+                limitFeature="maxFolders"
+                currentCount={currentFolderCount}
+              >
+                <DropdownMenuItem onClick={() => onCreateFolder(node.id)}>
+                  <FolderPlus className="h-4 w-4 mr-2" />
+                  New Subfolder
+                </DropdownMenuItem>
+              </SubscriptionGuard>
               <DropdownMenuItem onClick={() => onRenameFolder(node)}>
                 <Edit2 className="h-4 w-4 mr-2" />
                 Rename
@@ -172,6 +182,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     onRenameFolder,
     onDeleteFolder,
     onMoveFolder,
+    currentFolderCount,
   ]);
 
   return (
@@ -197,15 +208,21 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         <div className="text-center py-8 text-slate-500 dark:text-slate-400">
           <Folder className="h-12 w-12 mx-auto mb-2 opacity-50" />
           <p className="text-sm">No folders yet</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onCreateFolder(null)}
-            className="mt-2"
+          <SubscriptionGuard
+            feature="Folders"
+            limitFeature="maxFolders"
+            currentCount={currentFolderCount}
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Create First Folder
-          </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onCreateFolder(null)}
+              className="mt-2"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create First Folder
+            </Button>
+          </SubscriptionGuard>
         </div>
       )}
     </div>

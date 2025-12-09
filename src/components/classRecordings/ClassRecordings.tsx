@@ -27,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 
 interface ClassRecordingsProps {
   recordings?: ClassRecording[];
@@ -270,20 +271,33 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-blue-100 dark:border-slate-700 p-4">
               <h3 className="font-bold text-lg mb-3 text-blue-900 dark:text-blue-100">Quick Actions</h3>
               <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start bg-white dark:bg-slate-800"
-                  onClick={() => setActiveTab('record')}
+                <SubscriptionGuard
+                  feature="Class Recordings"
+                  limitFeature="maxRecordings"
+                  currentCount={recordings?.length || 0}
                 >
-                  <Mic className="h-4 w-4 mr-2 text-blue-500" /> Record New
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start bg-white dark:bg-slate-800"
-                  onClick={() => setActiveTab('upload')}
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start bg-white dark:bg-slate-800"
+                    onClick={() => setActiveTab('record')}
+                  >
+                    <Mic className="h-4 w-4 mr-2 text-blue-500" /> Record New
+                  </Button>
+                </SubscriptionGuard>
+                <SubscriptionGuard
+                  feature="Class Recordings"
+                  limitFeature="maxRecordings"
+                  currentCount={recordings?.length || 0}
                 >
-                  <Upload className="h-4 w-4 mr-2 text-blue-500" /> Upload Audio
-                </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start bg-white dark:bg-slate-800"
+                    onClick={() => setActiveTab('upload')}
+                  >
+                    <Mic className="h-4 w-4 mr-2 text-blue-500" /> Record New
+                  </Button>
+                </SubscriptionGuard>
+
               </div>
             </div>
 
@@ -380,12 +394,24 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                       Start by recording a lecture or uploading an audio file to get AI-powered transcripts and summaries
                     </p>
                     <div className="flex gap-2">
-                      <Button onClick={() => setActiveTab('record')} className="bg-blue-600 hover:bg-blue-700">
-                        <Mic className="h-4 w-4 mr-2" /> Start Recording
-                      </Button>
-                      <Button variant="outline" onClick={() => setActiveTab('upload')}>
-                        <Upload className="h-4 w-4 mr-2" /> Upload
-                      </Button>
+                      <SubscriptionGuard
+                        feature="Class Recordings"
+                        limitFeature="maxRecordings"
+                        currentCount={recordings?.length || 0}
+                      >
+                        <Button onClick={() => setActiveTab('record')} className="bg-blue-600 hover:bg-blue-700">
+                          <Mic className="h-4 w-4 mr-2" /> Start Recording
+                        </Button>
+                      </SubscriptionGuard>
+                      <SubscriptionGuard
+                        feature="Class Recordings"
+                        limitFeature="maxRecordings"
+                        currentCount={recordings?.length || 0}
+                      >
+                        <Button variant="outline" onClick={() => setActiveTab('upload')}>
+                          <Upload className="h-4 w-4 mr-2" /> Upload
+                        </Button>
+                      </SubscriptionGuard>
                     </div>
                   </CardContent>
                 </Card>
@@ -527,8 +553,14 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             <TabsContent value="record" className="mt-4">
               <Card className="bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800">
                 <CardContent className="p-6">
-                  <VoiceRecorder onRecordingComplete={handleRecordingComplete} />
-                </CardContent>
+                  <SubscriptionGuard
+                    feature="Class Recordings"
+                    limitFeature="maxRecordings"
+                    currentCount={recordings?.length || 0}
+                    message="You've reached your recording limit. Upgrade to record more classes."
+                  >
+                    <VoiceRecorder onRecordingComplete={handleRecordingComplete} />
+                  </SubscriptionGuard>                </CardContent>
               </Card>
             </TabsContent>
 
@@ -536,8 +568,14 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
             <TabsContent value="upload" className="mt-4">
               <Card className="bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800">
                 <CardContent className="p-6">
-                  <AudioUploadSection onAddRecording={onAddRecording} onUpdateRecording={onUpdateRecording} />
-                </CardContent>
+                  <SubscriptionGuard
+                    feature="Class Recordings"
+                    limitFeature="maxRecordings"
+                    currentCount={recordings?.length || 0}
+                    message="You've reached your recording limit. Upgrade to upload more audio files."
+                  >
+                    <AudioUploadSection onAddRecording={onAddRecording} onUpdateRecording={onUpdateRecording} />
+                  </SubscriptionGuard>                </CardContent>
               </Card>
             </TabsContent>
           </Tabs>

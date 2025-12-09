@@ -1,3 +1,4 @@
+// hooks/useSubscription.ts
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,10 +10,16 @@ export interface SubscriptionLimits {
   maxAiMessages: number;
   maxNotes: number;
   maxDocUploads: number;
+  maxDocuments: number; // Added alias
   maxDocSize: number; // in MB
   canPostSocials: boolean;
   hasExamMode: boolean;
   hasVerifiedBadge: boolean;
+  maxChatSessions: number;
+  maxRecordings: number; // Added
+  maxFolders: number; // Added
+  maxScheduleItems: number; // Added
+  maxDailyQuizzes: number; // Added
 }
 
 export interface Subscription {
@@ -29,28 +36,46 @@ const PLAN_LIMITS: Record<PlanType, SubscriptionLimits> = {
     maxAiMessages: 5,
     maxNotes: 3,
     maxDocUploads: 5,
+    maxDocuments: 5,
     maxDocSize: 5,
     canPostSocials: false,
     hasExamMode: false,
     hasVerifiedBadge: false,
+    maxChatSessions: 5,
+    maxRecordings: 3,
+    maxFolders: 3,
+    maxScheduleItems: 10,
+    maxDailyQuizzes: 1,
   },
   scholar: {
     maxAiMessages: 50,
     maxNotes: Infinity,
     maxDocUploads: 20,
+    maxDocuments: 20,
     maxDocSize: 25,
     canPostSocials: true,
     hasExamMode: false,
     hasVerifiedBadge: false,
+    maxChatSessions: 20,
+    maxRecordings: 20,
+    maxFolders: 10,
+    maxScheduleItems: 50,
+    maxDailyQuizzes: 10,
   },
   genius: {
     maxAiMessages: Infinity,
     maxNotes: Infinity,
     maxDocUploads: Infinity,
+    maxDocuments: Infinity,
     maxDocSize: 100,
     canPostSocials: true,
     hasExamMode: true,
     hasVerifiedBadge: true,
+    maxChatSessions: Infinity,
+    maxRecordings: Infinity,
+    maxFolders: Infinity,
+    maxScheduleItems: Infinity,
+    maxDailyQuizzes: 100,
   },
 };
 
@@ -129,7 +154,7 @@ export function useSubscription(): UseSubscriptionReturn {
     : false;
 
   // Determine effective tier
-  const tier: PlanType = 
+  const tier: PlanType =
     !subscription || subscription.status !== 'active' || isExpired
       ? 'free'
       : subscription.planType;
@@ -139,9 +164,9 @@ export function useSubscription(): UseSubscriptionReturn {
   // Calculate days remaining
   const daysRemaining = subscription?.currentPeriodEnd
     ? Math.max(0, Math.ceil(
-        (new Date(subscription.currentPeriodEnd).getTime() - Date.now()) / 
-        (1000 * 60 * 60 * 24)
-      ))
+      (new Date(subscription.currentPeriodEnd).getTime() - Date.now()) /
+      (1000 * 60 * 60 * 24)
+    ))
     : 0;
 
   const checkAccess = useCallback((feature: keyof SubscriptionLimits): boolean => {

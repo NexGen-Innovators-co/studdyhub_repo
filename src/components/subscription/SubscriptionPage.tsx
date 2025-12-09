@@ -1,10 +1,11 @@
+// pages/SubscriptionPage.tsx
 import { useState } from 'react';
-import { Gift, Crown, Sparkles, ArrowLeft } from 'lucide-react';
+import { Gift, Crown, Sparkles, ArrowLeft, Zap, BookOpen, FileText, Users, Shield, Target, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PricingCards } from './PricingCards';
-import { ReferralModal } from './ReferralModal';
+import { PricingCards } from '@/components/subscription/PricingCards';
+import { ReferralModal } from '@/components/subscription/ReferralModal';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,30 +15,89 @@ export function SubscriptionPage() {
   const [showReferralModal, setShowReferralModal] = useState(false);
 
   const tierConfig = {
-    free: { label: 'Free', icon: null, color: 'bg-muted' },
-    scholar: { label: 'Scholar', icon: Sparkles, color: 'bg-blue-500' },
-    genius: { label: 'Genius', icon: Crown, color: 'bg-amber-500' },
+    free: {
+      label: 'Visitor',
+      icon: null,
+      color: 'bg-gradient-to-r from-gray-400 to-gray-500',
+      textColor: 'text-gray-700 dark:text-gray-300'
+    },
+    scholar: {
+      label: 'Scholar',
+      icon: Sparkles,
+      color: 'bg-gradient-to-r from-blue-500 to-blue-600',
+      textColor: 'text-blue-600 dark:text-blue-400'
+    },
+    genius: {
+      label: 'Genius',
+      icon: Crown,
+      color: 'bg-gradient-to-r from-blue-700 to-blue-800',
+      textColor: 'text-blue-700 dark:text-blue-300'
+    },
   };
 
   const currentTier = tierConfig[tier];
   const TierIcon = currentTier.icon;
 
+  const featureCards = [
+    {
+      icon: <Zap className="h-6 w-6 text-blue-500" />,
+      title: "AI-Powered Learning",
+      description: "Smart assistance for studying and content creation"
+    },
+    {
+      icon: <BookOpen className="h-6 w-6 text-blue-500" />,
+      title: "Unlimited Notes",
+      description: "Create, organize, and review your study materials"
+    },
+    {
+      icon: <FileText className="h-6 w-6 text-blue-500" />,
+      title: "Document Processing",
+      description: "Upload and extract content from any document"
+    },
+    {
+      icon: <Users className="h-6 w-6 text-blue-500" />,
+      title: "Social Learning",
+      description: "Connect, share, and learn with others"
+    },
+    {
+      icon: <Shield className="h-6 w-6 text-blue-500" />,
+      title: "Exam Mode",
+      description: "Focus mode for serious study sessions"
+    },
+    {
+      icon: <Target className="h-6 w-6 text-blue-500" />,
+      title: "Verified Badge",
+      description: "Stand out as a serious learner"
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50/30 to-white dark:from-gray-900 dark:to-gray-950">
       {/* Header */}
-      <div className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+      <div className="border-b border-blue-100 dark:border-blue-900/30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container max-w-6xl mx-auto px-4 py-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(-1)}
+                className="rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/30"
+              >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              <h1 className="text-xl font-semibold">Subscription</h1>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
+                  Upgrade Your Learning
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Unlock premium features for smarter studying
+                </p>
+              </div>
             </div>
-            <Button 
-              variant="outline" 
+            <Button
               onClick={() => setShowReferralModal(true)}
-              className="gap-2"
+              className="gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg"
             >
               <Gift className="h-4 w-4" />
               Get Free Premium
@@ -46,122 +106,196 @@ export function SubscriptionPage() {
         </div>
       </div>
 
-      <div className="container max-w-6xl mx-auto px-4 py-8 space-y-8">
+      <div className="container max-w-6xl mx-auto px-4 py-8 space-y-12">
+        {/* Hero Section */}
+        <div className="text-center max-w-3xl mx-auto">
+          <Badge className="mb-4 bg-gradient-to-r from-blue-500 to-blue-400 text-white border-0 px-4 py-1">
+            ✨ Premium Features
+          </Badge>
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+            Learn <span className="bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">Smarter</span>,
+            Not <span className="text-gray-400">Harder</span>
+          </h2>
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            Join thousands of students who are studying smarter with AI-powered tools,
+            unlimited resources, and a supportive learning community.
+          </p>
+        </div>
+
         {/* Current Plan Summary */}
-        <Card className="bg-gradient-to-br from-primary/10 via-background to-background border-primary/20">
+        <Card className="bg-gradient-to-br from-blue-500/5 via-white to-blue-500/5 dark:from-blue-900/20 dark:via-gray-900 dark:to-blue-900/20 border-blue-200 dark:border-blue-800 shadow-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full ${currentTier.color} flex items-center justify-center`}>
-                {TierIcon ? <TierIcon className="h-5 w-5 text-white" /> : null}
+              <div className={`w-12 h-12 rounded-full ${currentTier.color} flex items-center justify-center shadow-lg`}>
+                {TierIcon ? <TierIcon className="h-6 w-6 text-white" /> : <Brain className="h-6 w-6 text-white" />}
               </div>
               <div>
-                <span className="text-lg">Current Plan: </span>
-                <Badge variant="secondary" className="ml-2 text-base">
-                  {currentTier.label}
-                </Badge>
+                <span className="text-xl text-gray-600 dark:text-gray-300">Current Plan</span>
+                <div className="flex items-center gap-3 mt-1">
+                  <Badge className={`text-lg px-4 py-1.5 ${currentTier.textColor} bg-white dark:bg-gray-800 border ${currentTier.textColor.replace('text-', 'border-')}/30`}>
+                    {currentTier.label}
+                  </Badge>
+                  {tier !== 'free' && daysRemaining > 0 && (
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      Renews in {daysRemaining} days
+                    </span>
+                  )}
+                </div>
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-background/50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-primary">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="bg-white/50 dark:bg-gray-800/50 rounded-xl p-4 text-center border border-blue-100 dark:border-blue-900/30">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-r from-blue-500 to-blue-400 flex items-center justify-center">
+                  <Zap className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
                   {limits.maxAiMessages === Infinity ? '∞' : limits.maxAiMessages}
                 </p>
-                <p className="text-xs text-muted-foreground">AI Messages/Day</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">AI Messages/Day</p>
               </div>
-              <div className="bg-background/50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-primary">
+              <div className="bg-white/50 dark:bg-gray-800/50 rounded-xl p-4 text-center border border-blue-100 dark:border-blue-900/30">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-r from-blue-500 to-blue-400 flex items-center justify-center">
+                  <BookOpen className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
                   {limits.maxNotes === Infinity ? '∞' : limits.maxNotes}
                 </p>
-                <p className="text-xs text-muted-foreground">Notes Limit</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Notes Limit</p>
               </div>
-              <div className="bg-background/50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-primary">
+              <div className="bg-white/50 dark:bg-gray-800/50 rounded-xl p-4 text-center border border-blue-100 dark:border-blue-900/30">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-r from-blue-500 to-blue-400 flex items-center justify-center">
+                  <Gift className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
                   {bonusAiCredits}
                 </p>
-                <p className="text-xs text-muted-foreground">Bonus AI Credits</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Bonus AI Credits</p>
               </div>
-              <div className="bg-background/50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-primary">
+              <div className="bg-white/50 dark:bg-gray-800/50 rounded-xl p-4 text-center border border-blue-100 dark:border-blue-900/30">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-r from-blue-500 to-blue-400 flex items-center justify-center">
+                  <Target className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
                   {tier === 'free' ? '—' : daysRemaining}
                 </p>
-                <p className="text-xs text-muted-foreground">Days Remaining</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Days Remaining</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Pricing Section */}
+        {/* Features Grid */}
         <div className="space-y-6">
           <div className="text-center">
-            <h2 className="text-2xl font-bold">Choose Your Plan</h2>
-            <p className="text-muted-foreground mt-2">
-              Unlock more features and study smarter
+            <h2 className="text-3xl font-bold mb-2">Everything You Need to Succeed</h2>
+            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+              Premium features designed to enhance your learning experience
             </p>
           </div>
-          
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {featureCards.map((feature, index) => (
+              <Card
+                key={index}
+                className="border-blue-100 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-300 hover:shadow-lg"
+              >
+                <CardContent className="p-6">
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mb-4">
+                    {feature.icon}
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">{feature.title}</h3>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">
+                    {feature.description}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Pricing Section */}
+        <div className="space-y-8">
+          <div className="text-center">
+            <Badge className="mb-4 bg-gradient-to-r from-blue-500 to-blue-400 text-white border-0 px-4 py-1">
+              💎 Simple Pricing
+            </Badge>
+            <h2 className="text-3xl font-bold mb-3">Choose Your Perfect Plan</h2>
+            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+              Start free, upgrade anytime. Cancel anytime. No hidden fees.
+            </p>
+          </div>
+
           <PricingCards />
         </div>
 
-        {/* Features Comparison */}
-        <Card>
-          <CardHeader>
-            <CardTitle>What's included in each plan?</CardTitle>
+        {/* FAQ Section */}
+        <Card className="border-blue-100 dark:border-blue-900/30">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Frequently Asked Questions</CardTitle>
+            <CardDescription>Get answers to common questions about subscriptions</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4">Feature</th>
-                    <th className="text-center py-3 px-4">Visitor</th>
-                    <th className="text-center py-3 px-4 bg-primary/5">Scholar</th>
-                    <th className="text-center py-3 px-4">Genius</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b">
-                    <td className="py-3 px-4">AI Messages</td>
-                    <td className="text-center py-3 px-4">5/day</td>
-                    <td className="text-center py-3 px-4 bg-primary/5">50/day</td>
-                    <td className="text-center py-3 px-4">Unlimited</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="py-3 px-4">Notes</td>
-                    <td className="text-center py-3 px-4">3 max</td>
-                    <td className="text-center py-3 px-4 bg-primary/5">Unlimited</td>
-                    <td className="text-center py-3 px-4">Unlimited</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="py-3 px-4">Document Uploads</td>
-                    <td className="text-center py-3 px-4">5 (5MB)</td>
-                    <td className="text-center py-3 px-4 bg-primary/5">20 (25MB)</td>
-                    <td className="text-center py-3 px-4">Unlimited (100MB)</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="py-3 px-4">Social Posting</td>
-                    <td className="text-center py-3 px-4">Read-only</td>
-                    <td className="text-center py-3 px-4 bg-primary/5">✓</td>
-                    <td className="text-center py-3 px-4">✓</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="py-3 px-4">Exam Mode</td>
-                    <td className="text-center py-3 px-4">—</td>
-                    <td className="text-center py-3 px-4 bg-primary/5">—</td>
-                    <td className="text-center py-3 px-4">✓</td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-4">Verified Badge</td>
-                    <td className="text-center py-3 px-4">—</td>
-                    <td className="text-center py-3 px-4 bg-primary/5">—</td>
-                    <td className="text-center py-3 px-4">✓</td>
-                  </tr>
-                </tbody>
-              </table>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <div className="border-b border-blue-100 dark:border-blue-900/30 pb-4">
+                <h4 className="font-semibold mb-2">Can I switch plans anytime?</h4>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                  Yes! You can upgrade or downgrade your plan at any time. Changes take effect immediately.
+                </p>
+              </div>
+              <div className="border-b border-blue-100 dark:border-blue-900/30 pb-4">
+                <h4 className="font-semibold mb-2">What payment methods do you accept?</h4>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                  We accept all major credit/debit cards, mobile money (MTN, Vodafone), and bank transfers via Paystack.
+                </p>
+              </div>
+              <div className="border-b border-blue-100 dark:border-blue-900/30 pb-4">
+                <h4 className="font-semibold mb-2">Is there a free trial for premium features?</h4>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                  All plans start with a free Visitor tier. You can try Scholar or Genius features risk-free for 7 days.
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">How do referrals work?</h4>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                  Invite friends to StuddyHub and earn free premium days. Both you and your friend get rewards!
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* CTA Section */}
+        <div className="text-center py-12">
+          <div className="bg-gradient-to-r from-blue-600/10 to-blue-500/10 dark:from-blue-900/30 dark:to-blue-800/30 rounded-2xl p-8 border border-blue-200 dark:border-blue-800">
+            <h3 className="text-2xl font-bold mb-3">Ready to Transform Your Learning?</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-2xl mx-auto">
+              Join thousands of successful students who are already studying smarter with StuddyHub Premium.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button
+                size="lg"
+                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-xl"
+                onClick={() => {
+                  const element = document.getElementById('pricing-cards');
+                  element?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                Choose Your Plan
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-blue-300 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                onClick={() => setShowReferralModal(true)}
+              >
+                <Gift className="h-4 w-4 mr-2" />
+                Earn Free Premium
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <ReferralModal open={showReferralModal} onOpenChange={setShowReferralModal} />
