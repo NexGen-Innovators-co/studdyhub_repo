@@ -27,6 +27,7 @@ import { AppProvider } from "./contexts/AppContext";
 import { AdminLayout } from "./components/admin/AdminLayout";
 import { HelmetProvider } from "react-helmet-async";
 import DynamicHead from "./components/seo/DynamicHead";
+import { SubscriptionPage } from "./components/subscription";
 
 // Lazy load admin components
 const AdminDashboard = lazy(() => import("./components/admin/adminDashboard"));
@@ -85,7 +86,8 @@ const AppWithSEO = () => {
           <Route path="/documents" element={<Index />} />
           <Route path="/settings" element={<Index />} />
           <Route path="/quizzes" element={<Index />} />
-
+          <Route path="/subscription" element={<SubscriptionPage />} />
+          <Route path="/pricing" element={<SubscriptionPage />} />
           {/* ==== SOCIAL ROUTES - Protected ==== */}
           <Route path="/social" element={<Index />} />
           <Route path="/social/:tab" element={<Index />} />
