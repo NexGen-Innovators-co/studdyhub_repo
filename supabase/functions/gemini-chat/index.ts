@@ -1710,9 +1710,9 @@ serve(async (req) => {
             })
             .eq('id', sessionId)
             .eq('user_id', userId)
-            .then(() => //console.log(`Title generated: ${title}`))
-            .catch((err) => //console.error('Error updating title:', err));
-        }).catch((err) => //console.error('Error generating title:', err));
+            .then(() => { /* Title generated */ })
+            .catch(() => { /* Error updating title */ });
+        }).catch(() => { /* Error generating title */ });
 
         const words = message.split(' ');
               aiGeneratedTitle = words.slice(0, 5).join(' ') + (message.split(' ').length > 5 ? '...' : '');
