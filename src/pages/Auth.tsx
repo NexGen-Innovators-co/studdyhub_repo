@@ -362,13 +362,18 @@ const Auth = () => {
         return;
       }
 
-      const { error } = await supabase.auth.signUp({
+      // Check for referral code in URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const referralCode = urlParams.get('ref');
+
+      const { data, error } = await supabase.auth.signUp({
         email: email.toLowerCase().trim(),
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
             full_name: fullName.trim(),
+            referral_code_used: referralCode || null,
           }
         }
       });
@@ -382,6 +387,20 @@ const Auth = () => {
           toast.error(error.message);
         }
       } else {
+        // Process referral if code was provided and signup successful
+        if (referralCode && data.user) {
+          try {
+            const { error: refError } = await supabase.rpc('process_referral_reward', {
+              p_referee_id: data.user.id,
+              p_referral_code: referralCode.toUpperCase()
+            });
+            if (!refError) {
+              toast.success('Referral bonus applied! You received 10 extra AI credits.');
+            }
+          } catch (refErr) {
+            console.log('Referral processing will complete after email verification');
+          }
+        }
         toast.success('Account created! Please check your email for a confirmation link.');
         setPendingVerificationEmail(email.toLowerCase().trim());
         setShowResendVerification(true);
