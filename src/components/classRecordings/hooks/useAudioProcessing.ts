@@ -211,6 +211,33 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
       return;
     }
 
+    // CHECK SUBSCRIPTION LIMITS BEFORE ATTEMPTING UPLOAD
+    const { data: subscriptionData } = await supabase
+      .from('subscriptions')
+      .select('subscription_tier')
+      .eq('user_id', user.id)
+      .single();
+    
+    const tier = subscriptionData?.subscription_tier || 'free';
+    const maxRecordings = tier === 'free' ? 50 : tier === 'scholar' ? 500 : Infinity;
+    
+    // Count existing recordings
+    const { count: recordingCount } = await supabase
+      .from('class_recordings')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+    
+    if (recordingCount && recordingCount >= maxRecordings) {
+      toast.error(`Recording limit reached (${maxRecordings}). You have created ${recordingCount} recordings.`, {
+        action: {
+          label: 'Upgrade',
+          onClick: () => window.location.href = '/subscription'
+        },
+        duration: 5000
+      });
+      return;
+    }
+
     const allowedAudioTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm'];
     if (!allowedAudioTypes.includes(file.type)) {
       toast.error('Unsupported audio file type. Please upload an MP3, WAV, M4A, or WebM file.');
@@ -258,6 +285,16 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
 
       if (docError) throw new Error(docError?.message || 'Failed to create document record for audio.');
 
+      // Calculate duration for uploaded audio
+      const audioUrl = URL.createObjectURL(file);
+      const audio = new Audio(audioUrl);
+      const durationPromise = new Promise<number>((resolve) => {
+        audio.onloadedmetadata = () => resolve(audio.duration);
+        audio.onerror = () => resolve(0);
+      });
+      const uploadedDuration = await durationPromise;
+      URL.revokeObjectURL(audioUrl);
+
       const newRecording: ClassRecording = {
         id: generateId(),
         title: `Uploaded Audio: ${file.name}`,
@@ -265,7 +302,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         audioUrl: urlData.publicUrl,
         transcript: '',
         summary: '',
-        duration: 0,
+        duration: Math.floor(uploadedDuration),
         date: new Date().toISOString(),
         created_at: new Date().toISOString(),
         userId: user.id,

@@ -50,6 +50,9 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
   const [earnedAchievements, setEarnedAchievements] = useState<Achievement[]>([]);
   const [isLoadingBadges, setIsLoadingBadges] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { userStats, isLoadingStats, recordQuizAttempt, fetchUserStats } = useQuizTracking(userId);
 
@@ -125,6 +128,22 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
     const recording = recordings.find(r => r.id === quiz.classId);
     setQuizMode({ recording: recording!, quiz });
   };
+
+  // Filter recordings based on search
+  const filteredRecordings = recordings.filter(recording =>
+    recording.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    recording.subject?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Filter quizzes based on search
+  const filteredQuizzes = quizzes.filter(quiz => {
+    const recording = recordings.find(r => r.id === quiz.classId);
+    return (
+      recording?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      recording?.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      quiz.difficulty?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
 
   // Quick Stats Summary
   const QuickStats = () => (
@@ -258,6 +277,44 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
           gradient="from-blue-600 to-indigo-600"
         />
 
+        {/* Search Bar */}
+        {(activeTab === 'recordings' || activeTab === 'history') && (
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1 max-w-md">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={activeTab === 'recordings' ? 'Search recordings...' : 'Search quiz history...'}
+                className="w-full px-4 py-2 pl-10 border rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <svg
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchQuery('')}
+                className="px-3"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        )}
+
         <TabsContent value="overview" className="space-y-6">
           <QuickStats />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -341,30 +398,34 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
 
           <Card>
             <CardHeader>
-              <CardTitle>Available Recordings ({recordings.length})</CardTitle>
+              <CardTitle>Available Recordings ({filteredRecordings.length})</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {recordings.map((recording) => (
-                  <div
-                    key={recording.id}
-                    className="flex items-center justify-between p-3  rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                    onClick={() => setSelectedRecording(recording.id)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Play className="h-4 w-4 text-blue-500" />
-                      <div>
-                        <p className="font-medium">{recording.title}</p>
-                        <p className="text-sm text-gray-500">
-                          {Math.round(recording.duration / 60)} min • {recording.subject}
-                        </p>
+                {filteredRecordings.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">No recordings found</p>
+                ) : (
+                  filteredRecordings.map((recording) => (
+                    <div
+                      key={recording.id}
+                      className="flex items-center justify-between p-3  rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+                      onClick={() => setSelectedRecording(recording.id)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Play className="h-4 w-4 text-blue-500" />
+                        <div>
+                          <p className="font-medium">{recording.title}</p>
+                          <p className="text-sm text-gray-500">
+                            {Math.round(recording.duration / 60)} min • {recording.subject}
+                          </p>
+                        </div>
                       </div>
+                      {selectedRecording === recording.id && (
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      )}
                     </div>
-                    {selectedRecording === recording.id && (
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    )}
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -396,7 +457,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <QuizHistory quizzes={quizzes} onSelectQuiz={handleSelectQuiz} />
+              <QuizHistory quizzes={filteredQuizzes} onSelectQuiz={handleSelectQuiz} />
             </CardContent>
           </Card>
         </TabsContent>

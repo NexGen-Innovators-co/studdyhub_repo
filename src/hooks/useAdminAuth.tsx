@@ -2,6 +2,7 @@ import { useEffect, useState, createContext, useContext, ReactNode } from 'react
 import { useAuth } from './useAuth';
 import { supabase } from '../integrations/supabase/client';
 import { AdminUser, AdminPermissions } from '../integrations/supabase/admin';
+import { toast } from 'sonner';
 
 interface AdminAuthContextType {
   adminUser: AdminUser | null;
@@ -69,14 +70,14 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
         .from('admin_users')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         if (error.code !== 'PGRST116') {
           //console.error('Error fetching admin status:', error);
         }
         setAdminUser(null);
-      } else {
+      } else if (data) {
         // Cast permissions to Record<string, boolean>
         const rawPerms = data.permissions as Record<string, boolean> | null;
         const admin: AdminUser = {
@@ -86,11 +87,22 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
 
         setAdminUser(admin);
 
+        // Show welcome toast for admin
+        const roleLabel = data.role === 'super_admin' ? 'Super Admin' : 
+                         data.role === 'admin' ? 'Admin' : 'Moderator';
+        toast.success(`Welcome back, ${roleLabel}! 🛡️`, {
+          description: 'You have full access to all features.',
+          duration: 4000,
+        });
+
         // Update last login
         await supabase
           .from('admin_users')
           .update({ last_login: new Date().toISOString() })
           .eq('id', data.id);
+      } else {
+        // User is not an admin
+        setAdminUser(null);
       }
     } catch (error) {
       //console.error('Error checking admin status:', error);

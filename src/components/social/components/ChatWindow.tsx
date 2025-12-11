@@ -293,6 +293,39 @@ const SharedDocumentPreview: React.FC<{ documentId: string; currentUserId: strin
         return;
       }
 
+      // Check document limit before inserting
+      const { count } = await supabase
+        .from('documents')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', currentUserId);
+
+      // Check if user is admin (admins have unlimited access)
+      const { data: adminUser } = await supabase
+        .from('admin_users')
+        .select('id, is_active')
+        .eq('user_id', currentUserId)
+        .eq('is_active', true)
+        .single();
+
+      const isAdmin = !!adminUser;
+
+      // Only check limits for non-admin users
+      if (!isAdmin) {
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('subscription_tier, maxDocUploads')
+          .eq('user_id', currentUserId)
+          .single();
+
+        const maxDocs = subscription?.maxDocUploads || 50;
+        const currentCount = count || 0;
+
+        if (subscription?.subscription_tier === 'free' && currentCount >= maxDocs) {
+          toast.error(`Document limit reached (${maxDocs}). Upgrade to add more documents.`);
+          return;
+        }
+      }
+
       const { error } = await supabase.from('documents').insert({
         user_id: currentUserId,
         title: doc.title ||
@@ -554,6 +587,39 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const handleAddSharedNote = async () => {
     if (!noteToAdd || !currentUserId) return;
     try {
+      // Check notes limit before inserting
+      const { count } = await supabase
+        .from('notes')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', currentUserId);
+
+      // Check if user is admin (admins have unlimited access)
+      const { data: adminUser } = await supabase
+        .from('admin_users')
+        .select('id, is_active')
+        .eq('user_id', currentUserId)
+        .eq('is_active', true)
+        .single();
+
+      const isAdmin = !!adminUser;
+
+      // Only check limits for non-admin users
+      if (!isAdmin) {
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('subscription_tier, maxNotes')
+          .eq('user_id', currentUserId)
+          .single();
+
+        const maxNotes = subscription?.maxNotes || 50;
+        const currentCount = count || 0;
+
+        if (subscription?.subscription_tier === 'free' && currentCount >= maxNotes) {
+          toast.error(`Note limit reached (${maxNotes}). Upgrade to add more notes.`);
+          return;
+        }
+      }
+
       const { error } = await supabase.from('notes').insert({
         user_id: currentUserId,
         title: newNoteTitle || noteToAdd.title,

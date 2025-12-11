@@ -3,7 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { Users, UserPlus, Loader2, RefreshCw } from 'lucide-react';
+import { Alert, AlertDescription } from '../../ui/alert';
+import { Users, UserPlus, Loader2, RefreshCw, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
 import { SocialUserWithDetails } from '../../../integrations/supabase/socialTypes';
 import { toast } from 'sonner';
 
@@ -24,6 +27,9 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
   onLoadMore,
   onRefresh,
 }) => {
+  const navigate = useNavigate();
+  const { canAccessSocial } = useFeatureAccess();
+  const canUseSocial = canAccessSocial();
   const [followingUsers, setFollowingUsers] = useState<Set<string>>(new Set());
   const observerRef = useRef<HTMLDivElement>(null);
   const [hasTriggeredInitialLoad, setHasTriggeredInitialLoad] = useState(false);
@@ -60,6 +66,17 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
   }, [users.length, isLoading, onLoadMore, hasTriggeredInitialLoad]);
 
   const handleFollowUser = async (userId: string, displayName: string) => {
+    // Check subscription before attempting to follow
+    if (!canUseSocial) {
+      toast.error('Following users requires Scholar plan', {
+        action: {
+          label: 'Upgrade',
+          onClick: () => navigate('/subscription')
+        }
+      });
+      return;
+    }
+
     setFollowingUsers(prev => new Set(prev).add(userId));
 
     try {
@@ -232,11 +249,17 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
               <Button
                 size="sm"
                 onClick={() => handleFollowUser(user.id, user.display_name)}
-                disabled={isFollowing}
+                disabled={isFollowing || !canUseSocial}
+                title={!canUseSocial ? 'Following requires Scholar plan' : ''}
                 className="ml-3 flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-300 dark:disabled:bg-gray-600 transition-all duration-200"
               >
                 {isFollowing ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
+                ) : !canUseSocial ? (
+                  <>
+                    <Lock className="h-3 w-3 mr-1" />
+                    Follow
+                  </>
                 ) : (
                   <>
                     <UserPlus className="h-3 w-3 mr-1" />

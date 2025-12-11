@@ -9,8 +9,12 @@ import {
   Smile,
   StickyNote,
   X,
+  Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
+import { useNavigate } from 'react-router-dom';
+import { Alert, AlertDescription } from '../../ui/alert';
 
 interface MessageInputProps {
   onSendMessage: (content: string, files?: File[]) => Promise<boolean>;
@@ -26,8 +30,22 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [message, setMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { canChat } = useFeatureAccess();
+  const canChatAccess = canChat();
+  const navigate = useNavigate();
 
   const handleSend = async () => {
+    if (!canChatAccess) {
+      toast.error('Messaging requires Scholar plan or higher', {
+        action: {
+          label: 'Upgrade',
+          onClick: () => navigate('/subscription')
+        },
+        duration: 5000
+      });
+      return;
+    }
+
     if (!message.trim() && selectedFiles.length === 0) {
       return;
     }
@@ -65,6 +83,21 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   return (
     <div className="border-t border-slate-200 dark:border-slate-800 p-4">
+      {!canChatAccess && (
+        <Alert className="mb-3 bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
+          <Lock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+          <AlertDescription className="text-orange-800 dark:text-orange-200">
+            Messaging requires Scholar or Genius plan. 
+            <Button 
+              variant="link" 
+              className="text-orange-600 dark:text-orange-400 p-0 h-auto ml-1"
+              onClick={() => navigate('/subscription')}
+            >
+              Upgrade now
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       {/* File previews */}
       {selectedFiles.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
@@ -104,12 +137,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       <div className="flex items-end gap-2">
         <div className="flex-1 relative">
           <Textarea
-            placeholder="Type a message..."
+            placeholder={canChatAccess ? "Type a message..." : "Messaging is available with Scholar+ plan"}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            className="min-h-[44px] max-h-[120px] resize-none pr-12"
-            disabled={isSending}
+            className="min-h-[44px] max-h-[120px] resize-none pr-12 disabled:opacity-50"
+            disabled={!canChatAccess || isSending}
           />
           
           {/* Emoji button (placeholder) */}
@@ -117,7 +150,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             variant="ghost"
             size="icon"
             className="absolute right-2 bottom-2 h-8 w-8"
-            disabled={isSending}
+            disabled={!canChatAccess || isSending}
           >
             <Smile className="h-5 w-5 text-slate-400" />
           </Button>
@@ -132,13 +165,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             multiple
             accept="image/*,video/*,.pdf,.doc,.docx"
             onChange={handleFileSelect}
+            disabled={!canChatAccess}
             className="hidden"
           />
           <Button
             variant="ghost"
             size="icon"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isSending}
+            disabled={!canChatAccess || isSending}
             title="Attach file"
           >
             <Paperclip className="h-5 w-5" />
@@ -149,7 +183,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             variant="ghost"
             size="icon"
             onClick={onShareNote}
-            disabled={isSending}
+            disabled={!canChatAccess || isSending}
             title="Share note or document"
           >
             <StickyNote className="h-5 w-5" />
@@ -158,7 +192,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           {/* Send button */}
           <Button
             onClick={handleSend}
-            disabled={isSending || (!message.trim() && selectedFiles.length === 0)}
+            disabled={!canChatAccess || isSending || (!message.trim() && selectedFiles.length === 0)}
             className="rounded-full h-10 w-10 p-0"
           >
             <Send className="h-5 w-5" />

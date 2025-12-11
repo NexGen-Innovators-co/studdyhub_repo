@@ -93,14 +93,12 @@ Example: ACTION: CREATE_POST|Just aced my biology quiz!|public|null
 Example: ACTION: UPDATE_USER_MEMORY|interest|favorite_subject|biology|0.9
 
 **CRITICAL RULES:**
-1. NEVER ask users for confirmation yourself
-2. NEVER write "Would you like me to proceed?" or similar
-3. When user requests an action, include the ACTION: marker naturally
-4. When user asks a question, just answer (no ACTION: marker)
-5. The system will automatically extract ACTION: markers and execute them
-6. Focus on educational excellence and personalized responses
-7. Always include complete information for each action
-8. Use NOTE_TITLE and DOCUMENT_TITLE (not IDs) where possible
+1. When user requests an action, include the ACTION: marker naturally
+2. When user asks a question, just answer (no ACTION: marker)
+3. The system will automatically extract ACTION: markers and execute them
+4. Focus on educational excellence and personalized responses
+5. Always include complete information for each action
+6. Use NOTE_TITLE and DOCUMENT_TITLE (not IDs) where possible
 `;
 
         const coreIdentity = `
@@ -112,13 +110,11 @@ Example: ACTION: UPDATE_USER_MEMORY|interest|favorite_subject|biology|0.9
         - Let the SYSTEM handle execution (you don't ask for confirmation)
         
         **CRITICAL RULES:**
-        1. NEVER ask users for confirmation yourself
-        2. NEVER write "Would you like me to proceed?" or similar
-        3. When user requests an action, include the ACTION: marker naturally
-        4. When user asks a question, just answer (no ACTION: marker)
-        5. The system will automatically extract ACTION: markers and execute them
-        6. Focus on educational excellence and personalized responses
-        7. You have COMPLETE database access - use ALL action types
+        1. When user requests an action, include the ACTION: marker naturally
+        2. When user asks a question, just answer (no ACTION: marker)
+        3. The system will automatically extract ACTION: markers and execute them
+        4. Focus on educational excellence and personalized responses
+        5. You have COMPLETE database access - use ALL action types
         `;
 
         const smartContextUsage = `

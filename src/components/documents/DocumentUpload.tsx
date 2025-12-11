@@ -24,6 +24,8 @@ interface DocumentUploadProps {
   documents: Document[];
   onDocumentDeleted: (documentId: string) => void;
   onDocumentUpdated: (document: Document) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 /* -------------------------------------------------------------------------- */
 /* Lazy-loaded heavy components (code-splitted) */
@@ -100,28 +102,59 @@ const DocumentListSkeleton = () => (
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   documents,
   onDocumentDeleted,
-  onDocumentUpdated
+  onDocumentUpdated,
+  searchQuery: externalSearchQuery,
+  onSearchChange,
 }) => {
   const { user } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+  const [dragLocked, setDragLocked] = useState(false); // Lock drag when not allowed
   const [processingDocuments, setProcessingDocuments] = useState<Set<string>>(new Set());
 
   // Enhanced UI State
-  const [searchQuery, setSearchQuery] = useState('');
+  const [internalSearch, setInternalSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const effectiveSearch = externalSearchQuery ?? internalSearch;
+
+  const handleSearchChange = (value: string) => {
+    setInternalSearch(value);
+    onSearchChange?.(value);
+  };
+
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { loadMoreDocuments, dataPagination, folders, folderTree, appOperations, loadDataIfNeeded, dataLoading } = useAppContext();
+
+  const handleManualRefresh = useCallback(async () => {
+    if (isRefreshing || !user?.id) return;
+    
+    setIsRefreshing(true);
+    try {
+      // Refresh both documents and folders with optimized parallel fetching
+      await Promise.all([
+        loadDataIfNeeded('documents', true), // Force refresh
+        loadDataIfNeeded('folders', true)
+      ]);
+      toast.success('Documents refreshed successfully!');
+    } catch (error: any) {
+      console.error('Error refreshing documents:', error);
+      toast.error(`Failed to refresh: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, user, loadDataIfNeeded]);
 
   // Folder state
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -407,8 +440,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   // Filter and sort documents
   const filteredAndSortedDocuments = useMemo(() => {
     let filtered = documents.filter(doc => {
-      const matchesSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        doc.content_extracted?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = doc.title.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
+        doc.content_extracted?.toLowerCase().includes(effectiveSearch.toLowerCase());
 
       const matchesCategory = selectedCategory === 'all' || getFileCategory(doc.file_type) === selectedCategory;
 
@@ -449,7 +482,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     });
 
     return filtered;
-  }, [documents, searchQuery, selectedCategory, selectedStatus, sortBy, sortOrder]);
+  }, [documents, effectiveSearch, selectedCategory, selectedStatus, sortBy, sortOrder]);
 
   const handleFileSelection = useCallback((file: File) => {
     const MAX_FILE_SIZE_MB = 200;
@@ -483,10 +516,16 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Check if user can upload documents
+    const canUpload = !isDocumentLimitReached && !isUploading;
+
     if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
+      setDragActive(canUpload);
+      setDragLocked(!canUpload); // Lock if cannot upload
     } else if (e.type === "dragleave") {
       setDragActive(false);
+      setDragLocked(false);
     }
   };
 
@@ -494,6 +533,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
+    setDragLocked(false);
+
+    // Check if user has permission to upload
+    if (isDocumentLimitReached) {
+      toast.error('Document upload limit reached. Upgrade your plan to upload more documents.');
+      return;
+    }
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelection(e.dataTransfer.files[0]);
@@ -929,6 +975,34 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
   }, [appOperations, selectedFolderId, user, loadDataIfNeeded]);
 
+  // Optimized initial data load with error handling
+  useEffect(() => {
+    let isMounted = true;
+    
+    const loadInitialData = async () => {
+      if (!user?.id || dataLoading) return;
+      
+      try {
+        // Load documents and folders in parallel for better performance
+        await Promise.allSettled([
+          loadDataIfNeeded('documents'),
+          loadDataIfNeeded('folders')
+        ]);
+      } catch (error) {
+        console.error('Error loading initial document data:', error);
+        // Don't show toast on initial load, user can manually refresh
+      }
+    };
+
+    if (isMounted) {
+      loadInitialData();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]); // Only run on mount and user change
+
   // Enhanced document synchronization and duplicate prevention
   useEffect(() => {
     // Log for debugging
@@ -1067,17 +1141,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             <Card className="overflow-hidden border-0 shadow-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
               <CardContent className="p-0">
                 <div
-                  className={`relative border-2 border-dashed rounded-lg transition-all duration-500 ${dragActive
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 scale-[1.02] shadow-lg'
-                    : selectedFile
-                      ? 'border-green-400 bg-green-50 dark:bg-green-500/10 shadow-lg'
-                      : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                    } cursor-pointer p-8 md:p-12 ${isUploading ? 'pointer-events-none opacity-75' : ''}`}
+                  className={`relative border-2 border-dashed rounded-lg transition-all duration-500 ${
+                    dragLocked
+                      ? 'border-red-400 bg-red-50 dark:bg-red-500/10 scale-[1.02] shadow-lg cursor-not-allowed opacity-60'
+                      : dragActive
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 scale-[1.02] shadow-lg'
+                        : selectedFile
+                          ? 'border-green-400 bg-green-50 dark:bg-green-500/10 shadow-lg'
+                          : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                    } cursor-pointer p-8 md:p-12 ${isUploading || dragLocked ? 'pointer-events-none opacity-75' : ''}`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  onClick={() => !isUploading && fileInputRef.current?.click()}
+                  onClick={() => !isUploading && !dragLocked && fileInputRef.current?.click()}
                 >
                   <input
                     type="file"
@@ -1089,12 +1166,26 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   />
 
                   <div className="text-center">
-                    <div className={`inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full ${selectedFile
-                      ? 'bg-green-100 dark:bg-green-500/20 animate-pulse'
-                      : 'bg-blue-100 dark:bg-blue-500/20'
+                    {dragLocked && !selectedFile && (
+                      <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg flex items-center justify-center gap-3">
+                        <Lock className="h-6 w-6 text-red-600 dark:text-red-400" />
+                        <div className="text-left">
+                          <p className="font-semibold text-red-800 dark:text-red-300">Upload limit reached</p>
+                          <p className="text-sm text-red-700 dark:text-red-400">Upgrade to upload more documents</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className={`inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full ${
+                      dragLocked
+                        ? 'bg-red-100 dark:bg-red-500/20'
+                        : selectedFile
+                          ? 'bg-green-100 dark:bg-green-500/20 animate-pulse'
+                          : 'bg-blue-100 dark:bg-blue-500/20'
                       } mb-4 transition-all duration-300 ${isUploading ? 'animate-bounce' : ''}`}>
                       {isUploading ? (
                         <Loader2 className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400 animate-spin" />
+                      ) : dragLocked && !selectedFile ? (
+                        <Lock className="h-8 w-8 md:h-10 md:w-10 text-red-600 dark:text-red-400" />
                       ) : selectedFile ? (
                         React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
                           className: "h-8 w-8 md:h-10 md:w-10 text-green-600 dark:text-green-400"
@@ -1246,11 +1337,24 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                       <Input
                         type="text"
                         placeholder="Search files by name or content..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        value={effectiveSearch}
+                        onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-10 bg-white dark:bg-slate-700"
                       />
                     </div>
+
+                    {/* Refresh Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleManualRefresh}
+                      disabled={isRefreshing}
+                      className="gap-2"
+                      title="Refresh documents"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                    </Button>
 
                     {/* Filters */}
                     <div className="flex flex-wrap gap-2">
@@ -1326,7 +1430,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                     <div className="w-24 h-24 mx-auto mb-6 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
                       {selectedFolderId ? (
                         <Folder className="h-12 w-12 text-slate-400 dark:text-slate-500" />
-                      ) : searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all' ? (
+                      ) : effectiveSearch || selectedCategory !== 'all' || selectedStatus !== 'all' ? (
                         <Search className="h-12 w-12 text-slate-400 dark:text-slate-500" />
                       ) : (
                         <FileText className="h-12 w-12 text-slate-400 dark:text-slate-500" />
@@ -1335,14 +1439,14 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                     <h3 className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">
                       {selectedFolderId
                         ? 'No files in this folder'
-                        : searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all'
+                        : effectiveSearch || selectedCategory !== 'all' || selectedStatus !== 'all'
                           ? 'No files match your filters'
                           : 'No files uploaded yet'}
                     </h3>
                     <p className="text-slate-500 dark:text-slate-500 mb-4">
                       {selectedFolderId
                         ? 'Upload files or move existing files to this folder'
-                        : searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all'
+                        : effectiveSearch || selectedCategory !== 'all' || selectedStatus !== 'all'
                           ? 'Try adjusting your search terms or filters'
                           : 'Upload your first document or image to get started with AI analysis'}
                     </p>

@@ -49,21 +49,45 @@ export const useSocialComments = (
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: comment, error } = await supabase
-        .from('social_comments')
-        .insert({
-          post_id: postId,
-          author_id: user.id,
+      // Use edge function to add comment with validation
+      const { data: response, error: functionError } = await supabase.functions.invoke('comment-on-post', {
+        body: {
+          postId,
           content
-        })
-        .select(`*, author:social_users(*)`)
+        }
+      });
+
+      if (functionError) {
+        // Handle subscription limit errors
+        if (functionError.message) {
+          toast.error(functionError.message);
+        } else {
+          toast.error('Failed to add comment');
+        }
+        return;
+      }
+
+      if (!response?.success || !response?.comment) {
+        throw new Error('Failed to add comment');
+      }
+
+      const comment = response.comment;
+
+      // Fetch author data for the comment
+      const { data: authorData } = await supabase
+        .from('social_users')
+        .select('*')
+        .eq('id', user.id)
         .single();
 
-      if (error) throw error;
+      const commentWithAuthor = {
+        ...comment,
+        author: authorData
+      };
 
       setComments(prev => ({
         ...prev,
-        [postId]: [...(prev[postId] || []), comment]
+        [postId]: [...(prev[postId] || []), commentWithAuthor]
       }));
 
       setNewComment(prev => ({

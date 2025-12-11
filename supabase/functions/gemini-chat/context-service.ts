@@ -81,11 +81,11 @@ export class UserContextService {
                 flashcards: flashcardsResult.data || []
             };
         } catch (error) {
-            //console.error('[ContextService] Error getting actionable context:', error);
+            console.error('[ContextService] Error getting actionable context:', error);
             return this.getFallbackActionableContext();
         }
     }
-    async analyzeLearningPatterns(userId) {
+async analyzeLearningPatterns(userId) {
         const [quizPatterns, notePatterns, schedulePatterns, chatPatterns, recordingPatterns] = await Promise.all([
             this.supabase.from('quiz_attempts')
                 .select('score, percentage, created_at, time_taken_seconds, quizzes(subject, source_type)')
@@ -480,7 +480,7 @@ export class UserContextService {
 
             return crossSessionContext;
         } catch (error) {
-            //console.error('Error getting cross-session context:', error);
+            console.error('Error getting cross-session context:', error);
             return null;
         }
     }
@@ -522,7 +522,7 @@ export class UserContextService {
                 }
             }
         } catch (error) {
-            //console.error('Error updating user memory:', error);
+            console.error('Error updating user memory:', error);
         }
     }
 
@@ -538,7 +538,7 @@ export class UserContextService {
                     connection_strength: strength
                 });
         } catch (error) {
-            //console.error('Error recording topic connection:', error);
+            console.error('Error recording topic connection:', error);
         }
     }
 
@@ -634,169 +634,169 @@ export class UserContextService {
 
         return stats;
     }
-    // In context-service.ts, add this method to the UserContextService class:
+// In context-service.ts, add this method to the UserContextService class:
 
-    async getUserContext(userId: string): Promise<any> {
-        try {
-            // Get basic user profile and stats
-            const { data: profile } = await this.supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', userId)
-                .single();
+async getUserContext(userId: string): Promise<any> {
+    try {
+        // Get basic user profile and stats
+        const { data: profile } = await this.supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
 
-            const { data: stats } = await this.supabase
-                .from('user_stats')
+        const { data: stats } = await this.supabase
+            .from('user_stats')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        // Get other context data using existing methods
+        const [
+            allNotes,
+            allDocuments,
+            learningSchedule,
+            learningGoals,
+            userMemory,
+            achievements,
+            flashcards,
+            socialProfile,
+            recentRecordings,
+            documentFolders,
+            recentQuizzes
+        ] = await Promise.all([
+            // Notes
+            this.supabase.from('notes')
                 .select('*')
                 .eq('user_id', userId)
-                .maybeSingle();
+                .order('updated_at', { ascending: false })
+                .limit(50),
+            
+            // Documents
+            this.supabase.from('documents')
+                .select('*')
+                .eq('user_id', userId)
+                .order('updated_at', { ascending: false })
+                .limit(50),
+            
+            // Schedule items (next 7 days)
+            this.supabase.from('schedule_items')
+                .select('*')
+                .eq('user_id', userId)
+                .gte('start_time', new Date().toISOString())
+                .lte('start_time', new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
+                .order('start_time', { ascending: true })
+                .limit(20),
+            
+            // Learning goals
+            this.supabase.from('user_learning_goals')
+                .select('*')
+                .eq('user_id', userId)
+                .order('updated_at', { ascending: false })
+                .limit(20),
+            
+            // User memory
+            this.supabase.from('ai_user_memory')
+                .select('*')
+                .eq('user_id', userId)
+                .order('last_referenced', { ascending: false })
+                .limit(50),
+            
+            // Achievements
+            this.supabase.from('achievements')
+                .select('*, badges(*)')
+                .eq('user_id', userId)
+                .order('earned_at', { ascending: false })
+                .limit(20),
+            
+            // Flashcards
+            this.supabase.from('flashcards')
+                .select('*')
+                .eq('user_id', userId)
+                .order('next_review_at', { ascending: true })
+                .limit(30),
+            
+            // Social profile
+            this.supabase.from('social_users')
+                .select('*')
+                .eq('id', userId)
+                .maybeSingle(),
+            
+            // Recent recordings
+            this.supabase.from('class_recordings')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(10),
+            
+            // Document folders
+            this.supabase.from('document_folders')
+                .select('*')
+                .eq('user_id', userId)
+                .order('updated_at', { ascending: false }),
+            
+            // Recent quizzes
+            this.supabase.from('quiz_attempts')
+                .select('*, quizzes(*)')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(10)
+        ]);
 
-            // Get other context data using existing methods
-            const [
-                allNotes,
-                allDocuments,
-                learningSchedule,
-                learningGoals,
-                userMemory,
-                achievements,
-                flashcards,
-                socialProfile,
-                recentRecordings,
-                documentFolders,
-                recentQuizzes
-            ] = await Promise.all([
-                // Notes
-                this.supabase.from('notes')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .order('updated_at', { ascending: false })
-                    .limit(50),
+        // Analyze learning patterns
+        const learningPatterns = await this.analyzeLearningPatterns(userId);
+        const studyHabits = await this.analyzeStudyHabits(userId);
+        const topicMastery = await this.analyzeTopicMastery(userId);
 
-                // Documents
-                this.supabase.from('documents')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .order('updated_at', { ascending: false })
-                    .limit(50),
+        // Build title indexes for quick lookup
+        const noteTitleIndex = new Map();
+        const documentTitleIndex = new Map();
+        
+        allNotes.data?.forEach(note => {
+            noteTitleIndex.set(note.title.toLowerCase(), note);
+        });
+        
+        allDocuments.data?.forEach(doc => {
+            documentTitleIndex.set(doc.title.toLowerCase(), doc);
+        });
 
-                // Schedule items (next 7 days)
-                this.supabase.from('schedule_items')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .gte('start_time', new Date().toISOString())
-                    .lte('start_time', new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
-                    .order('start_time', { ascending: true })
-                    .limit(20),
+        // Calculate total counts
+        const totalCounts = {
+            notes: allNotes.data?.length || 0,
+            documents: allDocuments.data?.length || 0,
+            quizzes: recentQuizzes.data?.length || 0,
+            recordings: recentRecordings.data?.length || 0,
+            flashcards: flashcards.data?.length || 0,
+            folders: documentFolders.data?.length || 0
+        };
 
-                // Learning goals
-                this.supabase.from('user_learning_goals')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .order('updated_at', { ascending: false })
-                    .limit(20),
-
-                // User memory
-                this.supabase.from('ai_user_memory')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .order('last_referenced', { ascending: false })
-                    .limit(50),
-
-                // Achievements
-                this.supabase.from('achievements')
-                    .select('*, badges(*)')
-                    .eq('user_id', userId)
-                    .order('earned_at', { ascending: false })
-                    .limit(20),
-
-                // Flashcards
-                this.supabase.from('flashcards')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .order('next_review_at', { ascending: true })
-                    .limit(30),
-
-                // Social profile
-                this.supabase.from('social_users')
-                    .select('*')
-                    .eq('id', userId)
-                    .maybeSingle(),
-
-                // Recent recordings
-                this.supabase.from('class_recordings')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .order('created_at', { ascending: false })
-                    .limit(10),
-
-                // Document folders
-                this.supabase.from('document_folders')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .order('updated_at', { ascending: false }),
-
-                // Recent quizzes
-                this.supabase.from('quiz_attempts')
-                    .select('*, quizzes(*)')
-                    .eq('user_id', userId)
-                    .order('created_at', { ascending: false })
-                    .limit(10)
-            ]);
-
-            // Analyze learning patterns
-            const learningPatterns = await this.analyzeLearningPatterns(userId);
-            const studyHabits = await this.analyzeStudyHabits(userId);
-            const topicMastery = await this.analyzeTopicMastery(userId);
-
-            // Build title indexes for quick lookup
-            const noteTitleIndex = new Map();
-            const documentTitleIndex = new Map();
-
-            allNotes.data?.forEach(note => {
-                noteTitleIndex.set(note.title.toLowerCase(), note);
-            });
-
-            allDocuments.data?.forEach(doc => {
-                documentTitleIndex.set(doc.title.toLowerCase(), doc);
-            });
-
-            // Calculate total counts
-            const totalCounts = {
-                notes: allNotes.data?.length || 0,
-                documents: allDocuments.data?.length || 0,
-                quizzes: recentQuizzes.data?.length || 0,
-                recordings: recentRecordings.data?.length || 0,
-                flashcards: flashcards.data?.length || 0,
-                folders: documentFolders.data?.length || 0
-            };
-
-            return {
-                profile: profile || null,
-                stats: stats || null,
-                allNotes: allNotes.data || [],
-                allDocuments: allDocuments.data || [],
-                recentQuizzes: recentQuizzes.data || [],
-                learningSchedule: learningSchedule.data || [],
-                learningGoals: learningGoals.data || [],
-                userMemory: userMemory.data || [],
-                achievements: achievements.data || [],
-                flashcards: flashcards.data || [],
-                socialProfile: socialProfile.data || null,
-                recentRecordings: recentRecordings.data || [],
-                documentFolders: documentFolders.data || [],
-                noteTitleIndex,
-                documentTitleIndex,
-                learningPatterns,
-                studyHabits,
-                topicMastery,
-                totalCounts
-            };
-        } catch (error) {
-            //console.error('[ContextService] Error getting user context:', error);
-            return this.getFallbackContext(userId);
-        }
+        return {
+            profile: profile || null,
+            stats: stats || null,
+            allNotes: allNotes.data || [],
+            allDocuments: allDocuments.data || [],
+            recentQuizzes: recentQuizzes.data || [],
+            learningSchedule: learningSchedule.data || [],
+            learningGoals: learningGoals.data || [],
+            userMemory: userMemory.data || [],
+            achievements: achievements.data || [],
+            flashcards: flashcards.data || [],
+            socialProfile: socialProfile.data || null,
+            recentRecordings: recentRecordings.data || [],
+            documentFolders: documentFolders.data || [],
+            noteTitleIndex,
+            documentTitleIndex,
+            learningPatterns,
+            studyHabits,
+            topicMastery,
+            totalCounts
+        };
+    } catch (error) {
+        console.error('[ContextService] Error getting user context:', error);
+        return this.getFallbackContext(userId);
     }
-    getFallbackActionableContext() {
+}
+ getFallbackActionableContext() {
         return {
             notes: [],
             documents: [],

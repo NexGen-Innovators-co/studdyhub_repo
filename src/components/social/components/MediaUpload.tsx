@@ -1,6 +1,9 @@
 import React, { useRef } from 'react';
 import { Button } from '../../ui/button';
-import { Image, Video, FileText, X } from 'lucide-react';
+import { Image, Video, FileText, X, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
 import { MediaUploadProps } from '../types/social';
 
 export const MediaUpload: React.FC<MediaUploadProps> = ({
@@ -9,6 +12,23 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({
   onFileSelect,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const { canPostSocials } = useFeatureAccess();
+  const canUploadMedia = canPostSocials();
+
+  const requireSocialAccess = () => {
+    if (!canUploadMedia) {
+      toast.error('Media uploads are available for Scholar and Genius plans', {
+        action: {
+          label: 'Upgrade',
+          onClick: () => navigate('/subscription'),
+        },
+        duration: 5000,
+      });
+      return false;
+    }
+    return true;
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -27,6 +47,7 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({
         accept="image/*,video/*,.pdf,.doc,.docx,.txt"
         multiple
         onChange={handleFileSelect}
+        disabled={!canUploadMedia}
         className="hidden"
       />
 
@@ -67,30 +88,36 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          className="text-green-600 hover:bg-green-50"
+          onClick={() => requireSocialAccess() && fileInputRef.current?.click()}
+          disabled={!canUploadMedia}
+          title={!canUploadMedia ? 'Upgrade to Scholar or Genius to upload media' : 'Upload a photo'}
+          className="text-green-600 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Image className="h-4 w-4 mr-1" />
+          {canUploadMedia ? <Image className="h-4 w-4 mr-1" /> : <Lock className="h-4 w-4 mr-1" />}
           Photo
         </Button>
 
         <Button
           variant="ghost"
           size="sm"
-          className="text-blue-600 hover:bg-blue-50"
-          onClick={() => fileInputRef.current?.click()}
+          className="text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => requireSocialAccess() && fileInputRef.current?.click()}
+          disabled={!canUploadMedia}
+          title={!canUploadMedia ? 'Upgrade to Scholar or Genius to upload media' : 'Upload a video'}
         >
-          <Video className="h-4 w-4 mr-1" />
+          {canUploadMedia ? <Video className="h-4 w-4 mr-1" /> : <Lock className="h-4 w-4 mr-1" />}
           Video
         </Button>
 
         <Button
           variant="ghost"
           size="sm"
-          className="text-blue-600 hover:bg-blue-50"
-          onClick={() => fileInputRef.current?.click()}
+          className="text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => requireSocialAccess() && fileInputRef.current?.click()}
+          disabled={!canUploadMedia}
+          title={!canUploadMedia ? 'Upgrade to Scholar or Genius to upload documents' : 'Upload a document'}
         >
-          <FileText className="h-4 w-4 mr-1" />
+          {canUploadMedia ? <FileText className="h-4 w-4 mr-1" /> : <Lock className="h-4 w-4 mr-1" />}
           Document
         </Button>
       </div>

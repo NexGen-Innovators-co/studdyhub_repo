@@ -47,7 +47,8 @@ export const UsageIndicator: React.FC<UsageIndicatorProps> = ({
         maxFolders,
         maxScheduleItems,
         tier,
-        isFree
+        isFree,
+        isAdmin
     } = useFeatureAccess();
 
     const percentage = getUsagePercentage(feature, currentCount);
@@ -122,7 +123,7 @@ export const UsageIndicator: React.FC<UsageIndicatorProps> = ({
     ].includes(feature);
 
     if (isBooleanFeature) {
-        const hasAccess = limit !== 0;
+        const hasAccess = isAdmin || limit !== 0;
         return (
             <Badge variant={hasAccess ? "default" : "outline"} className="cursor-default">
                 {hasAccess ? '✓ Available' : '✗ Locked'}

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import AIBot from '@/components/ui/aibot';
 import { Helmet } from 'react-helmet-async';
+import { SubscriptionStatusBar } from '@/components/subscription/SubscriptionStatusBar';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -188,8 +189,6 @@ const Index = () => {
 
   // Enhanced header props with error awareness
   const headerProps = useMemo(() => ({
-    searchQuery,
-    onSearchChange: setSearchQuery,
     onNewNote: appOperations.createNewNote,
     isSidebarOpen,
     onToggleSidebar: () => setIsSidebarOpen(prev => !prev),
@@ -199,8 +198,6 @@ const Index = () => {
     activeSocialTab,
     socialPostId,
     socialGroupId,
-    socialSearchQuery,
-    onSocialSearchChange: (q: string) => setSocialSearchQuery(q),
     onOpenCreatePostDialog: () => navigate('/social?openCreate=true'),
     // Add error indicators
     hasDataErrors: Object.keys(dataErrors || {}).length > 0,
@@ -210,9 +207,9 @@ const Index = () => {
     daysRemaining,
     onNavigateToSubscription: () => handleNavigateToTab('subscription'),
   }), [subscriptionTier, subscriptionLoading, daysRemaining,
-    searchQuery, appOperations.createNewNote, isSidebarOpen, setIsSidebarOpen,
+    appOperations.createNewNote, isSidebarOpen, setIsSidebarOpen,
     currentActiveTab, userProfile, activeSocialTab, socialPostId,
-    socialGroupId, socialSearchQuery, navigate, dataErrors,
+    socialGroupId, navigate, dataErrors,
   ]);
 
   // Enhanced sidebar props with error handling
@@ -267,6 +264,10 @@ const Index = () => {
     activeSocialTab,
     socialPostId,
     socialGroupId,
+    searchQuery,
+    onSearchChange: setSearchQuery,
+    socialSearchQuery,
+    onSocialSearchChange: (q: string) => setSocialSearchQuery(q),
     filteredNotes: filteredNotes || [],
     activeNote,
     recordings: recordings ?? [],
@@ -344,6 +345,8 @@ const Index = () => {
     activeSocialTab,
     socialPostId,
     socialGroupId,
+    searchQuery,
+    socialSearchQuery,
     filteredNotes,
     activeNote,
     recordings,
@@ -458,6 +461,9 @@ const Index = () => {
       `}>
         <Header onThemeChange={handleThemeChange} {...headerProps} />
       </header>
+
+      {/* Subscription Status Bar for free users */}
+      <SubscriptionStatusBar />
 
       <div className="flex-1 flex relative overflow-hidden">
         <div className={`z-30 ${currentActiveTab === 'chat' ? 'block' : 'lg:hidden'}`}>

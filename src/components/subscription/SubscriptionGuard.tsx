@@ -42,7 +42,8 @@ export const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({
         maxFolders,
         maxScheduleItems,
         maxDailyQuizzes,
-        maxChatSessions
+        maxChatSessions,
+        isAdmin
     } = useFeatureAccess();
 
     const navigate = useNavigate();
@@ -160,11 +161,11 @@ export const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({
     };
 
     // Determine if we should block access
-    const shouldBlockAccess = !hasTierAccess || hasHitLimit;
+    const shouldBlockAccess = !isAdmin && (!hasTierAccess || hasHitLimit);
 
     // Determine what to show
-    const showLimitWarning = hasHitLimit && limitFeature;
-    const showTierWarning = !hasTierAccess;
+    const showLimitWarning = !isAdmin && hasHitLimit && limitFeature;
+    const showTierWarning = !isAdmin && !hasTierAccess;
     const limitPercentage = limitFeature ? getUsagePercentage(limitFeature, currentCount) : 0;
 
     // Handle click on protected content

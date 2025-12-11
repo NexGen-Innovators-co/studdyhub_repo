@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Note } from '../types/Note';
 import { ClassRecording, ScheduleItem, Message, Quiz } from '../types/Class';
 import { Document, UserProfile } from '../types/Document';
@@ -40,6 +40,9 @@ interface UseAppOperationsProps {
 export const useAppOperations = ({
   notes,
   recordings,
+  scheduleItems,
+  documents,
+  folders,
   userProfile,
   activeNote,
   setNotes,
@@ -53,6 +56,7 @@ export const useAppOperations = ({
   setIsAILoading,
   isRealtimeConnected = false,
   refreshData = () => { },
+  setFolders,
   subscriptionTier,
   subscriptionLimits,
   checkSubscriptionAccess,
@@ -60,6 +64,34 @@ export const useAppOperations = ({
 }: UseAppOperationsProps) => {
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 1000;
+
+  // Check if user is admin
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('admin_users')
+          .select('id, is_active')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        setIsAdmin(!error && !!data);
+      } catch {
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdminStatus();
+  }, []);
 
   const withRetry = async <T extends any[]>(
     operation: (...args: T) => Promise<void>,
@@ -80,11 +112,27 @@ export const useAppOperations = ({
   const navigate = useNavigate()
   const createNewNote = useCallback(async () => {
     try {
-      // Check if user can create more notes
-      if (!checkSubscriptionAccess('maxNotes')) {
+      // Admins have unlimited access
+      if (!isAdmin) {
+        // Check subscription limit BEFORE attempting creation
         const noteCount = notes.length;
-        if (noteCount >= subscriptionLimits.maxNotes) {
-          toast.error(`Note limit reached (${subscriptionLimits.maxNotes}). Upgrade to create more notes.`, {
+        const maxNotes = subscriptionLimits.maxNotes;
+        
+        // For free tier, strict limit checking
+        if (subscriptionTier === 'free' && noteCount >= maxNotes) {
+          toast.error(`Note limit reached (${maxNotes}). You have created ${noteCount} notes.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            },
+            duration: 5000
+          });
+          return;
+        }
+        
+        // For other tiers, check against their specific limits
+        if (noteCount >= maxNotes && maxNotes !== Infinity) {
+          toast.error(`Note limit reached (${maxNotes}). Upgrade to create more notes.`, {
             action: {
               label: 'Upgrade',
               onClick: () => navigate('/subscription')
@@ -293,6 +341,34 @@ export const useAppOperations = ({
   }, [isRealtimeConnected, refreshData, setRecordings]);
   const createFolder = useCallback(async (input: CreateFolderInput) => {
     try {
+      // Admins have unlimited access
+      if (!isAdmin) {
+        // Check folder creation limit BEFORE attempting creation
+        const folderCount = folders.length;
+        const maxFolders = subscriptionLimits.maxFolders;
+        
+        if (subscriptionTier === 'free' && folderCount >= maxFolders) {
+          toast.error(`Folder limit reached (${maxFolders}). You have created ${folderCount} folders.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            },
+            duration: 5000
+          });
+          return null;
+        }
+        
+        if (folderCount >= maxFolders && maxFolders !== Infinity) {
+          toast.error(`Folder limit reached (${maxFolders}). Upgrade to create more folders.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            }
+          });
+          return null;
+        }
+      }
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -480,6 +556,34 @@ export const useAppOperations = ({
 
   const addScheduleItem = useCallback(async (item: ScheduleItem) => {
     try {
+      // Admins have unlimited access
+      if (!isAdmin) {
+        // Check schedule item limit BEFORE attempting creation
+        const scheduleCount = scheduleItems?.length || 0;
+        const maxScheduleItems = subscriptionLimits.maxScheduleItems;
+        
+        if (subscriptionTier === 'free' && scheduleCount >= maxScheduleItems) {
+          toast.error(`Schedule limit reached (${maxScheduleItems}). You have ${scheduleCount} scheduled items.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            },
+            duration: 5000
+          });
+          return;
+        }
+        
+        if (scheduleCount >= maxScheduleItems && maxScheduleItems !== Infinity) {
+          toast.error(`Schedule limit reached (${maxScheduleItems}). Upgrade to add more items.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            }
+          });
+          return;
+        }
+      }
+      
       const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -583,13 +687,16 @@ export const useAppOperations = ({
     imageMimeType?: string
   ) => {
     try {
-      // Check AI message limit for free users
-      if (subscriptionTier === 'free') {
-        // You might want to track daily AI messages
-        // For now, we'll just check the limit
-        if (subscriptionLimits.maxAiMessages !== Infinity) {
-          // You should implement daily message tracking here
-          toast.info(`Free users get ${subscriptionLimits.maxAiMessages} AI messages per day.`);
+      // Admins have unlimited access
+      if (!isAdmin) {
+        // Check AI message limit for free users
+        if (subscriptionTier === 'free') {
+          // You might want to track daily AI messages
+          // For now, we'll just check the limit
+          if (subscriptionLimits.maxAiMessages !== Infinity) {
+            // You should implement daily message tracking here
+            toast.info(`Free users get ${subscriptionLimits.maxAiMessages} AI messages per day.`);
+          }
         }
       }
       await withRetry(async () => {
@@ -644,19 +751,47 @@ export const useAppOperations = ({
 
   const handleDocumentUploaded = async (document: Document) => {
     try {
-      // Check if user can upload more documents
-      if (!checkSubscriptionAccess('maxDocUploads')) return
+      // Admins have unlimited access
+      if (!isAdmin) {
+        // Check document upload count limit BEFORE attempting upload
+        const docCount = documents.length;
+        const maxDocUploads = subscriptionLimits.maxDocUploads;
+        
+        if (subscriptionTier === 'free' && docCount >= maxDocUploads) {
+          toast.error(`Document limit reached (${maxDocUploads}). You have uploaded ${docCount} documents.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            },
+            duration: 5000
+          });
+          return;
+        }
+        
+        if (docCount >= maxDocUploads && maxDocUploads !== Infinity) {
+          toast.error(`Document limit reached (${maxDocUploads}). Upgrade to upload more documents.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            }
+          });
+          return;
+        }
 
-      // Check file size limit
-      const fileSizeMB = (document.file_size || 0) / (1024 * 1024);
-      if (fileSizeMB > subscriptionLimits.maxDocSize) {
-        toast.error(`File too large (${fileSizeMB.toFixed(1)}MB). Maximum allowed: ${subscriptionLimits.maxDocSize}MB.`, {
-          action: {
-            label: 'Upgrade',
-            onClick: () => navigate('/subscription')
-          }
-        });
-        return;
+        // Check file size limit
+        const fileSizeMB = (document.file_size || 0) / (1024 * 1024);
+        const maxSizeMB = subscriptionLimits.maxDocSize;
+        
+        if (fileSizeMB > maxSizeMB) {
+          toast.error(`File too large (${fileSizeMB.toFixed(1)}MB). Maximum allowed for your plan: ${maxSizeMB}MB.`, {
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/subscription')
+            },
+            duration: 5000
+          });
+          return;
+        }
       }
 
       const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object

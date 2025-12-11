@@ -36,6 +36,8 @@ interface ClassRecordingsProps {
   onGenerateNote: (recording: ClassRecording) => Promise<void>;
   onDeleteRecording: (recordingId: string, documentId: string | null, audioUrl: string | null) => Promise<void>;
   onReprocessAudio: (fileUrl: string, documentId: string, targetLang?: string) => Promise<void>;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
@@ -45,16 +47,25 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   onGenerateNote,
   onDeleteRecording,
   onReprocessAudio,
+  searchQuery: externalSearchQuery,
+  onSearchChange,
 }) => {
   const [selectedRecording, setSelectedRecording] = useState<ClassRecording | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'record' | 'upload'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [internalSearch, setInternalSearch] = useState('');
   const [activeContentTab, setActiveContentTab] = useState<'transcript' | 'summary'>('transcript');
   const [audioProgress, setAudioProgress] = useState(0);
   const [copySuccess, setCopySuccess] = useState(false);
+
+  const effectiveSearch = externalSearchQuery ?? internalSearch;
+
+  const handleSearchChange = (value: string) => {
+    setInternalSearch(value);
+    onSearchChange?.(value);
+  };
 
   // Fetch user ID
   useEffect(() => {
@@ -172,8 +183,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
 
   // Filter recordings
   const filteredRecordings = recordings.filter(rec =>
-    rec.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    rec.subject.toLowerCase().includes(searchQuery.toLowerCase())
+    rec.title.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
+    rec.subject.toLowerCase().includes(effectiveSearch.toLowerCase())
   );
 
   // Stats calculation
@@ -357,8 +368,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
               <input
                 type="text"
                 placeholder="Search recordings..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={effectiveSearch}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
             </div>

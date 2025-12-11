@@ -36,10 +36,45 @@ export const useQuizManagement = ({
     numQuestions: number,
     difficulty: string
   ) => {
-    const toastId = toast.loading('Generating quiz...');
+    const toastId = toast.loading('Checking quiz generation limits...');
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
+
+      // CHECK SUBSCRIPTION LIMITS BEFORE GENERATING QUIZ
+      const { data: subscriptionData } = await supabase
+        .from('subscriptions')
+        .select('subscription_tier')
+        .eq('user_id', user.id)
+        .single();
+      
+      const tier = subscriptionData?.subscription_tier || 'free';
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get daily quiz limits based on tier
+      let maxQuizzesPerDay = 1; // Free
+      if (tier === 'scholar') maxQuizzesPerDay = 10;
+      if (tier === 'genius') maxQuizzesPerDay = 100;
+      
+      // Count today's quizzes
+      const { count: quizCount } = await supabase
+        .from('quizzes')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('created_at', `${today}T00:00:00`)
+        .lte('created_at', `${today}T23:59:59`);
+      
+      if (quizCount && quizCount >= maxQuizzesPerDay) {
+        toast.error(`Daily quiz generation limit reached (${maxQuizzesPerDay}/day). You have generated ${quizCount} quizzes today.`, {
+          id: toastId,
+          action: {
+            label: 'Upgrade',
+            onClick: () => window.location.href = '/subscription'
+          },
+          duration: 5000
+        });
+        return;
+      }
 
       if (!recording.transcript || recording.transcript.split(' ').length < 50) {
         toast.error('This content may not be suitable for quiz generation. Please try a recording with more informational content.', { id: toastId });

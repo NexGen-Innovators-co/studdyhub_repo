@@ -63,6 +63,9 @@ export interface DashboardStats {
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const statsCache: Record<string, { data: DashboardStats; timestamp: number }> = {};
 
+// Prevent simultaneous fetches across dashboard and app context
+const activeFetchesRef: { current: Set<string> } = { current: new Set() };
+
 // Optimized: Batch queries and use database functions for complex calculations
 export const useDashboardStats = (userId: string | undefined) => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -257,6 +260,12 @@ export const useDashboardStats = (userId: string | undefined) => {
   const fetchDashboardStats = useCallback(async (forceRefresh = false) => {
     if (!userId) return;
 
+    // Check if already fetching
+    if (activeFetchesRef.current.has(userId)) {
+      console.log('Dashboard fetch already in progress, skipping...');
+      return;
+    }
+
     const cached = statsCache[userId];
     const now = Date.now();
 
@@ -269,6 +278,7 @@ export const useDashboardStats = (userId: string | undefined) => {
     if (isFetchingRef.current) return;
 
     isFetchingRef.current = true;
+    activeFetchesRef.current.add(userId);
     setLoading(true);
     setError(null);
     setProgress(0);
@@ -586,6 +596,7 @@ export const useDashboardStats = (userId: string | undefined) => {
         setLoading(false);
       }
       isFetchingRef.current = false;
+      activeFetchesRef.current.delete(userId!);
     }
   }, [userId, updateProgress]);
 
@@ -616,7 +627,14 @@ export const useDashboardStats = (userId: string | undefined) => {
   }, [userId, stats]);
 
   useEffect(() => {
-    if (userId) fetchDashboardStats(false);
+    if (userId) {
+      // Add a small delay to let AppContext data load first
+      const timeoutId = setTimeout(() => {
+        fetchDashboardStats(false);
+      }, 500); // 500ms delay to avoid race condition with app context
+      
+      return () => clearTimeout(timeoutId);
+    }
   }, [userId, fetchDashboardStats]);
 
   const refresh = useCallback(() => fetchDashboardStats(true), [fetchDashboardStats]);
