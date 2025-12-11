@@ -6,10 +6,11 @@ import {
 } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Search, RefreshCw, Bell, TrendingUp, Users, User, Home, Loader2, X, Plus, Sparkles, Settings, LogOut, ArrowUp, ExternalLink,
-  MessageCircle
+  MessageCircle, Lock
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Card, CardContent } from '../ui/card';
@@ -21,6 +22,7 @@ import { useSocialComments } from './hooks/useSocialComments';
 import { SocialNotification, useSocialNotifications } from './hooks/useSocialNotifications';
 import { useSocialPostViews } from './hooks/useSocialPostViews';
 import { useSocialData } from '../../hooks/useSocialData';
+import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 
 // Import components
 import { PostCard } from './components/PostCard';
@@ -47,13 +49,27 @@ import { supabase } from '@/integrations/supabase/client';
 interface SocialFeedProps {
   activeTab?: string;
   postId?: string;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
-export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActiveTab, postId }) => {
+export const SocialFeed: React.FC<SocialFeedProps> = ({ 
+  activeTab: initialActiveTab, 
+  postId,
+  searchQuery: externalSearchQuery,
+  onSearchChange
+}) => {
   // State management
   const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications' | 'userProfile'>(initialActiveTab as any || 'feed');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [internalSearch, setInternalSearch] = useState('');
   const [showPostDialog, setShowPostDialog] = useState(false);
+
+  const effectiveSearch = externalSearchQuery ?? internalSearch;
+
+  const handleSearchChange = (value: string) => {
+    setInternalSearch(value);
+    onSearchChange?.(value);
+  };
 
   // IMPROVED Pull-to-refresh & scroll-to-top states
   const [isPulling, setIsPulling] = useState(false);
@@ -357,11 +373,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
 
   const { trackPostView, cleanup } = useSocialPostViews(setPosts, setTrendingPosts, setUserPosts);
 
+  // Feature access hook for subscription checks
+  const { canPostSocials, canChat, canCreateGroups } = useFeatureAccess();
+  const canCreatePosts = useMemo(() => canPostSocials(), [canPostSocials]);
+  const canStartChats = useMemo(() => canChat(), [canChat]);
+  const canCreateNewGroups = useMemo(() => canCreateGroups(), [canCreateGroups]);
+
   // Sync search & "open create" dialog from URL query params
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const q = params.get('search') || '';
-    if (q !== searchQuery) setSearchQuery(q);
+    if (q !== effectiveSearch) handleSearchChange(q);
 
     if (params.get('openCreate') === 'true') {
       setShowPostDialog(true);
@@ -545,14 +567,41 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
   );
 
   const filterPosts = (postList: any[]) => {
-    if (!searchQuery.trim()) return postList;
-    const searchLower = searchQuery.toLowerCase();
+    if (!effectiveSearch.trim()) return postList;
+    const searchLower = effectiveSearch.toLowerCase();
     return postList.filter(post =>
-      post.content.toLowerCase().includes(searchLower) ||
+      post.content?.toLowerCase().includes(searchLower) ||
       post.author?.display_name?.toLowerCase().includes(searchLower) ||
       post.author?.username?.toLowerCase().includes(searchLower)
     );
   };
+
+  const filteredGroups = useMemo(() => {
+    if (!effectiveSearch.trim()) return groups;
+    const searchLower = effectiveSearch.toLowerCase();
+    return groups.filter((group) =>
+      group.name?.toLowerCase().includes(searchLower) ||
+      group.description?.toLowerCase().includes(searchLower) ||
+      group.tags?.some((t: string) => t?.toLowerCase().includes(searchLower))
+    );
+  }, [groups, effectiveSearch]);
+
+  const filteredUserPosts = useMemo(() => filterPosts(userPosts), [userPosts, effectiveSearch]);
+
+  const searchPlaceholder = useMemo(() => {
+    switch (activeTab) {
+      case 'trending':
+        return 'Search trending posts or authors';
+      case 'groups':
+        return 'Search groups by name or tag';
+      case 'profile':
+        return 'Search your posts';
+      case 'notifications':
+        return 'Search notifications';
+      default:
+        return 'Search posts, people, or tags';
+    }
+  }, [activeTab]);
 
   const uniqueSuggestedUsers = React.useMemo(() => {
     const map = new Map<string, any>();
@@ -808,6 +857,23 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
       default: return 'You have a new notification';
     }
   };
+
+  const filteredNotifications = useMemo(() => {
+    if (!effectiveSearch.trim()) return notifications;
+    const searchLower = effectiveSearch.toLowerCase();
+    return notifications.filter((notif) => {
+      const title = getNotificationTitle(notif).toLowerCase();
+      const message = getNotificationMessage(notif).toLowerCase();
+      const actor = notif.actor?.display_name?.toLowerCase() || '';
+      const postTitle = notif.post?.title?.toLowerCase() || '';
+      return (
+        title.includes(searchLower) ||
+        message.includes(searchLower) ||
+        actor.includes(searchLower) ||
+        postTitle.includes(searchLower)
+      );
+    });
+  }, [notifications, effectiveSearch]);
   // BEFORE the return statement, handle profile routing:
   if (routeGroupId) return <GroupDetailPage currentUser={currentUser} />;
 
@@ -859,7 +925,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
               </div>
               {activeTab !== 'notifications' && (
                 <NotificationsSection
-                  notifications={adaptNotifications(notifications)}
+                  notifications={adaptNotifications(filteredNotifications)}
                   unreadCount={unreadCount}
                   markNotificationAsRead={markNotificationAsRead}
                   markAllNotificationsAsRead={markAllNotificationsAsRead}
@@ -877,6 +943,32 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
             className="col-span-1 lg:col-span-6 max-h-screen overflow-y-auto modern-scrollbar pb-20 lg:pb-20"
           >
             <div />
+
+            {/* Unified search bar for all social tabs */}
+            <div className="px-4 pt-4">
+              <div className="max-w-[720px] mx-auto">
+                <div className="relative">
+                  <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    value={effectiveSearch}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder={searchPlaceholder}
+                    className="pl-9 pr-10"
+                  />
+                  {effectiveSearch && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-slate-500"
+                      onClick={() => handleSearchChange('')}
+                      aria-label="Clear search"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
 
 
             {hasNewPosts && newPostsCount > 0 && (
@@ -958,7 +1050,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
 
                   <TabsContent value="groups" className="outline-none">
                     <GroupsSection
-                      groups={groups}
+                      groups={filteredGroups}
                       isLoading={isLoadingGroups}
                       onJoinGroup={joinGroup}
                       onLeaveGroup={leaveGroup}
@@ -975,7 +1067,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
                       user={currentUser}
                       isOwnProfile={true}
                       onEditProfile={updateProfile}
-                      posts={userPosts}
+                      posts={filteredUserPosts}
                       isLoadingPosts={isLoadingUserPosts}
                       onLike={toggleLike}
                       onBookmark={toggleBookmark}
@@ -1013,7 +1105,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
 
                   <TabsContent value="notifications" className="animate-in fade-in duration-500 lg:bottom-24  bg-white dark:bg-slate-900 overflow-hidden flex">
                     <NotificationsSection
-                      notifications={adaptNotifications(notifications)}
+                      notifications={adaptNotifications(filteredNotifications)}
                       unreadCount={unreadCount}
                       markNotificationAsRead={markNotificationAsRead}
                       markAllNotificationsAsRead={markAllNotificationsAsRead}
@@ -1069,10 +1161,19 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
 
                         <Button
                           variant="outline"
-                          className="w-full justify-start bg-white dark:bg-slate-800"
-                          onClick={() => setShowPostDialog(true)}
+                          className="w-full justify-start bg-white dark:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => {
+                            if (!canCreatePosts) {
+                              toast.error('Posts are available for Scholar and Genius plans');
+                              return;
+                            }
+                            setShowPostDialog(true);
+                          }}
+                          disabled={!canCreatePosts}
+                          title={!canCreatePosts ? 'Upgrade to Scholar or Genius to create posts' : 'Create a new post'}
                         >
-                          <Plus className="h-4 w-4 mr-2" /> Create Post
+                          {!canCreatePosts && <Lock className="h-4 w-4 mr-2" />}
+                          <Plus className={!canCreatePosts ? '' : 'h-4 w-4 mr-2'} /> Create Post
                         </Button>
                         <Button
                           variant="outline"
@@ -1083,16 +1184,23 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ activeTab: initialActive
                         </Button>
                         <Button
                           variant="outline"
-                          className="w-full justify-start bg-white dark:bg-slate-800"
+                          className="w-full justify-start bg-white dark:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
                           onClick={() => {
+                            if (!canCreateNewGroups) {
+                              toast.error('Groups are available for Scholar and Genius plans');
+                              return;
+                            }
                             navigate('/social/groups');
                             setTimeout(() => {
                               const event = new CustomEvent('triggerCreateGroup');
                               window.dispatchEvent(event);
                             }, 100);
                           }}
+                          disabled={!canCreateNewGroups}
+                          title={!canCreateNewGroups ? 'Upgrade to Scholar or Genius to create groups' : 'Create a new group'}
                         >
-                          <Plus className="h-4 w-4 mr-2" /> Create Group
+                          {!canCreateNewGroups && <Lock className="h-4 w-4 mr-2" />}
+                          <Plus className={!canCreateNewGroups ? '' : 'h-4 w-4 mr-2'} /> Create Group
                         </Button>
                       </div>
                     </div>

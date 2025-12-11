@@ -58,23 +58,33 @@ export const useSocialActions = (
     }
 
     try {
-      // 1. Insert the new group
-      const { data: newGroupData, error: groupError } = await supabase
-        .from('social_groups')
-        .insert({
-          created_by: currentUser.id,
+      // Use edge function to create group with validation
+      const { data: response, error: functionError } = await supabase.functions.invoke('create-study-group', {
+        body: {
           name: groupData.name,
           description: groupData.description,
+          subject: groupData.category || 'general',
           privacy: groupData.privacy,
-          category: 'general', // Default category
-          avatar_url: `https://placehold.co/100x100/1e40af/ffffff?text=${groupData.name.charAt(0)}` // Placeholder avatar
-        })
-        .select()
-        .single();
+          max_members: 50,
+          cover_image_url: `https://placehold.co/100x100/1e40af/ffffff?text=${groupData.name.charAt(0)}`
+        }
+      });
 
-      if (groupError) throw groupError;
+      if (functionError) {
+        // Handle subscription limit errors
+        if (functionError.message) {
+          toast.error(functionError.message);
+        } else {
+          toast.error('Failed to create group');
+        }
+        return null;
+      }
 
-      const newGroup = newGroupData as SocialGroup;
+      if (!response?.success || !response?.group) {
+        throw new Error('Failed to create group');
+      }
+
+      const newGroup = response.group as SocialGroup;
 
       // 2. Automatically make the creator an admin member
       const { error: memberError } = await supabase
@@ -87,15 +97,11 @@ export const useSocialActions = (
 
       if (memberError) throw memberError;
 
-      toast.success(`Group "${newGroup.name}" created successfully!`);
-      if (memberError) throw memberError;
-
       // Update members_count on server
       const { count, error: countError } = await supabase
         .from('social_group_members')
         .select('count', { count: 'exact' })
         .eq('group_id', newGroup.id);
-
 
       await supabase
         .from('social_groups')
@@ -292,28 +298,59 @@ export const useSocialActions = (
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Step 1: Insert the post
-      const { data: newPost, error: postError } = await supabase
-        .from('social_posts')
-        .insert({
-          author_id: user.id,
-          content: content,
-          privacy: privacy,
-          group_id: groupId,
-          likes_count: 0,
-          comments_count: 0,
-          shares_count: 0,
-          bookmarks_count: 0,
-          views_count: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+      // Upload media files first and create media objects
+      const media: Array<{
+        type: string;
+        url: string;
+        filename: string;
+        size_bytes: number;
+        mime_type: string;
+        thumbnail_url?: string;
+      }> = [];
 
-      if (postError || !newPost) throw postError || new Error('Failed to create post');
+      for (const file of selectedFiles) {
+        const url = await uploadFile(file);
+        if (url) {
+          media.push({
+            type: file.type.startsWith('image/') ? 'image' 
+                  : file.type.startsWith('video/') ? 'video' 
+                  : 'document',
+            url: url,
+            filename: file.name,
+            size_bytes: file.size,
+            mime_type: file.type,
+            thumbnail_url: null
+          });
+        }
+      }
 
-      // Step 2: Fetch related data (author, group, media)
+      // Use edge function to create post with validation
+      const { data: response, error: functionError } = await supabase.functions.invoke('create-social-post', {
+        body: {
+          content,
+          privacy,
+          media: media,
+          group_id: groupId
+        }
+      });
+
+      if (functionError) {
+        // Handle subscription limit errors
+        if (functionError.message) {
+          toast.error(functionError.message);
+        } else {
+          toast.error('Failed to create post');
+        }
+        return false;
+      }
+
+      if (!response?.success || !response?.post) {
+        throw new Error('Failed to create post');
+      }
+
+      const newPost = response.post;
+
+      // Step 2: Fetch related data (author, group)
       const { data: authorData, error: authorError } = await supabase
         .from('social_users')
         .select('*')
@@ -332,24 +369,6 @@ export const useSocialActions = (
         if (error) throw error;
         groupData = { ...data, privacy: data.privacy as "public" | "private" };
       }
-
-      // Step 3: Upload media
-      const mediaPromises = selectedFiles.map(async (file) => {
-        const url = await uploadFile(file);
-        if (url) {
-          return supabase.from('social_media').insert({
-            post_id: newPost.id,
-            type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document',
-            url,
-            filename: file.name,
-            size_bytes: file.size,
-            mime_type: file.type,
-            created_at: new Date().toISOString(),
-          });
-        }
-      });
-
-      await Promise.all(mediaPromises.filter(Boolean));
 
       // Step 4: Handle hashtags
       const hashtags = extractHashtags(content);

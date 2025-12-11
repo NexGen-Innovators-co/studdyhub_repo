@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
+import { createSubscriptionValidator, createErrorResponse as createSubErrorResponse } from '../utils/subscription-validator.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -256,7 +257,15 @@ serve(async (req) => {
             });
         }
 
-        // 4. Validate request body
+        // Check AI generation limit
+        const validator = createSubscriptionValidator();
+        const limitCheck = await validator.checkAiMessageLimit(user.id);
+        
+        if (!limitCheck.allowed) {
+            return createSubErrorResponse(limitCheck.message || 'AI generation limit exceeded', 403);
+        }
+
+        // 4. Parse request body
         const { documentId, userProfile, selectedSection } = await req.json(); // Destructure selectedSection
         if (!documentId || !userProfile) {
             return new Response(JSON.stringify({

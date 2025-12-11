@@ -79,10 +79,23 @@ export const useChatActions = (currentUserId: string | null) => {
 
             if (!sender) throw new Error('Sender not found');
 
-            // Handle files
-            if (files && files.length > 0) {
-                const uploadedMedia = [];
+            // Insert message directly into social_chat_messages
+            const { data: newMessage, error: messageError } = await supabase
+                .from('social_chat_messages')
+                .insert({
+                    session_id: sessionId,
+                    sender_id: currentUserId,
+                    content: content.trim(),
+                    group_id: null,
+                })
+                .select()
+                .single();
 
+            if (messageError) throw messageError;
+
+            // Handle file uploads and create media records
+            const mediaRecords = [];
+            if (files && files.length > 0) {
                 for (const file of files) {
                     const fileExt = file.name.split('.').pop();
                     const fileName = `${currentUserId}/${Date.now()}.${fileExt}`;
@@ -97,78 +110,34 @@ export const useChatActions = (currentUserId: string | null) => {
                         .from('social-media')
                         .getPublicUrl(fileName);
 
-                    uploadedMedia.push({
-                        type: file.type.startsWith('image/')
-                            ? 'image'
-                            : file.type.startsWith('video/')
-                                ? 'video'
-                                : 'document',
-                        url: publicUrl,
-                        filename: file.name,
-                        size_bytes: file.size,
-                        mime_type: file.type,
-                    });
-                }
-
-                // Insert message with media
-                const { data: newMessage, error: messageError } = await supabase
-                    .from('social_chat_messages')
-                    .insert({
-                        session_id: sessionId,
-                        sender_id: currentUserId,
-                        content: content.trim(),
-                        group_id: null,
-                    })
-                    .select()
-                    .single();
-
-                if (messageError) throw messageError;
-
-                // Insert media records
-                const mediaRecords = [];
-                for (const media of uploadedMedia) {
                     const { data: mediaRecord } = await supabase
                         .from('social_chat_message_media')
                         .insert({
                             message_id: newMessage.id,
-                            ...media,
+                            type: file.type.startsWith('image/')
+                                ? 'image'
+                                : file.type.startsWith('video/')
+                                    ? 'video'
+                                    : 'document',
+                            url: publicUrl,
+                            filename: file.name,
+                            size_bytes: file.size,
+                            mime_type: file.type,
                         })
                         .select()
                         .single();
 
                     if (mediaRecord) mediaRecords.push(mediaRecord);
                 }
-
-                // Return complete message with media
-                return {
-                    ...newMessage,
-                    sender,
-                    media: mediaRecords,
-                    resources: [],
-                };
-            } else {
-                // Insert message without media
-                const { data: newMessage, error: messageError } = await supabase
-                    .from('social_chat_messages')
-                    .insert({
-                        session_id: sessionId,
-                        sender_id: currentUserId,
-                        content: content.trim(),
-                        group_id: null,
-                    })
-                    .select()
-                    .single();
-
-                if (messageError) throw messageError;
-
-                // Return complete message
-                return {
-                    ...newMessage,
-                    sender,
-                    media: [],
-                    resources: [],
-                };
             }
+
+            // Return complete message with media
+            return {
+                ...newMessage,
+                sender,
+                media: mediaRecords,
+                resources: [],
+            };
         } catch (error) {
             ////console.error('Error sending message:', error);
             toast.error('Failed to send message');

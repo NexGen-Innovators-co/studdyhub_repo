@@ -1,6 +1,6 @@
 // NotesList.tsx
 import React, { useRef, useEffect, useState } from 'react';
-import { Trash2, X, Edit, Save, X as CloseIcon, RefreshCw } from 'lucide-react';
+import { Trash2, X, Edit, Save, X as CloseIcon, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Note, NoteCategory } from '../../../types/Note';
 import { formatDate, getCategoryColor } from '../../classRecordings/utils/helpers';
@@ -46,6 +46,7 @@ export const NotesList: React.FC<NotesListProps> = ({
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState<NoteCategory>('general');
   const [editTags, setEditTags] = useState('');
+  const [noteSearch, setNoteSearch] = useState('');
   // Track if we've loaded any notes yet
   const [hasInitialNotes, setHasInitialNotes] = useState(false);
   // Track refresh loading state
@@ -173,6 +174,17 @@ export const NotesList: React.FC<NotesListProps> = ({
   // Handle null notes by providing default empty array
   const safeNotes = notes || [];
 
+  const filteredNotes = noteSearch.trim()
+    ? safeNotes.filter((note) => {
+        const searchLower = noteSearch.toLowerCase();
+        return (
+          note.title?.toLowerCase().includes(searchLower) ||
+          note.content?.toLowerCase().includes(searchLower) ||
+          note.tags?.some((t) => t.toLowerCase().includes(searchLower))
+        );
+      })
+    : safeNotes;
+
   // Show loading state
   const showLoading = isLoading && !hasInitialNotes;
 
@@ -186,7 +198,7 @@ export const NotesList: React.FC<NotesListProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-slate-800 text-sm sm:text-base dark:text-gray-100">
-              {showLoading ? 'Loading...' : `${safeNotes.length} ${safeNotes.length === 1 ? 'Note' : 'Notes'}`}
+              {showLoading ? 'Loading...' : `${filteredNotes.length} ${filteredNotes.length === 1 ? 'Note' : 'Notes'}`}
             </h3>
 
             {/* Manual Refresh Button */}
@@ -223,6 +235,30 @@ export const NotesList: React.FC<NotesListProps> = ({
         )}
       </div>
 
+      {/* Search */}
+      <div className="px-3 sm:px-4 pt-2">
+        <div className="relative">
+          <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input
+            value={noteSearch}
+            onChange={(e) => setNoteSearch(e.target.value)}
+            placeholder="Search notes..."
+            className="pl-9 pr-10"
+          />
+          {noteSearch && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-slate-500"
+              onClick={() => setNoteSearch('')}
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* Notes List */}
       <div className={`flex-wrap flex-1 overflow-y-auto modern-scrollbar`}>
         <div className="divide-y divide-slate-100 dark:divide-gray-800">
@@ -237,14 +273,14 @@ export const NotesList: React.FC<NotesListProps> = ({
                 </div>
               </div>
             </div>
-          ) : safeNotes.length === 0 ? (
+          ) : filteredNotes.length === 0 ? (
             <div className="p-6 sm:p-8 text-center text-slate-400 dark:text-gray-500">
               <div className="text-3xl sm:text-4xl mb-3">📝</div>
               <p className="text-sm sm:text-base">
-                {notes === null ? 'Failed to load notes.' : 'No notes available.'}
+                {notes === null ? 'Failed to load notes.' : noteSearch ? 'No matching notes.' : 'No notes available.'}
               </p>
               <p className="text-xs sm:text-sm">
-                {notes === null ? 'Please try again later' : 'Create your first note to get started'}
+                {notes === null ? 'Please try again later' : noteSearch ? 'Try a different search term' : 'Create your first note to get started'}
               </p>
               {(notes === null || safeNotes.length === 0) && onRefresh && (
                 <div className="mt-4 flex gap-2 justify-center">
@@ -262,7 +298,7 @@ export const NotesList: React.FC<NotesListProps> = ({
             </div>
           ) : (
             <>
-              {safeNotes.map((note) => (
+              {filteredNotes.map((note) => (
                 <div
                   key={note.id}
                   className={`p-3 sm:p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-800 dark:bg-gray-900 transition-colors border-l-4 group ${activeNote?.id === note.id

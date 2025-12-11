@@ -1,5 +1,7 @@
 // hooks/useFeatureAccess.tsx
 import { useAppContext } from './useAppContext';
+import { supabase } from '../integrations/supabase/client';
+import { useEffect, useState } from 'react';
 
 // Define the feature names that should be checked
 export type FeatureName =
@@ -26,8 +28,40 @@ export const useFeatureAccess = () => {
         checkSubscriptionAccess,
         subscription,
         daysRemaining,
-        bonusAiCredits
+        bonusAiCredits,
+        user
     } = useAppContext();
+
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [adminCheckLoading, setAdminCheckLoading] = useState(true);
+
+    // Check if user is an admin
+    useEffect(() => {
+        const checkAdminStatus = async () => {
+            if (!user) {
+                setIsAdmin(false);
+                setAdminCheckLoading(false);
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase
+                    .from('admin_users')
+                    .select('id, is_active')
+                    .eq('user_id', user.id)
+                    .eq('is_active', true)
+                    .maybeSingle();
+
+                setIsAdmin(!error && !!data);
+            } catch {
+                setIsAdmin(false);
+            } finally {
+                setAdminCheckLoading(false);
+            }
+        };
+
+        checkAdminStatus();
+    }, [user]);
 
     // Helper to check if feature exists in limits
     const hasFeature = (feature: FeatureName): boolean => {
@@ -36,6 +70,9 @@ export const useFeatureAccess = () => {
 
     // Get limit value safely
     const getLimit = (feature: FeatureName): number | boolean => {
+        // Admins have unlimited access
+        if (isAdmin) return Infinity;
+
         if (hasFeature(feature)) {
             const value = subscriptionLimits[feature as keyof typeof subscriptionLimits];
             if (typeof value === 'number') return value;
@@ -47,6 +84,9 @@ export const useFeatureAccess = () => {
 
     // Check access safely
     const checkAccess = (feature: FeatureName): boolean => {
+        // Admins always have access
+        if (isAdmin) return true;
+
         try {
             return checkSubscriptionAccess(feature as any);
         } catch {
@@ -55,34 +95,42 @@ export const useFeatureAccess = () => {
     };
 
     return {
+        // Admin status
+        isAdmin,
+        adminCheckLoading,
+
         // Quick access methods - use FeatureName type
-        canCreateNotes: () => checkAccess('maxNotes'),
-        canUploadDocuments: () => checkAccess('maxDocUploads'),
-        canPostSocial: () => checkAccess('canPostSocials'),
-        hasExamMode: () => checkAccess('hasExamMode'),
-        hasVerifiedBadge: () => checkAccess('hasVerifiedBadge'),
-        canUseAiChat: () => checkAccess('maxAiMessages'),
-        canGenerateQuizzes: () => checkAccess('canGenerateQuizzes'),
-        canAccessSocial: () => checkAccess('canAccessSocial'),
-        canCreateFolders: () => checkAccess('maxFolders'),
-        canScheduleItems: () => checkAccess('maxScheduleItems'),
-        canRecordAudio: () => checkAccess('maxRecordings'),
-        canUseAdvancedAi: () => subscriptionTier === 'genius',
+        canCreateNotes: () => isAdmin || checkAccess('maxNotes'),
+        canUploadDocuments: () => isAdmin || checkAccess('maxDocUploads'),
+        canPostSocials: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
+        canPostSocial: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
+        canAccessSocial: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
+        canCreateGroups: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
+        canChat: () => isAdmin || subscriptionTier !== 'free', // Scholar+ only
+        hasExamMode: () => isAdmin || checkAccess('hasExamMode'),
+        hasVerifiedBadge: () => isAdmin || checkAccess('hasVerifiedBadge'),
+        canUseAiChat: () => isAdmin || checkAccess('maxAiMessages'),
+        canGenerateQuizzes: () => isAdmin || checkAccess('canGenerateQuizzes'),
+        canCreateFolders: () => isAdmin || checkAccess('maxFolders'),
+        canScheduleItems: () => isAdmin || checkAccess('maxScheduleItems'),
+        canRecordAudio: () => isAdmin || checkAccess('maxRecordings'),
+        canUseAdvancedAi: () => isAdmin || subscriptionTier === 'genius',
 
         // Get limits safely
-        maxAiMessages: (getLimit('maxAiMessages') as number) || 20,
-        maxNotes: (getLimit('maxNotes') as number) || 50,
-        maxDocUploads: (getLimit('maxDocUploads') as number) || 20,
-        maxDocuments: (getLimit('maxDocUploads') as number) || 20, // Alias for consistency
-        maxDocSize: subscriptionLimits.maxDocSize || 10,
-        maxRecordings: (getLimit('maxRecordings') as number) || 10,
-        maxFolders: (getLimit('maxFolders') as number) || 5,
-        maxScheduleItems: (getLimit('maxScheduleItems') as number) || 20,
-        maxDailyQuizzes: (getLimit('maxDailyQuizzes') as number) || (subscriptionTier === 'free' ? 1 : 100),
-        maxChatSessions: (getLimit('maxChatSessions') as number) || 10,
+        maxAiMessages: (getLimit('maxAiMessages') as number) || (isAdmin ? Infinity : 20),
+        maxNotes: (getLimit('maxNotes') as number) || (isAdmin ? Infinity : 50),
+        maxDocUploads: (getLimit('maxDocUploads') as number) || (isAdmin ? Infinity : 20),
+        maxDocuments: (getLimit('maxDocUploads') as number) || (isAdmin ? Infinity : 20), // Alias for consistency
+        maxDocSize: isAdmin ? Infinity : (subscriptionLimits.maxDocSize || 10),
+        maxRecordings: (getLimit('maxRecordings') as number) || (isAdmin ? Infinity : 10),
+        maxFolders: (getLimit('maxFolders') as number) || (isAdmin ? Infinity : 5),
+        maxScheduleItems: (getLimit('maxScheduleItems') as number) || (isAdmin ? Infinity : 20),
+        maxDailyQuizzes: (getLimit('maxDailyQuizzes') as number) || (isAdmin ? Infinity : (subscriptionTier === 'free' ? 1 : 100)),
+        maxChatSessions: (getLimit('maxChatSessions') as number) || (isAdmin ? Infinity : 10),
 
         // Usage tracking helpers
         getUsagePercentage: (feature: FeatureName, currentCount: number) => {
+            if (isAdmin) return 0; // Admins don't have usage limits
             const limit = getLimit(feature);
             if (typeof limit !== 'number' || limit === Infinity) return 0;
             return Math.min(100, Math.round((currentCount / limit) * 100));
@@ -90,6 +138,7 @@ export const useFeatureAccess = () => {
 
         // Check if feature is blocked
         isFeatureBlocked: (feature: FeatureName, currentCount: number) => {
+            if (isAdmin) return false; // Admins are never blocked
             if (subscriptionTier === 'genius') return false;
             if (feature === 'maxDailyQuizzes') {
                 const limit = (getLimit('maxDailyQuizzes') as number) || (subscriptionTier === 'free' ? 1 : 100);
@@ -100,10 +149,10 @@ export const useFeatureAccess = () => {
         },
 
         // Tier info
-        tier: subscriptionTier,
-        isFree: subscriptionTier === 'free',
-        isScholar: subscriptionTier === 'scholar',
-        isGenius: subscriptionTier === 'genius',
+        tier: isAdmin ? 'admin' : subscriptionTier,
+        isFree: !isAdmin && subscriptionTier === 'free',
+        isScholar: !isAdmin && subscriptionTier === 'scholar',
+        isGenius: !isAdmin && subscriptionTier === 'genius',
 
         // Subscription details
         subscription,

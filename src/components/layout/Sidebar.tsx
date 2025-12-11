@@ -32,11 +32,14 @@ import {
   Home,
   TrendingUp,
   User,
-  Lightbulb
+  Lightbulb,
+  Shield,
+  Menu
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { useAuth } from '../../hooks/useAuth';
+import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -466,14 +469,19 @@ const AvatarMenu = memo(
     isOpen,
     onLogoutClick,
     isLoggingOut,
+    isAdmin,
+    onAdminClick,
   }: {
     isOpen: boolean;
     onLogoutClick: () => void;
     isLoggingOut: boolean;
+    isAdmin: boolean;
+    onAdminClick: () => void;
   }) => (
     <>
       {isOpen && (
         <div className="flex items-center gap-2">
+         
           <Button
             variant="ghost"
             size="sm"
@@ -663,11 +671,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isTogglingSidebar, setIsTogglingSidebar] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const { isAdmin } = useFeatureAccess();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const avatarMenuRef = useRef<HTMLDivElement>(null);
 
   const getInitials = useCallback((name: string | null) => {
     if (!name) return 'U';
@@ -705,6 +717,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setShowLogoutConfirm(true);
   }, []);
 
+  const handleAdminClick = useCallback(() => {
+    setIsAvatarMenuOpen(false);
+    navigate('/admin');
+  }, [navigate]);
+
   const handleConfirmLogout = useCallback(() => {
     handleSignOut();
     setShowLogoutConfirm(false);
@@ -716,6 +733,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onToggle();
     setTimeout(() => setIsTogglingSidebar(false), 300); // Match transition duration
   }, [onToggle, isTogglingSidebar]);
+
+  const toggleSidebarExpand = useCallback(() => {
+    setIsSidebarExpanded((prev) => !prev);
+  }, []);
+
+  // Handle outside clicks for avatar menu
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (avatarMenuRef.current && !avatarMenuRef.current.contains(event.target as Node)) {
+        setIsAvatarMenuOpen(false);
+      }
+    };
+
+    if (isAvatarMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isAvatarMenuOpen]);
 
   // Ref for the scrollable chat sessions container
   const chatSessionsRef = useRef<HTMLDivElement>(null);
@@ -828,18 +863,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [currentTheme, onThemeChange]);
 
   const tabs = useMemo(
-    () => [
-      { id: 'dashboard', name: 'Dashboard', icon: Book },
-      { id: 'notes', name: 'Notes', icon: FileText },
-      { id: 'recordings', name: 'Recordings', icon: Mic },
-      { id: 'quizzes', name: 'Quizzes', icon: Lightbulb },
-      { id: 'schedule', name: 'Schedule', icon: Calendar },
-      { id: 'chat', name: 'AI Chat', icon: MessageCircle },
-      { id: 'documents', name: 'Documents', icon: Upload },
-      { id: 'social', name: 'Social Feed', icon: Users },
-      { id: 'settings', name: 'Settings', icon: Settings },
-    ],
-    [],
+    () => {
+      const baseTabs = [
+        { id: 'dashboard', name: 'Dashboard', icon: Book },
+        { id: 'notes', name: 'Notes', icon: FileText },
+        { id: 'recordings', name: 'Recordings', icon: Mic },
+        { id: 'quizzes', name: 'Quizzes', icon: Lightbulb },
+        { id: 'schedule', name: 'Schedule', icon: Calendar },
+        { id: 'chat', name: 'AI Chat', icon: MessageCircle },
+        { id: 'documents', name: 'Documents', icon: Upload },
+        { id: 'social', name: 'Social Feed', icon: Users },
+        { id: 'settings', name: 'Settings', icon: Settings },
+      ];
+      
+      if (isAdmin) {
+        baseTabs.push({ id: 'admin', name: 'Admin Panel', icon: Shield });
+      }
+      
+      return baseTabs;
+    },
+    [isAdmin],
   );
 
   const categoriesListProps = useMemo(
@@ -855,9 +898,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
       selectedCategory,
       onCategoryChange,
-      isOpen,
+      isOpen: isOpen || isSidebarExpanded,
     }),
-    [selectedCategory, onCategoryChange, isOpen],
+    [selectedCategory, onCategoryChange, isOpen, isSidebarExpanded],
   );
 
   const socialNavProps = useMemo(
@@ -871,9 +914,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
       activeSocialTab: activeSocialTab || 'feed',
       onTabChange,
-      isOpen,
+      isOpen: isOpen || isSidebarExpanded,
     }),
-    [activeSocialTab, onTabChange, isOpen],
+    [activeSocialTab, onTabChange, isOpen, isSidebarExpanded],
   );
 
   const tabsListProps = useMemo(
@@ -882,9 +925,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       activeTab,
       onTabChange,
       activeChatSessionId,
-      isOpen,
+      isOpen: isOpen || isSidebarExpanded,
     }),
-    [tabs, activeTab, onTabChange, activeChatSessionId, isOpen],
+    [tabs, activeTab, onTabChange, activeChatSessionId, isOpen, isSidebarExpanded],
   );
 
   const chatSessionsListProps = useMemo(
@@ -894,7 +937,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       onChatSessionSelect,
       onDeleteChatClick: handleDeleteChatClick,
       onRenameChatClick: handleRenameChatClick,
-      isOpen,
+      isOpen: isOpen || isSidebarExpanded,
       isDeletingSession,
       isRenamingSession,
     }),
@@ -914,9 +957,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     () => ({
       currentTheme,
       onThemeChange: handleThemeToggle,
-      isOpen,
+      isOpen: isOpen || isSidebarExpanded,
     }),
-    [currentTheme, handleThemeToggle, isOpen],
+    [currentTheme, handleThemeToggle, isOpen, isSidebarExpanded],
   );
 
   const userAvatarProps = useMemo(
@@ -936,17 +979,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       isOpen: isAvatarMenuOpen,
       onLogoutClick: handleLogoutClick,
       isLoggingOut,
+      isAdmin,
+      onAdminClick: handleAdminClick,
     }),
-    [isAvatarMenuOpen, handleLogoutClick, isLoggingOut],
+    [isAvatarMenuOpen, handleLogoutClick, isLoggingOut, isAdmin, handleAdminClick],
   );
 
   return (
     <>
       <div
-        className={`bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 border-r h-full transition-transform duration-300 ease-in-out ${isOpen
+        ref={sidebarRef}
+        className={`bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 border-r h-full transition-all duration-300 ease-in-out ${isOpen
             ? 'translate-x-0 w-72 md:w-64'
-            : '-translate-x-full md:translate-x-0 md:w-14 md:hover:w-64'
-          } fixed inset-y-0 left-0 z-10 flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative md:w-16 lg:shadow-none lg:translate-x-0 lg:relative lg:w-16 lg:hover:w-64 group overflow-hidden overflow-y-scroll modern-scrollbar`}
+            : '-translate-x-full md:translate-x-0'
+          } ${isSidebarExpanded ? 'md:w-64' : 'md:w-16'} fixed inset-y-0 left-0 z-10 flex flex-col shadow-lg md:shadow-none md:translate-x-0 md:relative overflow-hidden overflow-y-scroll modern-scrollbar`}
       >
         <div className="p-6 sm:p-4 flex-1">
           {/* Toggle Button for Mobile */}
@@ -962,9 +1008,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </Button>
           </div>
 
+          {/* Expand/Collapse Button for Desktop */}
+          <div className="hidden md:flex justify-end mb-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleSidebarExpand}
+              className="text-slate-600 dark:text-gray-300"
+              title={isSidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              {isSidebarExpanded ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
+
           <div className="mb-2">
-            {isOpen && (
-              <h2 className="font-semibold text-slate-800 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-200">
+            {(isOpen || isSidebarExpanded) && (
+              <h2 className="font-semibold text-slate-800 dark:text-gray-200">
                 Navigation
               </h2>
             )}
@@ -978,8 +1037,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Social Navigation Section */}
           {activeTab === 'social' && (
             <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
-              {isOpen && (
-                <div className="mb-2 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+              {(isOpen || isSidebarExpanded) && (
+                <div className="mb-2">
                   <h2 className="font-semibold text-slate-800 dark:text-gray-200">
                     Social
                   </h2>
@@ -993,8 +1052,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {activeTab === 'chat' || activeTab.startsWith('chat/') ? (
             <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
-                {isOpen && (
-                  <h2 className="font-semibold text-slate-800 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 dark:text-gray-200">
+                {(isOpen || isSidebarExpanded) && (
+                  <h2 className="font-semibold text-slate-800 dark:text-gray-200">
                     Chat Sessions
                   </h2>
                 )}
@@ -1002,7 +1061,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={handleNewChat}
-                  className={`text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'
+                  className={`text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!(isOpen || isSidebarExpanded) && 'px-2'
                     }`}
                   title="New Chat"
                   disabled={isNewChatLoading}
@@ -1010,12 +1069,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {isNewChatLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Plus className={`h-4 w-4 ${isOpen ? 'mr-2' : ''}`} />
+                    <Plus className={`h-4 w-4 ${(isOpen || isSidebarExpanded) ? 'mr-2' : ''}`} />
                   )}
                   <span
-                    className={`${isOpen
+                    className={`${(isOpen || isSidebarExpanded)
                         ? ''
-                        : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:absolute lg:left-9 lg:w-full lg:pl-1 lg:pointer-events-none'
+                        : 'hidden'
                       }`}
                   >
                     New Chat
@@ -1024,10 +1083,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div
                 ref={chatSessionsRef}
-                className={`space-y-1 transition-all duration-300 ease-in-out ${isOpen
+                className={`space-y-1 transition-all duration-300 ease-in-out ${(isOpen || isSidebarExpanded)
                     ? 'max-h-[50vh] overflow-y-auto modern-scrollbar'
                     : 'max-h-0 overflow-hidden'
-                  } lg:group-hover:max-h-[31vh] lg:group-hover:overflow-y-auto lg:group-hover:modern-scrollbar lg:max-h-0 lg:overflow-hidden`}
+                  }`}
               >
                 <ChatSessionsList {...chatSessionsListProps} />
                 {hasMoreChatSessions && (
@@ -1035,7 +1094,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     variant="ghost"
                     size="sm"
                     onClick={handleLoadMore}
-                    className={`w-full text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!isOpen && 'px-2'
+                    className={`w-full text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800 ${!(isOpen || isSidebarExpanded) && 'px-2'
                       }`}
                     disabled={isLoadingMore}
                   >
@@ -1053,8 +1112,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Notes Categories Section */}
           {activeTab === 'notes' && (
             <div className="mt-6 mb-2 border-t border-slate-200 pt-4 dark:border-gray-700">
-              {isOpen && (
-                <div className="mb-2 lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+              {(isOpen || isSidebarExpanded) && (
+                <div className="mb-2">
                   <h2 className="font-semibold text-slate-800 dark:text-gray-200">
                     Categories
                   </h2>
@@ -1069,11 +1128,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div
-          className={`flex-shrink-0 border-t border-slate-200 p-4 dark:border-gray-700 transition-all duration-300 ease-in-out ${isOpen ? 'flex items-center gap-2' : 'flex justify-center'
-            } lg:group-hover:flex lg:group-hover:items-center lg:group-hover:gap-2 lg:flex lg:justify-center`}
+          ref={avatarMenuRef}
+          className={`flex-shrink-0 border-t border-slate-200 p-4 dark:border-gray-700 transition-all duration-300 ease-in-out relative ${
+            (isOpen || isSidebarExpanded) ? 'flex items-center gap-2' : 'flex justify-center'
+          }`}
         >
           <AvatarMenu {...avatarMenuProps} />
-          <UserAvatar {...userAvatarProps} />
+          <div className="flex items-center gap-2">
+            <UserAvatar {...userAvatarProps} />
+          </div>
         </div>
 
         <ConfirmationModal
@@ -1092,15 +1155,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           message="Enter a new title for your chat session:"
           initialValue={sessionToRenameTitle}
         />
-
-        <ConfirmationModal
-          isOpen={showLogoutConfirm}
-          onClose={() => setShowLogoutConfirm(false)}
-          onConfirm={handleConfirmLogout}
-          title="Sign Out"
-          message="Are you sure you want to sign out? You will be redirected to the login page."
-        />
       </div>
+
+      {/* Logout confirmation modal - centered on screen */}
+      <ConfirmationModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleConfirmLogout}
+        title="Sign Out"
+        message="Are you sure you want to sign out? You will be redirected to the login page."
+      />
     </>
   );
 };

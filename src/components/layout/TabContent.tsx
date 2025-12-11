@@ -34,6 +34,10 @@ interface TabContentProps {
   activeTab: 'dashboard' | 'notes' | 'recordings' | 'quizzes' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social';
   activeSocialTab?: string;
   socialPostId?: string;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  socialSearchQuery?: string;
+  onSocialSearchChange?: (query: string) => void;
   filteredNotes: Note[];
   activeNote: Note | null;
   recordings: ClassRecording[] | undefined;
@@ -181,6 +185,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     quizzes: props.quizzes,
     onReprocessAudio: props.onReprocessAudio,
     onDeleteRecording: props.onDeleteRecording,
+    searchQuery: props.searchQuery,
+    onSearchChange: props.onSearchChange,
   }), [
     props.recordings,
     props.onAddRecording,
@@ -190,6 +196,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.quizzes,
     props.onReprocessAudio,
     props.onDeleteRecording,
+    props.searchQuery,
+    props.onSearchChange,
   ]);
 
   const scheduleProps = useMemo(() => ({
@@ -310,7 +318,15 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     // onDocumentUploaded: props.onDocumentUploaded,
     onDocumentDeleted: props.onDocumentDeleted,
     onDocumentUpdated: props.onDocumentUpdated,
-  }), [props.documents, props.onDocumentDeleted, props.onDocumentUpdated]);
+    searchQuery: props.searchQuery,
+    onSearchChange: props.onSearchChange,
+  }), [
+    props.documents,
+    props.onDocumentDeleted,
+    props.onDocumentUpdated,
+    props.searchQuery,
+    props.onSearchChange
+  ]);
 
   const notesHistoryProps = useMemo(() => ({
     notes: props.filteredNotes,
@@ -509,7 +525,10 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
           <ErrorBoundary>
             <SocialFeed
               activeTab={props.activeSocialTab}
-              postId={props.socialPostId} />
+              postId={props.socialPostId}
+              searchQuery={props.socialSearchQuery}
+              onSearchChange={props.onSocialSearchChange}
+            />
           </ErrorBoundary>
         </div>
       );

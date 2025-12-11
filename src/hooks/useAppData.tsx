@@ -70,6 +70,34 @@ const CACHE_CONFIG = {
   maxSize: 100 // Max items per cache
 };
 
+// Toast deduplication - prevent showing same error multiple times
+const recentToastsRef: { current: Map<string, number> } = { current: new Map() };
+const TOAST_COOLDOWN = 3000; // Don't show same toast within 3 seconds
+
+// Request deduplication - prevent simultaneous fetches
+const activeRequestsRef: { current: Map<string, Promise<any>> } = { current: new Map() };
+
+const getRequestKey = (type: string, userId: string, isInitial: boolean) => {
+  return `${type}_${userId}_${isInitial ? 'initial' : 'more'}`;
+};
+
+const showToastOnce = (message: string, type: 'error' | 'success' | 'info' = 'error') => {
+  const now = Date.now();
+  const lastShown = recentToastsRef.current.get(message);
+  
+  if (!lastShown || now - lastShown > TOAST_COOLDOWN) {
+    recentToastsRef.current.set(message, now);
+    toast[type](message);
+    
+    // Cleanup old entries
+    if (recentToastsRef.current.size > 20) {
+      const oldestKey = Array.from(recentToastsRef.current.entries())
+        .sort((a, b) => a[1] - b[1])[0][0];
+      recentToastsRef.current.delete(oldestKey);
+    }
+  }
+};
+
 // Type definitions for Supabase responses
 interface SupabaseDocument {
   id: string;
@@ -684,9 +712,11 @@ export const useAppData = () => {
       recordResponseTime(responseTime);
 
       if (error) {
-        // Check if it's a network error
-        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          //console.warn('Network error loading documents, will retry later');
+        // Check if it's a network error or QUIC protocol error
+        if (error.message?.includes('network') || 
+            error.message?.includes('QUIC') || 
+            error.message?.includes('ERR_QUIC_PROTOCOL_ERROR')) {
+          //console.warn('Network/QUIC error loading documents, will retry later');
           // Don't throw, just return - it will be retried by queue
           return;
         }
@@ -749,13 +779,13 @@ export const useAppData = () => {
     } catch (error) {
       //console.error('Error loading documents:', error);
       if (isInitial && !error.message?.includes('network')) {
-        toast.error('Failed to load documents. Please check your connection.');
+        showToastOnce('Failed to load documents. Please check your connection.', 'error');
         setDataErrors(prev => ({ ...prev, documents: 'Failed to load documents' }));
       }
     } finally {
       setDataLoading('documents', false);
     }
-  }, [dataLoaded, dataLoading.documents, dataPagination.documents, setDataLoading, recordResponseTime]);
+  }, [dataLoaded, dataLoading, dataPagination, setDataLoading, recordResponseTime]);
 
   // Optimized recordings loading with retry logic
   const loadRecordingsPage = useCallback(async (userId: string, isInitial = false) => {
@@ -1369,17 +1399,24 @@ export const useAppData = () => {
       setDataErrors(prev => ({ ...prev, notes: 'Failed to load notes' }));
 
       if (isInitial && !error.message?.includes('network')) {
-        toast.error('Failed to load notes. Please check your connection.');
+        showToastOnce('Failed to load notes. Please check your connection.', 'error');
       }
     } finally {
       abortControllersRef.current.delete(`notes_${userId}`);
       setDataLoading('notes', false);
     }
-  }, [dataLoading.notes, dataPagination.notes, activeNote, getCachedData, setCachedData, setDataLoading, recordResponseTime]);
+  }, [dataLoading, dataPagination, activeNote, getCachedData, setCachedData, setDataLoading, recordResponseTime]);
 
   // Enhanced progressive loading with connection awareness - UPDATED
   const startProgressiveDataLoading = useCallback(async (user: any) => {
     if (!user?.id) return;
+
+    // Check if we already have active requests to prevent duplicate loading
+    const activeCount = activeRequestsRef.current.size;
+    if (activeCount > 3) {
+      console.log('Too many active requests, deferring progressive load...');
+      return;
+    }
 
     setLoading(true);
     setLoadingPhase({ phase: 'initial', progress: 10 });
@@ -1451,9 +1488,9 @@ export const useAppData = () => {
       const connectionQuality = getConnectionQuality();
 
       if (connectionQuality === 'poor') {
-        toast.error('Network connection is poor. Some data may not load.');
+        showToastOnce('Network connection is poor. Some data may not load.', 'info');
       } else {
-        toast.warning('Some data failed to load. You can still use the app.');
+        showToastOnce('Some data failed to load. You can still use the app.', 'info');
       }
 
       setLoading(false);

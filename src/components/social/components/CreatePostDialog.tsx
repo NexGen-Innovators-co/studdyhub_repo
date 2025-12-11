@@ -1,13 +1,17 @@
 // Fixed CreatePostDialog.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/dialog';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Lock } from 'lucide-react';
 import { SocialUserWithDetails } from '../../../integrations/supabase/socialTypes';
 import { Privacy } from '../types/social';
+import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
+import { Alert, AlertDescription } from '../../ui/alert';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 interface CreatePostDialogProps {
   isOpen: boolean;
@@ -38,10 +42,29 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
   currentUser,
   groupId
 }) => {
+  const { canPostSocials, tier } = useFeatureAccess();
+  const navigate = useNavigate();
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       onFilesChange(Array.from(e.target.files));
     }
+  };
+
+  const handleSubmit = () => {
+    // Check subscription access
+    if (!canPostSocials) {
+      toast.error('Social posting requires Scholar plan or higher', {
+        action: {
+          label: 'Upgrade',
+          onClick: () => navigate('/subscription')
+        },
+        duration: 5000
+      });
+      return;
+    }
+
+    onSubmit();
   };
 
   return (
@@ -51,15 +74,31 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
           <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">Create Post</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 p-6">
+          {!canPostSocials && (
+            <Alert className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
+              <Lock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <AlertDescription className="text-orange-800 dark:text-orange-200">
+                Social posting is only available with Scholar and Genius plans. 
+                <Button 
+                  variant="link" 
+                  className="text-orange-600 dark:text-orange-400 p-0 h-auto"
+                  onClick={() => navigate('/subscription')}
+                >
+                  Upgrade now
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           <Textarea
             value={content}
             onChange={(e) => onContentChange(e.target.value)}
             placeholder="What's on your mind?"
-            className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600"
+            disabled={!canPostSocials || isUploading}
+            className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600 disabled:opacity-50"
             rows={5}
           />
-          <Select value={privacy} onValueChange={onPrivacyChange}>
-            <SelectTrigger className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600">
+          <Select value={privacy} onValueChange={onPrivacyChange} disabled={!canPostSocials}>
+            <SelectTrigger className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600 disabled:opacity-50">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-white dark:bg-gray-800 border-slate-200 dark:border-gray-700">
@@ -73,7 +112,8 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
             accept="image/*,video/*"
             multiple
             onChange={handleFileChange}
-            className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-300 border-slate-200 dark:border-gray-600"
+            disabled={!canPostSocials || isUploading}
+            className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-300 border-slate-200 dark:border-gray-600 disabled:opacity-50"
           />
           {selectedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -96,9 +136,9 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
               Cancel
             </Button>
             <Button
-              onClick={onSubmit}
-              disabled={isUploading || !content.trim()}
-              className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+              onClick={handleSubmit}
+              disabled={!canPostSocials || isUploading || !content.trim()}
+              className="bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-800"
             >
               {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Post'}
             </Button>

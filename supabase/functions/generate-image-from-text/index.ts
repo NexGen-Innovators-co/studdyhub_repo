@@ -73,7 +73,7 @@ serve(async (req) => {
             });
 
         if (uploadError) {
-            //console.error('Supabase Storage upload error:', uploadError.message);
+            console.error('Supabase Storage upload error:', uploadError.message);
             throw new Error(`Failed to upload image to storage: ${uploadError.message}`);
         }
 
@@ -92,7 +92,7 @@ serve(async (req) => {
         });
 
     } catch (error) {
-        //console.error('Edge function error in generate-image-from-text:', error.message);
+        console.error('Edge function error in generate-image-from-text:', error.message);
         return new Response(JSON.stringify({ error: error.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

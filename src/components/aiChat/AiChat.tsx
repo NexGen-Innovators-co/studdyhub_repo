@@ -297,13 +297,15 @@ const AIChat: React.FC<AIChatProps> = ({
     return /mobile|android|iphone|ipad|tablet/i.test(userAgent) && window.innerWidth <= 768;
   }, []);
   const userMessagesToday = useAiMessageTracker().messagesToday;
-  const limit = useAiMessageTracker().limit;
+  const { checkAiMessageLimit } = useAiMessageTracker();
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (userMessagesToday >= limit) {
-      toast.message('you have exceeded your message limit for today. Please try again tomorrow.')
+    
+    // Check limit BEFORE attempting to send
+    if (!checkAiMessageLimit()) {
       return;
     }
+    
     if (isCurrentlySendingRef.current) {
       return;
     }
@@ -414,6 +416,7 @@ const AIChat: React.FC<AIChatProps> = ({
       );
       setInputMessage('');
 
+      // Note: Message count updates automatically via realtime subscription when AI responds
       await onSendMessageToBackend(
         inputMessage.trim(),
         documentIds,
@@ -429,6 +432,9 @@ const AIChat: React.FC<AIChatProps> = ({
       setExpandedMessages(new Set());
 
     } catch (error: any) {
+      // No need to decrement - we don't increment on send anymore
+      // Message count now updates automatically via realtime
+      
       //console.error("Error sending message:", error);
       let errorMessage = 'Failed to send message.';
 
@@ -468,6 +474,7 @@ const AIChat: React.FC<AIChatProps> = ({
     notes,
     onSendMessageToBackend,
     isCurrentlySending,
+    checkAiMessageLimit,
     messages
   ]);
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {

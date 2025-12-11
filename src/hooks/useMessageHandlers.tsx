@@ -6,6 +6,7 @@ import { Message, FileData, MessagePart } from '../types/Class';
 import { Document as AppDocument } from '../types/Document';
 import { Note } from '../types/Note';
 import { v4 as uuidv4 } from 'uuid';
+import { estimateChatRequestTokens, TOKEN_LIMITS, formatTokenCount, truncateToTokenLimit } from '../utils/tokenCounter';
 
 export const useMessageHandlers = () => {
   const {
@@ -89,6 +90,17 @@ export const useMessageHandlers = () => {
 
     if (!hasTextContent && !hasAttachments) {
       toast.warning('Please enter a message or attach files to send.');
+      return;
+    }
+
+    // Validate file count limit (max 10 files)
+    if (attachedFiles && attachedFiles.length > TOKEN_LIMITS.MAX_TOTAL_FILES) {
+      toast.error(
+        `Too many files attached. Maximum is ${TOKEN_LIMITS.MAX_TOTAL_FILES} files per message.`,
+        { description: 'Please remove some files and try again.' }
+      );
+      dispatch({ type: 'SET_IS_SUBMITTING_USER_MESSAGE', payload: false });
+      dispatch({ type: 'SET_IS_AI_LOADING', payload: false });
       return;
     }
 
@@ -178,6 +190,46 @@ export const useMessageHandlers = () => {
           });
         }
       });
+
+      // **TOKEN VALIDATION**: Estimate token count before sending
+      const conversationHistory = allChatMessages
+        .filter(msg => msg.session_id === currentSessionId)
+        .filter(msg => !(aiMessageIdToUpdate && msg.id === aiMessageIdToUpdate))
+        .slice(-20) // Use last 20 messages for estimation
+        .map(msg => ({ role: msg.role, content: msg.content }));
+
+      const tokenEstimate = estimateChatRequestTokens({
+        message: messageContent,
+        files: processedFiles.map(f => ({ 
+          content: f.content, 
+          data: f.data, 
+          mimeType: f.mimeType, 
+          type: f.type 
+        })),
+        documentsContext: currentAttachedContext,
+        conversationHistory: conversationHistory,
+      });
+
+      // Check if token limit exceeded
+      if (tokenEstimate.exceedsLimit) {
+        toast.error(
+          'Content too large to process',
+          { 
+            description: `Total: ${formatTokenCount(tokenEstimate.totalTokens)}. Maximum is ${formatTokenCount(TOKEN_LIMITS.GEMINI_MAX_INPUT)}. Please reduce the number of attachments or message length.` 
+          }
+        );
+        dispatch({ type: 'SET_IS_SUBMITTING_USER_MESSAGE', payload: false });
+        dispatch({ type: 'SET_IS_AI_LOADING', payload: false });
+        return;
+      }
+
+      // Show warnings if approaching limit
+      if (tokenEstimate.warnings.length > 0) {
+        toast.warning(
+          'Large context detected',
+          { description: tokenEstimate.warnings.join('. ') + `. Total: ${formatTokenCount(tokenEstimate.totalTokens)}` }
+        );
+      }
 
       const historicalMessagesForAI = allChatMessages
         .filter(msg => msg.session_id === currentSessionId)

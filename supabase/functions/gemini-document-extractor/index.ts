@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.2';
+import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -117,16 +118,14 @@ const extractContentWithGemini = async (
     };
 
     const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
-
-    (`Sending LLM request for ${fileType}. Input Base64 size: ${fileContentBase64.length} bytes.`);
-    (`Payload structure (truncated data for log):`, JSON.stringify({
+ JSON.stringify({
         contents: payload.contents.map(c => ({
             ...c,
             parts: c.parts.map(p => p.inline_data ? { ...p, inline_data: { mime_type: p.inline_data.mime_type, data: `[${p.inline_data.data.length} bytes]` } } : p)
         })),
         generationConfig: payload.generationConfig,
         safetySettings: payload.safetySettings
-    }, null, 2));
+    }, null, 2);
 
     const response = await fetch(geminiApiUrl, {
         method: 'POST',
@@ -160,7 +159,7 @@ const extractContentWithGemini = async (
     }
 
     if (finishReason === 'MAX_TOKENS') {
-        //console.warn('Gemini extraction hit token limit. Content might be truncated. Consider client-side chunking for extremely large documents.');
+        console.warn('Gemini extraction hit token limit. Content might be truncated. Consider client-side chunking for extremely large documents.');
     }
 
     (`Successfully extracted ${extractedText.length} characters using Gemini for ${fileType}.`);
@@ -210,7 +209,7 @@ const extractTextWithOptimalStrategy = async (
         return await extractContentWithGemini(fileContentBase64, fileType, geminiApiKey);
     } else {
         const errorMessage = `Content extraction not supported for file type: ${fileType}.`;
-        //console.warn(`Edge Function: Fallback for unexpected file type ${fileType}.`);
+        console.warn(`Edge Function: Fallback for unexpected file type ${fileType}.`);
         throw new Error(errorMessage);
     }
 };
@@ -247,6 +246,18 @@ serve(async (req) => {
         const { documentId: reqDocumentId, file_url, file_type, userId: reqUserId, imageMimeType, fileUrl: imageUrl } = payload;
         documentId = reqDocumentId;
         userId = reqUserId; // Ensure userId is captured
+
+        if (!userId) {
+            return createErrorResponse('Unauthorized: user_id is required', 401);
+        }
+
+        // Validate document upload limit before processing
+        const validator = createSubscriptionValidator();
+        const limitCheck = await validator.checkDocumentsLimit(userId);
+        
+        if (!limitCheck.allowed) {
+            return createErrorResponse(limitCheck.message || 'Document limit exceeded', 403);
+        }
 
         const finalFileUrl = file_url || imageUrl;
         const finalFileType = file_type || imageMimeType;
@@ -378,7 +389,7 @@ serve(async (req) => {
         });
 
     } catch (error) {
-        //console.error('Document extraction error:', error);
+        console.error('Document extraction error:', error);
 
         const errorMessage = error?.message || 'Unknown error occurred during text extraction';
 
@@ -392,7 +403,7 @@ serve(async (req) => {
                 }).eq('id', documentId);
             }
         } catch (updateErr) {
-            //console.error("Failed to update document status to failed:", updateErr);
+            console.error("Failed to update document status to failed:", updateErr);
         }
 
         return new Response(JSON.stringify({

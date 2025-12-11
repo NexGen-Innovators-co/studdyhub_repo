@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
+import { Alert, AlertDescription } from '../../ui/alert';
 import { Users, Lock, Globe, ArrowRight, Plus, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
 import {
   Dialog,
   DialogContent,
@@ -57,14 +59,22 @@ interface GroupsSectionProps {
 const CreateGroupFormDialog: React.FC<{
   onCreate: (data: CreateGroupData) => Promise<Group | null>;
   onClose: () => void;
-}> = ({ onCreate, onClose }) => {
+  canCreateGroups: boolean;
+}> = ({ onCreate, onClose, canCreateGroups }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [privacy, setPrivacy] = useState<'public' | 'private'>('public');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const handleSubmit = useCallback(async () => {
+    // Check subscription before attempting to create
+    if (!canCreateGroups) {
+      setError('Group creation is only available with Scholar and Genius plans.');
+      return;
+    }
+
     if (!name.trim() || !description.trim()) {
       setError('Group name and description are required.');
       return;
@@ -87,7 +97,33 @@ const CreateGroupFormDialog: React.FC<{
     } finally {
       setIsSubmitting(false);
     }
-  }, [name, description, privacy, onCreate, onClose]);
+  }, [name, description, privacy, onCreate, onClose, canCreateGroups]);
+
+  if (!canCreateGroups) {
+    return (
+      <DialogContent className="sm:max-w-[425px] rounded-xl">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold text-blue-600">
+            <Plus className="h-5 w-5 mr-2 inline" /> Start a New Community
+          </DialogTitle>
+        </DialogHeader>
+        <Alert className="border-orange-200 bg-orange-50 dark:bg-orange-950">
+          <Lock className="h-4 w-4 text-orange-600" />
+          <AlertDescription className="text-orange-800 dark:text-orange-200 ml-2">
+            Group creation is only available with Scholar and Genius plans.
+          </AlertDescription>
+        </Alert>
+        <DialogFooter>
+          <Button
+            onClick={() => navigate('/subscription')}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6"
+          >
+            Upgrade to Scholar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    );
+  }
 
   return (
     <DialogContent className="sm:max-w-[425px] rounded-xl">
@@ -191,6 +227,7 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
   isLoadingMore,
 }) => {
   const navigate = useNavigate();
+  const { canCreateGroups } = useFeatureAccess();
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
@@ -225,7 +262,13 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button
-                onClick={() => setIsCreateDialogOpen(true)}
+                onClick={() => {
+                  if (!canCreateGroups) {
+                    navigate('/subscription');
+                  } else {
+                    setIsCreateDialogOpen(true);
+                  }
+                }}
                 className="bg-white text-blue-600 hover:bg-blue-50 border-none shadow-none rounded-full"
               >
                 <Plus className="mr-2 h-4 w-4" /> Create Group
@@ -234,6 +277,7 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
             <CreateGroupFormDialog
               onCreate={onCreateGroup}
               onClose={() => setIsCreateDialogOpen(false)}
+              canCreateGroups={canCreateGroups}
             />
           </Dialog>
         )}

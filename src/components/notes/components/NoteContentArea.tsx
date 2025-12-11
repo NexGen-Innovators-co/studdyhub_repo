@@ -1296,7 +1296,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
                     )}
                   </button>
 
-                  {savedCards.length > 0 && (
                     <button
                       onClick={() => {
                         setShowDeck(!showDeck);
@@ -1307,7 +1306,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
                       <Brain className="w-4 h-4" />
                       {showDeck ? 'Hide' : 'View'} Flashcards ({savedCards.length})
                     </button>
-                  )}
+
                 </div>
               </div>
             </div>
