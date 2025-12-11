@@ -50,7 +50,7 @@ Supabase account
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/studdyhub.git
+git clone https://github.com/NexGen-Innovators-co/studdyhub_repo.git
 cd studdyhub
 ```
 
@@ -330,5 +330,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Made with ❤️ by the StuddyHub Team**
+
 
 [⬆ back to top](#-studdyhub---ai-powered-learning-platform)
