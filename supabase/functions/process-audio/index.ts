@@ -30,6 +30,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to extract audio duration using ffprobe-like approach
+async function extractAudioDuration(audioBlob: Blob): Promise<number | null> {
+  try {
+    // Use Web Audio API to decode and get duration
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    
+    // Try to extract duration from audio headers
+    // For WebM, MP3, M4A formats
+    if (audioBlob.type.includes('webm') || audioBlob.type.includes('mpeg') || audioBlob.type.includes('mp4')) {
+      // Create a data view to read the audio file
+      const view = new DataView(arrayBuffer);
+      
+      // Simple duration extraction (this is a basic implementation)
+      // For production, you'd want more robust parsing
+      
+      // For now, return null and let it be calculated on client side
+      // or use AI to estimate from transcript length
+      return null;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error extracting audio duration:', error);
+    return null;
+  }
+}
+
 // Process the audio in the background
 async function processAudioInBackground(file_url: string, target_language: string = 'en', user_id: string) {
   try {
@@ -41,6 +68,9 @@ async function processAudioInBackground(file_url: string, target_language: strin
 
     // Get audio as blob
     const audioBlob = await audioResponse.blob();
+
+    // Extract audio duration
+    const audioDuration = await extractAudioDuration(audioBlob);
 
     // 2. Convert to base64 more efficiently
     const arrayBuffer = await audioBlob.arrayBuffer();
@@ -89,8 +119,30 @@ async function processAudioInBackground(file_url: string, target_language: strin
     // Wait for both operations to complete
     const [summary, translatedContent] = await Promise.all([summaryPromise, translationPromise]);
 
+    // Estimate duration from transcript if not available
+    // Average speaking rate is ~150 words per minute
+    let estimatedDuration = audioDuration;
+    if (!estimatedDuration && transcript) {
+      const wordCount = transcript.split(/\s+/).length;
+      const estimatedMinutes = wordCount / 150;
+      estimat
+      transcript: null, 
+      summary: null, 
+      translated_content: null, 
+      duration: null,
+      status: 'error', 
+      error_message: error.message 
+   
+    }
+
     // Return all results for the main serve function to update the database
-    return { transcript, summary, translated_content: translatedContent, status: 'completed' };
+    return { 
+      transcript, 
+      summary, 
+      translated_content: translatedContent, 
+      duration: estimatedDuration,
+      status: 'completed' 
+    };
 
   } catch (error) {
     console.error('Background processing error:', error);
@@ -235,16 +287,39 @@ serve(async (req) => {
     const jobId = data.id;
 
     // Start background processing using EdgeRuntime.waitUntil
-    // Pass user_id to the background processing function
-    EdgeRuntime.waitUntil(
-      (async () => {
-        const results = await processAudioInBackground(file_url, target_language, user_id);
-
-        // Update the database with the results from background processing
-        if (results.status === 'completed') {
+    // Pas// Update audio_processing_results
           await supabase
             .from('audio_processing_results')
             .update({
+              transcript: results.transcript,
+              summary: results.summary,
+              translated_content: results.translated_content,
+              status: 'completed',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', jobId);
+
+          // Update class_recordings with duration if available
+          if (results.duration && document_id) {
+            const { data: recording } = await supabase
+              .from('class_recordings')
+              .select('duration')
+              .eq('document_id', document_id)
+              .single();
+
+            // Only update if duration is 0 or null
+            if (recording && (recording.duration === 0 || recording.duration === null)) {
+              await supabase
+                .from('class_recordings')
+                .update({
+                  duration: results.duration,
+                  transcript: results.transcript,
+                  summary: results.summary,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('document_id', document_id);
+            }
+          }
               transcript: results.transcript,
               summary: results.summary,
               translated_content: results.translated_content,

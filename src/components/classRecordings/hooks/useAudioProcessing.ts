@@ -116,17 +116,33 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         .eq('user_id', user.id);
 
       if (updateDocError) {
-        //console.error('Error updating document with processed audio:', updateDocError);
         throw new Error(`Failed to update document: ${updateDocError.message}`);
+      }
+
+      // Prepare update object for recording
+      const recordingUpdate: any = {
+        transcript: data.transcript,
+        summary: data.summary,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Update duration if returned from processor and current duration is 0 or null
+      if (data.duration) {
+        const { data: currentRecording } = await supabase
+          .from('class_recordings')
+          .select('duration')
+          .eq('document_id', documentId)
+          .eq('user_id', user.id)
+          .single();
+
+        if (currentRecording && (currentRecording.duration === 0 || currentRecording.duration === null)) {
+          recordingUpdate.duration = data.duration;
+        }
       }
 
       const { error: updateRecordingError } = await supabase
         .from('class_recordings')
-        .update({
-          transcript: data.transcript,
-          summary: data.summary,
-          updated_at: new Date().toISOString(),
-        })
+        .update(recordingUpdate)
         .eq('document_id', documentId)
         .eq('user_id', user.id);
 

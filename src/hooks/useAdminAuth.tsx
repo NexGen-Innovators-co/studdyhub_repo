@@ -90,10 +90,10 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
         // Show welcome toast for admin
         const roleLabel = data.role === 'super_admin' ? 'Super Admin' : 
                          data.role === 'admin' ? 'Admin' : 'Moderator';
-        toast.success(`Welcome back, ${roleLabel}! 🛡️`, {
-          description: 'You have full access to all features.',
-          duration: 4000,
-        });
+        // toast.success(`Welcome back, ${roleLabel}! 🛡️`, {
+        //   description: 'You have full access to all features.',
+        //   duration: 4000,
+        // });
 
         // Update last login
         await supabase

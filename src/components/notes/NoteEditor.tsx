@@ -1044,11 +1044,64 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         throw new Error("Could not get public URL for the uploaded audio file.");
       }
 
+      // Calculate audio duration from the file
+      const audioUrl = URL.createObjectURL(file);
+      const audio = new Audio(audioUrl);
+      const durationPromise = new Promise<number>((resolve) => {
+        audio.onloadedmetadata = () => resolve(audio.duration);
+        audio.onerror = () => resolve(0);
+      });
+      const audioDuration = await durationPromise;
+      URL.revokeObjectURL(audioUrl);
+
+      // Create a document record for the audio
+      const { data: newDocument, error: createDocError } = await supabase
+        .from('documents')
+        .insert({
+          user_id: userProfile.id,
+          title: file.name,
+          file_name: file.name,
+          file_url: publicUrlData.publicUrl,
+          file_type: file.type,
+          type: 'audio',
+          processing_status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (createDocError || !newDocument) {
+        throw new Error('Failed to create document record for audio.');
+      }
+
+      // Create a class recording entry with duration
+      const { error: recordingError } = await supabase
+        .from('class_recordings')
+        .insert({
+          user_id: userProfile.id,
+          title: file.name,
+          subject: 'Note Audio',
+          audio_url: publicUrlData.publicUrl,
+          duration: Math.floor(audioDuration),
+          transcript: '',
+          summary: '',
+          document_id: newDocument.id,
+          date: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        });
+
+      if (recordingError) {
+        // Non-critical error, continue
+        console.warn('Failed to create class recording entry:', recordingError);
+      }
+
       setUploadedAudioDetails({
         url: publicUrlData.publicUrl,
         type: file.type,
         name: file.name
       });
+      setDocumentIdForDialog(newDocument.id);
       setIsAudioOptionsVisible(true);
       toast.success('Audio file uploaded. Processing options available.', { id: toastId });
     } catch (error) {

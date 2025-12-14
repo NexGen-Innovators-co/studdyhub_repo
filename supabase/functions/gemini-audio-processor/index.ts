@@ -125,6 +125,15 @@ serve(async (req) => {
     const summaryResult = await summaryResponse.json();
     const summary = summaryResult?.candidates?.[0]?.content?.parts?.[0]?.text || 'No summary available.';
 
+    // 3.5. Estimate audio duration from transcript
+    // Average speaking rate is ~150 words per minute
+    let estimatedDuration = 0;
+    if (transcript && transcript !== 'No transcription available.') {
+      const wordCount = transcript.split(/\s+/).filter(word => word.length > 0).length;
+      const estimatedMinutes = wordCount / 150;
+      estimatedDuration = Math.floor(estimatedMinutes * 60); // Convert to seconds
+    }
+
     // 4. Translate Transcript (if target_language is not English)
     let translatedContent = null;
     if (target_language && target_language.toLowerCase() !== 'en') {
@@ -155,8 +164,13 @@ serve(async (req) => {
       }
     }
 
-    // Return all processed data directly
-    return new Response(JSON.stringify({ transcript, summary, translated_content: translatedContent }), {
+    // Return all processed data directly including estimated duration
+    return new Response(JSON.stringify({ 
+      transcript, 
+      summary, 
+      translated_content: translatedContent,
+      duration: estimatedDuration 
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

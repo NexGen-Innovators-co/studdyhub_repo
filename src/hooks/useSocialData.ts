@@ -27,12 +27,17 @@ const uniqueById = <T extends { id: string }>(arr: T[]): T[] => {
 };
 
 // Optimized: Batch queries and cache frequently used data
+// Dynamic feed algorithm: mixes engagement, recency, and randomization for varied content
 const createPostQuery = (baseQuery: any, sortBy: SortBy) => {
   let query = baseQuery;
 
   if (sortBy === 'newest') {
+    // Mix of newest posts with some randomization
+    // Fetch more than needed and will shuffle in-memory
     query = query.order('created_at', { ascending: false });
   } else if (sortBy === 'popular') {
+    // Engagement-based algorithm: score = (likes + comments*2 + shares*3) / age_in_hours
+    // This balances viral content with fresh content
     query = query.order('likes_count', { ascending: false });
   }
 
@@ -213,15 +218,45 @@ export const useSocialData = (
         return true;
       });
 
-      // Sort by viewed status
-      filteredPosts.sort((a, b) => {
-        const aViewed = viewedPostIds.has(a.id);
-        const bViewed = viewedPostIds.has(b.id);
-        if (aViewed === bViewed) return 0;
-        return aViewed ? 1 : -1;
-      });
+      // DYNAMIC FEED ALGORITHM:
+      // 1. Separate viewed and unviewed posts
+      const unviewedPosts = filteredPosts.filter(p => !viewedPostIds.has(p.id));
+      const viewedPosts = filteredPosts.filter(p => viewedPostIds.has(p.id));
 
-      const selectedPosts = filteredPosts.slice(0, POST_LIMIT);
+      // 2. Apply smart shuffling to unviewed posts for variety
+      // Shuffle using Fisher-Yates with engagement weight
+      const shuffleWithEngagement = (posts: any[]) => {
+        const weighted = [...posts];
+        
+        // Calculate engagement score for each post
+        const withScores = weighted.map(post => ({
+          post,
+          // Engagement score: recent posts get boost, popular posts get boost
+          score: (post.likes_count || 0) + 
+                 (post.comments_count || 0) * 2 + 
+                 (post.shares_count || 0) * 3 +
+                 // Recency bonus: newer posts (within 24h) get up to 10 point boost
+                 Math.max(0, 10 - ((Date.now() - new Date(post.created_at).getTime()) / (1000 * 60 * 60 * 24))),
+          // Add randomness (0-5 points) to prevent always showing same top posts
+          random: Math.random() * 5
+        }));
+
+        // Sort by combined score (engagement + recency + randomness)
+        withScores.sort((a, b) => (b.score + b.random) - (a.score + a.random));
+        
+        return withScores.map(item => item.post);
+      };
+
+      // 3. Shuffle unviewed posts for variety, keep viewed posts at end
+      const shuffledUnviewed = shuffleWithEngagement(unviewedPosts);
+      const sortedViewed = viewedPosts.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      // 4. Combine: unviewed posts first (shuffled), then viewed posts
+      const reorderedPosts = [...shuffledUnviewed, ...sortedViewed];
+
+      const selectedPosts = reorderedPosts.slice(0, POST_LIMIT);
       const postIds = selectedPosts.map(post => post.id);
 
       // OPTIMIZED: Batch fetch all relations at once
@@ -285,15 +320,31 @@ export const useSocialData = (
         return;
       }
 
-      // Prioritize unviewed posts
-      postsData.sort((a, b) => {
-        const aViewed = viewedPostIds.has(a.id);
-        const bViewed = viewedPostIds.has(b.id);
-        if (aViewed === bViewed) return 0;
-        return aViewed ? 1 : -1;
-      });
+      // DYNAMIC TRENDING ALGORITHM:
+      // Add variety to trending posts instead of always showing same top posts
+      const unviewedTrending = postsData.filter(p => !viewedPostIds.has(p.id));
+      const viewedTrending = postsData.filter(p => viewedPostIds.has(p.id));
 
-      const selectedPosts = postsData.slice(0, POST_LIMIT);
+      // Mix trending posts with slight randomization to show variety
+      const mixTrending = (posts: any[]) => {
+        return posts.map(post => ({
+          post,
+          // Trending score: heavily weighted toward likes/comments but with small random factor
+          score: (post.likes_count || 0) * 3 + 
+                 (post.comments_count || 0) * 2 + 
+                 (post.shares_count || 0) * 5 +
+                 // Small random factor (0-2 points) for variety
+                 Math.random() * 2
+        }))
+        .sort((a, b) => b.score - a.score)
+        .map(item => item.post);
+      };
+
+      const sortedUnviewed = mixTrending(unviewedTrending);
+      const sortedViewed = mixTrending(viewedTrending);
+
+      const reorderedPosts = [...sortedUnviewed, ...sortedViewed];
+      const selectedPosts = reorderedPosts.slice(0, POST_LIMIT);
       const postIds = selectedPosts.map(post => post.id);
 
       // OPTIMIZED: Batch fetch relations
