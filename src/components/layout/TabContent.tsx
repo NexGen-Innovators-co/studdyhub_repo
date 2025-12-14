@@ -15,8 +15,9 @@ import ErrorBoundary from './ErrorBoundary';
 import { toast } from 'sonner';
 import { SocialFeed } from '../social/SocialFeed';
 import { Quizzes } from '../quizzes/Quizzes';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChatSessionsListMobile } from '../aiChat/Components/ChatSessionsListMobile';
+import { NotificationsPage } from '../notifications/NotificationsPage';
 
 
 interface ChatSession {
@@ -130,6 +131,10 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory, activeSocialTab, socialPostId } = props;
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  // Check if we should show notifications view
+  const showNotifications = activeTab === 'dashboard' && searchParams.get('view') === 'notifications';
 
   const handleSuggestAiCorrection = useCallback((prompt?: string) => {
     toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
@@ -380,6 +385,17 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
   switch (activeTab) {
     case 'dashboard':
+      // Check if we should show notifications view
+      if (showNotifications) {
+        return (
+          <div className="flex-1 overflow-y-auto modern-scrollbar dark:bg-transparent">
+            <ErrorBoundary>
+              <NotificationsPage />
+            </ErrorBoundary>
+          </div>
+        );
+      }
+      
       return (
         <div className="flex-1 pb-6 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-transparent">
           <ErrorBoundary>

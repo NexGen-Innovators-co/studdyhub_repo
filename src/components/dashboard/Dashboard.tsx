@@ -106,14 +106,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
         );
     }
 
-    if (error || !stats) {
+    if (error || !stats ) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl">
                     <div className="w-20 h-20 mx-auto mb-4 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
                         <AlertCircle className="h-10 w-10 text-red-600 dark:text-red-400" />
                     </div>
-                    <p className="text-red-600 dark:text-red-400 text-lg font-semibold mb-4">{ "An error occured while fetching you data. Check you connection and try again "}</p>
                     <Button onClick={refresh} variant="outline" className="border-red-300">
                         <RefreshCw className="h-4 w-4 mr-2" /> Retry
                     </Button>

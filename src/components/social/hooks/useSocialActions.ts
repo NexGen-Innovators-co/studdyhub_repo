@@ -407,24 +407,59 @@ export const useSocialActions = (
   };
   const toggleLike = async (postId: string, isLiked: boolean) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // Get the current session instead of just user
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        toast.error('You must be logged in to like posts');
+        return;
+      }
+
+      const userId = session.user.id;
 
       if (isLiked) {
-        await supabase.from('social_likes').delete().eq('post_id', postId).eq('user_id', user.id);
+        const { error: deleteError } = await supabase
+          .from('social_likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', userId);
+
+        if (deleteError) {
+          toast.error('Failed to unlike post');
+          return;
+        }
       } else {
-        await supabase.from('social_likes').insert({ post_id: postId, user_id: user.id });
+        // Check if social_users record exists
+        const { data: socialUser, error: socialUserError } = await supabase
+          .from('social_users')
+          .select('id')
+          .eq('id', userId)
+          .single();
+        
+        if (socialUserError || !socialUser) {
+          toast.error('Please refresh the page');
+          return;
+        }
+
+        const { data: insertData, error: insertError } = await supabase
+          .from('social_likes')
+          .insert({ post_id: postId, user_id: userId })
+          .select();
+
+        if (insertError) {
+          toast.error('Failed to like post');
+          return;
+        }
 
         const post = posts.find(p => p.id === postId);
-        if (post && post.author_id !== user.id) {
+        if (post && post.author_id !== userId) {
           await supabase.from('social_notifications').insert({
             user_id: post.author_id,
             type: 'like',
             title: 'New like on your post',
             message: `${currentUser?.display_name} liked your post`,
-            data: { post_id: postId, user_id: user.id },
-            actor_id: user.id, // Added
-            post_id: postId // Added
+            data: { post_id: postId, user_id: userId },
+            actor_id: userId,
+            post_id: postId
           });
         }
       }
@@ -433,13 +468,14 @@ export const useSocialActions = (
         if (post.id === postId) {
           return {
             ...post,
-            is_liked: !isLiked
+            is_liked: !isLiked,
+            likes_count: isLiked ? post.likes_count - 1 : post.likes_count + 1
           };
         }
         return post;
       }));
     } catch (error) {
-      ////console.error('Error toggling like:', error);
+      console.error('Error toggling like:', error);
       toast.error('Failed to update like');
     }
   };

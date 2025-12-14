@@ -441,7 +441,7 @@ const Auth = () => {
         }
       } else {
 
-        toast.success('Welcome back!');
+        // toast.success('Welcome back!');
         navigate('/dashboard', { replace: true });
       }
     } catch (error) {
@@ -479,7 +479,32 @@ const Auth = () => {
   };
 
   const handleGoogleSignIn = async () => {
-    toast.info("Google sign-in coming soon...");
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // OAuth redirect will happen automatically
+      toast.success('Redirecting to Google...');
+    } catch (error: any) {
+      console.error('Google sign-in error:', error);
+      toast.error(error.message || 'Failed to sign in with Google');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -530,7 +555,7 @@ const Auth = () => {
 
                 <TabsContent value="signin" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    {/* <Button
+                    <Button
                       variant="outline"
                       onClick={handleGoogleSignIn}
                       className="w-full h-12 rounded-lg border border-gray-600 bg-gray-700/50 backdrop-blur-sm text-gray-100 hover:bg-gray-600/50 transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02]"
@@ -543,17 +568,17 @@ const Auth = () => {
                         <path d="M0.400326 12.0001C0.400326 11.2001 0.480326 10.4001 0.640326 9.60009L4.64033 6.64009C4.32033 7.28009 4.08033 7.92009 3.92033 8.64009H0.400326V12.0001Z" fill="#FBBC04" />
                       </svg>
                       Continue with Google
-                    </Button> */}
+                    </Button>
                   </div>
 
-                  {/* <div className="relative flex items-center justify-center my-6">
+                  <div className="relative flex items-center justify-center my-6">
                     <div className="absolute inset-0 flex items-center">
                       <span className="w-full border-t border-gray-700" />
                     </div>
                     <div className="relative z-10 bg-gray-900 px-4 text-sm text-gray-400">
                       or
                     </div>
-                  </div> */}
+                  </div>
 
                   <form onSubmit={handleSignIn} className="space-y-4">
                     <div className="space-y-2">
@@ -645,6 +670,33 @@ const Auth = () => {
                 </TabsContent>
 
                 <TabsContent value="signup" className="space-y-6 mt-6">
+                  <div className="space-y-4">
+                    <Button
+                      variant="outline"
+                      onClick={handleGoogleSignIn}
+                      className="w-full h-12 rounded-lg border border-gray-600 bg-gray-700/50 backdrop-blur-sm text-gray-100 hover:bg-gray-600/50 transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02]"
+                      disabled={isLoading}
+                      type="button"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.0003 4.40002C13.6003 4.40002 14.9603 4.96002 16.0003 5.92002L19.0403 2.96002C17.2003 1.28002 14.8003 0.400024 12.0003 0.400024C7.28033 0.400024 3.20033 3.04002 1.28033 7.04002L5.28033 10.0001C6.24033 7.52002 8.96033 5.92002 12.0003 5.92002V4.40002Z" fill="#EA4335" />
+                        <path d="M23.6003 12.0001C23.6003 11.2001 23.5203 10.4001 23.3603 9.60009H12.0003V14.4001H18.8003C18.4803 16.0001 17.6003 17.2001 16.4003 18.0001V21.4401H20.8003C23.2003 19.2001 23.6003 15.8401 23.6003 12.0001Z" fill="#4285F4" />
+                        <path d="M12.0003 23.6001C14.8003 23.6001 17.2003 22.7201 19.0403 21.4401L16.0003 18.0001C14.9603 18.7201 13.6003 19.2001 12.0003 19.2001C8.96033 19.2001 6.24033 17.6001 5.28033 15.1201L1.28033 18.0801C3.20033 22.0801 7.28033 24.7201 12.0003 24.7201V23.6001Z" fill="#34A853" />
+                        <path d="M0.400326 12.0001C0.400326 11.2001 0.480326 10.4001 0.640326 9.60009L4.64033 6.64009C4.32033 7.28009 4.08033 7.92009 3.92033 8.64009H0.400326V12.0001Z" fill="#FBBC04" />
+                      </svg>
+                      Sign up with Google
+                    </Button>
+                  </div>
+
+                  <div className="relative flex items-center justify-center my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-gray-700" />
+                    </div>
+                    <div className="relative z-10 bg-gray-900 px-4 text-sm text-gray-400">
+                      or
+                    </div>
+                  </div>
+
                   <form onSubmit={handleSignUp} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="signup-name" className="text-sm font-medium text-gray-300">Full Name</Label>

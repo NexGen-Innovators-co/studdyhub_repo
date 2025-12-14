@@ -13,6 +13,7 @@ import { motion } from 'framer-motion';
 import AIBot from '@/components/ui/aibot';
 import { Helmet } from 'react-helmet-async';
 import { SubscriptionStatusBar } from '@/components/subscription/SubscriptionStatusBar';
+import { initializePushNotifications } from '@/services/notificationInitService';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -397,6 +398,20 @@ const Index = () => {
       navigate('/auth');
     }
   }, [user, authLoading, navigate]);
+
+  // Initialize push notifications after user is authenticated
+  useEffect(() => {
+    if (user && !authLoading) {
+      // Small delay to ensure service worker is registered
+      const timer = setTimeout(() => {
+        initializePushNotifications().catch(error => {
+          console.error('Failed to initialize push notifications:', error);
+        });
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [user, authLoading]);
 
   const headerClass = useMemo(() => {
     const isNotesTab = currentActiveTab === 'notes';

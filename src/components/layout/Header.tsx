@@ -21,6 +21,7 @@ import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { PlanType } from '@/hooks/useSubscription';
 import { Badge } from '../ui/badge';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { NotificationCenter } from '../notifications/NotificationCenter';
 
 interface HeaderProps {
   onNewNote: () => void;
@@ -119,7 +120,8 @@ const sectionTabs = {
     { id: 'achievements', label: 'Achievements', icon: Trophy },
     { id: 'study', label: 'Study', icon: Clock },
     { id: 'privacy', label: 'Privacy', icon: Shield },
-    { id: 'security', label: 'Security', icon: Lock }
+    { id: 'security', label: 'Security', icon: Lock },
+    {id:'notifications', label:'notifications', icon:Bell }
   ],
 };
 
@@ -644,7 +646,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Right: Install App + Create Button + Avatar */}
+          {/* Right: Install App + Create Button + Notifications + Avatar */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* Install App Button - Hidden on smaller screens */}
             <div className="hidden md:block">
@@ -655,6 +657,9 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="hidden sm:block">
               <SubscriptionBadge />
             </div>
+
+            {/* Notification Center */}
+            <NotificationCenter />
 
             {/* Create Button - Icons only on mobile */}
             <div className="truncate max-w-[60px] sm:max-w-[80px] md:max-w-none">

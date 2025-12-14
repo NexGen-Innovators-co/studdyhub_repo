@@ -38,6 +38,7 @@ import { StickyRail } from '../layout/StickyRail';
 import { HeroHeader } from '../layout/HeroHeader';
 import { QuickActionsCard } from '../layout/QuickActionsCard';
 import { StatsCard } from '../layout/StatsCard';
+import { requestNotificationPermission, getPushService } from '@/services/notificationInitService';
 
 interface UserSettingsProps {
   profile: UserProfile | null;
@@ -92,7 +93,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   onProfileUpdate
 }) => {
   // Tab state
-  const [activeTab, setActiveTab] = useState<'profile' | 'learning' | 'goals' | 'achievements' | 'study' | 'privacy' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'learning' | 'goals' | 'achievements' | 'study' | 'privacy' | 'notifications' | 'security'>('profile');
 
   // Original form states
   const [learningStyle, setLearningStyle] = useState<UserProfile['learning_style']>('visual');
@@ -126,6 +127,48 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   const [breakInterval, setBreakInterval] = useState(45);
   const [dataCollection, setDataCollection] = useState(true);
   const [analytics, setAnalytics] = useState(true);
+
+  // Notification preferences
+  const [pushNotifications, setPushNotifications] = useState(true);
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [scheduleReminders, setScheduleReminders] = useState(true);
+  const [quizReminders, setQuizReminders] = useState(true);
+  const [assignmentReminders, setAssignmentReminders] = useState(true);
+  const [socialNotifications, setSocialNotifications] = useState(true);
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
+  const [quietHoursStart, setQuietHoursStart] = useState('22:00');
+  const [quietHoursEnd, setQuietHoursEnd] = useState('08:00');
+  const [reminderTime, setReminderTime] = useState(30);
+
+  // Handle push notification toggle
+  const handlePushNotificationToggle = async (checked: boolean) => {
+    if (checked) {
+      // Request permission and subscribe
+      const success = await requestNotificationPermission();
+      if (success) {
+        setPushNotifications(true);
+        toast.success('Push notifications enabled!');
+      } else {
+        setPushNotifications(false);
+        toast.error('Permission denied. Enable notifications in browser settings.');
+      }
+    } else {
+      // Unsubscribe
+      try {
+        const pushService = getPushService();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await pushService.unsubscribe(user.id);
+        }
+        setPushNotifications(false);
+        toast.success('Push notifications disabled');
+      } catch (error) {
+        console.error('Error unsubscribing:', error);
+        setPushNotifications(false);
+        toast.error('Failed to disable push notifications');
+      }
+    }
+  };
 
   // Sync tab changes with global header
   useEffect(() => {
@@ -168,6 +211,9 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         break;
       case 'study':
         loadStudyPreferences();
+        break;
+      case 'notifications':
+        loadNotificationPreferences();
         break;
       default:
         break;
@@ -452,6 +498,68 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     toast.success('Study preferences saved!');
   };
 
+  const saveNotificationPreferences = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const preferences = {
+        user_id: user.id,
+        push_notifications: pushNotifications,
+        email_notifications: emailNotifications,
+        schedule_reminders: scheduleReminders,
+        quiz_reminders: quizReminders,
+        assignment_reminders: assignmentReminders,
+        social_notifications: socialNotifications,
+        quiet_hours_enabled: quietHoursEnabled,
+        quiet_hours_start: quietHoursStart,
+        quiet_hours_end: quietHoursEnd,
+        reminder_time: reminderTime
+      };
+
+      const { error } = await supabase
+        .from('notification_preferences')
+        .upsert(preferences, { onConflict: 'user_id' });
+
+      if (error) throw error;
+
+      toast.success('Notification settings saved!');
+    } catch (error) {
+      console.error('Error saving notification preferences:', error);
+      toast.error('Failed to save notification settings');
+    }
+  };
+
+  const loadNotificationPreferences = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('notification_preferences')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+
+      if (data) {
+        setPushNotifications(data.push_notifications ?? true);
+        setEmailNotifications(data.email_notifications ?? true);
+        setScheduleReminders(data.schedule_reminders ?? true);
+        setQuizReminders(data.quiz_reminders ?? true);
+        setAssignmentReminders(data.assignment_reminders ?? true);
+        setSocialNotifications(data.social_notifications ?? true);
+        setQuietHoursEnabled(data.quiet_hours_enabled ?? false);
+        setQuietHoursStart(data.quiet_hours_start ?? '22:00');
+        setQuietHoursEnd(data.quiet_hours_end ?? '08:00');
+        setReminderTime(data.reminder_time ?? 30);
+      }
+    } catch (error) {
+      console.error('Error loading notification preferences:', error);
+    }
+  };
+
   const exportData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -524,6 +632,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     { id: 'achievements', label: 'Achievements', icon: Trophy },
     { id: 'study', label: 'Study', icon: Clock },
     { id: 'privacy', label: 'Privacy', icon: Shield },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Lock }
   ];
 
@@ -979,6 +1088,186 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                     Delete Account
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          )}
+
+          {/* Notifications Section */}
+          {activeTab === 'notifications' && (
+            <CardContent className="p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <Bell className="h-5 w-5 text-blue-500" />
+                <h2 className="text-xl font-semibold">Notification Settings</h2>
+              </div>
+
+              <div className="space-y-6">
+                {/* Notification Channels */}
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Notification Channels</h3>
+                  
+                  <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div>
+                      <div className="font-medium mb-1">Push Notifications</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
+                        Receive notifications on your device
+                      </div>
+                    </div>
+                    <Switch
+                      checked={pushNotifications}
+                      onCheckedChange={handlePushNotificationToggle}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div>
+                      <div className="font-medium mb-1">Email Notifications</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
+                        Get updates via email
+                      </div>
+                    </div>
+                    <Switch
+                      checked={emailNotifications}
+                      onCheckedChange={setEmailNotifications}
+                    />
+                  </div>
+                </div>
+
+                {/* Notification Types */}
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Notification Types</h3>
+                  
+                  <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div>
+                      <div className="font-medium mb-1">Schedule Reminders</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
+                        Reminders for upcoming classes and events
+                      </div>
+                    </div>
+                    <Switch
+                      checked={scheduleReminders}
+                      onCheckedChange={setScheduleReminders}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div>
+                      <div className="font-medium mb-1">Quiz Reminders</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
+                        Notifications when quizzes are due
+                      </div>
+                    </div>
+                    <Switch
+                      checked={quizReminders}
+                      onCheckedChange={setQuizReminders}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div>
+                      <div className="font-medium mb-1">Assignment Reminders</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
+                        Alerts for assignment deadlines
+                      </div>
+                    </div>
+                    <Switch
+                      checked={assignmentReminders}
+                      onCheckedChange={setAssignmentReminders}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div>
+                      <div className="font-medium mb-1">Social Notifications</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
+                        Likes, comments, and mentions
+                      </div>
+                    </div>
+                    <Switch
+                      checked={socialNotifications}
+                      onCheckedChange={setSocialNotifications}
+                    />
+                  </div>
+                </div>
+
+                {/* Reminder Timing */}
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Reminder Settings</h3>
+                  
+                  <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <Label htmlFor="reminderTime" className="mb-2 block">
+                      Reminder Time (minutes before)
+                    </Label>
+                    <Select
+                      value={reminderTime.toString()}
+                      onValueChange={(value) => setReminderTime(parseInt(value))}
+                    >
+                      <SelectTrigger id="reminderTime">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5">5 minutes</SelectItem>
+                        <SelectItem value="10">10 minutes</SelectItem>
+                        <SelectItem value="15">15 minutes</SelectItem>
+                        <SelectItem value="30">30 minutes</SelectItem>
+                        <SelectItem value="60">1 hour</SelectItem>
+                        <SelectItem value="120">2 hours</SelectItem>
+                        <SelectItem value="1440">1 day</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Quiet Hours */}
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Quiet Hours</h3>
+                  
+                  <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <div>
+                      <div className="font-medium mb-1">Enable Quiet Hours</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
+                        Silence notifications during specified hours
+                      </div>
+                    </div>
+                    <Switch
+                      checked={quietHoursEnabled}
+                      onCheckedChange={setQuietHoursEnabled}
+                    />
+                  </div>
+
+                  {quietHoursEnabled && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                        <Label htmlFor="quietStart" className="mb-2 block text-sm">
+                          Start Time
+                        </Label>
+                        <input
+                          id="quietStart"
+                          type="time"
+                          value={quietHoursStart}
+                          onChange={(e) => setQuietHoursStart(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+
+                      <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                        <Label htmlFor="quietEnd" className="mb-2 block text-sm">
+                          End Time
+                        </Label>
+                        <input
+                          id="quietEnd"
+                          type="time"
+                          value={quietHoursEnd}
+                          onChange={(e) => setQuietHoursEnd(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Button onClick={saveNotificationPreferences} className="w-full">
+                  Save Notification Settings
+                </Button>
               </div>
             </CardContent>
           )}
