@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast } from 'lucide-react';
+import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast, MenuIcon } from 'lucide-react';
 import { Button } from '../ui/button';
+import {
+  Menubar,
+  MenubarMenu,
+  MenubarTrigger,
+  MenubarContent,
+  MenubarItem
+} from '../ui/menubar';
 import { UserProfile, Document } from '../../types/Document';
 import { Note } from '../../types/Note';
 import { supabase } from '../../integrations/supabase/client';
@@ -754,8 +761,7 @@ const AIChat: React.FC<AIChatProps> = ({
   }, []);
 
   return (
-    <>
-      <div
+        <div
         ref={dropZoneRef}
         className={`flex flex-col h-[90vh] lg:h-screen ${isDiagramPanelOpen ? `` : 'max-w-3xl mx-auto'} border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
       >
@@ -886,169 +892,61 @@ const AIChat: React.FC<AIChatProps> = ({
                     />
                   </div>
                 ) : null}
-                <textarea
-                  ref={textareaRef}
-                  value={inputMessage}
-                  // REPLACE existing onChange with this:
-                  onChange={(e) => {
-                    e.preventDefault();
-                    const newValue = e.target.value;
-                    setInputMessage(newValue);
-
-                    // Direct resize (Performance Fix)
-                    if (textareaRef.current) {
-                      textareaRef.current.style.height = 'auto';
-                      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                <div className="flex flex-row gap-2 mt-0 sm:mt-2 w-full items-end">
+                  <Menubar className="flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg">
+                    <MenubarMenu>
+                      <MenubarTrigger className="h-10 w-10 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                        <MenuIcon className="h-5 w-5" />
+                      </MenubarTrigger>
+                      <MenubarContent align="end" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                        <MenubarItem onClick={() => setEnableStreamingMode(!enableStreamingMode)}>
+                          {enableStreamingMode ? 'Thinking Mode' : 'Fast Mode'}
+                        </MenubarItem>
+                        <MenubarItem onClick={isRecognizing ? stopRecognition : startRecognition} disabled={micPermissionStatus === 'checking' || isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                          <span className="flex items-center"><Mic className="h-5 w-5 mr-2" />{isRecognizing ? 'Stop Speech Recognition' : 'Start Speech Recognition'}</span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => cameraInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                          <span className="flex items-center"><Camera className="h-5 w-5 mr-2" />Take Picture</span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => fileInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                          <span className="flex items-center"><Paperclip className="h-5 w-5 mr-2" />Upload Files</span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => setShowDocumentSelector(true)} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                          <span className="flex items-center"><FileText className="h-5 w-5 mr-2" />{isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Select Documents/Notes'}</span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => setShowPodcastGenerator(true)} disabled={selectedDocumentIds.length === 0}>
+                          <span className="flex items-center"><Podcast className="h-5 w-5 mr-2 text-purple-600 dark:text-purple-400" />Generate AI Podcast</span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => setAutoTypeInPanel(prev => !prev)}>
+                          <span className="flex items-center">{autoTypeInPanel ? 'Panel On' : 'Panel Off'}</span>
+                        </MenubarItem>
+                      </MenubarContent>
+                    </MenubarMenu>
+                  </Menubar>
+                  <textarea
+                    ref={textareaRef}
+                    value={inputMessage}
+                    onChange={(e) => {
                       e.preventDefault();
-                      handleSendMessage(e);
-                    }
-                  }}
-                  placeholder="What do you want to know? (You can also drag and drop files here)"
-                  className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[48px]  dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
-                  disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                  rows={1}
-                />
-
-                <div className="flex items-center gap-2 mt-2 justify-between">
-                  <div className="flex items-center gap-2">
-                    {/* Streaming toggle button */}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEnableStreamingMode(!enableStreamingMode)}
-                      className={`h-10 px-3 flex items-center gap-2 rounded-lg transition-all duration-200 ${enableStreamingMode
-                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900 dark:text-purple-300 dark:hover:bg-purple-800'
-                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
-                        }`}
-                      title={enableStreamingMode ? 'Streaming Mode ON - See AI thinking in real-time' : 'Streaming Mode OFF - Get immediate response'}
-                    >
-                      <motion.div
-                        animate={enableStreamingMode ? { scale: [1, 1.2, 1] } : { scale: 1 }}
-                        transition={{ duration: 0.5, repeat: enableStreamingMode ? Infinity : 0, repeatDelay: 1 }}
-                      >
-                        {enableStreamingMode ? '🧠' : '💬'}
-                      </motion.div>
-                      <span className="text-xs font-medium hidden sm:inline">
-                        {enableStreamingMode ? 'Thinking Mode' : 'Fast Mode'}
-                      </span>
-                    </Button>
-                    
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={isRecognizing ? stopRecognition : startRecognition}
-                      className={`h-10 w-10 flex-shrink-0 rounded-lg p-0 relative transition-all duration-200 ${isRecognizing
-                        ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800 scale-105'
-                        : micPermissionStatus === 'denied'
-                          ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                          : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
-                        }`}
-                      title={
-                        isRecognizing
-                          ? 'Stop Speech Recognition'
-                          : micPermissionStatus === 'denied'
-                            ? 'Microphone access denied - check browser settings'
-                            : micPermissionStatus === 'checking'
-                              ? 'Checking microphone permissions...'
-                              : 'Start Speech Recognition'
+                      const newValue = e.target.value;
+                      setInputMessage(newValue);
+                      if (textareaRef.current) {
+                        textareaRef.current.style.height = 'auto';
+                        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
                       }
-                      disabled={
-                        isLoading ||
-                        isSubmittingUserMessage ||
-                        isGeneratingImage ||
-                        isUpdatingDocuments ||
-                        micPermissionStatus === 'checking' ||
-                        isAiTyping
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
                       }
-                    >
-                      <Mic className={`h-5 w-5 ${isRecognizing ? 'animate-pulse' : ''}`} />
-                      {isRecognizing && (
-                        <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse">
-                          <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-75"></div>
-                        </div>
-                      )}
-                      {micPermissionStatus === 'checking' && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </div>
-                      )}
-                    </Button>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      ref={cameraInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => cameraInputRef.current?.click()}
-                      className=" dark:text-gray-400 text-gray-600 hover:bg-gray-300 dark:hover:bg-gray-600  h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                      title="Take Picture"
-                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                    >
-                      <Camera className="h-5 w-5" />
-                    </Button>
-                    <input
-                      type="file"
-                      accept="*/*"
-                      multiple
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-gray-400 dark:text-gray-400   dark:hover:bg-gray-600 hover:bg-gray-300 h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                      title="Upload Files"
-                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                    >
-                      <Paperclip className="h-5 w-5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowDocumentSelector(true)}
-                      className="text-slate-600 hover:bg-slate-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-gray-300 dark:hover:bg-gray-700"
-                      title="Select Documents/Notes for Context"
-                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                    >
-                      {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
-                    </Button>
-                    {/* Podcast Generator Button */}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowPodcastGenerator(true)}
-                      className="text-purple-600 hover:bg-purple-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-purple-400 dark:hover:bg-purple-900"
-                      title="Generate AI Podcast from selected content"
-                      disabled={selectedDocumentIds.length === 0}
-                    >
-                      <Podcast className="h-5 w-5" />
-                    </Button>
-                    <Button
-                      onClick={() => setAutoTypeInPanel(prev => !prev)}
-                      variant="outline"
-                      className="text-sm text-gray-600 dark:text-gray-400 bg-transparent  dark:hover:bg-gray-600 hover:bg-gray-300 flex-shrink-0"
-                      title="Toggle code typing in panel"
-                    >
-                      {autoTypeInPanel ? 'Panel On' : 'Panel Off'}
-                    </Button>
-                  </div>
+                    }}
+                    placeholder="What do you want to know? (You can also drag and drop files here)"
+                    className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[82px] dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
+                    rows={1}
+                  />
+                  
                   <Button
                     type="submit"
                     onClick={handleSendMessage}
@@ -1071,9 +969,25 @@ const AIChat: React.FC<AIChatProps> = ({
                       <Send className="h-4 w-4" />
                     )}
                   </Button>
+                  {/* Hidden file inputs for menu actions */}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    ref={cameraInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <input
+                    type="file"
+                    accept="*/*"
+                    multiple
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
                 </div>
-              </SubscriptionGuard>
-            </div>
+                  </SubscriptionGuard>
           </div>
 
           {/* Document selector and other modals */}
@@ -1149,9 +1063,9 @@ const AIChat: React.FC<AIChatProps> = ({
           />
         )}
       </div>
-    </>
+    </div>
   );
-};
+}
 
 const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
   return (
