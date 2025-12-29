@@ -338,6 +338,14 @@ export default {
 						textShadow: '0 0 20px rgba(59, 130, 246, 0.8)'
 					}
 				},
+				'gradient-x': {
+					'0%, 100%': {
+						backgroundPosition: '0% 50%'
+					},
+					'50%': {
+						backgroundPosition: '100% 50%'
+					}
+				},
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
@@ -357,6 +365,7 @@ export default {
 				'spin-slow': 'spin-slow 3s linear infinite',
 				'float': 'float 3s ease-in-out infinite',
 				'glow': 'glow 2s ease-in-out infinite',
+				'gradient-x': 'gradient-x 15s ease infinite',
 			},
 			transitionTimingFunction: {
 				'smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',

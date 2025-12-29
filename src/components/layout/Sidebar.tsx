@@ -34,7 +34,8 @@ import {
   User,
   Lightbulb,
   Shield,
-  Menu
+  Menu,
+  Podcast
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
@@ -70,6 +71,7 @@ interface SidebarProps {
   | 'settings'
   | 'dashboard'
   | 'social'
+  | 'podcasts'
   | string;
   activeSocialTab?: string; // New prop for social sub-navigation
   onTabChange: (
@@ -83,6 +85,7 @@ interface SidebarProps {
       | 'dashboard'
       | 'social'
       | 'quizzes'
+      | 'podcasts'
       | string,
   ) => void;
   chatSessions: ChatSession[];
@@ -338,7 +341,7 @@ const ChatSessionsList = memo(
                 <span
                   className={`truncate ${isOpen
                       ? ''
-                      : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none'
+                      : 'lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300 lg:pointer-events-none text'
                     }`}
                 >
                   {session.title}
@@ -872,6 +875,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'schedule', name: 'Schedule', icon: Calendar },
         { id: 'chat', name: 'AI Chat', icon: MessageCircle },
         { id: 'documents', name: 'Documents', icon: Upload },
+        { id: 'podcasts', name: 'Podcasts', icon: Podcast },
         { id: 'social', name: 'Social Feed', icon: Users },
         { id: 'settings', name: 'Settings', icon: Settings },
       ];

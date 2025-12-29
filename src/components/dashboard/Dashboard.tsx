@@ -22,6 +22,7 @@ import {
 import { useDashboardStats } from './hooks/useDashboardStats';
 import BookPagesAnimation from '../ui/bookloader';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { RecentPodcasts } from './RecentPodcasts';
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 const GRADIENT_ID = 'engagementGradient';
@@ -176,7 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
     );
 
     return (
-        <div className="min-h-screen max-w-7xl pb-8 mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen max-w-5xl pb-8 mx-auto px-4 sm:px-6 lg:px-8">
             {/* Hero Header */}
             <div className="relative overflow-hidden rounded-2xl my-4 p-6 sm:p-8 bg-gradient-to-r from-blue-600 to-blue-600 text-white shadow-2xl">
                 <div className="absolute inset-0 bg-black opacity-20"></div>
@@ -350,7 +351,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                             <Button
                                 key={tab}
                                 variant={activeTab === tab ? "default" : "ghost"}
-                                className={`flex-1 rounded-xl ${activeTab === tab ? 'shadow-lg' : ''}`}
+                                className={`flex-1 rounded-xl hover:bg-blue-600  ${activeTab === tab ? 'shadow-lg bg-blue-800' : ''}`}
                                 onClick={() => setActiveTab(tab)}
                             >
                                 {tab === 'overview' ? <LayoutDashboard className="h-5 w-5 mr-2" /> :
@@ -365,6 +366,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                     {/* Overview Tab */}
                     {activeTab === 'overview' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Recent AI Podcasts */}
+                            <RecentPodcasts />
+                            
                             {/* Weekly Activity */}
                             <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border-0 shadow-xl">
                                 <CardHeader>

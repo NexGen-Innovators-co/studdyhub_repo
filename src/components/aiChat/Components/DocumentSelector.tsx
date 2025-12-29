@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../../ui/button';
 import { Checkbox } from '../../ui/checkbox';
 import { Input } from '../../ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../../ui/dialog';
 import { ScrollArea } from '../../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
 import {
@@ -178,6 +178,9 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
                 </span>
               )}
             </DialogTitle>
+            <DialogDescription>
+              Choose notes, documents, or recordings to add as context for your chat
+            </DialogDescription>
           </DialogHeader>
 
           {/* SEARCH & FILTER BAR */}

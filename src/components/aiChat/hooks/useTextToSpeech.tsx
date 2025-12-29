@@ -2,6 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Message } from '../../../types/Class';
+import { generateSpeech } from '../../../services/cloudTtsService';
 
 interface UseTextToSpeechProps {
   messages: Message[];
@@ -84,20 +85,19 @@ export const useTextToSpeech = ({
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [isAutoSpeakEnabled, setIsAutoSpeakEnabled] = useState(false);
-  const speechSynthesisRef = useRef<SpeechSynthesis>(window.speechSynthesis);
-  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastSpokenChunkRef = useRef<string>('');
   const blockAutoSpeakRef = useRef<boolean>(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const currentSessionIdRef = useRef<string | null>(null);
 
   const stopSpeech = useCallback(() => {
-    if (speechSynthesisRef.current) {
-      speechSynthesisRef.current.cancel();
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
       setIsSpeaking(false);
       setSpeakingMessageId(null);
       setIsPaused(false);
-      currentUtteranceRef.current = null;
       lastSpokenChunkRef.current = '';
       blockAutoSpeakRef.current = true;
     }
@@ -120,32 +120,28 @@ export const useTextToSpeech = ({
   useEffect(() => {
     return () => {
       //console.log('🔇 Component unmounting, stopping speech');
-      if (speechSynthesisRef.current) {
-        speechSynthesisRef.current.cancel();
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
       }
     };
   }, []);
 
   const pauseSpeech = useCallback(() => {
-    if (speechSynthesisRef.current && isSpeaking && !isPaused) {
-      speechSynthesisRef.current.pause();
+    if (currentAudioRef.current && isSpeaking && !isPaused) {
+      currentAudioRef.current.pause();
       setIsPaused(true);
     }
   }, [isSpeaking, isPaused]);
 
   const resumeSpeech = useCallback(() => {
-    if (speechSynthesisRef.current && isSpeaking && isPaused) {
-      speechSynthesisRef.current.resume();
+    if (currentAudioRef.current && isSpeaking && isPaused) {
+      currentAudioRef.current.play();
       setIsPaused(false);
     }
   }, [isSpeaking, isPaused]);
 
-  const speakMessage = useCallback((messageId: string, content: string) => {
-    if (!speechSynthesisRef.current) {
-      toast.error('Text-to-speech is not supported in this browser.');
-      return;
-    }
-
+  const speakMessage = useCallback(async (messageId: string, content: string) => {
     stopSpeech();
 
     // Clean content using enhanced markdown stripper
@@ -158,43 +154,67 @@ export const useTextToSpeech = ({
 
     //console.log('🔊 Speaking cleaned text:', cleanedContent.substring(0, 100) + '...');
 
-    const utterance = new SpeechSynthesisUtterance(cleanedContent);
-    utterance.lang = 'en-US';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
+    try {
+      // Generate speech using Cloud TTS
+      toast.loading('Generating speech...', { id: 'cloud-tts' });
+      
+      const { audioContent, error } = await generateSpeech({
+        text: cleanedContent,
+        voice: 'female',
+        rate: 1.0,
+        pitch: 0
+      });
 
-    utterance.onend = () => {
+      toast.dismiss('cloud-tts');
+
+      if (error || !audioContent) {
+        toast.error(error || 'Failed to generate speech');
+        return;
+      }
+
+      // Play audio
+      const cleanedAudio = audioContent
+        .trim()
+        .replace(/^data:audio\/[a-z]+;base64,/, '')
+        .replace(/\s/g, '');
+
+      const audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
+      currentAudioRef.current = audio;
+
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setSpeakingMessageId(null);
+        setIsPaused(false);
+        currentAudioRef.current = null;
+        lastSpokenChunkRef.current = '';
+        lastProcessedMessageIdRef.current = messageId;
+        blockAutoSpeakRef.current = true;
+      };
+
+      audio.onerror = (event) => {
+        console.error('Audio playback error:', event);
+        toast.error('Failed to play audio');
+        setIsSpeaking(false);
+        setSpeakingMessageId(null);
+        setIsPaused(false);
+        currentAudioRef.current = null;
+        lastSpokenChunkRef.current = '';
+        lastProcessedMessageIdRef.current = messageId;
+        blockAutoSpeakRef.current = true;
+      };
+
+      await audio.play();
+      setIsSpeaking(true);
+      setSpeakingMessageId(messageId);
+      setIsPaused(false);
+      lastSpokenChunkRef.current = cleanedContent;
+      lastProcessedMessageIdRef.current = messageId;
+    } catch (error: any) {
+      console.error('Speech synthesis error:', error);
+      toast.error(error.message || 'Failed to generate speech');
       setIsSpeaking(false);
       setSpeakingMessageId(null);
-      setIsPaused(false);
-      currentUtteranceRef.current = null;
-      lastSpokenChunkRef.current = '';
-      lastProcessedMessageIdRef.current = messageId;
-      blockAutoSpeakRef.current = true;
-    };
-
-    utterance.onerror = (event) => {
-      if (event.error === 'interrupted') return;
-      //console.error('Speech synthesis error:', event.error);
-      toast.error(`Speech synthesis failed: ${event.error}`);
-      setIsSpeaking(false);
-      setSpeakingMessageId(null);
-      setIsPaused(false);
-      currentUtteranceRef.current = null;
-      lastSpokenChunkRef.current = '';
-      lastProcessedMessageIdRef.current = messageId;
-      blockAutoSpeakRef.current = true;
-    };
-
-    speechSynthesisRef.current.cancel();
-    currentUtteranceRef.current = utterance;
-    speechSynthesisRef.current.speak(utterance);
-    setIsSpeaking(true);
-    setSpeakingMessageId(messageId);
-    setIsPaused(false);
-    lastSpokenChunkRef.current = cleanedContent;
-    lastProcessedMessageIdRef.current = messageId;
+    }
   }, [stopSpeech, stripCodeBlocks]);
 
   const toggleAutoSpeak = useCallback(() => {
@@ -211,7 +231,6 @@ export const useTextToSpeech = ({
       !isPhone() ||
       isLoading ||
       isLoadingSessionMessages ||
-      !speechSynthesisRef.current ||
       blockAutoSpeakRef.current ||
       !isAutoSpeakEnabled
     ) {
@@ -226,53 +245,11 @@ export const useTextToSpeech = ({
       !isSpeaking &&
       !isPaused
     ) {
-      // Clean content using enhanced markdown stripper
-      const cleanedContent = cleanContentForSpeech(lastMessage.content, stripCodeBlocks);
-
-      if (cleanedContent && cleanedContent.length >= 3) {
-        //console.log('🔊 Auto-speaking cleaned text:', cleanedContent.substring(0, 100) + '...');
-
-        const utterance = new SpeechSynthesisUtterance(cleanedContent);
-        utterance.lang = 'en-US';
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-          currentUtteranceRef.current = null;
-          lastSpokenChunkRef.current = '';
-          lastProcessedMessageIdRef.current = lastMessage.id;
-          blockAutoSpeakRef.current = true;
-        };
-
-        utterance.onerror = (event) => {
-          if (event.error === 'interrupted') return;
-          //console.error('Speech synthesis error:', event.error);
-          toast.error(`Speech synthesis failed: ${event.error}`);
-          setIsSpeaking(false);
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-          currentUtteranceRef.current = null;
-          lastSpokenChunkRef.current = '';
-          lastProcessedMessageIdRef.current = lastMessage.id;
-          blockAutoSpeakRef.current = true;
-        };
-
-        speechSynthesisRef.current.cancel();
-        currentUtteranceRef.current = utterance;
-        speechSynthesisRef.current.speak(utterance);
-        setIsSpeaking(true);
-        setSpeakingMessageId(lastMessage.id);
-        lastSpokenChunkRef.current = cleanedContent;
-        lastProcessedMessageIdRef.current = lastMessage.id;
-      }
+      // Auto-speak the last message
+      speakMessage(lastMessage.id, lastMessage.content);
     }
-  }, [messages, isLoading, isLoadingSessionMessages, isPhone, isSpeaking, isPaused, stripCodeBlocks, isAutoSpeakEnabled]);
-
-  return {
+  }, [messages, isLoading, isLoadingSessionMessages, isAutoSpeakEnabled, isSpeaking, isPaused, isPhone, speakMessage]);
+    return {
     isSpeaking,
     speakingMessageId,
     isPaused,

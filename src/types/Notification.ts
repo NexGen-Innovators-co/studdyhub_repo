@@ -34,6 +34,7 @@ export type NotificationType =
   | 'social_comment'
   | 'social_follow'
   | 'social_mention'
+  | 'podcast_share'
   | 'ai_limit_warning'
   | 'subscription_renewal'
   | 'general';

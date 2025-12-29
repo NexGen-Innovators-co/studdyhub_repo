@@ -56,6 +56,8 @@ export interface Message {
   isUpdating?: boolean;
   attachedDocumentIds?: string[];
   attachedNoteIds?: string[];
+  thinking_steps?: ThinkingStep[];  // Agentic reasoning steps
+  isStreaming?: boolean;  // Whether response is currently streaming
   isLoading?: boolean;
   image_url?: string; // Legacy image URL
   image_mime_type?: string; // Legacy image MIME type
@@ -106,6 +108,16 @@ export interface ChatSession {
   user_id: string;
   default_folder_id?: string | null;
 }
+export interface ThinkingStep {
+  id: string;
+  type: 'understanding' | 'retrieval' | 'reasoning' | 'memory' | 'verification' | 'action';
+  title: string;
+  detail: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  timestamp: string;
+  metadata?: any;
+}
+
 export interface MessagePart {
   text?: string;
   inlineData?: {

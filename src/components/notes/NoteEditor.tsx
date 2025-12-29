@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
 import { Note, NoteCategory, UserProfile } from '../../types';
 import { Database } from '../../integrations/supabase/types';
+import { generateSpeech } from '../../services/cloudTtsService';
 
 import { NoteContentArea } from './components/NoteContentArea';
 import { AISummarySection } from './components/AISummarySection';
@@ -47,8 +48,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [tags, setTags] = useState(note.tags.join(', '));
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(null);
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [documentSections, setDocumentSections] = useState<string[]>([]);
   const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
@@ -94,50 +94,22 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setIsAudioOptionsVisible(false);
     setAudioProcessingJobId(null);
 
-    if ('speechSynthesis' in window && speechSynthesis.speaking) {
-      speechSynthesis.cancel();
+    if (currentAudio) {
+      currentAudio.pause();
+      setCurrentAudio(null);
     }
     setIsSpeaking(false);
 
     return () => {
-      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      if (currentAudio) {
+        currentAudio.pause();
+      }
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
         audioPlayerRef.current.currentTime = 0;
       }
     };
-  }, [note]);
-
-  useEffect(() => {
-    const populateVoiceList = () => {
-      if (typeof speechSynthesis === 'undefined') {
-        return;
-      }
-      const availableVoices = speechSynthesis.getVoices();
-      if (availableVoices.length > 0) {
-        setVoices(availableVoices);
-        // Only set a default if one isn't already selected or if the selected one is no longer available
-        if (!selectedVoiceURI || !availableVoices.some(v => v.voiceURI === selectedVoiceURI)) {
-          const defaultVoice = availableVoices.find(voice => voice.name.includes('Google') && voice.lang.startsWith('en')) ||
-            availableVoices.find(voice => voice.lang.startsWith('en')) ||
-            availableVoices[0];
-          if (defaultVoice) {
-            setSelectedVoiceURI(defaultVoice.voiceURI);
-          }
-        }
-      } else {
-        // If no voices are immediately available, try again after a short delay
-        setTimeout(populateVoiceList, 500);
-      }
-    };
-
-    // Populate voices initially
-    populateVoiceList();
-    // Listen for voice changes (e.g., after network voices load)
-    if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
-      speechSynthesis.onvoiceschanged = populateVoiceList;
-    }
-  }, [selectedVoiceURI]);
+  }, [note, currentAudio]);
 
   // Polling effect for audio processing job
   useEffect(() => {
@@ -604,7 +576,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     let processedText = markdownContent;
 
     // Replace code blocks with descriptive text
-    const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+    // Make the newline optional with \s* and use [\s\S]*? for non-greedy matching
+    const codeBlockRegex = /```(\w*)\s*([\s\S]*?)```/g;
     processedText = processedText.replace(codeBlockRegex, (match, lang, code) => {
       const lowerLang = lang ? lang.toLowerCase() : '';
       if (lowerLang === 'mermaid') {
@@ -619,6 +592,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         return '(A code block is present here.)';
       }
     });
+
+    // Remove any remaining triple backticks or code block artifacts
+    processedText = processedText.replace(/```[\s\S]*$/g, ''); // Remove incomplete code blocks at end
+    processedText = processedText.replace(/```/g, ''); // Remove any remaining backticks
 
     // Remove other markdown formatting
     processedText = processedText
@@ -640,80 +617,109 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     return processedText;
   };
 
-  const handleTextToSpeech = () => {
-    if (!('speechSynthesis' in window)) {
-      toast.error("Text-to-speech is not supported in this browser.");
+  const handleTextToSpeech = async () => {
+    // If speech is currently active, stop it
+    if (isSpeaking && currentAudio) {
+      currentAudio.pause();
+      setCurrentAudio(null);
+      setIsSpeaking(false);
+      toast.info("Speech stopped.");
       return;
     }
 
-    // If speech is currently active (according to our state), the user wants to stop it.
-    if (isSpeaking) {
-      speechSynthesis.cancel();
-      setIsSpeaking(false);
-      toast.info("Speech stopped.");
-      return; // Exit the function, as the action was to stop.
-    }
-
-    // If we reach here, the user wants to start speech.
+    // Start speech
     if (!content.trim()) {
       toast.info("There's no content to read aloud.");
       return;
     }
 
+    console.log('[TTS] Original content:', content);
     const textToRead = processMarkdownForSpeech(content);
-    if (!textToRead) {
+    console.log('[TTS] Processed text:', textToRead);
+    console.log('[TTS] Text length:', textToRead?.length || 0);
+    
+    if (!textToRead || !textToRead.trim()) {
       toast.info("The note has no readable content after processing.");
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(textToRead);
-
-    // Re-fetch voices to ensure we have the most current list
-    const currentAvailableVoices = speechSynthesis.getVoices();
-    let voiceToUse: SpeechSynthesisVoice | undefined = undefined;
-
-    // Try to find the previously selected voice first among current voices
-    if (selectedVoiceURI) {
-      voiceToUse = currentAvailableVoices.find(v => v.voiceURI === selectedVoiceURI);
-    }
-
-    // If selected voice not found or not set, try to find a suitable default
-    if (!voiceToUse && currentAvailableVoices.length > 0) {
-      voiceToUse = currentAvailableVoices.find(voice => voice.name.includes('Google') && voice.lang.startsWith('en')) ||
-        currentAvailableVoices.find(voice => voice.lang.startsWith('en')) ||
-        currentAvailableVoices[0];
-      if (voiceToUse) {
-        setSelectedVoiceURI(voiceToUse.voiceURI); // Update state with the fallback voice
-      }
-    }
-
-    if (voiceToUse) {
-      utterance.voice = voiceToUse;
-    } else {
-      // If no voice is found after all attempts, show error and prevent speaking
-      toast.error("No suitable text-to-speech voice found on your device. Please check your device settings.");
-      return;
-    }
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = (e: SpeechSynthesisErrorEvent) => {
-      let errorMessage = "An unknown error occurred while reading the note.";
-      if (e.error === "interrupted") {
-        errorMessage = "Speech was interrupted. This can happen if you switch apps, receive a call, or rapidly tap the read button.";
-      } else if (e.error === "synthesis-failed") {
-        errorMessage = "Speech synthesis failed. This may be due to voice unavailability or a browser issue.";
-      } else if (e.error) {
-        errorMessage = `Speech error: ${e.error}. This may be due to browser limitations or voice availability.`;
-      }
-      toast.error(errorMessage);
-      setIsSpeaking(false);
-    };
-
     try {
-      speechSynthesis.speak(utterance);
-    } catch (error) {
-      toast.error("Failed to start reading. Your browser might have restrictions.");
+      toast.loading('Generating speech...', { id: 'note-tts' });
+      
+      console.log('[TTS] Calling generateSpeech with:', { text: textToRead.substring(0, 100) + '...' });
+      const { audioContent, error } = await generateSpeech({
+        text: textToRead,
+        voice: 'female',
+        rate: 1.0,
+        pitch: 0
+      });
+
+      toast.dismiss('note-tts');
+
+      console.log('[TTS] Response - audioContent length:', audioContent?.length || 0, 'error:', error);
+
+      if (error || !audioContent) {
+        toast.error(error || 'Failed to generate speech');
+        return;
+      }
+
+      // Play audio
+      const cleanedAudio = audioContent
+        .trim()
+        .replace(/^data:audio\/[a-z]+;base64,/, '')
+        .replace(/\s/g, '');
+
+      console.log('[TTS] Creating audio element, base64 length:', cleanedAudio.length);
+      const audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
+      
+      // Ensure audio is not muted and has volume
+      audio.volume = 1.0;
+      audio.muted = false;
+      console.log('[TTS] Audio settings - volume:', audio.volume, 'muted:', audio.muted);
+      
+      setCurrentAudio(audio);
+
+      audio.onplay = () => {
+        console.log('[TTS] Audio started playing - currentTime:', audio.currentTime, 'duration:', audio.duration, 'paused:', audio.paused);
+        setIsSpeaking(true);
+      };
+      audio.onended = () => {
+        console.log('[TTS] Audio playback ended');
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+      };
+      audio.onerror = (e) => {
+        console.error('[TTS] Audio playback error:', e);
+        console.error('[TTS] Audio error details:', audio.error);
+        toast.error("Failed to play audio");
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+      };
+
+      // Properly handle play() promise to avoid AbortError
+      try {
+        console.log('[TTS] Calling audio.play()');
+        await audio.play();
+        console.log('[TTS] audio.play() successful - paused:', audio.paused, 'readyState:', audio.readyState);
+        
+        // Check playback after a small delay
+        setTimeout(() => {
+          console.log('[TTS] Playback check - currentTime:', audio.currentTime, 'paused:', audio.paused, 'ended:', audio.ended);
+        }, 100);
+        
+        setIsSpeaking(true);
+      } catch (playError: any) {
+        // Ignore AbortError (happens when play is interrupted)
+        if (playError.name !== 'AbortError') {
+          console.error('Audio play error:', playError);
+          toast.error("Failed to play audio");
+        }
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+      }
+    } catch (error: any) {
+      console.error('TTS error:', error);
+      toast.error(error.message || 'Failed to generate speech');
       setIsSpeaking(false);
     }
   };
@@ -1281,9 +1287,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               handleCopyNoteContent={handleCopyNoteContent}
               handleTextToSpeech={handleTextToSpeech}
               isSpeaking={isSpeaking}
-              selectedVoiceURI={selectedVoiceURI}
-              setSelectedVoiceURI={setSelectedVoiceURI}
-              voices={voices}
               fileInputRef={fileInputRef}
               handleFileSelect={handleFileSelect}
               audioInputRef={audioInputRef}

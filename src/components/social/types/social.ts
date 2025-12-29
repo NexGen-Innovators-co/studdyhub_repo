@@ -186,7 +186,7 @@ export interface ChatMessageResource {
   id: string;
   message_id: string;
   resource_id: string;
-  resource_type: 'note' | 'document' | 'post';
+  resource_type: 'note' | 'document' | 'post' | 'class_recording';
   created_at: string;
 }
 
@@ -245,5 +245,13 @@ export interface EnrichedResource extends ChatMessageResource {
   tags?: string[];
   ai_summary?: string;
   document_id?: string | null;
+  // Class recording specific fields (matching actual DB schema)
+  audio_url?: string;
+  duration?: number;
+  summary?: string;
+  transcript?: string;
+  date?: string;
+  subject?: string;
+  error?: string;
 }
 export type ChatType = 'group' | 'p2p';

@@ -151,7 +151,7 @@ export const useChatActions = (currentUserId: string | null) => {
     const shareResource = async (
         messageId: string,
         resourceId: string,
-        resourceType: 'note' | 'document' | 'post'
+        resourceType: 'note' | 'document' | 'post' | 'class_recording'
     ): Promise<boolean> => {
         if (!currentUserId) {
             toast.error('You must be logged in');
@@ -173,6 +173,7 @@ export const useChatActions = (currentUserId: string | null) => {
                 note: 'Note',
                 document: 'Document',
                 post: 'Post',
+                class_recording: 'Class Recording',
             };
 
             toast.success(`${typeNames[resourceType] || 'Resource'} shared`);
@@ -189,7 +190,7 @@ export const useChatActions = (currentUserId: string | null) => {
         sessionId: string,
         content: string,
         resourceId: string,
-        resourceType: 'note' | 'document' | 'post'
+        resourceType: 'note' | 'document' | 'post' | 'class_recording'
     ): Promise<ChatMessageWithDetails | null> => {
         if (!currentUserId || !content.trim()) {
             return null;

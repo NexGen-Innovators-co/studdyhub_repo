@@ -65,6 +65,7 @@ const AdminOverview = () => {
         notesCount,
         documentsCount,
         reportsCount,
+        socialReportsCount,
         newUsersToday
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
@@ -80,6 +81,8 @@ const AdminOverview = () => {
         supabase.from('notes').select('*', { count: 'exact', head: true }),
         supabase.from('documents').select('*', { count: 'exact', head: true }),
         supabase.from('content_moderation_queue').select('*', { count: 'exact', head: true })
+          .eq('status', 'pending'),
+        supabase.from('social_reports').select('*', { count: 'exact', head: true })
           .eq('status', 'pending'),
         supabase.from('profiles').select('*', { count: 'exact', head: true })
           .gte('created_at', new Date().toISOString().split('T')[0])
@@ -100,7 +103,7 @@ const AdminOverview = () => {
         totalGroups: groupsCount.count || 0,
         totalNotes: notesCount.count || 0,
         totalDocuments: documentsCount.count || 0,
-        pendingReports: reportsCount.count || 0,
+        pendingReports: (reportsCount.count || 0) + (socialReportsCount.count || 0),
         newUsersToday: newUsersToday.count || 0,
         userGrowth,
         engagementRate: totalUsers > 0 ? ((activeUsers7d.count || 0) / totalUsers) * 100 : 0,

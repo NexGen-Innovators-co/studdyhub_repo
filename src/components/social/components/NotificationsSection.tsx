@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,6 +77,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
   isLoading,
   hasMore = true,
 }) => {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -176,6 +178,56 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
     }
   };
 
+  // Handle navigation based on notification type
+  const handleNotificationClick = (notification: SocialNotificationItem) => {
+    // Mark as read when clicked
+    if (!notification.is_read) {
+      markNotificationAsRead(notification.id);
+    }
+
+    const { type, data } = notification;
+    const postId = data?.post?.id;
+    const actorId = data?.actor?.id || notification.actor?.id;
+
+    try {
+      switch (type) {
+        case 'like':
+        case 'comment':
+        case 'mention':
+        case 'share':
+          // Navigate to the post that was liked/commented on
+          if (postId) {
+            navigate(`/social/post/${postId}`);
+          } else {
+            toast.info('Post not found');
+          }
+          break;
+
+        case 'follow':
+          // Navigate to the follower's profile
+          if (actorId) {
+            navigate(`/social/user/${actorId}`);
+          } else {
+            toast.info('User profile not found');
+          }
+          break;
+
+        case 'group_invite':
+          // Navigate to groups section
+          navigate('/social/groups');
+          break;
+
+        default:
+          // For other notification types, navigate to social feed
+          navigate('/social/feed');
+          break;
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
+      toast.error('Failed to navigate');
+    }
+  };
+
 
   return (
     <Card className="flex flex-col max-h-[calc(90vh-4rem)] overflow-y-auto pb-6 w-full bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700">
@@ -257,10 +309,19 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
               return (
                 <div
                   key={notification.id}
-                  className={`group flex items-start gap-3 sm:gap-4 p-4 hover:bg-slate-50 dark:hover:bg-gray-700/50 transition-colors ${!notification.is_read
+                  className={`group flex items-start gap-3 sm:gap-4 p-4 hover:bg-slate-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${!notification.is_read
                     ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
                     : ''
                     }`}
+                  onClick={() => handleNotificationClick(notification)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleNotificationClick(notification);
+                    }
+                  }}
                 >
                   {/* Actor Avatar */}
                   {notification.actor ? (
@@ -311,7 +372,10 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => markNotificationAsRead(notification.id)}
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent navigation
+                          markNotificationAsRead(notification.id);
+                        }}
                         title="Mark as read"
                       >
                         <CheckCheck className="h-4 w-4" />
@@ -321,7 +385,10 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleDelete(notification.id)}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent navigation
+                        handleDelete(notification.id);
+                      }}
                       disabled={isDeleting}
                       className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
                       title="Delete"

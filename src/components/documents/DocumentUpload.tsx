@@ -6,7 +6,7 @@ import {
   FileVideo, FileAudio, Archive, Code, Play, Pause, Volume2, FileBarChart,
   ChevronDown, ChevronRight, Grid, List, SortAsc, SortDesc,
   Maximize2, X, Copy, Share, Edit, Trash2, MoreHorizontal,
-  FileSpreadsheet, File, Zap, Clock, Users, Folder, Plus
+  FileSpreadsheet, File, Zap, Clock, Users, Folder, Plus, CheckSquare, Square, Lock
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -19,6 +19,8 @@ import { useAppContext } from '../../hooks/useAppContext';
 import { DocumentFolder, CreateFolderInput, UpdateFolderInput } from '../../types/Folder';
 import { Skeleton } from '../ui/skeleton';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { PodcastButton } from '../dashboard/PodcastButton';
+import { Checkbox } from '../ui/checkbox';
 
 interface DocumentUploadProps {
   documents: Document[];
@@ -107,6 +109,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   onSearchChange,
 }) => {
   const { user } = useAuth();
+  const { subscriptionLimits } = useAppContext();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -123,6 +126,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Podcast selection state
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [showSelection, setShowSelection] = useState(false);
 
   const effectiveSearch = externalSearchQuery ?? internalSearch;
 
@@ -144,8 +151,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     try {
       // Refresh both documents and folders with optimized parallel fetching
       await Promise.all([
-        loadDataIfNeeded('documents', true), // Force refresh
-        loadDataIfNeeded('folders', true)
+        loadDataIfNeeded('documents'), // Force refresh
+        loadDataIfNeeded('folders')
       ]);
       toast.success('Documents refreshed successfully!');
     } catch (error: any) {
@@ -518,6 +525,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     e.stopPropagation();
     
     // Check if user can upload documents
+    const isDocumentLimitReached = subscriptionLimits.maxDocUploads !== -1 && documents.length >= subscriptionLimits.maxDocUploads;
     const canUpload = !isDocumentLimitReached && !isUploading;
 
     if (e.type === "dragenter" || e.type === "dragover") {
@@ -536,6 +544,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     setDragLocked(false);
 
     // Check if user has permission to upload
+    const isDocumentLimitReached = subscriptionLimits.maxDocUploads !== -1 && documents.length >= subscriptionLimits.maxDocUploads;
     if (isDocumentLimitReached) {
       toast.error('Document upload limit reached. Upgrade your plan to upload more documents.');
       return;
@@ -1168,7 +1177,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   <div className="text-center">
                     {dragLocked && !selectedFile && (
                       <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg flex items-center justify-center gap-3">
-                        <Lock className="h-6 w-6 text-red-600 dark:text-red-400" />
+                        <Lock/>
                         <div className="text-left">
                           <p className="font-semibold text-red-800 dark:text-red-300">Upload limit reached</p>
                           <p className="text-sm text-red-700 dark:text-red-400">Upgrade to upload more documents</p>
@@ -1185,7 +1194,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                       {isUploading ? (
                         <Loader2 className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400 animate-spin" />
                       ) : dragLocked && !selectedFile ? (
-                        <Lock className="h-8 w-8 md:h-10 md:w-10 text-red-600 dark:text-red-400" />
+                        <Lock/>
                       ) : selectedFile ? (
                         React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
                           className: "h-8 w-8 md:h-10 md:w-10 text-green-600 dark:text-green-400"
@@ -1408,6 +1417,31 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                       >
                         {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
                       </Button>
+                      
+                      {/* Selection toggle */}
+                      <Button
+                        variant={showSelection ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setShowSelection(!showSelection);
+                          if (showSelection) {
+                            setSelectedDocumentIds([]); // Clear selections
+                          }
+                        }}
+                        className="px-3 gap-2"
+                      >
+                        {showSelection ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                        {showSelection ? `Selected (${selectedDocumentIds.length})` : 'Select'}
+                      </Button>
+                      
+                      {/* Podcast button */}
+                      {showSelection && selectedDocumentIds.length > 0 && (
+                        <PodcastButton 
+                          selectedDocumentIds={selectedDocumentIds}
+                          variant="default"
+                          size="sm"
+                        />
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -1511,6 +1545,33 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                                       {React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
                                         className: "h-16 w-16 text-slate-400 dark:text-slate-500"
                                       })}
+                                    </div>
+                                  )}
+
+                                  {/* Selection checkbox for podcast */}
+                                  {showSelection && (
+                                    <div 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedDocumentIds(prev => 
+                                          prev.includes(doc.id) 
+                                            ? prev.filter(id => id !== doc.id)
+                                            : [...prev, doc.id]
+                                        );
+                                      }}
+                                      className="absolute top-14 left-3 bg-white dark:bg-slate-800 rounded-md p-1.5 shadow-md cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 z-10"
+                                    >
+                                      <Checkbox 
+                                        checked={selectedDocumentIds.includes(doc.id)}
+                                        onCheckedChange={() => {
+                                          setSelectedDocumentIds(prev => 
+                                            prev.includes(doc.id) 
+                                              ? prev.filter(id => id !== doc.id)
+                                              : [...prev, doc.id]
+                                          );
+                                        }}
+                                        className="h-5 w-5"
+                                      />
                                     </div>
                                   )}
 

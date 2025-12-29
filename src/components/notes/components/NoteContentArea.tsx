@@ -308,9 +308,6 @@ interface NoteContentAreaProps {
   // Text-to-speech
   handleTextToSpeech: () => void;
   isSpeaking: boolean;
-  selectedVoiceURI: string | null;
-  setSelectedVoiceURI: (uri: string) => void;
-  voices: SpeechSynthesisVoice[];
 
   // File uploads
   fileInputRef: React.RefObject<HTMLInputElement>;
@@ -353,9 +350,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     handleCopyNoteContent,
     handleTextToSpeech,
     isSpeaking,
-    selectedVoiceURI,
-    setSelectedVoiceURI,
-    voices,
     fileInputRef,
     handleFileSelect,
     audioInputRef,
@@ -1105,21 +1099,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
       // TTS
       <React.Fragment key="tts">
-        <select
-          value={selectedVoiceURI || ''}
-          onChange={(e) => setSelectedVoiceURI(e.target.value)}
-          disabled={isSpeaking || voices.length === 0}
-          className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all duration-200"
-          title="Select Voice"
-          data-tutorial="voice-select"
-        >
-          <option value="">Default Voice</option>
-          {voices.map((voice, index) => (
-            <option key={`${voice.voiceURI}-${index}`} value={voice.voiceURI}>
-              {`${voice.name} (${voice.lang})`}
-            </option>
-          ))}
-        </select>
         <button
           onClick={handleTextToSpeech}
           disabled={isUploading || isGeneratingAI || isProcessingAudio}

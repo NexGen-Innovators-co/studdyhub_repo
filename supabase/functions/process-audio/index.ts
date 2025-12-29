@@ -119,21 +119,14 @@ async function processAudioInBackground(file_url: string, target_language: strin
     // Wait for both operations to complete
     const [summary, translatedContent] = await Promise.all([summaryPromise, translationPromise]);
 
-    // Estimate duration from transcript if not available
-    // Average speaking rate is ~150 words per minute
-    let estimatedDuration = audioDuration;
-    if (!estimatedDuration && transcript) {
-      const wordCount = transcript.split(/\s+/).length;
-      const estimatedMinutes = wordCount / 150;
-      estimat
-      transcript: null, 
-      summary: null, 
-      translated_content: null, 
-      duration: null,
-      status: 'error', 
-      error_message: error.message 
-   
-    }
+  // Estimate duration from transcript if not available
+  // Average speaking rate is ~150 words per minute
+  let estimatedDuration = audioDuration;
+  if (!estimatedDuration && transcript) {
+    const wordCount = transcript.split(/\s+/).length;
+    const estimatedMinutes = wordCount / 150;
+    estimatedDuration = estimatedMinutes * 60; // Convert to seconds
+  }
 
     // Return all results for the main serve function to update the database
     return { 
@@ -287,39 +280,16 @@ serve(async (req) => {
     const jobId = data.id;
 
     // Start background processing using EdgeRuntime.waitUntil
-    // Pas// Update audio_processing_results
+    // Pass user_id to the background processing function
+    EdgeRuntime.waitUntil(
+      (async () => {
+        const results = await processAudioInBackground(file_url, target_language, user_id);
+
+        // Update the database with the results from background processing
+        if (results.status === 'completed') {
           await supabase
             .from('audio_processing_results')
             .update({
-              transcript: results.transcript,
-              summary: results.summary,
-              translated_content: results.translated_content,
-              status: 'completed',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', jobId);
-
-          // Update class_recordings with duration if available
-          if (results.duration && document_id) {
-            const { data: recording } = await supabase
-              .from('class_recordings')
-              .select('duration')
-              .eq('document_id', document_id)
-              .single();
-
-            // Only update if duration is 0 or null
-            if (recording && (recording.duration === 0 || recording.duration === null)) {
-              await supabase
-                .from('class_recordings')
-                .update({
-                  duration: results.duration,
-                  transcript: results.transcript,
-                  summary: results.summary,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('document_id', document_id);
-            }
-          }
               transcript: results.transcript,
               summary: results.summary,
               translated_content: results.translated_content,

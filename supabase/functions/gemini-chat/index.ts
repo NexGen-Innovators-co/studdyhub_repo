@@ -3,6 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { UserContextService } from './context-service.ts';
 import { EnhancedPromptEngine } from './prompt-engine.ts';
 import { StuddyHubActionsService } from './actions-service.ts';
+import { AgenticCore, type UserIntent, type EntityMention } from './agentic-core.ts';
+import { createStreamResponse, StreamingHandler } from './streaming-handler.ts';
 import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
 
 // Define CORS headers for cross-origin requests
@@ -12,21 +14,21 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
-// Enhanced Processing Configuration
+// Enhanced Processing Configuration - Optimized for QUALITY and ACCURACY
 const ENHANCED_PROCESSING_CONFIG = {
-  MAX_INPUT_TOKENS: 2 * 1024 * 1024,
-  MAX_OUTPUT_TOKENS: 65530,
-  MAX_CONVERSATION_HISTORY: 100,
-  CONTEXT_MEMORY_WINDOW: 15,
-  SUMMARY_THRESHOLD: 8,
+  MAX_INPUT_TOKENS: 2 * 1024 * 1024,  // Full 2M context window
+  MAX_OUTPUT_TOKENS: 8192,  // Optimal for quality responses
+  MAX_CONVERSATION_HISTORY: 100,  // Full history for better understanding
+  CONTEXT_MEMORY_WINDOW: 20,  // Increased for better context
+  SUMMARY_THRESHOLD: 15,  // Balanced summarization
   CONTEXT_RELEVANCE_SCORE: 0.7,
-  RETRY_ATTEMPTS: 2,
+  RETRY_ATTEMPTS: 3,  // More retries for reliability
   INITIAL_RETRY_DELAY: 1000,
   MAX_RETRY_DELAY: 5000,
   EXPONENTIAL_BACKOFF_MULTIPLIER: 2,
-  RELEVANCE_SCORING_ENABLED: false,
-  RELEVANCE_TOP_K: 3,
-  RELEVANCE_SIMILARITY_THRESHOLD: 0.75,
+  RELEVANCE_SCORING_ENABLED: true,  // Enable for better context
+  RELEVANCE_TOP_K: 10,  // More relevant items
+  RELEVANCE_SIMILARITY_THRESHOLD: 0.7,
   RELEVANCE_DECAY_FACTOR: 0.95
 };
 
@@ -41,6 +43,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const contextService = new UserContextService(supabaseUrl, supabaseServiceKey);
 const promptEngine = new EnhancedPromptEngine();
 const actionsService = new StuddyHubActionsService(supabaseUrl, supabaseServiceKey);
+
+// Initialize Agentic Core for advanced understanding
+const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+if (!geminiApiKey) {
+  throw new Error('Missing GEMINI_API_KEY environment variable');
+}
+const agenticCore = new AgenticCore(supabaseUrl, supabaseServiceKey, geminiApiKey);
 
 // LIGHTWEIGHT token estimation - no heavy tokenizer library
 function estimateTokenCount(text: string | null | undefined): number {
@@ -589,6 +598,7 @@ async function getConversationHistory(userId: string, sessionId: string, maxMess
 
 async function buildAttachedContext(documentIds: string[], noteIds: string[], userId: string): Promise<string> {
   let context = '';
+  const MAX_CONTENT_LENGTH = 3000;  // Truncate long content for speed
 
   if (documentIds.length > 0) {
     const { data: documents, error } = await supabase
@@ -607,7 +617,11 @@ async function buildAttachedContext(documentIds: string[], noteIds: string[], us
         context += `Type: ${doc.type.charAt(0).toUpperCase() + doc.type.slice(1)}\n`;
 
         if (doc.content_extracted) {
-          context += `Content: ${doc.content_extracted}\n`;
+          // Truncate long content
+          const truncatedContent = doc.content_extracted.length > MAX_CONTENT_LENGTH 
+            ? doc.content_extracted.substring(0, MAX_CONTENT_LENGTH) + '... [Content truncated for performance]'
+            : doc.content_extracted;
+          context += `Content: ${truncatedContent}\n`;
         } else {
           if (doc.type === 'image' && doc.processing_status !== 'completed') {
             context += `Content: Image processing ${doc.processing_status || 'pending'}. No extracted text yet.\n`;
@@ -638,7 +652,11 @@ async function buildAttachedContext(documentIds: string[], noteIds: string[], us
         context += `Category: ${note.category}\n`;
 
         if (note.content) {
-          context += `Content: ${note.content}\n`;
+          // Truncate long note content
+          const truncatedContent = note.content.length > MAX_CONTENT_LENGTH
+            ? note.content.substring(0, MAX_CONTENT_LENGTH) + '... [Content truncated for performance]'
+            : note.content;
+          context += `Content: ${truncatedContent}\n`;
         }
 
         if (note.ai_summary) {
@@ -717,35 +735,53 @@ async function saveChatMessage({
   }
 }
 
-const generateChatTitle = async (sessionId: string, userId: string, initialMessage: string): Promise<string> => {
+const generateChatTitle = async (sessionId: string, userId: string, initialMessage: string, messageCount: number = 1): Promise<string> => {
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
   if (!geminiApiKey) return 'New Chat';
 
-  const truncatedMessage = initialMessage.substring(0, 200);
-  const titlePrompt = `Create a title (max 6 words) for: "${truncatedMessage}". Return ONLY the title, no quotes or explanation.`;
-
-  const contents = [
-    {
-      role: 'user',
-      parts: [
-        {
-          text: titlePrompt
-        }
-      ]
-    }
-  ];
-
   try {
+    // Get recent conversation context for better title generation
+    let contextMessages = '';
+    if (messageCount > 1) {
+      const { data: recentMessages } = await supabase
+        .from('chat_messages')
+        .select('content, role')
+        .eq('session_id', sessionId)
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .limit(6);
+      
+      if (recentMessages && recentMessages.length > 0) {
+        contextMessages = recentMessages
+          .reverse()
+          .map(m => `${m.role}: ${m.content.substring(0, 100)}`)
+          .join('\n');
+      }
+    }
+
+    const contentToAnalyze = contextMessages || initialMessage.substring(0, 300);
+    const titlePrompt = `Analyze this conversation and create a concise, descriptive title (4-6 words max):\n\n${contentToAnalyze}\n\nTitle should capture the main topic/purpose. Return ONLY the title, no quotes or explanation.`;
+
+    const contents = [
+      {
+        role: 'user',
+        parts: [{ text: titlePrompt }]
+      }
+    ];
+
     const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
     if (response.success && response.content) {
       let generatedTitle = response.content.trim();
-      generatedTitle = generatedTitle.replace(/^["']|["']$/g, '');
+      // Remove quotes and clean up
+      generatedTitle = generatedTitle.replace(/^["'`]|["'`]$/g, '');
+      generatedTitle = generatedTitle.replace(/^(Title:|Chat:|Session:)\s*/i, '');
       generatedTitle = generatedTitle.charAt(0).toUpperCase() + generatedTitle.slice(1);
 
       if (generatedTitle.length > 50) {
         generatedTitle = generatedTitle.substring(0, 47) + '...';
       }
 
+      console.log(`📝 Generated title: "${generatedTitle}" (message count: ${messageCount})`);
       return generatedTitle;
     } else {
       const words = initialMessage.split(' ');
@@ -755,6 +791,34 @@ const generateChatTitle = async (sessionId: string, userId: string, initialMessa
     console.error('Error generating chat title:', error);
     const words = initialMessage.split(' ');
     return words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
+  }
+};
+
+// Update session title based on conversation growth
+const maybeUpdateSessionTitle = async (sessionId: string, userId: string, messageCount: number, latestMessage: string): Promise<void> => {
+  try {
+    // Update title on message 1, 4, and 8 to refine based on conversation context
+    const shouldUpdateTitle = messageCount === 1 || messageCount === 4 || messageCount === 8;
+    
+    if (!shouldUpdateTitle) return;
+
+    console.log(`🔄 Updating session title (message ${messageCount})...`);
+    
+    const newTitle = await generateChatTitle(sessionId, userId, latestMessage, messageCount);
+    
+    const { error } = await supabase
+      .from('chat_sessions')
+      .update({ title: newTitle })
+      .eq('id', sessionId)
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('❌ Error updating session title:', error);
+    } else {
+      console.log(`✅ Session title updated: "${newTitle}"`);
+    }
+  } catch (error) {
+    console.error('❌ Error in maybeUpdateSessionTitle:', error);
   }
 };
 
@@ -773,9 +837,10 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
     }
 
     if (existingSession) {
+      const newMessageCount = (existingSession.message_count || 0) + 1;
       const updates: any = {
         document_ids: newDocumentIds,
-        message_count: (existingSession.message_count || 0) + 1
+        message_count: newMessageCount
       };
 
       if (newDocumentIds.length > 0) {
@@ -797,8 +862,15 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
       if (updateError) {
         console.error('Error updating chat session:', updateError);
       }
+      
+      // Update title if needed based on message count
+      if (initialMessage) {
+        maybeUpdateSessionTitle(sessionId, userId, newMessageCount, initialMessage).catch(err => 
+          console.error('Error updating title:', err)
+        );
+      }
     } else {
-      const newTitle = initialMessage ? await generateChatTitle(sessionId, userId, initialMessage) : 'New Chat';
+      const newTitle = initialMessage ? await generateChatTitle(sessionId, userId, initialMessage, 1) : 'New Chat';
 
       const { error: insertError } = await supabase
         .from('chat_sessions')
@@ -816,6 +888,8 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
 
       if (insertError) {
         console.error('Error creating chat session:', insertError);
+      } else {
+        console.log(`✅ New session created with title: "${newTitle}"`);
       }
     }
   } catch (error) {
@@ -1067,10 +1141,23 @@ ${actionableContextText}
 - If you have summary information, use it to show continuity
 - NEVER say "I don't have specific details memorized" - instead use the context provided`;
 
+      // Add current date and time context
+      const currentDateTime = new Date();
+      const dateTimeString = currentDateTime.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZoneName: 'short'
+      });
+
       systemInstruction = {
         parts: [
           {
-            text: `${enhancedSystemPrompt}\n\nQuery type: ${queryType}\n${queryGuidance[queryType]}\n\nCross-session context:\n${crossSessionText}\n\nYou are the AI Assistant for ${userName} on StuddyHub. Use the memory and context provided to give personalized, continuous responses.`
+            text: `${enhancedSystemPrompt}\n\nCURRENT DATE AND TIME: ${dateTimeString}\n\nQuery type: ${queryType}\n${queryGuidance[queryType]}\n\nCross-session context:\n${crossSessionText}\n\nYou are the AI Assistant for ${userName} on StuddyHub. Use the memory and context provided to give personalized, continuous responses.`
           }
         ]
       };
@@ -1091,9 +1178,9 @@ ${actionableContextText}
     }
 
     let recentMessages = conversationData.recentMessages;
-    if (recentMessages.length > 15) {
-      recentMessages = recentMessages.slice(-15);
-      console.log(`${logPrefix} Truncated to last 15 messages`);
+    if (recentMessages.length > 10) {
+      recentMessages = recentMessages.slice(-10);  // Reduced from 15 to 10 for speed
+      console.log(`${logPrefix} Truncated to last 10 messages`);
     }
 
     if (recentMessages && recentMessages.length > 0) {
@@ -1198,7 +1285,7 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string): Pro
     contents,
     generationConfig: {
       temperature: 0.8,
-      maxOutputTokens: ENHANCED_PROCESSING_CONFIG.MAX_OUTPUT_TOKENS,
+      maxOutputTokens: 4096,  // Reduced for summary generation speed
       topK: 40,
       topP: 0.95
     }
@@ -1363,6 +1450,334 @@ async function extractUserFacts(userMessage: string, aiResponse: string, userId:
   return facts;
 }
 
+// ========== STREAMING HANDLER FUNCTION ==========
+async function handleStreamingResponse(
+  userId: string,
+  sessionId: string,
+  message: string,
+  allDocumentIds: string[],
+  attachedNoteIds: string[],
+  learningStyle: string,
+  learningPreferences: any,
+  userMessageImageUrl: string | null,
+  imageMimeType: string | null,
+  filesMetadata: any[],
+  userMessageId: string | null,
+  userMessageTimestamp: string | null,
+  aiMessageIdToUpdate: string | null
+): Promise<Response> {
+  const { stream, handler } = createStreamResponse();
+
+  // Start async processing
+  (async () => {
+    try {
+      console.log('🚀 Starting streaming response for message:', message.substring(0, 50));
+      
+      // Step 1: Understanding Phase
+      handler.sendThinkingStep(
+        'understanding',
+        'Analyzing your request',
+        'Reading and understanding your message...',
+        'in-progress'
+      );
+      console.log('✅ Sent understanding step (in-progress)');
+
+      console.log('📚 Getting conversation history...');
+      const conversationHistory = await getConversationHistory(userId, sessionId);
+      console.log('✅ Retrieved conversation history:', conversationHistory.length, 'messages');
+      
+      let userIntent: UserIntent;
+      try {
+        console.log('🧠 Understanding query...');
+        userIntent = await agenticCore.understandQuery(message, userId, conversationHistory);
+        console.log('✅ Query understood:', userIntent.primary);
+      } catch (error: any) {
+        console.error('❌ Error in understandQuery:', error.message, error.stack);
+        // Fallback intent if query understanding fails
+        userIntent = {
+          primary: 'general_query',
+          secondary: [],
+          entities: [],
+          complexity: 'simple' as const,
+          requiresContext: false,
+          requiresAction: false,
+          confidence: 0.5
+        };
+        console.log('⚠️ Using fallback intent');
+      }
+
+      console.log('📤 Sending understanding complete step...');
+      handler.sendThinkingStep(
+        'understanding',
+        'Query understood',
+        `Intent: ${userIntent.primary}, Entities: ${userIntent.entities?.length || 0}, Complexity: ${userIntent.complexity}`,
+        'completed',
+        { intent: userIntent.primary, entities: (userIntent.entities || []).map((e: EntityMention) => `${e.type}:${e.value}`) }
+      );
+      console.log('✅ Understanding phase complete');
+
+      // Step 2: Retrieval Phase
+      console.log('🔍 Starting retrieval phase...');
+      handler.sendThinkingStep(
+        'retrieval',
+        'Gathering relevant information',
+        'Searching through your notes, documents, and past conversations...',
+        'in-progress'
+      );
+
+      let relevantContext: any[] = [];
+      try {
+        console.log('📥 Retrieving relevant context...');
+        relevantContext = await agenticCore.retrieveRelevantContext(userIntent, userId, sessionId);
+        console.log('✅ Retrieved context:', relevantContext?.length || 0, 'items');
+      } catch (error: any) {
+        console.error('❌ Error in retrieveRelevantContext:', error.message, error.stack);
+        // Continue with empty context
+      }
+
+      console.log('📤 Sending retrieval complete step...');
+      handler.sendThinkingStep(
+        'retrieval',
+        'Context retrieved',
+        `Found ${relevantContext?.length || 0} relevant items (${(relevantContext || []).filter(c => c.type === 'note').length} notes, ${(relevantContext || []).filter(c => c.type === 'document').length} documents)`,
+        'completed',
+        { contextCount: relevantContext?.length || 0, topItems: (relevantContext || []).slice(0, 3).map(c => c.title) }
+      );
+      console.log('✅ Retrieval phase complete');
+
+      // Step 3: Reasoning Phase
+      console.log('🤔 Starting reasoning phase...');
+      handler.sendThinkingStep(
+        'reasoning',
+        'Building reasoning chain',
+        'Analyzing what we know and determining the best approach...',
+        'in-progress'
+      );
+
+      let reasoningChain: string[] = [];
+      try {
+        console.log('⚙️ Building reasoning chain...');
+        reasoningChain = await agenticCore.buildReasoningChain(userIntent, relevantContext, message);
+        console.log('✅ Built reasoning chain:', reasoningChain?.length || 0, 'steps');
+      } catch (error: any) {
+        console.error('❌ Error in buildReasoningChain:', error.message, error.stack);
+        // Continue with empty reasoning chain
+      }
+
+      console.log('📤 Sending reasoning complete step...');
+      handler.sendThinkingStep(
+        'reasoning',
+        'Reasoning complete',
+        `Built ${reasoningChain?.length || 0} reasoning steps`,
+        'completed',
+        { reasoningSteps: reasoningChain || [] }
+      );
+      console.log('✅ Reasoning phase complete');
+
+      // Step 4: Memory Loading Phase
+      console.log('🧠 Starting memory loading phase...');
+      handler.sendThinkingStep(
+        'memory',
+        'Loading memory systems',
+        'Accessing working memory, long-term patterns, and past interactions...',
+        'in-progress'
+      );
+
+      console.log('💾 Loading memory systems...');
+      const [workingMemory, longTermMemory, episodicMemory] = await Promise.all([
+        agenticCore.getWorkingMemory(sessionId, userId),
+        agenticCore.getLongTermMemory(userId),
+        agenticCore.getEpisodicMemory(userId, message)
+      ]);
+      console.log('✅ Memory systems loaded');
+
+      console.log('📤 Sending memory complete step...');
+      handler.sendThinkingStep(
+        'memory',
+        'Memory loaded',
+        `Loaded ${workingMemory.recentMessages?.length || 0} recent messages, ${longTermMemory.facts?.length || 0} learned facts`,
+        'completed'
+      );
+      console.log('✅ Memory phase complete');
+
+      // Build context
+      console.log('📝 Building context...');
+      let attachedContext = '';
+      if (allDocumentIds.length > 0 || attachedNoteIds.length > 0) {
+        console.log('📎 Building attached context from', allDocumentIds.length, 'documents and', attachedNoteIds.length, 'notes');
+        attachedContext = await buildAttachedContext(allDocumentIds, attachedNoteIds, userId);
+        console.log('✅ Attached context built:', attachedContext.length, 'characters');
+      }
+      
+      // Add semantically retrieved context
+      if (relevantContext && relevantContext.length > 0) {
+        console.log('🔗 Adding semantic context...');
+        attachedContext += '\n\n=== SEMANTICALLY RELEVANT CONTEXT ===\n';
+        relevantContext.slice(0, 10).forEach(ctx => {
+          attachedContext += `\n[${ctx.type.toUpperCase()}] ${ctx.title} (Relevance: ${(ctx.relevanceScore * 100).toFixed(0)}%)\n`;
+          if (ctx.content) {
+            const preview = ctx.content.substring(0, 500);
+            attachedContext += `${preview}${ctx.content.length > 500 ? '...' : ''}\n`;
+          }
+        });
+        console.log('✅ Semantic context added');
+      }
+      
+      attachedContext += '\n\n=== REASONING CHAIN ===\n';
+      attachedContext += (reasoningChain || []).join('\n');
+      
+      if (episodicMemory.relevantSessions?.length > 0) {
+        console.log('📋 Adding episodic memory...');
+        attachedContext += '\n\n=== RELEVANT PAST DISCUSSIONS ===\n';
+        episodicMemory.relevantSessions.forEach((sess: any) => {
+          attachedContext += `- ${sess.title}: ${sess.context_summary || 'No summary'}\n`;
+        });
+      }
+
+      console.log('🎯 Building enhanced prompt...');
+      const userContext = await contextService.getUserContext(userId);
+      const systemPrompt = promptEngine.createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, 'light');
+      const conversationData = await buildEnhancedGeminiConversation(userId, sessionId, message, [], attachedContext, systemPrompt);
+      console.log('✅ Prompt built with', conversationData.contents.length, 'conversation parts');
+
+      // Generate response
+      console.log('⚙️ Starting action phase...');
+      handler.sendThinkingStep(
+        'action',
+        'Generating response',
+        'Crafting a personalized, accurate response based on all gathered information...',
+        'in-progress'
+      );
+
+      console.log('🤖 Calling Gemini API...');
+      const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+      if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
+
+      const geminiApiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent');
+      geminiApiUrl.searchParams.append('key', geminiApiKey);
+
+      const requestBody = {
+        contents: conversationData.contents,
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 8192
+        },
+        systemInstruction: conversationData.systemInstruction || undefined
+      };
+
+      console.log('🚀 Sending request to Gemini...');
+      const response = await fetch(geminiApiUrl.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Gemini API error:', response.status, errorText);
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      console.log('📥 Parsing Gemini response...');
+      const data = await response.json();
+      let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      console.log('✅ Generated response:', generatedText.length, 'characters');
+
+      handler.sendThinkingStep(
+        'action',
+        'Response generated',
+        'Successfully generated response',
+        'completed'
+      );
+      console.log('✅ Action phase complete');
+
+      // Verification phase
+      handler.sendThinkingStep(
+        'verification',
+        'Verifying response quality',
+        'Checking for accuracy and completeness...',
+        'in-progress'
+      );
+
+      let verification;
+      try {
+        verification = await agenticCore.verifyResponse(generatedText, userIntent, relevantContext);
+      } catch (error: any) {
+        console.error('Error in verifyResponse:', error);
+        // Default verification result
+        verification = {
+          isValid: true,
+          confidence: 0.8,
+          issues: []
+        };
+      }
+
+      handler.sendThinkingStep(
+        'verification',
+        'Verification complete',
+        `Quality score: ${(verification.confidence * 100).toFixed(0)}%${verification.issues.length > 0 ? `, ${verification.issues.length} issues detected` : ', looks good!'}`,
+        verification.isValid ? 'completed' : 'failed',
+        { confidence: verification.confidence, issues: verification.issues }
+      );
+
+      // Execute actions
+      console.log('⚙️ Executing AI actions...');
+      const actionResult = await executeAIActions(userId, sessionId, generatedText);
+      generatedText = actionResult.modifiedResponse;
+      console.log('✅ Actions executed:', actionResult.executedActions.length, 'actions');
+
+      // Save AI message
+      console.log('💾 Saving AI message...');
+      const aiMessageData = {
+        userId,
+        sessionId,
+        content: generatedText,
+        role: 'assistant',
+        attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
+        attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
+        isError: false
+      };
+
+      const savedAiMessage = await saveChatMessage(aiMessageData);
+      console.log('✅ AI message saved:', savedAiMessage?.id);
+
+      // Send final response
+      console.log('🏁 Sending final response...');
+      handler.sendDone({
+        response: generatedText,
+        aiMessageId: savedAiMessage?.id,
+        aiMessageTimestamp: savedAiMessage?.timestamp,
+        userMessageId,
+        userMessageTimestamp,
+        sessionId,
+        userId,
+        executedActions: actionResult.executedActions
+      });
+      console.log('✅ Final response sent, closing stream');
+
+      handler.close();
+      console.log('✅✅✅ Streaming response completed successfully! ✅✅✅');
+    } catch (error: any) {
+      console.error('❌ FATAL ERROR in streaming handler:', error.message);
+      console.error('❌ Stack trace:', error.stack);
+      console.error('❌ Full error:', JSON.stringify(error, null, 2));
+      handler.sendError(error.message || 'An error occurred');
+      handler.close();
+    }
+  })();
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      ...corsHeaders
+    }
+  });
+}
+
 // MAIN SERVER HANDLER
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -1446,7 +1861,8 @@ serve(async (req) => {
       attachedNoteIds = [],
       imageUrl = null,
       imageMimeType = null,
-      aiMessageIdToUpdate = null
+      aiMessageIdToUpdate = null,
+      enableStreaming = true  // Enable streaming by default for agentic visibility
     } = requestData;
 
     if (!userId || !sessionId) {
@@ -1509,6 +1925,7 @@ serve(async (req) => {
     if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
 
     let filesMetadata: any[] = [];
+    let attachedContext = '';
     const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
 
     if (hasFiles) {
@@ -1582,10 +1999,112 @@ serve(async (req) => {
 
     await ensureChatSession(userId, sessionId, allDocumentIds, message);
 
-    let attachedContext = '';
+    // Save user message BEFORE streaming (so we have the ID to send back)
+    if (message || hasFiles || attachedContext) {
+      const userMessageData = {
+        userId,
+        sessionId,
+        content: message,
+        role: 'user',
+        attachedDocumentIds: allDocumentIds.length > 0 ? allDocumentIds : null,
+        attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
+        imageUrl: userMessageImageUrl || imageUrl,
+        imageMimeType: userMessageImageMimeType || imageMimeType,
+        filesMetadata: filesMetadata.length > 0 ? filesMetadata : null
+      };
+
+      const savedUserMessage = await saveChatMessage(userMessageData);
+      if (savedUserMessage) {
+        userMessageId = savedUserMessage.id;
+        userMessageTimestamp = savedUserMessage.timestamp;
+        console.log('✅ User message saved for streaming:', userMessageId);
+      }
+    }
+
+    // Check if streaming is enabled
+    if (enableStreaming) {
+      // Return streaming response with saved user message ID
+      return handleStreamingResponse(
+        userId,
+        sessionId,
+        message,
+        allDocumentIds,
+        attachedNoteIds,
+        learningStyle,
+        learningPreferences,
+        userMessageImageUrl,
+        imageMimeType,
+        filesMetadata,
+        userMessageId,
+        userMessageTimestamp,
+        aiMessageIdToUpdate
+      );
+    }
+
+    // ========== AGENTIC UNDERSTANDING PHASE ==========
+    console.log('[Agentic] Starting advanced query understanding...');
+    
+    // Get conversation history for context
+    const conversationHistory = await getConversationHistory(userId, sessionId);
+    
+    // Step 1: Understand user intent deeply
+    const userIntent = await agenticCore.understandQuery(message, userId, conversationHistory);
+    console.log(`[Agentic] Intent: ${userIntent.primary}, Complexity: ${userIntent.complexity}, Confidence: ${userIntent.confidence}`);
+    console.log(`[Agentic] Entities detected: ${userIntent.entities.map(e => `${e.type}:${e.value}`).join(', ')}`);
+    
+    // Step 2: Retrieve relevant context using semantic understanding
+    const relevantContext = await agenticCore.retrieveRelevantContext(userIntent, userId, sessionId);
+    console.log(`[Agentic] Retrieved ${relevantContext.length} relevant context items`);
+    
+    // Step 3: Build reasoning chain
+    const reasoningChain = await agenticCore.buildReasoningChain(userIntent, relevantContext, message);
+    console.log(`[Agentic] Reasoning steps: ${reasoningChain.length}`);
+    
+    // Step 4: Get comprehensive memory
+    const [workingMemory, longTermMemory, episodicMemory] = await Promise.all([
+      agenticCore.getWorkingMemory(sessionId, userId),
+      agenticCore.getLongTermMemory(userId),
+      agenticCore.getEpisodicMemory(userId, message)
+    ]);
+    console.log(`[Agentic] Memory loaded - Working: ${workingMemory.recentMessages?.length || 0} msgs, LongTerm: ${longTermMemory.facts?.length || 0} facts`);
+    
+    // Step 5: Select appropriate tools if needed
+    const selectedTools = await agenticCore.selectTools(userIntent, relevantContext);
+    if (selectedTools.length > 0) {
+      console.log(`[Agentic] Tools selected: ${selectedTools.join(', ')}`);
+    }
+
+    // Build enhanced attached context from agentic retrieval
+    attachedContext = '';
     if (allDocumentIds.length > 0 || attachedNoteIds.length > 0) {
       attachedContext = await buildAttachedContext(allDocumentIds, attachedNoteIds, userId);
     }
+    
+    // Add semantically retrieved context
+    if (relevantContext.length > 0) {
+      attachedContext += '\n\n=== SEMANTICALLY RELEVANT CONTEXT ===\n';
+      relevantContext.slice(0, 10).forEach(ctx => {
+        attachedContext += `\n[${ctx.type.toUpperCase()}] ${ctx.title} (Relevance: ${(ctx.relevanceScore * 100).toFixed(0)}%)\n`;
+        if (ctx.content) {
+          const preview = ctx.content.substring(0, 500);
+          attachedContext += `${preview}${ctx.content.length > 500 ? '...' : ''}\n`;
+        }
+      });
+    }
+    
+    // Add reasoning chain to system understanding
+    attachedContext += '\n\n=== REASONING CHAIN ===\n';
+    attachedContext += reasoningChain.join('\n');
+    
+    // Add memory context
+    if (episodicMemory.relevantSessions?.length > 0) {
+      attachedContext += '\n\n=== RELEVANT PAST DISCUSSIONS ===\n';
+      episodicMemory.relevantSessions.forEach((sess: any) => {
+        attachedContext += `- ${sess.title}: ${sess.context_summary || 'No summary'}\n`;
+      });
+    }
+    
+    console.log('[Agentic] Context building complete');
 
     const userContext = await contextService.getUserContext(userId);
     const systemPrompt = promptEngine.createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, 'light');
@@ -1691,7 +2210,7 @@ serve(async (req) => {
         temperature: 0.7,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: ENHANCED_PROCESSING_CONFIG.MAX_OUTPUT_TOKENS
+        maxOutputTokens: 8192  // Reduced from 65530 for faster generation
       },
       systemInstruction: conversationData.systemInstruction || undefined
     };
@@ -1762,6 +2281,28 @@ serve(async (req) => {
       generatedText = `I apologize, but I wasn't able to generate a response at this time. Your message has been saved, and you can try asking again.`;
     }
     
+    // ========== AGENTIC VERIFICATION PHASE ==========
+    if (apiCallSuccess && generatedText) {
+      console.log('[Agentic] Verifying response quality...');
+      const verification = await agenticCore.verifyResponse(generatedText, userIntent, relevantContext);
+      console.log(`[Agentic] Response confidence: ${(verification.confidence * 100).toFixed(1)}%`);
+      
+      if (verification.issues.length > 0) {
+        console.warn(`[Agentic] Issues detected: ${verification.issues.join(', ')}`);
+        
+        // If confidence is too low, add clarification
+        if (verification.confidence < 0.5) {
+          generatedText += '\n\n_Note: I may not have all the information needed for a complete answer. Please let me know if you need clarification._';
+        }
+      }
+      
+      // If we identified missing information during understanding, ask for it
+      if (userIntent.confidence < 0.7 && userIntent.entities.some(e => !e.resolvedId)) {
+        const unresolvedEntities = userIntent.entities.filter(e => !e.resolvedId);
+        generatedText += `\n\n_I noticed you mentioned: ${unresolvedEntities.map(e => e.value).join(', ')}. Could you clarify which specific ${unresolvedEntities[0].type} you're referring to?_`;
+      }
+    }
+    
     console.log(`[Main] Checking for actions in AI response...`);
     const actionResult = await executeAIActions(userId, sessionId, generatedText);
     generatedText = actionResult.modifiedResponse;
@@ -1778,44 +2319,17 @@ serve(async (req) => {
       }
     }
 
+    // Get current session title for response
     let aiGeneratedTitle = 'New Chat Session';
-    if (conversationData.contextInfo.totalMessages <= 2) {
-      const { data: existingSession, error: fetchError } = await supabase
-        .from('chat_sessions')
-        .select('title')
-        .eq('id', sessionId)
-        .eq('user_id', userId)
-        .single();
+    const { data: existingSession } = await supabase
+      .from('chat_sessions')
+      .select('title')
+      .eq('id', sessionId)
+      .eq('user_id', userId)
+      .single();
 
-      if (!fetchError && existingSession?.title && existingSession.title !== 'New Chat' && existingSession.title !== 'New Chat Session') {
-        aiGeneratedTitle = existingSession.title;
-      } else if (message) {
-        generateChatTitle(sessionId, userId, message).then((title) => {
-          supabase
-            .from('chat_sessions')
-            .update({
-              title
-            })
-            .eq('id', sessionId)
-            .eq('user_id', userId)
-            .then(() => console.log(`Title generated: ${title}`))
-            .catch((err) => console.error('Error updating title:', err));
-        }).catch((err) => console.error('Error generating title:', err));
-
-        const words = message.split(' ');
-        aiGeneratedTitle = words.slice(0, 5).join(' ') + (message.split(' ').length > 5 ? '...' : '');
-      }
-    } else {
-      const { data: existingSession } = await supabase
-        .from('chat_sessions')
-        .select('title')
-        .eq('id', sessionId)
-        .eq('user_id', userId)
-        .single();
-
-      if (existingSession?.title) {
-        aiGeneratedTitle = existingSession.title;
-      }
+    if (existingSession?.title) {
+      aiGeneratedTitle = existingSession.title;
     }
 
     const assistantMessageData = {

@@ -140,11 +140,11 @@ export const QuickTips: React.FC<QuickTipsProps> = ({ userPreferences }) => {
 
   return (
     <>
-      <div className="fixed bottom-4 right-4 bg-yellow-50 dark:bg-yellow-800/95 border border-yellow-200 dark:border-yellow-800 rounded-lg shadow-lg p-4 max-w-sm z-50 animate-in fade-in duration-500">
+      <div className="fixed bottom-4 right-4 bg-blue-50 dark:bg-blue-800/95 border border-blue-200 dark:border-blue-800 rounded-lg shadow-lg p-4 max-w-sm z-50 animate-in fade-in duration-500">
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Lightbulb className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-            <span className="font-semibold text-yellow-800 dark:text-yellow-200 text-sm">
+            <Lightbulb className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="font-semibold text-blue-800 dark:text-blue-200 text-sm">
               Quick Tips - {getRouteName(location.pathname)}
             </span>
           </div>
@@ -153,7 +153,7 @@ export const QuickTips: React.FC<QuickTipsProps> = ({ userPreferences }) => {
               variant="ghost"
               size="sm"
               onClick={() => setShowSettings(true)}
-              className="h-6 w-6 p-0 hover:bg-yellow-100 dark:hover:bg-yellow-800"
+              className="h-6 w-6 p-0 hover:bg-blue-100 dark:hover:bg-blue-800"
             >
               <Settings className="w-3 h-3" />
             </Button>
@@ -161,7 +161,7 @@ export const QuickTips: React.FC<QuickTipsProps> = ({ userPreferences }) => {
               variant="ghost"
               size="sm"
               onClick={hideTemporarily}
-              className="h-6 w-6 p-0 hover:bg-yellow-100 dark:hover:bg-yellow-800"
+              className="h-6 w-6 p-0 hover:bg-blue-100 dark:hover:bg-blue-800"
             >
               <X className="w-3 h-3" />
             </Button>
@@ -169,21 +169,21 @@ export const QuickTips: React.FC<QuickTipsProps> = ({ userPreferences }) => {
         </div>
         <div className="space-y-1">
           {tips.map((tip, index) => (
-            <p key={index} className="text-xs text-yellow-700 dark:text-yellow-300 leading-relaxed">
+            <p key={index} className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
               {tip}
             </p>
           ))}
         </div>
-        <div className="mt-2 pt-2 border-t border-yellow-200 dark:border-yellow-700 flex justify-between">
+        <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700 flex justify-between">
           <button
             onClick={hideTemporarily}
-            className="text-xs text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300"
+            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
           >
             Got it
           </button>
           <button
             onClick={hidePermanently}
-            className="text-xs text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300"
+            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
           >
             Don't show again
           </button>

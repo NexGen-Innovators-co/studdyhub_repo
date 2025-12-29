@@ -33,9 +33,6 @@ interface NoteEditorHeaderProps {
   handleTextToSpeech: () => void;
   isSpeaking: boolean;
   handleSave: () => void;
-  selectedVoiceURI: string | null;
-  setSelectedVoiceURI: (uri: string) => void;
-  voices: SpeechSynthesisVoice[];
   documentId: string | null;
   onToggleNotesHistory?: () => void;
   isNotesHistoryOpen?: boolean;
@@ -67,9 +64,6 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
   handleTextToSpeech,
   isSpeaking,
   handleSave,
-  selectedVoiceURI,
-  setSelectedVoiceURI,
-  voices,
   documentId,
   onToggleNotesHistory,
   isNotesHistoryOpen,
@@ -270,27 +264,6 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
               </Select>
             </div>
 
-            {/* Voice Select */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-slate-700 dark:text-gray-300">Voice:</span>
-              <Select
-                value={selectedVoiceURI || ''}
-                onValueChange={(value) => setSelectedVoiceURI(value)}
-                disabled={isSpeaking || voices.length === 0}
-              >
-                <SelectTrigger className="w-48 h-8 dark:bg-gray-800 dark:border-gray-600">
-                  <SelectValue placeholder="Select voice" />
-                </SelectTrigger>
-                <SelectContent className="dark:bg-gray-800 dark:border-gray-600">
-                  {voices.map((voice, index) => (
-                    <SelectItem key={`${voice.voiceURI}-${index}`} value={voice.voiceURI} className="dark:text-gray-100">
-                      {`${voice.name} (${voice.lang})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Tags Input */}
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <span className="text-sm font-medium text-slate-700 dark:text-gray-300">Tags:</span>
@@ -434,26 +407,6 @@ export const NoteEditorHeader: React.FC<NoteEditorHeaderProps> = ({
                     <SelectItem value="history" className="text-xs dark:text-gray-100">History</SelectItem>
                     <SelectItem value="language" className="text-xs dark:text-gray-100">Languages</SelectItem>
                     <SelectItem value="other" className="text-xs dark:text-gray-100">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs text-slate-600 dark:text-gray-400">Voice</label>
-                <Select
-                  value={selectedVoiceURI || ''}
-                  onValueChange={(value) => setSelectedVoiceURI(value)}
-                  disabled={isSpeaking || voices.length === 0}
-                >
-                  <SelectTrigger className="w-full h-8 text-xs dark:bg-gray-700 dark:border-gray-600">
-                    <SelectValue placeholder="Select voice" />
-                  </SelectTrigger>
-                  <SelectContent className="dark:bg-gray-700 dark:border-gray-600">
-                    {voices.map((voice, index) => (
-                      <SelectItem key={`${voice.voiceURI}-${index}`} value={voice.voiceURI} className="text-xs dark:text-gray-100">
-                        {`${voice.name}`}
-                      </SelectItem>
-                    ))}
                   </SelectContent>
                 </Select>
               </div>

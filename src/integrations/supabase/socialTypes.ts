@@ -226,6 +226,7 @@ export interface SocialPostWithDetails extends SocialPost {
     group?: SocialGroup;
     is_liked?: boolean;
     is_bookmarked?: boolean;
+    metadata?: any; // Patch: allow metadata for podcast/social post logic
 }
 
 export interface SocialGroupWithDetails extends SocialGroup {

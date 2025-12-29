@@ -11,6 +11,7 @@ import { cn } from '../utils/cn';
 import BookPagesAnimation from '../../ui/bookloader';
 import AIBot from '../../ui/aibot';
 import { Note } from '@/types';
+import { ThinkingStepsDisplay } from './ThinkingStepsDisplayModern';
 
 interface AttachedFile {
     id?: string;
@@ -482,11 +483,22 @@ export const MessageList = memo(({
         } else {
             contentToRender = (
                 <>
-                    {message.isLoading || (message.id.startsWith('optimistic-ai-') && !message.content) ? (
+                    {/* Show thinking steps during streaming, or loader for non-streaming */}
+                    {message.thinking_steps && message.thinking_steps.length > 0 ? (
+                        <div className="mb-4">
+                            <ThinkingStepsDisplay 
+                                steps={message.thinking_steps} 
+                                isStreaming={message.isStreaming || false}
+                            />
+                        </div>
+                    ) : (message.isLoading || (message.id.startsWith('optimistic-ai-') && !message.content)) ? (
                         <div className="flex items-center gap-3 my-4">
                             <BookPagesAnimation size="md" showText={true} text='Generating response' />
                         </div>
-                    ) : (
+                    ) : null}
+
+                    {/* Message content */}
+                    {message.content && (
                         <>
                             {message.isError ? (
                                 <div className="p-3 rounded-lg border border-red-400 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-claude text-sm sm:text-base">

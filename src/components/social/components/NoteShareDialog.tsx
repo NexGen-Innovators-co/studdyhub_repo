@@ -1,6 +1,6 @@
 // src/components/social/components/NoteShareDialog.tsx
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../ui/dialog';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
@@ -130,6 +130,7 @@ export const NoteShareDialog: React.FC<NoteShareDialogProps> = ({
       <DialogContent className=" max-w-2xl p-0 lg:p-2 ">
         <DialogHeader>
           <DialogTitle>Share Note or Document</DialogTitle>
+          <DialogDescription>Select a note or document to share with others</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

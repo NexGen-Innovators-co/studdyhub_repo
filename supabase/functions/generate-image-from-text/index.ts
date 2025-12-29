@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
+// import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -16,8 +16,15 @@ serve(async (req) => {
 
     try {
         const { description, userId } = await req.json();
-        if (!description || !userId) {
-            return new Response(JSON.stringify({ error: 'Missing description or userId' }), {
+        console.log('[generate-image-from-text] Incoming data:', { description, userId });
+        if (!description || typeof description !== 'string' || !description.trim()) {
+            return new Response(JSON.stringify({ error: 'Missing or empty description for image generation.' }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+        if (!userId) {
+            return new Response(JSON.stringify({ error: 'Missing userId' }), {
                 status: 400,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
@@ -29,36 +36,98 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
         );
 
-        const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-        if (!geminiApiKey) {
-            throw new Error('GEMINI_API_KEY not configured in environment variables.');
+
+        // --- Vertex AI Imagen (text-to-image) ---
+        // Get service account JSON from env
+        const gcpServiceAccountJson = Deno.env.get("GCP_SERVICE_ACCOUNT_JSON");
+        const gcpProjectId = "gen-lang-client-0612038711";
+        const region = "us-central1";
+        if (!gcpServiceAccountJson) {
+            throw new Error("GCP_SERVICE_ACCOUNT_JSON not configured");
         }
-
-        const genAI = new GoogleGenerativeAI(geminiApiKey);
-        // Use the specific Gemini model for image generation
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-preview-image-generation' });
-
-        // Generate image using Gemini API with correct configuration
-        const result = await model.generateContent({
-            contents: [{ text: description }], // Simplified contents for direct text-to-image
-            generationConfig: {
-                temperature: 0.7,
-                topK: 40,
-                topP: 0.95,
-                responseMimeType: 'image/png', // Request PNG format
-                response_modalities: ['IMAGE'], // Explicitly request image output
-            },
+        // Parse and clean service account JSON
+        let cleanedJson = gcpServiceAccountJson.trim();
+        if (cleanedJson.startsWith('"') && cleanedJson.endsWith('"')) {
+            cleanedJson = cleanedJson.slice(1, -1);
+        }
+        cleanedJson = cleanedJson.replace(/\\"/g, '"');
+        const serviceAccount = JSON.parse(cleanedJson);
+        // JWT for OAuth2
+        const header = { alg: "RS256", typ: "JWT" };
+        const now = Math.floor(Date.now() / 1000);
+        const payload = {
+            iss: serviceAccount.client_email,
+            scope: "https://www.googleapis.com/auth/cloud-platform",
+            aud: "https://oauth2.googleapis.com/token",
+            exp: now + 3600,
+            iat: now
+        };
+        const base64url = (str) => btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        const encodedHeader = base64url(JSON.stringify(header));
+        const encodedPayload = base64url(JSON.stringify(payload));
+        const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+        // Import private key
+        const privateKey = serviceAccount.private_key.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g, '');
+        const binaryKey = Uint8Array.from(atob(privateKey), c => c.charCodeAt(0));
+        const cryptoKey = await crypto.subtle.importKey(
+            "pkcs8",
+            binaryKey,
+            { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+            false,
+            ["sign"]
+        );
+        const encoder = new TextEncoder();
+        const signature = await crypto.subtle.sign(
+            "RSASSA-PKCS1-v1_5",
+            cryptoKey,
+            encoder.encode(unsignedToken)
+        );
+        const encodedSignature = base64url(String.fromCharCode(...new Uint8Array(signature)));
+        const jwt = `${unsignedToken}.${encodedSignature}`;
+        // Exchange JWT for access token
+        const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                assertion: jwt
+            })
         });
-
-        const response = await result.response;
-        const generatedImagePart = response.candidates?.[0]?.content?.parts?.[0];
-
-        if (!generatedImagePart || !generatedImagePart.inlineData) {
-            throw new Error('No image data received from Gemini API.');
+        if (!tokenResponse.ok) {
+            throw new Error("Failed to get GCP access token: " + await tokenResponse.text());
         }
+        const tokenData = await tokenResponse.json();
+        const accessToken = tokenData.access_token;
 
-        const imageBase64 = generatedImagePart.inlineData.data;
-        const imageMimeType = generatedImagePart.inlineData.mimeType || 'image/png'; // Use mimeType from response or default
+        // Call Vertex AI Imagen endpoint
+        const imagenEndpoint = `https://${region}-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/${region}/publishers/google/models/imagegeneration@006:predict`;
+        const imagenRes = await fetch(imagenEndpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                instances: [
+                    {
+                        prompt: description
+                    }
+                ],
+                parameters: {
+                    sampleCount: 1,
+                    imageSize: "1024x1024"
+                }
+            })
+        });
+        if (!imagenRes.ok) {
+            throw new Error("Vertex AI Imagen error: " + await imagenRes.text());
+        }
+        const imagenData = await imagenRes.json();
+        const imageBase64 = imagenData.predictions?.[0]?.bytesBase64Encoded;
+        const imageMimeType = "image/png";
+        if (!imageBase64) {
+            throw new Error("No image data received from Imagen");
+        }
         const imageBuffer = decodeBase64(imageBase64);
 
         const imageFileName = `generated_image_${Date.now()}.${imageMimeType.split('/')[1] || 'png'}`;
