@@ -1,5 +1,6 @@
 // GroupDetail.tsx - UPDATED: Floating button with all group sections
 import React, { useState, useEffect, useRef } from 'react';
+import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../integrations/supabase/client';
 import { Button } from '../../ui/button';
@@ -58,6 +59,7 @@ interface GroupDetailPageProps {
 }
 
 export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser }) => {
+  const { canAccessSocial, isFree } = useFeatureAccess();
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
 
@@ -237,6 +239,16 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
   };
 
   const handleLeaveGroup = async () => {
+    if (!canAccessSocial()) {
+      toast.error('Leaving groups is available for Scholar and Genius plans', {
+        action: {
+          label: 'Upgrade',
+          onClick: () => navigate('/subscription'),
+        },
+        duration: 5000,
+      });
+      return;
+    }
     if (!confirm('Leave this group?')) return;
     const { error } = await supabase
       .from('social_group_members')
@@ -454,16 +466,49 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
                       <h2 className="text-xl font-bold mb-4">Group Actions</h2>
 
                       {canManage && (
-                        <Button onClick={() => setActiveSection('settings')} className="w-full">
+                        <Button
+                          onClick={() => {
+                            if (!canAccessSocial()) {
+                              toast.error('Managing groups is available for Scholar and Genius plans', {
+                                action: {
+                                  label: 'Upgrade',
+                                  onClick: () => navigate('/subscription'),
+                                },
+                                duration: 5000,
+                              });
+                              return;
+                            }
+                            setActiveSection('settings');
+                          }}
+                          className="w-full"
+                          disabled={!canAccessSocial()}
+                          title={!canAccessSocial() ? 'Upgrade to manage groups' : 'Manage Group'}
+                        >
+                          {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                           <Settings className="h-4 w-4 mr-2" /> Manage Group
                         </Button>
                       )}
 
                       <Button
                         variant="outline"
-                        onClick={handleShareGroup}
+                        onClick={() => {
+                          if (!canAccessSocial()) {
+                            toast.error('Sharing groups is available for Scholar and Genius plans', {
+                              action: {
+                                label: 'Upgrade',
+                                onClick: () => navigate('/subscription'),
+                              },
+                              duration: 5000,
+                            });
+                            return;
+                          }
+                          handleShareGroup();
+                        }}
                         className="w-full"
+                        disabled={!canAccessSocial()}
+                        title={!canAccessSocial() ? 'Upgrade to share groups' : 'Share Group'}
                       >
+                        {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                         <Share2 className="h-4 w-4 mr-2" />
                         Share Group
                       </Button>
@@ -473,7 +518,10 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
                           variant="destructive"
                           onClick={handleLeaveGroup}
                           className="w-full"
+                          disabled={!canAccessSocial()}
+                          title={!canAccessSocial() ? 'Upgrade to leave groups' : 'Leave Group'}
                         >
+                          {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                           Leave Group
                         </Button>
                       )}
@@ -491,37 +539,153 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({ currentUser })
                 <Card className="dark:bg-slate-900 shadow-sm border">
                   <CardContent className="pt-6 space-y-3 rounded-2xl bg-white dark:bg-slate-900">
                     {canManage && (
-                      <Button onClick={() => setActiveSection('settings')} className="w-full">
+                      <Button
+                        onClick={() => {
+                          if (!canAccessSocial()) {
+                            toast.error('Managing groups is available for Scholar and Genius plans', {
+                              action: {
+                                label: 'Upgrade',
+                                onClick: () => navigate('/subscription'),
+                              },
+                              duration: 5000,
+                            });
+                            return;
+                          }
+                          setActiveSection('settings');
+                        }}
+                        className="w-full"
+                        disabled={!canAccessSocial()}
+                        title={!canAccessSocial() ? 'Upgrade to manage groups' : 'Manage Group'}
+                      >
+                        {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                         <Settings className="h-4 w-4 mr-2" /> Manage Group
                       </Button>
                     )}
 
                     {!canManage && (
-                      <Button variant="outline" onClick={handleLeaveGroup} className="w-full">
+                      <Button
+                        variant="outline"
+                        onClick={handleLeaveGroup}
+                        className="w-full"
+                        disabled={!canAccessSocial()}
+                        title={!canAccessSocial() ? 'Upgrade to leave groups' : 'Leave Group'}
+                      >
+                        {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                         Leave Group
                       </Button>
                     )}
-                    <Button variant="outline" onClick={() => setActiveSection('chat')} className="w-full">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (!canAccessSocial()) {
+                          toast.error('Group chat is available for Scholar and Genius plans', {
+                            action: {
+                              label: 'Upgrade',
+                              onClick: () => navigate('/subscription'),
+                            },
+                            duration: 5000,
+                          });
+                          return;
+                        }
+                        setActiveSection('chat');
+                      }}
+                      className="w-full"
+                      disabled={!canAccessSocial()}
+                      title={!canAccessSocial() ? 'Upgrade to chat in groups' : 'Chat'}
+                    >
+                      {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                       <Send className="h-4 w-4 mr-2" />
                       Chat
                     </Button>
-                    <Button variant="outline" onClick={() => setActiveSection('events')} className="w-full">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (!canAccessSocial()) {
+                          toast.error('Viewing events is available for Scholar and Genius plans', {
+                            action: {
+                              label: 'Upgrade',
+                              onClick: () => navigate('/subscription'),
+                            },
+                            duration: 5000,
+                          });
+                          return;
+                        }
+                        setActiveSection('events');
+                      }}
+                      className="w-full"
+                      disabled={!canAccessSocial()}
+                      title={!canAccessSocial() ? 'Upgrade to view events' : 'View Events'}
+                    >
+                      {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                       <Calendar className="h-4 w-4 mr-2" />
                       View Events
                     </Button>
-                    <Button variant="outline" onClick={() => setActiveSection('members')} className="w-full">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (!canAccessSocial()) {
+                          toast.error('Viewing members is available for Scholar and Genius plans', {
+                            action: {
+                              label: 'Upgrade',
+                              onClick: () => navigate('/subscription'),
+                            },
+                            duration: 5000,
+                          });
+                          return;
+                        }
+                        setActiveSection('members');
+                      }}
+                      className="w-full"
+                      disabled={!canAccessSocial()}
+                      title={!canAccessSocial() ? 'Upgrade to view members' : 'View Members'}
+                    >
+                      {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                       <Users className="h-4 w-4 mr-2" />
                       View Members
                     </Button>
-                    <Button variant="outline" onClick={() => setActiveSection('posts')} className="w-full">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (!canAccessSocial()) {
+                          toast.error('Viewing posts is available for Scholar and Genius plans', {
+                            action: {
+                              label: 'Upgrade',
+                              onClick: () => navigate('/subscription'),
+                            },
+                            duration: 5000,
+                          });
+                          return;
+                        }
+                        setActiveSection('posts');
+                      }}
+                      className="w-full"
+                      disabled={!canAccessSocial()}
+                      title={!canAccessSocial() ? 'Upgrade to view posts' : 'View Posts'}
+                    >
+                      {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                       <MessageCircle className="h-4 w-4 mr-2" />
                       View Posts
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={handleShareGroup}
+                      onClick={() => {
+                        if (!canAccessSocial()) {
+                          toast.error('Sharing groups is available for Scholar and Genius plans', {
+                            action: {
+                              label: 'Upgrade',
+                              onClick: () => navigate('/subscription'),
+                            },
+                            duration: 5000,
+                          });
+                          return;
+                        }
+                        handleShareGroup();
+                      }}
                       className="w-full"
+                      disabled={!canAccessSocial()}
+                      title={!canAccessSocial() ? 'Upgrade to share groups' : 'Share Group'}
                     >
+                      {!canAccessSocial() && <Lock className="h-4 w-4 mr-2" />}
                       <Share2 className="h-4 w-4 mr-2" />
                       Share Group
                     </Button>

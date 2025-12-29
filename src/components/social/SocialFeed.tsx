@@ -119,6 +119,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
   const trendingObserverRef = useRef<HTMLDivElement>(null);
   const profileObserverRef = useRef<HTMLDivElement>(null);
   const suggestedObserverRef = useRef<HTMLDivElement>(null);
+  const suggestedContainerRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const firstPostRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -420,6 +421,15 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
   const canStartChats = useMemo(() => canChat(), [canChat]);
   const canCreateNewGroups = useMemo(() => canCreateGroups(), [canCreateGroups]);
 
+  // Move uniqueSuggestedUsers definition up so it's available for useEffect dependencies
+  const uniqueSuggestedUsers = React.useMemo(() => {
+    const map = new Map<string, any>();
+    for (const u of suggestedUsers || []) {
+      if (!map.has(u.id)) map.set(u.id, u);
+    }
+    return Array.from(map.values());
+  }, [suggestedUsers]);
+
   // Sync search & "open create" dialog from URL query params
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -454,25 +464,6 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     }
   };
 
-  // Add error display in your UI
-  {
-    error && (
-      <div className="mx-4 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-        <div className="flex items-center justify-between">
-          <div className="text-red-800 text-sm">{error}</div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setError(null)}
-            className="text-red-800 hover:bg-red-100"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    )
-  }
-  // Replace your existing useEffect with this improved version:
   useEffect(() => {
     if (isLoading || isRefreshing) return;
 
@@ -482,53 +473,75 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       ref: React.RefObject<HTMLDivElement>,
       hasMore: boolean,
       isLoadingMore: boolean,
-      loadMore: () => void
+      loadMore: () => void,
+      root: HTMLElement | null = null
     ) => {
       if (!ref.current || !hasMore || isLoadingMore) return null;
 
       const observer = new IntersectionObserver(
         (entries) => {
           entries.forEach(entry => {
-            // Check if element is actually visible in viewport
             if (entry.isIntersecting && entry.intersectionRatio > 0 && hasMore && !isLoadingMore && !isRefreshing) {
               loadMore();
             }
           });
         },
-        { 
-          threshold: [0, 0.1, 0.5], // Multiple thresholds for better detection
-          rootMargin: '200px', // Increased margin to trigger earlier
-          root: null // Use viewport as root
+        {
+          threshold: [0, 0.1, 0.5],
+          rootMargin: '200px',
+          root: root
         }
       );
-
       observer.observe(ref.current);
       return observer;
     };
 
     // Create observers based on active tab
     switch (activeTab) {
-      case 'feed':
+      case 'feed': {
         const feedObserver = createObserver(feedObserverRef, hasMorePosts, isLoadingMorePosts, loadMorePosts);
         if (feedObserver) observers.push(feedObserver);
+        // Inline suggestions infinite scroll in feed
+        if (uniqueSuggestedUsers.length > 0 && suggestedObserverRef.current) {
+          const inlineSuggestionsObserver = createObserver(
+            suggestedObserverRef,
+            hasMoreSuggestedUsers,
+            isLoadingSuggestedUsers,
+            loadMoreSuggestedUsers,
+            suggestedContainerRef.current
+          );
+          if (inlineSuggestionsObserver) observers.push(inlineSuggestionsObserver);
+        }
         break;
-
-      case 'trending':
+      }
+      case 'trending': {
         const trendingObserver = createObserver(trendingObserverRef, hasMoreTrendingPosts, isLoadingMorePosts, loadMoreTrendingPosts);
         if (trendingObserver) observers.push(trendingObserver);
         break;
-
-      case 'profile':
+      }
+      case 'profile': {
         const profileObserver = createObserver(profileObserverRef, hasMoreUserPosts, isLoadingUserPosts, loadMoreUserPosts);
         if (profileObserver) observers.push(profileObserver);
+        // Right sidebar suggestions infinite scroll in profile
+        if (uniqueSuggestedUsers.length > 0 && suggestedObserverRef.current) {
+          const sidebarSuggestionsObserver = createObserver(
+            suggestedObserverRef,
+            hasMoreSuggestedUsers,
+            isLoadingSuggestedUsers,
+            loadMoreSuggestedUsers,
+            suggestedContainerRef.current
+          );
+          if (sidebarSuggestionsObserver) observers.push(sidebarSuggestionsObserver);
+        }
         break;
+      }
     }
 
     // Cleanup function
     return () => {
       observers.forEach(observer => observer.disconnect());
     };
-  }, [activeTab, isLoading, isRefreshing, isLoadingMorePosts, isLoadingUserPosts]);
+  }, [activeTab, isLoading, isRefreshing, isLoadingMorePosts, isLoadingUserPosts, isLoadingSuggestedUsers, hasMoreSuggestedUsers, uniqueSuggestedUsers.length]);
 
   // Backup: Scroll-based load more trigger (in case IntersectionObserver fails)
   useEffect(() => {
@@ -724,13 +737,6 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     }
   }, [activeTab]);
 
-  const uniqueSuggestedUsers = React.useMemo(() => {
-    const map = new Map<string, any>();
-    for (const u of suggestedUsers || []) {
-      if (!map.has(u.id)) map.set(u.id, u);
-    }
-    return Array.from(map.values());
-  }, [suggestedUsers]);
 
 
   const InFeedSuggestedStrip: React.FC<{
@@ -787,7 +793,13 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       <div className="py-3 px-2 -mx-2 max-w-[680px]">
         <div className="flex items-center justify-between mb-2 px-2">
           <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Suggested for you</h4>
-          <button className="text-xs text-slate-500 hover:underline" onClick={() => handleTabChange('trending')}>See all</button>
+          <button className="text-xs text-slate-500 hover:underline" onClick={() => {
+            setActiveTab('profile');
+            setTimeout(() => {
+              const suggestionsTab = document.querySelector('[data-value="suggestions"]');
+              if (suggestionsTab) (suggestionsTab as HTMLElement).click();
+            }, 0);
+          }}>See all</button>
         </div>
 
         <div
@@ -795,10 +807,12 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
           onScroll={onScroll}
           className="flex space-x-3 overflow-x-auto scrollbar-hide px-2"
         >
+          
           {list.map((u) => (
             <div key={u.id} className="min-w-[140px] max-w-[180px] bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-3 flex-shrink-0">
               {/* CHANGED: Make avatar/name clickable to navigate */}
               <div
+                          
                 className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={() => handleViewProfile(u.id)}
               >
@@ -833,6 +847,14 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
               </div>
             </div>
           ))}
+          {hasMoreSuggestedUsers && !isLoadingSuggestedUsers && (
+              <div
+                ref={suggestedObserverRef}
+                className="h-6 min-w-[100px] flex items-center justify-center"
+              >
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              </div>
+            )}
         </div>
       </div>
     );
@@ -1004,6 +1026,23 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
 
   return (
     <div className=" bg-transparent font-sans">
+
+      {/* Error display */}
+      {error && (
+        <div className="mx-4 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="text-red-800 text-sm">{error}</div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setError(null)}
+              className="text-red-800 hover:bg-red-100"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className=" max-w-[1240px] mx-auto px-0 ">
 
@@ -1514,16 +1553,23 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                         </div>
                       </div>
                       <Button
-                        className="w-full mt-3"
+                        className="w-full mt-3 disabled:opacity-50 disabled:cursor-not-allowed"
                         size="sm"
                         onClick={() => {
+                          if (!canCreateNewGroups) {
+                            toast.error('Groups are available for Scholar and Genius plans');
+                            return;
+                          }
                           setTimeout(() => {
                             const event = new CustomEvent('triggerCreateGroup');
                             window.dispatchEvent(event);
                           }, 100);
                         }}
+                        disabled={!canCreateNewGroups}
+                        title={!canCreateNewGroups ? 'Upgrade to Scholar or Genius to create groups' : 'Create a new group'}
                       >
-                        <Plus className="h-4 w-4 mr-2" /> Create Group
+                        {!canCreateNewGroups && <Lock className="h-4 w-4 mr-2" />}
+                        <Plus className={!canCreateNewGroups ? '' : 'h-4 w-4 mr-2'} /> Create Group
                       </Button>
                     </div>
                   </div>
@@ -1556,7 +1602,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                   <div className="p-4 border-b border-slate-100 dark:border-slate-800">
                     <h3 className="font-bold text-lg">Who to follow</h3>
                   </div>
-                  <div className="p-4 space-y-4 overflow-y-scroll max-h-[500px] modern-scrollbar">
+                  <div ref={suggestedContainerRef} className="p-4 space-y-4 overflow-y-scroll max-h-[500px] modern-scrollbar">
                     {uniqueSuggestedUsers.map((user) => (
                       <div key={user.id} className="flex items-center justify-between gap-3">
                         {/* CHANGED: Make clickable to navigate */}

@@ -239,7 +239,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       let memberCounts: Record<string, number> = {};
       if (podcastIds.length > 0) {
         const { data: memberData, error: memberError } = await supabase
-          .from('ai_podcast_members')
+          .from('podcast_members')
           .select('podcast_id, id', { count: 'exact', head: false })
           .in('podcast_id', podcastIds);
         if (!memberError && memberData) {
@@ -780,11 +780,11 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                   Discover
                 </TabsTrigger>
                 <TabsTrigger value="my-podcasts" className="hidden sm:inline-flex data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900">
-                  <Podcast className="h-4 w-4 mr-2" />
+                  <Sparkles className="h-4 w-4 mr-2" />
                   My Podcasts
                 </TabsTrigger>
                 <TabsTrigger value="live" className="hidden sm:inline-flex data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900">
-                  <Radio className="h-4 w-4 mr-2" />
+                  <Globe className="h-4 w-4 mr-2" />
                   Live Now
                 </TabsTrigger>
               </TabsList>
@@ -1027,7 +1027,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       <button
         aria-label="Refresh Podcasts"
         onClick={() => fetchPodcasts(1, true)}
-        className="fixed bottom-16 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg p-4 flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        className="fixed bottom-32 right-2 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg p-4 flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
         style={{ boxShadow: '0 4px 24px rgba(59,130,246,0.15)' }}
         disabled={loading || refreshing}
       >

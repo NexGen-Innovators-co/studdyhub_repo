@@ -86,45 +86,22 @@ export const useSocialActions = (
 
       const newGroup = response.group as SocialGroup;
 
-      // 2. Automatically make the creator an admin member
-      const { error: memberError } = await supabase
-        .from('social_group_members')
-        .insert({
-          group_id: newGroup.id,
-          user_id: currentUser.id,
-          role: 'admin',
-        });
+      // The edge function already adds the creator as a member, so skip client insert
 
-      if (memberError) throw memberError;
-
-      // Update members_count on server
-      const { count, error: countError } = await supabase
-        .from('social_group_members')
-        .select('count', { count: 'exact' })
-        .eq('group_id', newGroup.id);
-
-      await supabase
-        .from('social_groups')
-        .update({ members_count: count })
-        .eq('id', newGroup.id);
-
+      // Optionally, you can fetch the latest members_count if needed, or trust the backend
       toast.success(`Group "${newGroup.name}" created successfully!`);
 
-      // Update local state with members_count
       const newGroupWithDetails: SocialGroupWithDetails = {
         ...newGroup,
-        members_count: count,  // Set the accurate count
         creator: currentUser,
         is_member: true,
         member_role: 'admin',
         member_status: 'active'
       };
-
       setGroups(prev => [newGroupWithDetails, ...prev]);
       return newGroupWithDetails;
 
     } catch (error) {
-      ////console.error('Error creating group:', error);
       toast.error('Failed to create group. Please try again.');
       return null;
     }
@@ -165,13 +142,13 @@ export const useSocialActions = (
           .eq('id', groupId);
       }
 
-      // Update the local state for the specific group
+      // Refetch or use backend count only, do not increment locally
       setGroups(prev => prev.map(g => g.id === groupId ? {
         ...g,
         is_member: status === 'active',
         member_status: status,
         member_role: 'member',
-        members_count: status === 'active' ? g.members_count + 1 : g.members_count,
+        // members_count: backend will update, so do not increment here
       } : g));
 
       if (status === 'active') {
@@ -219,13 +196,13 @@ export const useSocialActions = (
           .update({ members_count: count })
           .eq('id', groupId);
       }
-      // Update the local state for the specific group
+      // Refetch or use backend count only, do not decrement locally
       setGroups(prev => prev.map(g => g.id === groupId ? {
         ...g,
         is_member: false,
         member_status: null,
         member_role: null,
-        members_count: g.member_status === 'active' ? g.members_count - 1 : g.members_count,
+        // members_count: backend will update, so do not decrement here
       } : g));
 
       toast.info('You have left the group.');
@@ -570,28 +547,9 @@ export const useSocialActions = (
 
         if (deleteError) throw deleteError;
 
-        // Update target's followers_count
-        const { data: targetUser, error: targetError } = await supabase
-          .from('social_users')
-          .select('followers_count')
-          .eq('id', userId)
-          .single();
-
-        if (targetError) throw targetError;
-
-        await supabase
-          .from('social_users')
-          .update({ followers_count: Math.max(0, (targetUser.followers_count || 0) - 1) })
-          .eq('id', userId);
-
-        // Update current user's following_count
-        if (currentUser) {
-          const newCount = Math.max(0, (currentUser.following_count || 0) - 1);
-          setCurrentUser(prev => prev ? { ...prev, following_count: newCount } : prev);
-          await supabase
-            .from('social_users')
-            .update({ following_count: newCount })
-            .eq('id', user.id);
+        // After unfollow, refetch user profile to get correct counts
+        if (typeof refetchCurrentUser === 'function') {
+          await refetchCurrentUser();
         }
 
         toast.success('Unfollowed user');
@@ -607,28 +565,9 @@ export const useSocialActions = (
 
         if (followError) throw followError;
 
-        // Update target's followers_count
-        const { data: targetUser, error: targetError } = await supabase
-          .from('social_users')
-          .select('followers_count')
-          .eq('id', userId)
-          .single();
-
-        if (targetError) throw targetError;
-
-        await supabase
-          .from('social_users')
-          .update({ followers_count: (targetUser.followers_count || 0) + 1 })
-          .eq('id', userId);
-
-        // Update current user's following_count
-        if (currentUser) {
-          const newCount = (currentUser.following_count || 0) + 1;
-          setCurrentUser(prev => prev ? { ...prev, following_count: newCount } : prev);
-          await supabase
-            .from('social_users')
-            .update({ following_count: newCount })
-            .eq('id', user.id);
+        // After follow, refetch user profile to get correct counts
+        if (typeof refetchCurrentUser === 'function') {
+          await refetchCurrentUser();
         }
 
         // Create notification

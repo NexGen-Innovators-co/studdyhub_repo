@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { Button } from '../../ui/button';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, Lock } from 'lucide-react';
+import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
 import { toast } from 'sonner';
 import { PostCard } from './PostCard';
 import { CreatePostDialog } from './CreatePostDialog';
@@ -18,6 +19,7 @@ interface GroupPostsProps {
 }
 
 export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) => {
+  const { canPostSocial, canAccessSocial } = useFeatureAccess();
   const [posts, setPosts] = useState<SocialPostWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -267,9 +269,24 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
       {/* Create Post Button */}
       <div className="flex justify-end px-4 pt-4">
         <Button
-          onClick={() => setIsCreateDialogOpen(true)}
+          onClick={() => {
+            if (!canPostSocial()) {
+              toast.error('Posting is available for Scholar and Genius plans', {
+                action: {
+                  label: 'Upgrade',
+                  onClick: () => window.location.assign('/subscription'),
+                },
+                duration: 5000,
+              });
+              return;
+            }
+            setIsCreateDialogOpen(true);
+          }}
           className="gap-2"
+          disabled={!canPostSocial()}
+          title={!canPostSocial() ? 'Upgrade to post in groups' : 'Create Post'}
         >
+          {!canPostSocial() && <Lock className="h-4 w-4 mr-2" />}
           <Plus className="h-4 w-4" />
           Create Post
         </Button>
@@ -280,9 +297,24 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
         <div className="text-center py-20">
           <p className="text-slate-500">No posts yet</p>
           <Button
-            onClick={() => setIsCreateDialogOpen(true)}
+            onClick={() => {
+              if (!canPostSocial()) {
+                toast.error('Posting is available for Scholar and Genius plans', {
+                  action: {
+                    label: 'Upgrade',
+                    onClick: () => window.location.assign('/subscription'),
+                  },
+                  duration: 5000,
+                });
+                return;
+              }
+              setIsCreateDialogOpen(true);
+            }}
             className="mt-4"
+            disabled={!canPostSocial()}
+            title={!canPostSocial() ? 'Upgrade to post in groups' : 'Create Post'}
           >
+            {!canPostSocial() && <Lock className="h-4 w-4 mr-2" />}
             Create First Post
           </Button>
         </div>
@@ -331,6 +363,8 @@ export const GroupPosts: React.FC<GroupPostsProps> = ({ groupId, currentUser }) 
         isUploading={isUploading}
         currentUser={currentUser}
         groupId={groupId}
+        disabled={!canPostSocial()}
+        upgradeMessage={!canPostSocial() ? 'Posting is available for Scholar and Genius plans' : undefined}
       />
 
       {/* Share to Chat Dialog */}

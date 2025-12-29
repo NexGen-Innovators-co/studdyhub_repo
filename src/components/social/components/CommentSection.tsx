@@ -1,4 +1,6 @@
 import React from 'react';
+import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
+import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
@@ -15,7 +17,19 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   onSubmitComment,
   currentUser,
 }) => {
+  const { canPostSocials } = useFeatureAccess();
+  const canInteract = canPostSocials();
   const handleSubmit = () => {
+    if (!canInteract) {
+      toast.error('Commenting is available for Scholar and Genius plans', {
+        action: {
+          label: 'Upgrade',
+          onClick: () => window.location.assign('/subscription'),
+        },
+        duration: 5000,
+      });
+      return;
+    }
     if (newComment.trim()) {
       onSubmitComment();
     }
@@ -59,18 +73,27 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
             </Avatar>
             <div className="flex-1 flex gap-2">
               <Input
-                placeholder="Write a comment..."
+                placeholder={canInteract ? 'Write a comment...' : 'Upgrade to comment'}
                 value={newComment}
-                onChange={(e) => onCommentChange(e.target.value)}
+                onChange={(e) => canInteract ? onCommentChange(e.target.value) : toast.error('Commenting is available for Scholar and Genius plans', {
+                  action: {
+                    label: 'Upgrade',
+                    onClick: () => window.location.assign('/subscription'),
+                  },
+                  duration: 5000,
+                })}
                 onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
                 className="flex-1"
+                disabled={!canInteract}
+                title={!canInteract ? 'Upgrade to comment' : 'Write a comment'}
               />
               <Button
                 size="sm"
                 onClick={handleSubmit}
-                disabled={!newComment.trim()}
+                disabled={!newComment.trim() || !canInteract}
+                title={!canInteract ? 'Upgrade to comment' : 'Send comment'}
               >
-                <Send className="h-4 w-4 " />
+                {!canInteract ? <Send className="h-4 w-4 opacity-50" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
           </div>

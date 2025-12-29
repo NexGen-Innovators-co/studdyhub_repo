@@ -19,6 +19,7 @@ import {
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { toast } from 'sonner';
 
 // Assuming these types are available in the wider application context
 // For a standalone file, we define minimal types here:
@@ -56,6 +57,7 @@ interface GroupsSectionProps {
 }
 
 // --- Nested Create Group Dialog Component ---
+
 const CreateGroupFormDialog: React.FC<{
   onCreate: (data: CreateGroupData) => Promise<Group | null>;
   onClose: () => void;
@@ -67,28 +69,25 @@ const CreateGroupFormDialog: React.FC<{
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { canCreateGroups: canCreateGroupsFn } = useFeatureAccess();
+  const isLocked = !canCreateGroupsFn();
 
   const handleSubmit = useCallback(async () => {
-    // Check subscription before attempting to create
-    if (!canCreateGroups) {
+    if (isLocked) {
       setError('Group creation is only available with Scholar and Genius plans.');
       return;
     }
-
     if (!name.trim() || !description.trim()) {
       setError('Group name and description are required.');
       return;
     }
     setError('');
     setIsSubmitting(true);
-
     try {
-      // In a real app, you would use a toast notification library here.
-      // For this environment, we rely on //console logs or state update.
       const newGroup = await onCreate({ name, description, privacy });
       if (newGroup) {
-        // toast.success(`Group "${newGroup.name}" created successfully!`);
-        onClose(); // Close the dialog on success
+        setError('');
+        onClose();
       } else {
         setError('Failed to create group. Please try again.');
       }
@@ -97,9 +96,9 @@ const CreateGroupFormDialog: React.FC<{
     } finally {
       setIsSubmitting(false);
     }
-  }, [name, description, privacy, onCreate, onClose, canCreateGroups]);
+  }, [name, description, privacy, onCreate, onClose, isLocked]);
 
-  if (!canCreateGroups) {
+  if (isLocked) {
     return (
       <DialogContent className="sm:max-w-[425px] rounded-xl">
         <DialogHeader>
@@ -198,9 +197,11 @@ const CreateGroupFormDialog: React.FC<{
       <DialogFooter>
         <Button
           onClick={handleSubmit}
-          disabled={isSubmitting || !name.trim() || !description.trim()}
-          className="bg-blue-600 hover:bg-blue-700 text-white shadow-md rounded-full px-6 transition-colors"
+          disabled={isLocked || isSubmitting || !name.trim() || !description.trim()}
+          className="bg-blue-600 hover:bg-blue-700 text-white shadow-md rounded-full px-6 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title={isLocked ? 'Upgrade to Scholar or Genius to create groups' : 'Create Group'}
         >
+          {isLocked && <Lock className="h-4 w-4 mr-2" />}
           {isSubmitting ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
           ) : (
@@ -227,7 +228,9 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
   isLoadingMore,
 }) => {
   const navigate = useNavigate();
-  const { canCreateGroups } = useFeatureAccess();
+  const { canCreateGroups, canAccessSocial, isFree } = useFeatureAccess();
+  const canJoinGroups = canAccessSocial();
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
@@ -263,21 +266,24 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
             <DialogTrigger asChild>
               <Button
                 onClick={() => {
-                  if (!canCreateGroups) {
-                    navigate('/subscription');
-                  } else {
-                    setIsCreateDialogOpen(true);
+                  if (!canCreateGroups()) {
+                    toast.error('Group creation is available for Scholar and Genius plans');
+                    return;
                   }
+                  setIsCreateDialogOpen(true);
                 }}
-                className="bg-white text-blue-600 hover:bg-blue-50 border-none shadow-none rounded-full"
+                className="bg-white text-blue-600 hover:bg-blue-50 border-none shadow-none rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!canCreateGroups()}
+                title={!canCreateGroups() ? 'Upgrade to Scholar or Genius to create groups' : 'Create a new group'}
               >
-                <Plus className="mr-2 h-4 w-4" /> Create Group
+                {!canCreateGroups() && <Lock className="h-4 w-4 mr-2" />}
+                <Plus className={canCreateGroups() ? 'mr-2 h-4 w-4' : ''} /> Create Group
               </Button>
             </DialogTrigger>
             <CreateGroupFormDialog
               onCreate={onCreateGroup}
               onClose={() => setIsCreateDialogOpen(false)}
-              canCreateGroups={canCreateGroups}
+              canCreateGroups={canCreateGroups()}
             />
           </Dialog>
         )}
@@ -321,7 +327,7 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
               <CreateGroupFormDialog
                 onCreate={onCreateGroup}
                 onClose={() => setIsCreateDialogOpen(false)}
-                canCreateGroups={canCreateGroups}
+                canCreateGroups={canCreateGroups()}
               />
             </Dialog>
           )}
@@ -377,9 +383,19 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
                   ) : (
                     <Button
                       size="sm"
-                      onClick={(e) => { e.stopPropagation(); onJoinGroup(group.id, group.privacy); }}
-                      className="rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white hover:opacity-90 h-8 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!canJoinGroups) {
+                          toast.error('Joining groups is available for Scholar and Genius plans');
+                          return;
+                        }
+                        onJoinGroup(group.id, group.privacy);
+                      }}
+                      className="rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white hover:opacity-90 h-8 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!canJoinGroups}
+                      title={!canJoinGroups ? 'Upgrade to Scholar or Genius to join groups' : 'Join this group'}
                     >
+                      {!canJoinGroups && <Lock className="h-4 w-4 mr-2" />}
                       Join
                     </Button>
                   )}

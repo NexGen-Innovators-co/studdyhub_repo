@@ -19,6 +19,7 @@ import { useAppContext } from '../../hooks/useAppContext';
 import { DocumentFolder, CreateFolderInput, UpdateFolderInput } from '../../types/Folder';
 import { Skeleton } from '../ui/skeleton';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { PodcastButton } from '../dashboard/PodcastButton';
 import { Checkbox } from '../ui/checkbox';
 
@@ -110,6 +111,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 }) => {
   const { user } = useAuth();
   const { subscriptionLimits } = useAppContext();
+  const { canUploadDocuments } = useFeatureAccess();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -523,11 +525,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    // Check if user can upload documents
+    // Use subscription gating for drag/drop
     const isDocumentLimitReached = subscriptionLimits.maxDocUploads !== -1 && documents.length >= subscriptionLimits.maxDocUploads;
-    const canUpload = !isDocumentLimitReached && !isUploading;
-
+    const canUpload = canUploadDocuments() && !isDocumentLimitReached && !isUploading;
     if (e.type === "dragenter" || e.type === "dragover") {
       setDragActive(canUpload);
       setDragLocked(!canUpload); // Lock if cannot upload
@@ -542,14 +542,12 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     e.stopPropagation();
     setDragActive(false);
     setDragLocked(false);
-
     // Check if user has permission to upload
     const isDocumentLimitReached = subscriptionLimits.maxDocUploads !== -1 && documents.length >= subscriptionLimits.maxDocUploads;
-    if (isDocumentLimitReached) {
-      toast.error('Document upload limit reached. Upgrade your plan to upload more documents.');
+    if (!canUploadDocuments() || isDocumentLimitReached) {
+      toast.error('Document upload is locked. Upgrade your plan to upload more documents.');
       return;
     }
-
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelection(e.dataTransfer.files[0]);
     }
@@ -1147,193 +1145,182 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           {/* Main Content - Documents */}
           <div className="col-span-12 lg:col-span-9">
             {/* Enhanced Upload Area */}
-            <Card className="overflow-hidden border-0 shadow-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
-              <CardContent className="p-0">
-                <div
-                  className={`relative border-2 border-dashed rounded-lg transition-all duration-500 ${
-                    dragLocked
-                      ? 'border-red-400 bg-red-50 dark:bg-red-500/10 scale-[1.02] shadow-lg cursor-not-allowed opacity-60'
-                      : dragActive
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 scale-[1.02] shadow-lg'
-                        : selectedFile
-                          ? 'border-green-400 bg-green-50 dark:bg-green-500/10 shadow-lg'
-                          : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                    } cursor-pointer p-8 md:p-12 ${isUploading || dragLocked ? 'pointer-events-none opacity-75' : ''}`}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => !isUploading && !dragLocked && fileInputRef.current?.click()}
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                    accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.ico,.heic,.heif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.ods,.odp,.csv,.md,.html,.xml,.json,.js,.ts,.css,.py,.java,.c,.cpp,.cs,.php,.rb,.go,.rs,.sql,.zip,.rar,.7z,.tar,.gz,.mp3,.wav,.ogg,.m4a,.webm,.flac,.mp4,.avi,.mov,.wmv,.webm,.mkv"
-                    disabled={isUploading}
-                  />
 
-                  <div className="text-center">
-                    {dragLocked && !selectedFile && (
-                      <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg flex items-center justify-center gap-3">
-                        <Lock/>
-                        <div className="text-left">
-                          <p className="font-semibold text-red-800 dark:text-red-300">Upload limit reached</p>
-                          <p className="text-sm text-red-700 dark:text-red-400">Upgrade to upload more documents</p>
-                        </div>
-                      </div>
-                    )}
-                    <div className={`inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full ${
+
+            {/* Enhanced Upload Area - SubscriptionGuard wraps Card */}
+            <SubscriptionGuard
+              feature="Documents"
+              limitFeature="maxDocUploads"
+              currentCount={documents.length}
+            >
+              <Card className="overflow-hidden border-0 shadow-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
+                <CardContent className="p-0">
+                  <div
+                    className={`relative border-2 border-dashed rounded-lg transition-all duration-500 ${
                       dragLocked
-                        ? 'bg-red-100 dark:bg-red-500/20'
-                        : selectedFile
-                          ? 'bg-green-100 dark:bg-green-500/20 animate-pulse'
-                          : 'bg-blue-100 dark:bg-blue-500/20'
-                      } mb-4 transition-all duration-300 ${isUploading ? 'animate-bounce' : ''}`}>
+                        ? 'border-red-400 bg-red-50 dark:bg-red-500/10 scale-[1.02] shadow-lg cursor-not-allowed opacity-60'
+                        : dragActive
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 scale-[1.02] shadow-lg'
+                          : selectedFile
+                            ? 'border-green-400 bg-green-50 dark:bg-green-500/10 shadow-lg'
+                            : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                      } cursor-pointer p-8 md:p-12 ${isUploading || dragLocked ? 'pointer-events-none opacity-75' : ''}`}
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                    onClick={() => !isUploading && !dragLocked && fileInputRef.current?.click()}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.ico,.heic,.heif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.ods,.odp,.csv,.md,.html,.xml,.json,.js,.ts,.css,.py,.java,.c,.cpp,.cs,.php,.rb,.go,.rs,.sql,.zip,.rar,.7z,.tar,.gz,.mp3,.wav,.ogg,.m4a,.webm,.flac,.mp4,.avi,.mov,.wmv,.webm,.mkv"
+                      disabled={isUploading}
+                    />
+
+                    <div className="text-center">
+                      {dragLocked && !selectedFile && (
+                        <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg flex items-center justify-center gap-3">
+                          <Lock/>
+                          <div className="text-left">
+                            <p className="font-semibold text-red-800 dark:text-red-300">Upload limit reached</p>
+                            <p className="text-sm text-red-700 dark:text-red-400">Upgrade to upload more documents</p>
+                          </div>
+                        </div>
+                      )}
+                      <div className={`inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full ${
+                        dragLocked
+                          ? 'bg-red-100 dark:bg-red-500/20'
+                          : selectedFile
+                            ? 'bg-green-100 dark:bg-green-500/20 animate-pulse'
+                            : 'bg-blue-100 dark:bg-blue-500/20'
+                        } mb-4 transition-all duration-300 ${isUploading ? 'animate-bounce' : ''}`}>
+                        {isUploading ? (
+                          <Loader2 className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400 animate-spin" />
+                        ) : dragLocked && !selectedFile ? (
+                          <Lock/>
+                        ) : selectedFile ? (
+                          React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
+                            className: "h-8 w-8 md:h-10 md:w-10 text-green-600 dark:text-green-400"
+                          })
+                        ) : (
+                          <UploadCloud className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400" />
+                        )}
+                      </div>
+
                       {isUploading ? (
-                        <Loader2 className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400 animate-spin" />
-                      ) : dragLocked && !selectedFile ? (
-                        <Lock/>
+                        <div className="space-y-4">
+                          <div>
+                            <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200 mb-2">
+                              Processing your file...
+                            </h3>
+                            <p className="text-slate-600 dark:text-slate-400">
+                              AI is analyzing and extracting content from "{selectedFile?.name}"
+                            </p>
+                          </div>
+                          <div className="w-full max-w-md mx-auto bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                            <div
+                              className="bg-gradient-to-r from-blue-500 to-blue-500 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">{Math.round(uploadProgress)}% complete</p>
+                        </div>
                       ) : selectedFile ? (
-                        React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
-                          className: "h-8 w-8 md:h-10 md:w-10 text-green-600 dark:text-green-400"
-                        })
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-center gap-3 text-green-700 dark:text-green-300">
+                            {React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
+                              className: "h-6 w-6"
+                            })}
+                            <span className="text-lg font-semibold">{selectedFile.name}</span>
+                          </div>
+                          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(selectedFile.type))}`}>
+                            {getFileCategory(selectedFile.type).toUpperCase()}
+                          </div>
+                          <div className="flex items-center justify-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <HardDrive className="h-4 w-4" />
+                              {formatFileSize(selectedFile.size)}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <FileText className="h-4 w-4" />
+                              {selectedFile.type.split('/')[1]?.toUpperCase()}
+                            </span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedFile(null);
+                              if (fileInputRef.current) fileInputRef.current.value = '';
+                            }}
+                            disabled={isUploading}
+                            className="mt-4 text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:border-red-300"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Remove File
+                          </Button>
+                        </div>
                       ) : (
-                        <UploadCloud className="h-8 w-8 md:h-10 md:w-10 text-blue-600 dark:text-blue-400" />
+                        <div className="space-y-6">
+                          <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200">
+                            Drop your files here, or <span className="text-blue-600 dark:text-blue-400 underline">browse</span>
+                          </h3>
+                          <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                            Supports documents, images, videos, audio files, and code up to 200MB
+                          </p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
+                            {[
+                              { category: 'document', label: 'Documents', icon: FileText },
+                              { category: 'image', label: 'Images', icon: Image },
+                              { category: 'video', label: 'Videos', icon: FileVideo },
+                              { category: 'code', label: 'Code', icon: Code }
+                            ].map(({ category, label, icon: Icon }) => (
+                              <div key={category} className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-700/50">
+                                <Icon className="h-6 w-6 text-slate-600 dark:text-slate-400" />
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
-
-                    {isUploading ? (
-                      <div className="space-y-4">
-                        <div>
-                          <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200 mb-2">
-                            Processing your file...
-                          </h3>
-                          <p className="text-slate-600 dark:text-slate-400">
-                            AI is analyzing and extracting content from "{selectedFile?.name}"
-                          </p>
-                        </div>
-                        <div className="w-full max-w-md mx-auto bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                          <div
-                            className="bg-gradient-to-r from-blue-500 to-blue-500 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${uploadProgress}%` }}
-                          />
-                        </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">{Math.round(uploadProgress)}% complete</p>
-                      </div>
-                    ) : selectedFile ? (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-center gap-3 text-green-700 dark:text-green-300">
-                          {React.createElement(getCategoryIcon(getFileCategory(selectedFile.type)), {
-                            className: "h-6 w-6"
-                          })}
-                          <span className="text-lg font-semibold">{selectedFile.name}</span>
-                        </div>
-                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(selectedFile.type))}`}>
-                          {getFileCategory(selectedFile.type).toUpperCase()}
-                        </div>
-                        <div className="flex items-center justify-center gap-4 text-sm text-slate-600 dark:text-slate-400">
-                          <span className="flex items-center gap-1">
-                            <HardDrive className="h-4 w-4" />
-                            {formatFileSize(selectedFile.size)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <FileText className="h-4 w-4" />
-                            {selectedFile.type.split('/')[1]?.toUpperCase()}
-                          </span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedFile(null);
-                            if (fileInputRef.current) fileInputRef.current.value = '';
-                          }}
-                          disabled={isUploading}
-                          className="mt-4 text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:border-red-300"
-                        >
-                          <XCircle className="h-4 w-4 mr-2" />
-                          Remove File
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-6">
-                        <h3 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-200">
-                          Drop your files here, or <span className="text-blue-600 dark:text-blue-400 underline">browse</span>
-                        </h3>
-                        <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-                          Supports documents, images, videos, audio files, and code up to 200MB
-                        </p>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
-                          {[
-                            { category: 'document', label: 'Documents', icon: FileText },
-                            { category: 'image', label: 'Images', icon: Image },
-                            { category: 'video', label: 'Videos', icon: FileVideo },
-                            { category: 'code', label: 'Code', icon: Code }
-                          ].map(({ category, label, icon: Icon }) => (
-                            <div key={category} className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-700/50">
-                              <Icon className="h-6 w-6 text-slate-600 dark:text-slate-400" />
-                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {selectedFile && !isUploading && (
-                  <div className="p-6 bg-slate-50 dark:bg-slate-700/50 border-t">
-                    <SubscriptionGuard
-                      feature="Documents"
-                      limitFeature="maxDocUploads"
-                      currentCount={documents.length}
-                    >
-                      <Button
-                        onClick={handleUpload}
-                        disabled={!selectedFile || isUploading || !user?.id}
-                        className="w-full py-3 text-base font-semibold bg-gradient-to-r from-blue-600 via-blue-400 to-blue-200 hover:from-blue-700 hover:via-green-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <UploadCloud className="h-5 w-5 mr-2" />
-                        Upload & Analyze with AI
-                      </Button>
-                    </SubscriptionGuard>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Add Folder Selection for Upload */}
-            {selectedFile && !isUploading && (
-              <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Folder className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                      <div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                          Save to folder (optional)
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {uploadTargetFolderId
-                            ? folders.find((f) => f.id === uploadTargetFolderId)?.name || 'Root'
-                            : 'Root / No folder'}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setUploadFolderSelectorOpen(true)}
-                    >
-                      Choose Folder
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
-            )}
+              {/* Add Folder Selection for Upload */}
+              {selectedFile && !isUploading && (
+                <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm mb-8">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Folder className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                        <div>
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            Save to folder (optional)
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {uploadTargetFolderId
+                              ? folders.find((f) => f.id === uploadTargetFolderId)?.name || 'Root'
+                              : 'Root / No folder'}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setUploadFolderSelectorOpen(true)}
+                      >
+                        Choose Folder
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </SubscriptionGuard>
 
             {/* Enhanced Controls and Filters */}
             <div className="mb-8">
@@ -1508,7 +1495,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   <div
                     className={
                       viewMode === 'grid'
-                        ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'
+                        ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6'
                         : 'space-y-4'
                     }
                   >
@@ -1522,169 +1509,147 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                         <Card
                           key={uniqueKey}
                           ref={isLast ? lastDocumentElementRef : null}
-                          className={`group border-0 shadow-lg hover:shadow-xl animate-in slide-in-from-top-2 fade-in duration-500 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:scale-[1.02] overflow-hidden ${viewMode === 'list' ? 'flex' : ''
-                            }`}
+                          className={`group overflow-hidden hover:shadow-2xl transition-all duration-300 border-blue-200/50 dark:border-blue-900/50 h-full flex flex-col relative rounded-2xl cursor-pointer animate-in slide-in-from-top-2 fade-in duration-500 ${viewMode === 'list' ? 'flex' : ''}`}
                         >
-                          <CardContent className="p-0 ">
+                          <CardContent className="p-0">
                             {viewMode === 'grid' ? (
-                              <>
-                                {/* Grid View */}
-                                <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 ">
-                                  {getFileCategory(doc.file_type) === 'image' && doc.file_url ? (
-                                    <img
-                                      src={doc.file_url}
-                                      alt={doc.title}
-                                      className="w-full h-full object-contain"
-                                      onError={(e) => {
-                                        e.currentTarget.src = 'https://placehold.co/400x300/e0e0e0/666666?text=Image+Error';
-                                        e.currentTarget.alt = 'Image failed to load';
-                                      }}
-                                    />
-                                  ) : (
+                              <div className="relative aspect-[3/4] sm:aspect-[4/5] overflow-hidden">
+                                {/* Document Preview or Icon */}
+
+                                <div
+                                  className="absolute inset-0 bg-slate-200 dark:bg-slate-800 text-slate-900 flex items-center justify-center"
+                                  style={{
+                                    backgroundImage: getFileCategory(doc.file_type) === 'image' && doc.file_url ? `url(${doc.file_url})` : undefined,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center'
+                                  }}
+                                >
+                                  {getFileCategory(doc.file_type) !== 'image' && (
                                     <div className="w-full h-full flex items-center justify-center">
                                       {React.createElement(getCategoryIcon(getFileCategory(doc.file_type)), {
-                                        className: "h-16 w-16 text-slate-400 dark:text-slate-500"
+                                        className: "h-16 w-16 text-blue-600 dark:text-blue-300 opacity-70"
                                       })}
                                     </div>
                                   )}
+                                </div>
+                                {/* Gradient Overlay */}
+                                <div className="absolute border inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/50 to-transparent dark:from-slate-900/90 dark:via-slate-900/60 dark:to-transparent" />
 
-                                  {/* Selection checkbox for podcast */}
-                                  {showSelection && (
-                                    <div 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
+                               
+
+                                {/* Selection checkbox */}
+                                {showSelection && (
+                                  <div 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDocumentIds(prev => 
+                                        prev.includes(doc.id) 
+                                          ? prev.filter(id => id !== doc.id)
+                                          : [...prev, doc.id]
+                                      );
+                                    }}
+                                    className="absolute top-12 left-2 bg-white dark:bg-slate-800 rounded-md p-1.5 shadow-md cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 z-10"
+                                  >
+                                    <Checkbox 
+                                      checked={selectedDocumentIds.includes(doc.id)}
+                                      onCheckedChange={() => {
                                         setSelectedDocumentIds(prev => 
                                           prev.includes(doc.id) 
                                             ? prev.filter(id => id !== doc.id)
                                             : [...prev, doc.id]
                                         );
                                       }}
-                                      className="absolute top-14 left-3 bg-white dark:bg-slate-800 rounded-md p-1.5 shadow-md cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 z-10"
-                                    >
-                                      <Checkbox 
-                                        checked={selectedDocumentIds.includes(doc.id)}
-                                        onCheckedChange={() => {
-                                          setSelectedDocumentIds(prev => 
-                                            prev.includes(doc.id) 
-                                              ? prev.filter(id => id !== doc.id)
-                                              : [...prev, doc.id]
-                                          );
-                                        }}
-                                        className="h-5 w-5"
-                                      />
-                                    </div>
-                                  )}
-
-                                  {/* Status Badge */}
-                                  <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(doc.processing_status as string)}`}>
-                                    {getStatusIcon(doc.processing_status as string)}
-                                    <span className="capitalize">{(doc.processing_status as string) || 'unknown'}</span>
+                                      className="h-5 w-5"
+                                    />
                                   </div>
+                                )}
 
-                                  {/* Category Badge */}
-                                  <div className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(doc.file_type))}`}>
-                                    {getFileCategory(doc.file_type).toUpperCase()}
-                                  </div>
-
-                                  {/* Processing Overlay */}
-                                  {isDocumentProcessing(doc.id) && (
-                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                      <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
-                                        <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
-                                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                                          Processing...
-                                        </span>
-                                      </div>
+                                {/* Processing Overlay */}
+                                {isDocumentProcessing(doc.id) && (
+                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                    <div className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-2">
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
+                                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                                        Processing...
+                                      </span>
                                     </div>
-                                  )}
-                                </div>
+                                  </div>
+                                )}
 
-                                <div className="p-6 space-y-4">
-                                  <div>
-                                    <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2 line-clamp-2">
+                                {/* Bottom Overlay: Title, Author, Stats, Actions */}
+                                <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end p-3 sm:p-4">
+                                  {/* Title & Author */}
+                                  <div className="space-y-1.5 sm:space-y-2 mb-2">
+                                    <h3 className="text-white dark:text-slate-100 font-bold text-sm sm:text-base line-clamp-2 leading-tight">
                                       {doc.title}
                                     </h3>
-                                    <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
-                                      <span className="flex items-center gap-1">
-                                        <Calendar className="h-4 w-4" />
-                                        {doc.created_at ? (new Date(doc.created_at)).toLocaleDateString() : 'Unknown Date'}
-                                      </span>
-                                      <span className="flex items-center gap-1">
-                                        <HardDrive className="h-4 w-4" />
-                                        {formatFileSize(doc.file_size)}
+                                    <div className="flex items-center gap-1.5 sm:gap-2">
+                                      <Folder className="h-5 w-5 sm:h-6 sm:w-6 ring-2 ring-white/20 dark:ring-slate-700/40" />
+                                      <span className="text-white/90 dark:text-slate-200 text-xs sm:text-sm font-medium truncate">
+                                        {folders.find(f => f.id === doc.folder_ids?.[0])?.name || 'No Folder'}
                                       </span>
                                     </div>
                                   </div>
-
-                                  <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 min-h-[80px]">
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
-                                      {doc.content_extracted || 'No content extracted yet...'}
-                                    </p>
-                                  </div>
-
-                                  {doc.processing_status === 'failed' && doc.processing_error && (
-                                    <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-3">
-                                      <p className="text-sm text-red-600 dark:text-red-400">
-                                        <span className="font-medium">Error:</span> {(doc.processing_error as string)}
-                                      </p>
+                                  {/* Stats */}
+                                  <div className="flex items-center gap-2 sm:gap-3 text-xs text-white/80 dark:text-slate-300 mb-2">
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>{doc.created_at ? (new Date(doc.created_at)).toLocaleDateString() : 'Unknown Date'}</span>
                                     </div>
-                                  )}
-
-                                  <div className="flex gap-2 pt-2">
+                                    <div className="flex items-center gap-1">
+                                      <HardDrive className="h-3 w-3" />
+                                      <span>{formatFileSize(doc.file_size)}</span>
+                                    </div>
+                                  </div>
+                                  {/* Action Buttons - hover/focus overlay */}
+                                  <div className={`transition-all duration-300 flex gap-1.5 sm:gap-2 ${isDocumentProcessing(doc.id) ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}> 
                                     {doc.processing_status === 'failed' && (
                                       <Button
                                         variant="outline"
-                                        size="sm"
-                                        onClick={() => triggerAnalysis(doc)}
+                                        size="icon"
+                                        onClick={(e) => { e.stopPropagation(); triggerAnalysis(doc); }}
                                         disabled={isUploading || isDocumentProcessing(doc.id)}
-                                        className="flex-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10 border-blue-200 dark:border-blue-500/20"
+                                        className="border-white/30 dark:border-slate-700/40 bg-white/10 dark:bg-slate-900/30 hover:bg-white/20 dark:hover:bg-slate-900/50 text-blue-600 dark:text-blue-400 font-semibold text-xs sm:text-sm h-8 w-8 sm:h-9 sm:w-9 backdrop-blur-sm"
+                                        title="Retry"
                                       >
                                         {isDocumentProcessing(doc.id) ? (
-                                          <>
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                            Processing...
-                                          </>
+                                          <Loader2 className="h-4 w-4 animate-spin" />
                                         ) : (
-                                          <>
-                                            <RefreshCw className="h-4 w-4 mr-2" />
-                                            Retry
-                                          </>
+                                          <RefreshCw className="h-4 w-4" />
                                         )}
                                       </Button>
                                     )}
-
                                     <Button
                                       variant="outline"
-                                      size="sm"
-                                      onClick={() => openPreview(doc)}
-                                      className="flex-1 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
+                                      size="icon"
+                                      onClick={(e) => { e.stopPropagation(); openPreview(doc); }}
+                                      className="border-white/30 dark:border-slate-700/40 bg-white/10 dark:bg-slate-900/30 hover:bg-white/20 dark:hover:bg-slate-900/50 text-white dark:text-slate-200 backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
+                                      title="Preview"
                                     >
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      Preview
+                                      <Eye className="h-4 w-4" />
                                     </Button>
-
                                     <Button
                                       variant="outline"
-                                      size="sm"
-                                      onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                      size="icon"
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id, doc.file_url); }}
                                       disabled={isUploading}
-                                      className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
+                                      className="border-white/30 dark:border-slate-700/40 bg-white/10 dark:bg-slate-900/30 hover:bg-white/20 dark:hover:bg-slate-900/50 text-red-400 dark:text-red-300 backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
+                                      title="Delete"
                                     >
                                       <Trash2 className="h-4 w-4" />
-                                      Delete
                                     </Button>
                                     <Button
                                       variant="outline"
-                                      size="sm"
-                                      onClick={() => handleMoveDocument(doc)}
-                                      className="text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-500/10"
+                                      size="icon"
+                                      onClick={(e) => { e.stopPropagation(); handleMoveDocument(doc); }}
+                                      className="border-white/30 dark:border-slate-700/40 bg-white/10 dark:bg-slate-900/30 hover:bg-white/20 dark:hover:bg-slate-900/50 text-white dark:text-slate-200 backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
+                                      title="Move"
                                     >
-                                      <Folder className="h-4 w-4 mr-2" />
-                                      Move
+                                      <Folder className="h-4 w-4" />
                                     </Button>
                                   </div>
                                 </div>
-                              </>
+                              </div>
                             ) : (
                               <>
                                 {/* List View */}
@@ -1880,9 +1845,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         {/* Enhanced Preview Dialog */}
         {previewOpen && selectedDocument && (
           <Suspense fallback={null}>
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-                <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-start justify-between">
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[95vh] flex flex-col overflow-hidden">
+                <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-0">
                   <div className="space-y-2">
                     <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">
                       {selectedDocument.title}
@@ -1918,7 +1883,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   </Button>
                 </div>
 
-                <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)] space-y-6">
+                <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(95vh-160px)] space-y-6">
                   {/* File Preview */}
                   <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6">
                     <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
@@ -2012,7 +1977,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   )}
 
                   {/* Actions */}
-                  <div className="flex flex-wrap gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex flex-col xs:flex-row flex-wrap gap-2 xs:gap-3 pt-4 border-t border-slate-200 dark:border-slate-700 w-full">
                     <Button
                       variant="outline"
                       onClick={() => window.open(selectedDocument.file_url, '_blank')}

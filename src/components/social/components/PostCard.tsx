@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, memo, useState, useEffect } from 'react';
+import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
 import { Card, CardContent } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
@@ -31,7 +32,8 @@ import {
   Pause,
   ChevronLeft,
   ChevronRight,
-  Send
+  Send,
+  Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PostCardProps } from '../types/social';
@@ -300,30 +302,42 @@ MediaDisplay.displayName = 'MediaDisplay';
 // Action Button
 const ActionButton = ({ icon: Icon, label, count, active, activeColor, onClick, isLoading, isLikeButton }: any) => {
   const [animate, setAnimate] = React.useState(false);
+  const { canPostSocials } = useFeatureAccess();
+  const canInteract = canPostSocials();
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isLoading) return;
-    
+    if (isLoading || !canInteract) {
+      if (!canInteract) {
+        toast.error('Social actions are available for Scholar and Genius plans', {
+          action: {
+            label: 'Upgrade',
+            onClick: () => window.location.assign('/subscription'),
+          },
+          duration: 5000,
+        });
+      }
+      return;
+    }
     if (isLikeButton && !active) {
       setAnimate(true);
       setTimeout(() => setAnimate(false), 600);
     }
-    
     onClick();
   };
 
   return (
     <button
       onClick={handleClick}
-      disabled={isLoading}
-      className={`flex items-center space-x-1.5 group transition-all duration-200 ripple-effect ${active ? activeColor : 'text-slate-500 dark:text-slate-400 hover:text-blue-500'
-        } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+      disabled={isLoading || !canInteract}
+      title={!canInteract ? 'Upgrade to use this action' : label}
+      className={`flex items-center space-x-1.5 group transition-all duration-200 ripple-effect ${active ? activeColor : 'text-slate-500 dark:text-slate-400 hover:text-blue-500'} ${isLoading || !canInteract ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
-      <div className={`p-2 rounded-full transition-all duration-200 ${active ? 'bg-opacity-10' : 'group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20'
-        } ${active ? activeColor.replace('text-', 'bg-') : ''}`}>
+      <div className={`p-2 rounded-full transition-all duration-200 ${active ? 'bg-opacity-10' : 'group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20'} ${active ? activeColor.replace('text-', 'bg-') : ''}`}>
         {isLoading ? (
           <div className="animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full" />
+        ) : !canInteract ? (
+          <Lock className="h-5 w-5" />
         ) : (
           <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''} ${animate ? 'heart-beat' : ''} transition-transform`} />
         )}
@@ -338,6 +352,9 @@ const ActionButton = ({ icon: Icon, label, count, active, activeColor, onClick, 
 // --- MAIN POSTCARD COMPONENT ---
 export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
   (props) => {
+    const { canPostSocials, isFree } = useFeatureAccess();
+    const canInteract = canPostSocials();
+    const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
     const {
       post,
       onLike,
@@ -371,17 +388,19 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
     const cleanedContent = removeHashtagsFromContent(post.content || '');
     const isLongContent = cleanedContent.length > 280;
 
+
     const handleLike = async () => {
+      if (!canInteract) return setShowUpgradePrompt(true);
       if (isLiking) return;
       setIsLiking(true);
       try {
-        // Ensure onLike returns a Promise
         await Promise.resolve(onLike(post.id, post.is_liked || false));
       } finally {
         setTimeout(() => setIsLiking(false), 300);
       }
     };
     const handleBookmark = async () => {
+      if (!canInteract) return setShowUpgradePrompt(true);
       if (isBookmarking) return;
       setIsBookmarking(true);
       try {
@@ -571,6 +590,10 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
     });
 
     const handleShare = (e?: React.MouseEvent) => {
+      if (!canInteract) {
+        setShowUpgradePrompt(true);
+        return;
+      }
       e?.stopPropagation();
       setIsShareModalOpen(true);
     };
@@ -595,6 +618,23 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
         return prev === post.media.length - 1 ? 0 : prev + 1;
       });
     };
+
+    // Upgrade prompt dialog
+    const UpgradePrompt = () => (
+      <Dialog open={showUpgradePrompt} onOpenChange={setShowUpgradePrompt}>
+        <DialogContent className="max-w-xs rounded-xl">
+          <DialogHeader>
+            <DialogTitle>Upgrade Required</DialogTitle>
+            <DialogDescription>
+              Social posting and interactions are available for Scholar and Genius plans.
+            </DialogDescription>
+          </DialogHeader>
+          <Button className="w-full bg-blue-600 text-white mt-4" onClick={() => { setShowUpgradePrompt(false); window.location.href = '/subscription'; }}>
+            Upgrade Now
+          </Button>
+        </DialogContent>
+      </Dialog>
+    );
 
     const cardRef = React.useRef<HTMLDivElement | null>(null);
     const [hasTrackedView, setHasTrackedView] = useState(false);
@@ -628,7 +668,8 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
 
 
     return (
-      <Card
+      <>     
+       <Card
         className="border border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-500 bg-white dark:bg-slate-900 overflow-hidden max-w-[780px] mx-auto"
         ref={cardRef}
         onClick={(e) => {
@@ -755,23 +796,26 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                   count={post.likes_count}
                   active={post.is_liked}
                   activeColor="text-pink-600"
-                  onClick={handleLike}
+                  onClick={canInteract ? handleLike : () => setShowUpgradePrompt(true)}
                   isLoading={isLiking}
                   isLikeButton={true}
+                  disabled={!canInteract}
                 />
 
                 <ActionButton
                   icon={MessageCircle}
                   count={post.comments_count}
-                  onClick={onComment}
+                  onClick={canInteract ? onComment : () => setShowUpgradePrompt(true)}
+                  disabled={!canInteract}
                 />
 
                 <ActionButton
                   icon={Share2}
                   label="Share"
                   count={post.shares_count}
-                  onClick={handleShare}
+                  onClick={canInteract ? handleShare : () => setShowUpgradePrompt(true)}
                   isLoading={isSharing}
+                  disabled={!canInteract}
                 />
 
                 <ActionButton
@@ -779,8 +823,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                   label=""
                   active={post.is_bookmarked}
                   activeColor="text-blue-600"
-                  onClick={handleBookmark}
+                  onClick={canInteract ? handleBookmark : () => setShowUpgradePrompt(true)}
                   isLoading={isBookmarking}
+                  disabled={!canInteract}
                 />
 
                 {/* Views indicator */}
@@ -947,16 +992,17 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                     <AvatarFallback>{currentUser?.display_name?.[0]}</AvatarFallback>
                   </Avatar>
                   <Textarea
-                    placeholder="Add a comment..."
+                    placeholder={canInteract ? "Add a comment..." : "Upgrade to comment"}
                     value={newComment}
-                    onChange={(e) => onCommentChange(e.target.value)}
+                    onChange={(e) => canInteract ? onCommentChange(e.target.value) : setShowUpgradePrompt(true)}
                     className="flex-1 min-h-[40px] resize-none"
-                    disabled={isSubmittingComment}
+                    disabled={isSubmittingComment || !canInteract}
                   />
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={async () => {
+                      if (!canInteract) return setShowUpgradePrompt(true);
                       if (isSubmittingComment || !newComment.trim()) return;
                       setIsSubmittingComment(true);
                       try {
@@ -965,7 +1011,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                         setTimeout(() => setIsSubmittingComment(false), 300);
                       }
                     }}
-                    disabled={isSubmittingComment || !newComment.trim()}
+                    disabled={isSubmittingComment || !newComment.trim() || !canInteract}
                     className={`text-blue-600 transition-all ${isSubmittingComment ? 'pulse-scale' : ''}`}
                   >
                     {isSubmittingComment ? (
@@ -990,6 +1036,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
         />
 
       </Card>
+      <UpgradePrompt />
+      </>
+
     );
   }
 );

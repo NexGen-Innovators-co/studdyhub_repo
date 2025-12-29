@@ -163,7 +163,8 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateToSubscription,
 }) => {
   const navigate = useNavigate();
-  const { isAdmin } = useFeatureAccess();
+  const { isAdmin, canPostSocials } = useFeatureAccess();
+  const canCreatePosts = canPostSocials();
   const location = useLocation();
   const { signOut } = useAuth();
   const { handleNavigateToTab, createNewChatSession } = useAppContext();
@@ -334,6 +335,20 @@ export const Header: React.FC<HeaderProps> = ({
       // Just dispatch the event, PodcastsPage will handle the tab change
     }
   };
+  
+  useEffect(() => {
+  // Podcasts tab sync
+  if (activeTab === 'podcasts') {
+    if (location.pathname === '/podcasts' || location.pathname === '/podcasts/discover') {
+      setActiveSectionTab('discover');
+    } else if (location.pathname.startsWith('/podcasts/my')) {
+      setActiveSectionTab('my-podcasts');
+    } else if (location.pathname.startsWith('/podcasts/live')) {
+      setActiveSectionTab('live');
+    }
+  }
+  // Social tab sync (already handled by socialActiveTab)
+}, [activeTab, location.pathname]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -458,21 +473,24 @@ export const Header: React.FC<HeaderProps> = ({
         );
       case 'social':
         return (
-          <SubscriptionGuard
-            feature="Social Posts"
-            limitFeature="canPostSocials"
-            currentCount={0}
+          <Button
+            onClick={() => {
+              if (!canCreatePosts) {
+                toast.error('Posts are available for Scholar and Genius plans');
+                return;
+              }
+              onOpenCreatePostDialog();
+            }}
+            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            size="sm"
+            variant='ghost'
+            disabled={!canCreatePosts}
+            title={!canCreatePosts ? 'Upgrade to Scholar or Genius to create posts' : 'Create a new post'}
           >
-            <Button
-              onClick={onOpenCreatePostDialog}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
-              size="sm"
-               variant='ghost'
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              <span className="hidden md:inline">Post</span>
-            </Button>
-          </SubscriptionGuard>
+            {!canCreatePosts && <Lock className="h-4 w-4 mr-2" />}
+            <Plus className={!canCreatePosts ? '' : 'h-4 w-4 mr-2'} />
+            <span className="hidden md:inline">Post</span>
+          </Button>
         );
       case 'podcasts':
         return (
