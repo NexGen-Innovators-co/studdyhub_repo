@@ -291,6 +291,43 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
         </div>
       )}
 
+      {/* Empty State */}
+      {!isLoading && groups.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+          <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center mb-6">
+            <Users className="w-10 h-10 text-blue-600" />
+          </div>
+          <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">No Communities Yet</h3>
+          <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md leading-relaxed">
+            Communities bring people together around shared interests. Create the first group to start building your learning network!
+          </p>
+          {currentUser && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  onClick={() => {
+                    if (!canCreateGroups) {
+                      navigate('/subscription');
+                    } else {
+                      setIsCreateDialogOpen(true);
+                    }
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-full gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create First Community
+                </Button>
+              </DialogTrigger>
+              <CreateGroupFormDialog
+                onCreate={onCreateGroup}
+                onClose={() => setIsCreateDialogOpen(false)}
+                canCreateGroups={canCreateGroups}
+              />
+            </Dialog>
+          )}
+        </div>
+      )}
+
       {/* Grid */}
       {!isLoading && groups.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">

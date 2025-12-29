@@ -72,18 +72,49 @@ const CACHE_CONFIG = {
 
 // Toast deduplication - prevent showing same error multiple times
 const recentToastsRef: { current: Map<string, number> } = { current: new Map() };
-const TOAST_COOLDOWN = 3000; // Don't show same toast within 3 seconds
+const TOAST_COOLDOWN = 10000; // Don't show same toast within 10 seconds (increased from 3s)
 
 // Request deduplication - prevent simultaneous fetches
 const activeRequestsRef: { current: Map<string, Promise<any>> } = { current: new Map() };
+
+// Group similar errors to show one generic message
+const errorGroupsRef: { current: Map<string, number> } = { current: new Map() };
+const ERROR_GROUP_COOLDOWN = 15000; // 15 seconds between grouped error messages
 
 const getRequestKey = (type: string, userId: string, isInitial: boolean) => {
   return `${type}_${userId}_${isInitial ? 'initial' : 'more'}`;
 };
 
+// Get error group key (e.g., "fetch_error", "network_error")
+const getErrorGroup = (message: string): string => {
+  if (message.includes('fetch') || message.includes('network') || message.includes('connection')) {
+    return 'network_error';
+  }
+  if (message.includes('timeout')) {
+    return 'timeout_error';
+  }
+  if (message.includes('CORS') || message.includes('QUIC')) {
+    return 'cors_error';
+  }
+  return 'general_error';
+};
+
 const showToastOnce = (message: string, type: 'error' | 'success' | 'info' = 'error') => {
   const now = Date.now();
   const lastShown = recentToastsRef.current.get(message);
+  
+  // For errors, also check error group to prevent similar errors
+  if (type === 'error') {
+    const errorGroup = getErrorGroup(message);
+    const lastGroupError = errorGroupsRef.current.get(errorGroup);
+    
+    // If this error group was shown recently, skip
+    if (lastGroupError && now - lastGroupError < ERROR_GROUP_COOLDOWN) {
+      return;
+    }
+    
+    errorGroupsRef.current.set(errorGroup, now);
+  }
   
   if (!lastShown || now - lastShown > TOAST_COOLDOWN) {
     recentToastsRef.current.set(message, now);
@@ -94,6 +125,13 @@ const showToastOnce = (message: string, type: 'error' | 'success' | 'info' = 'er
       const oldestKey = Array.from(recentToastsRef.current.entries())
         .sort((a, b) => a[1] - b[1])[0][0];
       recentToastsRef.current.delete(oldestKey);
+    }
+    
+    // Cleanup old error groups
+    if (errorGroupsRef.current.size > 10) {
+      const oldestGroupKey = Array.from(errorGroupsRef.current.entries())
+        .sort((a, b) => a[1] - b[1])[0][0];
+      errorGroupsRef.current.delete(oldestGroupKey);
     }
   }
 };
@@ -778,8 +816,7 @@ export const useAppData = () => {
       }
     } catch (error) {
       //console.error('Error loading documents:', error);
-      if (isInitial && !error.message?.includes('network')) {
-        showToastOnce('Failed to load documents. Please check your connection.', 'error');
+      if (isInitial && !error.message?.includes('network') && !error.message?.includes('QUIC') && !error.message?.includes('timeout')) {
         setDataErrors(prev => ({ ...prev, documents: 'Failed to load documents' }));
       }
     } finally {
@@ -1487,9 +1524,10 @@ export const useAppData = () => {
       // Even if there's an error, try to show the UI with available data
       const connectionQuality = getConnectionQuality();
 
+      // Only show one toast for initial load failures
       if (connectionQuality === 'poor') {
         showToastOnce('Network connection is poor. Some data may not load.', 'info');
-      } else {
+      } else if (!error.message?.includes('timeout') && !error.message?.includes('network')) {
         showToastOnce('Some data failed to load. You can still use the app.', 'info');
       }
 

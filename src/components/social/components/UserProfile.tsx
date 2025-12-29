@@ -221,70 +221,124 @@ export const UserProfile: React.FC<any> = ({
       <div className="min-h-[200px]">
         {activeTab === 'posts' && (
           <div className="lg:space-y-4 space-y-2">
-            {posts.map((post: any) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                currentUser={currentUser}
-                onLike={onLike}
-                onBookmark={onBookmark}
-                onShare={onShare}
-                onComment={() => onComment(post.id)}
-                isExpanded={isPostExpanded(post.id)}
-                comments={getPostComments(post.id)}
-                isLoadingComments={isLoadingPostComments(post.id)}
-                newComment={getNewCommentContent(post.id)}
-                onCommentChange={(c) => onCommentChange(post.id, c)}
-                onSubmitComment={() => onSubmitComment(post.id)}
-                onDeletePost={onDeletePost}
-                onEditPost={onEditPost}
-              />
-            ))}
+            {posts.length === 0 && !isLoadingPosts ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                  <Grid className="w-8 h-8 text-slate-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">No posts yet</h3>
+                <p className="text-slate-600 dark:text-slate-400 max-w-sm">
+                  {isOwnProfile 
+                    ? "You haven't created any posts yet. Share your thoughts and knowledge with the community!"
+                    : "This user hasn't posted anything yet."}
+                </p>
+              </div>
+            ) : (
+              <>
+                {posts.map((post: any) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    currentUser={currentUser}
+                    onLike={onLike}
+                    onBookmark={onBookmark}
+                    onShare={onShare}
+                    onComment={() => onComment(post.id)}
+                    isExpanded={isPostExpanded(post.id)}
+                    comments={getPostComments(post.id)}
+                    isLoadingComments={isLoadingPostComments(post.id)}
+                    newComment={getNewCommentContent(post.id)}
+                    onCommentChange={(c) => onCommentChange(post.id, c)}
+                    onSubmitComment={() => onSubmitComment(post.id)}
+                    onDeletePost={onDeletePost}
+                    onEditPost={onEditPost}
+                  />
+                ))}
+              </>
+            )}
             {isLoadingPosts && <LoadingSpinner />}
           </div>
         )}
 
         {activeTab === 'groups' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {userGroups.map((group: any) => (
-              <Card key={group.id} className="hover:shadow-md transition-all cursor-pointer border-none shadow-sm bg-white dark:bg-slate-900" onClick={() => navigate(`/social/group/${group.id}`)}>
-                <CardContent className="p-4 flex items-center gap-4">
-                  <Avatar className="h-12 w-12 rounded-lg">
-                    <AvatarImage src={group.avatar_url} />
-                    <AvatarFallback className="rounded-lg">{group.name[0]}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="font-bold text-slate-900 dark:text-white">{group.name}</h3>
-                    <p className="text-xs text-slate-500">{group.members_count} members</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <>
+            {userGroups.length === 0 && !isLoadingPosts ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                  <Users className="w-8 h-8 text-slate-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">No groups</h3>
+                <p className="text-slate-600 dark:text-slate-400 max-w-sm">
+                  {isOwnProfile 
+                    ? "You haven't joined any groups yet. Explore communities to connect with others!"
+                    : "This user hasn't joined any groups yet."}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {userGroups.map((group: any) => (
+                  <Card key={group.id} className="hover:shadow-md transition-all cursor-pointer border-none shadow-sm bg-white dark:bg-slate-900" onClick={() => navigate(`/social/group/${group.id}`)}>
+                    <CardContent className="p-4 flex items-center gap-4">
+                      <Avatar className="h-12 w-12 rounded-lg">
+                        <AvatarImage src={group.avatar_url} />
+                        <AvatarFallback className="rounded-lg">{group.name[0]}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h3 className="font-bold text-slate-900 dark:text-white">{group.name}</h3>
+                        <p className="text-xs text-slate-500">{group.members_count} members</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* Placeholders for Likes/Saved */}
         {(activeTab === 'likes' || activeTab === 'saved') && (
           <div className="space-y-4">
-            {(activeTab === 'likes' ? likedPosts : bookmarkedPosts).map((post: any) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                currentUser={currentUser}
-                onLike={onLike}
-                onBookmark={onBookmark}
-                onShare={onShare}
-                onComment={() => onComment(post.id)}
-                isExpanded={isPostExpanded(post.id)}
-                comments={getPostComments(post.id)}
-                isLoadingComments={isLoadingPostComments(post.id)}
-                newComment={getNewCommentContent(post.id)}
-                onCommentChange={(c) => onCommentChange(post.id, c)}
-                onSubmitComment={() => onSubmitComment(post.id)}
-                onDeletePost={onDeletePost}
-                onEditPost={onEditPost}
-              />
-            ))}
+            {(activeTab === 'likes' ? likedPosts : bookmarkedPosts).length === 0 && !isLoadingPosts ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                  {activeTab === 'likes' ? (
+                    <Heart className="w-8 h-8 text-slate-400" />
+                  ) : (
+                    <Bookmark className="w-8 h-8 text-slate-400" />
+                  )}
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  {activeTab === 'likes' ? 'No liked posts' : 'No saved posts'}
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 max-w-sm">
+                  {activeTab === 'likes' 
+                    ? "Posts you like will appear here. Start exploring and showing some love!"
+                    : "Posts you save will appear here. Bookmark content you want to revisit later."}
+                </p>
+              </div>
+            ) : (
+              <>
+                {(activeTab === 'likes' ? likedPosts : bookmarkedPosts).map((post: any) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    currentUser={currentUser}
+                    onLike={onLike}
+                    onBookmark={onBookmark}
+                    onShare={onShare}
+                    onComment={() => onComment(post.id)}
+                    isExpanded={isPostExpanded(post.id)}
+                    comments={getPostComments(post.id)}
+                    isLoadingComments={isLoadingPostComments(post.id)}
+                    newComment={getNewCommentContent(post.id)}
+                    onCommentChange={(c) => onCommentChange(post.id, c)}
+                    onSubmitComment={() => onSubmitComment(post.id)}
+                    onDeletePost={onDeletePost}
+                    onEditPost={onEditPost}
+                  />
+                ))}
+              </>
+            )}
             {(isLoadingPostComments || isLoadingPosts) && <LoadingSpinner />}
           </div>
         )}

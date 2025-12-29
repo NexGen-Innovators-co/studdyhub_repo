@@ -10,6 +10,7 @@
 - [Quiz System](#quiz-system)
 - [Study Scheduler](#study-scheduler)
 - [Social Learning](#social-learning)
+- [AI Podcast Generation](#ai-podcast-generation)
 - [Subscription Management](#subscription-management)
 - [Admin Dashboard](#admin-dashboard)
 - [User Settings](#user-settings)
@@ -693,6 +694,168 @@ const { data: group } = await supabase.functions.invoke('create-study-group', {
 - **Notifications** - Manage social notifications
 - **Blocking** - Block unwanted users
 - **Reporting** - Report inappropriate content
+
+---
+
+## AI Podcast Generation
+
+Transform your study materials into engaging audio podcasts powered by AI.
+
+### Podcast Creation (AI Chat Integration)
+
+Generate podcasts directly from your study materials:
+
+```typescript
+// Generate podcast in AI chat
+const { data: podcast } = await supabase.functions.invoke('generate-podcast', {
+  body: {
+    topic: 'World War II History',
+    style: 'conversational', // conversational, educational, storytelling
+    duration: 300, // seconds
+    sources: noteIds // Array of note IDs to use as source material
+  }
+});
+```
+
+**Podcast Styles**
+- Conversational - Two-host discussion format
+- Educational - Teacher-student format
+- Storytelling - Narrative style
+- Interview - Q&A format
+
+### Podcast Player Features
+
+Interactive player with advanced controls:
+
+- **Resizable Panel** - Adjustable width (30-80%)
+- **Full-Screen Mode** - Immersive listening experience
+- **Audio Controls**
+  - Play/pause
+  - Volume control with mute
+  - Progress bar with click-to-seek
+  - Auto-play next segment
+- **Interactive Transcript**
+  - Click segments to jump to specific parts
+  - Highlight current segment
+  - Full-text search
+- **Download & Share** - Export audio or share link
+
+### Social Podcast Features
+
+Share and discover podcasts in the social feed:
+
+#### Podcast Sharing
+
+```typescript
+// Share podcast to social feed
+const { data: post } = await supabase.functions.invoke('share-podcast', {
+  body: {
+    podcastId: podcast.id,
+    content: 'Check out my new podcast on WWII!',
+    privacy: 'public'
+  }
+});
+```
+
+**Metadata Tracking**
+- Listen count
+- Share count
+- Duration and segment count
+- Cover image and tags
+
+#### Discovery Platform
+
+- **Discover Tab** - Browse public podcasts
+- **My Podcasts** - Manage your podcast library
+- **Live Now** - See live streaming podcasts
+- **Search & Filter** - Find podcasts by title, description, or tags
+- **Beautiful Cards** - Gradient UI with stats display
+
+#### Visibility Controls
+
+- **Public/Private Toggle** - Control who can access
+- **Share to Clipboard** - Quick link sharing
+- **Share to Social Feed** - Post as social content
+
+### Collaboration Features (Database Ready)
+
+Infrastructure in place for collaborative podcasts:
+
+#### Podcast Members
+
+```sql
+-- Roles: owner, co-host, listener
+CREATE TABLE podcast_members (
+  podcast_id UUID REFERENCES ai_podcasts(id),
+  user_id UUID REFERENCES auth.users(id),
+  role TEXT NOT NULL,
+  invited_by UUID REFERENCES auth.users(id)
+);
+```
+
+#### Invitation System
+
+```sql
+-- Invite users to collaborate
+CREATE TABLE podcast_invites (
+  podcast_id UUID,
+  inviter_id UUID,
+  invitee_id UUID,
+  status TEXT DEFAULT 'pending', -- pending, accepted, declined
+  expires_at TIMESTAMP
+);
+```
+
+#### Live Streaming
+
+```sql
+-- Track real-time listeners
+CREATE TABLE podcast_listeners (
+  podcast_id UUID,
+  user_id UUID,
+  is_active BOOLEAN,
+  joined_at TIMESTAMP
+);
+```
+
+### Podcast Analytics
+
+Track engagement and performance:
+
+- **Listen Count** - Total and unique listeners
+- **Share Tracking** - Platform-specific share analytics
+- **Engagement Metrics** - Average listen duration
+- **Popular Segments** - Most replayed parts
+- **Demographic Insights** - Audience analysis (Genius tier)
+
+### Technical Details
+
+**Audio Format**
+- Base64 encoded MP3
+- Segmented audio for better control
+- Cloud TTS generation via Supabase Edge Functions
+
+**Storage**
+- Efficient JSONB metadata storage
+- RLS policies for secure access
+- Indexed fields for fast queries
+
+**Integration Points**
+- AI Chat panel (like diagram panel)
+- Social feed automatic detection
+- Podcasts dedicated page (/podcasts)
+- Sidebar navigation
+
+### Usage Limits by Tier
+
+| Feature | Free | Scholar | Genius |
+|---------|------|---------|--------|
+| Podcast Generation | 3/month | 20/month | Unlimited |
+| Storage | 5 podcasts | 50 podcasts | Unlimited |
+| Share to Social | ❌ | ✅ | ✅ |
+| Live Streaming | ❌ | ❌ | ✅ (Coming Soon) |
+| Collaboration | ❌ | Limited | Full Access |
+| Analytics | Basic | Standard | Advanced |
 
 ---
 

@@ -8,7 +8,9 @@ import {
   Clock, Filter, X, Hash, Brain, Target, Trophy, Shield, Zap,
   Smartphone, CheckCircle, AlertCircle,
   MapPin,
-  Lock
+  Lock,
+  Podcast,
+  Radio
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../ui/button';
@@ -27,7 +29,7 @@ interface HeaderProps {
   onNewNote: () => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social' | 'quizzes';
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social' | 'quizzes' | 'podcasts';
   fullName: string | null;
   avatarUrl: string | null;
   onOpenCreatePostDialog: () => void;
@@ -35,6 +37,8 @@ interface HeaderProps {
   onUploadDocument?: () => void;
   onNewSchedule?: () => void;
   onNewChat?: () => void;
+  onGoLive?: () => void;
+  onCreatePodcast?: () => void;
   currentTheme: 'light' | 'dark';
   onThemeChange: (theme: 'light' | 'dark') => void;
   subscriptionTier: PlanType;
@@ -48,6 +52,7 @@ const tabNames: Record<HeaderProps['activeTab'], string> = {
   recordings: 'Class Recordings',
   schedule: 'Schedule & Timetable',
   chat: 'AI Study Assistant',
+  podcasts: 'AI Podcasts',
   documents: 'Document Upload',
   settings: 'Learning Settings',
   dashboard: 'Dashboard',
@@ -65,6 +70,7 @@ const mainNavItems = [
   { label: 'Quizzes', icon: Sparkles, tab: 'quizzes' },
   { label: 'Social', icon: Users2, tab: 'social' },
   { label: 'Settings', icon: Sliders, tab: 'settings' },
+  { label: 'Podcasts', icon: Podcast, tab: 'podcasts' },
 ] as const;
 
 // Define section-specific tabs
@@ -86,6 +92,11 @@ const sectionTabs = {
     { id: 'all', label: 'All Recordings', icon: FileText },
     { id: 'record', label: 'Record', icon: Mic },
     { id: 'upload', label: 'Upload', icon: Upload },
+  ],
+  podcasts: [
+    { id: 'discover', label: 'Discover', icon: TrendingUp },
+    { id: 'my-podcasts', label: 'My Podcasts', icon: Podcast },
+    { id: 'live', label: 'Live Now', icon: Radio },
   ],
   // notes: [
   //   // { id: 'all', label: 'All Notes', icon: BookOpen },
@@ -142,6 +153,8 @@ export const Header: React.FC<HeaderProps> = ({
   onUploadDocument,
   onNewSchedule,
   onNewChat,
+  onGoLive,
+  onCreatePodcast,
   currentTheme,
   onThemeChange,
   subscriptionTier,
@@ -315,6 +328,11 @@ export const Header: React.FC<HeaderProps> = ({
     if (activeTab === 'social' && path) {
       navigate(path);
     }
+    
+    // Handle navigation for podcasts (no path needed, handled by event listener)
+    if (activeTab === 'podcasts') {
+      // Just dispatch the event, PodcastsPage will handle the tab change
+    }
   };
 
   const handleLogout = async () => {
@@ -358,29 +376,30 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={onNewNote}
               className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
               size="sm"
+               variant='ghost'
             >
               <Plus className="h-4 w-4 mr-2" />
               <span className="hidden md:inline">New Note</span>
             </Button>
           </SubscriptionGuard>
         );
-      case 'recordings':
-        return (
-          <SubscriptionGuard
-            feature="Class Recordings"
-            limitFeature="maxRecordings"
-            currentCount={recordings?.length || 0}
-          >
-            <Button
-              onClick={() => onNewRecording?.()}
-              className="bg-green-600 hover:bg-green-700"
-              size="sm"
-            >
-              <Mic className="h-4 w-4 mr-2" />
-              <span className="hidden md:inline">Record</span>
-            </Button>
-          </SubscriptionGuard>
-        );
+      // case 'recordings':
+      //   return (
+      //     <SubscriptionGuard
+      //       feature="Class Recordings"
+      //       limitFeature="maxRecordings"
+      //       currentCount={recordings?.length || 0}
+      //     >
+      //       <Button
+      //         onClick={() => onNewRecording?.()}
+      //         className="bg-green-600 hover:bg-green-700"
+      //         size="sm"
+      //       >
+      //         <Mic className="h-4 w-4 mr-2" />
+      //         <span className="hidden md:inline">Record</span>
+      //       </Button>
+      //     </SubscriptionGuard>
+      //   );
       case 'documents':
         return (
           <SubscriptionGuard
@@ -392,29 +411,30 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => onUploadDocument?.()}
               className="bg-blue-600 hover:bg-blue-700"
               size="sm"
+               variant='ghost'
             >
               <Upload className="h-4 w-4 mr-2" />
               <span className="hidden md:inline">Upload</span>
             </Button>
           </SubscriptionGuard>
         );
-      case 'schedule':
-        return (
-          <SubscriptionGuard
-            feature="Schedule Items"
-            limitFeature="maxScheduleItems"
-            currentCount={scheduleItems?.length || 0}
-          >
-            <Button
-              onClick={() => onNewSchedule?.()}
-              className="bg-blue-600 hover:bg-blue-700"
-              size="sm"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              <span className="hidden md:inline">Add Event</span>
-            </Button>
-          </SubscriptionGuard>
-        );
+      // case 'schedule':
+      //   return (
+      //     <SubscriptionGuard
+      //       feature="Schedule Items"
+      //       limitFeature="maxScheduleItems"
+      //       currentCount={scheduleItems?.length || 0}
+      //     >
+      //       <Button
+      //         onClick={() => onNewSchedule?.()}
+      //         className="bg-blue-600 hover:bg-blue-700"
+      //         size="sm"
+      //       >
+      //         <Plus className="h-4 w-4 mr-2" />
+      //         <span className="hidden md:inline">Add Event</span>
+      //       </Button>
+      //     </SubscriptionGuard>
+      //   );
       case 'chat':
         return (
           <SubscriptionGuard
@@ -429,6 +449,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
               className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
               size="sm"
+               variant='ghost'
             >
               <MessageCircle className="h-4 w-4 mr-2" />
               <span className="hidden md:inline">New Chat</span>
@@ -446,11 +467,35 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={onOpenCreatePostDialog}
               className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
               size="sm"
+               variant='ghost'
             >
               <Plus className="h-4 w-4 mr-2" />
               <span className="hidden md:inline">Post</span>
             </Button>
           </SubscriptionGuard>
+        );
+      case 'podcasts':
+        return (
+          <div className="flex gap-2">
+            {/* <Button
+              onClick={() => onGoLive?.()}
+              variant="outline"
+              size="sm"
+              className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
+            >
+              <Radio className="h-4 w-4 mr-2" />
+              <span className="hidden md:inline">Go Live</span>
+            </Button> */}
+            <Button
+              onClick={() => onCreatePodcast?.()}
+              className=" text-gray-600"
+              size="sm"
+              variant='ghost'
+            >
+             <Radio className="h-4 w-4 mr-2" />
+              <span className="hidden md:inline">Create</span>
+            </Button>
+          </div>
         );
       default:
         return null;
@@ -649,9 +694,9 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Right: Install App + Create Button + Notifications + Avatar */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* Install App Button - Hidden on smaller screens */}
-            <div className="hidden md:block">
+            {/* <div className="hidden md:block">
               <InstallAppButton />
-            </div>
+            </div> */}
             
             {/* Subscription Badge - Hidden on mobile */}
             <div className="hidden sm:block">
@@ -668,12 +713,12 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Avatar */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              {isAdmin && (
+              {/* {isAdmin && (
                 <div className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-purple-500 to-blue-600 text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-lg">
                   <Shield className="h-3.5 w-3.5" />
                   <span>Admin</span>
                 </div>
-              )}
+              )} */}
               <div ref={avatarRef} className="relative">
                 <button
                   onClick={() => setIsAvatarMenuOpen(!isAvatarMenuOpen)}
@@ -700,6 +745,12 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="py-2">
                     <button onClick={() => { navigate('/social/profile'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base">
                       <User className="h-5 w-5 flex-shrink-0" /> My Profile
+                    </button>
+                    <button onClick={() => { navigate('/podcasts'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base">
+                      <Podcast className="h-5 w-5 flex-shrink-0" /> Podcasts
+                    </button>
+                    <button onClick={() => { onGoLive?.(); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm sm:text-base">
+                      <Radio className="h-5 w-5 flex-shrink-0" /> Go Live
                     </button>
                     <button onClick={() => { navigate('/settings'); setIsAvatarMenuOpen(false); }} className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm sm:text-base">
                       <Settings className="h-5 w-5 flex-shrink-0" /> Settings

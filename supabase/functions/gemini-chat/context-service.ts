@@ -8,67 +8,60 @@ export class UserContextService {
         this.supabase = createClient(supabaseUrl, supabaseKey);
     }
 
-    // Add this method for action support
+    // Add this method for action support - OPTIMIZED FOR ACCURACY
     async getActionableContext(userId: string) {
         try {
+            // Run comprehensive parallel queries for full context
             const [
                 notesResult,
                 documentsResult,
                 foldersResult,
                 scheduleResult,
                 goalsResult,
-                quizzesResult,
-                flashcardsResult
+                quizzesResult
             ] = await Promise.all([
-                // Notes for creating flashcards
+                // Get comprehensive notes list
                 this.supabase.from('notes')
-                    .select('id, title')
+                    .select('id, title, category, tags, ai_summary')
                     .eq('user_id', userId)
                     .order('updated_at', { ascending: false })
-                    .limit(20),
+                    .limit(50),
 
-                // Documents for linking
+                // Get comprehensive documents list
                 this.supabase.from('documents')
-                    .select('id, title')
+                    .select('id, title, type, processing_status')
                     .eq('user_id', userId)
                     .order('updated_at', { ascending: false })
-                    .limit(20),
+                    .limit(50),
 
-                // Folders for organizing
+                // Get folder structure for organization
                 this.supabase.from('document_folders')
-                    .select('id, name, parent_folder_id')
+                    .select('id, name, parent_folder_id, color')
                     .eq('user_id', userId)
                     .order('updated_at', { ascending: false }),
 
-                // Schedule items
+                // Get upcoming schedule
                 this.supabase.from('schedule_items')
-                    .select('id, title, start_time')
+                    .select('id, title, start_time, subject, type')
                     .eq('user_id', userId)
                     .gte('start_time', new Date().toISOString())
                     .order('start_time', { ascending: true })
-                    .limit(10),
+                    .limit(30),
 
-                // Learning goals
+                // Get all active goals
                 this.supabase.from('user_learning_goals')
-                    .select('id, goal_text, progress')
+                    .select('id, goal_text, progress, target_date')
                     .eq('user_id', userId)
                     .eq('is_completed', false)
                     .order('updated_at', { ascending: false })
-                    .limit(10),
+                    .limit(20),
 
-                // Quizzes
+                // Get recent quizzes
                 this.supabase.from('quizzes')
-                    .select('id, title')
+                    .select('id, title, subject')
                     .eq('user_id', userId)
                     .order('created_at', { ascending: false })
-                    .limit(10),
-
-                // Flashcards
-                this.supabase.from('flashcards')
-                    .select('id, front, category, next_review_at')
-                    .eq('user_id', userId)
-                    .order('next_review_at', { ascending: true })
-                    .limit(10)
+                    .limit(20)
             ]);
 
             return {
@@ -78,7 +71,7 @@ export class UserContextService {
                 schedule: scheduleResult.data || [],
                 goals: goalsResult.data || [],
                 quizzes: quizzesResult.data || [],
-                flashcards: flashcardsResult.data || []
+                flashcards: []  // Can be added if needed
             };
         } catch (error) {
             console.error('[ContextService] Error getting actionable context:', error);
@@ -427,16 +420,18 @@ async analyzeLearningPatterns(userId) {
 
     async getCrossSessionContext(userId, currentSessionId, currentMessage) {
         try {
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            // Look back 14 days for comprehensive context
+            const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
+            // Get up to 10 recent sessions for better continuity
             const { data: recentSessions } = await this.supabase
                 .from('chat_sessions')
-                .select('id, title, context_summary, last_message_at, message_count, token_count')
+                .select('id, title, context_summary, last_message_at, message_count, document_ids')
                 .eq('user_id', userId)
                 .neq('id', currentSessionId)
-                .gte('last_message_at', sevenDaysAgo)
+                .gte('last_message_at', fourteenDaysAgo)
                 .order('last_message_at', { ascending: false })
-                .limit(5);
+                .limit(10);
 
             if (!recentSessions?.length) return null;
 
@@ -447,17 +442,18 @@ async analyzeLearningPatterns(userId) {
                     sessionTitle: session.title,
                     lastActive: session.last_message_at,
                     messageCount: session.message_count,
-                    tokenCount: session.token_count,
+                    documentIds: session.document_ids,
                     summary: null,
                     recentTopics: [],
                     keyMessages: []
                 };
 
+                // Use summary if available
                 if (session.context_summary) {
                     sessionContext.summary = session.context_summary;
                 }
 
-                // Get key user messages from other sessions
+                // Get key messages from past sessions for better understanding
                 const { data: keyMessages } = await this.supabase
                     .from('chat_messages')
                     .select('content, role, timestamp, attached_document_ids, attached_note_ids')
@@ -465,11 +461,11 @@ async analyzeLearningPatterns(userId) {
                     .eq('session_id', session.id)
                     .eq('role', 'user')
                     .order('timestamp', { ascending: false })
-                    .limit(5);
+                    .limit(3);  // Get top 3 messages for context
 
                 if (keyMessages?.length) {
                     sessionContext.keyMessages = keyMessages.map((m) => ({
-                        content: m.content.length > 100 ? m.content.substring(0, 100) + '...' : m.content,
+                        content: m.content.length > 150 ? m.content.substring(0, 150) + '...' : m.content,
                         timestamp: m.timestamp,
                         hasAttachments: (m.attached_document_ids?.length || 0) + (m.attached_note_ids?.length || 0) > 0
                     }));

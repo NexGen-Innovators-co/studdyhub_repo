@@ -88,6 +88,11 @@ const AppWithSEO = () => {
           <Route path="/quizzes" element={<Index />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
           <Route path="/pricing" element={<SubscriptionPage />} />
+          
+          {/* ==== PODCAST ROUTES - Protected ==== */}
+          <Route path="/podcasts" element={<Index />} />
+          <Route path="/podcasts/:podcastId" element={<Index />} />
+          
           {/* ==== SOCIAL ROUTES - Protected ==== */}
           <Route path="/social" element={<Index />} />
           <Route path="/social/:tab" element={<Index />} />

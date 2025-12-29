@@ -515,7 +515,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                                       <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
+                                  <DropdownMenuContent align="end" className="bg-white dark:bg-slate-600">
                                     <DropdownMenuItem onClick={() => {
                                       if (selectedRecording?.id !== recording.id && isPlayingAudio) {
                                         handlePauseAudio();

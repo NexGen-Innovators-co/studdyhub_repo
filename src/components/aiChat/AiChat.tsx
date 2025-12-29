@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown } from 'lucide-react';
+import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast } from 'lucide-react';
 import { Button } from '../ui/button';
 import { UserProfile, Document } from '../../types/Document';
 import { Note } from '../../types/Note';
@@ -24,6 +24,8 @@ import { AppContext } from '@/contexts/AppContext';
 import { initialAppState } from '@/contexts/appReducer';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { useAiMessageTracker } from '@/hooks/useAiMessageTracker';
+import { PodcastGenerator, type PodcastData } from './PodcastGenerator';
+import { PodcastPanel } from './Components/PodcastPanel';
 
 export interface AttachedFile {
   file: File;
@@ -107,9 +109,16 @@ const AIChat: React.FC<AIChatProps> = ({
   isLoadingDocuments,
 }) => {
   const [inputMessage, setInputMessage] = useState('');
+  const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
+  const [activePodcast, setActivePodcast] = useState<PodcastData | null>(null);
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
+  // NEW: Enable streaming by default, persist to localStorage
+  const [enableStreamingMode, setEnableStreamingMode] = useState(() => {
+    const stored = localStorage.getItem('ai-streaming-mode');
+    return stored !== null ? stored === 'true' : true;
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -162,6 +171,10 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isCurrentlySending, setIsCurrentlySending] = useState(false);
   const [panelWidth, setPanelWidth] = useState<number>(() => {
     const storedWidth = localStorage.getItem('diagramPanelWidth');
+    return storedWidth ? parseFloat(storedWidth) : 65;
+  });
+  const [podcastPanelWidth, setPodcastPanelWidth] = useState<number>(() => {
+    const storedWidth = localStorage.getItem('podcastPanelWidth');
     return storedWidth ? parseFloat(storedWidth) : 65;
   });
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -298,6 +311,11 @@ const AIChat: React.FC<AIChatProps> = ({
   }, []);
   const userMessagesToday = useAiMessageTracker().messagesToday;
   const { checkAiMessageLimit } = useAiMessageTracker();
+
+  // Persist streaming mode preference
+  useEffect(() => {
+    localStorage.setItem('ai-streaming-mode', String(enableStreamingMode));
+  }, [enableStreamingMode]);
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -897,6 +915,29 @@ const AIChat: React.FC<AIChatProps> = ({
 
                 <div className="flex items-center gap-2 mt-2 justify-between">
                   <div className="flex items-center gap-2">
+                    {/* Streaming toggle button */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEnableStreamingMode(!enableStreamingMode)}
+                      className={`h-10 px-3 flex items-center gap-2 rounded-lg transition-all duration-200 ${enableStreamingMode
+                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900 dark:text-purple-300 dark:hover:bg-purple-800'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
+                        }`}
+                      title={enableStreamingMode ? 'Streaming Mode ON - See AI thinking in real-time' : 'Streaming Mode OFF - Get immediate response'}
+                    >
+                      <motion.div
+                        animate={enableStreamingMode ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+                        transition={{ duration: 0.5, repeat: enableStreamingMode ? Infinity : 0, repeatDelay: 1 }}
+                      >
+                        {enableStreamingMode ? '🧠' : '💬'}
+                      </motion.div>
+                      <span className="text-xs font-medium hidden sm:inline">
+                        {enableStreamingMode ? 'Thinking Mode' : 'Fast Mode'}
+                      </span>
+                    </Button>
+                    
                     <Button
                       type="button"
                       variant="ghost"
@@ -987,6 +1028,18 @@ const AIChat: React.FC<AIChatProps> = ({
                     >
                       {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
                     </Button>
+                    {/* Podcast Generator Button */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowPodcastGenerator(true)}
+                      className="text-purple-600 hover:bg-purple-100 h-10 w-10 flex-shrink-0 rounded-lg p-0 dark:text-purple-400 dark:hover:bg-purple-900"
+                      title="Generate AI Podcast from selected content"
+                      disabled={selectedDocumentIds.length === 0}
+                    >
+                      <Podcast className="h-5 w-5" />
+                    </Button>
                     <Button
                       onClick={() => setAutoTypeInPanel(prev => !prev)}
                       variant="outline"
@@ -1042,6 +1095,19 @@ const AIChat: React.FC<AIChatProps> = ({
             />
           )}
 
+          {/* Podcast Generator Dialog */}
+          {showPodcastGenerator && (
+            <PodcastGenerator
+              selectedNoteIds={selectedDocumentIds.filter(id => notes.some(n => n.id === id))}
+              selectedDocumentIds={selectedDocumentIds.filter(id => documents.some(d => d.id === id))}
+              onClose={() => setShowPodcastGenerator(false)}
+              onPodcastGenerated={(podcast) => {
+                setActivePodcast(podcast);
+                setShowPodcastGenerator(false);
+              }}
+            />
+          )}
+
           <ConfirmationModal
             isOpen={showDeleteConfirm}
             onClose={() => setShowDeleteConfirm(false)}
@@ -1069,6 +1135,17 @@ const AIChat: React.FC<AIChatProps> = ({
             currentTheme={initialAppState.currentTheme}
             panelWidth={panelWidth}
             setPanelWidth={setPanelWidth}
+          />
+        )}
+
+        {/* Podcast Panel */}
+        {activePodcast && (
+          <PodcastPanel
+            podcast={activePodcast}
+            onClose={() => setActivePodcast(null)}
+            isOpen={!!activePodcast}
+            panelWidth={podcastPanelWidth}
+            setPanelWidth={setPodcastPanelWidth}
           />
         )}
       </div>

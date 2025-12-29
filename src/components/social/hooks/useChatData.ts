@@ -141,6 +141,32 @@ export const useChatData = (currentUserId: string | null) => {
             fullResource.displayAsText = canDisplayDocumentInline(doc);
             fullResource.previewContent = doc.content_extracted || null;
         }
+        else if (res.resource_type === 'class_recording') {
+            const { data: recording, error } = await supabase
+                .from('class_recordings')
+                .select('id, title, subject, audio_url, duration, date, summary, transcript')
+                .eq('id', res.resource_id)
+                .maybeSingle();
+
+            if (error || !recording) {
+                return { ...res, error: 'Recording not found or access denied' };
+            }
+
+            fullResource = { ...res, ...recording };
+
+            if (recording.audio_url) {
+                const { bucket, path } = extractStorageDetails(recording.audio_url);
+
+                if (path && !path.startsWith('http')) {
+                    const { data: signed } = await supabase.storage
+                        .from(bucket)
+                        .createSignedUrl(path, 7200); // 2 hours for recordings
+                    signedFileUrl = signed?.signedUrl || null;
+                }
+            }
+
+            fullResource.signedFileUrl = signedFileUrl;
+        }
 
         return fullResource;
     };

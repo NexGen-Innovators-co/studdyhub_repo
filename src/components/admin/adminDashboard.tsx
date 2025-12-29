@@ -1,13 +1,15 @@
 import React, { Suspense, lazy } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Skeleton } from '../ui/skeleton';
-import { LayoutDashboard, Users, Shield, AlertTriangle, Settings, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, Shield, AlertTriangle, Settings, FileText, Flag, Sparkles } from 'lucide-react';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 
 const AdminOverview = lazy(() => import('./AdminOverview'));
 const UserManagement = lazy(() => import('./UserManagement'));
 const AdminManagement = lazy(() => import('./AdminManagement'));
 const ContentModeration = lazy(() => import('./ContentModeration'));
+const ReportsManagement = lazy(() => import('./ReportsManagement'));
+const ContentModerationAdmin = lazy(() => import('./ContentModerationAdmin'));
 const SystemSettings = lazy(() => import('./SystemSettings'));
 const ActivityLogs = lazy(() => import('./ActivityLogs'));
 
@@ -27,6 +29,8 @@ const AdminDashboard = () => {
     { id: 'users', label: 'Users', icon: Users, component: UserManagement, perm: permissions.canManageUsers },
     { id: 'admins', label: 'Admins', icon: Shield, component: AdminManagement, perm: permissions.canManageAdmins },
     { id: 'moderation', label: 'Moderation', icon: AlertTriangle, component: ContentModeration, perm: permissions.canModerateContent },
+    { id: 'reports', label: 'Reports', icon: Flag, component: ReportsManagement, perm: permissions.canModerateContent },
+    { id: 'ai-moderation', label: 'AI Moderation', icon: Sparkles, component: ContentModerationAdmin, perm: permissions.canManageSettings },
     { id: 'settings', label: 'Settings', icon: Settings, component: SystemSettings, perm: permissions.canManageSettings },
     { id: 'logs', label: 'Activity Logs', icon: FileText, component: ActivityLogs, perm: permissions.canViewLogs },
   ].filter(t => t.perm);
@@ -38,8 +42,8 @@ const AdminDashboard = () => {
         <p className="text-gray-400 mt-1">Manage your platform with full control</p>
       </div>
 
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full mb-8 bg-gray-800 p-1 rounded-lg">
+      <Tabs defaultValue="overview" className="w-full">7
+        <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 w-full mb-8 bg-gray-800 p-1 rounded-lg">
           {tabs.map(({ id, label, icon: Icon }) => (
             <TabsTrigger
               key={id}

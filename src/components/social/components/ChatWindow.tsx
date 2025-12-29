@@ -19,7 +19,11 @@ import {
   Edit as EditIcon,
   Trash2,
   Copy as CopyIcon,
-  Check, Sparkle
+  Check,
+  Sparkle,
+  Video,
+  Clock,
+  Calendar
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -39,10 +43,11 @@ import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { ChatSessionWithDetails, ChatMessageWithDetails } from '../types/social';
 import { MessageInput } from './MessageInput';
-import { NoteShareDialog } from './NoteShareDialog';
+import { ResourceSharingModal } from './ResourceSharingModal';
 import { supabase } from '../../../integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
 
 
 interface ChatWindowProps {
@@ -54,7 +59,7 @@ interface ChatWindowProps {
   onSendMessageWithResource: (
     content: string,
     resourceId: string,
-    resourceType: 'note' | 'document' | 'post'
+    resourceType: 'note' | 'document' | 'post' | 'class_recording'
   ) => Promise<boolean>; // Keep as boolean for now
   isSending: boolean;
   isLoading: boolean;
@@ -509,6 +514,123 @@ const SharedNotePreview: React.FC<{ noteId: string; onClick: () => void }> = ({ 
   );
 };
 
+// Shared Class Recording Preview
+const SharedClassRecordingPreview: React.FC<{ recordingId: string; currentUserId: string }> = ({ recordingId, currentUserId }) => {
+  const [recording, setRecording] = useState<any>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isAdded, setIsAdded] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from('class_recordings')
+      .select('id, title, summary, audio_url, duration, subject, date')
+      .eq('id', recordingId)
+      .single()
+      .then(({ data }) => setRecording(data));
+  }, [recordingId]);
+
+  const handleAddToMyRecordings = async () => {
+    if (!recording || isAdded) return;
+    setIsAdding(true);
+    try {
+      const { data: existing } = await supabase
+        .from('class_recordings')
+        .select('id')
+        .eq('user_id', currentUserId)
+        .eq('audio_url', recording.audio_url)
+        .maybeSingle();
+
+      if (existing) {
+        toast.info('You already have this recording');
+        setIsAdded(true);
+        return;
+      }
+
+      const { error } = await supabase.from('class_recordings').insert({
+        user_id: currentUserId,
+        title: recording.title,
+        summary: recording.summary,
+        audio_url: recording.audio_url,
+        duration: recording.duration,
+        subject: recording.subject,
+        date: recording.date,
+      });
+
+      if (error) throw error;
+      setIsAdded(true);
+      toast.success('Recording saved to your library!');
+    } catch {
+      toast.error('Failed to save recording');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return 'Unknown';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  if (!recording) return <div className="bg-gray-200 dark:bg-slate-700 rounded-xl h-24 animate-pulse" />;
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-200 dark:border-slate-600 hover:shadow-xl overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-gradient-to-br from-purple-600 to-purple-500 rounded-lg">
+            <Video className="h-8 w-8 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm mb-1">{recording.title}</p>
+            {recording.summary && (
+              <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">{recording.summary}</p>
+            )}
+            <div className="flex items-center gap-3 text-xs text-gray-500">
+              {recording.subject && (
+                <Badge variant="secondary" className="text-xs">
+                  {recording.subject}
+                </Badge>
+              )}
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {formatDuration(recording.duration)}
+              </span>
+              {recording.date && (
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {new Date(recording.date).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+          </div>
+          <Button
+            size="icon"
+            variant={isAdded ? 'default' : 'ghost'}
+            className={isAdded ? 'bg-green-600 hover:bg-green-700' : 'hover:bg-blue-50 dark:hover:bg-slate-700'}
+            onClick={handleAddToMyRecordings}
+            disabled={isAdding || isAdded}
+          >
+            {isAdding ? <Loader2 className="h-5 w-5 animate-spin" /> : isAdded ? <CheckCircle className="h-5 w-5 text-white" /> : <Plus className="h-5 w-5" />}
+          </Button>
+        </div>
+        {recording.audio_url && (
+          <div className="mt-3">
+            <audio
+              controls
+              className="w-full"
+              src={recording.audio_url}
+            >
+              Your browser does not support audio playback.
+            </audio>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // Date Separator
 const DateSeparator: React.FC<{ date: string }> = ({ date }) => (
   <div className="flex items-center justify-center my-6">
@@ -532,8 +654,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   addOptimisticMessage: onOptimisticMessage, // ADD THIS
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [showNoteShare, setShowNoteShare] = useState(false);
+  const [showResourceSharing, setShowResourceSharing] = useState(false);
   const [addNoteDialogOpen, setAddNoteDialogOpen] = useState(false);
+  const [userNotes, setUserNotes] = useState<any[]>([]);
+  const [userDocuments, setUserDocuments] = useState<any[]>([]);
+  const [userClassRecordings, setUserClassRecordings] = useState<any[]>([]);
+  const [isLoadingResources, setIsLoadingResources] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [notesOffset, setNotesOffset] = useState(0);
+  const [documentsOffset, setDocumentsOffset] = useState(0);
+  const [recordingsOffset, setRecordingsOffset] = useState(0);
+  const [hasMoreNotes, setHasMoreNotes] = useState(true);
+  const [hasMoreDocuments, setHasMoreDocuments] = useState(true);
+  const [hasMoreRecordings, setHasMoreRecordings] = useState(true);
+  const ITEMS_PER_PAGE = 20;
   const [noteToAdd, setNoteToAdd] = useState<{ id: string; title: string; content: string } | null>(null);
   const [newNoteTitle, setNewNoteTitle] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -543,6 +677,44 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Fetch user resources when modal opens
+  useEffect(() => {
+    if (showResourceSharing && !isLoadingResources && userNotes.length === 0) {
+      const fetchResources = async () => {
+        setIsLoadingResources(true);
+        try {
+          const [notesResult, documentsResult, recordingsResult] = await Promise.all([
+            supabase.from('notes').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).range(0, ITEMS_PER_PAGE - 1),
+            supabase.from('documents').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).range(0, ITEMS_PER_PAGE - 1),
+            supabase.from('class_recordings').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).range(0, ITEMS_PER_PAGE - 1)
+          ]);
+          
+          if (notesResult.data) {
+            setUserNotes(notesResult.data);
+            setHasMoreNotes(notesResult.data.length === ITEMS_PER_PAGE);
+            setNotesOffset(ITEMS_PER_PAGE);
+          }
+          if (documentsResult.data) {
+            setUserDocuments(documentsResult.data);
+            setHasMoreDocuments(documentsResult.data.length === ITEMS_PER_PAGE);
+            setDocumentsOffset(ITEMS_PER_PAGE);
+          }
+          if (recordingsResult.data) {
+            setUserClassRecordings(recordingsResult.data);
+            setHasMoreRecordings(recordingsResult.data.length === ITEMS_PER_PAGE);
+            setRecordingsOffset(ITEMS_PER_PAGE);
+          }
+        } catch (error) {
+          console.error('Error fetching resources:', error);
+          toast.error('Failed to load resources');
+        } finally {
+          setIsLoadingResources(false);
+        }
+      };
+      fetchResources();
+    }
+  }, [showResourceSharing, currentUserId, isLoadingResources, userNotes.length, ITEMS_PER_PAGE]);
 
   const getChatTitle = () => {
     if (!session) return 'Chat';
@@ -572,12 +744,82 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const onlineStatus = getOnlineStatus();
 
-  const handleShareNote = async (content: string, resourceId: string, resourceType: 'note' | 'document') => {
-    const newMessage = await onSendMessageWithResource(content, resourceId, resourceType) as unknown as ChatMessageWithDetails;
-    if (newMessage && onOptimisticMessage) {
-      onOptimisticMessage(newMessage);
-      setShowNoteShare(false);
+  const loadMoreNotes = async () => {
+    if (isLoadingMore || !hasMoreNotes) return;
+    setIsLoadingMore(true);
+    try {
+      const { data } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false })
+        .range(notesOffset, notesOffset + ITEMS_PER_PAGE - 1);
+      
+      if (data) {
+        setUserNotes(prev => [...prev, ...data]);
+        setHasMoreNotes(data.length === ITEMS_PER_PAGE);
+        setNotesOffset(prev => prev + ITEMS_PER_PAGE);
+      }
+    } catch (error) {
+      console.error('Error loading more notes:', error);
+    } finally {
+      setIsLoadingMore(false);
     }
+  };
+
+  const loadMoreDocuments = async () => {
+    if (isLoadingMore || !hasMoreDocuments) return;
+    setIsLoadingMore(true);
+    try {
+      const { data } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false })
+        .range(documentsOffset, documentsOffset + ITEMS_PER_PAGE - 1);
+      
+      if (data) {
+        setUserDocuments(prev => [...prev, ...data]);
+        setHasMoreDocuments(data.length === ITEMS_PER_PAGE);
+        setDocumentsOffset(prev => prev + ITEMS_PER_PAGE);
+      }
+    } catch (error) {
+      console.error('Error loading more documents:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  const loadMoreRecordings = async () => {
+    if (isLoadingMore || !hasMoreRecordings) return;
+    setIsLoadingMore(true);
+    try {
+      const { data } = await supabase
+        .from('class_recordings')
+        .select('*')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false })
+        .range(recordingsOffset, recordingsOffset + ITEMS_PER_PAGE - 1);
+      
+      if (data) {
+        setUserClassRecordings(prev => [...prev, ...data]);
+        setHasMoreRecordings(data.length === ITEMS_PER_PAGE);
+        setRecordingsOffset(prev => prev + ITEMS_PER_PAGE);
+      }
+    } catch (error) {
+      console.error('Error loading more recordings:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  const handleShareResource = async (resourceId: string, resourceType: 'note' | 'document' | 'class_recording', message?: string): Promise<boolean> => {
+    const success = await onSendMessageWithResource(message || '', resourceId, resourceType);
+    if (success) {
+      setShowResourceSharing(false);
+      toast.success('Resource shared successfully');
+    }
+    return success;
   };
   const handleSendMessage = async (content: string, files?: File[]) => {
     const success = await onSendMessage(content, files);
@@ -685,6 +927,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         );
       case 'document':
         return <SharedDocumentPreview documentId={resource.resource_id} currentUserId={currentUserId} />;
+      case 'class_recording':
+        return <SharedClassRecordingPreview recordingId={resource.resource_id} currentUserId={currentUserId} />;
       default:
         return null;
     }
@@ -878,13 +1122,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         {/* Input */}
         <MessageInput
           onSendMessage={handleSendMessage}
-          onShareNote={() => setShowNoteShare(true)}
+          onShareNote={() => setShowResourceSharing(true)}
           isSending={isSending}
         />
       </div>
 
       {/* Dialogs */}
-      <NoteShareDialog isOpen={showNoteShare} onClose={() => setShowNoteShare(false)} onShare={handleShareNote} currentUserId={currentUserId} />
+      <ResourceSharingModal
+        isOpen={showResourceSharing}
+        onClose={() => setShowResourceSharing(false)}
+        onShareResource={handleShareResource}
+        notes={userNotes}
+        documents={userDocuments}
+        classRecordings={userClassRecordings}
+        isSharing={isSending}
+        isLoading={isLoadingResources}
+        onLoadMoreNotes={loadMoreNotes}
+        onLoadMoreDocuments={loadMoreDocuments}
+        onLoadMoreRecordings={loadMoreRecordings}
+        hasMoreNotes={hasMoreNotes}
+        hasMoreDocuments={hasMoreDocuments}
+        hasMoreRecordings={hasMoreRecordings}
+        isLoadingMore={isLoadingMore}
+      />
 
       <Dialog open={addNoteDialogOpen} onOpenChange={setAddNoteDialogOpen}>
         <DialogContent className="sm:max-w-md z-50">

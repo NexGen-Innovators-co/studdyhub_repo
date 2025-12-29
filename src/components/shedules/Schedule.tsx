@@ -284,9 +284,9 @@ export const Schedule: React.FC<ScheduleProps> = ({
 
   const rightRail = (
     <StickyRail>
-      <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-2xl p-4 border border-amber-200 dark:border-amber-800">
-        <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">💡 Tips</h4>
-        <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
+      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl p-4 border border-blue-200 dark:border-blue-800">
+        <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">💡 Tips</h4>
+        <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
           <li>• Add start/end times to avoid overlaps</li>
           <li>• Use types to color-code events</li>
           <li>• Refresh to sync latest changes</li>
@@ -302,7 +302,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
         <HeroHeader
           title="Schedule & Timetable"
           subtitle={`${currentItems.length} ${activeTab} ${currentItems.length === 1 ? 'event' : 'events'}`}
-          icon={<Sparkles className="h-7 w-7 text-yellow-300" />}
+          icon={<Sparkles className="h-7 w-7 text-blue-300" />}
           gradient="from-blue-600 to-indigo-600"
           actions={
             <div className="flex gap-2">

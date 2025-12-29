@@ -178,13 +178,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <Paperclip className="h-5 w-5" />
           </Button>
 
-          {/* Share note */}
+          {/* Share resources */}
           <Button
             variant="ghost"
             size="icon"
             onClick={onShareNote}
             disabled={!canChatAccess || isSending}
-            title="Share note or document"
+            title="Share resources (notes, documents, recordings)"
           >
             <StickyNote className="h-5 w-5" />
           </Button>

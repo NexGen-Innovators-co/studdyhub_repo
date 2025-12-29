@@ -1,11 +1,13 @@
 // NotesList.tsx
 import React, { useRef, useEffect, useState } from 'react';
-import { Trash2, X, Edit, Save, X as CloseIcon, RefreshCw, Search } from 'lucide-react';
+import { Trash2, X, Edit, Save, X as CloseIcon, RefreshCw, Search, CheckSquare, Square, Podcast } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Note, NoteCategory } from '../../../types/Note';
 import { formatDate, getCategoryColor } from '../../classRecordings/utils/helpers';
 import { Input } from '../../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { PodcastButton } from '../../dashboard/PodcastButton';
+import { Checkbox } from '../../ui/checkbox';
 
 interface NotesListProps {
   notes: Note[] | null; // Allow notes to be null
@@ -51,6 +53,9 @@ export const NotesList: React.FC<NotesListProps> = ({
   const [hasInitialNotes, setHasInitialNotes] = useState(false);
   // Track refresh loading state
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Track selected notes for podcast generation
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [showSelection, setShowSelection] = useState(false);
 
   // Reset hasInitialNotes when notes change
   useEffect(() => {
@@ -171,6 +176,23 @@ export const NotesList: React.FC<NotesListProps> = ({
     }
   };
 
+  // Toggle note selection for podcast
+  const toggleNoteSelection = (noteId: string) => {
+    setSelectedNoteIds(prev => 
+      prev.includes(noteId) 
+        ? prev.filter(id => id !== noteId)
+        : [...prev, noteId]
+    );
+  };
+
+  // Toggle selection mode
+  const toggleSelectionMode = () => {
+    setShowSelection(!showSelection);
+    if (showSelection) {
+      setSelectedNoteIds([]); // Clear selections when exiting selection mode
+    }
+  };
+
   // Handle null notes by providing default empty array
   const safeNotes = notes || [];
 
@@ -226,6 +248,30 @@ export const NotesList: React.FC<NotesListProps> = ({
             </Button>
           )}
         </div>
+
+        {/* Podcast and Selection Controls */}
+        {!showLoading && filteredNotes.length > 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            <Button
+              variant={showSelection ? "default" : "outline"}
+              size="sm"
+              onClick={toggleSelectionMode}
+              className="h-7 text-xs flex items-center gap-1.5"
+            >
+              {showSelection ? <CheckSquare className="h-3 w-3" /> : <Square className="h-3 w-3" />}
+              {showSelection ? `Selected (${selectedNoteIds.length})` : 'Select'}
+            </Button>
+            
+            {showSelection && selectedNoteIds.length > 0 && (
+              <PodcastButton 
+                selectedNoteIds={selectedNoteIds}
+                variant="default"
+                size="sm"
+                className="h-7 text-xs"
+              />
+            )}
+          </div>
+        )}
 
         {/* Refresh loading indicator */}
         {isRefreshing && (
@@ -308,9 +354,26 @@ export const NotesList: React.FC<NotesListProps> = ({
                       ? 'bg-yellow-50 border-l-yellow-500 dark:bg-yellow-950 dark:border-l-yellow-700'
                       : ''
                     }`}
-                  onClick={() => handleNoteSelect(note)}
+                  onClick={() => !showSelection && handleNoteSelect(note)}
                 >
                   <div className="flex items-start justify-between mb-2 gap-2">
+                    {/* Selection checkbox */}
+                    {showSelection && (
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleNoteSelection(note.id);
+                        }}
+                        className="flex items-center justify-center h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0"
+                      >
+                        <Checkbox 
+                          checked={selectedNoteIds.includes(note.id)}
+                          onCheckedChange={() => toggleNoteSelection(note.id)}
+                          className="h-4 w-4"
+                        />
+                      </div>
+                    )}
+                    
                     {editingNoteId === note.id ? (
                       <div className="flex-1 min-w-0 space-y-2">
                         <Input

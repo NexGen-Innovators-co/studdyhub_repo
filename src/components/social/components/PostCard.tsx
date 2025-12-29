@@ -36,9 +36,10 @@ import {
 import { toast } from 'sonner';
 import { PostCardProps } from '../types/social';
 import { CommentSection } from './CommentSection';
-import { getTimeAgo } from '../utils/postUtils';
+import { getTimeAgo, removeHashtagsFromContent, renderContentWithClickableLinks } from '../utils/postUtils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../ui/dialog';
 import { SocialPostWithDetails } from '@/integrations/supabase/socialTypes';
+import { ReportDialog } from './ReportDialog';
 import {
   FaWhatsapp,
   FaFacebook,
@@ -49,6 +50,7 @@ import {
   FaEnvelope
 } from 'react-icons/fa'; // Import react-icons for social SVGs
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PostCardWithViewTrackingProps extends PostCardProps {
   onPostView?: (postId: string) => void;
@@ -296,21 +298,42 @@ const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFu
 MediaDisplay.displayName = 'MediaDisplay';
 
 // Action Button
-const ActionButton = ({ icon: Icon, label, count, active, activeColor, onClick }: any) => (
-  <button
-    onClick={(e) => { e.stopPropagation(); onClick(); }}
-    className={`flex items-center space-x-1.5 group transition-colors duration-200 ${active ? activeColor : 'text-slate-500 dark:text-slate-400 hover:text-blue-500'
-      }`}
-  >
-    <div className={`p-2 rounded-full transition-colors ${active ? 'bg-opacity-10' : 'group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20'
-      } ${active ? activeColor.replace('text-', 'bg-') : ''}`}>
-      <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
-    </div>
-    <span className={`text-sm font-medium ${active ? '' : 'group-hover:text-blue-500'}`}>
-      {count > 0 ? count : label}
-    </span>
-  </button>
-);
+const ActionButton = ({ icon: Icon, label, count, active, activeColor, onClick, isLoading, isLikeButton }: any) => {
+  const [animate, setAnimate] = React.useState(false);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isLoading) return;
+    
+    if (isLikeButton && !active) {
+      setAnimate(true);
+      setTimeout(() => setAnimate(false), 600);
+    }
+    
+    onClick();
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={isLoading}
+      className={`flex items-center space-x-1.5 group transition-all duration-200 ripple-effect ${active ? activeColor : 'text-slate-500 dark:text-slate-400 hover:text-blue-500'
+        } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+    >
+      <div className={`p-2 rounded-full transition-all duration-200 ${active ? 'bg-opacity-10' : 'group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20'
+        } ${active ? activeColor.replace('text-', 'bg-') : ''}`}>
+        {isLoading ? (
+          <div className="animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full" />
+        ) : (
+          <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''} ${animate ? 'heart-beat' : ''} transition-transform`} />
+        )}
+      </div>
+      <span className={`text-sm font-medium ${active ? '' : 'group-hover:text-blue-500'}`}>
+        {count > 0 ? count : label}
+      </span>
+    </button>
+  );
+};
 
 // --- MAIN POSTCARD COMPONENT ---
 export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
@@ -339,11 +362,34 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(post.content || '');
     const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
+    const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+    const [isLiking, setIsLiking] = useState(false);
+    const [isBookmarking, setIsBookmarking] = useState(false);
+    const [isSharing, setIsSharing] = useState(false);
+    const [isSubmittingComment, setIsSubmittingComment] = useState(false);
     const isOwnPost = currentUser?.id === post.author_id;
-    const isLongContent = post.content && post.content.length > 280;
+    const cleanedContent = removeHashtagsFromContent(post.content || '');
+    const isLongContent = cleanedContent.length > 280;
 
-    const handleLike = () => onLike(post.id, post.is_liked || false);
-    const handleBookmark = () => onBookmark(post.id, post.is_bookmarked || false);
+    const handleLike = async () => {
+      if (isLiking) return;
+      setIsLiking(true);
+      try {
+        // Ensure onLike returns a Promise
+        await Promise.resolve(onLike(post.id, post.is_liked || false));
+      } finally {
+        setTimeout(() => setIsLiking(false), 300);
+      }
+    };
+    const handleBookmark = async () => {
+      if (isBookmarking) return;
+      setIsBookmarking(true);
+      try {
+        await onBookmark(post.id, post.is_bookmarked || false);
+      } finally {
+        setTimeout(() => setIsBookmarking(false), 300);
+      }
+    };
     const handleCopyLink = () => {
       navigator.clipboard.writeText(`${window.location.origin}/social/post/${post.id}`);
       toast.success("Link copied!");
@@ -390,13 +436,90 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
       };
 
       const platforms = [
-        { name: 'WhatsApp', icon: <FaWhatsapp className="h-5 w-5 text-green-600" />, url: `https://wa.me/?text=${encodeURIComponent(shareUrl)}` },
-        { name: 'Facebook', icon: <FaFacebook className="h-5 w-5 text-blue-600" />, url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}` },
-        { name: 'Twitter', icon: <FaTwitter className="h-5 w-5 text-blue-400" />, url: `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}` },
-        { name: 'LinkedIn', icon: <FaLinkedin className="h-5 w-5 text-blue-700" />, url: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(shareUrl)}` },
-        { name: 'Reddit', icon: <FaReddit className="h-5 w-5 text-orange-600" />, url: `https://reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}` },
-        { name: 'Telegram', icon: <FaTelegram className="h-5 w-5 text-blue-500" />, url: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}` },
-        { name: 'Email', icon: <FaEnvelope className="h-5 w-5 text-gray-600" />, url: `mailto:?subject=${encodeURIComponent(shareText)}&body=${encodeURIComponent(shareUrl)}` },
+        {
+          name: 'WhatsApp',
+          icon: <FaWhatsapp className="h-5 w-5 text-green-600" />,
+          url: (() => {
+            try {
+              return `https://wa.me/?text=${encodeURIComponent(shareUrl)}`;
+            } catch (e) {
+              console.error('encodeURIComponent error (WhatsApp):', shareUrl, e);
+              return 'https://wa.me/?text=';
+            }
+          })()
+        },
+        {
+          name: 'Facebook',
+          icon: <FaFacebook className="h-5 w-5 text-blue-600" />,
+          url: (() => {
+            try {
+              return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+            } catch (e) {
+              console.error('encodeURIComponent error (Facebook):', shareUrl, e);
+              return 'https://www.facebook.com/sharer/sharer.php?u=';
+            }
+          })()
+        },
+        {
+          name: 'Twitter',
+          icon: <FaTwitter className="h-5 w-5 text-blue-400" />,
+          url: (() => {
+            try {
+              return `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
+            } catch (e) {
+              console.error('encodeURIComponent error (Twitter):', shareUrl, shareText, e);
+              return 'https://twitter.com/intent/tweet?url=&text=';
+            }
+          })()
+        },
+        {
+          name: 'LinkedIn',
+          icon: <FaLinkedin className="h-5 w-5 text-blue-700" />,
+          url: (() => {
+            try {
+              return `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(shareUrl)}`;
+            } catch (e) {
+              console.error('encodeURIComponent error (LinkedIn):', shareUrl, e);
+              return 'https://www.linkedin.com/shareArticle?mini=true&url=';
+            }
+          })()
+        },
+        {
+          name: 'Reddit',
+          icon: <FaReddit className="h-5 w-5 text-orange-600" />,
+          url: (() => {
+            try {
+              return `https://reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`;
+            } catch (e) {
+              console.error('encodeURIComponent error (Reddit):', shareUrl, shareText, e);
+              return 'https://reddit.com/submit?url=&title=';
+            }
+          })()
+        },
+        {
+          name: 'Telegram',
+          icon: <FaTelegram className="h-5 w-5 text-blue-500" />,
+          url: (() => {
+            try {
+              return `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
+            } catch (e) {
+              console.error('encodeURIComponent error (Telegram):', shareUrl, shareText, e);
+              return 'https://t.me/share/url?url=&text=';
+            }
+          })()
+        },
+        {
+          name: 'Email',
+          icon: <FaEnvelope className="h-5 w-5 text-gray-600" />,
+          url: (() => {
+            try {
+              return `mailto:?subject=${encodeURIComponent(shareText)}&body=${encodeURIComponent(shareUrl)}`;
+            } catch (e) {
+              console.error('encodeURIComponent error (Email):', shareText, shareUrl, e);
+              return 'mailto:?subject=&body=';
+            }
+          })()
+        },
 
       ];
 
@@ -574,7 +697,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                       </>
                     )}
                     {!isOwnPost && (
-                      <DropdownMenuItem onClick={() => toast.info("Reported")}><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setIsReportDialogOpen(true)}><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -597,7 +720,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                 <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 px-4 whitespace-pre-wrap break-words">
                   {isLongContent && !isContentExpanded ? (
                     <>
-                      {post.content.slice(0, 280)}...
+                      {renderContentWithClickableLinks(cleanedContent.slice(0, 280))}...
                       <button
                         onClick={(e) => { e.stopPropagation(); setIsContentExpanded(true); }}
                         className="text-blue-600 hover:underline ml-1 font-medium"
@@ -606,7 +729,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                       </button>
                     </>
                   ) : (
-                    post.content
+                    renderContentWithClickableLinks(cleanedContent)
                   )}
                 </div>
               )}
@@ -633,6 +756,8 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                   active={post.is_liked}
                   activeColor="text-pink-600"
                   onClick={handleLike}
+                  isLoading={isLiking}
+                  isLikeButton={true}
                 />
 
                 <ActionButton
@@ -646,6 +771,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                   label="Share"
                   count={post.shares_count}
                   onClick={handleShare}
+                  isLoading={isSharing}
                 />
 
                 <ActionButton
@@ -654,6 +780,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                   active={post.is_bookmarked}
                   activeColor="text-blue-600"
                   onClick={handleBookmark}
+                  isLoading={isBookmarking}
                 />
 
                 {/* Views indicator */}
@@ -759,7 +886,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
 
                 {/* Post Content */}
                 <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 mb-4">
-                  {post.content}
+                  {renderContentWithClickableLinks(cleanedContent)}
                 </div>
 
                 {/* Hashtags */}
@@ -786,6 +913,8 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                     active={post.is_liked}
                     activeColor="text-pink-600"
                     onClick={handleLike}
+                    isLoading={isLiking}
+                    isLikeButton={true}
                   />
 
                   <ActionButton
@@ -798,6 +927,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                     icon={Share2}
                     label="Share"
                     onClick={handleShare}
+                    isLoading={isSharing}
                   />
 
                   <ActionButton
@@ -806,6 +936,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                     active={post.is_bookmarked}
                     activeColor="text-blue-600"
                     onClick={handleBookmark}
+                    isLoading={isBookmarking}
                   />
                 </div>
 
@@ -820,20 +951,43 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                     value={newComment}
                     onChange={(e) => onCommentChange(e.target.value)}
                     className="flex-1 min-h-[40px] resize-none"
+                    disabled={isSubmittingComment}
                   />
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={onSubmitComment}
-                    className="text-blue-600"
+                    onClick={async () => {
+                      if (isSubmittingComment || !newComment.trim()) return;
+                      setIsSubmittingComment(true);
+                      try {
+                        await onSubmitComment();
+                      } finally {
+                        setTimeout(() => setIsSubmittingComment(false), 300);
+                      }
+                    }}
+                    disabled={isSubmittingComment || !newComment.trim()}
+                    className={`text-blue-600 transition-all ${isSubmittingComment ? 'pulse-scale' : ''}`}
                   >
-                    <Send className="h-5 w-5" />
+                    {isSubmittingComment ? (
+                      <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                    ) : (
+                      <Send className="h-5 w-5" />
+                    )}
                   </Button>
                 </div>
               </div>
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Report Dialog */}
+        <ReportDialog
+          isOpen={isReportDialogOpen}
+          onClose={() => setIsReportDialogOpen(false)}
+          postId={post.id}
+          reportedUserId={post.author_id}
+          reportType="post"
+        />
 
       </Card>
     );

@@ -13,11 +13,12 @@ import { ClassRecording, ScheduleItem, Message, Quiz } from '../../types/Class';
 import { Document, UserProfile } from '../../types/Document';
 import ErrorBoundary from './ErrorBoundary';
 import { toast } from 'sonner';
-import { SocialFeed } from '../social/SocialFeed';
+import { SocialFeed, SocialFeedHandle } from '../social/SocialFeed';
 import { Quizzes } from '../quizzes/Quizzes';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChatSessionsListMobile } from '../aiChat/Components/ChatSessionsListMobile';
 import { NotificationsPage } from '../notifications/NotificationsPage';
+import { PodcastsPage } from '../podcasts/PodcastsPage';
 
 
 interface ChatSession {
@@ -30,9 +31,11 @@ interface ChatSession {
   message_count?: number;
 }
 
+import { RefObject } from 'react';
+
 interface TabContentProps {
   socialGroupId?: string; // Added
-  activeTab: 'dashboard' | 'notes' | 'recordings' | 'quizzes' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social';
+  activeTab: 'dashboard' | 'notes' | 'recordings' | 'quizzes' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social' | 'podcasts';
   activeSocialTab?: string;
   socialPostId?: string;
   searchQuery?: string;
@@ -80,7 +83,8 @@ interface TabContentProps {
       content: string | null;
       processing_status: string;
       processing_error: string | null;
-    }>
+    }>,
+    enableStreaming?: boolean  // NEW: Streaming mode flag
   ) => Promise<void>;
 
   // onDocumentUploaded: (document: Document) => Promise<void>;
@@ -125,9 +129,12 @@ interface TabContentProps {
   onRefresh?: () => void;
   refreshNotes?: () => Promise<void>;
   navigateToNote: (noteId: string | null) => void; // Fix the syntax error
+  setSocialFeedRef?: (ref: RefObject<SocialFeedHandle>) => void;
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
+  // Shared ref for SocialFeed, available in both social and podcasts tabs
+  const socialFeedRef = useRef<SocialFeedHandle>(null);
   const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory, activeSocialTab, socialPostId } = props;
   const navigate = useNavigate();
   const location = useLocation();
@@ -275,7 +282,8 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         imageMimeType,
         imageDataBase64,
         null, // aiMessageIdToUpdate
-        attachedFiles
+        attachedFiles,
+        localStorage.getItem('ai-streaming-mode') === 'true' // Read streaming mode from localStorage
       );
     },
     onMessageUpdate: props.onMessageUpdate,
@@ -535,20 +543,53 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       );
 
     // In TabContent.tsx
-    case 'social':
-      return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-          <ErrorBoundary>
-            <SocialFeed
-              activeTab={props.activeSocialTab}
-              postId={props.socialPostId}
-              searchQuery={props.socialSearchQuery}
-              onSearchChange={props.onSocialSearchChange}
-            />
-          </ErrorBoundary>
-        </div>
-      );
+        // --- SocialFeed ref shared for both social and podcasts tabs ---
+        // Define socialFeedRef at the top of the component (not inside the switch)
+        // (This patch assumes you will move this line to the top of the component)
+        // const socialFeedRef = useRef<SocialFeedHandle>(null);
 
+        case 'social': {
+          if (props.setSocialFeedRef) props.setSocialFeedRef(socialFeedRef);
+          return (
+            <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
+              <ErrorBoundary>
+                <SocialFeed
+                  ref={socialFeedRef}
+                  activeTab={props.activeSocialTab}
+                  postId={props.socialPostId}
+                  searchQuery={props.socialSearchQuery}
+                  onSearchChange={props.onSocialSearchChange}
+                />
+              </ErrorBoundary>
+            </div>
+          );
+        }
+        case 'podcasts':
+          return (
+            <div className="flex-1 overflow-hidden">
+              <ErrorBoundary>
+                <PodcastsPage 
+                  searchQuery={props.searchQuery}
+                  onGoLive={() => {
+                    // Trigger the internal go live handler
+                    if ((window as any).__podcastGoLive) {
+                      (window as any).__podcastGoLive();
+                    }
+                  }}
+                  onCreatePodcast={() => {
+                    // Trigger the internal create podcast handler
+                    if ((window as any).__podcastCreate) {
+                      (window as any).__podcastCreate();
+                    }
+                  }}
+                  socialFeedRef={socialFeedRef}
+                  onNavigateToTab={props.onNavigateToTab}
+                />
+              </ErrorBoundary>
+            </div>
+          );
+
+    
     default:
       return null;
   }

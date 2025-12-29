@@ -31,6 +31,7 @@ import { UserProfile } from './components/UserProfile';
 import { GroupsSection } from './components/GroupsSection';
 import { NotificationsSection, SocialNotificationItem } from './components/NotificationsSection';
 import { GroupDetailPage } from './components/GroupDetail';
+import { ContentModerationFeedback, ContentGuidelines } from './components/ContentModerationFeedback';
 
 
 import { ChatList } from './components/ChatList';
@@ -53,12 +54,14 @@ interface SocialFeedProps {
   onSearchChange?: (query: string) => void;
 }
 
-export const SocialFeed: React.FC<SocialFeedProps> = ({ 
-  activeTab: initialActiveTab, 
-  postId,
-  searchQuery: externalSearchQuery,
-  onSearchChange
-}) => {
+import { useImperativeHandle, forwardRef } from 'react';
+
+export interface SocialFeedHandle {
+  openCreatePostDialog: (options: { content: string; coverUrl?: string }) => void;
+}
+
+export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
+  ({ activeTab: initialActiveTab, postId, searchQuery: externalSearchQuery, onSearchChange }, ref) => {
   // State management
   const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'groups' | 'profile' | 'notifications' | 'userProfile'>(initialActiveTab as any || 'feed');
   const [internalSearch, setInternalSearch] = useState('');
@@ -89,6 +92,28 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
   const [selectedPrivacy, setSelectedPrivacy] = useState<Privacy>('public');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
+  // Expose openCreatePostDialog to parent via ref
+  useImperativeHandle(ref, () => ({
+    openCreatePostDialog: async ({ content, coverUrl }) => {
+      setNewPostContent(content);
+      setSelectedPrivacy('public');
+      if (coverUrl) {
+        try {
+          const response = await fetch(coverUrl);
+          const blob = await response.blob();
+          const fileName = coverUrl.split('/').pop() || 'cover.jpg';
+          const file = new File([blob], fileName, { type: blob.type });
+          setSelectedFiles([file]);
+        } catch (e) {
+          setSelectedFiles([]);
+        }
+      } else {
+        setSelectedFiles([]);
+      }
+      setShowPostDialog(true);
+    }
+  }), []);
+
   // Refs
   const feedObserverRef = useRef<HTMLDivElement>(null);
   const trendingObserverRef = useRef<HTMLDivElement>(null);
@@ -108,6 +133,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
   const [viewedUserId, setViewedUserId] = useState<string | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);        // > 800px
   const [isScrolledDeep, setIsScrolledDeep] = useState(false); // > 1200px
+  
+  // State for user resources
+  const [userNotes, setUserNotes] = useState<any[]>([]);
+  const [userDocuments, setUserDocuments] = useState<any[]>([]);
+  const [userClassRecordings, setUserClassRecordings] = useState<any[]>([]);
 
   // Add this helper once (outside component or inside but memoized)
   const getScrollContainer = useCallback(() => {
@@ -126,6 +156,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
           full_name: user.user_metadata?.full_name || user.email?.split('@')[0],
           avatar_url: user.user_metadata?.avatar_url || ''
         });
+        
+        // Fetch user resources for sharing
+        const [notesResult, documentsResult, recordingsResult] = await Promise.all([
+          supabase.from('notes').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
+          supabase.from('documents').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
+          supabase.from('class_recordings').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)
+        ]);
+        
+        if (notesResult.data) setUserNotes(notesResult.data);
+        if (documentsResult.data) setUserDocuments(documentsResult.data);
+        if (recordingsResult.data) setUserClassRecordings(recordingsResult.data);
       }
     };
     fetchUserProfile();
@@ -193,13 +234,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
     groupId?: string;
     userId?: string;
   }>();
-  const handleShareResource = async (resourceId: string, resourceType: 'note' | 'document'): Promise<boolean> => {
+  const handleShareResource = async (resourceId: string, resourceType: 'note' | 'document' | 'class_recording', message?: string): Promise<boolean> => {
     if (!activeChatSessionId) {
       toast.error("No active chat session to share resource to.");
       return Promise.resolve(false);
     }
     sharePost(postToShare); // Increment share count
-    const result = await sendMessageWithResource(activeChatSessionId, "", resourceId, resourceType);
+    const result = await sendMessageWithResource(activeChatSessionId, message || "", resourceId, resourceType);
     if (result && addOptimisticMessage) {
       addOptimisticMessage(result);
     }
@@ -208,7 +249,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
   const handleChatSendMessageWithResource = async (
     content: string,
     resourceId: string,
-    resourceType: 'note' | 'document' | 'post'
+    resourceType: 'note' | 'document' | 'post' | 'class_recording'
   ): Promise<boolean> => {
     if (!activeChatSessionId) return false;
     const result = await sendMessageWithResource(activeChatSessionId, content, resourceId, resourceType);
@@ -447,11 +488,18 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
 
       const observer = new IntersectionObserver(
         (entries) => {
-          if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isRefreshing) {
-            loadMore();
-          }
+          entries.forEach(entry => {
+            // Check if element is actually visible in viewport
+            if (entry.isIntersecting && entry.intersectionRatio > 0 && hasMore && !isLoadingMore && !isRefreshing) {
+              loadMore();
+            }
+          });
         },
-        { threshold: 0.1, rootMargin: '100px' }
+        { 
+          threshold: [0, 0.1, 0.5], // Multiple thresholds for better detection
+          rootMargin: '200px', // Increased margin to trigger earlier
+          root: null // Use viewport as root
+        }
       );
 
       observer.observe(ref.current);
@@ -481,6 +529,61 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
       observers.forEach(observer => observer.disconnect());
     };
   }, [activeTab, isLoading, isRefreshing, isLoadingMorePosts, isLoadingUserPosts]);
+
+  // Backup: Scroll-based load more trigger (in case IntersectionObserver fails)
+  useEffect(() => {
+    const container = getScrollContainer();
+    if (!container || isLoading || isRefreshing) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      const scrollHeight = container.scrollHeight;
+      const clientHeight = container.clientHeight;
+      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+
+      // Trigger load more when scrolled 85% down
+      if (scrollPercentage > 0.85) {
+        switch (activeTab) {
+          case 'feed':
+            if (hasMorePosts && !isLoadingMorePosts) loadMorePosts();
+            break;
+          case 'trending':
+            if (hasMoreTrendingPosts && !isLoadingMorePosts) loadMoreTrendingPosts();
+            break;
+          case 'profile':
+            if (hasMoreUserPosts && !isLoadingUserPosts) loadMoreUserPosts();
+            break;
+        }
+      }
+    };
+
+    // Debounce scroll handler
+    let scrollTimeout: NodeJS.Timeout;
+    const debouncedScroll = () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(handleScroll, 100);
+    };
+
+    container.addEventListener('scroll', debouncedScroll);
+    return () => {
+      clearTimeout(scrollTimeout);
+      container.removeEventListener('scroll', debouncedScroll);
+    };
+  }, [
+    activeTab, 
+    isLoading, 
+    isRefreshing, 
+    hasMorePosts, 
+    isLoadingMorePosts, 
+    hasMoreTrendingPosts, 
+    hasMoreUserPosts, 
+    isLoadingUserPosts,
+    loadMorePosts,
+    loadMoreTrendingPosts,
+    loadMoreUserPosts,
+    getScrollContainer
+  ]);
+
   // Replace the existing useEffect that sets activeTab from route
   useEffect(() => {
     if (routeUserId) {
@@ -520,15 +623,32 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
     }
   }, [routeTab, initialActiveTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Moderation state
+  const [moderationResult, setModerationResult] = useState<any>(null);
+  const [showGuidelines, setShowGuidelines] = useState(false);
+
   // Handlers
   const handleCreatePost = async () => {
-    const success = await createPost(newPostContent, selectedPrivacy, selectedFiles);
-    if (success) {
+    const result = await createPost(newPostContent, selectedPrivacy, selectedFiles);
+    
+    // Handle moderation rejection
+    if (typeof result === 'object' && result.moderation && !result.moderation.approved) {
+      setModerationResult(result.moderation);
+      // Keep the dialog open so user can see feedback and revise
+      setShowPostDialog(false); // Close the create dialog
+      toast.error('Content needs improvement', {
+        description: 'Your post doesn\'t meet our educational guidelines. Please review the feedback below.',
+        duration: 6000,
+      });
+      return;
+    }
+    
+    if (result === true) {
       setNewPostContent('');
       setSelectedFiles([]);
       setShowPostDialog(false);
-
-      toast.success('Post published!');
+      setModerationResult(null);
+      toast.success('Post published successfully! 🎉');
     }
   };
 
@@ -581,8 +701,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
     const searchLower = effectiveSearch.toLowerCase();
     return groups.filter((group) =>
       group.name?.toLowerCase().includes(searchLower) ||
-      group.description?.toLowerCase().includes(searchLower) ||
-      group.tags?.some((t: string) => t?.toLowerCase().includes(searchLower))
+      group.description?.toLowerCase().includes(searchLower) 
+      // ||
+      // group.tags?.some((t: string) => t?.toLowerCase().includes(searchLower))
     );
   }, [groups, effectiveSearch]);
 
@@ -865,12 +986,12 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
       const title = getNotificationTitle(notif).toLowerCase();
       const message = getNotificationMessage(notif).toLowerCase();
       const actor = notif.actor?.display_name?.toLowerCase() || '';
-      const postTitle = notif.post?.title?.toLowerCase() || '';
+      const postContent = notif.post?.content?.toLowerCase() || '';
       return (
         title.includes(searchLower) ||
         message.includes(searchLower) ||
         actor.includes(searchLower) ||
-        postTitle.includes(searchLower)
+        postContent.includes(searchLower)
       );
     });
   }, [notifications, effectiveSearch]);
@@ -923,7 +1044,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
                   </div>
                 </div>
               </div>
-              {activeTab !== 'notifications' && (
+              {/* {activeTab !== 'notifications' && (
                 <NotificationsSection
                   notifications={adaptNotifications(filteredNotifications)}
                   unreadCount={unreadCount}
@@ -935,7 +1056,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
                   fetchNotifications={fetchNotifications
                   }
                 />
-              )}
+              )} */}
             </div>
           </div>
           <main
@@ -1012,6 +1133,55 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
               ) : (
                 <Tabs value={activeTab} className="space-y-1 ">
                   <TabsContent value="feed" className="outline-none space-y-1 lg:space-y-4">
+                    {/* Moderation Feedback */}
+                    {moderationResult && !moderationResult.approved && (
+                      <div className="mb-4">
+                        <ContentModerationFeedback
+                          result={moderationResult}
+                          onRevise={() => {
+                            setModerationResult(null);
+                            setShowPostDialog(true);
+                          }}
+                          onAppeal={() => {
+                            toast.info('Appeal feature coming soon!');
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Educational Guidelines Button */}
+                    {!showGuidelines && (
+                      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border-blue-200 dark:border-blue-800">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Sparkles className="h-5 w-5 text-blue-600" />
+                              <div>
+                                <h4 className="font-semibold text-sm">Educational Content Platform</h4>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">
+                                  Share knowledge, study resources, and learning experiences
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowGuidelines(!showGuidelines)}
+                            >
+                              View Guidelines
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Guidelines Modal */}
+                    {showGuidelines && (
+                      <div className="mb-4">
+                        <ContentGuidelines onClose={() => setShowGuidelines(false)} />
+                      </div>
+                    )}
+
                     <CreatePostDialog
                       isOpen={showPostDialog}
                       onOpenChange={setShowPostDialog}
@@ -1027,7 +1197,23 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
                     />
 
 
-                    {posts.length === 0 ? <LoadingSpinner /> : (
+                    {isLoading && posts.length === 0 ? (
+                      <LoadingSpinner />
+                    ) : posts.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                          <MessageCircle className="w-8 h-8 text-primary" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">No posts yet</h3>
+                        <p className="text-slate-600 mb-6 max-w-sm">
+                          Be the first to share something educational! Start a discussion, ask a question, or share your knowledge.
+                        </p>
+                        <Button onClick={() => setShowPostDialog(true)} className="gap-2">
+                          <Plus className="w-4 h-4" />
+                          Create First Post
+                        </Button>
+                      </div>
+                    ) : (
                       <>
                         {renderPostsWithStrips(posts, isLoading)}
                         <div ref={feedObserverRef} className="h-10" />
@@ -1037,13 +1223,27 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
                   </TabsContent>
 
                   <TabsContent value="trending" className="outline-none space-y-1 lg:space-y-4">
-                    {trendingPosts.length === 0 ? <LoadingSpinner /> : (
+                    {isLoading && trendingPosts.length === 0 ? (
+                      <LoadingSpinner />
+                    ) : trendingPosts.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                        <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center mb-4">
+                          <TrendingUp className="w-8 h-8 text-orange-600" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">No trending posts yet</h3>
+                        <p className="text-slate-600 mb-6 max-w-sm">
+                          Trending posts appear here based on engagement. Start creating and interacting with posts to see them trend!
+                        </p>
+                        <Button onClick={() => setShowPostDialog(true)} variant="outline" className="gap-2">
+                          <Plus className="w-4 h-4" />
+                          Create Post
+                        </Button>
+                      </div>
+                    ) : (
                       <>
                         {renderPostsWithStrips(trendingPosts, isLoading)}
                         <div ref={trendingObserverRef} className="h-10" />
                         {isLoadingMorePosts && <LoadingSpinner size="sm" />}
-
-
                       </>
                     )}
                   </TabsContent>
@@ -1207,7 +1407,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
                   </div>
 
                   {/* Trending Widget */}
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                  {/* <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
                     <div className="p-4 border-b border-slate-100 dark:border-slate-800">
                       <h3 className="font-bold text-lg flex items-center gap-2">
                         <Sparkles className="h-4 w-4 text-yellow-500" /> Trends for you
@@ -1225,7 +1425,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
                     <div className="p-3 text-center">
                       <Button variant="ghost" className="text-blue-600 text-sm w-full" onClick={() => handleTabChange('trending')}>Show more</Button>
                     </div>
-                  </div>
+                  </div> */}
                 </>
               )}
 
@@ -1254,7 +1454,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
                     </div>
                   </div>
                   {/* Trending Stats Widget */}
-                  <div className="bg-gradient-to-br from-blue-50 to-pink-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-blue-100 dark:border-slate-700 overflow-hidden">
+                  {/* <div className="bg-gradient-to-br from-blue-50 to-pink-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl shadow-sm border border-blue-100 dark:border-slate-700 overflow-hidden">
                     <div className="p-4">
                       <h3 className="font-bold text-lg mb-3 flex items-center gap-2 text-blue-900 dark:text-blue-100">
                         <TrendingUp className="h-5 w-5" /> Trending Now
@@ -1270,10 +1470,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Top Hashtags Widget */}
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                  {/* <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
                     <div className="p-4 border-b border-slate-100 dark:border-slate-800">
                       <h3 className="font-bold text-lg">Top Hashtags</h3>
                     </div>
@@ -1291,7 +1491,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </div> */}
                 </>
               )}
 
@@ -1419,9 +1619,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
           </div>
         </div>
 
-        {/* MOBILE BOTTOM NAV */}
-
-
         {/* Floating Action Buttons: Refresh + Scroll-to-top */}
 
         <div className="fixed bottom-16 right-2 flex flex-col gap-3 z-40 pointer-events-none">
@@ -1536,9 +1733,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
           isOpen={showResourceSharingModal}
           onClose={() => setShowResourceSharingModal(false)}
           onShareResource={handleShareResource}
-          notes={[]} // Pass actual notes from parent
-          documents={[]} // Pass actual documents from parent
+          notes={userNotes}
+          documents={userDocuments}
+          classRecordings={userClassRecordings}
           isSharing={isSendingMessage}
+          isLoading={false}
+          hasMoreNotes={false}
+          hasMoreDocuments={false}
+          hasMoreRecordings={false}
         />
       )}
 
@@ -1557,4 +1759,4 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({
       />
     </div>
   );
-};
+});

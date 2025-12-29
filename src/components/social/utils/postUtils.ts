@@ -1,4 +1,5 @@
 import { SocialPostWithDetails } from '../../../integrations/supabase/socialTypes';
+import React from 'react';
 
 // Base URL for the application, configurable via environment variable
 const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://studdyhub.vercel.app.com';
@@ -14,8 +15,42 @@ export const extractHashtags = (content: string): string[] => {
   return [...new Set(hashtags)];
 };
 
+export const extractLinks = (content: string): string[] => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const links = content.match(urlRegex) || [];
+  return [...new Set(links)];
+};
+
+export const removeHashtagsFromContent = (content: string): string => {
+  // Remove hashtags but keep the content structure
+  return content.replace(/#\w+/g, '').replace(/\s+/g, ' ').trim();
+};
+
 export const formatPostContent = (content: string): string => {
   return content.trim();
+};
+
+export const renderContentWithClickableLinks = (content: string): React.ReactNode => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = content.split(urlRegex);
+  
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      return React.createElement(
+        'a',
+        {
+          key: index,
+          href: part,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          className: 'text-blue-600 dark:text-blue-400 hover:underline',
+          onClick: (e: React.MouseEvent) => e.stopPropagation()
+        },
+        part
+      );
+    }
+    return React.createElement('span', { key: index }, part);
+  });
 };
 
 export const validatePostContent = (content: string): boolean => {

@@ -3,6 +3,8 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
 import { TabContent } from '../components/layout/TabContent';
+import { useRef } from 'react';
+import { SocialFeedHandle } from '../components/social/SocialFeed';
 import { useAppContext } from '../hooks/useAppContext';
 import { useMessageHandlers } from '../hooks/useMessageHandlers';
 import BookPagesAnimation, { LoadingScreen } from '@/components/ui/bookloader';
@@ -159,6 +161,10 @@ const Index = () => {
         title: 'Social Learning | StuddyHub',
         description: 'Connect with other students, share notes, and collaborate',
       },
+      podcasts: {
+        title: 'AI Podcasts | StuddyHub',
+        description: 'Discover and create AI-powered podcast conversations from your study materials',
+      },
       settings: {
         title: 'Settings | StuddyHub',
         description: 'Customize your StuddyHub experience',
@@ -200,6 +206,18 @@ const Index = () => {
     socialPostId,
     socialGroupId,
     onOpenCreatePostDialog: () => navigate('/social?openCreate=true'),
+    onGoLive: () => {
+      if ((window as any).__podcastGoLive) {
+        (window as any).__podcastGoLive();
+      }
+    },
+    onCreatePodcast: () => {
+      if ((window as any).__podcastCreate) {
+        (window as any).__podcastCreate();
+      } else {
+        navigate('/chat');
+      }
+    },
     // Add error indicators
     hasDataErrors: Object.keys(dataErrors || {}).length > 0,
     currentTheme: currentTheme,
@@ -259,6 +277,9 @@ const Index = () => {
     currentTheme, handleThemeChange, userProfile, dataErrors, retryLoading,
   ]);
 
+  // SocialFeed ref for cross-tab post creation
+  const socialFeedRef = useRef<SocialFeedHandle>(null);
+
   // Enhanced tabContentProps with error handling and safe data access
   const tabContentProps = useMemo(() => ({
     activeTab: currentActiveTab as any,
@@ -282,6 +303,13 @@ const Index = () => {
     onNoteUpdate: appOperations.updateNote,
     onNoteDelete: appOperations.deleteNote,
     onAddRecording: appOperations.addRecording,
+    setSocialFeedRef: (ref: React.RefObject<SocialFeedHandle>) => {
+      // Only set if not already set
+      if (ref && ref !== socialFeedRef) {
+        socialFeedRef.current = ref.current;
+      }
+    },
+    socialFeedRef,
     onUpdateRecording: appOperations.updateRecording,
     onGenerateQuiz: appOperations.generateQuiz,
     onAddScheduleItem: appOperations.addScheduleItem,

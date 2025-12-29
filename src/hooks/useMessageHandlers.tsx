@@ -2,11 +2,12 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '../integrations/supabase/client';
 import { useAppContext } from '../hooks/useAppContext';
-import { Message, FileData, MessagePart } from '../types/Class';
+import { Message, FileData, MessagePart, ThinkingStep } from '../types/Class';
 import { Document as AppDocument } from '../types/Document';
 import { Note } from '../types/Note';
 import { v4 as uuidv4 } from 'uuid';
 import { estimateChatRequestTokens, TOKEN_LIMITS, formatTokenCount, truncateToTokenLimit } from '../utils/tokenCounter';
+import { useStreamingChat } from './useStreamingChat';
 
 export const useMessageHandlers = () => {
   const {
@@ -22,6 +23,8 @@ export const useMessageHandlers = () => {
     dispatch,
     selectedDocumentIds,
   } = useAppContext();
+
+  const { startStreaming, stopStreaming, streamingState, accumulatedDataRef } = useStreamingChat();
 
   const buildRichContext = useCallback((
     documentIdsToInclude: string[],
@@ -80,7 +83,8 @@ export const useMessageHandlers = () => {
     imageMimeType?: string,
     imageDataBase64?: string,
     aiMessageIdToUpdate: string | null = null,
-    attachedFiles?: FileData[]
+    attachedFiles?: FileData[],
+    enableStreaming?: boolean  // NEW: Enable streaming mode
   ) => {
     const hasTextContent = messageContent?.trim();
     const hasAttachments = (attachedDocumentIds && attachedDocumentIds.length > 0) ||
@@ -285,6 +289,8 @@ export const useMessageHandlers = () => {
         session_id: currentSessionId,
         has_been_displayed: false,
         isLoading: true, // Add loading flag
+        thinking_steps: [], // Initialize thinking steps array
+        isStreaming: enableStreaming || false, // Set streaming flag
       };
 
       // Add optimistic messages to UI immediately
@@ -301,9 +307,10 @@ export const useMessageHandlers = () => {
         });
       }
 
-      // Send the message to AI service
-      const { data, error } = await supabase.functions.invoke('gemini-chat', {
-        body: {
+      // Choose between streaming and regular response
+      if (enableStreaming) {
+        // === STREAMING MODE ===
+        await startStreaming({
           userId: currentUser.id,
           sessionId: currentSessionId,
           learningStyle: userProfile?.learning_style || 'visual',
@@ -321,8 +328,152 @@ export const useMessageHandlers = () => {
           imageUrl: imageUrl,
           imageMimeType: imageMimeType,
           aiMessageIdToUpdate: aiMessageIdToUpdate,
-        },
-      });
+          onThinkingStep: (step: ThinkingStep) => {
+            // Update the optimistic AI message with new thinking step
+            setChatMessages(prev => {
+              return prev.map(msg => {
+                if (msg.id === optimisticAiMessageId) {
+                  return {
+                    ...msg,
+                    thinking_steps: [...(msg.thinking_steps || []), step],
+                    isStreaming: true,
+                  };
+                }
+                return msg;
+              });
+            });
+          },
+          onContentChunk: (chunk: string) => {
+            // Append content chunk to the optimistic AI message
+            setChatMessages(prev => {
+              return prev.map(msg => {
+                if (msg.id === optimisticAiMessageId) {
+                  return {
+                    ...msg,
+                    content: msg.content + chunk,
+                    isStreaming: true,
+                    isLoading: false, // Remove loading indicator once content starts
+                  };
+                }
+                return msg;
+              });
+            });
+          },
+          onComplete: async (finalData: any) => {
+            // Fetch real messages from database using the IDs returned from backend
+            const userMessageId = finalData.userMessageId;
+            const aiMessageId = finalData.aiMessageId;
+
+            if (userMessageId && aiMessageId) {
+              // Fetch both messages from database
+              const { data: messages, error } = await supabase
+                .from('chat_messages')
+                .select('*')
+                .in('id', [userMessageId, aiMessageId])
+                .order('timestamp', { ascending: true });
+
+              if (!error && messages) {
+                // Replace optimistic messages with real database messages
+                setChatMessages(prev => {
+                  const withoutOptimistic = prev.filter(msg =>
+                    msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
+                  );
+                  return [...withoutOptimistic, ...messages];
+                });
+              } else {
+                console.error('Error fetching final messages:', error);
+                // Fallback: create messages from finalData
+                const realUserMessage: Message = {
+                  id: userMessageId,
+                  content: messageContent || '[Files attached]',
+                  role: 'user',
+                  timestamp: finalData.userMessageTimestamp || new Date().toISOString(),
+                  isError: false,
+                  attachedDocumentIds: finalAttachedDocumentIds,
+                  attachedNoteIds: finalAttachedNoteIds,
+                  session_id: currentSessionId,
+                  has_been_displayed: true,
+                  image_url: imageUrl,
+                  image_mime_type: imageMimeType,
+                  files_metadata: processedFiles.length > 0 ? JSON.stringify(processedFiles) : undefined,
+                };
+
+                const finalMessage: Message = {
+                  id: aiMessageId,
+                  content: finalData.response,
+                  role: 'assistant',
+                  timestamp: finalData.aiMessageTimestamp || new Date().toISOString(),
+                  isError: false,
+                  attachedDocumentIds: finalAttachedDocumentIds,
+                  attachedNoteIds: finalAttachedNoteIds,
+                  session_id: currentSessionId,
+                  has_been_displayed: false,
+                  thinking_steps: accumulatedDataRef.current?.thinkingSteps || [],
+                };
+                
+                setChatMessages(prev => {
+                  const withoutOptimistic = prev.filter(msg =>
+                    msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
+                  );
+                  return [...withoutOptimistic, realUserMessage, finalMessage];
+                });
+              }
+            } else {
+              console.error('Missing message IDs in finalData');
+            }
+
+            // Update the session title if provided
+            dispatch({
+              type: 'UPDATE_CHAT_SESSION',
+              payload: {
+                id: currentSessionId,
+                updates: {
+                  last_message_at: new Date().toISOString(),
+                  document_ids: [...new Set([...selectedDocumentIds, ...finalAttachedDocumentIds])],
+                }
+              }
+            });
+
+            dispatch({ type: 'SET_IS_SUBMITTING_USER_MESSAGE', payload: false });
+            dispatch({ type: 'SET_IS_AI_LOADING', payload: false });
+          },
+          onError: (error: string) => {
+            // Remove optimistic messages on error
+            setChatMessages(prev => {
+              return prev.filter(msg => !msg.id.startsWith('optimistic-'));
+            });
+
+            toast.error(`Streaming error: ${error}`);
+            dispatch({ type: 'SET_IS_SUBMITTING_USER_MESSAGE', payload: false });
+            dispatch({ type: 'SET_IS_AI_LOADING', payload: false });
+          },
+        });
+
+      } else {
+        // === REGULAR MODE (Non-streaming) ===
+        // Send the message to AI service
+        const { data, error } = await supabase.functions.invoke('gemini-chat', {
+          body: {
+            userId: currentUser.id,
+            sessionId: currentSessionId,
+            learningStyle: userProfile?.learning_style || 'visual',
+            learningPreferences: userProfile?.learning_preferences || {
+              explanation_style: 'detailed',
+              examples: false,
+              difficulty: 'intermediate',
+            },
+            chatHistory: chatHistoryForAI,
+            message: messageContent || '',
+            messageParts: currentMessageParts,
+            files: processedFiles,
+            attachedDocumentIds: finalAttachedDocumentIds,
+            attachedNoteIds: finalAttachedNoteIds,
+            imageUrl: imageUrl,
+            imageMimeType: imageMimeType,
+            aiMessageIdToUpdate: aiMessageIdToUpdate,
+            enableStreaming: false, // Explicitly disable streaming
+          },
+        });
 
       if (error) {
         ////console.error('Edge function error:', error);
@@ -407,6 +558,7 @@ export const useMessageHandlers = () => {
           toast.error(`Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
         }
       }
+    } // End of else block for regular mode
 
     } catch (error: any) {
       ////console.error('Error in handleSubmitMessage:', error);
@@ -606,6 +758,8 @@ export const useMessageHandlers = () => {
     handleRegenerateResponse,
     handleRetryFailedMessage,
     buildRichContext,
+    streamingState, // Export streaming state
+    stopStreaming, // Export stop streaming function
   };
 };
 

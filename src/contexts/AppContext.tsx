@@ -392,6 +392,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       case 'social': return 'social';
       case 'settings': return 'settings';
       case 'quizzes': return 'quizzes';
+      case 'podcasts': return 'podcasts';
       default: return 'dashboard';
     }
   }, [location.pathname]);

@@ -339,12 +339,27 @@ export const useSocialActions = (
         if (functionError.message) {
           toast.error(functionError.message);
         } else {
-          toast.error('Failed to create post');
+          toast.error('Failed to create post. Please try again.');
         }
         return false;
       }
 
+      // Handle content moderation rejection
+      if (!response?.success && response?.moderation) {
+        // Show a friendly toast notification
+        toast.error('Post needs revision', {
+          description: response.moderation.reason || 'Content does not meet educational guidelines',
+          duration: 5000,
+        });
+        
+        return {
+          success: false,
+          moderation: response.moderation
+        };
+      }
+
       if (!response?.success || !response?.post) {
+        toast.error('Failed to create post. Please try again.');
         throw new Error('Failed to create post');
       }
 

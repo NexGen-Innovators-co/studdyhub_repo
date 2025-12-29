@@ -69,11 +69,12 @@ const activeFetchesRef: { current: Set<string> } = { current: new Set() };
 // Optimized: Batch queries and use database functions for complex calculations
 export const useDashboardStats = (userId: string | undefined) => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Initialize as true to show loading on mount
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const isFetchingRef = useRef(false);
   const mountedRef = useRef(true);
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -627,11 +628,12 @@ export const useDashboardStats = (userId: string | undefined) => {
   }, [userId, stats]);
 
   useEffect(() => {
-    if (userId) {
+    if (userId && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
       // Add a small delay to let AppContext data load first
       const timeoutId = setTimeout(() => {
         fetchDashboardStats(false);
-      }, 500); // 500ms delay to avoid race condition with app context
+      }, 300); // Reduced to 300ms for faster initial load
       
       return () => clearTimeout(timeoutId);
     }
