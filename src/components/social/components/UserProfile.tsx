@@ -5,11 +5,11 @@ import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { EditProfileModal } from './EditProfileModal';
 import { PostCard } from './PostCard';
-import { Calendar, MapPin, Link as LinkIcon, Grid, Heart, Bookmark, Users, Loader2 } from 'lucide-react';
+import { Calendar, MapPin, Link as LinkIcon, Grid, Heart, Bookmark, Users, Loader2, UserPlus, Users2, UsersRound, Sparkles, User2Icon } from 'lucide-react';
 import { formatEngagementCount } from '../utils/postUtils';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
-
+import { supabase } from '../../../integrations/supabase/client';
 export const UserProfile: React.FC<any> = ({
   user,
   isOwnProfile,
@@ -41,18 +41,181 @@ export const UserProfile: React.FC<any> = ({
   isFollowing: initialIsFollowing, // Rename prop to avoid conflict
   onToggleFollow,
 }) => {
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'saved' | 'groups'>('posts');
-  const [isFollowing, setIsFollowing] = useState(initialIsFollowing || false);
-  const [isFollowLoading, setIsFollowLoading] = useState(false);
-  const navigate = useNavigate();
-
   // Update local state when prop changes
   useEffect(() => {
     setIsFollowing(initialIsFollowing || false);
   }, [initialIsFollowing]);
 
-  if (!user) return null;
+  // All hooks must be at the top and in the same order every render
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'saved' | 'groups' | 'followers' | 'following' | 'suggestions'>('posts');
+  const [isFollowing, setIsFollowing] = useState(initialIsFollowing || false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
+  const [followers, setFollowers] = useState<any[]>([]);
+  const [following, setFollowing] = useState<any[]>([]);
+  const [suggested, setSuggested] = useState<any[]>([]);
+  const [isLoadingFollowers, setIsLoadingFollowers] = useState(false);
+  const [isLoadingFollowing, setIsLoadingFollowing] = useState(false);
+  const [isLoadingSuggested, setIsLoadingSuggested] = useState(false);
+  const [hasMoreFollowers, setHasMoreFollowers] = useState(true);
+  const [hasMoreFollowing, setHasMoreFollowing] = useState(true);
+  const [hasMoreSuggested, setHasMoreSuggested] = useState(true);
+  const followersObserver = React.useRef<HTMLDivElement>(null);
+  const followingObserver = React.useRef<HTMLDivElement>(null);
+  const suggestedObserver = React.useRef<HTMLDivElement>(null);
+  const followersPage = React.useRef(0);
+  const followingPage = React.useRef(0);
+  const suggestedPage = React.useRef(0);
+  const PAGE_SIZE = 20;
+  const navigate = useNavigate();
+  // Fetch followers (two-step: get IDs, then user details)
+  const fetchFollowers = async () => {
+    const profileUser = user || currentUser;
+    if (!profileUser) return;
+    setIsLoadingFollowers(true);
+    const page = followersPage.current;
+    // Step 1: Get follower IDs
+    const { data: followRows, error: followError } = await supabase
+      .from('social_follows')
+      .select('follower_id')
+      .eq('following_id', profileUser.id)
+      .order('created_at', { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (followError || !followRows || followRows.length === 0) {
+      setHasMoreFollowers(false);
+      setIsLoadingFollowers(false);
+      return;
+    }
+    const followerIds = followRows.map((f: any) => f.follower_id);
+    // Step 2: Get user details
+    const { data: users, error: userError } = await supabase
+      .from('social_users')
+      .select('*')
+      .in('id', followerIds);
+    if (!userError && users) {
+      setFollowers(prev => {
+        const existingIds = new Set(prev.map((u: any) => u.id));
+        const newUsers = users.filter((u: any) => !existingIds.has(u.id));
+        return [...prev, ...newUsers];
+      });
+      setHasMoreFollowers(followRows.length === PAGE_SIZE);
+      followersPage.current += 1;
+    } else {
+      setHasMoreFollowers(false);
+    }
+    setIsLoadingFollowers(false);
+  };
+
+  // Fetch following (two-step: get IDs, then user details)
+  const fetchFollowing = async () => {
+    const profileUser = user || currentUser;
+    if (!profileUser) return;
+    setIsLoadingFollowing(true);
+    const page = followingPage.current;
+    // Step 1: Get following IDs
+    const { data: followRows, error: followError } = await supabase
+      .from('social_follows')
+      .select('following_id')
+      .eq('follower_id', profileUser.id)
+      .order('created_at', { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (followError || !followRows || followRows.length === 0) {
+      setHasMoreFollowing(false);
+      setIsLoadingFollowing(false);
+      return;
+    }
+    const followingIds = followRows.map((f: any) => f.following_id);
+    // Step 2: Get user details
+    const { data: users, error: userError } = await supabase
+      .from('social_users')
+      .select('*')
+      .in('id', followingIds);
+    if (!userError && users) {
+      setFollowing(prev => {
+        const existingIds = new Set(prev.map((u: any) => u.id));
+        const newUsers = users.filter((u: any) => !existingIds.has(u.id));
+        return [...prev, ...newUsers];
+      });
+      setHasMoreFollowing(followRows.length === PAGE_SIZE);
+      followingPage.current += 1;
+    } else {
+      setHasMoreFollowing(false);
+    }
+    setIsLoadingFollowing(false);
+  };
+
+  // Fetch suggestions (users not followed by current user, not self)
+  const fetchSuggestions = async () => {
+    if (!user) return;
+    setIsLoadingSuggested(true);
+    const page = suggestedPage.current;
+    // Get IDs of users already followed
+    const followingIds = following.map((u: any) => u.id);
+    const excludeIds = [user.id, ...followingIds];
+    const { data, error } = await supabase
+      .from('social_users')
+      .select('*')
+      .not('id', 'in', `(${excludeIds.join(',')})`)
+      .order('created_at', { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (!error && data) {
+      setSuggested(prev => {
+        const existingIds = new Set(prev.map((u: any) => u.id));
+        const newUsers = data.filter((u: any) => !existingIds.has(u.id));
+        return [...prev, ...newUsers];
+      });
+      setHasMoreSuggested(data.length === PAGE_SIZE);
+      suggestedPage.current += 1;
+    } else {
+      setHasMoreSuggested(false);
+    }
+    setIsLoadingSuggested(false);
+  };
+
+  // Infinite scroll observers
+  useEffect(() => {
+    if (activeTab === 'followers' && hasMoreFollowers && followersObserver.current) {
+      const observer = new window.IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !isLoadingFollowers) fetchFollowers();
+      }, { threshold: 0.1 });
+      observer.observe(followersObserver.current);
+      return () => observer.disconnect();
+    }
+  }, [activeTab, hasMoreFollowers, isLoadingFollowers, followersObserver.current]);
+
+  useEffect(() => {
+    if (activeTab === 'following' && hasMoreFollowing && followingObserver.current) {
+      const observer = new window.IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !isLoadingFollowing) fetchFollowing();
+      }, { threshold: 0.1 });
+      observer.observe(followingObserver.current);
+      return () => observer.disconnect();
+    }
+  }, [activeTab, hasMoreFollowing, isLoadingFollowing, followingObserver.current]);
+
+  useEffect(() => {
+    if (activeTab === 'suggestions' && hasMoreSuggested && suggestedObserver.current) {
+      const observer = new window.IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !isLoadingSuggested) fetchSuggestions();
+      }, { threshold: 0.1 });
+      observer.observe(suggestedObserver.current);
+      return () => observer.disconnect();
+    }
+  }, [activeTab, hasMoreSuggested, isLoadingSuggested, suggestedObserver.current]);
+
+  // Reset lists when switching tabs, but only when user/currentUser is loaded
+  useEffect(() => {
+    const profileUser = user || currentUser;
+    if (!profileUser) return;
+    if (activeTab === 'followers') {
+      setFollowers([]); followersPage.current = 0; setHasMoreFollowers(true); fetchFollowers();
+    } else if (activeTab === 'following') {
+      setFollowing([]); followingPage.current = 0; setHasMoreFollowing(true); fetchFollowing();
+    } else if (activeTab === 'suggestions') {
+      setSuggested([]); suggestedPage.current = 0; setHasMoreSuggested(true); fetchSuggestions();
+    }
+    // eslint-disable-next-line
+  }, [activeTab, user?.id, currentUser?.id]);
 
   const handleFollowToggle = async () => {
     if (isFollowLoading) return;
@@ -103,6 +266,17 @@ export const UserProfile: React.FC<any> = ({
     </div>
   );
 
+  // Show loading spinner if user/currentUser is not loaded
+  const profileUser = user || currentUser;
+  if (!profileUser) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600 mb-4" />
+        <div className="text-slate-500 dark:text-slate-300 text-lg font-medium">Loading profile...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 animate-in fade-in duration-500 max-w-[780px] lg:mx-auto">
 
@@ -117,8 +291,8 @@ export const UserProfile: React.FC<any> = ({
           {/* Floating Avatar & Edit Button */}
           <div className="flex justify-between items-end -mt-12 mb-4">
             <Avatar className="w-32 h-32 ring-4 ring-white dark:ring-slate-900 shadow-lg">
-              <AvatarImage src={user.avatar_url} className="object-cover" />
-              <AvatarFallback className="text-4xl bg-slate-200">{user.display_name?.[0]}</AvatarFallback>
+              <AvatarImage src={profileUser.avatar_url} className="object-cover" />
+              <AvatarFallback className="text-4xl bg-slate-200">{profileUser.display_name?.[0]}</AvatarFallback>
             </Avatar>
 
             {isOwnProfile && (
@@ -154,7 +328,7 @@ export const UserProfile: React.FC<any> = ({
                 </Button>
                 {onStartChat && (
                   <Button
-                    onClick={() => onStartChat(user.id)}
+                    onClick={() => onStartChat(profileUser.id)}
                     variant="outline"
                     className="flex-1 rounded-full"
                   >
@@ -170,30 +344,30 @@ export const UserProfile: React.FC<any> = ({
           <div className="space-y-3">
             <div>
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                {user.display_name}
-                {user.is_verified && <Badge variant="secondary" className="bg-blue-100 text-blue-700 h-5 px-1.5 text-[10px]">Verified</Badge>}
+                {profileUser.display_name}
+                {profileUser.is_verified && <Badge variant="secondary" className="bg-blue-100 text-blue-700 h-5 px-1.5 text-[10px]">Verified</Badge>}
               </h1>
-              <p className="text-slate-500 dark:text-slate-400 font-medium">@{user.username}</p>
+              <p className="text-slate-500 dark:text-slate-400 font-medium">@{profileUser.username}</p>
             </div>
 
-            {user.bio && <p className="text-slate-700 dark:text-slate-300 leading-relaxed max-w-2xl">{user.bio}</p>}
+            {profileUser.bio && <p className="text-slate-700 dark:text-slate-300 leading-relaxed max-w-2xl">{profileUser.bio}</p>}
 
             {/* Metadata Row */}
             <div className="flex flex-wrap gap-4 text-sm text-slate-500 dark:text-slate-400">
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
-                Joined {new Date(user.created_at).toLocaleDateString()}
+                Joined {new Date(profileUser.created_at).toLocaleDateString()}
               </div>
             </div>
 
             {/* Stats Row */}
             <div className="flex gap-6 pt-2">
               <div className="flex items-center gap-1">
-                <span className="font-bold text-slate-900 dark:text-white">{formatEngagementCount(user.followers_count || 0)}</span>
+                <span className="font-bold text-slate-900 dark:text-white">{formatEngagementCount(profileUser.followers_count || 0)}</span>
                 <span className="text-slate-500">Followers</span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="font-bold text-slate-900 dark:text-white">{formatEngagementCount(user.following_count || 0)}</span>
+                <span className="font-bold text-slate-900 dark:text-white">{formatEngagementCount(profileUser.following_count || 0)}</span>
                 <span className="text-slate-500">Following</span>
               </div>
               <div className="flex items-center gap-1">
@@ -205,20 +379,20 @@ export const UserProfile: React.FC<any> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex mt-2 px-6 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex mt-2 px-6 border-b border-slate-100 dark:border-slate-800 overflow-x-auto">
           <TabButton id="posts" icon={Grid} label="Posts" />
-          {isOwnProfile && (
-            <>
-              <TabButton id="likes" icon={Heart} label="Liked" />
-              <TabButton id="saved" icon={Bookmark} label="Saved" />
-            </>
-          )}
-          <TabButton id="groups" icon={Users} label="Groups" />
+          {isOwnProfile && <TabButton id="likes" icon={Heart} label="Liked" />}
+          {isOwnProfile && <TabButton id="saved" icon={Bookmark} label="Saved" />}
+          <TabButton id="groups" icon={UsersRound} label="Groups" />
+          <TabButton id="followers" icon={User2Icon} label="Followers" />
+          <TabButton id="following" icon={UserPlus} label="Following" />
+          <TabButton id="suggestions" icon={Sparkles} label="Suggestions" />
         </div>
       </div>
 
       {/* 2. Content Area */}
       <div className="min-h-[200px]">
+        {/* Posts Tab */}
         {activeTab === 'posts' && (
           <div className="lg:space-y-4 space-y-2">
             {posts.length === 0 && !isLoadingPosts ? (
@@ -295,7 +469,7 @@ export const UserProfile: React.FC<any> = ({
           </>
         )}
 
-        {/* Placeholders for Likes/Saved */}
+        {/* Likes/Saved Tabs */}
         {(activeTab === 'likes' || activeTab === 'saved') && (
           <div className="space-y-4">
             {(activeTab === 'likes' ? likedPosts : bookmarkedPosts).length === 0 && !isLoadingPosts ? (
@@ -340,6 +514,74 @@ export const UserProfile: React.FC<any> = ({
               </>
             )}
             {(isLoadingPostComments || isLoadingPosts) && <LoadingSpinner />}
+          </div>
+        )}
+
+        {/* Followers Tab */}
+        {activeTab === 'followers' && (
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Followers</h3>
+            <div>
+              {followers.map((f: any, idx: number) => (
+                <div key={`follower-${f.id}-${idx}`} className="flex items-center gap-3 py-2 border-b">
+                  <Avatar className="h-8 w-8"><AvatarImage src={f.avatar_url} /><AvatarFallback>{f.display_name?.[0]}</AvatarFallback></Avatar>
+                  <div className="flex-1">
+                    <div className="font-medium">{f.display_name}</div>
+                    <div className="text-xs text-slate-500">@{f.username}</div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/social/profile/${f.id}`)}>View</Button>
+                </div>
+              ))}
+              {isLoadingFollowers && <LoadingSpinner />}
+              <div ref={followersObserver} />
+              {!hasMoreFollowers && followers.length === 0 && !isLoadingFollowers && <div className="text-center text-slate-400 py-8">No followers found.</div>}
+            </div>
+          </div>
+        )}
+
+        {/* Following Tab */}
+        {activeTab === 'following' && (
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Following</h3>
+            {/* TODO: Render following list with infinite scroll */}
+            <div>
+              {following.map((f: any, idx: number) => (
+                <div key={`following-${f.id}-${idx}`} className="flex items-center gap-3 py-2 border-b">
+                  <Avatar className="h-8 w-8"><AvatarImage src={f.avatar_url} /><AvatarFallback>{f.display_name?.[0]}</AvatarFallback></Avatar>
+                  <div className="flex-1">
+                    <div className="font-medium">{f.display_name}</div>
+                    <div className="text-xs text-slate-500">@{f.username}</div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/social/profile/${f.id}`)}>View</Button>
+                </div>
+              ))}
+              {isLoadingFollowing && <LoadingSpinner />}
+              <div ref={followingObserver} />
+              {!hasMoreFollowing && following.length === 0 && !isLoadingFollowing && <div className="text-center text-slate-400 py-8">No following found.</div>}
+            </div>
+          </div>
+        )}
+
+        {/* Suggestions Tab */}
+        {activeTab === 'suggestions' && (
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Suggestions</h3>
+            <div>
+              {/* You can use the SuggestedUsers component here in the next step */}
+              {suggested.map((f: any, idx: number) => (
+                <div key={`suggested-${f.id}-${idx}`} className="flex items-center gap-3 py-2 border-b">
+                  <Avatar className="h-8 w-8"><AvatarImage src={f.avatar_url} /><AvatarFallback>{f.display_name?.[0]}</AvatarFallback></Avatar>
+                  <div className="flex-1">
+                    <div className="font-medium">{f.display_name}</div>
+                    <div className="text-xs text-slate-500">@{f.username}</div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/social/profile/${f.id}`)}>View</Button>
+                </div>
+              ))}
+              {isLoadingSuggested && <LoadingSpinner />}
+              <div ref={suggestedObserver} />
+              {!hasMoreSuggested && suggested.length === 0 && !isLoadingSuggested && <div className="text-center text-slate-400 py-8">No suggestions found.</div>}
+            </div>
           </div>
         )}
       </div>
