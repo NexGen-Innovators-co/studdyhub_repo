@@ -63,7 +63,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
       setColor('#3B82F6');
       onOpenChange(false);
     } catch (error) {
-      //console.error('Error creating folder:', error);
+
     } finally {
       setIsCreating(false);
     }
@@ -205,7 +205,7 @@ export const RenameFolderDialog: React.FC<RenameFolderDialogProps> = ({
       });
       onOpenChange(false);
     } catch (error) {
-      //console.error('Error renaming folder:', error);
+
     } finally {
       setIsRenaming(false);
     }

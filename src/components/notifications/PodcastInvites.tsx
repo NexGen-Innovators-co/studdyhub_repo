@@ -90,7 +90,7 @@ export const PodcastInvites: React.FC = () => {
       if (error) throw error;
       setInvites(data || []);
     } catch (error) {
-      console.error('Error loading invites:', error);
+
     } finally {
       setLoading(false);
     }
@@ -128,7 +128,7 @@ export const PodcastInvites: React.FC = () => {
       toast.success(`You're now a ${invite.role} of "${invite.podcast?.title}"!`);
       loadInvites();
     } catch (error: any) {
-      console.error('Error accepting invite:', error);
+
       toast.error('Failed to accept invite: ' + error.message);
     } finally {
       setProcessingInvite(null);
@@ -151,7 +151,7 @@ export const PodcastInvites: React.FC = () => {
       toast.success('Invite declined');
       loadInvites();
     } catch (error: any) {
-      console.error('Error declining invite:', error);
+
       toast.error('Failed to decline invite');
     } finally {
       setProcessingInvite(null);

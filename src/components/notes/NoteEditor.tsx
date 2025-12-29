@@ -195,7 +195,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   // Enhanced save handler
   // Enhanced save handler
   const handleSave = useCallback(() => {
-    ////console.log("Save triggered - Getting current markdown from editor...");
+
     if (!content) {
       toast.error("No content to save");
       return;
@@ -203,7 +203,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     // Use the markdown from the ref (which includes diagrams) or fallback to content state
     setIsloading(true);
     const markdownToSave = content;
-    ////console.log("Markdown to save length:", markdownToSave.length);
+
 
     const updatedNote: Note = {
       ...note,
@@ -230,7 +230,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   // Enhanced content change handler
   const handleContentChange = useCallback((newContent: string) => {
-    ////console.log("Content changed in editor, length:", newContent.length);
+
     setContent(newContent);
     setIsContentModified(true);
   }, []);
@@ -305,12 +305,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    ////console.log("🚀 handleFileSelect triggered!");
+
     const file = event.target.files?.[0];
 
     if (!file || !userProfile) {
       if (!userProfile) {
-        //console.error("❌ User profile is missing");
+
         toast.error("Cannot upload: User profile is missing.");
       }
       return;
@@ -335,14 +335,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     // Route to audio handler if audio file
     if (allowedAudioTypes.includes(file.type)) {
-      ////console.log("🎵 Routing to audio file handler");
+
       handleAudioFileSelect(event);
       return;
     }
 
     // Validate document type
     if (!allowedDocumentTypes.includes(file.type)) {
-      //console.error("❌ Unsupported file type:", file.type);
+
       toast.error('Unsupported file type. Please upload a PDF, TXT, Word document, or an audio file.');
       if (event.target) event.target.value = '';
       return;
@@ -633,10 +633,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       return;
     }
 
-    console.log('[TTS] Original content:', content);
+
     const textToRead = processMarkdownForSpeech(content);
-    console.log('[TTS] Processed text:', textToRead);
-    console.log('[TTS] Text length:', textToRead?.length || 0);
+
+
     
     if (!textToRead || !textToRead.trim()) {
       toast.info("The note has no readable content after processing.");
@@ -646,7 +646,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       toast.loading('Generating speech...', { id: 'note-tts' });
       
-      console.log('[TTS] Calling generateSpeech with:', { text: textToRead.substring(0, 100) + '...' });
+
       const { audioContent, error } = await generateSpeech({
         text: textToRead,
         voice: 'female',
@@ -656,7 +656,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       toast.dismiss('note-tts');
 
-      console.log('[TTS] Response - audioContent length:', audioContent?.length || 0, 'error:', error);
+
 
       if (error || !audioContent) {
         toast.error(error || 'Failed to generate speech');
@@ -669,18 +669,18 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         .replace(/^data:audio\/[a-z]+;base64,/, '')
         .replace(/\s/g, '');
 
-      console.log('[TTS] Creating audio element, base64 length:', cleanedAudio.length);
+
       const audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
       
       // Ensure audio is not muted and has volume
       audio.volume = 1.0;
       audio.muted = false;
-      console.log('[TTS] Audio settings - volume:', audio.volume, 'muted:', audio.muted);
+
       
       setCurrentAudio(audio);
 
       audio.onplay = () => {
-        console.log('[TTS] Audio started playing - currentTime:', audio.currentTime, 'duration:', audio.duration, 'paused:', audio.paused);
+
         setIsSpeaking(true);
       };
       audio.onended = () => {

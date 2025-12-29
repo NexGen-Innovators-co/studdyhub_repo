@@ -76,7 +76,7 @@ export const ReportPodcastDialog: React.FC<ReportPodcastDialogProps> = ({
       setSelectedReason('');
       setDetails('');
     } catch (error: any) {
-      console.error('Error submitting report:', error);
+
       toast.error('Failed to submit report: ' + error.message);
     } finally {
       setIsSubmitting(false);

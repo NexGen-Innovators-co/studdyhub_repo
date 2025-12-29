@@ -105,7 +105,7 @@ export const useSocialNotifications = () => {
         }
       }
     } catch (error) {
-      ////console.error('Error fetching notifications:', error);
+
       toast.error('Failed to load notifications');
     } finally {
       setIsLoading(false);
@@ -177,19 +177,19 @@ export const useSocialNotifications = () => {
                     action: {
                       label: 'View',
                       onClick: () => {
-                        ////console.log('Navigate to notification:', notificationData.id);
+
                       }
                     }
                   });
                 }
               }
             } catch (error) {
-              ////console.error('Error processing real-time notification:', error);
+
             }
           }
         )
         .on('system', { event: 'disconnect' }, () => {
-          ////console.log('Notification channel disconnected');
+
           // Attempt to reconnect with exponential backoff
           if (retryCount < maxRetries) {
             const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
@@ -201,7 +201,7 @@ export const useSocialNotifications = () => {
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            ////console.log('Notification channel subscribed');
+
             retryCount = 0;
           }
         });
@@ -223,7 +223,7 @@ export const useSocialNotifications = () => {
         const { data: { user } } = await supabase.auth.getUser();
         setUserId(user?.id || null);
       } catch (error) {
-        ////console.error('Error getting user:', error);
+
       }
     };
     getUser();
@@ -286,19 +286,19 @@ export const useSocialNotifications = () => {
                       label: 'View',
                       onClick: () => {
                         // You can add navigation logic here
-                        ////console.log('Navigate to notification:', notificationData.id);
+
                       }
                     }
                   });
                 }
               }
             } catch (error) {
-              ////console.error('Error processing real-time notification:', error);
+
             }
           }
         )
         .on('system', { event: 'disconnect' }, () => {
-          ////console.log('Notification channel disconnected');
+
           // Attempt to reconnect with exponential backoff
           if (retryCount < maxRetries) {
             const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
@@ -310,7 +310,7 @@ export const useSocialNotifications = () => {
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            ////console.log('Notification channel subscribed');
+
             retryCount = 0;
           }
         });
@@ -352,7 +352,7 @@ export const useSocialNotifications = () => {
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
-      ////console.error('Error marking notification as read:', error);
+
       toast.error('Failed to mark notification as read');
     }
   }, []);
@@ -375,7 +375,7 @@ export const useSocialNotifications = () => {
       setUnreadCount(0);
       toast.success('All notifications marked as read');
     } catch (error) {
-      ////console.error('Error marking all notifications as read:', error);
+
       toast.error('Failed to mark notifications as read');
     }
   }, [userId]);
@@ -399,7 +399,7 @@ export const useSocialNotifications = () => {
 
       toast.success('Notification deleted');
     } catch (error) {
-      ////console.error('Error deleting notification:', error);
+
       toast.error('Failed to delete notification');
     }
   }, [notifications]);

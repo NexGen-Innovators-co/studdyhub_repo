@@ -65,7 +65,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
       );
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(serializedChunks));
     } catch (err) {
-      console.warn('Failed to save recording backup:', err);
+
     }
   }, [enableLocalBackup]);
 
@@ -88,7 +88,7 @@ export function useChunkedRecording(options: UseChunkedRecordingOptions = {}) {
       );
       return chunks;
     } catch (err) {
-      console.warn('Failed to restore recording backup:', err);
+
       return null;
     }
   }, [enableLocalBackup]);

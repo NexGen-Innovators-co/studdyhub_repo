@@ -25,7 +25,7 @@ export const useInfiniteScroll = ({
       try {
         await loadMore();
       } catch (error) {
-        //console.error('Error loading more items:', error);
+
       } finally {
         setIsLoadingMore(false);
       }

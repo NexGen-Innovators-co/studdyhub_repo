@@ -63,7 +63,7 @@ export const RecentPodcasts: React.FC = () => {
       if (error) throw error;
       setPodcasts(data || []);
     } catch (error: any) {
-      console.error('Error fetching podcasts:', error);
+
     } finally {
       setLoading(false);
     }
@@ -97,7 +97,7 @@ export const RecentPodcasts: React.FC = () => {
             URL.revokeObjectURL(audioUrl);
           };
         } else {
-          console.error('No audio source found in segment:', firstSegment);
+
           setPlaying(null);
           return;
         }

@@ -113,7 +113,7 @@ export const SharePodcastDialog: React.FC<SharePodcastDialogProps> = ({
         setFriends(usersData || []);
       }
     } catch (error) {
-      console.error('Error fetching friends:', error);
+
     } finally {
       setLoadingFriends(false);
     }
@@ -131,7 +131,7 @@ export const SharePodcastDialog: React.FC<SharePodcastDialogProps> = ({
       if (error) throw error;
       setGroups(data || []);
     } catch (error) {
-      console.error('Error fetching groups:', error);
+
     } finally {
       setLoadingGroups(false);
     }
@@ -163,7 +163,7 @@ export const SharePodcastDialog: React.FC<SharePodcastDialogProps> = ({
 
       await supabase.rpc('increment_podcast_share_count', { podcast_id: podcast.id });
     } catch (error) {
-      console.error('Error tracking share:', error);
+
     }
   };
 
@@ -208,7 +208,7 @@ ${podcast.duration || 0} minutes of great content
       await trackShare('direct_message', 'friend');
       toast.success(`Shared with ${friend.display_name || friend.username}!`);
     } catch (error) {
-      console.error('Error sharing to friend:', error);
+
       toast.error('Failed to share with friend');
     } finally {
       setSharing(false);
@@ -239,7 +239,7 @@ Listen here: ${shareUrl}`;
       toast.success(`Shared to ${group.name}!`);
       onClose();
     } catch (error) {
-      console.error('Error sharing to group:', error);
+
       toast.error('Failed to share to group');
     } finally {
       setSharing(false);

@@ -89,7 +89,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       if (error) throw error;
       setUserStats(data);
     } catch (error) {
-      console.error('Error fetching user stats:', error);
+
       setUserStats(null);
     } finally {
       setIsLoadingStats(false);
@@ -176,7 +176,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
       toast.success('Transcript copied to clipboard!');
       setTimeout(() => setCopySuccess(false), 2000);
     }).catch(err => {
-      console.error('Failed to copy transcript:', err);
+
       toast.error('Failed to copy transcript.');
     });
   }, []);

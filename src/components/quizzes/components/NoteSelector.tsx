@@ -56,7 +56,7 @@ export const NotesSelector: React.FC<NotesSelectorProps> = ({
       if (error) throw error;
       setNotes(data || []);
     } catch (error) {
-      //console.error('Error fetching notes:', error);
+
     } finally {
       setIsLoading(false);
     }

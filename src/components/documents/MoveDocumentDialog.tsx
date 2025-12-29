@@ -34,7 +34,7 @@ export const MoveDocumentDialog: React.FC<MoveDocumentDialogProps> = ({
             onOpenChange(false);
             setSelectedFolderId(null);
         } catch (error) {
-            //console.error('Error moving document:', error);
+
         } finally {
             setIsMoving(false);
         }

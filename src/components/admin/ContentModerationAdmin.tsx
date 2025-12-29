@@ -109,7 +109,7 @@ export const ContentModerationAdmin: React.FC = () => {
         setSettings(defaultSettings);
       }
     } catch (error) {
-      console.error('Error fetching settings:', error);
+
     }
   };
 
@@ -173,7 +173,7 @@ export const ContentModerationAdmin: React.FC = () => {
         approvalRate: totalCount ? ((approvedCount || 0) / totalCount) * 100 : 0
       });
     } catch (error) {
-      console.error('Error fetching stats:', error);
+
     } finally {
       setLoading(false);
     }
@@ -190,7 +190,7 @@ export const ContentModerationAdmin: React.FC = () => {
       if (error) throw error;
       setRecentLogs(data || []);
     } catch (error) {
-      console.error('Error fetching logs:', error);
+
     }
   };
 
@@ -220,7 +220,7 @@ export const ContentModerationAdmin: React.FC = () => {
         description: 'Content moderation settings updated successfully.',
       });
     } catch (error: any) {
-      console.error('Error saving settings:', error);
+
       toast({
         title: 'Error',
         description: error.message || 'Failed to save settings',

@@ -109,7 +109,7 @@ export const useTextToSpeech = ({
 
     // If session changed, stop speech
     if (currentSessionIdRef.current && currentSessionId !== currentSessionIdRef.current) {
-      //console.log('🔇 Session changed, stopping speech');
+
       stopSpeech();
     }
 
@@ -119,7 +119,7 @@ export const useTextToSpeech = ({
   // Cleanup speech on unmount (when leaving chat interface)
   useEffect(() => {
     return () => {
-      //console.log('🔇 Component unmounting, stopping speech');
+
       if (currentAudioRef.current) {
         currentAudioRef.current.pause();
         currentAudioRef.current = null;
@@ -152,7 +152,7 @@ export const useTextToSpeech = ({
       return;
     }
 
-    //console.log('🔊 Speaking cleaned text:', cleanedContent.substring(0, 100) + '...');
+
 
     try {
       // Generate speech using Cloud TTS
@@ -192,7 +192,7 @@ export const useTextToSpeech = ({
       };
 
       audio.onerror = (event) => {
-        console.error('Audio playback error:', event);
+
         toast.error('Failed to play audio');
         setIsSpeaking(false);
         setSpeakingMessageId(null);
@@ -210,7 +210,7 @@ export const useTextToSpeech = ({
       lastSpokenChunkRef.current = cleanedContent;
       lastProcessedMessageIdRef.current = messageId;
     } catch (error: any) {
-      console.error('Speech synthesis error:', error);
+
       toast.error(error.message || 'Failed to generate speech');
       setIsSpeaking(false);
       setSpeakingMessageId(null);

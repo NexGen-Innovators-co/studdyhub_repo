@@ -134,7 +134,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           requirementsNeeded: []
         });
       } catch (error) {
-        console.error('Error checking eligibility:', error);
+
         // Allow creation on error to not block users
         setEligibility({
           canCreate: true,
@@ -185,7 +185,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           setDocumentsHasMore(documents.length === 20);
         }
       } catch (error) {
-        console.error('Error fetching content:', error);
+
       } finally {
         setLoadingContent(false);
       }
@@ -290,7 +290,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
         throw new Error(result.error || 'Failed to generate podcast');
       }
     } catch (error: any) {
-      console.error('Error generating podcast:', error);
+
       toast.error(error.message || 'Failed to generate podcast');
     } finally {
       setIsGenerating(false);

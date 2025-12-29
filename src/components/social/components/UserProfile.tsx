@@ -234,7 +234,7 @@ export const UserProfile: React.FC<any> = ({
     } catch (error) {
       // Revert on error
       setIsFollowing(isFollowing);
-      //console.error('Error toggling follow:', error);
+      // Error handling for follow toggle is handled by UI toast
     } finally {
       setIsFollowLoading(false);
     }

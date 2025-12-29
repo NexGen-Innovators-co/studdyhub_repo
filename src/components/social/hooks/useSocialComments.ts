@@ -31,7 +31,7 @@ export const useSocialComments = (
         [postId]: data || []
       }));
     } catch (error) {
-      ////console.error('Error fetching comments:', error);
+
     } finally {
       setLoadingComments(prev => {
         const newSet = new Set(prev);
@@ -111,7 +111,7 @@ export const useSocialComments = (
 
       toast.success('Comment added!');
     } catch (error) {
-      ////console.error('Error adding comment:', error);
+
       toast.error('Failed to add comment');
     }
   };

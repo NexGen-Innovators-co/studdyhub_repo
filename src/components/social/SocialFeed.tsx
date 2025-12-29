@@ -349,7 +349,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
 
   const handleStartChat = async (userId: string) => {
     const sessionId = await createP2PChatSession(userId);
-    //console.log(sessionId)
+
 
     if (sessionId) {
       try {
@@ -358,7 +358,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
         setShowChatList(true);
         await setActiveSession(sessionId);
       } catch (error) {
-        //console.error('Error refetching chat sessions:', error);
+
       }
     }
 
@@ -458,7 +458,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       await fetchNotifications();
     } catch (err) {
       setError('Failed to refresh data');
-      //console.error('Refresh error:', err);
+
     } finally {
       setIsRefreshing(false);
     }

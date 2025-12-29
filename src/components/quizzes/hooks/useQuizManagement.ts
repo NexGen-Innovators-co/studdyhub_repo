@@ -102,7 +102,7 @@ export const useQuizManagement = ({
 
       toast.success('Quiz generated from notes!', { id: toastId });
     } catch (error) {
-      //console.error('Error generating quiz from notes:', error);
+
       toast.error('Failed to generate quiz from notes', { id: toastId });
     }
   }, [onGenerateQuiz]);
@@ -118,9 +118,9 @@ export const useQuizManagement = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      //console.log('🔍 Starting AI quiz generation for user:', user.id);
-      //console.log('📝 Topics:', topics);
-      //console.log('🎯 Focus areas:', focusAreas);
+
+
+
 
       // Get user's quiz performance data for personalization
       const { data: recentAttempts, error: attemptsError } = await supabase
@@ -131,12 +131,12 @@ export const useQuizManagement = ({
         .limit(10);
 
       if (attemptsError) {
-        //console.error('❌ Error fetching recent attempts:', attemptsError);
+
       } else {
-        //console.log('📊 Recent attempts found:', recentAttempts?.length || 0);
+
       }
 
-      //console.log('🚀 Calling generate-ai-quiz edge function...');
+
 
       const { data, error } = await supabase.functions.invoke('generate-ai-quiz', {
         body: {
@@ -151,12 +151,12 @@ export const useQuizManagement = ({
       });
 
       if (error) {
-        //console.error('❌ Edge function error:', error);
+
         throw new Error(error.message || 'Failed to generate AI quiz');
       }
 
-      //console.log('✅ Edge function response received:', data);
-      //console.log('📋 Response data type:', typeof data);
+
+
       //console.log('📋 Has questions array?', Array.isArray(data?.questions));
       //console.log('📋 Questions count:', data?.questions?.length);
 

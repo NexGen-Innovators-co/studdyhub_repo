@@ -43,7 +43,7 @@ export const useSocialActions = (
 
       return publicUrl;
     } catch (error) {
-      ////console.error('Error uploading file:', error);
+
       toast.error('File upload failed.');
       return null;
     }
@@ -159,7 +159,7 @@ export const useSocialActions = (
       return true;
 
     } catch (error) {
-      ////console.error('Error joining group:', error);
+
       toast.error('Failed to join group. You might already have a pending request.');
       return false;
     }
