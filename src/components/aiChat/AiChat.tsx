@@ -253,7 +253,7 @@ const AIChat: React.FC<AIChatProps> = ({
         .single();
 
       if (error) {
-        //console.error('Error loading session documents:', error);
+
         return;
       }
 
@@ -261,7 +261,7 @@ const AIChat: React.FC<AIChatProps> = ({
         onSelectionChange(sessionData.document_ids);
       }
     } catch (error) {
-      //console.error('Error loading session documents:', error);
+
     }
   }, [userProfile?.id, onSelectionChange]);
 
@@ -373,7 +373,7 @@ const AIChat: React.FC<AIChatProps> = ({
           .eq('user_id', userId);
 
         if (error) {
-          //console.error('Error updating session documents:', error);
+
         }
       }
 
@@ -411,11 +411,11 @@ const AIChat: React.FC<AIChatProps> = ({
                 });
                 content = await textPromise;
               } catch (textError) {
-                //console.warn('Could not extract text content from file:', textError);
+
               }
             }
           } catch (error) {
-            //console.error('Error processing file:', attachedFile.file.name, error);
+
             toast.error(`Failed to process file: ${attachedFile.file.name}`);
             throw error;
           }
@@ -453,7 +453,7 @@ const AIChat: React.FC<AIChatProps> = ({
       // No need to decrement - we don't increment on send anymore
       // Message count now updates automatically via realtime
       
-      //console.error("Error sending message:", error);
+
       let errorMessage = 'Failed to send message.';
 
       if (error.message.includes('Too Many Requests')) {
@@ -497,7 +497,7 @@ const AIChat: React.FC<AIChatProps> = ({
   ]);
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {
-      //console.warn("User or session ID missing, cannot mark message as displayed.");
+
       return;
     }
 
@@ -514,7 +514,7 @@ const AIChat: React.FC<AIChatProps> = ({
         .eq('user_id', userProfile.id);
 
       if (error) {
-        //console.error('Error marking message as displayed:', error);
+
         return;
       }
 

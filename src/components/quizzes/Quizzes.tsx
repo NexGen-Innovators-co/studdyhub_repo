@@ -141,7 +141,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
     return (
       recording?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       recording?.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      quiz.difficulty?.toLowerCase().includes(searchQuery.toLowerCase())
+      quiz.source_type?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   });
 

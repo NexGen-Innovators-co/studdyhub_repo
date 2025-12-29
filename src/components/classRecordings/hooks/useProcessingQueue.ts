@@ -75,7 +75,7 @@ export function useProcessingQueue(options: UseProcessingQueueOptions) {
       });
 
     } catch (err) {
-      console.error('Failed to fetch processing jobs:', err);
+
       setIsLoading(false);
     }
   }, [userId, jobs, onJobComplete, onJobError]);

@@ -82,7 +82,7 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
       if (audioRef.current) {
         audioRef.current.srcObject = stream;
         audioRef.current.play().catch(err => {
-          console.error('Error playing audio:', err);
+
           toast.error('Failed to play audio. Please check your permissions.');
         });
       }

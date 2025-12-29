@@ -36,7 +36,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
       audioPlayerRef.current.play().then(() => {
         setIsPlayingAudio(true);
       }).catch(e => {
-        //console.error("Error playing audio:", e);
+
         toast.error('Failed to play audio. Please try again.');
         setIsPlayingAudio(false);
       });
@@ -80,7 +80,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
     navigator.clipboard.writeText(audioPlayerRef.current.src).then(() => {
       toast.success('Audio URL copied to clipboard!');
     }).catch(err => {
-      //console.error('Failed to copy audio URL:', err);
+
       toast.error('Failed to copy audio URL.');
     });
   }, []);

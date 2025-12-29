@@ -9,8 +9,10 @@ import { Badge } from '../ui/badge';
 import { Skeleton } from '../ui/skeleton';
 import { useToast } from '../ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Select as PlanSelect, SelectTrigger as PlanSelectTrigger, SelectValue as PlanSelectValue, SelectContent as PlanSelectContent, SelectItem as PlanSelectItem } from '../ui/select';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
+import { useNavigate } from 'react-router-dom';
 
 interface UserProfile {
   id: string;
@@ -26,6 +28,34 @@ interface UserProfile {
 
 const UserManagement = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
+  const [upgradePlan, setUpgradePlan] = useState<'scholar' | 'genius'>('scholar');
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  // Manual upgrade handler
+  const handleManualUpgrade = async () => {
+    if (!selectedUser) return;
+    setIsUpgrading(true);
+    try {
+      // Upsert subscription for user
+      const { error } = await supabase
+        .from('subscriptions')
+        .upsert({
+          user_id: selectedUser.id,
+          plan_type: upgradePlan,
+          status: 'active',
+          current_period_end: '2099-12-31', // Far future for indefinite access
+          paystack_sub_code: null
+        }, { onConflict: 'user_id' });
+      if (error) throw error;
+      toast({ title: 'Success', description: `User upgraded to ${upgradePlan} plan and activated.` });
+      setIsUpgradeOpen(false);
+    } catch (err) {
+      toast({ title: 'Error upgrading user', description: `${err}`, variant: 'destructive' });
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -166,7 +196,17 @@ const UserManagement = () => {
                 </Badge>
               </TableCell>
               <TableCell className="flex gap-2">
-                <Button variant="outline" size="sm">View</Button>
+                <Button variant="outline" size="sm" onClick={() => navigate(`/social/profile/${u.id}`)}>View</Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedUser(u);
+                    setIsUpgradeOpen(true);
+                  }}
+                >
+                  Make Paid
+                </Button>
                 <Button
                   variant="destructive"
                   size="sm"
@@ -177,6 +217,31 @@ const UserManagement = () => {
                 >
                   {u.is_verified ? 'Suspend' : 'Activate'}
                 </Button>
+                    {/* Manual Upgrade Dialog */}
+                    <Dialog open={isUpgradeOpen} onOpenChange={setIsUpgradeOpen}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Grant Paid Access</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label>Select Plan</Label>
+                            <PlanSelect value={upgradePlan} onValueChange={v => setUpgradePlan(v as 'scholar' | 'genius')}>
+                              <PlanSelectTrigger className="w-full">
+                                <PlanSelectValue />
+                              </PlanSelectTrigger>
+                              <PlanSelectContent>
+                                <PlanSelectItem value="scholar">Scholar (Standard Paid)</PlanSelectItem>
+                                <PlanSelectItem value="genius">Genius (Full Access)</PlanSelectItem>
+                              </PlanSelectContent>
+                            </PlanSelect>
+                          </div>
+                          <Button onClick={handleManualUpgrade} disabled={isUpgrading} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                            {isUpgrading ? 'Granting...' : 'Grant Paid Access'}
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
               </TableCell>
             </TableRow>
           ))}

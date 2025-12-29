@@ -139,7 +139,7 @@ export const useQuizManagement = ({
         errorMessage = error.message;
       }
       toast.error(errorMessage, { id: toastId });
-      //console.error('Error generating quiz:', error);
+
       setQuizMode(null);
     }
   }, [onGenerateQuiz]);
@@ -215,7 +215,7 @@ export const useQuizManagement = ({
       setShowResults(true);
       toast.success('Quiz submitted successfully!', { id: toastId });
     } catch (error) {
-      //console.error('Error submitting quiz:', error);
+
       toast.error('Failed to submit quiz. Please try again.', { id: toastId });
     } finally {
       setIsSubmitting(false);

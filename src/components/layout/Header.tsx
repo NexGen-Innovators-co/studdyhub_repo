@@ -86,6 +86,7 @@ const sectionTabs = {
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'recordings', label: 'Recordings', icon: Play },
     { id: 'notes', label: 'Notes', icon: FileText },
+    {id: 'ai', label: 'AI Generated', icon: Sparkles },
     { id: 'history', label: 'History', icon: History },
   ],
   recordings: [

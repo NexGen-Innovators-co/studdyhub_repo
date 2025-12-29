@@ -78,7 +78,7 @@ export const ReportsManagement: React.FC = () => {
       if (error) throw error;
       setReports(data as ReportWithDetails[]);
     } catch (error: any) {
-      console.error('Error fetching reports:', error);
+
       toast({
         title: 'Error',
         description: 'Failed to load reports',
@@ -133,7 +133,7 @@ export const ReportsManagement: React.FC = () => {
       setActionNote('');
       fetchReports();
     } catch (error: any) {
-      console.error('Error resolving report:', error);
+
       toast({
         title: 'Error',
         description: 'Failed to resolve report',
@@ -170,7 +170,7 @@ export const ReportsManagement: React.FC = () => {
       setActionNote('');
       fetchReports();
     } catch (error: any) {
-      console.error('Error dismissing report:', error);
+
       toast({
         title: 'Error',
         description: 'Failed to dismiss report',
@@ -224,7 +224,7 @@ export const ReportsManagement: React.FC = () => {
       setBanDuration('7');
       fetchReports();
     } catch (error: any) {
-      console.error('Error banning user:', error);
+
       toast({
         title: 'Error',
         description: 'Failed to ban user',

@@ -75,15 +75,15 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10 p-4">
-      <Card className="bg-white rounded-lg shadow-xl max-w-lg w-full dark:bg-gray-800">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10 p-2 sm:p-4">
+      <Card className="bg-white rounded-lg shadow-xl w-full max-w-lg sm:max-w-lg dark:bg-gray-800 mx-2 sm:mx-0" style={{ maxHeight: '95vh', overflowY: 'auto' }}>
         <CardHeader className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">Edit Profile</CardTitle>
           <Button variant="ghost" size="sm" onClick={onClose} className="text-slate-600 dark:text-gray-300">
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-1">

@@ -69,7 +69,7 @@ export const useQuizTracking = (userId: string) => {
         setUserStats(newStats);
       }
     } catch (error) {
-      ////console.error('Error fetching user stats:', error);
+
       toast.error('Failed to load user statistics');
     } finally {
       setIsLoadingStats(false);
@@ -119,7 +119,7 @@ export const useQuizTracking = (userId: string) => {
 
       return data;
     } catch (error) {
-      ////console.error('Error recording quiz attempt:', error);
+
       toast.error('Failed to save quiz results');
       return null;
     }
@@ -289,7 +289,7 @@ export const useQuizTracking = (userId: string) => {
         await fetchUserStats();
       }
     } catch (error) {
-      ////console.error('Error checking achievements:', error);
+
     }
   };
 
@@ -309,7 +309,7 @@ export const useQuizTracking = (userId: string) => {
       if (error) throw error;
       return data;
     } catch (error) {
-      ////console.error('Error fetching quiz history:', error);
+
       return [];
     }
   };

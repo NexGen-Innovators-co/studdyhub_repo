@@ -109,7 +109,7 @@ const AdminOverview = () => {
         engagementRate: totalUsers > 0 ? ((activeUsers7d.count || 0) / totalUsers) * 100 : 0,
       });
     } catch (error) {
-      //console.error('Error fetching stats:', error);
+
     } finally {
       setLoading(false);
     }
@@ -184,7 +184,7 @@ const AdminOverview = () => {
         activityTrend
       });
     } catch (error) {
-      //console.error('Error fetching chart data:', error);
+
     }
   };
 

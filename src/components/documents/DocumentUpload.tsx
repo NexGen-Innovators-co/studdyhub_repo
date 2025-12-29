@@ -158,7 +158,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       ]);
       toast.success('Documents refreshed successfully!');
     } catch (error: any) {
-      console.error('Error refreshing documents:', error);
+
       toast.error(`Failed to refresh: ${error.message || 'Unknown error'}`);
     } finally {
       setIsRefreshing(false);
@@ -793,7 +793,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 }
               }
             } catch (urlError) {
-              //console.warn('Invalid file URL format:', fileUrl, urlError);
+
             }
 
             if (storagePath) {
@@ -996,7 +996,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           loadDataIfNeeded('folders')
         ]);
       } catch (error) {
-        console.error('Error loading initial document data:', error);
+
         // Don't show toast on initial load, user can manually refresh
       }
     };
@@ -1013,7 +1013,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   // Enhanced document synchronization and duplicate prevention
   useEffect(() => {
     // Log for debugging
-    ////console.log('📄 Documents count:', documents.length);
+
 
     // Check for duplicates
     const documentIds = documents.map(doc => doc.id);

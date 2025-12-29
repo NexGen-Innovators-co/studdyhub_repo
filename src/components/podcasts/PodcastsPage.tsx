@@ -169,7 +169,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           table: 'ai_podcasts'
         },
         (payload) => {
-          console.log('Podcast updated:', payload);
+
           // Optionally, only update the changed podcast in state instead of refetching all
           fetchPodcasts(1, true);
         }
@@ -274,7 +274,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           try {
             audioSegments = podcast.audio_segments ? JSON.parse(podcast.audio_segments) : [];
           } catch (e) {
-            console.error('Invalid audio_segments JSON:', podcast.audio_segments, e);
+
             audioSegments = [];
           }
         } else {
@@ -288,7 +288,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
             try {
               visualAssets = JSON.parse(podcast.visual_assets);
             } catch (e) {
-              console.error('Invalid visual_assets JSON:', podcast.visual_assets, e);
+
               visualAssets = null;
             }
           } else {
@@ -326,7 +326,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       setHasMore((data || []).length === 20);
       setPage(fetchPage);
     } catch (error: any) {
-      console.error('Error fetching podcasts:', error);
+
       toast.error('Failed to load podcasts');
     } finally {
       setLoading(false);
@@ -358,14 +358,14 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   const incrementListenCount = async (podcastId: string) => {
     // Check if this podcast has already been counted in this session
     if (listenedPodcasts.has(podcastId)) {
-      console.log('Listen count already incremented for this podcast in this session');
+
       return;
     }
 
     try {
       // Check if the current user is already a listener in the podcast_listeners table
       if (!currentUser) {
-        console.warn('No user found, cannot check podcast_listeners');
+
         return;
       }
       const { data: existingListener, error: listenerError } = await supabase
@@ -376,14 +376,14 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         .maybeSingle();
 
       if (listenerError) {
-        console.error('Error checking podcast_listeners:', listenerError);
+
         return;
       }
 
       if (existingListener) {
         // User is already a listener in the DB, do not increment
         setListenedPodcasts(prev => new Set(prev).add(podcastId));
-        console.log('User already a listener in podcast_listeners table');
+
         return;
       }
 
@@ -392,7 +392,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         .from('podcast_listeners')
         .insert({ podcast_id: podcastId, user_id: currentUser.id });
       if (insertError) {
-        console.error('Error adding user to podcast_listeners:', insertError);
+
         return;
       }
 
@@ -400,7 +400,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       // Mark this podcast as listened to in this session
       setListenedPodcasts(prev => new Set(prev).add(podcastId));
     } catch (error) {
-      console.error('Error incrementing listen count:', error);
+
     }
   };
 
@@ -435,7 +435,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       setPodcastToDelete(null);
       fetchPodcasts(); // Refresh the list
     } catch (error: any) {
-      console.error('Error deleting podcast:', error);
+
       toast.error('Failed to delete podcast: ' + error.message);
     } finally {
       setDeletingPodcast(false);
@@ -492,7 +492,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           size_bytes: 0
         });
         if (mediaError) {
-          console.error('Error attaching cover image to social_media:', mediaError);
+
           toast.error('Podcast shared, but failed to attach cover image.');
         }
       }
@@ -515,7 +515,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         }
       });
     } catch (error) {
-      console.error('Error sharing to social:', error);
+
       toast.error('Failed to share to social feed');
     }
   };
@@ -538,7 +538,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       toast.success(newPublicState ? 'Podcast is now public' : 'Podcast is now private');
     } catch (error) {
-      console.error('Error toggling podcast visibility:', error);
+
       toast.error('Failed to update podcast visibility');
       // Revert optimistic update on error
       fetchPodcasts();

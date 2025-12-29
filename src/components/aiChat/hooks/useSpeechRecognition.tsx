@@ -68,7 +68,7 @@ export const useSpeechRecognition = ({
     useEffect(() => {
         const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognitionConstructor) {
-            ////console.warn('SpeechRecognition API not supported in this browser.');
+
             return;
         }
 
@@ -105,7 +105,7 @@ export const useSpeechRecognition = ({
         };
 
         recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
-            ////console.error('Speech recognition error:', event.error, event.message);
+
             setIsRecognizing(false);
             toast.error(`Speech recognition failed: ${event.error}`);
         };
@@ -133,7 +133,7 @@ export const useSpeechRecognition = ({
         if (micPermissionStatus !== 'granted') {
             const hasNotificationPermission = await requestNotificationPermission();
             if (!hasNotificationPermission) {
-                ////console.warn("Notification permission not granted, proceeding without notifications.");
+
             }
 
             const hasMicrophonePermission = await requestMicrophonePermission();
@@ -149,7 +149,7 @@ export const useSpeechRecognition = ({
             setIsRecognizing(true);
             toast.info('Listening... Click the mic button again to stop.');
         } catch (error: any) {
-            ////console.error('Error starting speech recognition:', error);
+
             toast.error(`Failed to start speech recognition: ${error.message || 'Unknown error'}`);
             setIsRecognizing(false);
         }

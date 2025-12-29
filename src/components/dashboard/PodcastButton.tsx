@@ -51,7 +51,7 @@ export const PodcastButton: React.FC<PodcastButtonProps> = ({
         setShowGenerator(true);
       }
     } catch (error) {
-      console.error('Error checking eligibility:', error);
+
       toast.error('Failed to check eligibility');
     } finally {
       setChecking(false);
