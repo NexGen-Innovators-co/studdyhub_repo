@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../integrations/supabase/client';
 import { toast } from 'sonner';
 import { DEFAULT_LIMITS } from '../utils/socialConstants';
@@ -27,6 +28,7 @@ export interface SocialNotification {
 
 // Updated useSocialNotifications hook with duplicate prevention
 export const useSocialNotifications = () => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<SocialNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
@@ -177,7 +179,14 @@ export const useSocialNotifications = () => {
                     action: {
                       label: 'View',
                       onClick: () => {
-
+                        const n = notificationData as SocialNotification;
+                        if (n.post_id) {
+                          navigate(`/social/post/${n.post_id}`);
+                        } else if (n.type === 'follow') {
+                          navigate(`/social/profile/${n.actor_id}`);
+                        } else {
+                          navigate('/social');
+                        }
                       }
                     }
                   });
@@ -214,7 +223,7 @@ export const useSocialNotifications = () => {
     return () => {
       subscription?.unsubscribe();
     };
-  }, [userId]);
+  }, [userId, navigate]);
 
 
   useEffect(() => {
@@ -228,103 +237,6 @@ export const useSocialNotifications = () => {
     };
     getUser();
   }, []);
-
-  // Real-time subscription
-  useEffect(() => {
-    if (!userId) return;
-
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    const setupSubscription = () => {
-      const subscription = supabase
-        .channel(`user_notifications_${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'social_notifications',
-            filter: `user_id=eq.${userId}`
-          },
-          async (payload) => {
-            try {
-              // Reset retry count on successful message
-              retryCount = 0;
-
-              const { data: notificationData, error } = await supabase
-                .from('social_notifications')
-                .select(`
-                  *,
-                  actor:social_users!social_notifications_actor_id_fkey(
-                    id,
-                    username,
-                    display_name,
-                    avatar_url
-                  ),
-                  post:social_posts(
-                    id,
-                    content,
-                    author_id
-                  )
-                `)
-                .eq('id', payload.new.id)
-                .single();
-
-              if (error) throw error;
-
-              if (notificationData) {
-                setNotifications(prev => [notificationData as SocialNotification, ...prev]);
-                setUnreadCount(prev => prev + 1);
-
-                // Show toast only for important notifications
-                if (!notificationData.is_read) {
-                  const message = getNotificationMessage(notificationData as SocialNotification);
-                  toast.info(message, {
-                    duration: 4000,
-                    action: {
-                      label: 'View',
-                      onClick: () => {
-                        // You can add navigation logic here
-
-                      }
-                    }
-                  });
-                }
-              }
-            } catch (error) {
-
-            }
-          }
-        )
-        .on('system', { event: 'disconnect' }, () => {
-
-          // Attempt to reconnect with exponential backoff
-          if (retryCount < maxRetries) {
-            const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-            setTimeout(() => {
-              retryCount++;
-              setupSubscription();
-            }, delay);
-          }
-        })
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-
-            retryCount = 0;
-          }
-        });
-
-      return subscription;
-    };
-
-    const subscription = setupSubscription();
-
-    return () => {
-      subscription?.unsubscribe();
-    };
-  }, [userId]);
-
 
   // Initial fetch when userId changes
   useEffect(() => {

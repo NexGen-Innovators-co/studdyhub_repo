@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast, MenuIcon } from 'lucide-react';
+import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast, MenuIcon, Layout } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
   Menubar,
@@ -116,6 +117,10 @@ const AIChat: React.FC<AIChatProps> = ({
   isLoadingDocuments,
 }) => {
   const [inputMessage, setInputMessage] = useState('');
+  // ...existing code...
+  // The main return for the component must be here:
+  // (REMOVED: return ...)
+
   const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
   const [activePodcast, setActivePodcast] = useState<PodcastData | null>(null);
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
@@ -140,6 +145,9 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState('');
+  // ...rest of your hooks and logic...
+
+  // (Move the main return statement to the end of the function)
 
   // Use useMemo for merged documents instead of state
   const mergedDocuments = useMemo(() => {
@@ -202,10 +210,22 @@ const AIChat: React.FC<AIChatProps> = ({
     message: '',
     progress: 0
   });
-  const ChatLoadingIndicator: React.FC<{
-    isLoadingSession: boolean;
-    messageCount: number;
-  }> = ({ isLoadingSession, messageCount }) => {
+// MessageSkeleton: loading placeholder for messages
+const MessageSkeleton: React.FC = () => (
+  <div className="space-y-4 animate-pulse">
+    {[1, 2, 3].map((i) => (
+      <div key={i} className="flex gap-3">
+        <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
+          <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: number }> = ({ isLoadingSession, messageCount }) => {
     if (!isLoadingSession) return null;
 
     return (
@@ -218,36 +238,19 @@ const AIChat: React.FC<AIChatProps> = ({
           <p className="text-base text-gray-600 dark:text-gray-300 animate-pulse">
             Loading conversation...
           </p>
-          {messageCount > 0 && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {messageCount} message{messageCount !== 1 ? 's' : ''} loaded
-            </p>
-          )}
         </div>
-
-        {/* Progress bar */}
-        <div className="w-64 h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-pink-500 to-purple-500 animate-pulse"
-            style={{ width: '60%' }}
-          />
-        </div>
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex gap-3">
+            <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
+              <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
+            </div>
+          </div>
+        ))}
       </div>
     );
-  };
-  const MessageSkeleton: React.FC = () => (
-    <div className="space-y-4 animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex gap-3">
-          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
-            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+};
   const loadSessionDocuments = useCallback(async (sessionId: string) => {
     if (!userProfile?.id) return;
 
@@ -761,58 +764,50 @@ const AIChat: React.FC<AIChatProps> = ({
   }, []);
 
   return (
-        <div
+    <>
+      {/* Main Chat Container */}
+      <div
         ref={dropZoneRef}
-        className={`flex flex-col h-[90vh] lg:h-screen ${isDiagramPanelOpen ? `` : 'max-w-3xl mx-auto'} border-none relative justify-center bg-transparent dark:bg-transparent overflow-hidden md:flex-row md:gap-0 font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+        className={`flex h-[90vh] lg:h-screen border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
       >
         <DragOverlay isDragging={isDragging} />
 
         {/* Chat Panel */}
         <div
-          className={`relative flex flex-col h-full rounded-lg panel-transition
-            ${isDiagramPanelOpen
-              ? (isPhone()
-                ? 'hidden'
-                : `flex-shrink-0`)
-              : 'w-full flex-1'
-            } bg-transparent dark:bg-transparent`}
-          style={{
-            width: isDiagramPanelOpen && !isPhone()
-              ? `calc(100% - ${panelWidth}%)`
-              : '100%',
-            transition: 'width 0.1s ease-in-out'
-          }}
+          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen' : ''}`}
+          style={isDiagramPanelOpen && !isPhone() ? { width: `calc(${100 - panelWidth}% - 1px)` } : isPhone() ? { width: '100vw', height: '100vh', left: 0, top: 0 } : { flex: 1 }}
         >
+          {/* Enhanced Loading States */}
+          {isLoadingSessionMessages && messages.length === 0 ? (
+            <ChatLoadingIndicator
+              isLoadingSession={true}
+              messageCount={0}
+            />
+          ) : isLoadingSessionMessages && messages.length > 0 ? (
+            <div className="flex justify-center items-center py-4">
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <Loader2 className="h-4 w-4 animate-spin text-pink-500" />
+                <span>Loading older messages...</span>
+              </div>
+            </div>
+          ) : activeChatSessionId && messages.length === 0 ? (
+            <div className="text-center text-gray-500 dark:text-gray-400 mt-20 font-claude">
+              <BookPagesAnimation className="mx-auto mb-4 h-16 w-16 text-pink-500" showText={false} />
+              <p className="text-lg md:text-xl">Start the conversation by sending a message!</p>
+            </div>
+          ) : null}
+
+          {/* Show skeleton only when loading first messages */}
+          {isLoadingSessionMessages && messages.length === 0 && (
+            <MessageSkeleton />
+          )}
+
+          {/* Messages */}
           <div
             ref={chatContainerRef}
-            className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar pb-36 md:pb-6"
+            className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar"
+            style={{ paddingBottom: '180px' }}
           >
-            {/* Enhanced Loading States */}
-            {isLoadingSessionMessages && messages.length === 0 ? (
-              <ChatLoadingIndicator
-                isLoadingSession={true}
-                messageCount={0}
-              />
-            ) : isLoadingSessionMessages && messages.length > 0 ? (
-              <div className="flex justify-center items-center py-4">
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                  <Loader2 className="h-4 w-4 animate-spin text-pink-500" />
-                  <span>Loading older messages...</span>
-                </div>
-              </div>
-            ) : activeChatSessionId && messages.length === 0 ? (
-              <div className="text-center text-gray-500 dark:text-gray-400 mt-20 font-claude">
-                <BookPagesAnimation className="mx-auto mb-4 h-16 w-16 text-pink-500" showText={false} />
-                <p className="text-lg md:text-xl">Start the conversation by sending a message!</p>
-              </div>
-            ) : null}
-
-            {/* Show skeleton only when loading first messages */}
-            {isLoadingSessionMessages && messages.length === 0 && (
-              <MessageSkeleton />
-            )}
-
-            {/* Messages */}
             {messages.length > 0 && (
               <MessageList
                 messages={messages}
@@ -858,136 +853,183 @@ const AIChat: React.FC<AIChatProps> = ({
                 </div>
               </div>
             )}
-
             <div ref={messagesEndRef} />
           </div>
+          {isCurrentlySending && isAiTyping && messages.length > 0 && (
+            <div className="flex justify-center font-sans">
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700">
+                <div className="flex gap-1">
+                  <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+                <span className="text-sm text-gray-600 dark:text-gray-300">sending...</span>
+              </div>
+            </div>
+          )}
 
-
+          <div ref={messagesEndRef} />
           {/* Input area */}
           <div className={`fixed bottom-0 left-0 right-0 sm:pb-8 md:shadow-none md:static rounded-t-lg rounded-lg md:rounded-lg bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
-          ${isDiagramPanelOpen
-              ? (isPhone() ? 'hidden' : `md:pr-[calc(${panelWidth}%+1.5rem)]`)
-              : ''
-            }`}>
-
-            <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2">
-              <SubscriptionGuard
-                feature="AI Chat"
-                limitFeature="maxAiMessages"
-                currentCount={useAiMessageTracker().messagesToday} // from useAiMessageTracker
-                message="You've reached your daily AI message limit."
-              >
-                {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
-                  <div className="mb-2">
-                    <ContextBadges
-                      attachedFiles={attachedFiles}
-                      selectedImageDocuments={selectedImageDocuments}
-                      selectedDocumentTitles={selectedDocumentTitles}
-                      selectedNoteTitles={selectedNoteTitles}
-                      handleRemoveAllFiles={handleRemoveAllFiles}
-                      onSelectionChange={onSelectionChange}
-                      selectedDocumentIds={selectedDocumentIds}
-                      documents={documents}
-                      notes={notes}
+            ${isDiagramPanelOpen ? `md:pr-[calc(${panelWidth}%+1.5rem)]` : ''}`}>
+              <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2">
+                <SubscriptionGuard
+                  feature="AI Chat"
+                  limitFeature="maxAiMessages"
+                  currentCount={useAiMessageTracker().messagesToday}
+                  message="You've reached your daily AI message limit."
+                >
+                  {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
+                    <div className="mb-2">
+                      <ContextBadges
+                        attachedFiles={attachedFiles}
+                        selectedImageDocuments={selectedImageDocuments}
+                        selectedDocumentTitles={selectedDocumentTitles}
+                        selectedNoteTitles={selectedNoteTitles}
+                        handleRemoveAllFiles={handleRemoveAllFiles}
+                        onSelectionChange={onSelectionChange}
+                        selectedDocumentIds={selectedDocumentIds}
+                        documents={documents}
+                        notes={notes}
+                      />
+                    </div>
+                  ) : null}
+                  <div className="flex flex-row gap-2 mt-0 sm:mt-2 w-full items-end">
+                    <Menubar className="flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg">
+                      <MenubarMenu>
+                        <MenubarTrigger className="h-10 w-10 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                          <MenuIcon className="h-5 w-5" />
+                        </MenubarTrigger>
+                        <MenubarContent align="end" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                          <MenubarItem onClick={() => setEnableStreamingMode(!enableStreamingMode)} className="flex items-center gap-2">
+                            <motion.div
+                              animate={enableStreamingMode ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+                              transition={{ duration: 0.5, repeat: enableStreamingMode ? Infinity : 0, repeatDelay: 1 }}
+                              whileHover={{ scale: 1.25 }}
+                              className={enableStreamingMode ? 'text-pink-500' : 'text-blue-500'}
+                            >
+                              {enableStreamingMode ? '🧠' : '💬'}
+                            </motion.div>
+                            <span className="text-xs font-medium hidden sm:inline">
+                              {enableStreamingMode ? 'Thinking Mode' : 'Fast Mode'}
+                            </span>
+                          </MenubarItem>
+                          <MenubarItem onClick={isRecognizing ? stopRecognition : startRecognition} disabled={micPermissionStatus === 'checking' || isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                            <span className="flex items-center">
+                              <motion.span whileHover={{ scale: 1.25 }} className={isRecognizing ? 'text-green-500' : 'text-gray-500'}>
+                                <Mic className="h-5 w-5 mr-2" />
+                              </motion.span>
+                              {isRecognizing ? 'Stop Speech Recognition' : 'Start Speech Recognition'}
+                            </span>
+                          </MenubarItem>
+                          <MenubarItem onClick={() => cameraInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                            <span className="flex items-center">
+                              <motion.span whileHover={{ scale: 1.25 }} className="text-yellow-500">
+                                <Camera className="h-5 w-5 mr-2" />
+                              </motion.span>
+                              Take Picture
+                            </span>
+                          </MenubarItem>
+                          <MenubarItem onClick={() => fileInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                            <span className="flex items-center">
+                              <motion.span whileHover={{ scale: 1.25 }} className="text-purple-500">
+                                <Paperclip className="h-5 w-5 mr-2" />
+                              </motion.span>
+                              Upload Files
+                            </span>
+                          </MenubarItem>
+                          <MenubarItem onClick={() => setShowDocumentSelector(true)} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                            <span className="flex items-center">
+                              <motion.span whileHover={{ scale: 1.25 }} className="text-blue-500">
+                                <FileText className="h-5 w-5 mr-2" />
+                              </motion.span>
+                              {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Select Documents/Notes'}
+                            </span>
+                          </MenubarItem>
+                          <MenubarItem onClick={() => setShowPodcastGenerator(true)} disabled={selectedDocumentIds.length === 0}>
+                            <span className="flex items-center">
+                              <motion.span whileHover={{ scale: 1.25 }} className="text-pink-500">
+                                <Podcast className="h-5 w-5 mr-2" />
+                              </motion.span>
+                              Generate AI Podcast
+                            </span>
+                          </MenubarItem>
+                          <MenubarItem onClick={() => setAutoTypeInPanel(prev => !prev)}>
+                            <span className="flex items-center">
+                              <motion.span whileHover={{ scale: 1.25 }} className={autoTypeInPanel ? 'text-green-500' : 'text-gray-500'}>
+                                <Layout className="h-5 w-5 mr-2" />
+                              </motion.span>
+                              {autoTypeInPanel ? 'Panel On' : 'Panel Off'}
+                            </span>
+                          </MenubarItem>
+                        </MenubarContent>
+                      </MenubarMenu>
+                    </Menubar>
+                    <textarea
+                      ref={textareaRef}
+                      value={inputMessage}
+                      onChange={(e) => {
+                        e.preventDefault();
+                        const newValue = e.target.value;
+                        setInputMessage(newValue);
+                        if (textareaRef.current) {
+                          textareaRef.current.style.height = 'auto';
+                          textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage(e);
+                        }
+                      }}
+                      placeholder="What do you want to know? (You can also drag and drop files here)"
+                      className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[82px] dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
+                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
+                      rows={1}
+                    />
+                    <Button
+                      type="submit"
+                      onClick={handleSendMessage}
+                      disabled={
+                        isLoading ||
+                        isSubmittingUserMessage ||
+                        isGeneratingImage ||
+                        isUpdatingDocuments ||
+                        (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) ||
+                        !isLastAiMessageDisplayed ||
+                        isCurrentlySending ||
+                        isAiTyping ||
+                        messages.some(msg => msg.id.startsWith('optimistic-'))
+                      }
+                      className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                    >
+                      {isSubmittingUserMessage || isCurrentlySending || isAiTyping ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                    {/* Hidden file inputs for menu actions */}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      ref={cameraInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    <input
+                      type="file"
+                      accept="*/*"
+                      multiple
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
                     />
                   </div>
-                ) : null}
-                <div className="flex flex-row gap-2 mt-0 sm:mt-2 w-full items-end">
-                  <Menubar className="flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg">
-                    <MenubarMenu>
-                      <MenubarTrigger className="h-10 w-10 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
-                        <MenuIcon className="h-5 w-5" />
-                      </MenubarTrigger>
-                      <MenubarContent align="end" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                        <MenubarItem onClick={() => setEnableStreamingMode(!enableStreamingMode)}>
-                          {enableStreamingMode ? 'Thinking Mode' : 'Fast Mode'}
-                        </MenubarItem>
-                        <MenubarItem onClick={isRecognizing ? stopRecognition : startRecognition} disabled={micPermissionStatus === 'checking' || isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                          <span className="flex items-center"><Mic className="h-5 w-5 mr-2" />{isRecognizing ? 'Stop Speech Recognition' : 'Start Speech Recognition'}</span>
-                        </MenubarItem>
-                        <MenubarItem onClick={() => cameraInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                          <span className="flex items-center"><Camera className="h-5 w-5 mr-2" />Take Picture</span>
-                        </MenubarItem>
-                        <MenubarItem onClick={() => fileInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                          <span className="flex items-center"><Paperclip className="h-5 w-5 mr-2" />Upload Files</span>
-                        </MenubarItem>
-                        <MenubarItem onClick={() => setShowDocumentSelector(true)} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                          <span className="flex items-center"><FileText className="h-5 w-5 mr-2" />{isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Select Documents/Notes'}</span>
-                        </MenubarItem>
-                        <MenubarItem onClick={() => setShowPodcastGenerator(true)} disabled={selectedDocumentIds.length === 0}>
-                          <span className="flex items-center"><Podcast className="h-5 w-5 mr-2 text-purple-600 dark:text-purple-400" />Generate AI Podcast</span>
-                        </MenubarItem>
-                        <MenubarItem onClick={() => setAutoTypeInPanel(prev => !prev)}>
-                          <span className="flex items-center">{autoTypeInPanel ? 'Panel On' : 'Panel Off'}</span>
-                        </MenubarItem>
-                      </MenubarContent>
-                    </MenubarMenu>
-                  </Menubar>
-                  <textarea
-                    ref={textareaRef}
-                    value={inputMessage}
-                    onChange={(e) => {
-                      e.preventDefault();
-                      const newValue = e.target.value;
-                      setInputMessage(newValue);
-                      if (textareaRef.current) {
-                        textareaRef.current.style.height = 'auto';
-                        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage(e);
-                      }
-                    }}
-                    placeholder="What do you want to know? (You can also drag and drop files here)"
-                    className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[82px] dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
-                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                    rows={1}
-                  />
-                  
-                  <Button
-                    type="submit"
-                    onClick={handleSendMessage}
-                    disabled={
-                      isLoading ||
-                      isSubmittingUserMessage ||
-                      isGeneratingImage ||
-                      isUpdatingDocuments ||
-                      (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) ||
-                      !isLastAiMessageDisplayed ||
-                      isCurrentlySending ||
-                      isAiTyping ||
-                      messages.some(msg => msg.id.startsWith('optimistic-'))
-                    }
-                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
-                  >
-                    {isSubmittingUserMessage || isCurrentlySending || isAiTyping ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
-                  {/* Hidden file inputs for menu actions */}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    ref={cameraInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <input
-                    type="file"
-                    accept="*/*"
-                    multiple
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </div>
-                  </SubscriptionGuard>
+                </SubscriptionGuard>
+              </div>
           </div>
 
           {/* Document selector and other modals */}
@@ -1008,8 +1050,6 @@ const AIChat: React.FC<AIChatProps> = ({
               activeChatSessionId={activeChatSessionId}
             />
           )}
-
-          {/* Podcast Generator Dialog */}
           {showPodcastGenerator && (
             <PodcastGenerator
               selectedNoteIds={selectedDocumentIds.filter(id => notes.some(n => n.id === id))}
@@ -1021,7 +1061,6 @@ const AIChat: React.FC<AIChatProps> = ({
               }}
             />
           )}
-
           <ConfirmationModal
             isOpen={showDeleteConfirm}
             onClose={() => setShowDeleteConfirm(false)}
@@ -1031,10 +1070,21 @@ const AIChat: React.FC<AIChatProps> = ({
           />
         </div>
 
-        {/* Diagram Panel */}
-        {isDiagramPanelOpen && (
+        {/* Podcast Panel */}
+        {activePodcast && (
+          <PodcastPanel
+            podcast={activePodcast}
+            onClose={() => setActivePodcast(null)}
+            isOpen={!!activePodcast}
+            panelWidth={podcastPanelWidth}
+            setPanelWidth={setPodcastPanelWidth}
+          />
+        )}
+
+        {/* Diagram Panel - Desktop only (side by side) */}
+        {isDiagramPanelOpen && !isPhone() && (
           <DiagramPanel
-            key={`diagram-panel-${panelWidth}`}
+            key="diagram-panel"
             diagramContent={activeDiagram?.content}
             diagramType={activeDiagram?.type || 'unknown'}
             onClose={handleCloseDiagramPanel}
@@ -1051,20 +1101,36 @@ const AIChat: React.FC<AIChatProps> = ({
             setPanelWidth={setPanelWidth}
           />
         )}
-
-        {/* Podcast Panel */}
-        {activePodcast && (
-          <PodcastPanel
-            podcast={activePodcast}
-            onClose={() => setActivePodcast(null)}
-            isOpen={!!activePodcast}
-            panelWidth={podcastPanelWidth}
-            setPanelWidth={setPodcastPanelWidth}
-          />
-        )}
       </div>
-    </div>
+
+      {/* Diagram Panel - Mobile only (fixed overlay, portal) */}
+      {isDiagramPanelOpen && isPhone() && typeof window !== 'undefined' && (
+        ReactDOM.createPortal(
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, width: '100vw', height: '100vh', background: 'white' }}>
+            <DiagramPanel
+              key="diagram-panel-mobile"
+              diagramContent={activeDiagram?.content}
+              diagramType={activeDiagram?.type || 'unknown'}
+              onClose={handleCloseDiagramPanel}
+              onMermaidError={memoizedOnMermaidError}
+              onSuggestAiCorrection={memoizedOnSuggestAiCorrection}
+              isOpen={isDiagramPanelOpen}
+              language={activeDiagram?.language}
+              imageUrl={activeDiagram?.imageUrl}
+              initialWidthPercentage={100}
+              liveContent={activeDiagram?.content}
+              isPhone={isPhone}
+              currentTheme={initialAppState.currentTheme}
+              panelWidth={100}
+              setPanelWidth={setPanelWidth}
+            />
+          </div>,
+          document.body
+        )
+      )}
+    </>
   );
+// End of AIChat component
 }
 
 const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {

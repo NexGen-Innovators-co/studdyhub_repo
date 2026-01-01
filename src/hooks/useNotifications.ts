@@ -1,5 +1,6 @@
 // Hook for managing notifications
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { pushNotificationService } from '@/services/pushNotificationService';
@@ -8,6 +9,7 @@ import { toast } from 'sonner';
 
 export function useNotifications() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
@@ -269,6 +271,48 @@ export function useNotifications() {
           
           setNotifications(prev => [newNotification, ...prev]);
           setUnreadCount(prev => prev + 1);
+
+          // Show toast for foreground notification
+          toast.info(newNotification.title, {
+            description: newNotification.message,
+            action: {
+              label: 'View',
+              onClick: () => {
+                if (newNotification.action_url) {
+                  navigate(newNotification.action_url);
+                } else {
+                  // Default navigation based on type
+                  switch (newNotification.type) {
+                    case 'schedule_reminder':
+                    case 'assignment_due':
+                      navigate('/schedule');
+                      break;
+                    case 'quiz_due':
+                      navigate('/quizzes');
+                      break;
+                    case 'social_like':
+                    case 'social_comment':
+                    case 'social_mention':
+                      if (newNotification.data?.post_id) {
+                        navigate(`/social/post/${newNotification.data.post_id}`);
+                      } else {
+                        navigate('/social');
+                      }
+                      break;
+                    case 'social_follow':
+                      if (newNotification.data?.actor_id) {
+                        navigate(`/social/profile/${newNotification.data.actor_id}`);
+                      } else {
+                        navigate('/social');
+                      }
+                      break;
+                    default:
+                      navigate('/notifications');
+                  }
+                }
+              }
+            }
+          });
           
           // Show browser notification if enabled
           if (preferences?.push_notifications && isSubscribed) {

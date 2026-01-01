@@ -50,7 +50,7 @@ serve(async (req) => {
     const body = await req.json();
     console.log('Request body parsed:', { contentLength: body.content?.length, privacy: body.privacy });
     
-    const { content, privacy = 'public', media = [], group_id = null } = body;
+    const { content, privacy = 'public', media = [], group_id = null, metadata = null } = body;
 
     // Validate content
     if (!content || content.trim().length === 0) {
@@ -298,6 +298,7 @@ Respond in JSON format:
         content,
         privacy,
         group_id,
+        metadata,
         created_at: new Date().toISOString(),
         likes_count: 0,
         comments_count: 0

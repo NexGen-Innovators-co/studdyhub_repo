@@ -42,7 +42,6 @@ interface DiagramPanelProps {
   liveContent?: string;
   isPhone: () => boolean;
   currentTheme: 'light' | 'dark';
-  // Add these two props
   panelWidth?: number;
   setPanelWidth?: React.Dispatch<React.SetStateAction<number>>;
 }
@@ -67,7 +66,6 @@ export const DiagramPanel = memo(({
   liveContent,
   isPhone,
   currentTheme,
-  // Add these props
   panelWidth: externalPanelWidth,
   setPanelWidth: externalSetPanelWidth
 }: DiagramPanelProps) => {
@@ -80,6 +78,8 @@ export const DiagramPanel = memo(({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const resizeStartX = useRef<number>(0);
+  const resizeStartWidth = useRef<number>(0);
   const innerContentWrapperRef = useRef<HTMLDivElement>(null);
   const htmlIframeRef = useRef<HTMLIFrameElement>(null);
   const mermaidIframeRef = useRef<HTMLIFrameElement>(null);
@@ -131,6 +131,65 @@ export const DiagramPanel = memo(({
   const handleNodeClick = useCallback((nodeId: string) => {
     toast.success(`Node ${nodeId} clicked`);
   }, []);
+
+  // Resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = panelWidth;
+  }, [panelWidth]);
+
+  // Throttle resize updates to reduce re-renders
+  const throttledSetPanelWidth = useCallback((newWidth: number) => {
+    setPanelWidth(newWidth);
+  }, [setPanelWidth]);
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    const deltaX = resizeStartX.current - e.clientX;
+    const windowWidth = window.innerWidth;
+    const deltaPercent = (deltaX / windowWidth) * 100;
+    const newWidth = Math.min(Math.max(resizeStartWidth.current + deltaPercent, 30), 90);
+    
+    // Update immediately for smooth visual feedback
+    throttledSetPanelWidth(newWidth);
+  }, [throttledSetPanelWidth]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+    // Save to localStorage only when done resizing
+    localStorage.setItem('diagramPanelWidth', panelWidth.toString());
+  }, [panelWidth]);
+
+  useEffect(() => {
+    // Don't attach resize listeners on mobile
+    if (isResizing && !isPhone()) {
+      const handleMove = (e: MouseEvent) => {
+        const deltaX = resizeStartX.current - e.clientX;
+        const windowWidth = window.innerWidth;
+        const deltaPercent = (deltaX / windowWidth) * 100;
+        const newWidth = Math.min(Math.max(resizeStartWidth.current + deltaPercent, 30), 90);
+        setPanelWidth(newWidth);
+      };
+
+      const handleUp = () => {
+        setIsResizing(false);
+        localStorage.setItem('diagramPanelWidth', panelWidth.toString());
+      };
+
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleUp);
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [isResizing, isPhone, setPanelWidth, panelWidth]);
 
   useEffect(() => {
     if (effectiveDiagramType === 'slides' && renderContent) {
@@ -322,60 +381,7 @@ box-sizing: border-box;
     }
   }, [effectiveDiagramType, renderContent, imageUrl, onMermaidError, language, isInteractiveContent, sanitizeHtml]);
 
-  // Resizing functions
-  const startResizing = useCallback((e: React.MouseEvent) => {
-    //console.log('Start resizing');
-    setIsResizing(true);
-    lastMousePos.current = { x: e.clientX, y: e.clientY };
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
 
-  const stopResizing = useCallback(() => {
-    //console.log('Stop resizing');
-    setIsResizing(false);
-    localStorage.setItem('diagramPanelWidth', panelWidth.toString());
-  }, [panelWidth]);
-
-  const resizePanel = useCallback((e: MouseEvent) => {
-    if (isResizing) {
-      e.preventDefault();
-      const newWidth = e.clientX;
-      const percentage = (newWidth / window.innerWidth) * 100;
-      const clampedPercentage = Math.max(30, Math.min(70, percentage));
-      //console.log('Resizing to:', clampedPercentage);
-      setPanelWidth(clampedPercentage);
-    }
-  }, [isResizing, setPanelWidth]);
-
-  useEffect(() => {
-    //console.log('Panel width changed:', panelWidth);
-  }, [panelWidth]);
-
-  // Event listeners for resizing
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      resizePanel(e);
-    };
-
-    const handleMouseUp = () => {
-      stopResizing();
-    };
-
-    if (isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'ew-resize';
-      document.body.style.userSelect = 'none';
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isResizing, resizePanel, stopResizing]);
 
   const downloadContent = useCallback(() => {
     if (!renderContent) {
@@ -504,8 +510,8 @@ ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
       {!isFullScreen && !mobileFullScreen && (
         <div
           className="absolute left-0 top-0 h-full w-3 cursor-ew-resize -ml-1.5 z-50 hover:bg-blue-100/30 dark:hover:bg-blue-900/30 transition-colors"
-          onMouseDown={startResizing}
           title="Resize panel"
+          onMouseDown={handleResizeStart}
         >
           <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-500 h-16 w-0.5 rounded-full opacity-70" />
         </div>

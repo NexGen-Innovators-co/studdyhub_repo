@@ -199,32 +199,15 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     }
   }, [profile]);
 
-  // Load additional data when tab changes
-  useEffect(() => {
-    switch (activeTab) {
-      case 'goals':
-        fetchUserGoals();
-        break;
-      case 'achievements':
-        fetchAchievements();
-        fetchUserStats();
-        break;
-      case 'study':
-        loadStudyPreferences();
-        break;
-      case 'notifications':
-        loadNotificationPreferences();
-        break;
-      default:
-        break;
-    }
-  }, [activeTab]);
-
   const fetchUserGoals = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data, error } = await supabase
         .from('user_learning_goals')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -237,12 +220,16 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
   const fetchAchievements = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data, error } = await supabase
         .from('achievements')
         .select(`
           *,
           badges (*)
         `)
+        .eq('user_id', user.id)
         .order('earned_at', { ascending: false });
 
       if (error) throw error;
@@ -290,6 +277,33 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       setBreakInterval(JSON.parse(savedInterval));
     }
   };
+
+  // Initial load of stats and achievements for the Profile Snapshot
+  useEffect(() => {
+    fetchUserStats();
+    fetchAchievements();
+  }, []);
+
+  // Load additional data when tab changes
+  useEffect(() => {
+    switch (activeTab) {
+      case 'goals':
+        fetchUserGoals();
+        break;
+      case 'achievements':
+        fetchAchievements();
+        fetchUserStats();
+        break;
+      case 'study':
+        loadStudyPreferences();
+        break;
+      case 'notifications':
+        loadNotificationPreferences();
+        break;
+      default:
+        break;
+    }
+  }, [activeTab]);
 
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

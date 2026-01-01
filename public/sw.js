@@ -58,21 +58,33 @@ self.addEventListener('notificationclick', (event) => {
   if (notificationData) {
     switch (notificationData.type) {
       case 'schedule_reminder':
-        url = '/dashboard?view=schedule';
+        url = '/schedule';
         break;
       case 'quiz_due':
-        url = '/dashboard?view=quizzes';
+        url = '/quizzes';
         break;
       case 'assignment_due':
-        url = '/dashboard?view=schedule';
+        url = '/schedule';
         break;
-      case 'social_like':
-      case 'social_comment':
+      case 'social_share':
+      case 'social_mention':
+      case 'like':
+        url = notificationData.post_id ? `/social/post/${notificationData.post_id}` : '/social';
+        break;
+      case 'comment':
+        url = notificationData.post_id ? `/social/post/${notificationData.post_id}` : '/social';
+        break;
+      case 'share':
+      case 'mention':
+        url = notificationData.post_id ? `/social/post/${notificationData.post_id}` : '/social';
+        break;
       case 'social_follow':
-        url = '/dashboard?view=social';
+        url = notificationData.actor_id ? `/social/profile/${notificationData.actor_id}` : '/social';
+      case 'follow':
+        url = notificationData.actor_id ? `/social/profile/${notificationData.actor_id}` : '/social';
         break;
       case 'ai_limit_warning':
-        url = '/dashboard?view=subscription';
+        url = '/subscription';
         break;
       default:
         url = notificationData.action_url || '/dashboard';

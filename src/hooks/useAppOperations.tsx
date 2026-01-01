@@ -22,6 +22,7 @@ interface UseAppOperationsProps {
   setScheduleItems: (items: ScheduleItem[] | ((prev: ScheduleItem[]) => ScheduleItem[])) => void;
   setChatMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   setDocuments: (documents: Document[] | ((prev: Document[]) => Document[])) => void;
+  setQuizzes: (quizzes: Quiz[] | ((prev: Quiz[]) => Quiz[])) => void;
   setUserProfile: (profile: UserProfile | null) => void;
   setActiveNote: (note: Note | null) => void;
   setActiveTab: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
@@ -50,6 +51,7 @@ export const useAppOperations = ({
   setScheduleItems,
   setChatMessages,
   setDocuments,
+  setQuizzes,
   setUserProfile,
   setActiveNote,
   setActiveTab,
@@ -544,13 +546,18 @@ export const useAppOperations = ({
 
   const generateQuiz = async (recording: ClassRecording, quiz: Quiz) => {
     try {
-      // Quiz is already inserted by useQuizManagement; only update local state
-      // No direct action needed here, as the quiz is managed within the ClassRecordings component's state
-      // and the recording itself is updated via onUpdateRecording if needed.
-      // This function is kept for consistency with the prop signature, but its body is empty.
+      // Update local state with the new quiz
+      setQuizzes(prev => {
+        // Check if quiz already exists to avoid duplicates from realtime sync
+        if (prev.some(q => q.id === quiz.id)) return prev;
+        return [quiz, ...prev];
+      });
+      
+      // If it's a recording-based quiz, we might want to update the recording's quiz count or similar
+      // but for now, just adding to the quizzes list is enough for the history to update.
     } catch (error) {
       //console.error('Error generating quiz (operation hook):', error);
-      toast.error('Failed to generate quiz (operation hook)');
+      toast.error('Failed to update quiz list');
     }
   };
 

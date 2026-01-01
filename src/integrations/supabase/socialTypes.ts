@@ -33,6 +33,7 @@ export interface SocialPost {
     created_at: string;
     updated_at: string;
     views_count?: number;
+    metadata?: any;
 }
 
 export interface SocialMedia {
@@ -245,6 +246,7 @@ export interface SocialCommentWithDetails extends SocialComment {
 export interface SocialUserWithDetails extends SocialUser {
     is_following?: boolean;
     is_followed_by?: boolean;
+    mutual_friends_count?: number;
 }
 
 

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
 import { Note, NoteCategory, UserProfile } from '../../types';
 import { Database } from '../../integrations/supabase/types';
-import { generateSpeech } from '../../services/cloudTtsService';
+import { generateSpeech, playAudioContent } from '../../services/cloudTtsService';
 
 import { NoteContentArea } from './components/NoteContentArea';
 import { AISummarySection } from './components/AISummarySection';
@@ -42,19 +42,25 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   onToggleNotesHistory,
   isNotesHistoryOpen
 }) => {
+
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content); // Markdown
   const [category, setCategory] = useState<NoteCategory>(note.category);
   const [tags, setTags] = useState(note.tags.join(', '));
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [documentIdForDialog, setDocumentIdForDialog] = useState<string | null>(null);
+  const [uploadedDocumentPublicUrl, setUploadedDocumentPublicUrl] = useState<string | null>(null);
   const [documentSections, setDocumentSections] = useState<string[]>([]);
-  const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
+// Removed stray comment
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [extractedContent, setExtractedContent] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
   const [isSummaryVisible, setIsSummaryVisible] = useState(true);
 
   const [isDocumentViewerOpen, setIsDocumentViewerOpen] = useState(false);
@@ -69,17 +75,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [targetLanguage, setTargetLanguage] = useState<string>('en');
   const [uploadedAudioDetails, setUploadedAudioDetails] = useState<{ url: string; type: string; name: string; } | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement>(null);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isAudioOptionsVisible, setIsAudioOptionsVisible] = useState(false);
   const [audioProcessingJobId, setAudioProcessingJobId] = useState<string | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isGeneratingAudioNote, setIsGeneratingAudioNote] = useState(false);
   const [isGeneratingAudioSummary, setIsGeneratingAudioSummary] = useState(false);
   const [isTranslatingAudio, setIsTranslatingAudio] = useState(false);
 
-  const [uploadedDocumentPublicUrl, setUploadedDocumentPublicUrl] = useState<string | null>(null);
-  const [documentIdForDialog, setDocumentIdForDialog] = useState<string | null>(null);
-  const [isLoading, setIsloading] = useState(false);
-  const contentAreaRef = useRef<any>(null);
+
+    const [isLoading, setIsloading] = useState(false);
+    const contentAreaRef = useRef<any>(null);
 
   // Reset on note change
   useEffect(() => {
@@ -94,22 +99,23 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setIsAudioOptionsVisible(false);
     setAudioProcessingJobId(null);
 
-    if (currentAudio) {
-      currentAudio.pause();
-      setCurrentAudio(null);
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
     }
     setIsSpeaking(false);
 
     return () => {
-      if (currentAudio) {
-        currentAudio.pause();
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
       }
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
         audioPlayerRef.current.currentTime = 0;
       }
     };
-  }, [note, currentAudio]);
+  }, [note, currentAudioRef]);
 
   // Polling effect for audio processing job
   useEffect(() => {
@@ -195,15 +201,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   // Enhanced save handler
   // Enhanced save handler
   const handleSave = useCallback(() => {
+    // Use the markdown from the ref (which includes diagrams) or fallback to content state
+    const markdownToSave = contentAreaRef.current?.getCurrentMarkdown() || content;
 
-    if (!content) {
+    if (!markdownToSave) {
       toast.error("No content to save");
       return;
     }
-    // Use the markdown from the ref (which includes diagrams) or fallback to content state
+    
     setIsloading(true);
-    const markdownToSave = content;
-
 
     const updatedNote: Note = {
       ...note,
@@ -215,25 +221,76 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       ai_summary: note.ai_summary
     };
 
+    console.log('--- UPDATING NOTE IN DATABASE ---', updatedNote.content);
+
     // Update local state to ensure synchronization
     if (markdownToSave !== content) {
       setContent(markdownToSave);
     }
+
     setTimeout(() => {
       onNoteUpdate(updatedNote);
       setIsContentModified(false);
       setIsloading(false);
       toast.success("Note saved successfully");
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
     }, 1000);
+  }, [content, note, title, category, tags, onNoteUpdate]);
 
-  }, [note, title, content, category, tags, onNoteUpdate]);
-
-  // Enhanced content change handler
   const handleContentChange = useCallback((newContent: string) => {
-
     setContent(newContent);
     setIsContentModified(true);
   }, []);
+
+  const handleSummaryChange = useCallback((newSummary: string) => {
+    onNoteUpdate({
+      ...note,
+      ai_summary: newSummary,
+      updated_at: new Date().toISOString()
+    });
+    toast.success("Summary updated");
+  }, [note, onNoteUpdate]);
+
+  const handleRegenerateSummary = useCallback(async () => {
+    if (!content) {
+      toast.error("No content to summarize");
+      return;
+    }
+
+    setIsGeneratingSummary(true);
+    const toastId = toast.loading("Regenerating summary...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-summary', {
+        body: {
+          content: content,
+          title: title,
+          category: category
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.summary) {
+        onNoteUpdate({
+          ...note,
+          ai_summary: data.summary,
+          updated_at: new Date().toISOString()
+        });
+        toast.success("Summary regenerated successfully", { id: toastId });
+      } else {
+        throw new Error("No summary returned from AI");
+      }
+    } catch (error: any) {
+      console.error("Error regenerating summary:", error);
+      toast.error(error.message || "Failed to regenerate summary", { id: toastId });
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  }, [content, title, category, note, onNoteUpdate]);
 
   // Add auto-save or manual save indicator in the UI if needed
 
@@ -619,25 +676,27 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleTextToSpeech = async () => {
     // If speech is currently active, stop it
-    if (isSpeaking && currentAudio) {
-      currentAudio.pause();
-      setCurrentAudio(null);
+    if (isSpeaking && currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
       setIsSpeaking(false);
       toast.info("Speech stopped.");
       return;
     }
 
-    // Start speech
+    // Always pause and clear any previous audio before starting new
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+      setIsSpeaking(false);
+    }
+
     if (!content.trim()) {
       toast.info("There's no content to read aloud.");
       return;
     }
 
-
     const textToRead = processMarkdownForSpeech(content);
-
-
-    
     if (!textToRead || !textToRead.trim()) {
       toast.info("The note has no readable content after processing.");
       return;
@@ -645,82 +704,39 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     try {
       toast.loading('Generating speech...', { id: 'note-tts' });
-      
-
       const { audioContent, error } = await generateSpeech({
         text: textToRead,
         voice: 'female',
         rate: 1.0,
         pitch: 0
       });
-
       toast.dismiss('note-tts');
-
-
-
       if (error || !audioContent) {
         toast.error(error || 'Failed to generate speech');
         return;
       }
-
-      // Play audio
+      // Play audio using a persistent ref
       const cleanedAudio = audioContent
         .trim()
         .replace(/^data:audio\/[a-z]+;base64,/, '')
         .replace(/\s/g, '');
-
-
       const audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
-      
-      // Ensure audio is not muted and has volume
-      audio.volume = 1.0;
-      audio.muted = false;
-
-      
-      setCurrentAudio(audio);
-
-      audio.onplay = () => {
-
-        setIsSpeaking(true);
-      };
+      currentAudioRef.current = audio;
       audio.onended = () => {
-        console.log('[TTS] Audio playback ended');
         setIsSpeaking(false);
-        setCurrentAudio(null);
+        currentAudioRef.current = null;
       };
-      audio.onerror = (e) => {
-        console.error('[TTS] Audio playback error:', e);
-        console.error('[TTS] Audio error details:', audio.error);
-        toast.error("Failed to play audio");
+      audio.onerror = (event) => {
+        toast.error('Failed to play audio');
         setIsSpeaking(false);
-        setCurrentAudio(null);
+        currentAudioRef.current = null;
       };
-
-      // Properly handle play() promise to avoid AbortError
-      try {
-        console.log('[TTS] Calling audio.play()');
-        await audio.play();
-        console.log('[TTS] audio.play() successful - paused:', audio.paused, 'readyState:', audio.readyState);
-        
-        // Check playback after a small delay
-        setTimeout(() => {
-          console.log('[TTS] Playback check - currentTime:', audio.currentTime, 'paused:', audio.paused, 'ended:', audio.ended);
-        }, 100);
-        
-        setIsSpeaking(true);
-      } catch (playError: any) {
-        // Ignore AbortError (happens when play is interrupted)
-        if (playError.name !== 'AbortError') {
-          console.error('Audio play error:', playError);
-          toast.error("Failed to play audio");
-        }
-        setIsSpeaking(false);
-        setCurrentAudio(null);
-      }
+      await audio.play();
+      setIsSpeaking(true);
     } catch (error: any) {
-      console.error('TTS error:', error);
       toast.error(error.message || 'Failed to generate speech');
       setIsSpeaking(false);
+      currentAudioRef.current = null;
     }
   };
 
@@ -855,20 +871,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         padding: 8px;
         text-align: left;
       }
-      th {
-        background: #f5f5f5;
-        font-weight: bold;
-      }
-      ul, ol {
-        margin: 0.5em 0;
-        padding-left: 2em;
-      }
-      li {
-        margin: 0.25em 0;
-      }
-      blockquote {
-        border-left: 4px solid #ddd;
-        padding-left: 1em;
+
+      // (Stray code removed. All logic is now inside the NoteEditor component.)
         margin: 1em 0;
         color: #666;
       }
@@ -1229,6 +1233,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setIsTranslatingAudio(false);
     }
   };
+
+  // The component must return JSX here!
   return (
     <div className="flex bg-white flex-col h-full w-full dark:bg-gray-950">
       {/* Audio Options Section */}
@@ -1336,12 +1342,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               }}
             />
           </div>
-
-          {note.ai_summary && isSummaryVisible && (
+          {(note.ai_summary || isGeneratingSummary) && isSummaryVisible && (
             <AISummarySection
               ai_summary={note.ai_summary}
               isSummaryVisible={isSummaryVisible}
               setIsSummaryVisible={setIsSummaryVisible}
+              onSummaryChange={handleSummaryChange}
+              onRegenerateSummary={handleRegenerateSummary}
+              isGenerating={isGeneratingSummary}
             />
           )}
 
@@ -1382,6 +1390,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         fileType={originalDocumentFileType}
         fileUrl={originalDocumentFileUrl}
       />
+
     </div>
   );
-}
+};

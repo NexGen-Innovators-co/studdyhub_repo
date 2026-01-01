@@ -53,6 +53,7 @@ import {
 } from 'react-icons/fa'; // Import react-icons for social SVGs
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { Podcast } from 'lucide-react';
 
 interface PostCardWithViewTrackingProps extends PostCardProps {
   onPostView?: (postId: string) => void;
@@ -666,6 +667,71 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
     const currentMedia = fullscreenIndex !== null ? post.media[fullscreenIndex] : null;
     const isFullscreenVideo = currentMedia?.type === 'video';
 
+    const isPodcast = post.metadata?.type === 'podcast';
+    const podcastMetadata = post.metadata;
+
+    const PodcastPreview = () => {
+      if (!isPodcast) return null;
+
+      const podcastId = podcastMetadata.podcastId || podcastMetadata.podcast_id;
+      const title = podcastMetadata.title || 'Podcast';
+      const description = podcastMetadata.description || 'AI-generated podcast conversation';
+      const coverUrl = podcastMetadata.coverUrl || podcastMetadata.cover_image_url;
+
+      return (
+        <div 
+          className="mt-3 mx-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-4 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (podcastId) {
+              navigate(`/podcasts/${podcastId}`);
+            }
+          }}
+        >
+          <div className="relative h-16 w-16 flex-shrink-0 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700">
+            {coverUrl ? (
+              <img 
+                src={coverUrl} 
+                alt={title} 
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center text-slate-400">
+                <Podcast className="h-8 w-8" />
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 flex items-center justify-center transition-colors">
+              <Play className="h-6 w-6 text-white fill-white" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="font-bold text-slate-900 dark:text-slate-100 truncate">
+              {title}
+            </h4>
+            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-1">
+              {description}
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                Podcast
+              </span>
+              {podcastMetadata.duration_minutes && (
+                <span className="text-xs text-slate-400">
+                  {podcastMetadata.duration_minutes} min
+                </span>
+              )}
+            </div>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+          >
+            Listen
+          </Button>
+        </div>
+      );
+    };
 
     return (
       <>     
@@ -774,6 +840,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                   )}
                 </div>
               )}
+
+              {/* Podcast Preview */}
+              {isPodcast && <PodcastPreview />}
 
               {/* Hashtags */}
               {post.hashtags && post.hashtags.length > 0 && (
@@ -933,6 +1002,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                 <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 mb-4">
                   {renderContentWithClickableLinks(cleanedContent)}
                 </div>
+
+                {/* Podcast Preview in Fullscreen */}
+                {isPodcast && <PodcastPreview />}
 
                 {/* Hashtags */}
                 {post.hashtags && post.hashtags.length > 0 && (

@@ -26,6 +26,9 @@ interface CreatePostDialogProps {
   isUploading: boolean;
   currentUser: SocialUserWithDetails | null;
   groupId?: string; // Optional since not always in group context
+  metadata?: any;
+  disabled?: boolean;
+  upgradeMessage?: string;
 }
 
 export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
@@ -40,10 +43,16 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
   onSubmit,
   isUploading,
   currentUser,
-  groupId
+  groupId,
+  metadata,
+  disabled,
+  upgradeMessage
 }) => {
-  const { canPostSocials, tier } = useFeatureAccess();
+  const { canPostSocials: canPostSocialsAccess, tier } = useFeatureAccess();
   const navigate = useNavigate();
+
+  const canPostSocials = disabled !== undefined ? !disabled : canPostSocialsAccess;
+  const displayUpgradeMessage = upgradeMessage || 'Social posting requires Scholar plan or higher';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -54,7 +63,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
   const handleSubmit = () => {
     // Check subscription access
     if (!canPostSocials) {
-      toast.error('Social posting requires Scholar plan or higher', {
+      toast.error(displayUpgradeMessage, {
         action: {
           label: 'Upgrade',
           onClick: () => navigate('/subscription')
@@ -78,7 +87,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
             <Alert className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
               <Lock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
               <AlertDescription className="text-orange-800 dark:text-orange-200">
-                Social posting is only available with Scholar and Genius plans. 
+                {displayUpgradeMessage} 
                 <Button 
                   variant="link" 
                   className="text-orange-600 dark:text-orange-400 p-0 h-auto"
@@ -97,6 +106,30 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
             className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600 disabled:opacity-50"
             rows={5}
           />
+
+          {metadata?.type === 'podcast' && (
+            <div className="p-3 border border-slate-200 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-900/50 flex gap-3">
+              {metadata.coverUrl && (
+                <img 
+                  src={metadata.coverUrl} 
+                  alt={metadata.title} 
+                  className="w-16 h-16 rounded object-cover flex-shrink-0"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-900 dark:text-gray-100 truncate">
+                  {metadata.title}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-gray-400 line-clamp-2">
+                  {metadata.description}
+                </p>
+                <div className="mt-1 flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Podcast Attachment</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <Select value={privacy} onValueChange={onPrivacyChange} disabled={!canPostSocials}>
             <SelectTrigger className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600 disabled:opacity-50">
               <SelectValue />

@@ -56,6 +56,7 @@ import {
   FilePlus, // Add FilePlus icon
   Lightbulb, // Add Lightbulb icon
 } from 'lucide-react';
+import { supabase } from '../../../integrations/supabase/client';
 
 import { generateFlashcardsFromNote } from '../services/FlashCardServices';
 import { generateInlineContent } from '../../../services/aiServices';
@@ -69,6 +70,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { UniversalTutorial } from '@/components/notes/components/UniversalTutorial';
 import { useTutorial } from '@/components/notes/hooks/useTutorials';
 import { getNoteEditorTutorial } from '@/components/notes/config/tutorialConfigs';
+import { convertMarkdownToHtml, convertHtmlToMarkdown } from '../../../utils/markdownUtils';
 
 /* ---------- Tiptap ---------- */
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -108,49 +110,35 @@ lowlight.registerLanguage('typescript', typescript as any);
 lowlight.registerLanguage('json', json as any);
 lowlight.registerLanguage('css', css as any);
 
-/* ---------- Markdown to HTML ---------- */
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import remarkGfm from 'remark-gfm';
-import remarkRehype from 'remark-rehype';
-import rehypeStringify from 'rehype-stringify';
-import TurndownService from 'turndown';
-import * as gfm from 'turndown-plugin-gfm';
-
 Chart.register(...registerables);
 mermaid.initialize({ startOnLoad: false });
-
-const mdProcessor = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkRehype)
-  .use(rehypeStringify);
-
-const turndown = new TurndownService({ headingStyle: 'atx' });
-turndown.use(gfm.gfm);
 
 /* ---------- Custom Tiptap Nodes for Visuals ---------- */
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import { DiagramWrapper } from './DiagramWrapper';
-import { delay } from 'framer-motion';
 
 /** Mermaid node */
 const MermaidNode = Node.create({
   name: 'mermaid',
   group: 'block',
   atom: true,
+  draggable: true,
   addAttributes() {
     return {
       code: {
         default: '',
-        parseHTML: element => {
-          const code = element.getAttribute('data-code');
-          return code || '';
-        },
+        parseHTML: element => element.getAttribute('data-code') || '',
         renderHTML: attributes => ({
           'data-mermaid': '',
           'data-code': attributes.code || ''
+        }),
+      },
+      height: {
+        default: '300px',
+        parseHTML: element => element.getAttribute('data-height') || '300px',
+        renderHTML: attributes => ({
+          'data-height': attributes.height || '300px'
         }),
       }
     };
@@ -159,20 +147,24 @@ const MermaidNode = Node.create({
     return [
       {
         tag: 'div[data-mermaid]',
+        getAttrs: dom => ({ 
+          code: (dom as HTMLElement).getAttribute('data-code') || '',
+          height: (dom as HTMLElement).getAttribute('data-height') || '300px'
+        })
+      },
+      {
+        tag: 'pre',
+        preserveWhitespace: 'full',
         getAttrs: (dom) => {
-          if (typeof dom === 'string') return {};
-          const element = dom as HTMLElement;
-          const code = element.getAttribute('data-code') || '';
-          return { code };
+          const code = (dom as HTMLElement).querySelector('code.language-mermaid');
+          if (!code) return false;
+          return { code: code.textContent || '' };
         }
       }
     ];
   },
   renderHTML({ HTMLAttributes }) {
-    return ['div', {
-      'data-mermaid': '',
-      'data-code': HTMLAttributes.code || ''
-    }];
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-mermaid': '' })];
   },
   addNodeView() {
     return ReactNodeViewRenderer(DiagramWrapper);
@@ -184,17 +176,22 @@ const ChartJsNode = Node.create({
   name: 'chartjs',
   group: 'block',
   atom: true,
+  draggable: true,
   addAttributes() {
     return {
       config: {
         default: '{}',
-        parseHTML: element => {
-          const config = element.getAttribute('data-config');
-          return config || '{}';
-        },
+        parseHTML: element => element.getAttribute('data-config') || '{}',
         renderHTML: attributes => ({
           'data-chartjs': '',
           'data-config': attributes.config || '{}'
+        }),
+      },
+      height: {
+        default: '400px',
+        parseHTML: element => element.getAttribute('data-height') || '400px',
+        renderHTML: attributes => ({
+          'data-height': attributes.height || '400px'
         }),
       }
     };
@@ -203,20 +200,24 @@ const ChartJsNode = Node.create({
     return [
       {
         tag: 'div[data-chartjs]',
+        getAttrs: dom => ({ 
+          config: (dom as HTMLElement).getAttribute('data-config') || '{}',
+          height: (dom as HTMLElement).getAttribute('data-height') || '400px'
+        })
+      },
+      {
+        tag: 'pre',
+        preserveWhitespace: 'full',
         getAttrs: (dom) => {
-          if (typeof dom === 'string') return {};
-          const element = dom as HTMLElement;
-          const config = element.getAttribute('data-config') || '{}';
-          return { config };
+          const code = (dom as HTMLElement).querySelector('code.language-chartjs');
+          if (!code) return false;
+          return { config: code.textContent || '{}' };
         }
       }
     ];
   },
   renderHTML({ HTMLAttributes }) {
-    return ['div', {
-      'data-chartjs': '',
-      'data-config': HTMLAttributes.config || '{}'
-    }];
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-chartjs': '' })];
   },
   addNodeView() {
     return ReactNodeViewRenderer(DiagramWrapper);
@@ -228,12 +229,23 @@ const DotNode = Node.create({
   name: 'dot',
   group: 'block',
   atom: true,
+  draggable: true,
   addAttributes() {
     return {
       code: {
         default: '',
         parseHTML: element => element.getAttribute('data-code') || '',
-        renderHTML: attributes => ({ 'data-code': attributes.code }),
+        renderHTML: attributes => ({
+          'data-dot': '',
+          'data-code': attributes.code || ''
+        }),
+      },
+      height: {
+        default: '300px',
+        parseHTML: element => element.getAttribute('data-height') || '300px',
+        renderHTML: attributes => ({
+          'data-height': attributes.height || '300px'
+        }),
       }
     };
   },
@@ -241,19 +253,16 @@ const DotNode = Node.create({
     return [
       {
         tag: 'div[data-dot]',
-        getAttrs: (dom) => {
-          if (typeof dom === 'string') return {};
-          const element = dom as HTMLElement;
-          return { code: element.getAttribute('data-code') || '' };
-        }
+        getAttrs: dom => ({ 
+          code: (dom as HTMLElement).getAttribute('data-code') || '',
+          height: (dom as HTMLElement).getAttribute('data-height') || '300px'
+        })
       },
       {
         tag: 'pre',
         preserveWhitespace: 'full',
         getAttrs: (dom) => {
-          if (typeof dom === 'string') return false;
-          const element = dom as HTMLElement;
-          const code = element.querySelector('code[class*="language-dot"], code[class*="language-graphviz"]');
+          const code = (dom as HTMLElement).querySelector('code.language-dot, code.language-graphviz');
           if (!code) return false;
           return { code: code.textContent || '' };
         }
@@ -261,10 +270,7 @@ const DotNode = Node.create({
     ];
   },
   renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes, {
-      'data-dot': '',
-      'data-code': HTMLAttributes.code
-    })];
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-dot': '' })];
   },
   addNodeView() {
     return ReactNodeViewRenderer(DiagramWrapper);
@@ -372,103 +378,12 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
     // Function to convert editor HTML back to markdown while preserving diagrams
     const convertEditorHtmlToMarkdown = (html: string): string => {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = html;
-
-      // Handle Chart.js nodes
-      const chartNodes = tempDiv.querySelectorAll('div[data-chartjs]');
-      chartNodes.forEach((node, index) => {
-        const config = node.getAttribute('data-config');
-        if (config && config.trim()) {
-          const codeBlock = document.createElement('pre');
-          const code = document.createElement('code');
-          code.className = 'language-chartjs';
-          code.textContent = config;
-          codeBlock.appendChild(code);
-          node.replaceWith(codeBlock);
-        } else {
-          node.remove();
-        }
-      });
-
-      // Handle Mermaid nodes
-      const mermaidNodes = tempDiv.querySelectorAll('div[data-mermaid]');
-      mermaidNodes.forEach((node, index) => {
-        const code = node.getAttribute('data-code');
-        if (code && code.trim()) {
-          const codeBlock = document.createElement('pre');
-          const codeElement = document.createElement('code');
-          codeElement.className = 'language-mermaid';
-          codeElement.textContent = code;
-          codeBlock.appendChild(codeElement);
-          node.replaceWith(codeBlock);
-        } else {
-          node.remove();
-        }
-      });
-
-      // Handle Graphviz (DOT) nodes
-      const dotNodes = tempDiv.querySelectorAll('div[data-dot]');
-      dotNodes.forEach((node, index) => {
-        const code = node.getAttribute('data-code');
-        if (code && code.trim()) {
-          const codeBlock = document.createElement('pre');
-          const codeElement = document.createElement('code');
-          codeElement.className = 'language-dot';
-          codeElement.textContent = code;
-          codeBlock.appendChild(codeElement);
-          node.replaceWith(codeBlock);
-        } else {
-          node.remove();
-        }
-      });
-
-      const markdown = turndown.turndown(tempDiv.innerHTML);
-      return markdown;
+      return convertHtmlToMarkdown(html);
     };
 
     // Function to properly convert markdown to editor HTML with diagram support
     const convertMarkdownToEditorHtml = (markdown: string): string => {
-      if (!markdown.trim()) return '';
-
-      try {
-        let html = mdProcessor.processSync(markdown).toString();
-
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-
-        const mermaidCodeBlocks = tempDiv.querySelectorAll('pre code.language-mermaid');
-        mermaidCodeBlocks.forEach((codeBlock) => {
-          const code = codeBlock.textContent || '';
-          const mermaidDiv = document.createElement('div');
-          mermaidDiv.setAttribute('data-mermaid', '');
-          mermaidDiv.setAttribute('data-code', code);
-          codeBlock.parentElement?.replaceWith(mermaidDiv);
-        });
-
-        const chartjsCodeBlocks = tempDiv.querySelectorAll('pre code.language-chartjs');
-        chartjsCodeBlocks.forEach((codeBlock) => {
-          const config = codeBlock.textContent || '{}';
-          const chartDiv = document.createElement('div');
-          chartDiv.setAttribute('data-chartjs', '');
-          chartDiv.setAttribute('data-config', config);
-          codeBlock.parentElement?.replaceWith(chartDiv);
-        });
-
-        const dotCodeBlocks = tempDiv.querySelectorAll('pre code.language-dot, pre code.language-graphviz');
-        dotCodeBlocks.forEach((codeBlock) => {
-          const code = codeBlock.textContent || '';
-          const dotDiv = document.createElement('div');
-          dotDiv.setAttribute('data-dot', '');
-          dotDiv.setAttribute('data-code', code);
-          codeBlock.parentElement?.replaceWith(dotDiv);
-        });
-
-        return tempDiv.innerHTML;
-      } catch (error) {
-        //console.error('Error converting markdown to HTML:', error);
-        return markdown;
-      }
+      return convertMarkdownToHtml(markdown);
     };
 
     // Then update the editor configuration:
@@ -531,6 +446,10 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     };
 
     const handleSave = () => {
+      if (editor) {
+        const markdown = convertEditorHtmlToMarkdown(editor.getHTML());
+        console.log('--- SAVING NOTE CONTENT ---', markdown);
+      }
       debugEditorState();
       onSave()
     };
@@ -556,6 +475,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [generatedText, setGeneratedText] = useState('');
     const [actionType, setActionType] = useState('');
     const [isTyping, setIsTyping] = useState(false);
+    const [isLoadingInlineEdit, setIsLoadingInlineEdit] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -568,6 +488,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       hasCompletedBefore
     } = useTutorial('note-editor');
     const [isToolbarExpanded, setIsToolbarExpanded] = useState(true);
+    const [selectionRange, setSelectionRange] = useState({ from: 0, to: 0 });
     const startAI = () => {
       if (!editor) return;
       const { from, to } = editor.state.selection;
@@ -577,35 +498,61 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
       }
       const text = editor.state.doc.textBetween(from, to, ' ');
       setSelectedText(text);
-
+      setSelectionRange({ from, to });
       const coords = editor.view.coordsAtPos(from);
       setAiPos({ top: coords.bottom + 10, left: coords.left });
       setShowAI(true);
     };
 
-    const runAI = async (action: string, custom?: string) => {
+    // Fetch attached document content if available
+    const runAI = async (selectedText: string, actionType: string, customInstruction: string) => {
       setError(null);
       setGeneratedText('');
+      setIsLoadingInlineEdit(true);
+      let attachedDocumentContent = '';
+      if (note && note.document_id) {
+        try {
+          // Try to fetch the document content from Supabase storage or DB (adjust as needed)
+          const { data, error } = await supabase
+            .from('documents')
+            .select('content')
+            .eq('id', note.document_id)
+            .single();
+          if (!error && data && data.content) {
+            attachedDocumentContent = data.content;
+          }
+        } catch (err) {
+          // Ignore document fetch errors, just proceed without it
+        }
+      }
       try {
         const result = await generateInlineContent(
           selectedText,
           content,
           userProfile!,
-          action,
-          custom
+          actionType,
+          customInstruction,
+          attachedDocumentContent, // Pass as extra arg
+          selectionRange // Pass selection indices
         );
         setGeneratedText(result);
       } catch (e: any) {
         setError(e.message);
       } finally {
         setIsTyping(false);
+        setIsLoadingInlineEdit(false);
       }
     };
 
-    const acceptAI = () => {
+    // Accept AI: support both node and markdown insertion
+    const acceptAI = (contentNodeOrNothing?: any) => {
       if (!editor) return;
-      const htmlFromMd = mdProcessor.processSync(generatedText).toString();
-      editor.chain().focus().insertContent(htmlFromMd, { parseOptions: { preserveWhitespace: true } }).run();
+      if (contentNodeOrNothing && typeof contentNodeOrNothing === 'object' && contentNodeOrNothing.type) {
+        editor.chain().focus().insertContent(contentNodeOrNothing).run();
+      } else {
+        const htmlFromMd = convertMarkdownToHtml(generatedText);
+        editor.chain().focus().insertContent(htmlFromMd, { parseOptions: { preserveWhitespace: true } }).run();
+      }
       setShowAI(false);
       setGeneratedText('');
     };
@@ -1607,15 +1554,17 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
           <InlineAIEditor
             originalText={content}
             selectedText={selectedText}
+            selectionRange={selectionRange}
             generatedText={generatedText}
             actionType={actionType}
             isTyping={isTyping}
-            isLoading={isLoading}
+            isLoading={isLoadingInlineEdit}
             error={error ?? ''}
             position={aiPos}
             isVisible={showAI}
             onGenerate={runAI}
             onAccept={acceptAI}
+            onInsertContent={acceptAI}
             onReject={() => cancelAI()}
             onClearError={() => setError(null)}
           />,

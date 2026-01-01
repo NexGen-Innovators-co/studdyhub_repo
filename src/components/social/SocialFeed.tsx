@@ -57,7 +57,7 @@ interface SocialFeedProps {
 import { useImperativeHandle, forwardRef } from 'react';
 
 export interface SocialFeedHandle {
-  openCreatePostDialog: (options: { content: string; coverUrl?: string }) => void;
+  openCreatePostDialog: (options: { content: string; coverUrl?: string; metadata?: any }) => void;
 }
 
 export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
@@ -91,12 +91,14 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
   const [newPostContent, setNewPostContent] = useState('');
   const [selectedPrivacy, setSelectedPrivacy] = useState<Privacy>('public');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [postMetadata, setPostMetadata] = useState<any>(null);
 
   // Expose openCreatePostDialog to parent via ref
   useImperativeHandle(ref, () => ({
-    openCreatePostDialog: async ({ content, coverUrl }) => {
+    openCreatePostDialog: async ({ content, coverUrl, metadata }) => {
       setNewPostContent(content);
       setSelectedPrivacy('public');
+      setPostMetadata(metadata || null);
       if (coverUrl) {
         try {
           const response = await fetch(coverUrl);
@@ -298,6 +300,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     refetchTrendingPosts,
     refetchGroups,
     refetchUserPosts,
+    refetchCurrentUser,
     loadMorePosts,
     loadMoreTrendingPosts,
     loadMoreUserPosts,
@@ -384,6 +387,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     groups,
     setGroups,
     setCurrentUser,
+    refetchCurrentUser,
   );
 
   const {
@@ -501,17 +505,6 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       case 'feed': {
         const feedObserver = createObserver(feedObserverRef, hasMorePosts, isLoadingMorePosts, loadMorePosts);
         if (feedObserver) observers.push(feedObserver);
-        // Inline suggestions infinite scroll in feed
-        if (uniqueSuggestedUsers.length > 0 && suggestedObserverRef.current) {
-          const inlineSuggestionsObserver = createObserver(
-            suggestedObserverRef,
-            hasMoreSuggestedUsers,
-            isLoadingSuggestedUsers,
-            loadMoreSuggestedUsers,
-            suggestedContainerRef.current
-          );
-          if (inlineSuggestionsObserver) observers.push(inlineSuggestionsObserver);
-        }
         break;
       }
       case 'trending': {
@@ -642,7 +635,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
 
   // Handlers
   const handleCreatePost = async () => {
-    const result = await createPost(newPostContent, selectedPrivacy, selectedFiles);
+    const result = await createPost(newPostContent, selectedPrivacy, selectedFiles, undefined, postMetadata);
     
     // Handle moderation rejection
     if (typeof result === 'object' && result.moderation && !result.moderation.approved) {
@@ -659,6 +652,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     if (result === true) {
       setNewPostContent('');
       setSelectedFiles([]);
+      setPostMetadata(null);
       setShowPostDialog(false);
       setModerationResult(null);
       toast.success('Post published successfully! 🎉');
@@ -720,6 +714,17 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     );
   }, [groups, effectiveSearch]);
 
+  const filteredUsers = useMemo(() => {
+    if (!effectiveSearch.trim()) return [];
+    const searchLower = effectiveSearch.toLowerCase();
+    return uniqueSuggestedUsers.filter(user => 
+      user.display_name?.toLowerCase().includes(searchLower) ||
+      user.username?.toLowerCase().includes(searchLower) ||
+      user.bio?.toLowerCase().includes(searchLower) ||
+      user.interests?.some((i: string) => i.toLowerCase().includes(searchLower))
+    );
+  }, [uniqueSuggestedUsers, effectiveSearch]);
+
   const filteredUserPosts = useMemo(() => filterPosts(userPosts), [userPosts, effectiveSearch]);
 
   const searchPlaceholder = useMemo(() => {
@@ -748,6 +753,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
   }> = ({ users, offset, stripId, saveScroll, getSavedScroll }) => {
     const [loadingIds, setLoadingIds] = React.useState<Record<string, boolean>>({});
     const containerRef = React.useRef<HTMLDivElement | null>(null);
+    const localObserverRef = React.useRef<HTMLDivElement | null>(null);
 
     const handleFollow = async (id: string) => {
       if (loadingIds[id]) return;
@@ -781,6 +787,27 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
       if (saved && Math.abs(el.scrollLeft - saved) > 2) el.scrollLeft = saved;
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Local observer for horizontal infinite scroll
+    useEffect(() => {
+      if (!localObserverRef.current || !hasMoreSuggestedUsers || isLoadingSuggestedUsers) return;
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasMoreSuggestedUsers && !isLoadingSuggestedUsers) {
+            loadMoreSuggestedUsers();
+          }
+        },
+        { 
+          threshold: 0.1, 
+          root: containerRef.current,
+          rootMargin: '0px 100px 0px 0px' // Trigger when 100px from right edge
+        }
+      );
+
+      observer.observe(localObserverRef.current);
+      return () => observer.disconnect();
+    }, [hasMoreSuggestedUsers, isLoadingSuggestedUsers]);
 
     const onScroll = () => {
       const pos = containerRef.current?.scrollLeft || 0;
@@ -847,12 +874,16 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
               </div>
             </div>
           ))}
-          {hasMoreSuggestedUsers && !isLoadingSuggestedUsers && (
+          {hasMoreSuggestedUsers && (
               <div
-                ref={suggestedObserverRef}
-                className="h-6 min-w-[100px] flex items-center justify-center"
+                ref={localObserverRef}
+                className="h-full min-w-[100px] flex items-center justify-center"
               >
-                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                {isLoadingSuggestedUsers ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                ) : (
+                  <div className="text-xs text-slate-400">Scroll for more</div>
+                )}
               </div>
             )}
         </div>
@@ -1233,8 +1264,63 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                       onSubmit={handleCreatePost}
                       isUploading={isUploading}
                       currentUser={currentUser}
+                      metadata={postMetadata}
                     />
 
+                    {/* People Search Results */}
+                    {effectiveSearch.trim() && filteredUsers.length > 0 && (
+                      <div className="mb-6 px-4 lg:px-0">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <Users className="h-4 w-4 text-blue-600" />
+                            People
+                          </h3>
+                        </div>
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+                          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {filteredUsers.slice(0, 3).map((user) => (
+                              <div key={user.id} className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                <div 
+                                  className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
+                                  onClick={() => navigate(`/social/profile/${user.id}`)}
+                                >
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarImage src={user.avatar_url} />
+                                    <AvatarFallback>{user.display_name?.[0]}</AvatarFallback>
+                                  </Avatar>
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-sm text-slate-900 dark:text-white truncate">{user.display_name}</div>
+                                    <div className="text-xs text-slate-500 truncate">@{user.username}</div>
+                                  </div>
+                                </div>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="rounded-full h-8 text-xs"
+                                  onClick={() => toggleFollow(user.id)}
+                                >
+                                  Follow
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                          {filteredUsers.length > 3 && (
+                            <button 
+                              className="w-full py-2 text-xs text-blue-600 font-medium hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-t border-slate-100 dark:border-slate-800"
+                              onClick={() => {
+                                setActiveTab('profile');
+                                setTimeout(() => {
+                                  const suggestionsTab = document.querySelector('[data-value="suggestions"]');
+                                  if (suggestionsTab) (suggestionsTab as HTMLElement).click();
+                                }, 0);
+                              }}
+                            >
+                              View all {filteredUsers.length} people
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {isLoading && posts.length === 0 ? (
                       <LoadingSpinner />
@@ -1336,6 +1422,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                       onEditPost={editPost}
                       onFollow={toggleFollow}
                       onStartChat={handleStartChat}
+                      searchQuery={effectiveSearch}
                     />
                     <div ref={profileObserverRef} className="h-10" />
                     {isLoadingMorePosts == true && <LoadingSpinner />}
@@ -1378,6 +1465,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                         onRefreshLikedPosts={refetchLikedPosts}
                         onRefreshBookmarkedPosts={refetchBookmarkedPosts}
                         userGroups={groups.filter(g => g.is_member)}
+                        searchQuery={effectiveSearch}
                       />)
                     }
 

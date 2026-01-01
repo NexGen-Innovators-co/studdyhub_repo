@@ -36,9 +36,14 @@ import { toast } from 'sonner';
 interface PodcastWithMeta {
   id: string;
   title: string;
+  description?: string;
   duration?: number;
   user_id: string;
   cover_image_url?: string;
+  user?: {
+    full_name: string;
+    avatar_url?: string;
+  };
 }
 
 interface SharePodcastDialogProps {
@@ -80,7 +85,7 @@ export const SharePodcastDialog: React.FC<SharePodcastDialogProps> = ({
   const [loadingFriends, setLoadingFriends] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(false);
 
-  const shareUrl = `${window.location.origin}/podcasts?podcast=${podcast.id}`;
+  const shareUrl = `${window.location.origin}/podcasts/${podcast.id}`;
 
   useEffect(() => {
     if (open && currentUser) {

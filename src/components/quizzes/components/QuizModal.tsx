@@ -4,7 +4,8 @@ import { Quiz, QuizQuestion } from '../../../types/Class';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../ui/dialog';
 import { Button } from '../../ui/button';
 import { Card, CardContent } from '../../ui/card';
-import { CheckCircle, XCircle, ArrowLeft, ArrowRight, Trophy, Lightbulb } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowLeft, ArrowRight, Trophy, Lightbulb, Info } from 'lucide-react';
+import { QuizAttempt } from '../../../types/EnhancedClasses';
 
 interface QuizModalProps {
   quizMode: { recording: any; quiz: Quiz } | null;
@@ -16,6 +17,7 @@ interface QuizModalProps {
   onPreviousQuestion: () => void;
   onExitQuizMode: () => void;
   calculateScore: () => number;
+  bestAttempts?: Record<string, QuizAttempt>;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
@@ -28,6 +30,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onPreviousQuestion,
   onExitQuizMode,
   calculateScore,
+  bestAttempts = {},
 }) => {
   if (!quizMode) {
     return null;
@@ -41,6 +44,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const isFirstQuestion = currentQuestionIndex === 0;
 
   const score = showResults ? calculateScore() : 0;
+  const bestAttempt = bestAttempts[quiz.id];
 
   return (
     <Dialog open={!!quizMode} onOpenChange={onExitQuizMode} >
@@ -49,11 +53,19 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           <DialogTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
             <Lightbulb className="h-6 w-6 text-yellow-500" /> {quiz.title || 'Generated Quiz'}
           </DialogTitle>
-          {recording && (
-            <DialogDescription className="text-center text-gray-600 dark:text-gray-400">
-              Based on: <span className="font-medium text-blue-600 dark:text-blue-400">{recording.title}</span>
-            </DialogDescription>
-          )}
+          <div className="flex flex-col items-center gap-1">
+            {recording && (
+              <DialogDescription className="text-center text-gray-600 dark:text-gray-400">
+                Based on: <span className="font-medium text-blue-600 dark:text-blue-400">{recording.title}</span>
+              </DialogDescription>
+            )}
+            {bestAttempt && !showResults && (
+              <div className="flex items-center gap-1.5 text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-800 mt-1">
+                <Info className="h-3 w-3" />
+                <span>You've already attempted this quiz (Best: {bestAttempt.percentage}%). No new XP will be awarded unless you beat your high score.</span>
+              </div>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="relative">

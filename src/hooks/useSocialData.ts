@@ -176,9 +176,9 @@ export const useSocialData = (
 
   // OPTIMIZED: Fetch posts with batched relations
   const fetchPosts = useCallback(async (reset: boolean = false) => {
-    try {
-      if (!reset && (!hasMorePosts || isLoadingMorePosts)) return;
+    if (!reset && (!hasMorePosts || isLoadingMorePosts)) return;
 
+    try {
       setIsLoading(reset);
       if (!reset) setIsLoadingMorePosts(true);
 
@@ -286,9 +286,9 @@ export const useSocialData = (
 
   // OPTIMIZED: Trending posts with same batching
   const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
-    try {
-      if (!reset && (!hasMoreTrendingPosts || isLoadingMorePosts)) return;
+    if (!reset && (!hasMoreTrendingPosts || isLoadingMorePosts)) return;
 
+    try {
       setIsLoading(reset);
       if (!reset) setIsLoadingMorePosts(true);
 
@@ -373,9 +373,9 @@ export const useSocialData = (
 
   // OPTIMIZED: User posts with batching
   const fetchUserPosts = useCallback(async (reset: boolean = false) => {
-    try {
-      if (!reset && (!hasMoreUserPosts || isLoadingUserPosts)) return;
+    if (!reset && (!hasMoreUserPosts || isLoadingUserPosts)) return;
 
+    try {
       setIsLoadingUserPosts(reset);
 
       const { data: { user } } = await supabase.auth.getUser();
@@ -608,6 +608,8 @@ export const useSocialData = (
   // OPTIMIZED: Groups query - simplified and more efficient
   const fetchGroups = useCallback(async (reset = true) => {
     if (!currentUserIdRef.current) return;
+    if (!reset && (!hasMoreGroups || isLoadingMoreGroups)) return;
+    if (reset && isLoadingGroups) return;
 
     const limit = DEFAULT_LIMITS.GROUPS_PER_PAGE;
     const offset = reset ? 0 : groupsOffset;
@@ -662,6 +664,25 @@ export const useSocialData = (
       setIsLoadingMoreGroups(false);
     }
   }, [groupsOffset, groups]);
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: socialUser, error } = await supabase
+        .from('social_users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (!error && socialUser) {
+        setCurrentUser(socialUser);
+      }
+    } catch (error) {
+      ////console.error('Error refetching current user:', error);
+    }
+  }, []);
+
   useEffect(() => {
     const initializeSocialUser = async () => {
       try {
@@ -1000,7 +1021,10 @@ export const useSocialData = (
         prev.map(post => {
           if (post.id === postId) {
             const isCurrentUser = userId === currentUserIdRef.current;
-            const likesChange = eventType === 'INSERT' ? 1 : eventType === 'DELETE' ? -1 : 0;
+            
+            // If it's the current user, we skip the count increment because 
+            // it's already handled by the manual update in useSocialActions.toggleLike
+            const likesChange = isCurrentUser ? 0 : (eventType === 'INSERT' ? 1 : eventType === 'DELETE' ? -1 : 0);
 
             return {
               ...post,
@@ -1135,407 +1159,6 @@ export const useSocialData = (
 
   };
 
-  // In useSocialData.ts, update the fetchPosts function:
-  // const fetchPosts = useCallback(async (reset: boolean = false) => {
-  //   try {
-  //     if (!reset && (!hasMorePosts || isLoadingMorePosts)) return;
-
-  //     setIsLoading(reset);
-  //     if (!reset) setIsLoadingMorePosts(true);
-
-  //     const currentOffset = reset ? 0 : postsOffset;
-  //     const fetchLimit = DEFAULT_LIMITS.POSTS_PER_PAGE * 3;
-
-  //     let query = supabase
-  //       .from('social_posts')
-  //       .select(`
-  //   *,
-  //   author:social_users(*),
-  //   group:social_groups(*),
-  //   media:social_media(*)
-  //   `)
-  //       .eq('privacy', 'public');
-
-  //     if (sortBy === 'newest') {
-  //       query = query.order('created_at', { ascending: false });
-  //     } else if (sortBy === 'popular') {
-  //       query = query.order('likes_count', { ascending: false });
-  //     }
-
-  //     const { data: postsData, error: postsError } = await query
-  //       .range(currentOffset, currentOffset + fetchLimit - 1);
-
-  //     if (postsError) throw postsError;
-  //     if (!postsData || postsData.length === 0) {
-  //       setHasMorePosts(false);
-  //       return;
-  //     }
-
-  //     // Filter out posts owned by other users, keeping only current user's recent posts
-  //     const filteredPosts = postsData.filter(post => {
-  //       if (post.author_id === currentUserIdRef.current) {
-  //         // Check if the post was created within the last 5 minutes
-  //         const postCreatedAt = new Date(post.created_at).getTime();
-  //         const now = Date.now();
-  //         const fiveMinutesAgo = now - (5 * 60 * 1000);
-
-  //         return postCreatedAt >= fiveMinutesAgo; // Include if within 5 minutes
-  //       } else {
-  //         return true; // Include posts by other users
-  //       }
-  //     });
-
-  //     filteredPosts.sort((a, b) => {
-  //       const aViewed = viewedPostIds.has(a.id);
-  //       const bViewed = viewedPostIds.has(b.id);
-  //       if (aViewed === bViewed) {
-  //         return 0;
-  //       }
-  //       return aViewed ? 1 : -1;
-  //     });
-
-  //     const selectedPosts = filteredPosts.slice(0, POST_LIMIT);
-
-  //     const postIds = selectedPosts.map(post => post.id);
-
-  //     const [hashtagResult, tagResult, likeResult, bookmarkResult] = await Promise.all([
-  //       supabase
-  //         .from('social_post_hashtags')
-  //         .select(`post_id, hashtag:social_hashtags(*)`)
-  //         .in('post_id', postIds),
-  //       supabase
-  //         .from('social_post_tags')
-  //         .select(`post_id, tag:social_tags(*)`)
-  //         .in('post_id', postIds),
-  //       currentUserIdRef.current ? supabase
-  //         .from('social_likes')
-  //         .select('post_id')
-  //         .eq('user_id', currentUserIdRef.current)
-  //         .in('post_id', postIds) : { data: [] },
-  //       currentUserIdRef.current ? supabase
-  //         .from('social_bookmarks')
-  //         .select('post_id')
-  //         .eq('user_id', currentUserIdRef.current)
-  //         .in('post_id', postIds) : { data: [] }
-  //     ]);
-
-  //     const transformedPosts = selectedPosts.map(post => {
-  //       const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
-  //       const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
-  //       const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
-  //       const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-
-  //       return {
-  //         ...post,
-  //         privacy: post.privacy as "public" | "followers" | "private",
-  //         media: (post.media || []).map((m: any) => ({
-  //           ...m,
-  //           type: m.type as "image" | "video" | "document"
-  //         })),
-  //         group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
-  //         hashtags: postHashtags,
-  //         tags: postTags,
-  //         is_liked: isLiked,
-  //         is_bookmarked: isBookmarked
-  //       };
-  //     });
-
-  //     if (reset) {
-  //       setPosts(uniqueById(transformedPosts));
-  //       setPostsOffset(transformedPosts.length);
-  //     } else {
-  //       setPosts(prev => uniqueById([...prev, ...transformedPosts]));
-  //       setPostsOffset(prev => prev + transformedPosts.length);
-  //     }
-
-  //     if (selectedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
-  //       setHasMorePosts(false);
-  //     }
-  //   } catch (error) {
-  //     //console.error('Error fetching posts:', error);
-  //     toast.error('Failed to load posts');
-  //   } finally {
-  //     setIsLoading(false);
-  //     setIsLoadingMorePosts(false);
-  //   }
-  // }, [sortBy, filterBy, hasMorePosts, isLoadingMorePosts, postsOffset, viewedPostIds]);
-  // // Update the fetchTrendingPosts function similarly:
-
-  // const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
-  //   try {
-  //     if (!reset && (!hasMoreTrendingPosts || isLoadingMorePosts)) return;
-
-  //     setIsLoading(reset);
-  //     if (!reset) setIsLoadingMorePosts(true);
-
-  //     const currentOffset = reset ? 0 : trendingPostsOffset;
-
-  //     // ⭐ Fetch MORE posts than needed for prioritization
-  //     const fetchLimit = DEFAULT_LIMITS.POSTS_PER_PAGE * 3; // Fetch 3x more posts
-
-  //     let query = supabase
-  //       .from('social_posts')
-  //       .select(`
-  //       *,
-  //       author:social_users(*),
-  //       group:social_groups(*),
-  //       media:social_media(*)
-  //     `)
-  //       .eq('privacy', 'public')
-  //       .order('likes_count', { ascending: false })
-  //       .order('comments_count', { ascending: false });
-
-  //     // ⭐ EXCLUDE current user's posts from trending
-  //     if (currentUserIdRef.current) {
-  //       query = query.neq('author_id', currentUserIdRef.current);
-  //     }
-
-  //     const { data: postsData, error: postsError } = await query
-  //       .range(currentOffset, currentOffset + fetchLimit - 1);
-
-  //     if (postsError) throw postsError;
-  //     if (!postsData || postsData.length === 0) {
-  //       setHasMoreTrendingPosts(false);
-  //       return;
-  //     }
-
-  //     // Prioritize unviewed posts first, preserving the original sort order within groups
-  //     postsData.sort((a, b) => {
-  //       const aViewed = viewedPostIds.has(a.id);
-  //       const bViewed = viewedPostIds.has(b.id);
-  //       if (aViewed === bViewed) {
-  //         return 0; // Preserve original order
-  //       }
-  //       return aViewed ? 1 : -1; // Unviewed first
-  //     });
-
-  //     // Select the top POST_LIMIT after prioritization
-  //     const selectedPosts = postsData.slice(0, POST_LIMIT);
-
-  //     const postIds = selectedPosts.map(post => post.id);
-
-  //     const [hashtagResult, tagResult, likeResult, bookmarkResult] = await Promise.all([
-  //       supabase
-  //         .from('social_post_hashtags')
-  //         .select(`post_id, hashtag:social_hashtags(*)`)
-  //         .in('post_id', postIds),
-  //       supabase
-  //         .from('social_post_tags')
-  //         .select(`post_id, tag:social_tags(*)`)
-  //         .in('post_id', postIds),
-  //       currentUserIdRef.current
-  //         ? supabase
-  //           .from('social_likes')
-  //           .select('post_id')
-  //           .eq('user_id', currentUserIdRef.current)
-  //           .in('post_id', postIds)
-  //         : { data: [] },
-  //       currentUserIdRef.current
-  //         ? supabase
-  //           .from('social_bookmarks')
-  //           .select('post_id')
-  //           .eq('user_id', currentUserIdRef.current)
-  //           .in('post_id', postIds)
-  //         : { data: [] }
-  //     ]);
-
-  //     const transformedPosts = selectedPosts.map(post => {
-  //       const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
-  //       const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
-  //       const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
-  //       const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-
-  //       return {
-  //         ...post,
-  //         privacy: post.privacy as "public" | "followers" | "private",
-  //         media: (post.media || []).map((m: any) => ({
-  //           ...m,
-  //           type: m.type as "image" | "video" | "document"
-  //         })),
-  //         group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
-  //         hashtags: postHashtags,
-  //         tags: postTags,
-  //         is_liked: isLiked,
-  //         is_bookmarked: isBookmarked
-  //       };
-  //     });
-
-  //     if (reset) {
-  //       setTrendingPosts(uniqueById(transformedPosts));
-  //       setTrendingPostsOffset(transformedPosts.length);
-  //     } else {
-  //       setTrendingPosts(prev => uniqueById([...prev, ...transformedPosts]));
-  //       setTrendingPostsOffset(prev => prev + transformedPosts.length);
-  //     }
-
-  //     if (selectedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
-  //       setHasMoreTrendingPosts(false);
-  //       //console.log('No more trending posts to load.');
-  //     }
-  //   } catch (error) {
-  //     //console.error('Error fetching trending posts:', error);
-  //     toast.error('Failed to load trending posts');
-  //   } finally {
-  //     setIsLoading(false);
-  //     setIsLoadingMorePosts(false);
-  //   }
-  // }, [hasMoreTrendingPosts, isLoadingMorePosts, trendingPostsOffset, currentUserIdRef, viewedPostIds]);
-  // const fetchUserPosts = useCallback(async (reset: boolean = false) => {
-  //   try {
-  //     if (!reset && (!hasMoreUserPosts || isLoadingUserPosts)) return;
-
-  //     setIsLoadingUserPosts(reset);
-
-  //     const { data: { user } } = await supabase.auth.getUser();
-  //     if (!user) {
-  //       setUserPosts([]);
-  //       setIsLoadingUserPosts(false);
-  //       return;
-  //     }
-
-  //     const currentOffset = reset ? 0 : userPostsOffset;
-
-  //     let query = supabase
-  //       .from('social_posts')
-  //       .select(`
-  //         *,
-  //         author:social_users(*),
-  //         group:social_groups(*),
-  //         media:social_media(*)
-  //       `)
-  //       .eq('author_id', user.id)
-  //       .order('created_at', { ascending: false });
-
-  //     const { data: postsData, error: postsError } = await query
-  //       .range(currentOffset, currentOffset + DEFAULT_LIMITS.POSTS_PER_PAGE - 1);
-
-  //     if (postsError) throw postsError;
-  //     if (!postsData || postsData.length === 0) {
-  //       setHasMoreUserPosts(false);
-  //       setIsLoadingUserPosts(false);
-  //       //console.log('No more user posts to load.');
-  //       return;
-  //     }
-
-  //     const postIds = postsData.map(post => post.id);
-
-  //     const [hashtagResult, tagResult, likeResult, bookmarkResult] = await Promise.all([
-  //       supabase
-  //         .from('social_post_hashtags')
-  //         .select(`post_id, hashtag:social_hashtags(*)`)
-  //         .in('post_id', postIds),
-  //       supabase
-  //         .from('social_post_tags')
-  //         .select(`post_id, tag:social_tags(*)`)
-  //         .in('post_id', postIds),
-  //       supabase
-  //         .from('social_likes')
-  //         .select('post_id')
-  //         .eq('user_id', user.id)
-  //         .in('post_id', postIds),
-  //       supabase
-  //         .from('social_bookmarks')
-  //         .select('post_id')
-  //         .eq('user_id', user.id)
-  //         .in('post_id', postIds)
-  //     ]);
-
-  //     const transformedPosts = postsData.map(post => {
-  //       const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
-  //       const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
-  //       const isLiked = likeResult.data?.some(like => like.post_id === post.id) || false;
-  //       const isBookmarked = bookmarkResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-
-  //       return {
-  //         ...post,
-  //         privacy: post.privacy as "public" | "followers" | "private",
-  //         media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
-  //         group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
-  //         hashtags: postHashtags,
-  //         tags: postTags,
-  //         is_liked: isLiked,
-  //         is_bookmarked: isBookmarked
-  //       };
-  //     });
-
-  //     if (reset) {
-  //       setUserPosts(uniqueById(transformedPosts));
-  //       setUserPostsOffset(transformedPosts.length);
-  //     } else {
-  //       setUserPosts(prev => uniqueById([...prev, ...transformedPosts]));
-  //       setUserPostsOffset(prev => prev + transformedPosts.length);
-  //     }
-  //     //console.log('Fetched user posts:', transformedPosts.length);
-  //     if (transformedPosts.length < DEFAULT_LIMITS.POSTS_PER_PAGE) {
-  //       setHasMoreUserPosts(false);
-  //       //console.log('No more user posts to load.');
-  //     }
-  //   } catch (error) {
-  //     //console.error('Error fetching user posts:', error);
-  //     toast.error('Failed to load user posts');
-  //   } finally {
-  //     setIsLoadingUserPosts(false);
-  //     //console.log('Finished fetching user posts.');
-  //   }
-  // }, [hasMoreUserPosts, isLoadingUserPosts, userPostsOffset]);
-
-  // // FIXED: Fetch Groups - removed dependency on currentUser, use currentUserIdRef instead
-  // const fetchGroups = useCallback(async (reset = true) => {
-  //   if (!currentUserIdRef.current) return;
-
-  //   const limit = DEFAULT_LIMITS.GROUPS_PER_PAGE;
-  //   const offset = reset ? 0 : groupsOffset;
-
-  //   try {
-  //     setIsLoadingMoreGroups(!reset);
-  //     if (reset) setIsLoadingGroups(true);
-
-  //     const { data: rawGroups, error } = await supabase
-  //       .from('social_groups')
-  //       .select(`
-  //         *,
-  //         creator:social_users!social_groups_created_by_fkey(*),
-  //         members:social_group_members(count),
-  //         current_user_membership:social_group_members!social_group_members_group_id_fkey(
-  //           user_id,
-  //           role,
-  //           status
-  //         )
-  //       `)
-  //       .eq('current_user_membership.user_id', currentUserIdRef.current) // crucial filter
-  //       .order('created_at', { ascending: false })
-  //       .range(offset, offset + limit - 1);
-
-  //     if (error) throw error;
-
-  //     const groupsWithDetails: SocialGroupWithDetails[] = (rawGroups || []).map(g => ({
-  //       ...g,
-  //       creator: g.creator,
-  //       member_count: g.members[0]?.count || 0,
-  //       is_member: !!g.current_user_membership?.length, // ← THIS IS THE KEY
-  //       member_role: g.current_user_membership?.[0]?.role || null,
-  //       member_status: g.current_user_membership?.[0]?.status || null,
-  //     }));
-
-  //     if (reset) {
-  //       setGroups(groupsWithDetails);
-  //     } else {
-  //       setGroups(prev => [...prev, ...groupsWithDetails]);
-  //     }
-
-  //     setHasMoreGroups(groupsWithDetails.length === limit);
-  //     setGroupsOffset(offset + groupsWithDetails.length);
-
-  //     saveToCache(CACHE_KEYS.GROUPS, reset ? groupsWithDetails : [...groups, ...groupsWithDetails]);
-  //   } catch (err) {
-  //     //console.error('Error fetching groups:', err);
-  //     toast.error('Failed to load groups');
-  //   } finally {
-  //     setIsLoadingGroups(false);
-  //     setIsLoadingMoreGroups(false);
-  //     //console.log('Finished fetching groups.');
-  //   }
-  // }, [groupsOffset, groups]);
   const fetchTrendingHashtags = async () => {
     try {
       const { data, error } = await supabase
@@ -1551,191 +1174,19 @@ export const useSocialData = (
       ////console.error('Error fetching trending hashtags:', error);
     }
   };
-  // const fetchLikedPosts = useCallback(async () => {
-  //   try {
-  //     setIsLoadingLikedPosts(true);
-
-  //     const { data: { user } } = await supabase.auth.getUser();
-  //     if (!user) {
-  //       setLikedPosts([]);
-  //       return;
-  //     }
-
-  //     // Get all liked post IDs
-  //     const { data: likesData, error: likesError } = await supabase
-  //       .from('social_likes')
-  //       .select('post_id')
-  //       .eq('user_id', user.id)
-  //       .order('created_at', { ascending: false });
-
-  //     if (likesError) throw likesError;
-  //     if (!likesData || likesData.length === 0) {
-  //       setLikedPosts([]);
-  //       return;
-  //     }
-
-  //     const postIds = likesData.map(like => like.post_id);
-
-  //     // Fetch full post details
-  //     const { data: postsData, error: postsError } = await supabase
-  //       .from('social_posts')
-  //       .select(`
-  //   *,
-  //   author:social_users(*),
-  //   group:social_groups(*),
-  //   media:social_media(*)
-  //   `)
-  //       .in('id', postIds);
-
-  //     if (postsError) throw postsError;
-  //     if (!postsData) {
-  //       setLikedPosts([]);
-  //       return;
-  //     }
-
-  //     // Fetch hashtags, tags, and bookmarks
-  //     const [hashtagResult, tagResult, bookmarksResult] = await Promise.all([
-  //       supabase
-  //         .from('social_post_hashtags')
-  //         .select(`post_id, hashtag:social_hashtags(*)`)
-  //         .in('post_id', postIds),
-  //       supabase
-  //         .from('social_post_tags')
-  //         .select(`post_id, tag:social_tags(*)`)
-  //         .in('post_id', postIds),
-  //       supabase
-  //         .from('social_bookmarks')
-  //         .select('post_id')
-  //         .eq('user_id', user.id)
-  //         .in('post_id', postIds) // Limit bookmarks query to the liked postIds
-  //     ]);
-
-  //     // Transform posts
-  //     const transformedPosts = postsData.map(post => {
-  //       const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
-  //       const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
-  //       const isBookmarked = bookmarksResult.data?.some(bookmark => bookmark.post_id === post.id) || false;
-
-  //       return {
-  //         ...post,
-  //         privacy: post.privacy as "public" | "followers" | "private",
-  //         media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
-  //         group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
-  //         hashtags: postHashtags,
-  //         tags: postTags,
-  //         is_liked: true, // Always true for liked posts
-  //         is_bookmarked: isBookmarked
-  //       };
-  //     });
-
-  //     setLikedPosts(transformedPosts);
-  //   } catch (error) {
-  //     //console.error('Error fetching liked posts:', error);
-  //     toast.error('Failed to load liked posts');
-  //   } finally {
-  //     setIsLoadingLikedPosts(false);
-  //   }
-  // }, []);
-
-
-  // const fetchBookmarkedPosts = useCallback(async () => {
-  //   try {
-  //     setIsLoadingBookmarkedPosts(true);
-
-  //     const { data: { user } } = await supabase.auth.getUser();
-  //     if (!user) {
-  //       setBookmarkedPosts([]);
-  //       return;
-  //     }
-
-  //     // Get all bookmarked post IDs
-  //     const { data: bookmarksData, error: bookmarksError } = await supabase
-  //       .from('social_bookmarks')
-  //       .select('post_id')
-  //       .eq('user_id', user.id)
-  //       .order('created_at', { ascending: true });
-
-  //     if (bookmarksError) throw bookmarksError;
-  //     if (!bookmarksData || bookmarksData.length === 0) {
-  //       setBookmarkedPosts([]);
-  //       return;
-  //     }
-
-  //     const postIds = bookmarksData.map(bookmark => bookmark.post_id);
-
-  //     // Fetch full post details
-  //     const { data: postsData, error: postsError } = await supabase
-  //       .from('social_posts')
-  //       .select(`
-  //   *,
-  //   author:social_users(*),
-  //   group:social_groups(*),
-  //   media:social_media(*)
-  //   `)
-  //       .in('id', postIds);
-
-  //     if (postsError) throw postsError;
-  //     if (!postsData) {
-  //       setBookmarkedPosts([]);
-  //       return;
-  //     }
-
-  //     // Fetch hashtags, tags, and likes
-  //     const [hashtagResult, tagResult, likesResult] = await Promise.all([
-  //       supabase
-  //         .from('social_post_hashtags')
-  //         .select(`post_id, hashtag:social_hashtags(*)`)
-  //         .in('post_id', postIds),
-  //       supabase
-  //         .from('social_post_tags')
-  //         .select(`post_id, tag:social_tags(*)`)
-  //         .in('post_id', postIds),
-  //       supabase
-  //         .from('social_likes')
-  //         .select('post_id')
-  //         .eq('user_id', user.id)
-  //         .in('post_id', postIds) // Limit likes query to the bookmarked postIds
-  //     ]);
-
-  //     // Transform posts
-  //     const transformedPosts = postsData.map(post => {
-  //       const postHashtags = hashtagResult.data?.filter(ph => ph.post_id === post.id)?.map(ph => ph.hashtag)?.filter(Boolean) || [];
-  //       const postTags = tagResult.data?.filter(pt => pt.post_id === post.id)?.map(pt => pt.tag)?.filter(Boolean) || [];
-  //       const isLiked = likesResult.data?.some(like => like.post_id === post.id) || false;
-
-  //       return {
-  //         ...post,
-  //         privacy: post.privacy as "public" | "followers" | "private",
-  //         media: (post.media || []).map((m: any) => ({ ...m, type: m.type as "image" | "video" | "document" })),
-  //         group: post.group ? { ...post.group, privacy: post.group.privacy as "public" | "private" } : undefined,
-  //         hashtags: postHashtags,
-  //         tags: postTags,
-  //         is_liked: isLiked,
-  //         is_bookmarked: true // Always true for bookmarked posts
-  //       };
-  //     });
-
-  //     setBookmarkedPosts(transformedPosts);
-  //   } catch (error) {
-  //     //console.error('Error fetching bookmarked posts:', error);
-  //     toast.error('Failed to load bookmarked posts');
-  //   } finally {
-  //     setIsLoadingBookmarkedPosts(false);
-  //   }
-  // }, []);
 
   const fetchSuggestedUsers = useCallback(
     async (reset: boolean = false) => {
+      if (!reset && (isLoadingSuggestedUsers || !hasMoreSuggestedUsers)) {
+        return;
+      }
+
       try {
+        setIsLoadingSuggestedUsers(true);
         if (reset) {
-          setIsLoadingSuggestedUsers(true);
           setSuggestedUsersOffset(0);
           setSuggestedUsers([]);
           setHasMoreSuggestedUsers(true);
-        } else if (isLoadingSuggestedUsers || !hasMoreSuggestedUsers) {
-          return;
-        } else {
-          setIsLoadingSuggestedUsers(true);
         }
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -1756,92 +1207,157 @@ export const useSocialData = (
           .eq('follower_id', user.id);
 
         const followingIds = followingData?.map(f => f.following_id) ?? [];
-        const excludeIds = [...followingIds, user.id];
+        const excludeIds = [user.id, ...followingIds];
 
         // --------------------------------------------------------------
-        // 2. Call the RPC that does **all** the scoring + ordering
+        // 2. Fetch potential candidates and calculate mutual follows
         // --------------------------------------------------------------
-        const { data, error } = await supabase
-          .rpc('get_suggested_users', {
-            p_user_id: user.id,
-            p_exclude_ids: excludeIds,
-            p_limit: limit,
-            p_offset: currentOffset,
+        let mutualFollowsMap: Record<string, number> = {};
+        if (followingIds.length > 0) {
+          const { data: mutuals } = await supabase
+            .from('social_follows')
+            .select('following_id')
+            .in('follower_id', followingIds.slice(0, 50));
+          
+          mutuals?.forEach(m => {
+            if (!excludeIds.includes(m.following_id)) {
+              mutualFollowsMap[m.following_id] = (mutualFollowsMap[m.following_id] || 0) + 1;
+            }
           });
+        }
 
-        const scoredUsers = data as SuggestedUser[] | null;
+        // Fetch a pool of users to score
+        const poolIds = Object.keys(mutualFollowsMap);
+        let userPool: SocialUserWithDetails[] = [];
 
-        if (error) throw error;
+        if (poolIds.length > 0) {
+          const { data: mutualPool } = await supabase
+            .from('social_users')
+            .select('*')
+            .in('id', poolIds.slice(0, 100));
+          if (mutualPool) userPool = mutualPool as SocialUserWithDetails[];
+        }
 
-        if (!scoredUsers || scoredUsers.length === 0) {
+        // Also fetch some popular users to fill the pool
+        let popularQuery = supabase
+          .from('social_users')
+          .select('*');
+        
+        if (excludeIds.length > 0) {
+          popularQuery = popularQuery.not('id', 'in', `(${excludeIds.slice(0, 100).join(',')})`);
+        }
+
+        const { data: popularPool } = await popularQuery
+          .order('followers_count', { ascending: false })
+          .limit(50);
+        
+        if (popularPool) {
+          const existingIds = new Set(userPool.map(u => u.id));
+          popularPool.forEach(u => {
+            if (!existingIds.has(u.id) && !excludeIds.includes(u.id)) {
+              userPool.push(u as SocialUserWithDetails);
+            }
+          });
+        }
+
+        // --------------------------------------------------------------
+        // 3. Scoring Algorithm
+        // --------------------------------------------------------------
+        const userInterests = currentUser?.interests || [];
+        
+        const scoredUsers: SuggestedUser[] = userPool.map(poolUser => {
+          let score = 0;
+
+          // Mutual follows score (High weight)
+          const mutualCount = mutualFollowsMap[poolUser.id] || 0;
+          score += mutualCount * 15;
+
+          // Interest match score (Medium weight)
+          if (userInterests.length > 0 && poolUser.interests) {
+            const commonInterests = poolUser.interests.filter(interest => 
+              userInterests.includes(interest)
+            );
+            score += commonInterests.length * 10;
+          }
+
+          // Popularity score (Low weight)
+          score += Math.min((poolUser.followers_count || 0) / 10, 20);
+
+          // Activity score (Medium weight)
+          score += Math.min((poolUser.posts_count || 0) / 5, 15);
+
+          // Recency bonus
+          const lastActive = poolUser.last_active ? new Date(poolUser.last_active) : new Date(0);
+          const daysSinceActive = (Date.now() - lastActive.getTime()) / (1000 * 3600 * 24);
+          if (daysSinceActive < 3) score += 15;
+          else if (daysSinceActive < 7) score += 5;
+
+          return {
+            ...poolUser,
+            recommendation_score: score,
+            mutual_friends_count: mutualCount,
+            is_following: false,
+            is_followed_by: false
+          };
+        });
+
+        // Sort by score
+        scoredUsers.sort((a, b) => (b.recommendation_score || 0) - (a.recommendation_score || 0));
+
+        // Paginate
+        const paginatedUsers = scoredUsers.slice(currentOffset, currentOffset + limit);
+
+        if (paginatedUsers.length === 0) {
           setHasMoreSuggestedUsers(false);
           setIsLoadingSuggestedUsers(false);
           return;
         }
 
-        // --------------------------------------------------------------
-        // 3. Update state – **no sorting needed**
-        // --------------------------------------------------------------
         if (reset) {
-          setSuggestedUsers(scoredUsers);
+          setSuggestedUsers(paginatedUsers);
         } else {
-          setSuggestedUsers(prev => [...prev, ...scoredUsers]);
+          setSuggestedUsers(prev => [...prev, ...paginatedUsers]);
         }
 
-        setSuggestedUsersOffset(currentOffset + scoredUsers.length);
+        setSuggestedUsersOffset(currentOffset + paginatedUsers.length);
+        setHasMoreSuggestedUsers(currentOffset + paginatedUsers.length < scoredUsers.length);
 
-        if (scoredUsers.length < limit) {
-          setHasMoreSuggestedUsers(false);
-        }
       } catch (err) {
         ////console.error('Error fetching suggested users:', err);
-        if (reset || suggestedUsers.length === 0) {
-          toast.error('Failed to load suggested users');
-        }
       } finally {
         setIsLoadingSuggestedUsers(false);
       }
     },
-    [
-      isLoadingSuggestedUsers,
-      hasMoreSuggestedUsers,
-      suggestedUsersOffset,
-      suggestedUsers.length,
-    ]
+    [currentUser, suggestedUsersOffset, isLoadingSuggestedUsers, hasMoreSuggestedUsers]
   );
 
   const loadMorePosts = () => {
     if (!isLoadingMorePosts && hasMorePosts) {
       fetchPosts(false);
-      setHasMorePosts(false); // Prevent further loads until next refetch
     }
   };
 
   const loadMoreTrendingPosts = () => {
     if (!isLoadingMorePosts && hasMoreTrendingPosts) {
       fetchTrendingPosts(false);
-      setHasMoreTrendingPosts(false); // Prevent further loads until next refetch
     }
   };
 
   const loadMoreUserPosts = () => {
     if (!isLoadingUserPosts && hasMoreUserPosts) {
       fetchUserPosts(false);
-      setHasMoreUserPosts(false); // Prevent further loads until next refetch
     }
   };
 
   const loadMoreGroups = () => {
     if (!isLoadingGroups && hasMoreGroups) {
       fetchGroups(false);
-      setHasMoreGroups(false); // Prevent further loads until next refetch
     }
   };
 
   const loadMoreSuggestedUsers = () => {
     if (!isLoadingSuggestedUsers && hasMoreSuggestedUsers) {
       fetchSuggestedUsers(false);
-      setHasMoreSuggestedUsers(false); // Prevent further loads until next refetch
     }
   };
 
@@ -1898,6 +1414,7 @@ export const useSocialData = (
     refetchGroups: () => fetchGroups(true),
     refetchUserPosts: () => fetchUserPosts(true),
     refetchSuggestedUsers: () => fetchSuggestedUsers(true),
+    refetchCurrentUser: fetchCurrentUser,
     loadMorePosts,
     loadMoreTrendingPosts,
     loadMoreUserPosts,

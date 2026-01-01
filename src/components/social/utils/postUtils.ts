@@ -2,7 +2,7 @@ import { SocialPostWithDetails } from '../../../integrations/supabase/socialType
 import React from 'react';
 
 // Base URL for the application, configurable via environment variable
-const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://studdyhub.vercel.app.com';
+const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://studdyhub.vercel.app';
 
 
 export const extractHashtags = (content: string): string[] => {

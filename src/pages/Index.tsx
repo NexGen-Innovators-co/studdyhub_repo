@@ -114,6 +114,7 @@ const Index = () => {
   const groupId = params.groupId;
   const userId = params.userId;
   const tab = params.tab;
+  const podcastId = params.podcastId;
 
   if (location.pathname.startsWith('/social/group/')) {
     activeSocialTab = 'group';
@@ -286,6 +287,7 @@ const Index = () => {
     activeSocialTab,
     socialPostId,
     socialGroupId,
+    podcastId,
     searchQuery,
     onSearchChange: setSearchQuery,
     socialSearchQuery,
@@ -374,6 +376,7 @@ const Index = () => {
     activeSocialTab,
     socialPostId,
     socialGroupId,
+    podcastId,
     searchQuery,
     socialSearchQuery,
     filteredNotes,

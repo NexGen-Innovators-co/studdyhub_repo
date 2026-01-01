@@ -436,7 +436,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
       }
       
       // Create social post with link to podcast
-      const podcastUrl = `${window.location.origin}/#/podcasts?podcast=${podcast.id}`;
+      const podcastUrl = `${window.location.origin}/podcasts/${podcast.id}`;
       const content = `🎙️ Check out my AI-generated podcast: "${podcast.title}"
 
 ${podcast.audioSegments.length} segments • ${podcast.duration} minutes
@@ -451,7 +451,15 @@ Generated with StuddyHub AI Podcasts!`;
         .insert({
           author_id: user.id,
           content,
-          privacy: 'public'
+          privacy: 'public',
+          metadata: {
+            type: 'podcast',
+            podcastId: podcast.id,
+            title: podcast.title,
+            description: podcast.description || '',
+            coverUrl: podcast.cover_image_url,
+            authorName: user.user_metadata?.full_name || user.email
+          }
         });
       
       if (error) throw error;

@@ -194,6 +194,67 @@
     font-size: inherit;
     border-radius: 0;
   }
+
+  /* Syntax Highlighting for Tiptap Code Blocks */
+  .ProseMirror .hljs-comment,
+  .ProseMirror .hljs-quote {
+    color: #9ca3af;
+    font-style: italic;
+  }
+
+  .ProseMirror .hljs-keyword,
+  .ProseMirror .hljs-selector-tag {
+    color: #c084fc;
+    font-weight: 600;
+  }
+
+  .ProseMirror .hljs-string,
+  .ProseMirror .hljs-doctag,
+  .ProseMirror .hljs-regexp,
+  .ProseMirror .hljs-addition {
+    color: #86efac;
+  }
+
+  .ProseMirror .hljs-number,
+  .ProseMirror .hljs-built_in,
+  .ProseMirror .hljs-literal,
+  .ProseMirror .hljs-type,
+  .ProseMirror .hljs-params,
+  .ProseMirror .hljs-meta,
+  .ProseMirror .hljs-link {
+    color: #fdba74;
+  }
+
+  .ProseMirror .hljs-attribute,
+  .ProseMirror .hljs-name,
+  .ProseMirror .hljs-tag {
+    color: #93c5fd;
+  }
+
+  .ProseMirror .hljs-title,
+  .ProseMirror .hljs-section {
+    color: #fcd34d;
+    font-weight: 600;
+  }
+
+  .ProseMirror .hljs-variable,
+  .ProseMirror .hljs-template-variable {
+    color: #bfdbfe;
+  }
+
+  .ProseMirror .hljs-bullet,
+  .ProseMirror .hljs-subst,
+  .ProseMirror .hljs-meta .hljs-keyword {
+    color: #5eead4;
+  }
+
+  .ProseMirror .hljs-deletion {
+    color: #f87171;
+  }
+
+  .ProseMirror .hljs-formula {
+    text-decoration: underline;
+  }
   
   /* Inline Code */
   .ProseMirror code {
