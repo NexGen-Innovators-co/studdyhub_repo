@@ -18,12 +18,9 @@ interface PeerConnection {
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-//   Add TURN servers for production
-  {
-    urls: 'turn:your-turn-server.com:3478',
-    username: 'username',
-    credential: 'password'
-  }
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
 ];
 export const useWebRTC = ({
   podcastId,
@@ -43,6 +40,9 @@ export const useWebRTC = ({
   const currentUserIdRef = useRef<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const pendingIceCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
+  const pendingListenersRef = useRef<Set<string>>(new Set());
 
   // Initialize WebRTC
   useEffect(() => {
@@ -52,6 +52,35 @@ export const useWebRTC = ({
       cleanup();
     };
   }, [podcastId, isHost]);
+
+  // Handle pending listeners when host stream becomes available
+  useEffect(() => {
+    if (isHost && localStream && pendingListenersRef.current.size > 0) {
+      console.log(`Host stream ready. Processing ${pendingListenersRef.current.size} pending listeners...`);
+      pendingListenersRef.current.forEach(listenerId => {
+        createOfferForListener(listenerId);
+      });
+      pendingListenersRef.current.clear();
+    }
+  }, [localStream, isHost]);
+
+  // Periodically re-announce presence if not connected (for listeners)
+  useEffect(() => {
+    if (isHost || isConnected) return;
+
+    const interval = setInterval(() => {
+      if (signalingChannelRef.current && currentUserIdRef.current) {
+        console.log('Re-announcing presence as listener...');
+        signalingChannelRef.current.send({
+          type: 'broadcast',
+          event: 'listener-joined',
+          payload: { userId: currentUserIdRef.current }
+        });
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isHost, isConnected]);
 
   const initializeWebRTC = async () => {
     try {
@@ -75,16 +104,24 @@ export const useWebRTC = ({
   };
 
   const setupSignalingChannel = () => {
-    const channel = supabase.channel(`podcast-webrtc-${podcastId}`);
+    const channel = supabase.channel(`podcast-webrtc-${podcastId}`, {
+      config: {
+        broadcast: { ack: true }
+      }
+    });
+
+    signalingChannelRef.current = channel;
 
     channel
       .on('broadcast', { event: 'offer' }, async ({ payload }) => {
         if (payload.to === currentUserIdRef.current) {
+          console.log('Received offer from', payload.from);
           await handleOffer(payload);
         }
       })
       .on('broadcast', { event: 'answer' }, async ({ payload }) => {
         if (payload.to === currentUserIdRef.current) {
+          console.log('Received answer from', payload.from);
           await handleAnswer(payload);
         }
       })
@@ -95,21 +132,30 @@ export const useWebRTC = ({
       })
       .on('broadcast', { event: 'listener-joined' }, async ({ payload }) => {
         if (isHost && payload.userId !== currentUserIdRef.current) {
-          await createOfferForListener(payload.userId);
+          if (localStreamRef.current) {
+            console.log('Listener joined, creating offer for', payload.userId);
+            await createOfferForListener(payload.userId);
+          } else {
+            console.log(`Listener ${payload.userId} joined, but host stream not ready. Buffering.`);
+            pendingListenersRef.current.add(payload.userId);
+          }
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Signaling channel subscribed');
 
-    signalingChannelRef.current = channel;
-
-    // Announce presence
-    if (!isHost) {
-      channel.send({
-        type: 'broadcast',
-        event: 'listener-joined',
-        payload: { userId: currentUserIdRef.current }
+          // Announce presence
+          if (!isHost) {
+            console.log('Announcing presence as listener');
+            channel.send({
+              type: 'broadcast',
+              event: 'listener-joined',
+              payload: { userId: currentUserIdRef.current }
+            });
+          }
+        }
       });
-    }
   };
 
   const startBroadcasting = async () => {
@@ -123,6 +169,7 @@ export const useWebRTC = ({
       });
 
       setLocalStream(stream);
+      localStreamRef.current = stream;
       setIsConnected(true);
       setConnectionQuality('excellent');
 
@@ -190,8 +237,11 @@ export const useWebRTC = ({
           setConnectionQuality('excellent');
           break;
         case 'disconnected':
+          setConnectionQuality('poor');
+          break;
         case 'failed':
           setConnectionQuality('disconnected');
+          setIsConnected(false);
           break;
         case 'connecting':
           setConnectionQuality('poor');
@@ -250,13 +300,14 @@ export const useWebRTC = ({
 
   const createOfferForListener = async (listenerId: string) => {
     try {
-      if (!localStream) return;
+      const stream = localStreamRef.current;
+      if (!stream) return;
 
       const pc = createPeerConnection(listenerId);
       
       // Add local tracks to peer connection
-      localStream.getTracks().forEach(track => {
-        pc.addTrack(track, localStream);
+      stream.getTracks().forEach(track => {
+        pc.addTrack(track, stream);
       });
 
       peerConnectionsRef.current.set(listenerId, {
@@ -293,6 +344,7 @@ export const useWebRTC = ({
       });
 
       await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+      await applyPendingIceCandidates(payload.from, pc);
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -318,6 +370,7 @@ export const useWebRTC = ({
       const peer = peerConnectionsRef.current.get(payload.from);
       if (peer) {
         await peer.connection.setRemoteDescription(new RTCSessionDescription(payload.answer));
+        await applyPendingIceCandidates(payload.from, peer.connection);
       }
     } catch (err) {
       console.error('Error handling answer:', err);
@@ -327,11 +380,31 @@ export const useWebRTC = ({
   const handleIceCandidate = async (payload: any) => {
     try {
       const peer = peerConnectionsRef.current.get(payload.from);
-      if (peer && payload.candidate) {
+      if (peer && peer.connection.remoteDescription) {
         await peer.connection.addIceCandidate(new RTCIceCandidate(payload.candidate));
+      } else {
+        // Buffer candidate if peer connection not ready or remote description not set
+        const candidates = pendingIceCandidatesRef.current.get(payload.from) || [];
+        candidates.push(new RTCIceCandidate(payload.candidate));
+        pendingIceCandidatesRef.current.set(payload.from, candidates);
       }
     } catch (err) {
       console.error('Error handling ICE candidate:', err);
+    }
+  };
+
+  const applyPendingIceCandidates = async (userId: string, pc: RTCPeerConnection) => {
+    const candidates = pendingIceCandidatesRef.current.get(userId);
+    if (candidates && pc.remoteDescription) {
+      console.log(`Applying ${candidates.length} buffered ICE candidates for ${userId}`);
+      for (const candidate of candidates) {
+        try {
+          await pc.addIceCandidate(candidate);
+        } catch (e) {
+          console.error('Error adding buffered ICE candidate:', e);
+        }
+      }
+      pendingIceCandidatesRef.current.delete(userId);
     }
   };
 
@@ -356,6 +429,7 @@ export const useWebRTC = ({
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
       setLocalStream(null);
+      localStreamRef.current = null;
     }
     setIsConnected(false);
 
@@ -370,14 +444,18 @@ export const useWebRTC = ({
     peerConnectionsRef.current.clear();
 
     // Stop local stream
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
     }
 
     // Unsubscribe from signaling channel
     if (signalingChannelRef.current) {
       signalingChannelRef.current.unsubscribe();
     }
+
+    pendingIceCandidatesRef.current.clear();
+    pendingListenersRef.current.clear();
 
     setIsConnected(false);
   };

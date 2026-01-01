@@ -12,6 +12,7 @@ interface PodcastRequest {
   style?: 'casual' | 'educational' | 'deep-dive';
   duration?: 'short' | 'medium' | 'long'; // 5min, 15min, 30min
   podcastType?: 'audio' | 'image-audio' | 'video' | 'live-stream';
+  cover_image_url?: string;
 }
 
 serve(async (req) => {
@@ -132,7 +133,14 @@ serve(async (req) => {
       throw new Error("Invalid request body - expected JSON");
     }
 
-    const { noteIds = [], documentIds = [], style = 'educational', duration = 'medium', podcastType = 'audio' } = body;
+    const { 
+      noteIds = [], 
+      documentIds = [], 
+      style = 'educational', 
+      duration = 'medium', 
+      podcastType = 'audio',
+      cover_image_url: providedCoverImageUrl
+    } = body;
 
     console.log(`[Podcast] Generating podcast for user ${user.id}`);
     console.log(`[Podcast] Notes: ${noteIds.length}, Documents: ${documentIds.length}`);
@@ -318,8 +326,9 @@ serve(async (req) => {
 
     // 4.5. Generate images for visual podcast types
     let visualAssets: any[] = [];
-    let coverImageUrl = '';
-    if (podcastType === 'image-audio' || podcastType === 'video' || podcastType === 'live-stream') {
+    let coverImageUrl = providedCoverImageUrl || '';
+    
+    if (!coverImageUrl && (podcastType === 'image-audio' || podcastType === 'video' || podcastType === 'live-stream')) {
     // Generate a cover image for the podcast (use first concept or a summary prompt)
     try {
       let coverPrompt = '';

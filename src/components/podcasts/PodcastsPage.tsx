@@ -1,5 +1,5 @@
 // PodcastsPage.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -32,7 +32,8 @@ import {
   Trash2,
   Flag,
   MoreVertical,
-  RefreshCcw
+  RefreshCcw,
+  Image as ImageIcon
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -75,7 +76,6 @@ interface PodcastsPageProps {
   onNavigateToTab?: (tab: string) => void;
 }
 
-import { useRef } from 'react';
 import { SocialFeedHandle } from '../social/SocialFeed';
 
 export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.RefObject<SocialFeedHandle> }> = ({
@@ -110,6 +110,84 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   const [deletingPodcast, setDeletingPodcast] = useState(false);
   const [listenedPodcasts, setListenedPodcasts] = useState<Set<string>>(new Set());
   const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
+  const [isUpdatingCover, setIsUpdatingCover] = useState<string | null>(null);
+  const [isGeneratingAiCover, setIsGeneratingAiCover] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpdateCover = async (podcastId: string, file: File) => {
+    setIsUpdatingCover(podcastId);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const filePath = `covers/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('podcasts')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('podcasts')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from('ai_podcasts')
+        .update({ cover_image_url: publicUrl })
+        .eq('id', podcastId);
+
+      if (updateError) throw updateError;
+
+      setPodcasts(prev => prev.map(p => 
+        p.id === podcastId ? { ...p, cover_image_url: publicUrl } : p
+      ));
+
+      toast.success('Cover image updated');
+    } catch (error) {
+      console.error('Error updating cover:', error);
+      toast.error('Failed to update cover');
+    } finally {
+      setIsUpdatingCover(null);
+    }
+  };
+
+  const handleGenerateAiCoverForExisting = async (podcast: PodcastWithMeta) => {
+    setIsGeneratingAiCover(podcast.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const prompt = `A professional podcast cover for a show titled "${podcast.title}". Modern, clean, educational style, vibrant colors.`;
+
+      const { data, error } = await supabase.functions.invoke('generate-image-from-text', {
+        body: { description: prompt, userId: user.id }
+      });
+
+      if (error) throw error;
+      if (data?.imageUrl) {
+        const { error: updateError } = await supabase
+          .from('ai_podcasts')
+          .update({ cover_image_url: data.imageUrl })
+          .eq('id', podcast.id);
+
+        if (updateError) throw updateError;
+
+        setPodcasts(prev => prev.map(p => 
+          p.id === podcast.id ? { ...p, cover_image_url: data.imageUrl } : p
+        ));
+
+        toast.success('AI cover generated and updated');
+      }
+    } catch (error) {
+      console.error('Error generating AI cover:', error);
+      toast.error('Failed to generate AI cover');
+    } finally {
+      setIsGeneratingAiCover(null);
+    }
+  };
 
   // Use external search query if provided
   useEffect(() => {
@@ -185,9 +263,18 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
               .eq('id', data.user_id)
               .single();
 
+            // Calculate duration
+            let totalDuration = data.duration_minutes || 0;
+            if (audioSegments.length > 0 && audioSegments[0].end_time !== undefined) {
+              const lastSegment = audioSegments[audioSegments.length - 1];
+              if (lastSegment && typeof lastSegment.end_time === 'number' && isFinite(lastSegment.end_time)) {
+                totalDuration = Math.ceil(lastSegment.end_time / 60);
+              }
+            }
+
             const podcastWithMeta: PodcastWithMeta = {
               ...data,
-              duration: data.duration_minutes,
+              duration: totalDuration,
               audioSegments,
               visualAssets,
               sources: data.sources || [],
@@ -287,7 +374,8 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   };
 
   const fetchPodcasts = async (fetchPage = 1, reset = false) => {
-    if (reset) setLoading(true);
+    const isInitialFetch = reset || fetchPage === 1;
+    if (isInitialFetch) setLoading(true);
     try {
       let query = supabase
         .from('ai_podcasts')
@@ -396,11 +484,18 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         }
 
         // Calculate total duration from audio segments (in minutes)
-        let totalDuration = podcast.duration_minutes;
-        if (audioSegments.length > 0 && audioSegments[0].end_time) {
+        let totalDuration = podcast.duration_minutes || 0;
+        if (audioSegments.length > 0 && audioSegments[0].end_time !== undefined) {
           // For live podcasts, calculate from last segment's end_time
           const lastSegment = audioSegments[audioSegments.length - 1];
-          totalDuration = Math.ceil(lastSegment.end_time / 60); // Convert seconds to minutes
+          if (lastSegment && typeof lastSegment.end_time === 'number' && isFinite(lastSegment.end_time)) {
+            totalDuration = Math.ceil(lastSegment.end_time / 60); // Convert seconds to minutes
+          }
+        }
+
+        // Ensure duration is a valid number and not Infinity
+        if (!isFinite(totalDuration) || isNaN(totalDuration)) {
+          totalDuration = podcast.duration_minutes || 0;
         }
 
         return {
@@ -417,7 +512,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         };
       });
 
-      if (reset) {
+      if (isInitialFetch) {
         setPodcasts(transformedPodcasts);
       } else {
         setPodcasts(prev => [...prev, ...transformedPodcasts]);
@@ -824,6 +919,32 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => {
+                            setIsUpdatingCover(podcast.id);
+                            fileInputRef.current?.click();
+                          }}
+                          disabled={isUpdatingCover === podcast.id}
+                        >
+                          {isUpdatingCover === podcast.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <ImageIcon className="h-4 w-4 mr-2" />
+                          )}
+                          Update Cover
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleGenerateAiCoverForExisting(podcast)}
+                          disabled={isGeneratingAiCover === podcast.id}
+                        >
+                          {isGeneratingAiCover === podcast.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4 mr-2" />
+                          )}
+                          Generate AI Cover
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
                             setPodcastToDelete(podcast);
                             setShowDeleteDialog(true);
                           }}
@@ -895,7 +1016,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           </div> */}
 
           <ScrollArea className="flex-1" ref={podcastsScrollRef}>
-            <div className="max-w-7xl mx-auto p-6">
+            <div className="max-w-7xl mx-auto p-12 pb-24 sm:p-24 lg:p-20">
               {loading ? (
                 <div className="flex items-center justify-center h-64">
                   <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
@@ -1163,6 +1284,22 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           <RefreshCcw className="h-6 w-6" />
         )}
       </button>
+
+      {/* Hidden File Input for Cover Update */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept="image/*"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && isUpdatingCover) {
+            handleUpdateCover(isUpdatingCover, file);
+          }
+          // Reset input
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 };
