@@ -326,8 +326,59 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
   useEffect(() => {
     localStorage.setItem('ai-streaming-mode', String(enableStreamingMode));
   }, [enableStreamingMode]);
+  const { isRecognizing, startRecognition, stopRecognition, micPermissionStatus } = useSpeechRecognition({
+    setInputMessage,
+    resizeTextarea: useCallback(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      }
+    }, []),
+    inputMessage,
+    requestNotificationPermission: useCallback(async (): Promise<boolean> => {
+      if (!("Notification" in window)) {
+        //console.warn("Notification API not supported in this browser.");
+        return false;
+      }
+      try {
+        const permission = await Notification.requestPermission();
+        return permission === "granted";
+      } catch (error) {
+        //console.error("Error requesting notification permission:", error);
+        return false;
+      }
+    }, []),
+    requestMicrophonePermission: useCallback(async (): Promise<boolean> => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        return true;
+      } catch (error: any) {
+        //console.error('Error requesting microphone permission:', error);
+        toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
+        return false;
+      }
+    }, []),
+    checkMicrophonePermission: useCallback(async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
+      try {
+        if (navigator.permissions && navigator.permissions.query) {
+          const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          return permissionStatus.state as 'granted' | 'denied' | 'prompt';
+        }
+        return 'unknown';
+      } catch (error) {
+        //console.error('Error checking microphone permission:', error);
+        return 'unknown';
+      }
+    }, []),
+  });
+
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isRecognizing) {
+      stopRecognition();
+    }
     
     // Check limit BEFORE attempting to send
     if (!checkAiMessageLimit()) {
@@ -503,7 +554,9 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
     onSendMessageToBackend,
     isCurrentlySending,
     checkAiMessageLimit,
-    messages
+    messages,
+    isRecognizing,
+    stopRecognition
   ]);
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {
@@ -686,53 +739,6 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
       .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type === 'image');
   }, [mergedDocuments, selectedDocumentIds]);
 
-  const { isRecognizing, startRecognition, stopRecognition, micPermissionStatus } = useSpeechRecognition({
-    setInputMessage,
-    resizeTextarea: useCallback(() => {
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-      }
-    }, []),
-    inputMessage,
-    requestNotificationPermission: useCallback(async (): Promise<boolean> => {
-      if (!("Notification" in window)) {
-        //console.warn("Notification API not supported in this browser.");
-        return false;
-      }
-      try {
-        const permission = await Notification.requestPermission();
-        return permission === "granted";
-      } catch (error) {
-        //console.error("Error requesting notification permission:", error);
-        return false;
-      }
-    }, []),
-    requestMicrophonePermission: useCallback(async (): Promise<boolean> => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-        return true;
-      } catch (error: any) {
-        //console.error('Error requesting microphone permission:', error);
-        toast.error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
-        return false;
-      }
-    }, []),
-    checkMicrophonePermission: useCallback(async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
-      try {
-        if (navigator.permissions && navigator.permissions.query) {
-          const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-          return permissionStatus.state as 'granted' | 'denied' | 'prompt';
-        }
-        return 'unknown';
-      } catch (error) {
-        //console.error('Error checking microphone permission:', error);
-        return 'unknown';
-      }
-    }, []),
-  });
-
   const { isSpeaking, speakingMessageId, isPaused, speakMessage, pauseSpeech, resumeSpeech, stopSpeech } = useTextToSpeech({
     messages,
     isLoading,
@@ -768,13 +774,13 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
       {/* Main Chat Container */}
       <div
         ref={dropZoneRef}
-        className={`flex h-[90vh] lg:h-screen border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+        className={`flex h-[90vh] lg:h-screen pt-24 border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
       >
         <DragOverlay isDragging={isDragging} />
 
         {/* Chat Panel */}
         <div
-          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen' : ''}`}
+          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
           style={isDiagramPanelOpen && !isPhone() ? { width: `calc(${100 - panelWidth}% - 1px)` } : isPhone() ? { width: '100vw', height: '100vh', left: 0, top: 0 } : { flex: 1 }}
         >
           {/* Enhanced Loading States */}
@@ -872,7 +878,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
           {/* Input area */}
           <div className={`fixed bottom-0 left-0 right-0 sm:pb-8 md:shadow-none md:static rounded-t-lg rounded-lg md:rounded-lg bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
             ${isDiagramPanelOpen ? `md:pr-[calc(${panelWidth}%+1.5rem)]` : ''}`}>
-              <div className="w-full max-w-4xl mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2">
+              <div className={`w-full ${(!isDiagramPanelOpen && !activePodcast) ? 'max-w-3xl' : 'max-w-4xl'} mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2`}>
                 <SubscriptionGuard
                   feature="AI Chat"
                   limitFeature="maxAiMessages"
@@ -989,25 +995,50 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
                       rows={1}
                     />
                     <Button
-                      type="submit"
-                      onClick={handleSendMessage}
+                      type="button"
+                      onClick={(e) => {
+                        if (inputMessage.trim() || attachedFiles.length > 0) {
+                          handleSendMessage(e);
+                        } else {
+                          if (isRecognizing) {
+                            stopRecognition();
+                          } else {
+                            startRecognition();
+                          }
+                        }
+                      }}
                       disabled={
-                        isLoading ||
+                        (isLoading ||
                         isSubmittingUserMessage ||
                         isGeneratingImage ||
                         isUpdatingDocuments ||
-                        (!inputMessage.trim() && attachedFiles.length === 0 && selectedDocumentIds.length === 0) ||
-                        !isLastAiMessageDisplayed ||
                         isCurrentlySending ||
                         isAiTyping ||
-                        messages.some(msg => msg.id.startsWith('optimistic-'))
+                        !isLastAiMessageDisplayed ||
+                        messages.some(msg => msg.id.startsWith('optimistic-'))) && !isRecognizing
                       }
-                      className="bg-blue-600 hover:bg-blue-700 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0"
+                      className={`${
+                        isRecognizing ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'
+                      } text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0 transition-all duration-300`}
                     >
                       {isSubmittingUserMessage || isCurrentlySending || isAiTyping ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
+                      ) : (inputMessage.trim() || attachedFiles.length > 0) ? (
                         <Send className="h-4 w-4" />
+                      ) : (
+                        <motion.div
+                          animate={isRecognizing ? { 
+                            scale: [1, 1.2, 1],
+                            opacity: [1, 0.8, 1]
+                          } : { scale: 1 }}
+                          transition={{ 
+                            duration: 1.5, 
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                        >
+                          <Mic className="h-4 w-4" />
+                        </motion.div>
                       )}
                     </Button>
                     {/* Hidden file inputs for menu actions */}

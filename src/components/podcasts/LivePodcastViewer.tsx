@@ -73,25 +73,28 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
   const {
     isConnected,
     connectionQuality,
-    error
+    error,
+    startBroadcasting // This will trigger a re-announcement if we add it to the hook
   } = useWebRTC({
     podcastId,
     isHost: false,
     onRemoteStream: (stream) => {
+      console.log('Received remote stream');
       // Attach remote audio stream to audio element
       if (audioRef.current) {
         audioRef.current.srcObject = stream;
         audioRef.current.play().catch(err => {
-
+          console.error('Audio play error:', err);
           toast.error('Failed to play audio. Please check your permissions.');
         });
       }
     },
     onConnectionStateChange: (state) => {
+      console.log('Viewer connection state:', state);
       if (state === 'connected') {
         toast.success('Connected to live stream');
       } else if (state === 'disconnected' || state === 'failed') {
-        toast.error('Connection lost');
+        toast.error('Connection lost. Attempting to reconnect...');
       }
     }
   });

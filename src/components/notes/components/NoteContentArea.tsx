@@ -721,11 +721,8 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [showTutorial, setShowTutorial] = useState(false);
 
     const toolbarRef = useRef<HTMLDivElement>(null);
-    const [hiddenIndices, setHiddenIndices] = useState<Set<number>>(new Set());
-    const [hasOverflow, setHasOverflow] = useState(false);
-    const [isExpanded, setIsExpanded] = useState(false);
 
-    const NOTE_EDITOR_TUTORIAL = getNoteEditorTutorial(isMobile, isExpanded);
+    const NOTE_EDITOR_TUTORIAL = getNoteEditorTutorial(isMobile, false);
     // Define your toolbar groups as React nodes
     const toolbarItems: React.ReactNode[] = [
       // Navigation
@@ -1087,47 +1084,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         </button>
       </React.Fragment>,
     ];
-    useEffect(() => {
-      if (!toolbarRef.current) return;
 
-      const checkOverflow = () => {
-        const container = toolbarRef.current;
-        if (!container) return;
-
-        if (isExpanded) {
-          setHiddenIndices(new Set());
-          setHasOverflow(false);
-          return;
-        }
-
-        const children = Array.from(container.children) as HTMLElement[];
-        const containerWidth = container.offsetWidth;
-        let totalWidth = 0;
-        const newHidden = new Set<number>();
-
-        children.forEach((child, index) => {
-          totalWidth += child.offsetWidth + 8;
-          if (totalWidth > containerWidth - 1) {
-            newHidden.add(index);
-          }
-        });
-
-        setHiddenIndices(newHidden);
-        setHasOverflow(newHidden.size > 0);
-      };
-
-      checkOverflow();
-
-      const resizeObserver = new ResizeObserver(checkOverflow);
-      resizeObserver.observe(toolbarRef.current);
-
-      window.addEventListener('resize', checkOverflow);
-
-      return () => {
-        resizeObserver.disconnect();
-        window.removeEventListener('resize', checkOverflow);
-      };
-    }, [editor, savedCards.length, isToolbarExpanded, isSummaryVisible, isExpanded]);
     return (
       <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-gray-900">
         {/* Hidden file inputs */}
@@ -1149,13 +1106,13 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         {/* ---------- RESPONSIVE FORMATTING TOOLBAR ---------- */}
         <div className="flex-shrink-0 relative border-b border-gray-300 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 shadow-sm">
           {/* Desktop Toolbar - Hidden on mobile */}
-          <div className={`hidden lg:flex items-center gap-2 px-4 py-2 overflow-x-scroll modern-scrollbar in transition-all duration-300 ${isExpanded ? 'flex-wrap' : ''}`}>
-            <div className={`flex items-center gap-2 flex-1 min-w-0 ${isExpanded ? 'flex-wrap' : ''}`} ref={toolbarRef}>
+          <div className="hidden lg:flex items-center gap-2 px-4 py-2 overflow-x-scroll modern-scrollbar transition-all duration-300">
+            <div className="flex items-center gap-2 flex-1 min-w-0" ref={toolbarRef}>
               {toolbarItems.map((item, index) => (
                 <div
                   key={index}
                   data-index={index}
-                  className={`flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg transition-all duration-300 ${hiddenIndices.has(index) && !isExpanded ? 'opacity-0 w-0 p-0 m-0 overflow-hidden' : ''}`}
+                  className="flex items-center gap-1 px-2 py-1 bg-white/50 dark:bg-gray-700/50 rounded-lg transition-all duration-300"
                   style={{
                     flexShrink: 0,
                   }}
@@ -1164,13 +1121,6 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
                 </div>
               ))}
             </div>
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 flex-shrink-0 ml-2"
-              title={isExpanded ? 'Collapse' : 'Expand'}
-            >
-              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
           </div>
           {showMenu && !isMobile && (
             <div className="border-b border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-lg animate-slide-in-down">

@@ -25,27 +25,15 @@ export const getNoteEditorTutorial = (isMobile: boolean, isExpanded: boolean): T
     },
     {
       id: 'expand-toolbar',
-      title: 'Expandable Toolbar',
-      description: isMobile
-        ? 'The toolbar can be scrolled horizontally. Tap and drag to see more tools.'
-        : 'Click the expand button or scroll horizontally to access all tools. Some tools may be hidden on smaller screens.',
+      title: 'Scrollable Toolbar',
+      description: 'The toolbar can be scrolled horizontally. Click and drag or use your scroll wheel to see more tools.',
       elementSelector: isMobile
         ? '.lg\\:hidden.flex.items-center.overflow-x-scroll'
-        : '[data-tutorial="expand-toolbar-button"]',
+        : '.hidden.lg\\:flex.items-center.overflow-x-scroll',
       position: isMobile ? 'bottom' : 'top',
       highlightPadding: isMobile ? 20 : 12,
-      tips: ['Scroll or expand to see all tools', 'Frequently used tools are always visible'],
-      actions: !isMobile ? [
-        {
-          label: 'Expand Toolbar',
-          onClick: () => {
-            const expandBtn = document.querySelector('[data-tutorial="expand-toolbar-button"]') as HTMLElement;
-            if (expandBtn) {
-              expandBtn.click();
-            }
-          }
-        }
-      ] : []
+      tips: ['Scroll to see all tools', 'Frequently used tools are always visible'],
+      actions: []
     },
     {
       id: 'basic-formatting',
@@ -59,18 +47,11 @@ export const getNoteEditorTutorial = (isMobile: boolean, isExpanded: boolean): T
         {
           label: 'Show Formatting Tools',
           onClick: () => {
-            // Expand toolbar first
-            const expandBtn = document.querySelector('[data-tutorial="expand-toolbar-button"]') as HTMLElement;
-            if (expandBtn && !isExpanded) {
-              expandBtn.click();
-            }
             // Scroll to formatting
-            setTimeout(() => {
-              const boldBtn = document.querySelector('[data-tutorial="bold-button"]');
-              if (boldBtn) {
-                boldBtn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-              }
-            }, 100);
+            const boldBtn = document.querySelector('[data-tutorial="bold-button"]');
+            if (boldBtn) {
+              boldBtn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
           }
         }
       ] : []

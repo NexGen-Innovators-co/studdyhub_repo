@@ -74,6 +74,9 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
   const [style, setStyle] = useState<'casual' | 'educational' | 'deep-dive'>('educational');
   const [duration, setDuration] = useState<'short' | 'medium' | 'long'>('medium');
   const [podcastType, setPodcastType] = useState<'audio' | 'image-audio' | 'video' | 'live-stream'>('audio');
+  const [coverImage, setCoverImage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isGeneratingAiCover, setIsGeneratingAiCover] = useState(false);
   const [checkingEligibility, setCheckingEligibility] = useState(true);
   const [eligibility, setEligibility] = useState<{
     canCreate: boolean;
@@ -237,6 +240,86 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
     );
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const filePath = `covers/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('podcasts')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('podcasts')
+        .getPublicUrl(filePath);
+
+      setCoverImage(publicUrl);
+      toast.success('Cover image uploaded successfully');
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to upload cover image');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleGenerateAiCover = async () => {
+    setIsGeneratingAiCover(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Get titles of selected notes/docs for the prompt
+      const selectedTitles = [
+        ...availableNotes.filter(n => localSelectedNoteIds.includes(n.id)).map(n => n.title),
+        ...availableDocuments.filter(d => localSelectedDocumentIds.includes(d.id)).map(d => d.title)
+      ];
+
+      const prompt = selectedTitles.length > 0 
+        ? `A professional podcast cover for a show about ${selectedTitles.join(', ')}. Modern, clean, educational style, vibrant colors.`
+        : "A professional educational podcast cover, modern design, vibrant colors, clean typography.";
+
+      const { data, error } = await supabase.functions.invoke('generate-image-from-text', {
+        body: { description: prompt, userId: user.id }
+      });
+
+      if (error) throw error;
+      if (data?.imageUrl) {
+        setCoverImage(data.imageUrl);
+        toast.success('AI cover generated successfully');
+      } else {
+        throw new Error('No image URL returned');
+      }
+    } catch (error: any) {
+      console.error('Error generating AI cover:', error);
+      toast.error('Failed to generate AI cover');
+    } finally {
+      setIsGeneratingAiCover(false);
+    }
+  };
+
   const generatePodcast = async () => {
     // Allow generation without pre-selected content for podcast page
     // if (selectedNoteIds.length === 0 && selectedDocumentIds.length === 0) {
@@ -261,7 +344,8 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           documentIds: localSelectedDocumentIds,
           style,
           duration,
-          podcastType
+          podcastType,
+          cover_image_url: coverImage,        
         }
       });
 
@@ -512,6 +596,69 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
             </div>
           </div>
           */}
+
+          {/* Cover Image Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-sm font-medium block">Cover Image (Optional)</Label>
+              {!coverImage && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 text-xs gap-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                  onClick={handleGenerateAiCover}
+                  disabled={isGeneratingAiCover || isUploadingImage}
+                >
+                  {isGeneratingAiCover ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  Generate with AI
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-col gap-4">
+              {coverImage ? (
+                <div className="relative w-full aspect-video rounded-lg overflow-hidden border group">
+                  <img 
+                    src={coverImage} 
+                    alt="Podcast cover" 
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    onClick={() => setCoverImage(null)}
+                    className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-accent/50 transition-colors">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      {isUploadingImage ? (
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      ) : (
+                        <>
+                          <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">Click to upload cover image</p>
+                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                        </>
+                      )}
+                    </div>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={isUploadingImage || isGeneratingAiCover}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Podcast Type Selection */}
           <div>
