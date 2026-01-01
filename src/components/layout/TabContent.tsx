@@ -38,6 +38,7 @@ interface TabContentProps {
   activeTab: 'dashboard' | 'notes' | 'recordings' | 'quizzes' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social' | 'podcasts';
   activeSocialTab?: string;
   socialPostId?: string;
+  podcastId?: string;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   socialSearchQuery?: string;
@@ -135,7 +136,7 @@ interface TabContentProps {
 export const TabContent: React.FC<TabContentProps> = (props) => {
   // Shared ref for SocialFeed, available in both social and podcasts tabs
   const socialFeedRef = useRef<SocialFeedHandle>(null);
-  const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory, activeSocialTab, socialPostId } = props;
+  const { activeTab, userProfile, isAILoading, isNotesHistoryOpen, onToggleNotesHistory, activeSocialTab, socialPostId, podcastId } = props;
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -570,6 +571,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
               <ErrorBoundary>
                 <PodcastsPage 
                   searchQuery={props.searchQuery}
+                  podcastId={podcastId}
                   onGoLive={() => {
                     // Trigger the internal go live handler
                     if ((window as any).__podcastGoLive) {

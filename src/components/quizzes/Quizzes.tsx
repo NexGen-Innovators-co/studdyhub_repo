@@ -54,7 +54,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
 
-  const { userStats, isLoadingStats, recordQuizAttempt, fetchUserStats } = useQuizTracking(userId);
+  const { userStats, isLoadingStats, bestAttempts, recordQuizAttempt, fetchUserStats } = useQuizTracking(userId);
 
   const {
     quizMode,
@@ -138,10 +138,13 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
   // Filter quizzes based on search
   const filteredQuizzes = quizzes.filter(quiz => {
     const recording = recordings.find(r => r.id === quiz.classId);
+    const searchLower = searchQuery.toLowerCase();
+    
     return (
-      recording?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      recording?.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      quiz.source_type?.toLowerCase().includes(searchQuery.toLowerCase())
+      quiz.title?.toLowerCase().includes(searchLower) ||
+      recording?.title?.toLowerCase().includes(searchLower) ||
+      recording?.subject?.toLowerCase().includes(searchLower) ||
+      quiz.source_type?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -457,7 +460,11 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <QuizHistory quizzes={filteredQuizzes} onSelectQuiz={handleSelectQuiz} />
+              <QuizHistory 
+                quizzes={filteredQuizzes} 
+                onSelectQuiz={handleSelectQuiz} 
+                bestAttempts={bestAttempts}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -473,6 +480,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
         onPreviousQuestion={handlePreviousQuestion}
         onExitQuizMode={handleExitQuizMode}
         calculateScore={calculateScore}
+        bestAttempts={bestAttempts}
       />
     </AppShell>
   );

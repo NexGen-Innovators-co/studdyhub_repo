@@ -64,10 +64,12 @@ interface PodcastWithMeta extends PodcastData {
   };
   member_count?: number;
   active_listeners?: number;
+  visualAssets?: JSON | null;
 }
 
 interface PodcastsPageProps {
   searchQuery?: string;
+  podcastId?: string;
   onGoLive?: () => void;
   onCreatePodcast?: () => void;
   onNavigateToTab?: (tab: string) => void;
@@ -78,6 +80,7 @@ import { SocialFeedHandle } from '../social/SocialFeed';
 
 export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.RefObject<SocialFeedHandle> }> = ({
   searchQuery: externalSearchQuery = '',
+  podcastId,
   onGoLive,
   onCreatePodcast,
   socialFeedRef,
@@ -114,6 +117,102 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       setSearchQuery(externalSearchQuery);
     }
   }, [externalSearchQuery]);
+
+  // Handle direct podcast ID navigation
+  useEffect(() => {
+    if (podcastId) {
+      const fetchAndSelectPodcast = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('ai_podcasts')
+            .select(`
+              id,
+              user_id,
+              title,
+              sources,
+              script,
+              audio_segments,
+              duration_minutes,
+              style,
+              podcast_type,
+              status,
+              is_public,
+              is_live,
+              created_at,
+              updated_at,
+              cover_image_url,
+              description,
+              tags,
+              listen_count,
+              share_count,
+              visual_assets
+            `)
+            .eq('id', podcastId)
+            .single();
+
+          if (error) throw error;
+          if (data) {
+            // Parse audio_segments
+            let audioSegments = [];
+            if (typeof data.audio_segments === 'string') {
+              try {
+                audioSegments = data.audio_segments ? JSON.parse(data.audio_segments) : [];
+              } catch (e) {
+                audioSegments = [];
+              }
+            } else {
+              audioSegments = data.audio_segments || [];
+            }
+
+            // Parse visual_assets
+            let visualAssets = null;
+            if (data.visual_assets) {
+              if (typeof data.visual_assets === 'string') {
+                try {
+                  visualAssets = JSON.parse(data.visual_assets);
+                } catch (e) {
+                  visualAssets = null;
+                }
+              } else {
+                visualAssets = data.visual_assets;
+              }
+            }
+
+            // Fetch user info
+            const { data: userData } = await supabase
+              .from('social_users')
+              .select('id, display_name, username, avatar_url')
+              .eq('id', data.user_id)
+              .single();
+
+            const podcastWithMeta: PodcastWithMeta = {
+              ...data,
+              duration: data.duration_minutes,
+              audioSegments,
+              visualAssets,
+              sources: data.sources || [],
+              user: userData ? {
+                full_name: userData.display_name || userData.username || 'Anonymous User',
+                avatar_url: userData.avatar_url
+              } : {
+                full_name: 'Anonymous User',
+                avatar_url: undefined
+              },
+              member_count: 0, // Will be updated if needed
+            };
+
+            setSelectedPodcast(podcastWithMeta);
+            incrementListenCount(data.id);
+          }
+        } catch (err) {
+          console.error('Error fetching podcast by ID:', err);
+          toast.error('Podcast not found');
+        }
+      };
+
+      fetchAndSelectPodcast();
+    }
+  }, [podcastId]);
 
   // Wire up external handlers
   useEffect(() => {
@@ -470,7 +569,11 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           privacy: 'public',
           metadata: {
             type: 'podcast',
-            podcast_id: podcast.id
+            podcastId: podcast.id,
+            title: podcast.title,
+            description: podcast.description || '',
+            coverUrl: podcast.cover_image_url,
+            authorName: podcast.user?.full_name || 'Anonymous'
           }
         })
         .select()
@@ -946,21 +1049,44 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           }}
           podcast={selectedPodcastForShare}
           currentUser={currentUser}
-          onShareToFeedDraft={({ content, coverUrl }) => {
+          onShareToFeedDraft={({ content, coverUrl, podcast }) => {
             // Use the provided onNavigateToTab prop to switch to the social tab, then open modal
             if (onNavigateToTab) {
               onNavigateToTab('social');
               setTimeout(() => {
                 if (socialFeedRef?.current) {
-                  socialFeedRef.current.openCreatePostDialog({ content, coverUrl });
+                  socialFeedRef.current.openCreatePostDialog({ 
+                    content, 
+                    coverUrl,
+                    metadata: {
+                      type: 'podcast',
+                      podcastId: podcast.id,
+                      title: podcast.title,
+                      description: podcast.description || '',
+                      coverUrl: podcast.cover_image_url,
+                      authorName: podcast.user?.full_name || 'Anonymous'
+                    }
+                  });
                 }
               }, 300);
             } else {
               // fallback: open modal directly if no tab switch function
               if (socialFeedRef?.current) {
-                socialFeedRef.current.openCreatePostDialog({ content, coverUrl });
+                socialFeedRef.current.openCreatePostDialog({ 
+                  content, 
+                  coverUrl,
+                  metadata: {
+                    type: 'podcast',
+                    podcastId: podcast.id,
+                    title: podcast.title,
+                    description: podcast.description || '',
+                    coverUrl: podcast.cover_image_url,
+                    authorName: podcast.user?.full_name || 'Anonymous'
+                  }
+                });
               }
             }
+            setShowShareDialog(false);
           }}
         />
       )}

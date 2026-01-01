@@ -30,7 +30,14 @@ export const useRealtimeSyncForQuizzes = ({
         },
         (payload) => {
           if (payload.new) {
-            onQuizUpdate(payload.new as Quiz);
+            const newQuiz = payload.new as any;
+            const formattedQuiz: Quiz = {
+              ...newQuiz,
+              classId: newQuiz.class_id,
+              userId: newQuiz.user_id,
+              questions: typeof newQuiz.questions === 'string' ? JSON.parse(newQuiz.questions) : newQuiz.questions
+            };
+            onQuizUpdate(formattedQuiz);
           }
         }
       )

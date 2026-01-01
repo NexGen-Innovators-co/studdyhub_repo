@@ -1,26 +1,82 @@
 // components/AISummarySection.tsx - FIXED VERSION
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Sparkles, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Sparkles, ChevronDown, ChevronUp, X, Edit2, Save, RotateCw, Loader2, Bold, Italic, List, ListOrdered, Quote, Undo, Redo } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { CodeRenderer } from './CodeRenderer';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
+import Placeholder from '@tiptap/extension-placeholder';
+import { convertMarkdownToHtml, convertHtmlToMarkdown } from '../../../utils/markdownUtils';
 
 interface AISummarySectionProps {
   ai_summary: string | null;
   isSummaryVisible: boolean;
   setIsSummaryVisible: (isVisible: boolean) => void;
+  onSummaryChange?: (newSummary: string) => void;
+  onRegenerateSummary?: () => void;
+  isGenerating?: boolean;
 }
 
 export const AISummarySection: React.FC<AISummarySectionProps> = ({
   ai_summary,
   isSummaryVisible,
   setIsSummaryVisible,
+  onSummaryChange,
+  onRegenerateSummary,
+  isGenerating = false,
 }) => {
-  if (!ai_summary) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Link.configure({ openOnClick: false }),
+      Underline,
+      Placeholder.configure({ placeholder: 'Edit your summary here...' }),
+    ],
+    content: '',
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[200px] p-4 bg-white dark:bg-gray-950 rounded-md border border-blue-200 dark:border-gray-700',
+      },
+    },
+  });
+
+  // Update editor content when entering edit mode
+  useEffect(() => {
+    if (isEditing && editor && ai_summary) {
+      const html = convertMarkdownToHtml(ai_summary);
+      editor.commands.setContent(html);
+    }
+  }, [isEditing, editor, ai_summary]);
+
+  if (!ai_summary && !isGenerating) {
     return null;
   }
+
+  const handleSave = () => {
+    if (onSummaryChange && editor) {
+      const html = editor.getHTML();
+      const markdown = convertHtmlToMarkdown(html);
+      onSummaryChange(markdown);
+    }
+    setIsEditing(false);
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleRegenerate = () => {
+    if (onRegenerateSummary) {
+      onRegenerateSummary();
+    }
+  };
 
   const commonMarkdownComponents = {
     code: CodeRenderer,
@@ -122,6 +178,45 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
             </div>
 
             <div className="flex items-center gap-1">
+              {/* Regenerate Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRegenerate}
+                disabled={isGenerating}
+                className="h-8 w-8 p-0 hover:bg-blue-200 dark:hover:bg-gray-600"
+                title="Regenerate Summary"
+              >
+                {isGenerating ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                ) : (
+                  <RotateCw className="h-4 w-4 text-slate-600 dark:text-gray-400" />
+                )}
+              </Button>
+
+              {/* Edit/Save Toggle */}
+              {isEditing ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSave}
+                  className="h-8 w-8 p-0 hover:bg-green-200 dark:hover:bg-green-900/30"
+                  title="Save Summary"
+                >
+                  <Save className="h-4 w-4 text-green-600 dark:text-green-400" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleEdit}
+                  className="h-8 w-8 p-0 hover:bg-blue-200 dark:hover:bg-gray-600"
+                  title="Edit Summary"
+                >
+                  <Edit2 className="h-4 w-4 text-slate-600 dark:text-gray-400" />
+                </Button>
+              )}
+
               {/* Desktop Toggle - Hide Summary */}
               <Button
                 variant="ghost"
@@ -149,15 +244,109 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
 
         {/* Content Area with Scroll */}
         <div className="flex-1 overflow-y-auto modern-scrollbar px-4 py-4 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-gray-800 dark:to-gray-900">
-          <div className="prose prose-sm max-w-none">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
-              components={commonMarkdownComponents}
-            >
-              {String(ai_summary || '')}
-            </ReactMarkdown>
-          </div>
+          {isGenerating ? (
+            <div className="flex flex-col items-center justify-center h-full space-y-4 text-center">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <p className="text-sm text-slate-600 dark:text-gray-400 animate-pulse">
+                AI is crafting your summary...
+              </p>
+            </div>
+          ) : isEditing ? (
+            <div className="h-full flex flex-col space-y-2">
+              {/* Mini Toolbar */}
+              <div className="flex flex-wrap gap-1 p-1 bg-slate-100 dark:bg-gray-800 rounded-md border border-slate-200 dark:border-gray-700">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().toggleBold().run()}
+                  className={`h-8 w-8 p-0 ${editor?.isActive('bold') ? 'bg-blue-200 dark:bg-blue-900' : ''}`}
+                >
+                  <Bold className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().toggleItalic().run()}
+                  className={`h-8 w-8 p-0 ${editor?.isActive('italic') ? 'bg-blue-200 dark:bg-blue-900' : ''}`}
+                >
+                  <Italic className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().toggleBulletList().run()}
+                  className={`h-8 w-8 p-0 ${editor?.isActive('bulletList') ? 'bg-blue-200 dark:bg-blue-900' : ''}`}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+                  className={`h-8 w-8 p-0 ${editor?.isActive('orderedList') ? 'bg-blue-200 dark:bg-blue-900' : ''}`}
+                >
+                  <ListOrdered className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+                  className={`h-8 w-8 p-0 ${editor?.isActive('blockquote') ? 'bg-blue-200 dark:bg-blue-900' : ''}`}
+                >
+                  <Quote className="h-4 w-4" />
+                </Button>
+                <div className="w-px h-4 bg-slate-300 dark:bg-gray-600 mx-1 self-center" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().undo().run()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Undo className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().redo().run()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Redo className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto modern-scrollbar">
+                <EditorContent editor={editor} />
+              </div>
+
+              <div className="mt-2 flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setIsEditing(false)}
+                  className="text-xs h-8"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={handleSave}
+                  className="text-xs h-8 bg-blue-600 hover:bg-blue-700"
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="prose prose-sm max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+                components={commonMarkdownComponents}
+              >
+                {String(ai_summary || '')}
+              </ReactMarkdown>
+            </div>
+          )}
         </div>
 
         {/* Mobile drag handle */}

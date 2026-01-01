@@ -15,7 +15,8 @@ export const useSocialActions = (
   setSuggestedUsers: React.Dispatch<React.SetStateAction<SocialUserWithDetails[]>>,
   groups: SocialGroupWithDetails[],
   setGroups: React.Dispatch<React.SetStateAction<SocialGroupWithDetails[]>>,
-  setCurrentUser: React.Dispatch<React.SetStateAction<SocialUserWithDetails | null>>
+  setCurrentUser: React.Dispatch<React.SetStateAction<SocialUserWithDetails | null>>,
+  refetchCurrentUser?: () => Promise<void>
 ) => {
   const [isUploading, setIsUploading] = useState(false);
 
@@ -267,7 +268,7 @@ export const useSocialActions = (
     }
   };
 
-  const createPost = async (content: string, privacy: Privacy, selectedFiles: File[], groupId?: string) => {
+  const createPost = async (content: string, privacy: Privacy, selectedFiles: File[], groupId?: string, metadata?: any) => {
     if (!content.trim()) return;
 
     try {
@@ -307,7 +308,8 @@ export const useSocialActions = (
           content,
           privacy,
           media: media,
-          group_id: groupId
+          group_id: groupId,
+          metadata: metadata
         }
       });
 
@@ -547,6 +549,15 @@ export const useSocialActions = (
 
         if (deleteError) throw deleteError;
 
+        // Optimistically update current user's following count
+        setCurrentUser(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            following_count: Math.max(0, (prev.following_count || 0) - 1)
+          };
+        });
+
         // After unfollow, refetch user profile to get correct counts
         if (typeof refetchCurrentUser === 'function') {
           await refetchCurrentUser();
@@ -564,6 +575,15 @@ export const useSocialActions = (
           });
 
         if (followError) throw followError;
+
+        // Optimistically update current user's following count
+        setCurrentUser(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            following_count: (prev.following_count || 0) + 1
+          };
+        });
 
         // After follow, refetch user profile to get correct counts
         if (typeof refetchCurrentUser === 'function') {

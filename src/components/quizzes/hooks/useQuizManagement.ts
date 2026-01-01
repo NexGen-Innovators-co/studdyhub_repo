@@ -71,6 +71,7 @@ export const useQuizManagement = ({
         .from('quizzes')
         .insert({
           id: quiz.id,
+          class_id: quiz.classId,
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,
@@ -185,6 +186,7 @@ export const useQuizManagement = ({
         .from('quizzes')
         .insert({
           id: quiz.id,
+          class_id: quiz.classId,
           title: quiz.title,
           questions: quiz.questions as any,
           user_id: user.id,

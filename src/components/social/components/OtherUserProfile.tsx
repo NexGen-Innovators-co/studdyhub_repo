@@ -30,6 +30,7 @@ interface OtherUserProfileProps {
     onRefreshLikedPosts: () => void;
     onRefreshBookmarkedPosts: () => void;
     userGroups: any[];
+    searchQuery?: string;
 }
 
 const POSTS_PER_PAGE = 20;
@@ -194,15 +195,35 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
         setIsFollowing(newFollowingState);
         setIsFollowLoading(true);
 
+        // Optimistically update target user's followers count
+        setUser(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                followers_count: newFollowingState 
+                    ? (prev.followers_count || 0) + 1 
+                    : Math.max(0, (prev.followers_count || 0) - 1)
+            };
+        });
+
         try {
             await props.onFollow(userId);
-            // If successful, refresh data
+            // If successful, refresh data to ensure accuracy
             fetchUserProfile();
         } catch (error) {
             //console.error('Error toggling follow:', error);
             toast.error('Failed to update follow status');
             // Revert on error
             setIsFollowing(!newFollowingState);
+            setUser(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    followers_count: !newFollowingState 
+                        ? (prev.followers_count || 0) + 1 
+                        : Math.max(0, (prev.followers_count || 0) - 1)
+                };
+            });
         } finally {
             setIsFollowLoading(false);
         }
@@ -280,6 +301,7 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
                 onEditPost={props.onEditPost}
                 isFollowing={isFollowing}
                 onToggleFollow={handleToggleFollow}
+                searchQuery={props.searchQuery}
             />
 
             {/* Infinite Scroll Trigger */}

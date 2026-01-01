@@ -1,9 +1,10 @@
 // src/components/notes/components/DiagramWrapper.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mermaid from 'mermaid';
 import { Chart, ChartConfiguration } from 'chart.js';
-import { Edit2, X, AlertCircle } from 'lucide-react';
+import { Edit2, X, AlertCircle, RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, RefreshCcw, GripVertical, ChevronDown } from 'lucide-react';
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
+import { motion, useAnimation } from 'framer-motion';
 
 interface DiagramWrapperProps {
   node: any;
@@ -21,12 +22,56 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
   selected,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<Chart | null>(null);
   const [editing, setEditing] = useState(false);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [height, setHeight] = useState(node.attrs.height || '300px');
+  const controls = useAnimation();
 
   const type = node.type.name; // chartjs | mermaid | dot
+
+  const handleZoomIn = () => setScale(prev => Math.min(prev + 0.2, 3));
+  const handleZoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
+  const handleResetZoom = () => setScale(1);
+  const toggleFullscreen = () => setIsFullscreen(!isFullscreen);
+
+  // Resize logic
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+    if (wrapperRef.current) {
+      updateAttributes({ height: `${wrapperRef.current.offsetHeight}px` });
+    }
+  }, [updateAttributes]);
+
+  const resize = useCallback((e: MouseEvent) => {
+    if (isResizing && wrapperRef.current) {
+      const newHeight = e.clientY - wrapperRef.current.getBoundingClientRect().top;
+      if (newHeight > 150) {
+        setHeight(`${newHeight}px`);
+      }
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
 
   // Initialize code
   useEffect(() => {
@@ -34,6 +79,9 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
       setCode(node.attrs.config || '{}');
     } else if (type === 'mermaid' || type === 'dot') {
       setCode(node.attrs.code || '');
+    }
+    if (node.attrs.height) {
+      setHeight(node.attrs.height);
     }
   }, [node.attrs, type]);
 
@@ -216,14 +264,62 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
   };
 
   return (
-    <NodeViewWrapper className="relative my-4">
+    <NodeViewWrapper className={`relative my-6 group ${isFullscreen ? 'z-[9999]' : ''}`}>
+      {/* Drag Handle for Tiptap */}
+      {!isFullscreen && (
+        <div 
+          contentEditable={false} 
+          draggable="true" 
+          data-drag-handle
+          className="absolute -left-8 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <GripVertical className="w-5 h-5" />
+        </div>
+      )}
+
       {/* Highlight selected state */}
       <div
-        className={`border rounded-lg overflow-hidden bg-white dark:bg-gray-900 shadow-sm ${selected ? 'ring-2 ring-blue-500' : 'border-gray-200 dark:border-gray-700'
-          }`}
+        ref={wrapperRef}
+        className={`border rounded-lg overflow-hidden bg-white dark:bg-gray-900 shadow-sm transition-all duration-300 ${selected ? 'ring-2 ring-blue-500' : 'border-gray-200 dark:border-gray-700'
+          } ${isFullscreen ? 'fixed inset-4 z-[10000] flex flex-col' : 'relative'}`}
+        style={!isFullscreen ? { height } : {}}
       >
         {/* Action buttons */}
-        <div className="absolute top-2 right-2 flex gap-1 z-10">
+        <div className={`absolute top-2 right-2 flex gap-1 z-20 ${isFullscreen ? 'top-4 right-4' : ''}`}>
+          {(type === 'mermaid' || type === 'dot') && (
+            <div className="flex gap-1 mr-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-1 rounded-md border shadow-sm">
+              <button
+                onClick={handleZoomOut}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleResetZoom}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                title="Reset Zoom"
+              >
+                <RefreshCcw className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleZoomIn}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+              <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1 self-center" />
+              <button
+                onClick={toggleFullscreen}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+              >
+                {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          )}
+
           <button
             onClick={() => setEditing(true)}
             className="p-1.5 bg-white dark:bg-gray-800 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm"
@@ -231,25 +327,67 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
           >
             <Edit2 className="w-4 h-4" />
           </button>
-          <button
-            onClick={deleteNode}
-            className="p-1.5 bg-white dark:bg-gray-800 border rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 shadow-sm"
-            title="Delete"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {!isFullscreen && (
+            <button
+              onClick={deleteNode}
+              className="p-1.5 bg-white dark:bg-gray-800 border rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 shadow-sm"
+              title="Delete"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+          {isFullscreen && (
+            <button
+              onClick={toggleFullscreen}
+              className="p-1.5 bg-white dark:bg-gray-800 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm"
+              title="Close Fullscreen"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+          {/* Fix Diagram Button: Only show if error is present */}
+          {error && (
+            <button
+              onClick={() => {
+                setEditing(true);
+                setError(null);
+              }}
+              className="p-1.5 bg-blue-50 dark:bg-blue-900 border border-blue-300 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 shadow-sm text-blue-700 dark:text-blue-300"
+              title="Fix Diagram with AI"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
-        {/* Rendered diagram */}
+        {/* Rendered diagram with Zoom/Pan support */}
         <div
-          ref={containerRef}
-          className="p-6 min-h-[200px] flex items-center justify-center"
+          className={`flex-1 overflow-hidden flex items-center justify-center bg-gray-50/50 dark:bg-gray-950/50 ${isFullscreen ? 'p-12' : 'p-6'}`}
           style={{ isolation: 'isolate' }}
-        />
+        >
+          <motion.div
+            ref={containerRef}
+            animate={{ scale }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            drag={scale > 1}
+            dragConstraints={{ left: -1000, right: 1000, top: -1000, bottom: 1000 }}
+            className="cursor-grab active:cursor-grabbing"
+          />
+        </div>
+
+        {/* Resize Handle */}
+        {!isFullscreen && (
+          <div
+            onMouseDown={startResizing}
+            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-blue-500/30 flex items-center justify-center group/resize"
+          >
+            <div className="w-8 h-1 bg-gray-300 dark:bg-gray-700 rounded-full group-hover/resize:bg-blue-500 transition-colors" />
+          </div>
+        )}
 
         {/* Editor Modal */}
         {editing && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[10001] p-4">
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col border">
               <div className="flex items-center justify-between p-4 border-b">
                 <div>

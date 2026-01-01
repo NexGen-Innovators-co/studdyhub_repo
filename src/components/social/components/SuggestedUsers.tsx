@@ -17,6 +17,7 @@ interface SuggestedUsersProps {
   hasMore?: boolean;
   onLoadMore?: () => void;
   onRefresh?: () => void;
+  hideHeader?: boolean;
 }
 
 export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
@@ -26,6 +27,7 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
   hasMore = false,
   onLoadMore,
   onRefresh,
+  hideHeader = false,
 }) => {
   const navigate = useNavigate();
   const { canAccessSocial } = useFeatureAccess();
@@ -82,6 +84,12 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
     try {
       await onFollowUser(userId);
       toast.success(`Now following ${displayName}!`);
+      // Remove from following state on success
+      setFollowingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
     } catch (error) {
       toast.error('Failed to follow user');
       setFollowingUsers(prev => {
@@ -93,14 +101,18 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
   };
 
   const getRecommendationReason = (user: SocialUserWithDetails & { recommendation_score?: number }) => {
+    if (user.mutual_friends_count && user.mutual_friends_count > 0) {
+      return `${user.mutual_friends_count} mutual follow${user.mutual_friends_count > 1 ? 's' : ''}`;
+    }
     if (user.is_verified) return 'Verified';
     if ((user.followers_count || 0) > 1000) return 'Popular';
     if ((user.posts_count || 0) > 50) return 'Active Creator';
-    if (user.interests && user.interests.length > 3) return 'Similar Interests';
+    if (user.interests && user.interests.length > 0) return 'Similar Interests';
     return 'New Member';
   };
 
   const getRecommendationColor = (reason: string) => {
+    if (reason.includes('mutual follow')) return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
     switch (reason) {
       case 'Verified': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'Popular': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
@@ -118,25 +130,27 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
 
   if (users.length === 0 && !isLoading) {
     return (
-      <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-slate-200 dark:border-gray-700">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Suggested Users
-            </div>
-            {onRefresh && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRefresh}
-                className="h-6 w-6 p-0"
-              >
-                <RefreshCw className="h-3 w-3" />
-              </Button>
-            )}
-          </CardTitle>
-        </CardHeader>
+      <Card className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-slate-200 dark:border-gray-700 ${hideHeader ? 'border-none shadow-none bg-transparent' : ''}`}>
+        {!hideHeader && (
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Suggested Users
+              </div>
+              {onRefresh && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRefresh}
+                  className="h-6 w-6 p-0"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </Button>
+              )}
+            </CardTitle>
+          </CardHeader>
+        )}
         <CardContent className="text-center py-6">
           <Users className="h-8 w-8 mx-auto mb-2 text-slate-400 dark:text-gray-500" />
           <p className="text-sm text-slate-500 dark:text-gray-400">
@@ -151,32 +165,34 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
   }
 
   return (
-    <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-slate-200 dark:border-gray-700 max-h-96 overflow-scroll modern-scrollbar">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Suggested Users
-            {users.length > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                {users.length}
-              </Badge>
+    <Card className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-slate-200 dark:border-gray-700 ${hideHeader ? 'max-h-none overflow-visible' : 'max-h-96 overflow-scroll modern-scrollbar'}`}>
+      {!hideHeader && (
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Suggested Users
+              {users.length > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {users.length}
+                </Badge>
+              )}
+            </div>
+            {onRefresh && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRefresh}
+                disabled={isLoading}
+                className="h-6 w-6 p-0"
+              >
+                <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
             )}
-          </div>
-          {onRefresh && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onRefresh}
-              disabled={isLoading}
-              className="h-6 w-6 p-0"
-            >
-              <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+          </CardTitle>
+        </CardHeader>
+      )}
+      <CardContent className={`${hideHeader ? 'p-0' : 'space-y-4'}`}>
         {users.map((user, index) => {
           const isFollowing = followingUsers.has(user.id);
           const recommendationReason = getRecommendationReason(user);
@@ -187,7 +203,10 @@ export const SuggestedUsers: React.FC<SuggestedUsersProps> = ({
               key={`${user.id}-${index}`}
               className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors group"
             >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div 
+                className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                onClick={() => navigate(`/social/profile/${user.id}`)}
+              >
                 <Avatar className="h-10 w-10 flex-shrink-0 ring-2 ring-transparent group-hover:ring-blue-500/20 transition-all">
                   <AvatarImage src={user.avatar_url} alt={user.display_name} />
                   <AvatarFallback className="bg-slate-200 dark:bg-gray-700 text-slate-600 dark:text-gray-300 text-sm">

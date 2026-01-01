@@ -1,267 +1,278 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.24.1';
-import { createSubscriptionValidator, createErrorResponse as createSubErrorResponse } from '../utils/subscription-validator.ts';
-// Constants
+import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+	'Access-Control-Allow-Origin': '*',
+	'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+	'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
-const MAX_TEXT_LENGTH = 50000; // Prevent excessively long inputs
-const MAX_CUSTOM_INSTRUCTION_LENGTH = 1000;
-// Visual content detection patterns
-const VISUAL_PATTERNS = {
-  chart: /\b(chart|graph|plot|visualization|data|statistics|trend|comparison)\b/i,
-  flowchart: /\b(process|workflow|steps|flow|procedure|algorithm|decision)\b/i,
-  diagram: /\b(diagram|architecture|structure|relationship|connection|network)\b/i,
-  timeline: /\b(timeline|history|chronology|sequence|events|progression)\b/i,
-  mindmap: /\b(mindmap|mind map|concepts|brainstorm|ideas|branches)\b/i,
-  table: /\b(table|comparison|versus|vs|compare|data|list|features)\b/i
-};
-// Enhanced prompt creation with visual content support
-const createInlinePrompt = (
-  selectedText: string,
-  fullNoteContent: string,
-  userProfile: any,
-  actionType: string,
-  customInstruction: string = ''
-) => {
-  const { learning_style = 'balanced', learning_preferences = {} } = userProfile || {};
-  const { explanation_style = 'balanced', examples, difficulty = 'intermediate' } = learning_preferences || {};
 
-  // Normalize text for reliable matching
-  const normalizedSelected = selectedText.trim();
-  const selectionIndex = fullNoteContent.indexOf(normalizedSelected);
+function createInlineContentPrompt(
+	selectedText: string, 
+	fullNoteContent: string, 
+	userProfile: any, 
+	actionType: string, 
+	customInstruction: string, 
+	attachedDocumentContent: string
+) {
+	let basePrompt = `You are an expert AI writing assistant for a note-taking app. Your job is to help users edit, expand, summarize, or rewrite selected text in their notes, following the user's intent and context.
 
-  // Extract surrounding context (500 chars before/after) — helps AI understand flow
-  const beforeContext = selectionIndex > 0
-    ? fullNoteContent.slice(Math.max(0, selectionIndex - 500), selectionIndex)
-    : '«START OF NOTE»';
+USER PROFILE:
+- Learning Style: ${userProfile?.learning_style || 'balanced'}
+- Preferred Explanation Style: ${userProfile?.learning_preferences?.explanation_style || 'balanced'}
 
-  const afterContext = selectionIndex !== -1
-    ? fullNoteContent.slice(selectionIndex + normalizedSelected.length, selectionIndex + normalizedSelected.length + 500)
-    : '«END OF NOTE»';
+TASK: ${actionType}
+`;
 
-  // Precise action instructions
-  const actionInstructions = {
-    expand: `Expand this section with more depth, examples, explanations, and details. Make it flow naturally with the surrounding content. Preserve the original tone, style, and formatting.`,
-    summarize: `Replace the selected text with a concise, accurate summary that captures all key ideas in significantly fewer words. Keep it clear and integrated with the note's flow.`,
-    rephrase: `Rewrite the selected text for better clarity, flow, or professionalism. Keep the exact same meaning and similar length. Match the tone and style of the surrounding note perfectly.`,
-    explain: `Provide a clear, educational explanation of the selected concept. Break it down using analogies, examples, or step-by-step reasoning suited to the user's learning style.`,
-    simplify: `Rewrite the selected text using simple, clear language. Eliminate jargon. Make it easy to understand while preserving all meaning.`,
-    elaborate: `Greatly expand the selected section with comprehensive details, real-world examples, implications, and supporting explanations. Maintain logical flow with the rest of the note.`,
-    example: `Add 1–3 concrete, relevant examples that illustrate the selected concept clearly. Insert them naturally within or after the selection.`,
-    visualize: `Create a visual representation (Chart.js, Mermaid diagram, or table) that clearly illustrates the selected content. Include a brief caption explaining it.`,
-    analyze: `Analyze the selected content deeply: break down components, discuss implications, strengths, weaknesses, and real-world relevance.`,
-    compare: `Compare the concepts in the selected text with related ideas, showing similarities, differences, advantages, and trade-offs.`,
-    question: `Generate 3–5 thoughtful, high-quality questions about the selected text to promote deeper understanding and critical thinking.`,
-    default: `Improve or transform the selected text according to the user's request while ensuring it fits perfectly into the existing note structure and tone.`
-  };
+	// Detect if user wants a diagram
+	let diagramRequested = false;
+	const diagramKeywords = /diagram|mermaid|flowchart|chart|graph|visualization|visual|uml|sequence|class diagram|entity relationship|mind map/i;
+	
+	if (customInstruction && customInstruction.trim()) {
+		basePrompt += `\n\nCUSTOM USER INSTRUCTION (IMPORTANT - FOLLOW THIS CAREFULLY):\n${customInstruction}`;
+		console.log('[createPrompt] Custom instruction added to prompt');
+		
+		if (diagramKeywords.test(customInstruction)) {
+			diagramRequested = true;
+			console.log('[createPrompt] Diagram requested via custom instruction');
+		}
+	}
+	
+	// Also check if the action type itself suggests visualization
+	if (actionType === 'visualize' || actionType === 'diagram') {
+		diagramRequested = true;
+		console.log('[createPrompt] Diagram requested via action type');
+	}
 
-  const instruction = actionInstructions[actionType] || actionInstructions.default;
+	if (attachedDocumentContent && attachedDocumentContent.trim()) {
+		basePrompt += `\nATTACHED DOCUMENT CONTEXT:\n${attachedDocumentContent.slice(0, 8000)}`;
+	}
 
-  return `You are an expert note-taking AI that performs precise inline edits.
+	basePrompt += `\n\nSELECTED TEXT:\n"""${selectedText}"""\n\nNOTE CONTEXT (for reference):\n"""${fullNoteContent.slice(0, 15000)}"""`;
 
-CRITICAL RULES — FOLLOW EXACTLY:
-- You are editing ONE specific section inside a larger note
-- Return ONLY the new version of the selected text
-- NEVER rewrite the entire note
-- NEVER add introductions like "Here is your summary", "Expanded version:", or explanations outside the content
-- NEVER wrap your response in \`\`\`markdown, \`\`\`md, \`\`\`text, or any code block
-- NEVER use fenced code blocks unless explicitly creating a diagram (chartjs, mermaid, dot)
-- Output raw, clean Markdown text directly — ready to insert
-- Match the exact tone, style, formatting, and voice of the original note
+	basePrompt += `\n\nRESPONSE INSTRUCTIONS:`;
+	
+	if (diagramRequested) {
+		basePrompt += `\n- IMPORTANT: Generate a valid, working diagram that can be rendered.`;
+		basePrompt += `\n- For Mermaid diagrams, use this EXACT format (including the backticks and language identifier):`;
+		basePrompt += `\n\`\`\`mermaid`;
+		basePrompt += `\ngraph TD`;
+		basePrompt += `\n    A[Start] --> B[Process]`;
+		basePrompt += `\n    B --> C[End]`;
+		basePrompt += `\n\`\`\``;
+		basePrompt += `\n- For Chart.js diagrams, use this EXACT format:`;
+		basePrompt += `\n\`\`\`chartjs`;
+		basePrompt += `\n{`;
+		basePrompt += `\n  "type": "bar",`;
+		basePrompt += `\n  "data": {`;
+		basePrompt += `\n    "labels": ["Label 1", "Label 2"],`;
+		basePrompt += `\n    "datasets": [{`;
+		basePrompt += `\n      "label": "Dataset",`;
+		basePrompt += `\n      "data": [10, 20]`;
+		basePrompt += `\n    }]`;
+		basePrompt += `\n  }`;
+		basePrompt += `\n}`;
+		basePrompt += `\n\`\`\``;
+		basePrompt += `\n- CRITICAL: Keep the backticks and language identifiers (mermaid, chartjs, dot) exactly as shown.`;
+		basePrompt += `\n- Do NOT add any text before or after the code block.`;
+		basePrompt += `\n- Make sure the diagram syntax is 100% valid and will render without errors.`;
+		basePrompt += `\n- Return ONLY the diagram code block, nothing else.`;
+	} else {
+		basePrompt += `\n- Return ONLY the generated content that should replace the selected text.`;
+		basePrompt += `\n- Do NOT wrap your response in markdown code blocks unless specifically generating code.`;
+		basePrompt += `\n- Do NOT repeat the prompt or selected text.`;
+		basePrompt += `\n- Do NOT add explanations or preambles.`;
+		
+		if (actionType === 'summarize') {
+			basePrompt += `\n- Create a concise, clear summary that captures the key points.`;
+		} else if (actionType === 'expand' || actionType === 'elaborate') {
+			basePrompt += `\n- Add detailed explanations, examples, and context.`;
+			basePrompt += `\n- Make the content richer and more comprehensive.`;
+		} else if (actionType === 'rephrase' || actionType === 'rewrite') {
+			basePrompt += `\n- Rephrase for improved clarity, tone, or style.`;
+			basePrompt += `\n- Maintain the original meaning while improving expression.`;
+		} else if (actionType === 'simplify') {
+			basePrompt += `\n- Use simpler language and shorter sentences.`;
+			basePrompt += `\n- Make the content easier to understand.`;
+		} else if (actionType === 'explain') {
+			basePrompt += `\n- Provide a clear, detailed explanation of the concept.`;
+			basePrompt += `\n- Break down complex ideas into understandable parts.`;
+		} else if (actionType === 'example') {
+			basePrompt += `\n- Provide concrete, practical examples.`;
+			basePrompt += `\n- Show real-world applications or use cases.`;
+		} else if (actionType === 'analyze') {
+			basePrompt += `\n- Examine the content critically and provide insights.`;
+			basePrompt += `\n- Discuss strengths, weaknesses, and implications.`;
+		} else if (actionType === 'compare') {
+			basePrompt += `\n- Compare and contrast different aspects or alternatives.`;
+			basePrompt += `\n- Highlight similarities and differences.`;
+		}
+		
+		basePrompt += `\n- Be helpful, clear, and concise.`;
+		basePrompt += `\n- Match the user's learning style and preferences.`;
+	}
 
-USER LEARNING PROFILE:
-- Learning Style: ${learning_style}
-- Explanation Style: ${explanation_style}
-- Include Examples: ${examples ? 'Yes' : 'Only if requested'}
-- Difficulty Level: ${difficulty}
+	return basePrompt;
+}
 
-TASK:
-${instruction}
+async function generateInlineContentWithGemini(prompt: string): Promise<string> {
+	const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+	if (!geminiApiKey) throw new Error('Gemini API key not configured');
 
-${customInstruction ? `USER'S SPECIFIC INSTRUCTIONS:\n${customInstruction.trim()}\n` : ''}
+	const genAI = new GoogleGenerativeAI(geminiApiKey);
+	const model = genAI.getGenerativeModel({
+		model: 'gemini-2.0-flash',
+		generationConfig: {
+			temperature: 0.7,
+			topP: 0.9,
+			topK: 40,
+			maxOutputTokens: 2048
+		}
+	});
 
-CONTEXT — What comes BEFORE the selected text:
-"""
-${beforeContext.trim()}
-"""
+	const result = await model.generateContent(prompt);
+	const response = await result.response;
+	let aiContent = await response.text();
 
-SELECTED TEXT (this must be replaced or enhanced):
-"""
-${normalizedSelected}
-"""
+	// Clean up the response intelligently
+	aiContent = aiContent.trim();
+	
+	// Check if this is a diagram response (contains code blocks for diagrams)
+	const hasDiagramBlock = /```(?:mermaid|chartjs|dot)/.test(aiContent);
+	
+	if (hasDiagramBlock) {
+		// For diagrams, preserve the code blocks but remove any wrapper
+		// Remove outer markdown wrapper if AI added one
+		if (aiContent.startsWith('```markdown') || aiContent.startsWith('```md')) {
+			aiContent = aiContent.replace(/^```(?:markdown|md)\n/, '').replace(/```$/, '').trim();
+		}
+		// Keep the diagram code blocks intact
+		console.log('[generate-inline-content] Diagram detected, preserving code blocks');
+	} else {
+		// For regular text, remove any unnecessary markdown wrappers
+		// but preserve intentional code blocks (for actual code examples)
+		if (aiContent.startsWith('```') && aiContent.endsWith('```')) {
+			// Check if this is a wrapper around the entire response
+			const lines = aiContent.split('\n');
+			if (lines.length > 2 && lines[0].startsWith('```') && lines[lines.length - 1] === '```') {
+				// Remove the wrapper
+				aiContent = lines.slice(1, -1).join('\n').trim();
+			}
+		}
+	}
 
-CONTEXT — What comes AFTER the selected text:
-"""
-${afterContext.trim()}
-"""
+	return aiContent;
+}
 
-Now return ONLY the improved version of the selected text in clean Markdown. No fences. No extra text. No explanations. Just the content.`;
-};
-// Enhanced error response helper
-const createErrorResponse = (error, status, code, details)=>{
-  const errorBody = {
-    error,
-    code,
-    details
-  };
-  console.error(`Edge function error [${status}]:`, {
-    error,
-    code,
-    details
-  });
-  return new Response(JSON.stringify(errorBody), {
-    status,
-    headers: {
-      ...CORS_HEADERS,
-      'Content-Type': 'application/json'
-    }
-  });
-};
-// Input validation helper
-const validateRequestBody = (body)=>{
-  const { selectedText, fullNoteContent, userProfile, actionType, customInstruction } = body;
-  if (!selectedText?.trim()) {
-    throw new Error('Selected text is required and cannot be empty');
-  }
-  if (selectedText.length > MAX_TEXT_LENGTH) {
-    throw new Error(`Selected text exceeds maximum length of ${MAX_TEXT_LENGTH} characters`);
-  }
-  if (!fullNoteContent?.trim()) {
-    throw new Error('Full note content is required');
-  }
-  if (!userProfile || typeof userProfile !== 'object') {
-    throw new Error('Valid user profile is required');
-  }
-  if (!actionType?.trim()) {
-    throw new Error('Action type is required');
-  }
-  if (customInstruction && customInstruction.length > MAX_CUSTOM_INSTRUCTION_LENGTH) {
-    throw new Error(`Custom instruction exceeds maximum length of ${MAX_CUSTOM_INSTRUCTION_LENGTH} characters`);
-  }
-  return {
-    selectedText,
-    fullNoteContent,
-    userProfile,
-    actionType,
-    customInstruction
-  };
-};
-serve(async (req)=>{
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: CORS_HEADERS
-    });
-  }
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return createErrorResponse('Method not allowed', 405, 'METHOD_NOT_ALLOWED', req.method);
-  }
-  try {
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Supabase configuration missing');
-    }
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: req.headers.get('Authorization') || ''
-        }
-      }
-    });
-    // Authenticate user
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError) {
-      return createErrorResponse('Authentication failed', 401, 'AUTH_ERROR', authError.message);
-    }
-    if (!user) {
-      return createErrorResponse('Unauthorized - valid authentication required', 401, 'UNAUTHORIZED', authError);
-    }
+serve(async (req) => {
+	console.log('[generate-inline-content] Incoming request:', req.method);
 
-    // Check AI generation limit
-    const validator = createSubscriptionValidator();
-    const limitCheck = await validator.checkAiMessageLimit(user.id);
-    
-    if (!limitCheck.allowed) {
-      return createSubErrorResponse(limitCheck.message || 'AI generation limit exceeded', 403);
-    }
+	if (req.method === 'OPTIONS') {
+		console.log('[generate-inline-content] OPTIONS preflight');
+		return new Response('ok', { headers: CORS_HEADERS });
+	}
 
-    // Parse and validate request body
-    let requestBody;
-    try {
-      const rawBody = await req.json();
-      requestBody = validateRequestBody(rawBody);
-    } catch (parseError) {
-      return createErrorResponse('Invalid request body', 400, 'VALIDATION_ERROR', parseError instanceof Error ? parseError.message : 'Unknown validation error');
-    }
-    // Check Gemini API key
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!geminiApiKey) {
-      throw new Error('Gemini API key not configured');
-    }
-    // Create AI prompt
-    const prompt = createInlinePrompt(requestBody.selectedText, requestBody.fullNoteContent, requestBody.userProfile, requestBody.actionType, requestBody.customInstruction);
-    // Initialize Gemini AI with error handling
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.8,
-        topK: 40,
-        maxOutputTokens: 678907
-      },
-      safetySettings: [
-        {
-          category: 'HARM_CATEGORY_HARASSMENT',
-          threshold: 'BLOCK_MEDIUM_AND_ABOVE'
-        },
-        {
-          category: 'HARM_CATEGORY_HATE_SPEECH',
-          threshold: 'BLOCK_MEDIUM_AND_ABOVE'
-        }
-      ]
-    });
-    // Generate content with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(()=>controller.abort(), 30000); // 30 second timeout
-    try {
-      const result = await model.generateContent(prompt);
-      clearTimeout(timeoutId);
-      const response = await result.response;
-      const aiContent = response.text();
-      if (!aiContent?.trim()) {
-        throw new Error('AI generated empty response');
-      }
-      // Log successful generation (optional, for monitoring)
-      console.log(`AI generation successful for user ${user.id}, action: ${requestBody.actionType}`);
-      return new Response(JSON.stringify({
-        generatedContent: aiContent,
-        actionType: requestBody.actionType,
-        timestamp: new Date().toISOString()
-      }), {
-        status: 200,
-        headers: {
-          ...CORS_HEADERS,
-          'Content-Type': 'application/json'
-        }
-      });
-    } catch (aiError) {
-      clearTimeout(timeoutId);
-      if (aiError instanceof Error && aiError.name === 'AbortError') {
-        return createErrorResponse('AI generation timeout', 408, 'TIMEOUT_ERROR', aiError);
-      }
-      throw aiError; // Re-throw for general error handling
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown server error';
-    const errorCode = error instanceof Error && error.name ? error.name : 'INTERNAL_ERROR';
-    return createErrorResponse('Internal server error occurred', 500, errorCode, errorMessage);
-  }
+	if (req.method !== 'POST') {
+		console.warn('[generate-inline-content] Method not allowed:', req.method);
+		return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+			status: 405,
+			headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+		});
+	}
+
+	try {
+		const body = await req.json();
+		console.log('[generate-inline-content] Request body keys:', Object.keys(body));
+		console.log('[generate-inline-content] Action type:', body.actionType);
+		console.log('[generate-inline-content] Custom instruction:', body.customInstruction || '(none)');
+		console.log('[generate-inline-content] Custom instruction length:', (body.customInstruction || '').length);
+
+		const { 
+			selectedText, 
+			fullNoteContent, 
+			userProfile, 
+			actionType, 
+			customInstruction, 
+			attachedDocumentContent, 
+			selectionRange 
+		} = body;
+
+		if (!selectedText || !selectedText.trim()) {
+			console.warn('[generate-inline-content] Missing selectedText');
+			return createErrorResponse('Selected text is required', 400);
+		}
+
+		if (!userProfile || !userProfile.id) {
+			console.warn('[generate-inline-content] Missing userProfile or userProfile.id');
+			return createErrorResponse('User profile is required', 400);
+		}
+
+		// Validate AI message limit
+		const validator = createSubscriptionValidator();
+		const limitCheck = await validator.checkAiMessageLimit(userProfile.id);
+		console.log('[generate-inline-content] AI message limit check:', limitCheck);
+
+		if (!limitCheck.allowed) {
+			console.warn('[generate-inline-content] AI message limit exceeded:', limitCheck.message);
+			return createErrorResponse(limitCheck.message || 'AI generation limit exceeded', 403);
+		}
+
+		// Compose prompt
+		const prompt = createInlineContentPrompt(
+			selectedText, 
+			fullNoteContent, 
+			userProfile, 
+			actionType, 
+			customInstruction || '', 
+			attachedDocumentContent || ''
+		);
+		console.log('[generate-inline-content] Generated prompt length:', prompt.length);
+		console.log('[generate-inline-content] Action type:', actionType);
+		console.log('[generate-inline-content] Custom instruction:', customInstruction);
+
+		// Generate content
+		let generatedContent = '';
+		try {
+			generatedContent = await generateInlineContentWithGemini(prompt);
+			console.log('[generate-inline-content] AI generated content length:', generatedContent.length);
+			console.log('[generate-inline-content] Content preview:', generatedContent.slice(0, 200));
+		} catch (aiError) {
+			console.error('[generate-inline-content] AI generation failed:', aiError);
+			return new Response(JSON.stringify({ 
+				error: 'AI generation failed', 
+				details: aiError instanceof Error ? aiError.message : 'Unknown error' 
+			}), {
+				status: 500,
+				headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+			});
+		}
+
+		// Validate the generated content
+		if (!generatedContent || !generatedContent.trim()) {
+			console.error('[generate-inline-content] Empty content generated');
+			return createErrorResponse('AI generated empty content', 500);
+		}
+
+		// Return result
+		console.log('[generate-inline-content] Returning result successfully');
+		return new Response(JSON.stringify({ generatedContent }), {
+			status: 200,
+			headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+		});
+
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		console.error('[generate-inline-content] Unexpected error:', errorMessage);
+		console.error('[generate-inline-content] Error stack:', error instanceof Error ? error.stack : 'No stack');
+		
+		return new Response(JSON.stringify({ 
+			error: 'Failed to generate inline content', 
+			details: errorMessage 
+		}), {
+			status: 500,
+			headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+		});
+	}
 });

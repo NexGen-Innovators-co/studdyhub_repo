@@ -204,10 +204,11 @@ interface SupabaseScheduleItem {
 interface SupabaseQuiz {
   id: string;
   title: string;
-  questions: any[];
+  questions: any;
   class_id: string;
   user_id: string;
   created_at: string;
+  source_type?: string;
 }
 
 interface SupabaseFolder {
@@ -1050,20 +1051,36 @@ export const useAppData = () => {
           !loadedIdsRef.current.quizzes.has(quiz.id)
         );
 
-        const formattedQuizzes: Quiz[] = newQuizzesData.map(quiz => ({
-          id: quiz.id,
-          title: quiz.title || 'Untitled Quiz',
-          questions: (Array.isArray(quiz.questions) ? quiz.questions.map((q: any) => ({
-            id: q.id,
-            question: q.question || '',
-            options: q.options || [],
-            correctAnswer: q.correctAnswer || 0,
-            explanation: q.explanation || ''
-          })) : []) as QuizQuestion[],
-          classId: quiz.class_id,
-          userId: quiz.user_id,
-          created_at: quiz.created_at
-        }));
+        const formattedQuizzes: Quiz[] = newQuizzesData.map(quiz => {
+          // Robust parsing for questions which might be a string or an array
+          let parsedQuestions: any[] = [];
+          try {
+            if (Array.isArray(quiz.questions)) {
+              parsedQuestions = quiz.questions;
+            } else if (typeof quiz.questions === 'string') {
+              parsedQuestions = JSON.parse(quiz.questions);
+            }
+          } catch (e) {
+            console.error('Error parsing quiz questions:', e);
+            parsedQuestions = [];
+          }
+
+          return {
+            id: quiz.id,
+            title: quiz.title || 'Untitled Quiz',
+            questions: (Array.isArray(parsedQuestions) ? parsedQuestions.map((q: any) => ({
+              id: q.id || Math.random().toString(36).substr(2, 9),
+              question: q.question || '',
+              options: q.options || [],
+              correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
+              explanation: q.explanation || ''
+            })) : []) as QuizQuestion[],
+            classId: quiz.class_id,
+            userId: quiz.user_id,
+            created_at: quiz.created_at,
+            source_type: (quiz.source_type || (quiz.title?.toLowerCase().includes('ai smart') ? 'ai' : (quiz.title?.toLowerCase().includes('notes') ? 'notes' : 'recording'))) as any
+          };
+        });
 
         // Add new IDs to loaded set
         formattedQuizzes.forEach(quiz => loadedIdsRef.current.quizzes.add(quiz.id));

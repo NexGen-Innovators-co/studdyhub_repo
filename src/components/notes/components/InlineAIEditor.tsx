@@ -1,8 +1,43 @@
-// components/InlineAIEditor.tsx - UPDATED WITH TYPING ANIMATION
+// components/InlineAIEditor.tsx - IMPROVED DIAGRAM HANDLING
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '../../ui/button';
 import { Check, X, RotateCcw, Loader2, Edit3, Sparkles, ChevronDown, ChevronUp, AlertCircle, Lightbulb } from 'lucide-react';
 import { Textarea } from '../../ui/textarea';
+import { Bar, Line, Pie, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import { CodeRenderer } from './CodeRenderer';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  PointElement,
+  LineElement,
+  ArcElement,
+  RadialLinearScale,
+} from 'chart.js';
+
+
+// Direct mermaid rendering (matches DiagramWrapper)
+import mermaid from 'mermaid';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  PointElement,
+  LineElement,
+  ArcElement,
+  RadialLinearScale
+);
 
 // Types for better type safety
 interface InlineAIEditorProps {
@@ -10,6 +45,7 @@ interface InlineAIEditorProps {
   onAccept: () => void;
   onReject: () => void;
   selectedText: string;
+  selectionRange: { from: number; to: number };
   actionType: string;
   onGenerate: (selectedText: string, actionType: string, customInstruction: string) => Promise<void>;
   position: { top: number; left: number };
@@ -19,6 +55,7 @@ interface InlineAIEditorProps {
   onClearError?: () => void;
   generatedText?: string;
   isTyping?: boolean;
+  onInsertContent?: (content: any) => void; // New prop for node insertion
 }
 
 // Smart suggestions interface
@@ -30,7 +67,89 @@ interface SmartSuggestion {
   icon: string;
   keywords: string[];
 }
+// DiagramPreview: A unified component for rendering various diagram types.
+const DiagramPreview: React.FC<{ type: 'mermaid' | 'chartjs' | 'dot'; code: string }> = ({ type, code }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
+  const chartComponentMap = {
+    bar: Bar,
+    line: Line,
+    pie: Pie,
+    doughnut: Doughnut,
+    radar: Radar,
+    polarArea: PolarArea,
+  };
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const renderDiagram = async () => {
+      if (!containerRef.current) return;
+      containerRef.current.innerHTML = '';
+      setError(null);
+
+      try {
+        if (type === 'mermaid') {
+          mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose', logLevel: 1 });
+          const id = `mermaid-preview-${Date.now()}`;
+          const { svg } = await mermaid.render(id, code.trim());
+          if (isMounted && containerRef.current) {
+            containerRef.current.innerHTML = svg;
+          }
+        } else if (type === 'chartjs') {
+          // Chart.js rendering is handled via JSX below
+        } else {
+          const lang = 'dot';
+          containerRef.current.innerHTML = `<pre><code class="language-${lang}">${code}</code></pre>`;
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          const errorMessage = err?.message || `Invalid ${type} syntax.`;
+          setError(errorMessage);
+          if (containerRef.current) {
+            containerRef.current.innerHTML = `<div style="border: 1px solid #ef4444; background: rgba(239,68,68,0.1); color: #ef4444; padding: 0.75rem; border-radius: 0.5rem; font-size: 0.85rem; font-family: system-ui, sans-serif;"><strong>⚠️ ${type.charAt(0).toUpperCase() + type.slice(1)} Diagram Error</strong><br>${errorMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+          }
+        }
+      }
+    };
+
+    renderDiagram();
+    return () => { isMounted = false; };
+  }, [code, type]);
+
+  const renderChartJs = () => {
+    try {
+      const chartConfig = new Function(`return ${code}`)();
+      const ChartComponent = chartComponentMap[chartConfig.type as keyof typeof chartComponentMap] || Bar;
+      return <ChartComponent data={chartConfig.data} options={chartConfig.options} />;
+    } catch (e: any) {
+      setError(`Invalid Chart.js configuration: ${e.message}`);
+      return null;
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
+      {type === 'chartjs' ? (
+        renderChartJs()
+      ) : (
+        <div ref={containerRef} className="w-full min-h-[120px] flex items-center justify-center" />
+      )}
+      <div className="mt-4">
+        <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">Source Code</div>
+        <CodeRenderer inline={false} className={`language-${type}`}>
+          {code}
+        </CodeRenderer>
+      </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+        ℹ️ This is a live preview. The diagram will be inserted when you accept.
+      </p>
+      {error && (
+        <div className="text-xs text-red-600 mt-2">{error}</div>
+      )}
+    </div>
+  );
+};
 // Smart AI suggestions based on content analysis
 const SMART_SUGGESTIONS: SmartSuggestion[] = [
   {
@@ -148,7 +267,7 @@ const ACTION_CONFIGS = {
   visualize: {
     icon: '📊',
     label: 'Visualize',
-    description: 'Create charts, diagrams, or visual aids',
+    description: 'Create diagrams or visual aids',
     placeholder: 'e.g., Create a flowchart showing the process...'
   }
 } as const;
@@ -158,6 +277,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
   onAccept,
   onReject,
   selectedText,
+  selectionRange,
   actionType,
   onGenerate,
   position,
@@ -166,14 +286,37 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
   error,
   onClearError,
   generatedText = '',
-  isTyping = false
+  isTyping = false,
+  onInsertContent
 }) => {
+  // Detect and extract diagram info
+  const diagramInfo = useMemo(() => {
+    const mermaidMatch = generatedText.match(/```mermaid[\r\n]+([\s\S]*?)```/i);
+    if (mermaidMatch) {
+      return { type: 'mermaid', code: mermaidMatch[1].trim() };
+    }
+
+    const chartjsMatch = generatedText.match(/```chartjs[\r\n]+([\s\S]*?)```/i);
+    if (chartjsMatch) {
+      return { type: 'chartjs', code: chartjsMatch[1].trim() };
+    }
+
+    const dotMatch = generatedText.match(/```dot[\r\n]+([\s\S]*?)```/i);
+    if (dotMatch) {
+      return { type: 'dot', code: dotMatch[1].trim() };
+    }
+
+    return null;
+  }, [generatedText]);
+  // Local loading state for instant feedback
+  const [localLoading, setLocalLoading] = useState(false);
   // State management
   const [customInstruction, setCustomInstruction] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [showSmartSuggestions, setShowSmartSuggestions] = useState(false);
   const [currentActionType, setCurrentActionType] = useState(actionType);
   const [showPreview, setShowPreview] = useState(false);
+  const [preservedSelectedText, setPreservedSelectedText] = useState(selectedText);
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -185,6 +328,11 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
       setShowPreview(true);
     }
   }, [generatedText]);
+
+  // Sync local loading with parent isLoading
+  useEffect(() => {
+    if (!isLoading) setLocalLoading(false);
+  }, [isLoading]);
 
   // Memoized action config
   const actionConfig = useMemo(() =>
@@ -214,51 +362,62 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
     }
   }, [isVisible, showCustomInput]);
 
-  // Position adjustment to keep editor in viewport
+  // Responsive position and width
   const adjustedPosition = useMemo(() => {
-    if (!isVisible) return position;
-
+    if (!isVisible) {
+      return { ...position, width: window.innerWidth < 640 ? window.innerWidth * 0.95 : 500 };
+    }
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const editorWidth = 500;
+    const editorWidth = viewportWidth < 640 ? viewportWidth * 0.95 : 500;
     const editorHeight = showSmartSuggestions ? 500 : 400;
-
     let { top, left } = position;
-
-    if (left + editorWidth / 2 > viewportWidth) {
-      left = viewportWidth - editorWidth / 2 - 20;
-    } else if (left - editorWidth / 2 < 0) {
-      left = editorWidth / 2 + 20;
+    if (left + editorWidth > viewportWidth) {
+      left = viewportWidth - editorWidth - 10;
+    } else if (left < 0) {
+      left = 10;
     }
-
     if (top + editorHeight > viewportHeight) {
-      top = Math.max(20, viewportHeight - editorHeight - 20);
+      top = Math.max(10, viewportHeight - editorHeight - 10);
     }
-
-    return { top, left };
+    return { top, left, width: editorWidth };
   }, [position, isVisible, showSmartSuggestions]);
 
-  // Handlers
-  const handleGenerate = useCallback(async () => {
-    if (isLoading) return;
-
-    try {
-      if (onClearError) onClearError();
-      setShowPreview(false);
-      await onGenerate(selectedText, currentActionType, customInstruction);
-    } catch (err) {
-      //console.error('Generation failed:', err);
-    }
-  }, [selectedText, currentActionType, customInstruction, onGenerate, isLoading, onClearError]);
+  // (Already declared above) Remove duplicate isDiagram and mermaidCode declarations
 
   const handleAccept = useCallback(() => {
-    onAccept();
+    if (diagramInfo && onInsertContent) {
+      const { type, code } = diagramInfo;
+      if (type === 'chartjs') {
+        onInsertContent({ type: 'chartjs', attrs: { config: code } });
+      } else {
+        onInsertContent({ type, attrs: { code } });
+      }
+    } else {
+      onAccept();
+    }
     setCustomInstruction('');
     setShowCustomInput(false);
     setShowPreview(false);
     setShowSmartSuggestions(false);
     if (onClearError) onClearError();
-  }, [onAccept, onClearError]);
+  }, [diagramInfo, onInsertContent, onAccept, onClearError]);
+
+  // Handlers
+  const handleGenerate = useCallback(async () => {
+    if (isLoading || localLoading) return;
+    setLocalLoading(true);
+    setShowSmartSuggestions(false);
+    if (onClearError) onClearError();
+    
+    console.log('[InlineAIEditor] Generating with:', {
+      actionType: currentActionType,
+      customInstruction: customInstruction || '(none)',
+      customInstructionLength: customInstruction.length
+    });
+    
+    await onGenerate(selectedText, currentActionType, customInstruction);
+  }, [isLoading, localLoading, onGenerate, selectedText, currentActionType, customInstruction, onClearError]);
 
   const handleReject = useCallback(() => {
     onReject();
@@ -293,12 +452,27 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
   }, [handleGenerate, handleReject, isLoading]);
 
   const toggleCustomInput = useCallback(() => {
-    setShowCustomInput(prev => !prev);
-  }, []);
+    setShowCustomInput(prev => {
+      if (!prev) {
+        setPreservedSelectedText(selectedText);
+      }
+      return !prev;
+    });
+  }, [selectedText]);
 
   const toggleSmartSuggestions = useCallback(() => {
     setShowSmartSuggestions(prev => !prev);
   }, []);
+
+  // (Removed duplicate isDiagram and mermaidCode declarations)
+
+  // Fix diagram function - regenerate with specific instructions
+  const handleFixDiagram = useCallback(async () => {
+    setLocalLoading(true);
+    const fixInstruction = 'The previous diagram had errors. Please regenerate a valid, working diagram. Ensure all syntax is correct and the diagram will render properly. Return ONLY the diagram code block with proper formatting.';
+    await onGenerate(selectedText, 'visualize', fixInstruction);
+    setLocalLoading(false);
+  }, [selectedText, onGenerate]);
 
   if (!isVisible) return null;
 
@@ -309,12 +483,16 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
   return (
     <div
       ref={containerRef}
-      className="fixed bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl min-w-[450px] max-w-[600px] z-[10000] max-h-[80vh] overflow-hidden"
-      style={{
-        top: `${adjustedPosition.top}px`,
-        left: `${adjustedPosition.left}px`,
-        transform: 'translateX(-50%)'
-      }}
+      className={
+        `fixed bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl z-[10000] max-h-[90vh] overflow-hidden transition-all duration-200
+        min-w-[320px] max-w-[600px] w-full
+        sm:min-w-[450px] sm:w-auto
+        ${window.innerWidth < 640 ? 'left-0 right-0 bottom-0 top-auto mx-auto rounded-b-none rounded-t-xl' : ''}`
+      }
+      style={window.innerWidth < 640
+        ? { left: 0, right: 0, bottom: 0, top: 'auto', width: '100vw', maxWidth: '100vw', minWidth: 0, borderRadius: '1rem 1rem 0 0' }
+        : { top: `${adjustedPosition.top}px`, left: `${adjustedPosition.left}px`, transform: 'translateX(-50%)' }
+      }
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-blue-50 dark:from-gray-800 dark:to-gray-800">
@@ -329,7 +507,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
               </span>
               {showPreview && !isTyping && (
                 <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">
-                  Generated
+                  {diagramInfo ? 'Diagram Ready' : 'Generated'}
                 </span>
               )}
               {isTyping && (
@@ -382,7 +560,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+      <div className="p-4 space-y-4 max-h-[60vh] sm:max-h-[60vh] overflow-y-auto">
         {/* Error Display */}
         {error && (
           <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -401,13 +579,13 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
           </div>
         )}
 
-        {/* Generated Text Preview with Typing Animation */}
+        {/* Generated Text Preview */}
         {showPreview && generatedText && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-2">
                 <Sparkles className="h-3 w-3 text-blue-500" />
-                {isTyping ? 'AI is typing...' : 'Generated Text'}
+                {isTyping ? 'AI is typing...' : diagramInfo ? 'Generated Diagram' : 'Generated Text'}
               </div>
               {isTyping && (
                 <div className="flex gap-1">
@@ -416,15 +594,41 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                 </div>
               )}
+              {/* Fix Diagram Button - Only show for diagrams that might have issues */}
+              {!isTyping && diagramInfo && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                  onClick={handleFixDiagram}
+                  disabled={isLoading || localLoading}
+                  title="Regenerate diagram if it has errors"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" /> 
+                  {isLoading || localLoading ? 'Fixing...' : 'Fix Diagram'}
+                </Button>
+              )}
             </div>
             <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 rounded-lg border border-blue-200 dark:border-gray-700 max-h-64 overflow-y-auto">
               <div className="prose prose-sm dark:prose-invert max-w-none">
-                <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
-                  {generatedText}
-                  {isTyping && (
-                    <span className="inline-block w-0.5 h-4 bg-blue-500 ml-0.5 animate-pulse"></span>
-                  )}
-                </p>
+                {diagramInfo ? (
+                  <DiagramPreview type={diagramInfo.type as 'mermaid' | 'chartjs' | 'dot'} code={diagramInfo.code} />
+                ) : (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      code: CodeRenderer,
+                      p: ({ children }) => (
+                        <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed mb-2">
+                          {children}
+                        </p>
+                      ),
+                    }}
+                  >
+                    {generatedText + (isTyping ? ' █' : '')}
+                  </ReactMarkdown>
+                )}
               </div>
             </div>
             {!isTyping && (
@@ -531,7 +735,7 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
         )}
         {showPreview && !isTyping && (
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            Review and accept or regenerate
+            {diagramInfo ? 'Review diagram and accept to insert' : 'Review and accept or regenerate'}
           </div>
         )}
         {isTyping && (
@@ -568,10 +772,10 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
             <Button
               size="sm"
               onClick={handleGenerate}
-              disabled={isLoading}
+              disabled={isLoading || localLoading}
               className="h-8 text-xs bg-gradient-to-r from-blue-600 to-blue-600 hover:from-blue-700 hover:to-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
+              {(isLoading || localLoading) ? (
                 <>
                   <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                   Generating...

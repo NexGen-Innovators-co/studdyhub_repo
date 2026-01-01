@@ -8,6 +8,7 @@ export const useQuizTracking = (userId: string) => {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [bestAttempts, setBestAttempts] = useState<Record<string, QuizAttempt>>({});
 
   // Calculate XP based on performance
   const calculateXP = (score: number, totalQuestions: number, timeTaken: number): number => {
@@ -31,6 +32,7 @@ export const useQuizTracking = (userId: string) => {
     try {
       setIsLoadingStats(true);
 
+      // Fetch stats
       const { data, error } = await supabase
         .from('user_stats')
         .select('*')
@@ -68,8 +70,23 @@ export const useQuizTracking = (userId: string) => {
         if (insertError) throw insertError;
         setUserStats(newStats);
       }
-    } catch (error) {
 
+      // Fetch best attempts for each quiz
+      const { data: attempts, error: attemptsError } = await supabase
+        .from('quiz_attempts')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (!attemptsError && attempts) {
+        const best: Record<string, QuizAttempt> = {};
+        attempts.forEach(attempt => {
+          if (!best[attempt.quiz_id] || attempt.percentage > best[attempt.quiz_id].percentage) {
+            best[attempt.quiz_id] = attempt;
+          }
+        });
+        setBestAttempts(best);
+      }
+    } catch (error) {
       toast.error('Failed to load user statistics');
     } finally {
       setIsLoadingStats(false);
@@ -88,7 +105,15 @@ export const useQuizTracking = (userId: string) => {
 
     try {
       const percentage = Math.round((score / totalQuestions) * 100);
-      const xpEarned = calculateXP(score, totalQuestions, timeTaken);
+      
+      // Check if this is a retake and if we should award XP
+      const existingBest = bestAttempts[quizId];
+      const isNewBest = !existingBest || percentage > existingBest.percentage;
+      
+      // Only award XP if it's the first attempt or a new high score
+      // If it's a new high score, we award the difference or just the full amount?
+      // Let's award XP only if it's a new best score to keep it simple and fair.
+      const xpEarned = isNewBest ? calculateXP(score, totalQuestions, timeTaken) : 0;
 
       const attempt = {
         quiz_id: quizId,
@@ -110,12 +135,20 @@ export const useQuizTracking = (userId: string) => {
       if (error) throw error;
 
       // Update user stats
-      await updateUserStats(xpEarned, percentage, timeTaken, score === totalQuestions);
+      if (xpEarned > 0) {
+        await updateUserStats(xpEarned, percentage, timeTaken, score === totalQuestions);
+        toast.success(`Quiz completed! +${xpEarned} XP earned! 🎉`);
+      } else {
+        // Still update streak and last activity even if no XP earned
+        await updateUserStats(0, percentage, timeTaken, score === totalQuestions);
+        toast.success(`Quiz completed! (No new XP for retake)`);
+      }
 
       // Check for new achievements
       await checkAchievements();
 
-      toast.success(`Quiz completed! +${xpEarned} XP earned! 🎉`);
+      // Refresh best attempts
+      await fetchUserStats();
 
       return data;
     } catch (error) {
@@ -324,6 +357,7 @@ export const useQuizTracking = (userId: string) => {
     userStats,
     recentAchievements,
     isLoadingStats,
+    bestAttempts,
     recordQuizAttempt,
     fetchUserStats,
     getQuizHistory,
