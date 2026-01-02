@@ -609,7 +609,9 @@ export const useSocialData = (
   const fetchGroups = useCallback(async (reset = true) => {
     if (!currentUserIdRef.current) return;
     if (!reset && (!hasMoreGroups || isLoadingMoreGroups)) return;
-    if (reset && isLoadingGroups) return;
+    
+    // Removed the guard that was blocking initial load when isLoadingGroups was true
+    // if (reset && isLoadingGroups) return;
 
     const limit = DEFAULT_LIMITS.GROUPS_PER_PAGE;
     const offset = reset ? 0 : groupsOffset;
@@ -619,32 +621,44 @@ export const useSocialData = (
       if (reset) setIsLoadingGroups(true);
 
       // OPTIMIZED: Single query with proper filtering
+      // We fetch all groups to allow discovery, and then check membership
       const { data: rawGroups, error } = await supabase
         .from('social_groups')
         .select(`
           *,
           creator:social_users!social_groups_created_by_fkey(*),
-          members:social_group_members(count),
-          current_user_membership:social_group_members!left(
-            user_id,
-            role,
-            status
-          )
+          members:social_group_members(count)
         `)
-        .eq('current_user_membership.user_id', currentUserIdRef.current)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
       if (error) throw error;
 
-      const groupsWithDetails: SocialGroupWithDetails[] = (rawGroups || []).map(g => ({
-        ...g,
-        creator: g.creator,
-        member_count: g.members[0]?.count || 0,
-        is_member: !!g.current_user_membership?.length,
-        member_role: g.current_user_membership?.[0]?.role || null,
-        member_status: g.current_user_membership?.[0]?.status || null,
-      }));
+      // Fetch memberships for these groups for the current user separately
+      // to avoid filtering out groups the user hasn't joined yet
+      const groupIds = (rawGroups || []).map(g => g.id);
+      let memberships: any[] = [];
+      
+      if (groupIds.length > 0 && currentUserIdRef.current) {
+        const { data: membershipData } = await supabase
+          .from('social_group_members')
+          .select('group_id, role, status')
+          .eq('user_id', currentUserIdRef.current)
+          .in('group_id', groupIds);
+        memberships = membershipData || [];
+      }
+
+      const groupsWithDetails: SocialGroupWithDetails[] = (rawGroups || []).map(g => {
+        const membership = memberships.find(m => m.group_id === g.id);
+        return {
+          ...g,
+          creator: g.creator,
+          members_count: g.members[0]?.count || g.members_count || 0,
+          is_member: !!membership,
+          member_role: membership?.role || null,
+          member_status: membership?.status || null,
+        };
+      });
 
       if (reset) {
         setGroups(groupsWithDetails);
@@ -663,7 +677,7 @@ export const useSocialData = (
       setIsLoadingGroups(false);
       setIsLoadingMoreGroups(false);
     }
-  }, [groupsOffset, groups]);
+  }, [groupsOffset, groups, hasMoreGroups, isLoadingMoreGroups, isLoadingGroups]);
   const fetchCurrentUser = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
