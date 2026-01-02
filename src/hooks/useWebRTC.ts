@@ -168,6 +168,8 @@ export const useWebRTC = ({
         }
       });
 
+      console.log('Microphone access granted, tracks:', stream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
+      
       setLocalStream(stream);
       localStreamRef.current = stream;
       setIsConnected(true);
@@ -266,9 +268,18 @@ export const useWebRTC = ({
 
     // Handle remote stream (for listeners)
     pc.ontrack = (event) => {
-      console.log('Received remote track:', event.track.kind);
-      if (event.streams[0]) {
+      console.log(`Received remote track: ${event.track.kind} for user ${userId}`);
+      
+      // Ensure the track is enabled
+      event.track.enabled = true;
+      
+      if (event.streams && event.streams[0]) {
+        console.log(`Stream found for track: ${event.streams[0].id}`);
         onRemoteStream?.(event.streams[0]);
+      } else {
+        console.log('No stream found for track, creating one');
+        const newStream = new MediaStream([event.track]);
+        onRemoteStream?.(newStream);
       }
     };
 
@@ -303,10 +314,18 @@ export const useWebRTC = ({
       const stream = localStreamRef.current;
       if (!stream) return;
 
+      // Close existing connection if any to avoid leaks and conflicts
+      const existingPeer = peerConnectionsRef.current.get(listenerId);
+      if (existingPeer) {
+        console.log(`Closing existing connection for ${listenerId}`);
+        existingPeer.connection.close();
+      }
+
       const pc = createPeerConnection(listenerId);
       
       // Add local tracks to peer connection
       stream.getTracks().forEach(track => {
+        console.log(`Adding track to PC for listener ${listenerId}: ${track.kind}, enabled: ${track.enabled}`);
         pc.addTrack(track, stream);
       });
 
@@ -337,6 +356,13 @@ export const useWebRTC = ({
 
   const handleOffer = async (payload: any) => {
     try {
+      // Close existing connection if any
+      const existingPeer = peerConnectionsRef.current.get(payload.from);
+      if (existingPeer) {
+        console.log(`Closing existing connection for ${payload.from}`);
+        existingPeer.connection.close();
+      }
+
       const pc = createPeerConnection(payload.from);
       peerConnectionsRef.current.set(payload.from, {
         userId: payload.from,
