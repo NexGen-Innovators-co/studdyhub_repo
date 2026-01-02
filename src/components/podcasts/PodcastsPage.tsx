@@ -1,6 +1,6 @@
 // PodcastsPage.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useCallback, useRef, useMemo, useDeferredValue, memo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { offlineStorage, STORES } from '@/utils/offlineStorage';
 import { PodcastPanel } from '../aiChat/Components/PodcastPanel';
 import { PodcastData, PodcastGenerator } from '../aiChat/PodcastGenerator';
 import { GoLiveDialog } from './GoLiveDialog';
@@ -78,6 +79,248 @@ interface PodcastsPageProps {
 
 import { SocialFeedHandle } from '../social/SocialFeed';
 
+const PodcastCard = memo(({ 
+  podcast, 
+  isOwner, 
+  onPlay, 
+  onShare, 
+  onInvite, 
+  onManageMembers, 
+  onTogglePublic, 
+  onUpdateCover, 
+  onGenerateAiCover, 
+  onDelete, 
+  onReport, 
+  onJoinLive,
+  isUpdatingCover,
+  isGeneratingAiCover,
+  fileInputRef
+}: { 
+  podcast: PodcastWithMeta; 
+  isOwner: boolean;
+  onPlay: (p: PodcastWithMeta) => void;
+  onShare: (p: PodcastWithMeta) => void;
+  onInvite: (p: PodcastWithMeta) => void;
+  onManageMembers: (p: PodcastWithMeta) => void;
+  onTogglePublic: (p: PodcastWithMeta) => void;
+  onUpdateCover: (id: string) => void;
+  onGenerateAiCover: (p: PodcastWithMeta) => void;
+  onDelete: (p: PodcastWithMeta) => void;
+  onReport: (p: PodcastWithMeta) => void;
+  onJoinLive: (id: string) => void;
+  isUpdatingCover: string | null;
+  isGeneratingAiCover: string | null;
+  fileInputRef: React.RefObject<HTMLInputElement>;
+}) => {
+  const [showActions, setShowActions] = useState(false);
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      layout
+      className="group"
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
+      onClick={() => setShowActions(!showActions)}
+    >
+      <Card className="overflow-hidden hover:shadow-2xl transition-all duration-300 border-blue-200/50 dark:border-blue-900/50 h-full flex flex-col relative rounded-2xl cursor-pointer">
+        {/* Background Image with Overlay */}
+        <div className="relative aspect-[3/4] sm:aspect-[4/5] overflow-hidden">
+          {/* Cover Image */}
+          <div 
+            className="absolute inset-0 bg-gradient-to-br from-blue-500 to-pink-500"
+            style={{
+              backgroundImage: podcast.cover_image_url ? `url(${podcast.cover_image_url})` : undefined,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}
+          >
+            {!podcast.cover_image_url && (
+              <div className="w-full h-full flex items-center justify-center">
+                <Radio className="h-12 w-12 sm:h-16 sm:w-16 text-white opacity-30" />
+              </div>
+            )}
+          </div>
+          
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+          
+          {/* Live Badge */}
+          {podcast.is_live && (
+            <Badge className="absolute top-2 left-2 bg-red-500 text-white animate-pulse text-xs">
+              <Radio className="h-2.5 w-2.5 mr-1" />
+              LIVE
+            </Badge>
+          )}
+
+          {/* Privacy Badge */}
+          <Badge 
+            variant="secondary" 
+            className="absolute top-2 right-2 bg-black/60 text-white backdrop-blur-sm text-xs border-0"
+          >
+            {podcast.is_public ? <Globe className="h-2.5 w-2.5 mr-1" /> : <Lock className="h-2.5 w-2.5 mr-1" />}
+            <span className="hidden sm:inline">{podcast.is_public ? 'Public' : 'Private'}</span>
+          </Badge>
+
+          {/* Content Overlay - Always visible on mobile, hover on desktop */}
+          <div className="absolute inset-0 flex flex-col justify-end p-3 sm:p-4">
+            {/* Title & Author - Always visible */}
+            <div className="space-y-1.5 sm:space-y-2 mb-2">
+              <h3 className="text-white font-bold text-sm sm:text-base line-clamp-2 leading-tight">
+                {podcast.title}
+              </h3>
+              
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Avatar className="h-5 w-5 sm:h-6 sm:w-6 ring-2 ring-white/20">
+                  <AvatarImage src={podcast.user?.avatar_url} />
+                  <AvatarFallback className="text-xs bg-blue-500 text-white">
+                    {podcast.user?.full_name?.charAt(0) || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-white/90 text-xs sm:text-sm font-medium truncate">
+                  {podcast.user?.full_name || 'Unknown'}
+                </span>
+              </div>
+            </div>
+
+            {/* Stats - Compact */}
+            <div className="flex items-center gap-2 sm:gap-3 text-xs text-white/80 mb-2">
+              <div className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                <span>{podcast.duration || 0}m</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Eye className="h-3 w-3" />
+                <span>{podcast.listen_count || 0}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                <span>{podcast.member_count ?? 0}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons - Toggle visibility */}
+            <div className={`transition-all duration-300 ${showActions ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+              <div className="flex gap-1.5 sm:gap-2">
+                {/* Main Play Button */}
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (podcast.is_live) {
+                      onJoinLive(podcast.id);
+                    } else {
+                      onPlay(podcast);
+                    }
+                  }}
+                  className="flex-1 border-white/30 bg-white/10 hover:bg-white/20 text-blue-600 font-semibold text-xs sm:text-sm h-8 sm:h-9 backdrop-blur-sm"
+                  size="sm"
+                >
+                  {podcast.is_live ? (
+                    <Radio className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  ) : (
+                    <Play className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  )}
+                  <span className="hidden xs:inline">{podcast.is_live ? 'Join' : 'Listen'}</span>
+                </Button>
+                
+                {/* Share Button */}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShare(podcast);
+                  }}
+                  className="border-white/30 bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
+                  title="Share"
+                >
+                  <Share2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                </Button>
+
+                {/* More Options Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={(e) => e.stopPropagation()}
+                      className="border-white/30 bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
+                    >
+                      <MoreVertical className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className='bg-white dark:bg-slate-800'>
+                    {isOwner && (
+                      <>
+                        <DropdownMenuItem
+                          onClick={() => onInvite(podcast)}
+                        >
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Invite Members
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => onManageMembers(podcast)}
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          Manage Members
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onTogglePublic(podcast)}>
+                          {podcast.is_public ? <Lock className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
+                          Make {podcast.is_public ? 'Private' : 'Public'}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => onUpdateCover(podcast.id)}
+                          disabled={isUpdatingCover === podcast.id}
+                        >
+                          {isUpdatingCover === podcast.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <ImageIcon className="h-4 w-4 mr-2" />
+                          )}
+                          Update Cover
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => onGenerateAiCover(podcast)}
+                          disabled={isGeneratingAiCover === podcast.id}
+                        >
+                          {isGeneratingAiCover === podcast.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4 mr-2" />
+                          )}
+                          Generate AI Cover
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => onDelete(podcast)}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Podcast
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem
+                      onClick={() => onReport(podcast)}
+                    >
+                      <Flag className="h-4 w-4 mr-2" />
+                      Report Podcast
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+});
+
 export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.RefObject<SocialFeedHandle> }> = ({
   searchQuery: externalSearchQuery = '',
   podcastId,
@@ -93,6 +336,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedPodcast, setSelectedPodcast] = useState<PodcastData | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showGoLiveDialog, setShowGoLiveDialog] = useState(false);
@@ -418,7 +662,17 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        if (!navigator.onLine) {
+          const offlinePodcasts = await offlineStorage.getAll<any>(STORES.PODCASTS);
+          if (offlinePodcasts.length > 0) {
+            setPodcasts(offlinePodcasts);
+            setLoading(false);
+            return;
+          }
+        }
+        throw error;
+      }
 
 
       // Fetch member counts for all podcasts
@@ -512,6 +766,11 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         };
       });
 
+      // Save to offline storage
+      if (transformedPodcasts.length > 0) {
+        await offlineStorage.save(STORES.PODCASTS, transformedPodcasts);
+      }
+
       if (isInitialFetch) {
         setPodcasts(transformedPodcasts);
       } else {
@@ -562,6 +821,13 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
         return;
       }
+
+      if (!navigator.onLine) {
+        setListenedPodcasts(prev => new Set(prev).add(podcastId));
+        await offlineStorage.addPendingSync('create', 'podcast_listeners', { podcast_id: podcastId, user_id: currentUser.id });
+        return;
+      }
+
       const { data: existingListener, error: listenerError } = await supabase
         .from('podcast_listeners')
         .select('id')
@@ -600,6 +866,15 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
   const handleDeletePodcast = async () => {
     if (!podcastToDelete) return;
+
+    if (!navigator.onLine) {
+      setPodcasts(prev => prev.filter(p => p.id !== podcastToDelete.id));
+      await offlineStorage.addPendingSync('delete', STORES.PODCASTS, { id: podcastToDelete.id });
+      setPodcastToDelete(null);
+      setShowDeleteDialog(false);
+      toast.success('Podcast deleted offline');
+      return;
+    }
 
     setDeletingPodcast(true);
     try {
@@ -743,238 +1018,13 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     }
   };
 
-  const filteredPodcasts = podcasts.filter(podcast =>
-    podcast.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    podcast.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    podcast.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const PodcastCard: React.FC<{ podcast: PodcastWithMeta; isOwner: boolean }> = ({ podcast, isOwner }) => {
-    const [showActions, setShowActions] = useState(false);
-    
-    return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="group"
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
-      onClick={() => setShowActions(!showActions)}
-    >
-      <Card className="overflow-hidden hover:shadow-2xl transition-all duration-300 border-blue-200/50 dark:border-blue-900/50 h-full flex flex-col relative rounded-2xl cursor-pointer">
-        {/* Background Image with Overlay */}
-        <div className="relative aspect-[3/4] sm:aspect-[4/5] overflow-hidden">
-          {/* Cover Image */}
-          <div 
-            className="absolute inset-0 bg-gradient-to-br from-blue-500 to-pink-500"
-            style={{
-              backgroundImage: podcast.cover_image_url ? `url(${podcast.cover_image_url})` : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center'
-            }}
-          >
-            {!podcast.cover_image_url && (
-              <div className="w-full h-full flex items-center justify-center">
-                <Radio className="h-12 w-12 sm:h-16 sm:w-16 text-white opacity-30" />
-              </div>
-            )}
-          </div>
-          
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
-          
-          {/* Live Badge */}
-          {podcast.is_live && (
-            <Badge className="absolute top-2 left-2 bg-red-500 text-white animate-pulse text-xs">
-              <Radio className="h-2.5 w-2.5 mr-1" />
-              LIVE
-            </Badge>
-          )}
-
-          {/* Privacy Badge */}
-          <Badge 
-            variant="secondary" 
-            className="absolute top-2 right-2 bg-black/60 text-white backdrop-blur-sm text-xs border-0"
-          >
-            {podcast.is_public ? <Globe className="h-2.5 w-2.5 mr-1" /> : <Lock className="h-2.5 w-2.5 mr-1" />}
-            <span className="hidden sm:inline">{podcast.is_public ? 'Public' : 'Private'}</span>
-          </Badge>
-
-          {/* Content Overlay - Always visible on mobile, hover on desktop */}
-          <div className="absolute inset-0 flex flex-col justify-end p-3 sm:p-4">
-            {/* Title & Author - Always visible */}
-            <div className="space-y-1.5 sm:space-y-2 mb-2">
-              <h3 className="text-white font-bold text-sm sm:text-base line-clamp-2 leading-tight">
-                {podcast.title}
-              </h3>
-              
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Avatar className="h-5 w-5 sm:h-6 sm:w-6 ring-2 ring-white/20">
-                  <AvatarImage src={podcast.user?.avatar_url} />
-                  <AvatarFallback className="text-xs bg-blue-500 text-white">
-                    {podcast.user?.full_name?.charAt(0) || 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-white/90 text-xs sm:text-sm font-medium truncate">
-                  {podcast.user?.full_name || 'Unknown'}
-                </span>
-              </div>
-            </div>
-
-            {/* Stats - Compact */}
-            <div className="flex items-center gap-2 sm:gap-3 text-xs text-white/80 mb-2">
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>{podcast.duration || 0}m</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Eye className="h-3 w-3" />
-                <span>{podcast.listen_count || 0}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                <span>{podcast.member_count ?? 0}</span>
-              </div>
-            </div>
-
-            {/* Action Buttons - Toggle visibility */}
-            <div className={`transition-all duration-300 ${showActions ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
-              <div className="flex gap-1.5 sm:gap-2">
-                {/* Main Play Button */}
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (podcast.is_live) {
-                      setLivePodcastId(podcast.id);
-                    } else {
-                      handlePlayPodcast(podcast);
-                    }
-                  }}
-                  className="flex-1 border-white/30 bg-white/10 hover:bg-white/20 text-blue-600 font-semibold text-xs sm:text-sm h-8 sm:h-9 backdrop-blur-sm"
-                  size="sm"
-                >
-                  {podcast.is_live ? (
-                    <Radio className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                  ) : (
-                    <Play className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                  )}
-                  <span className="hidden xs:inline">{podcast.is_live ? 'Join' : 'Listen'}</span>
-                </Button>
-                
-                {/* Share Button */}
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSharePodcast(podcast);
-                  }}
-                  className="border-white/30 bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
-                  title="Share"
-                >
-                  <Share2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                </Button>
-
-                {/* More Options Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={(e) => e.stopPropagation()}
-                      className="border-white/30 bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
-                    >
-                      <MoreVertical className="h-3 w-3 sm:h-4 sm:w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className='bg-white dark:bg-slate-800'>
-                    {isOwner && (
-                      <>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedPodcastForManagement(podcast);
-                            setShowInviteDialog(true);
-                          }}
-                        >
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          Invite Members
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedPodcastForManagement(podcast);
-                            setShowMembersDialog(true);
-                          }}
-                        >
-                          <Users className="h-4 w-4 mr-2" />
-                          Manage Members
-                        </DropdownMenuItem>
-                        {/* <DropdownMenuItem onClick={() => setSelectedPodcastForShare(podcast)}>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Share to Feed
-                        </DropdownMenuItem> */}
-                        <DropdownMenuItem onClick={() => handleTogglePublic(podcast)}>
-                          {podcast.is_public ? <Lock className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
-                          Make {podcast.is_public ? 'Private' : 'Public'}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setIsUpdatingCover(podcast.id);
-                            fileInputRef.current?.click();
-                          }}
-                          disabled={isUpdatingCover === podcast.id}
-                        >
-                          {isUpdatingCover === podcast.id ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <ImageIcon className="h-4 w-4 mr-2" />
-                          )}
-                          Update Cover
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleGenerateAiCoverForExisting(podcast)}
-                          disabled={isGeneratingAiCover === podcast.id}
-                        >
-                          {isGeneratingAiCover === podcast.id ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Sparkles className="h-4 w-4 mr-2" />
-                          )}
-                          Generate AI Cover
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setPodcastToDelete(podcast);
-                            setShowDeleteDialog(true);
-                          }}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete Podcast
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setSelectedPodcastForReport(podcast);
-                        setShowReportDialog(true);
-                      }}
-                    >
-                      <Flag className="h-4 w-4 mr-2" />
-                      Report Podcast
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-    </motion.div>
-  );
-};
+  const filteredPodcasts = useMemo(() => {
+    return podcasts.filter(podcast =>
+      podcast.title?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+      podcast.description?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+      podcast.tags?.some(tag => tag.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
+    );
+  }, [podcasts, deferredSearchQuery]);
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-blue-50/30 dark:from-slate-950 dark:to-blue-950/20">
@@ -1078,6 +1128,34 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                         key={podcast.id}
                         podcast={podcast}
                         isOwner={podcast.user_id === currentUser?.id}
+                        onPlay={handlePlayPodcast}
+                        onShare={handleSharePodcast}
+                        onInvite={(p) => {
+                          setSelectedPodcastForManagement(p);
+                          setShowInviteDialog(true);
+                        }}
+                        onManageMembers={(p) => {
+                          setSelectedPodcastForManagement(p);
+                          setShowMembersDialog(true);
+                        }}
+                        onTogglePublic={handleTogglePublic}
+                        onUpdateCover={(id) => {
+                          setIsUpdatingCover(id);
+                          fileInputRef.current?.click();
+                        }}
+                        onGenerateAiCover={handleGenerateAiCoverForExisting}
+                        onDelete={(p) => {
+                          setPodcastToDelete(p);
+                          setShowDeleteDialog(true);
+                        }}
+                        onReport={(p) => {
+                          setSelectedPodcastForReport(p);
+                          setShowReportDialog(true);
+                        }}
+                        onJoinLive={(id) => setLivePodcastId(id)}
+                        isUpdatingCover={isUpdatingCover}
+                        isGeneratingAiCover={isGeneratingAiCover}
+                        fileInputRef={fileInputRef}
                       />
                     ))}
                   </div>

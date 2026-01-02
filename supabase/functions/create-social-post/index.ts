@@ -246,12 +246,11 @@ Respond in JSON format:
 
           if (recentRejections && recentRejections.length >= 5) {
             await supabase.from('content_moderation_queue').insert({
-              user_id: userId,
-              content: content,
-              content_type: 'post',
+              content_id: userId,
+              content_type: 'user',
               reason: 'Multiple rejected posts (5+ in 24 hours)',
               status: 'pending',
-              priority: 'high'
+              priority: 10
             });
           }
 

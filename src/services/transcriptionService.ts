@@ -132,13 +132,6 @@ export const transcribeLivePodcast = async (
   summary: string;
 }> => {
   try {
-    console.log('Starting podcast transcription...', {
-      title,
-      duration,
-      audioUrl,
-      audioBlobSize: audioBlob.size
-    });
-
     // Call dedicated podcast transcription function
     const { data, error } = await supabase.functions.invoke('podcast-transcribe', {
       body: {
@@ -147,8 +140,6 @@ export const transcribeLivePodcast = async (
         duration: duration
       }
     });
-
-    console.log('Transcription function response:', { data, error });
 
     if (error) {
       console.error('Transcription error:', error);
@@ -166,11 +157,6 @@ export const transcribeLivePodcast = async (
     if (!data.transcript) {
       throw new Error('No transcript in response');
     }
-
-    console.log('Transcription complete!', {
-      transcriptLength: data.transcript.length,
-      summary: data.summary
-    });
 
     return {
       transcript: data.transcript,

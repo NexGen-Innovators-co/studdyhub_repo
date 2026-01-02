@@ -64,7 +64,6 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
     podcastId,
     isHost: true,
     onConnectionStateChange: (state) => {
-      console.log('Connection state:', state);
     }
   });
 
@@ -225,8 +224,6 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
               publicUrl
             );
 
-            console.log('Transcription result:', transcriptionResult);
-
             // Prepare update data
             const updateData = {
               is_live: false,
@@ -242,9 +239,6 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
               description: transcriptionResult.summary || podcast.description
             };
 
-            console.log('Updating podcast with data:', updateData);
-            console.log('Updating podcast with ID:', podcastId);
-
             // First verify the podcast exists
             const { data: existingPodcast, error: checkError } = await supabase
               .from('ai_podcasts')
@@ -257,16 +251,12 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
               throw new Error('Podcast not found in database');
             }
 
-            console.log('Existing podcast before update:', existingPodcast);
-
             // Update podcast with audio URL, transcript, and formatted script
             const { data: updateResult, error: updateError } = await supabase
               .from('ai_podcasts')
               .update(updateData)
               .eq('id', podcastId)
               .select();
-
-            console.log('Update response:', { updateResult, updateError });
 
             if (updateError) {
               console.error('Error updating podcast:', updateError);
@@ -280,14 +270,10 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
               .eq('id', podcastId)
               .single();
 
-            console.log('Podcast after update:', verifyPodcast);
-
             if (!verifyPodcast || verifyPodcast.is_live !== false) {
               console.error('Update failed - podcast still live:', verifyPodcast);
               throw new Error('Failed to update podcast status');
             }
-
-            console.log('Podcast updated successfully:', updateResult);
 
             toast.dismiss('transcribing');
             toast.dismiss('ending-stream');

@@ -409,19 +409,24 @@ export class StuddyHubActionsService {
         color?: string;
     }) {
         try {
+            // Validate type
+            const validTypes = ['class', 'study', 'assignment', 'exam', 'other'];
+            const type = validTypes.includes(scheduleData.type) ? scheduleData.type : 'study';
+
             const { data, error } = await this.supabase
                 .from('schedule_items')
                 .insert({
                     user_id: userId,
                     title: scheduleData.title,
                     subject: scheduleData.subject,
-                    type: scheduleData.type,
+                    type: type,
                     start_time: scheduleData.start_time,
                     end_time: scheduleData.end_time,
                     description: scheduleData.description || '',
                     location: scheduleData.location || '',
                     color: scheduleData.color || '#3B82F6',
-                    created_at: new Date().toISOString()
+                    created_at: new Date().toISOString(),
+                    calendar_event_id: null // Explicitly set to null as per schema
                 })
                 .select()
                 .single();
@@ -451,6 +456,14 @@ export class StuddyHubActionsService {
                 const item = await this.getScheduleItemByTitle(userId, itemIdOrTitle);
                 if (!item) return { success: false, error: `Schedule item "${itemIdOrTitle}" not found` };
                 itemId = item.id;
+            }
+
+            // Validate type if present in updates
+            if (updates.type) {
+                const validTypes = ['class', 'study', 'assignment', 'exam', 'other'];
+                if (!validTypes.includes(updates.type)) {
+                    delete updates.type; // Remove invalid type or fallback? Removing is safer to keep existing.
+                }
             }
 
             const { data, error } = await this.supabase
@@ -900,6 +913,7 @@ export class StuddyHubActionsService {
         average_score?: number;
         total_study_time_seconds?: number;
         weak_areas?: string[];
+        badges_earned?: string[];
     }) {
         try {
             // First, get current stats
@@ -907,47 +921,59 @@ export class StuddyHubActionsService {
                 .from('user_stats')
                 .select('*')
                 .eq('user_id', userId)
-                .single();
+                .maybeSingle();
 
-            const newStats = {
-                ...(currentStats || {}),
-                ...updates,
-                updated_at: new Date().toISOString()
+            // Prepare base stats with defaults if creating new
+            const baseStats = currentStats || {
+                user_id: userId,
+                total_xp: 0,
+                level: 1,
+                current_streak: 0,
+                longest_streak: 0,
+                total_quizzes_attempted: 0,
+                total_quizzes_completed: 0,
+                average_score: 0,
+                total_study_time_seconds: 0,
+                badges_earned: [],
+                weak_areas: [],
+                created_at: new Date().toISOString()
             };
 
+            const newStats = { ...baseStats };
+            
+            // Handle increments for cumulative counters
+            if (updates.total_xp !== undefined) newStats.total_xp = (baseStats.total_xp || 0) + updates.total_xp;
+            if (updates.total_quizzes_attempted !== undefined) newStats.total_quizzes_attempted = (baseStats.total_quizzes_attempted || 0) + updates.total_quizzes_attempted;
+            if (updates.total_quizzes_completed !== undefined) newStats.total_quizzes_completed = (baseStats.total_quizzes_completed || 0) + updates.total_quizzes_completed;
+            if (updates.total_study_time_seconds !== undefined) newStats.total_study_time_seconds = (baseStats.total_study_time_seconds || 0) + updates.total_study_time_seconds;
+            
+            // For other fields, overwrite or merge
+            if (updates.current_streak !== undefined) newStats.current_streak = updates.current_streak;
+            if (updates.longest_streak !== undefined) newStats.longest_streak = updates.longest_streak;
+            if (updates.average_score !== undefined) newStats.average_score = updates.average_score;
+            if (updates.weak_areas !== undefined) newStats.weak_areas = updates.weak_areas;
+            if (updates.badges_earned !== undefined) {
+                 newStats.badges_earned = [...new Set([...(baseStats.badges_earned || []), ...updates.badges_earned])];
+            }
+
+            newStats.updated_at = new Date().toISOString();
+
             // Calculate new level based on XP (simplified: 1000 XP per level)
-            if (newStats.total_xp !== undefined) {
-                newStats.level = Math.floor(newStats.total_xp / 1000) + 1;
+            newStats.level = Math.floor(newStats.total_xp / 1000) + 1;
+
+            // Upsert
+            const { data, error } = await this.supabase
+                .from('user_stats')
+                .upsert(newStats)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('[ActionService] Error upserting user stats:', error);
+                throw error;
             }
 
-            // Update or insert
-            let result;
-            if (currentStats) {
-                const { data, error } = await this.supabase
-                    .from('user_stats')
-                    .update(newStats)
-                    .eq('user_id', userId)
-                    .select()
-                    .single();
-
-                if (error) throw error;
-                result = data;
-            } else {
-                const { data, error } = await this.supabase
-                    .from('user_stats')
-                    .insert({
-                        user_id: userId,
-                        ...newStats,
-                        created_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
-
-                if (error) throw error;
-                result = data;
-            }
-
-            return { success: true, stats: result };
+            return { success: true, stats: data };
         } catch (error: any) {
             console.error('[ActionService] Exception updating user stats:', error);
             return { success: false, error: 'Failed to update user stats' };
@@ -1089,12 +1115,16 @@ export class StuddyHubActionsService {
                 return { success: false, error: error.message };
             }
 
-            // Add XP reward to user stats
+            // Add XP reward to user stats and update badges list
+            const updates: any = {
+                badges_earned: [data.badges?.name || badgeName]
+            };
+            
             if (data.badges?.xp_reward) {
-                await this.updateUserStats(userId, {
-                    total_xp: data.badges.xp_reward
-                });
+                updates.total_xp = data.badges.xp_reward;
             }
+            
+            await this.updateUserStats(userId, updates);
 
             return {
                 success: true,

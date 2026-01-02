@@ -8,6 +8,7 @@ import { Note } from '../types/Note';
 import { v4 as uuidv4 } from 'uuid';
 import { estimateChatRequestTokens, TOKEN_LIMITS, formatTokenCount, truncateToTokenLimit } from '../utils/tokenCounter';
 import { useStreamingChat } from './useStreamingChat';
+import { offlineStorage, STORES } from '../utils/offlineStorage';
 
 export const useMessageHandlers = () => {
   const {
@@ -308,7 +309,7 @@ export const useMessageHandlers = () => {
       }
 
       // Choose between streaming and regular response
-      if (enableStreaming) {
+      if (enableStreaming && navigator.onLine) {
         // === STREAMING MODE ===
         await startStreaming({
           userId: currentUser.id,
@@ -449,7 +450,7 @@ export const useMessageHandlers = () => {
           },
         });
 
-      } else {
+      } else if (navigator.onLine) {
         // === REGULAR MODE (Non-streaming) ===
         // Send the message to AI service
         const { data, error } = await supabase.functions.invoke('gemini-chat', {
@@ -528,7 +529,12 @@ export const useMessageHandlers = () => {
         );
 
         // Add real messages
-        return [...withoutOptimistic, realUserMessage, realAiMessage];
+        const newMessages = [...withoutOptimistic, realUserMessage, realAiMessage];
+        
+        // Save to offline storage
+        offlineStorage.saveAll(STORES.CHAT_MESSAGES, [realUserMessage, realAiMessage]);
+        
+        return newMessages;
       });
 
       // Update the session with the new title if provided
@@ -558,8 +564,40 @@ export const useMessageHandlers = () => {
           toast.error(`Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
         }
       }
-    } // End of else block for regular mode
+      } else {
+        // === OFFLINE MODE ===
+        const offlineAiMessage: Message = {
+          id: `offline-ai-${uuidv4()}`,
+          content: "I'm currently offline. I'll be able to help you once you're back online!",
+          role: 'assistant',
+          timestamp: new Date().toISOString(),
+          isError: false,
+          attachedDocumentIds: [],
+          attachedNoteIds: [],
+          session_id: currentSessionId,
+          has_been_displayed: true,
+        };
 
+        // Save user message to offline storage for sync later
+        await offlineStorage.save(STORES.CHAT_MESSAGES, optimisticUserMessage);
+        await offlineStorage.addPendingSync('create', STORES.CHAT_MESSAGES, {
+          content: messageContent,
+          role: 'user',
+          session_id: currentSessionId,
+          attached_document_ids: finalAttachedDocumentIds,
+          attached_note_ids: finalAttachedNoteIds,
+          timestamp: optimisticUserMessage.timestamp
+        });
+
+        setChatMessages(prev => {
+          const withoutOptimistic = prev.filter(msg =>
+            msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
+          );
+          return [...withoutOptimistic, optimisticUserMessage, offlineAiMessage];
+        });
+
+        toast.info('Message saved offline. AI will respond when you are back online.');
+      }
     } catch (error: any) {
       ////console.error('Error in handleSubmitMessage:', error);
 

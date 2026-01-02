@@ -7,6 +7,7 @@ import { DocumentFolder, FolderTreeNode } from '../types/Folder';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 import { clearCache } from '@/utils/socialCache';
+import { offlineStorage, STORES } from '@/utils/offlineStorage';
 
 // Enhanced pagination with memory optimization
 const INITIAL_LOAD_LIMITS = {
@@ -199,6 +200,7 @@ interface SupabaseScheduleItem {
   color: string;
   user_id: string;
   created_at: string;
+  calendar_event_id?: string | null;
 }
 
 interface SupabaseQuiz {
@@ -262,13 +264,11 @@ const withRetry = async <T,>(
       // Exponential backoff for retries
       if (attempt < retries) {
         const delay = RETRY_DELAY * Math.pow(2, attempt);
-        //console.log(`🔄 Retrying ${dataType} (attempt ${attempt + 1}/${retries}) after ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
 
-  //console.error(`❌ Failed to load ${dataType} after ${retries} retries:`, lastError);
   return { data: null, error: lastError, retriesUsed: retries };
 };
 
@@ -407,12 +407,9 @@ const useLoadingQueue = () => {
 
       // Execute in parallel but with controlled concurrency
       const promises = itemsToProcess.map(async (item) => {
-        //console.log(`🚀 Starting ${item.dataType} load (priority: ${item.priority})`);
         try {
           await item.execute();
-          //console.log(`✅ Completed ${item.dataType} load`);
         } catch (error) {
-          //console.error(`❌ Failed ${item.dataType} load:`, error);
           throw error; // Re-throw so Promise.allSettled can catch it
         }
       });
@@ -473,7 +470,7 @@ export const useAppData = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard' | 'podcasts'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -613,10 +610,6 @@ export const useAppData = () => {
   // Optimized user change detection with debouncing
   useEffect(() => {
     if (currentUser?.id && currentUser.id !== lastUserId) {
-      //console.log('🔄 User changed, starting progressive data loading...');
-      //console.log('👤 New user ID:', currentUser.id);
-      //console.log('📧 User email:', currentUser.email);
-
       setLastUserId(currentUser.id);
 
       // Clear cache and data
@@ -627,7 +620,6 @@ export const useAppData = () => {
       // Start progressive loading
       startProgressiveDataLoading(currentUser);
     } else if (!currentUser && lastUserId !== null) {
-      //console.log('🚪 User logged out, clearing data...');
       setLastUserId(null);
       clearAllData();
       clearCache();
@@ -752,11 +744,17 @@ export const useAppData = () => {
 
       if (error) {
         // Check if it's a network error or QUIC protocol error
-        if (error.message?.includes('network') || 
+        if (!navigator.onLine || 
+            error.message?.includes('network') || 
             error.message?.includes('QUIC') || 
-            error.message?.includes('ERR_QUIC_PROTOCOL_ERROR')) {
-          //console.warn('Network/QUIC error loading documents, will retry later');
-          // Don't throw, just return - it will be retried by queue
+            error.message?.includes('ERR_QUIC_PROTOCOL_ERROR') ||
+            error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
+          if (offlineDocs && offlineDocs.length > 0) {
+            setDocuments(offlineDocs);
+            setDataLoaded(prev => new Set([...prev, 'documents']));
+          }
           return;
         }
         throw error;
@@ -792,6 +790,9 @@ export const useAppData = () => {
 
         // Add new IDs to loaded set
         formattedDocuments.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.DOCUMENTS, formattedDocuments);
 
         if (isInitial) {
           setDocuments(formattedDocuments);
@@ -858,8 +859,13 @@ export const useAppData = () => {
       recordResponseTime(responseTime);
 
       if (error) {
-        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          //console.warn('Network error loading recordings, will retry later');
+        if (!navigator.onLine || error.message?.includes('network') || error.message?.includes('QUIC') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineRecordings = await offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS);
+          if (offlineRecordings && offlineRecordings.length > 0) {
+            setRecordings(offlineRecordings);
+            setDataLoaded(prev => new Set([...prev, 'recordings']));
+          }
           return;
         }
         throw error;
@@ -887,6 +893,9 @@ export const useAppData = () => {
 
         // Add new IDs to loaded set
         formattedRecordings.forEach(recording => loadedIdsRef.current.recordings.add(recording.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.RECORDINGS, formattedRecordings);
 
         if (isInitial) {
           setRecordings(formattedRecordings);
@@ -942,11 +951,16 @@ export const useAppData = () => {
 
       if (error) {
         // Handle CORS/network errors gracefully
-        if (error.message?.includes('Failed to fetch') || error.message?.includes('CORS')) {
-          //console.warn('Network/CORS error loading schedule items. Skipping for now.');
-          // Set empty data instead of throwing error
-          setScheduleItems(prev => isInitial ? [] : prev);
-          setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
+        if (!navigator.onLine || error.message?.includes('Failed to fetch') || error.message?.includes('CORS') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineSchedule = await offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE);
+          if (offlineSchedule && offlineSchedule.length > 0) {
+            setScheduleItems(offlineSchedule);
+            setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
+          } else {
+            setScheduleItems(prev => isInitial ? [] : prev);
+            setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
+          }
           return;
         }
         throw error;
@@ -969,11 +983,15 @@ export const useAppData = () => {
           location: item.location || '',
           color: item.color || '#3B82F6',
           userId: item.user_id,
-          created_at: item.created_at
+          created_at: item.created_at,
+          calendarEventIds: item.calendar_event_id ? JSON.parse(item.calendar_event_id) : undefined
         }));
 
         // Add new IDs to loaded set
         formattedItems.forEach(item => loadedIdsRef.current.scheduleItems.add(item.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.SCHEDULE, formattedItems);
 
         if (isInitial) {
           setScheduleItems(formattedItems);
@@ -1038,8 +1056,13 @@ export const useAppData = () => {
       recordResponseTime(responseTime);
 
       if (error) {
-        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          //console.warn('Network error loading quizzes, will retry later');
+        if (!navigator.onLine || error.message?.includes('network') || error.message?.includes('QUIC') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineQuizzes = await offlineStorage.getAll<Quiz>(STORES.QUIZZES);
+          if (offlineQuizzes && offlineQuizzes.length > 0) {
+            setQuizzes(offlineQuizzes);
+            setDataLoaded(prev => new Set([...prev, 'quizzes']));
+          }
           return;
         }
         throw error;
@@ -1084,6 +1107,9 @@ export const useAppData = () => {
 
         // Add new IDs to loaded set
         formattedQuizzes.forEach(quiz => loadedIdsRef.current.quizzes.add(quiz.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.QUIZZES, formattedQuizzes);
 
         if (isInitial) {
           setQuizzes(formattedQuizzes);
@@ -1160,8 +1186,14 @@ export const useAppData = () => {
       recordResponseTime(responseTime);
 
       if (error) {
-        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          //console.warn('Network error loading folders, will retry later');
+        if (!navigator.onLine || error.message?.includes('network') || error.message?.includes('QUIC') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineFolders = await offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS);
+          if (offlineFolders && offlineFolders.length > 0) {
+            setFolders(offlineFolders);
+            setFolderTree(buildFolderTree(offlineFolders));
+            setDataLoaded(prev => new Set([...prev, 'folders']));
+          }
           return;
         }
         throw error;
@@ -1188,6 +1220,9 @@ export const useAppData = () => {
         // Add new IDs to loaded set
         formattedFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
 
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.FOLDERS, formattedFolders);
+
         const tree = buildFolderTree(formattedFolders);
 
         setFolders(formattedFolders);
@@ -1213,21 +1248,18 @@ export const useAppData = () => {
     //console.log('🔄 loadUserProfile called for user:', user?.id);
 
     if (dataLoaded.has('profile')) {
-      //console.log('📋 Profile already loaded, skipping');
       return;
     }
 
     const cacheKey = `profile_${user.id}`;
     const cached = getCachedData(cacheKey);
     if (cached) {
-      //console.log('💾 Using cached profile data');
       setUserProfile(cached);
       setDataLoaded(prev => new Set([...prev, 'profile']));
       return;
     }
 
     setDataLoading('profile', true);
-    //console.log('⏳ Loading profile from database...');
 
     try {
       const startTime = Date.now();
@@ -1251,6 +1283,16 @@ export const useAppData = () => {
       recordResponseTime(responseTime);
 
       if (profileError && profileError.code !== 'PGRST116') {
+        if (!navigator.onLine || profileError.message?.includes('network') || profileError.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineProfiles = await offlineStorage.getAll<UserProfile>(STORES.PROFILE);
+          const myProfile = offlineProfiles.find(p => p.id === user.id);
+          if (myProfile) {
+            setUserProfile(myProfile);
+            setDataLoaded(prev => new Set([...prev, 'profile']));
+            return;
+          }
+        }
         //console.error('Error loading user profile:', profileError);
       }
 
@@ -1268,9 +1310,8 @@ export const useAppData = () => {
             examples: true,
             difficulty: 'intermediate'
           },
-          created_at: new Date(profileData.created_at || Date.now()),
-          updated_at: new Date(profileData.updated_at || Date.now())
-        };
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()        };
       } else {
         // Create default profile
         finalProfile = {
@@ -1284,8 +1325,8 @@ export const useAppData = () => {
             examples: true,
             difficulty: 'intermediate' as const
           },
-          created_at: new Date(),
-          updated_at: new Date()
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         };
 
         // Create in background without blocking
@@ -1304,6 +1345,10 @@ export const useAppData = () => {
 
       setUserProfile(finalProfile);
       setCachedData(cacheKey, finalProfile);
+      
+      // Save to IndexedDB for offline access
+      offlineStorage.save(STORES.PROFILE, finalProfile);
+
       setDataLoaded(prev => new Set([...prev, 'profile']));
 
     } catch (error) {
@@ -1320,8 +1365,8 @@ export const useAppData = () => {
           examples: true,
           difficulty: 'intermediate'
         },
-        created_at: new Date(),
-        updated_at: new Date()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
       setUserProfile(fallbackProfile);
       setDataLoaded(prev => new Set([...prev, 'profile']));
@@ -1385,8 +1430,14 @@ export const useAppData = () => {
       recordResponseTime(responseTime);
 
       if (error) {
-        if (error.message?.includes('network') || error.message?.includes('QUIC')) {
-          //console.warn('Network error loading notes, will retry later');
+        if (!navigator.onLine || error.message?.includes('network') || error.message?.includes('QUIC') || error.message?.includes('timeout')) {
+          // Try to load from IndexedDB
+          const offlineNotes = await offlineStorage.getAll<Note>(STORES.NOTES);
+          if (offlineNotes && offlineNotes.length > 0) {
+            setNotes(offlineNotes);
+            setDataLoaded(prev => new Set([...prev, 'notes']));
+            //toast.info('Loaded notes from offline storage');
+          }
           return;
         }
         throw error;
@@ -1413,6 +1464,9 @@ export const useAppData = () => {
 
         // Add new IDs to loaded set
         formattedNotes.forEach(note => loadedIdsRef.current.notes.add(note.id));
+
+        // Save to IndexedDB for offline access
+        offlineStorage.save(STORES.NOTES, formattedNotes);
 
         let newActiveNote = activeNote;
         if (isInitial && formattedNotes.length > 0 && !activeNote) {
@@ -1476,12 +1530,9 @@ export const useAppData = () => {
     setLoadingPhase({ phase: 'initial', progress: 10 });
 
     try {
-      //console.log('👤 Starting profile load...');
-
       // Phase 1: Critical data (profile MUST load first)
       const profileResult = await loadUserProfile(user); // Use the existing function
 
-      //console.log('✅ Profile loaded, moving to core data...');
       setLoadingPhase({ phase: 'core', progress: 30 });
 
       // Phase 2: Core content (notes are critical)
@@ -1495,12 +1546,10 @@ export const useAppData = () => {
         )
       ]);
 
-      //console.log('✅ Core data loaded');
       setLoadingPhase({ phase: 'secondary', progress: 60 });
 
       // Phase 3: Load documents (important but not blocking)
       const documentsPromise = loadDocumentsPage(user.id, true).catch(error => {
-        //console.warn('Documents load warning:', error.message);
         // Continue even if documents fail
       });
 
@@ -1509,7 +1558,6 @@ export const useAppData = () => {
         loadRecordingsPage(user.id, true),
         // Schedule items might fail due to CORS, so handle separately
         loadSchedulePage(user.id, true).catch(error => {
-          //console.warn('Schedule items load warning:', error.message);
           return null; // Don't throw, just continue
         }),
         loadQuizzesPage(user.id, true)
@@ -1517,7 +1565,6 @@ export const useAppData = () => {
 
       // Don't wait for background promises to complete
       Promise.allSettled(backgroundPromises).then(() => {
-        //console.log('✅ All background data loaded or failed gracefully');
       }).catch(() => {
         // Ignore errors in background loading
       });
@@ -1775,7 +1822,6 @@ export const useAppData = () => {
     const failedLoads = Object.entries(dataErrors).filter(([_, error]) => error);
 
     if (failedLoads.length > 0 && currentUser?.id) {
-      //console.log(`🔄 Auto-retrying ${failedLoads.length} failed loads...`);
 
       failedLoads.forEach(([dataType]) => {
         // Clear the error first

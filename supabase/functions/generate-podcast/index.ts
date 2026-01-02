@@ -36,7 +36,6 @@ serve(async (req) => {
 
       try {
         console.log("[OAuth] Service account JSON length:", gcpServiceAccountJson.length);
-        console.log("[OAuth] First 100 chars:", gcpServiceAccountJson.substring(0, 100));
         
         let cleanedJson = gcpServiceAccountJson.trim();
         if (cleanedJson.startsWith('"') && cleanedJson.endsWith('"')) {
@@ -100,7 +99,6 @@ serve(async (req) => {
 
         if (tokenResponse.ok) {
           const tokenData = await tokenResponse.json();
-          console.log("[OAuth] Successfully obtained access token");
           return tokenData.access_token;
         } else {
           console.error("[OAuth] Token fetch failed:", await tokenResponse.text());
@@ -142,10 +140,6 @@ serve(async (req) => {
       cover_image_url: providedCoverImageUrl
     } = body;
 
-    console.log(`[Podcast] Generating podcast for user ${user.id}`);
-    console.log(`[Podcast] Notes: ${noteIds.length}, Documents: ${documentIds.length}`);
-    console.log(`[Podcast] Type: ${podcastType}, Style: ${style}, Duration: ${duration}`);
-
     // 1. Fetch content from notes and documents
     let content = "";
     let sources: string[] = [];
@@ -182,7 +176,6 @@ serve(async (req) => {
 
     // If no content provided, fetch user's recent notes
     if (!content.trim()) {
-      console.log("[Podcast] No content provided, fetching recent notes...");
       const { data: recentNotes } = await supabase
         .from("notes")
         .select("title, content")
@@ -201,7 +194,6 @@ serve(async (req) => {
     }
 
     // 2. Generate podcast script using Gemini
-    console.log("[Podcast] Generating script with Gemini...");
     
     const scriptPrompt = generateScriptPrompt(content, sources, style, duration);
     
@@ -242,12 +234,8 @@ serve(async (req) => {
       throw new Error("Failed to generate podcast script");
     }
 
-    console.log("[Podcast] Script generated successfully");
-
     // 3. Parse script into segments (Host A and Host B)
     const segments = parseScript(script);
-
-    console.log(`[Podcast] Parsed ${segments.length} segments`);
 
     // 4. Generate audio for each segment using Google TTS
     const audioSegments = await Promise.all(
@@ -296,14 +284,6 @@ serve(async (req) => {
 
         const ttsData = await ttsResponse.json();
         
-        if (index === 0) {
-          console.log("[Podcast] TTS API response keys:", Object.keys(ttsData));
-          console.log("[Podcast] TTS has audioContent field:", !!ttsData.audioContent);
-          if (!ttsData.audioContent) {
-            console.error("[Podcast] Full TTS response:", JSON.stringify(ttsData));
-          }
-        }
-        
         if (!ttsData.audioContent) {
           throw new Error(`TTS response missing audioContent for segment ${index}`);
         }
@@ -319,10 +299,6 @@ serve(async (req) => {
 
     // Filter out null segments (empty after cleaning)
     const validAudioSegments = audioSegments.filter(segment => segment !== null);
-
-    console.log("[Podcast] Audio generated for all segments");
-    console.log("[Podcast] Valid segments:", validAudioSegments.length);
-    console.log("[Podcast] First segment has audioContent:", !!validAudioSegments[0]?.audioContent);
 
     // 4.5. Generate images for visual podcast types
     let visualAssets: any[] = [];
@@ -348,7 +324,6 @@ serve(async (req) => {
       if (coverRes.ok) {
         const coverData = await coverRes.json();
         coverImageUrl = coverData.imageUrl;
-        console.log('[Podcast] Generated cover image');
       } else {
         console.error('[Podcast] Cover image upload error:', await coverRes.text());
       }
@@ -356,7 +331,6 @@ serve(async (req) => {
       console.error('[Podcast] Cover image generation exception:', coverError);
     }
 
-      console.log(`[Podcast] Generating visual assets for ${podcastType} type...`);
       try {
         // Extract key concepts for image generation (3-5 images per podcast)
         const conceptPrompt = `Based on this podcast content, extract 3-5 key visual concepts that would make compelling images. Return ONLY a JSON array of objects with "concept" and "description" fields.
@@ -408,8 +382,6 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
           }];
         }
 
-        console.log(`[Podcast] Generating ${concepts.length} images...`);
-
         // For each concept, find the most relevant segment (by simple keyword match)
         function findRelevantSegmentIndex(concept: string, segments: Array<{ speaker: string; text: string }>): number {
           const lowerConcept = concept.toLowerCase();
@@ -454,7 +426,6 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
             if (imageRes.ok) {
               const imageData = await imageRes.json();
               imageUrl = imageData.imageUrl;
-              console.log(`[Podcast] Uploaded image for concept: ${concept.concept}`);
             } else {
               console.error(`[Podcast] Image upload error:`, await imageRes.text());
             }

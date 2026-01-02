@@ -41,7 +41,7 @@ export async function initializePushNotifications(): Promise<boolean> {
       .from('notification_preferences')
       .select('push_notifications')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     // Only auto-subscribe if user has enabled push notifications
     if (preferences && !preferences.push_notifications) {
@@ -84,7 +84,6 @@ export async function requestNotificationPermission(): Promise<boolean> {
         return false;
       }
     } else {
-      console.log('❌ [Init] Notification permission denied');
       return false;
     }
   } catch (error) {

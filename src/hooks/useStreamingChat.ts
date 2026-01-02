@@ -86,7 +86,6 @@ export const useStreamingChat = (): StreamingChatHook => {
       content: '',
       isDone: false,
     };
-    console.log('🚀 [Streaming] Starting stream...');
     try {
       // Get the session for authentication
       const { data: { session }, error: authError } = await supabase.auth.getSession();
@@ -113,7 +112,6 @@ export const useStreamingChat = (): StreamingChatHook => {
       });
 
       // Use fetch with streaming instead of EventSource (EventSource doesn't support POST)
-      console.log('📡 [Streaming] Connecting to edge function...', { enableStreaming: true });
       
       const response = await fetch(url.toString(), {
         method: 'POST',
@@ -134,7 +132,6 @@ export const useStreamingChat = (): StreamingChatHook => {
         throw new Error('Response body is null');
       }
       
-      console.log('✅ [Streaming] Connected, reading stream...');
       
       // Check if this is actually a streaming response
       const contentType = response.headers.get('content-type');
@@ -190,7 +187,6 @@ export const useStreamingChat = (): StreamingChatHook => {
           const { done, value } = await reader.read();
           
           if (done) {
-            console.log('📭 [Streaming] Stream ended', { eventCount, hasContent: !!accumulatedDataRef.current.content });
             break;
           }
 
@@ -199,7 +195,6 @@ export const useStreamingChat = (): StreamingChatHook => {
           // Decode the chunk and add to buffer
           const chunk = decoder.decode(value, { stream: true });
           buffer += chunk;
-          console.log('📦 [Streaming] Received chunk:', chunk.substring(0, 100));
 
           // Process complete SSE events (separated by double newlines)
           const events = buffer.split('\n\n');
@@ -246,7 +241,6 @@ export const useStreamingChat = (): StreamingChatHook => {
               switch (eventType) {
                 case 'thinking_step':
                   // New thinking step received
-                  console.log('🧠 [Streaming] Thinking step:', data.type, data.phase);
                   const thinkingStep = data as ThinkingStep;
                   accumulatedDataRef.current.thinkingSteps.push(thinkingStep);
                   params.onThinkingStep(thinkingStep);
@@ -254,15 +248,12 @@ export const useStreamingChat = (): StreamingChatHook => {
 
                 case 'content':
                   // Content chunk received
-                  console.log('💬 [Streaming] Content chunk:', data.chunk?.substring(0, 50));
                   accumulatedDataRef.current.content += data.chunk;
                   params.onContentChunk(data.chunk);
                   break;
 
                 case 'done':
                   // Stream complete
-                  console.log('✅ [Streaming] Stream completed successfully');
-                  console.log('📦 [Streaming] Done data:', data);
                   accumulatedDataRef.current.isDone = true;
                   // Pass the raw backend data which includes userMessageId, aiMessageId, etc.
                   params.onComplete(data);
@@ -288,15 +279,9 @@ export const useStreamingChat = (): StreamingChatHook => {
       // If we reach here without a 'done' event, handle gracefully
       if (!accumulatedDataRef.current.isDone) {
         console.warn('⚠️ [Streaming] Stream ended without done event');
-        console.log('📊 [Streaming] Accumulated data:', {
-          thinkingSteps: accumulatedDataRef.current.thinkingSteps.length,
-          contentLength: accumulatedDataRef.current.content.length,
-          hasContent: !!accumulatedDataRef.current.content,
-        });
 
         // If we have content, treat as success (graceful degradation)
         if (accumulatedDataRef.current.content || accumulatedDataRef.current.thinkingSteps.length > 0) {
-          console.log('✅ [Streaming] Completing with partial data');
           const messageId = uuidv4();
           const finalMessage: Message = {
             id: messageId,

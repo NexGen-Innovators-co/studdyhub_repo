@@ -762,7 +762,7 @@ export class AgenticCore {
     // Get quiz history related to topics
     const { data: quizzes } = await this.supabase
       .from('quiz_attempts')
-      .select('*, quizzes(subject)')
+      .select('*, quizzes(title)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(20);

@@ -43,6 +43,7 @@ export interface ScheduleItem {
   type: 'class' | 'study' | 'assignment' | 'exam' | 'other';
   userId: string;
   created_at: string;
+  calendarEventIds?: Record<string, string>;
 }
 // In types/Class.ts
 export interface Message {

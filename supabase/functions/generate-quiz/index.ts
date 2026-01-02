@@ -37,8 +37,6 @@ serve(async (req)=>{
     }
 
     const { name, transcript, file_url } = await req.json();
-    console.log('Generating quiz for:', name);
-    console.log('Transcript length:', transcript?.length || 0);
     if (!transcript || transcript.trim().length < 100) {
       throw new Error('Transcript too short or missing. Need at least 100 characters for quiz generation.');
     }
@@ -58,7 +56,6 @@ Transcript:
 "${transcript.substring(0, 3000)}"
 
 Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
-    console.log('Calling Gemini API...');
     // Construct the payload for Gemini API
     const payload = {
       contents: [
@@ -130,12 +127,10 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
       throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
     const result = await response.json();
-    console.log('Gemini response received');
     if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts || result.candidates[0].content.parts.length === 0) {
       throw new Error('Invalid response structure from Gemini API');
     }
     const generatedContent = result.candidates[0].content.parts[0].text;
-    console.log('Generated content:', generatedContent.substring(0, 200) + '...');
     let quizData;
     try {
       // Direct parse the JSON response
@@ -150,7 +145,6 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
           throw new Error(`Invalid question structure at index ${index}: ${JSON.stringify(q)}`);
         }
       });
-      console.log('Quiz validation passed');
     } catch (parseError) {
       console.error('Failed to parse quiz JSON or validate structure:', parseError);
       console.error('Raw content that failed parsing:', generatedContent);
@@ -173,8 +167,6 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
       };
       console.warn('Falling back to default quiz due to parsing error.');
     }
-    console.log('Quiz generated successfully:', quizData.title);
-    console.log('Number of questions:', quizData.questions.length);
     return new Response(JSON.stringify(quizData), {
       headers: {
         ...corsHeaders,

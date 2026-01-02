@@ -158,15 +158,11 @@ export const useQuizManagement = ({
 
 
 
-      //console.log('📋 Has questions array?', Array.isArray(data?.questions));
-      //console.log('📋 Questions count:', data?.questions?.length);
-
       if (!data) {
         throw new Error('No data received from AI quiz generation');
       }
 
       if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
-        //console.error('❌ Invalid questions data:', data);
         throw new Error('AI generated quiz has no valid questions');
       }
 
@@ -179,8 +175,6 @@ export const useQuizManagement = ({
         created_at: new Date().toISOString(),
         source_type: 'ai'
       };
-
-      //console.log('💾 Saving quiz to database...', quiz);
 
       const { error: insertError } = await supabase
         .from('quizzes')
@@ -195,13 +189,8 @@ export const useQuizManagement = ({
         });
 
       if (insertError) {
-        //console.error('❌ Database insert error:', insertError);
-        //console.error('❌ Insert error details:', insertError.details);
-        //console.error('❌ Insert error hint:', insertError.hint);
         throw insertError;
       }
-
-      //console.log('✅ Quiz saved successfully');
 
       const aiRecording: ClassRecording = {
         id: 'ai-generated',
@@ -223,7 +212,6 @@ export const useQuizManagement = ({
       setShowResults(false);
       setQuizStartTime(Date.now());
 
-      //console.log('🎉 AI Smart Quiz fully generated and ready!');
       toast.success('AI Smart Quiz generated!', { id: toastId });
 
     } catch (error) {

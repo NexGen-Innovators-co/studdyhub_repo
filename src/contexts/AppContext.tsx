@@ -26,6 +26,8 @@ import { DataLoadingState } from '../hooks/useAppData';
 import { useSocialData } from '../hooks/useSocialData';
 import { clearCache } from '../utils/socialCache'
 import { PlanType, SubscriptionLimits, Subscription, useSubscription, } from '@/hooks/useSubscription';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { offlineStorage, STORES } from '@/utils/offlineStorage';
 
 // Context interface
 interface AppContextType extends AppState {
@@ -306,6 +308,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadSpecificNotes,
     refreshNotes
   } = appData;
+
+  const refreshData = useCallback(() => {
+    if (user?.id) {
+      appData.retryLoading('notes');
+      appData.retryLoading('documents');
+      appData.retryLoading('quizzes');
+    }
+  }, [user?.id, appData]);
+
+  const { syncPendingChanges } = useOfflineSync(refreshData);
+
   const addDocument = useCallback((document: AppDocument) => {
     setDocuments(prev => [document, ...prev]);
   }, [setDocuments]);
@@ -350,6 +363,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     subscriptionLimits,
     checkSubscriptionAccess,
     refreshSubscription,
+    refreshData,
   });
   const socialData = useSocialData(userProfile, 'newest', 'all');
   const navigateToNote = useCallback((noteId: string | null) => {
@@ -375,7 +389,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user) {
       // User logged out, clear cache
       clearCache();
-      //console.log('🔴 User logged out - social cache cleared');
     }
   }, [user]);
   const handleThemeChange = useCallback((theme: 'light' | 'dark') => {
@@ -383,7 +396,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Computed values
-  const currentActiveTab = useMemo(() => {
+  const currentActiveTab = useMemo((): 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard' | 'podcasts' => {
     const path = location.pathname.split('/')[1];
     switch (path) {
       case 'notes': return 'notes';
@@ -481,7 +494,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         'Failed to load chat sessions'
       );
 
-      if (error) throw error;
+      if (error) {
+        if (!navigator.onLine) {
+          const offlineSessions = await offlineStorage.getAll<ChatSession>(STORES.CHAT_SESSIONS);
+          const userSessions = offlineSessions
+            .filter(s => s.user_id === user.id)
+            .sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
+          
+          dispatch({ type: 'SET_CHAT_SESSIONS', payload: userSessions });
+          return;
+        }
+        throw error;
+      }
 
       const formattedSessions: ChatSession[] = (data || []).map((session: SupabaseChatSession) => ({
         id: session.id,
@@ -493,6 +517,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         user_id: session.user_id,
         message_count: session.message_count || 0,
       }));
+
+      // Save to offline storage
+      await offlineStorage.saveAll(STORES.CHAT_SESSIONS, formattedSessions);
 
       dispatch({ type: 'SET_CHAT_SESSIONS', payload: formattedSessions });
       dispatch({
@@ -536,7 +563,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         'Failed to create chat session'
       );
 
-      if (error) throw error;
+      if (error) {
+        if (!navigator.onLine) {
+          const offlineId = `offline-${Date.now()}`;
+          const newSession: ChatSession = {
+            id: offlineId,
+            title: 'New Chat (Offline)',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_message_at: new Date().toISOString(),
+            document_ids: state.selectedDocumentIds,
+            message_count: 0,
+            user_id: user.id,
+          };
+
+          await offlineStorage.save(STORES.CHAT_SESSIONS, newSession);
+          await offlineStorage.addPendingSync('create', STORES.CHAT_SESSIONS, {
+            user_id: user.id,
+            title: 'New Chat',
+            document_ids: state.selectedDocumentIds,
+            message_count: 0,
+          });
+
+          dispatch({ type: 'ADD_CHAT_SESSION', payload: newSession });
+          dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: offlineId });
+          return offlineId;
+        }
+        throw error;
+      }
       if (!data) throw new Error('No data returned from session creation');
 
       const newSession: ChatSession = {
@@ -667,9 +721,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
 
       const loadTime = Date.now() - startTime;
-      //console.log(`✅ Loaded ${data?.length || 0} messages in ${loadTime}ms`);
 
-      if (error) throw error;
+      if (error) {
+        if (!navigator.onLine) {
+          const offlineMsgs = await offlineStorage.getAll<Message>(STORES.CHAT_MESSAGES);
+          const sessionMsgs = offlineMsgs
+            .filter(m => m.session_id === sessionId)
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          
+          setChatMessages(sessionMsgs);
+          return;
+        }
+        throw error;
+      }
 
       const fetchedMessages: Message[] = (data || []).reverse().map((msg: SupabaseChatMessage) => ({
         id: msg.id,
@@ -684,6 +748,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         files_metadata: msg.files_metadata,
         isLoading: false
       }));
+
+      // Save to offline storage
+      if (fetchedMessages.length > 0) {
+        await offlineStorage.saveAll(STORES.CHAT_MESSAGES, fetchedMessages);
+      }
 
       // OPTIMIZATION 2: Lazy load documents/notes only if needed
       const hasAttachments = fetchedMessages.some(m =>
@@ -855,9 +924,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // This would call the message submission handler
       // For now, we'll just show a placeholder implementation
-      //////console.log('Regenerating response for:', lastUserMessageContent);
     } catch (error) {
-      ////console.error('Error regenerating response:', error);
       toast.error('Failed to regenerate response');
 
       setChatMessages(prevAllMessages =>
@@ -900,9 +967,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // This would call the message submission handler
       // For now, we'll just show a placeholder implementation
-      //////console.log('Retrying failed message:', originalUserMessageContent);
     } catch (error) {
-      ////console.error('Error retrying message:', error);
       toast.error('Failed to retry message');
 
       setChatMessages(prevAllMessages =>
@@ -972,7 +1037,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setActiveNote(noteFromUrl);
           //console.log('✅ Note loaded from URL:', noteIdFromUrl);
         } else if (!noteFromUrl) {
-          //console.log('❌ Note not found in URL:', noteIdFromUrl);
           // Note not found, navigate to notes list
           navigate('/notes', { replace: true });
         }
@@ -993,7 +1057,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Handle URL session restoration first
     if (sessionIdFromUrl && sessionIdFromUrl !== state.activeChatSessionId && user) {
-      ////console.log('🔄 Session restored from URL:', sessionIdFromUrl);
       dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionIdFromUrl });
       loadSessionMessages(sessionIdFromUrl);
       return;

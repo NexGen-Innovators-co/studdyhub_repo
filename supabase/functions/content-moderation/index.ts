@@ -213,12 +213,11 @@ Be encouraging but maintain quality standards. For borderline cases at medium st
       if (recentRejections && recentRejections.length >= 5) {
         // Flag user for admin review
         await supabase.from('content_moderation_queue').insert({
-          user_id: userId,
-          content: content,
-          content_type: contentType,
-          reason: 'Multiple rejected posts (5+ in 24 hours)',
+          content_id: userId,
+          content_type: 'user',
+          reason: `Multiple rejected posts (5+ in 24 hours). Last content type: ${contentType}`,
           status: 'pending',
-          priority: 'high'
+          priority: 10
         });
       }
     }

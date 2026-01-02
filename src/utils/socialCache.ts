@@ -54,8 +54,6 @@ export const clearCache = () => {
       }
     }
     keysToRemove.forEach(key => sessionStorage.removeItem(key));
-
-    //console.log('✅ Social cache cleared');
   } catch (error) {
     //console.error('Error clearing cache:', error);
   }
