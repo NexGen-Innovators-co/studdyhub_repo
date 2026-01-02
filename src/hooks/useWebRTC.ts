@@ -56,7 +56,6 @@ export const useWebRTC = ({
   // Handle pending listeners when host stream becomes available
   useEffect(() => {
     if (isHost && localStream && pendingListenersRef.current.size > 0) {
-      console.log(`Host stream ready. Processing ${pendingListenersRef.current.size} pending listeners...`);
       pendingListenersRef.current.forEach(listenerId => {
         createOfferForListener(listenerId);
       });
@@ -70,14 +69,13 @@ export const useWebRTC = ({
 
     const interval = setInterval(() => {
       if (signalingChannelRef.current && currentUserIdRef.current) {
-        console.log('Re-announcing presence as listener...');
         signalingChannelRef.current.send({
           type: 'broadcast',
           event: 'listener-joined',
           payload: { userId: currentUserIdRef.current }
         });
       }
-    }, 5000);
+    }, 10000); // Increased to 10s to avoid interrupting handshake
 
     return () => clearInterval(interval);
   }, [isHost, isConnected]);
@@ -115,13 +113,11 @@ export const useWebRTC = ({
     channel
       .on('broadcast', { event: 'offer' }, async ({ payload }) => {
         if (payload.to === currentUserIdRef.current) {
-          console.log('Received offer from', payload.from);
           await handleOffer(payload);
         }
       })
       .on('broadcast', { event: 'answer' }, async ({ payload }) => {
         if (payload.to === currentUserIdRef.current) {
-          console.log('Received answer from', payload.from);
           await handleAnswer(payload);
         }
       })
@@ -133,21 +129,16 @@ export const useWebRTC = ({
       .on('broadcast', { event: 'listener-joined' }, async ({ payload }) => {
         if (isHost && payload.userId !== currentUserIdRef.current) {
           if (localStreamRef.current) {
-            console.log('Listener joined, creating offer for', payload.userId);
             await createOfferForListener(payload.userId);
           } else {
-            console.log(`Listener ${payload.userId} joined, but host stream not ready. Buffering.`);
             pendingListenersRef.current.add(payload.userId);
           }
         }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('Signaling channel subscribed');
-
           // Announce presence
           if (!isHost) {
-            console.log('Announcing presence as listener');
             channel.send({
               type: 'broadcast',
               event: 'listener-joined',
@@ -168,8 +159,6 @@ export const useWebRTC = ({
         }
       });
 
-      console.log('Microphone access granted, tracks:', stream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
-      
       setLocalStream(stream);
       localStreamRef.current = stream;
       setIsConnected(true);
@@ -201,8 +190,6 @@ export const useWebRTC = ({
 
       mediaRecorder.start(1000); // Collect data every second
       mediaRecorderRef.current = mediaRecorder;
-      
-      console.log('Started recording audio');
     } catch (err) {
       console.error('Error starting recording:', err);
     }
@@ -230,24 +217,28 @@ export const useWebRTC = ({
 
     // Monitor connection state
     pc.onconnectionstatechange = () => {
-      console.log(`Connection state for ${userId}:`, pc.connectionState);
       onConnectionStateChange?.(pc.connectionState);
 
-      switch (pc.connectionState) {
-        case 'connected':
-          setIsConnected(true);
-          setConnectionQuality('excellent');
-          break;
-        case 'disconnected':
-          setConnectionQuality('poor');
-          break;
-        case 'failed':
-          setConnectionQuality('disconnected');
-          setIsConnected(false);
-          break;
-        case 'connecting':
-          setConnectionQuality('poor');
-          break;
+      // Only update global isConnected state for listeners
+      // For hosts, isConnected means "broadcasting" and is managed by start/stopBroadcasting
+      if (!isHost) {
+        switch (pc.connectionState) {
+          case 'connected':
+            setIsConnected(true);
+            setConnectionQuality('excellent');
+            break;
+          case 'disconnected':
+            setConnectionQuality('poor');
+            setIsConnected(false);
+            break;
+          case 'failed':
+            setConnectionQuality('disconnected');
+            setIsConnected(false);
+            break;
+          case 'connecting':
+            setConnectionQuality('poor');
+            break;
+        }
       }
     };
 
@@ -258,7 +249,7 @@ export const useWebRTC = ({
           type: 'broadcast',
           event: 'ice-candidate',
           payload: {
-            candidate: event.candidate,
+            candidate: event.candidate.toJSON(),
             from: currentUserIdRef.current,
             to: userId
           }
@@ -268,16 +259,12 @@ export const useWebRTC = ({
 
     // Handle remote stream (for listeners)
     pc.ontrack = (event) => {
-      console.log(`Received remote track: ${event.track.kind} for user ${userId}`);
-      
       // Ensure the track is enabled
       event.track.enabled = true;
       
       if (event.streams && event.streams[0]) {
-        console.log(`Stream found for track: ${event.streams[0].id}`);
         onRemoteStream?.(event.streams[0]);
       } else {
-        console.log('No stream found for track, creating one');
         const newStream = new MediaStream([event.track]);
         onRemoteStream?.(newStream);
       }
@@ -285,24 +272,26 @@ export const useWebRTC = ({
 
     // Monitor ICE connection state
     pc.oniceconnectionstatechange = () => {
-      console.log(`ICE state for ${userId}:`, pc.iceConnectionState);
-      
-      switch (pc.iceConnectionState) {
-        case 'checking':
-          setConnectionQuality('poor');
-          break;
-        case 'connected':
-        case 'completed':
-          setConnectionQuality('excellent');
-          break;
-        case 'disconnected':
-          setConnectionQuality('poor');
-          break;
-        case 'failed':
-          setConnectionQuality('disconnected');
-          // Attempt to reconnect
-          pc.restartIce();
-          break;
+      if (!isHost) {
+        switch (pc.iceConnectionState) {
+          case 'checking':
+            setConnectionQuality('poor');
+            break;
+          case 'connected':
+          case 'completed':
+            setConnectionQuality('excellent');
+            break;
+          case 'disconnected':
+            setConnectionQuality('poor');
+            setIsConnected(false);
+            break;
+          case 'failed':
+            setConnectionQuality('disconnected');
+            setIsConnected(false);
+            // Attempt to reconnect
+            pc.restartIce();
+            break;
+        }
       }
     };
 
@@ -312,12 +301,17 @@ export const useWebRTC = ({
   const createOfferForListener = async (listenerId: string) => {
     try {
       const stream = localStreamRef.current;
-      if (!stream) return;
+      if (!stream) {
+        return;
+      }
 
       // Close existing connection if any to avoid leaks and conflicts
       const existingPeer = peerConnectionsRef.current.get(listenerId);
       if (existingPeer) {
-        console.log(`Closing existing connection for ${listenerId}`);
+        const state = existingPeer.connection.connectionState;
+        if (state === 'connected' || state === 'connecting') {
+          return;
+        }
         existingPeer.connection.close();
       }
 
@@ -325,7 +319,7 @@ export const useWebRTC = ({
       
       // Add local tracks to peer connection
       stream.getTracks().forEach(track => {
-        console.log(`Adding track to PC for listener ${listenerId}: ${track.kind}, enabled: ${track.enabled}`);
+        track.enabled = true; // Ensure track is enabled before adding
         pc.addTrack(track, stream);
       });
 
@@ -335,7 +329,10 @@ export const useWebRTC = ({
       });
 
       // Create and send offer
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: false,
+        offerToReceiveVideo: false
+      });
       await pc.setLocalDescription(offer);
 
       if (signalingChannelRef.current) {
@@ -359,7 +356,10 @@ export const useWebRTC = ({
       // Close existing connection if any
       const existingPeer = peerConnectionsRef.current.get(payload.from);
       if (existingPeer) {
-        console.log(`Closing existing connection for ${payload.from}`);
+        const state = existingPeer.connection.connectionState;
+        if (state === 'connected' || state === 'connecting') {
+          return;
+        }
         existingPeer.connection.close();
       }
 
@@ -422,7 +422,6 @@ export const useWebRTC = ({
   const applyPendingIceCandidates = async (userId: string, pc: RTCPeerConnection) => {
     const candidates = pendingIceCandidatesRef.current.get(userId);
     if (candidates && pc.remoteDescription) {
-      console.log(`Applying ${candidates.length} buffered ICE candidates for ${userId}`);
       for (const candidate of candidates) {
         try {
           await pc.addIceCandidate(candidate);

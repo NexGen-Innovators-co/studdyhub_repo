@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { extractHashtags, generateShareText } from '../utils/postUtils';
 import { Privacy } from '../types/social';
 import { v4 as uuidv4 } from 'uuid';
+import { offlineStorage, STORES } from '../../../utils/offlineStorage';
 
 
 export const useSocialActions = (
@@ -59,6 +60,40 @@ export const useSocialActions = (
     }
 
     try {
+      if (!navigator.onLine) {
+        const offlineId = `offline-${uuidv4()}`;
+        const optimisticGroup: SocialGroupWithDetails = {
+          id: offlineId,
+          name: groupData.name,
+          description: groupData.description || '',
+          avatar_url: groupData.avatar_url || null,
+          cover_image_url: groupData.cover_image_url || null,
+          category: groupData.category || 'general',
+          privacy: groupData.privacy as any,
+          members_count: 1,
+          posts_count: 0,
+          created_by: currentUser.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          is_member: true,
+          member_role: 'admin',
+          member_status: 'active',
+          creator: currentUser as any
+        };
+
+        setGroups(prev => [optimisticGroup, ...prev]);
+        await offlineStorage.save(STORES.SOCIAL_GROUPS, optimisticGroup);
+        await offlineStorage.addPendingSync('create', STORES.SOCIAL_GROUPS, {
+          name: groupData.name,
+          description: groupData.description,
+          privacy: groupData.privacy,
+          created_by: currentUser.id
+        });
+
+        toast.success('Group created offline');
+        return optimisticGroup;
+      }
+
       // Use edge function to create group with validation
       const { data: response, error: functionError } = await supabase.functions.invoke('create-study-group', {
         body: {
@@ -276,6 +311,52 @@ export const useSocialActions = (
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      if (!navigator.onLine) {
+        const offlineId = `offline-${uuidv4()}`;
+        const optimisticPost: SocialPostWithDetails = {
+          id: offlineId,
+          content,
+          privacy: privacy as any,
+          author_id: user.id,
+          group_id: groupId || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          likes_count: 0,
+          comments_count: 0,
+          shares_count: 0,
+          bookmarks_count: 0,
+          is_liked: false,
+          is_bookmarked: false,
+          author: currentUser as any,
+          media: [],
+          hashtags: extractHashtags(content).map(h => ({ 
+            id: `offline-tag-${uuidv4()}`,
+            name: h,
+            posts_count: 0,
+            created_at: new Date().toISOString()
+          })),
+          tags: []
+        };
+
+        // Save to local state
+        setPosts(prev => [optimisticPost, ...prev]);
+        
+        // Save to IndexedDB
+        await offlineStorage.save(STORES.SOCIAL_POSTS, optimisticPost);
+        
+        // Add to pending sync
+        await offlineStorage.addPendingSync('create', STORES.SOCIAL_POSTS, {
+          content,
+          privacy,
+          group_id: groupId,
+          metadata,
+          author_id: user.id
+        });
+
+        toast.success('Post saved offline. It will be published when you are back online.');
+        return true;
+      }
+
       // Upload media files first and create media objects
       const media: Array<{
         type: string;
@@ -410,6 +491,20 @@ export const useSocialActions = (
 
       const userId = session.user.id;
 
+      if (!navigator.onLine) {
+        // Optimistic update
+        setPosts(prev => prev.map(p => 
+          p.id === postId 
+            ? { ...p, is_liked: !isLiked, likes_count: p.likes_count + (isLiked ? -1 : 1) } 
+            : p
+        ));
+
+        await offlineStorage.addPendingSync(isLiked ? 'delete' : 'create', 'social_likes', { post_id: postId, user_id: userId });
+
+        toast.info(isLiked ? 'Unliked offline' : 'Liked offline');
+        return;
+      }
+
       if (isLiked) {
         const { error: deleteError } = await supabase
           .from('social_likes')
@@ -478,6 +573,25 @@ export const useSocialActions = (
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      if (!navigator.onLine) {
+        // Optimistic update
+        setPosts(prev => prev.map(post => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              bookmarks_count: isBookmarked ? post.bookmarks_count - 1 : post.bookmarks_count + 1,
+              is_bookmarked: !isBookmarked
+            };
+          }
+          return post;
+        }));
+
+        await offlineStorage.addPendingSync(isBookmarked ? 'delete' : 'create', 'social_bookmarks', { post_id: postId, user_id: user.id });
+
+        toast.info(isBookmarked ? 'Removed from bookmarks offline' : 'Bookmarked offline');
+        return;
+      }
 
       if (isBookmarked) {
         await supabase.from('social_bookmarks').delete().eq('post_id', postId).eq('user_id', user.id);
@@ -621,6 +735,16 @@ export const useSocialActions = (
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
+
+      if (!navigator.onLine) {
+        // Optimistic update
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        
+        await offlineStorage.addPendingSync('delete', STORES.SOCIAL_POSTS, { id: postId });
+
+        toast.success('Post deleted offline');
+        return true;
+      }
 
       // Get the post to verify ownership
       const { data: post, error: fetchError } = await supabase

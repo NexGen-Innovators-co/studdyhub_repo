@@ -12,6 +12,7 @@ import {
   loadFromCache,
   clearCache
 } from '../utils/socialCache';
+import { offlineStorage, STORES } from '../utils/offlineStorage';
 
 export type SuggestedUser = SocialUserWithDetails & {
   recommendation_score?: number;
@@ -201,7 +202,18 @@ export const useSocialData = (
       const { data: postsData, error: postsError } = await query
         .range(currentOffset, currentOffset + fetchLimit - 1);
 
-      if (postsError) throw postsError;
+      if (postsError) {
+        if (!navigator.onLine) {
+          const offlinePosts = await offlineStorage.getAll<SocialPostWithDetails>(STORES.SOCIAL_POSTS);
+          if (offlinePosts.length > 0) {
+            setPosts(reset ? offlinePosts : uniqueById([...posts, ...offlinePosts]));
+            setHasMorePosts(false);
+            return;
+          }
+        }
+        throw postsError;
+      }
+      
       if (!postsData || postsData.length === 0) {
         setHasMorePosts(false);
         return;
@@ -263,6 +275,11 @@ export const useSocialData = (
       const relations = await fetchPostRelations(postIds, currentUserIdRef.current);
 
       const transformedPosts = transformPosts(selectedPosts, relations);
+
+      // Save to offline storage
+      if (transformedPosts.length > 0) {
+        await offlineStorage.saveAll(STORES.SOCIAL_POSTS, transformedPosts);
+      }
 
       if (reset) {
         setPosts(uniqueById(transformedPosts));
@@ -632,7 +649,17 @@ export const useSocialData = (
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
-      if (error) throw error;
+      if (error) {
+        if (!navigator.onLine) {
+          const offlineGroups = await offlineStorage.getAll<SocialGroupWithDetails>(STORES.SOCIAL_GROUPS);
+          if (offlineGroups.length > 0) {
+            setGroups(reset ? offlineGroups : [...groups, ...offlineGroups]);
+            setHasMoreGroups(false);
+            return;
+          }
+        }
+        throw error;
+      }
 
       // Fetch memberships for these groups for the current user separately
       // to avoid filtering out groups the user hasn't joined yet
@@ -668,6 +695,11 @@ export const useSocialData = (
 
       setHasMoreGroups(groupsWithDetails.length === limit);
       setGroupsOffset(offset + groupsWithDetails.length);
+
+      // Save to offline storage
+      if (groupsWithDetails.length > 0) {
+        await offlineStorage.saveAll(STORES.SOCIAL_GROUPS, groupsWithDetails);
+      }
 
       saveToCache(CACHE_KEYS.GROUPS, reset ? groupsWithDetails : [...groups, ...groupsWithDetails]);
     } catch (err) {

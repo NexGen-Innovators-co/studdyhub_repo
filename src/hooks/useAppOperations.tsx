@@ -8,6 +8,8 @@ import { supabase } from '../integrations/supabase/client';
 import { CreateFolderInput, DocumentFolder, UpdateFolderInput } from '@/types/Folder';
 import { PlanType, SubscriptionLimits } from './useSubscription';
 import { useNavigate } from 'react-router-dom';
+import { offlineStorage, STORES } from '@/utils/offlineStorage';
+import { calendarIntegrationService } from '@/services/calendarIntegrationService';
 
 interface UseAppOperationsProps {
   notes: Note[];
@@ -148,18 +150,41 @@ export const useAppOperations = ({
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
 
-        const newNote = {
+        const newNoteData: Note = {
+          id: crypto.randomUUID(), // Generate ID locally for offline support
           title: 'Untitled Note',
           content: '',
           category: 'general',
           tags: [] as string[],
           user_id: user.id,
-          ai_summary: ''
+          document_id: null,
+          ai_summary: '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         };
+
+        // If offline, save locally
+        if (!navigator.onLine) {
+          await offlineStorage.save(STORES.NOTES, newNoteData);
+          await offlineStorage.addPendingSync('create', 'notes', newNoteData);
+          
+          setNotes(prev => [newNoteData, ...prev]);
+          setActiveNote(newNoteData);
+          setActiveTab('notes');
+          toast.info('Note created locally (offline)');
+          return;
+        }
 
         const { data, error } = await supabase
           .from('notes')
-          .insert(newNote)
+          .insert({
+            title: newNoteData.title,
+            content: newNoteData.content,
+            category: newNoteData.category,
+            tags: newNoteData.tags,
+            user_id: newNoteData.user_id,
+            ai_summary: newNoteData.ai_summary
+          })
           .select()
           .single();
 
@@ -195,6 +220,26 @@ export const useAppOperations = ({
     try {
       if (!updatedNote.id) {
         throw new Error('Note ID is required for update');
+      }
+
+      // If offline, save to IndexedDB and add to pending sync
+      if (!navigator.onLine) {
+        const noteWithUpdatedTime = {
+          ...updatedNote,
+          updated_at: new Date().toISOString()
+        };
+        
+        await offlineStorage.save(STORES.NOTES, noteWithUpdatedTime);
+        await offlineStorage.addPendingSync('update', 'notes', noteWithUpdatedTime);
+        
+        setNotes(prev =>
+          prev.map(note =>
+            note.id === updatedNote.id ? noteWithUpdatedTime : note
+          )
+        );
+        setActiveNote(noteWithUpdatedTime);
+        toast.info('Note saved locally (offline)');
+        return;
       }
 
       await withRetry(async () => {
@@ -238,6 +283,19 @@ export const useAppOperations = ({
 
   const deleteNote = useCallback(async (noteId: string) => {
     try {
+      // If offline, handle locally
+      if (!navigator.onLine) {
+        await offlineStorage.delete(STORES.NOTES, noteId);
+        await offlineStorage.addPendingSync('delete', 'notes', { id: noteId });
+        
+        setNotes(prev => prev.filter(note => note.id !== noteId));
+        if (activeNote?.id === noteId) {
+          setActiveNote(null);
+        }
+        toast.info('Note deleted locally (offline)');
+        return;
+      }
+
       await withRetry(async () => {
         const { data: { user } = {} } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
@@ -295,10 +353,24 @@ export const useAppOperations = ({
     audioUrl: string | null
   ) => {
     try {
-      await withRetry(async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Not authenticated');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
 
+      if (!navigator.onLine) {
+        await offlineStorage.delete(STORES.RECORDINGS, recordingId);
+        await offlineStorage.addPendingSync('delete', 'recordings', { id: recordingId });
+        
+        if (documentId) {
+          await offlineStorage.delete(STORES.DOCUMENTS, documentId);
+          await offlineStorage.addPendingSync('delete', 'documents', { id: documentId });
+        }
+        
+        setRecordings(prev => prev.filter(rec => rec.id !== recordingId));
+        toast.success('Recording deleted offline. Will sync when online.');
+        return;
+      }
+
+      await withRetry(async () => {
         // 1. Delete recording
         const { error: recordingError } = await supabase
           .from('class_recordings')
@@ -374,6 +446,25 @@ export const useAppOperations = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      if (!navigator.onLine) {
+        const offlineFolder: DocumentFolder = {
+          id: crypto.randomUUID(),
+          user_id: user.id,
+          name: input.name,
+          parent_folder_id: input.parent_folder_id || null,
+          color: input.color || '#3B82F6',
+          description: input.description || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          isExpanded: false
+        };
+        await offlineStorage.save(STORES.FOLDERS, offlineFolder);
+        await offlineStorage.addPendingSync('create', 'folders', offlineFolder);
+        setFolders(prev => [offlineFolder, ...prev]);
+        toast.success('Folder created offline. Will sync when online.');
+        return offlineFolder;
+      }
+
       const { data, error } = await supabase
         .from('document_folders')
         .insert({
@@ -402,6 +493,19 @@ export const useAppOperations = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      if (!navigator.onLine) {
+        const existingFolder = folders.find(f => f.id === folderId);
+        if (existingFolder) {
+          const updatedFolder = { ...existingFolder, ...input, updated_at: new Date().toISOString() };
+          await offlineStorage.save(STORES.FOLDERS, updatedFolder);
+          await offlineStorage.addPendingSync('update', 'folders', updatedFolder);
+          setFolders(prev => prev.map(f => f.id === folderId ? updatedFolder : f));
+          toast.success('Folder updated offline. Will sync when online.');
+          return true;
+        }
+        return false;
+      }
+
       const { error } = await supabase
         .from('document_folders')
         .update(input)
@@ -423,6 +527,14 @@ export const useAppOperations = ({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
+
+      if (!navigator.onLine) {
+        await offlineStorage.delete(STORES.FOLDERS, folderId);
+        await offlineStorage.addPendingSync('delete', 'folders', { id: folderId });
+        setFolders(prev => prev.filter(f => f.id !== folderId));
+        toast.success('Folder deleted offline. Will sync when online.');
+        return true;
+      }
 
       const { error } = await supabase
         .from('document_folders')
@@ -594,6 +706,20 @@ export const useAppOperations = ({
       const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      if (!navigator.onLine) {
+        const offlineItem: ScheduleItem = {
+          ...item,
+          id: item.id || crypto.randomUUID(),
+          userId: user.id,
+          created_at: new Date().toISOString()
+        };
+        await offlineStorage.save(STORES.SCHEDULE, offlineItem);
+        await offlineStorage.addPendingSync('create', 'schedule', offlineItem);
+        setScheduleItems(prev => [...prev, offlineItem]);
+        toast.success('Schedule item added offline. Will sync when online.');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('schedule_items')
         .insert({
@@ -627,6 +753,16 @@ export const useAppOperations = ({
         created_at: data.created_at
       };
 
+      // Sync to external calendars
+      try {
+        const syncResult = await calendarIntegrationService.syncToCalendar(newScheduleItem, user.id);
+        if (syncResult.success) {
+          newScheduleItem.calendarEventIds = syncResult.eventIds;
+        }
+      } catch (syncError) {
+        console.error('Failed to sync to external calendar:', syncError);
+      }
+
       setScheduleItems(prev => [...prev, newScheduleItem]);
       toast.success('Schedule item added successfully');
     } catch (error) {
@@ -639,6 +775,14 @@ export const useAppOperations = ({
     try {
       const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
+
+      if (!navigator.onLine) {
+        await offlineStorage.save(STORES.SCHEDULE, item);
+        await offlineStorage.addPendingSync('update', 'schedule', item);
+        setScheduleItems(prev => prev.map(i => i.id === item.id ? item : i));
+        toast.success('Schedule item updated offline. Will sync when online.');
+        return;
+      }
 
       const { error } = await supabase
         .from('schedule_items')
@@ -657,6 +801,32 @@ export const useAppOperations = ({
 
       if (error) throw error;
 
+      // Update external calendars
+      try {
+        if (item.calendarEventIds) {
+          const integrations = await calendarIntegrationService.getIntegrations(user.id);
+          for (const integration of integrations) {
+            const eventId = item.calendarEventIds[integration.provider];
+            if (eventId) {
+              await calendarIntegrationService.updateCalendarEvent(
+                item, 
+                eventId, 
+                integration.provider, 
+                integration
+              );
+            }
+          }
+        } else {
+          // Try to sync if not already synced
+          const syncResult = await calendarIntegrationService.syncToCalendar(item, user.id);
+          if (syncResult.success) {
+            item.calendarEventIds = syncResult.eventIds;
+          }
+        }
+      } catch (syncError) {
+        console.error('Failed to update external calendar:', syncError);
+      }
+
       setScheduleItems(prev => prev.map(i => i.id === item.id ? item : i));
       toast.success('Schedule item updated successfully');
     } catch (error) {
@@ -670,6 +840,14 @@ export const useAppOperations = ({
       const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      if (!navigator.onLine) {
+        await offlineStorage.delete(STORES.SCHEDULE, id);
+        await offlineStorage.addPendingSync('delete', 'schedule', { id });
+        setScheduleItems(prev => prev.filter(i => i.id !== id));
+        toast.success('Schedule item deleted offline. Will sync when online.');
+        return;
+      }
+
       const { error } = await supabase
         .from('schedule_items')
         .delete()
@@ -677,6 +855,26 @@ export const useAppOperations = ({
         .eq('user_id', user.id);
 
       if (error) throw error;
+
+      // Delete from external calendars
+      try {
+        const itemToDelete = scheduleItems.find(i => i.id === id);
+        if (itemToDelete && itemToDelete.calendarEventIds) {
+          const integrations = await calendarIntegrationService.getIntegrations(user.id);
+          for (const integration of integrations) {
+            const eventId = itemToDelete.calendarEventIds[integration.provider];
+            if (eventId) {
+              await calendarIntegrationService.deleteCalendarEvent(
+                eventId, 
+                integration.provider, 
+                integration
+              );
+            }
+          }
+        }
+      } catch (syncError) {
+        console.error('Failed to delete from external calendar:', syncError);
+      }
 
       setScheduleItems(prev => prev.filter(i => i.id !== id));
       toast.success('Schedule item deleted successfully');
@@ -804,6 +1002,21 @@ export const useAppOperations = ({
       const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
+      if (!navigator.onLine) {
+        const newDoc = {
+          ...document,
+          user_id: user.id,
+          id: document.id || generateId(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        await offlineStorage.save(STORES.DOCUMENTS, newDoc);
+        await offlineStorage.addPendingSync('create', 'documents', newDoc);
+        setDocuments(prev => [newDoc, ...prev]);
+        toast.success('Document saved offline. Will sync when online.');
+        return;
+      }
+
       const { error } = await supabase
         .from('documents')
         .insert({
@@ -844,6 +1057,14 @@ export const useAppOperations = ({
       const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
+      if (!navigator.onLine) {
+        await offlineStorage.delete(STORES.DOCUMENTS, documentId);
+        await offlineStorage.addPendingSync('delete', 'documents', { id: documentId });
+        setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+        toast.success('Document deleted offline. Will sync when online.');
+        return;
+      }
+
       const { error } = await supabase
         .from('documents')
         .delete()
@@ -865,6 +1086,15 @@ export const useAppOperations = ({
       const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
       if (!user) throw new Error('Not authenticated');
 
+      if (!navigator.onLine) {
+        const updatedProfile = { ...profile, updated_at: new Date().toISOString() };
+        await offlineStorage.save(STORES.PROFILE, updatedProfile);
+        await offlineStorage.addPendingSync('update', STORES.PROFILE, updatedProfile);
+        setUserProfile(updatedProfile);
+        toast.success('Profile updated offline. Will sync when online.');
+        return;
+      }
+
       const { error } = await supabase
         .from('profiles')
         .upsert({
@@ -879,7 +1109,7 @@ export const useAppOperations = ({
 
       if (error) throw error;
 
-      setUserProfile({ ...profile, updated_at: new Date() });
+      setUserProfile({ ...profile, updated_at: new Date().toISOString() });
       toast.success('Profile updated successfully');
     } catch (error) {
       //console.error('Error updating profile:', error);

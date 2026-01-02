@@ -87,11 +87,9 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
     podcastId,
     isHost: false,
     onRemoteStream: (stream) => {
-      console.log('Received remote stream');
       setRemoteStream(stream);
     },
     onConnectionStateChange: (state) => {
-      console.log('Viewer connection state:', state);
       if (state === 'connected') {
         toast.success('Connected to live stream');
       } else if (state === 'disconnected' || state === 'failed') {
@@ -102,7 +100,6 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
 
   useEffect(() => {
     if (remoteStream && audioRef.current) {
-      console.log('Attaching remote stream to audio element', remoteStream.id);
       
       // Only attach if not already attached to avoid interruptions
       if (audioRef.current.srcObject !== remoteStream) {
@@ -134,7 +131,7 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
         });
       }
     }
-  }, [remoteStream, podcast, isAudioMuted, volume]); // Added podcast, isAudioMuted, and volume to dependencies
+  }, [remoteStream, isAudioMuted, volume]); // Removed podcast from dependencies to avoid interruptions
 
   useEffect(() => {
     loadPodcast();

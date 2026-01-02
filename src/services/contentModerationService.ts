@@ -74,9 +74,10 @@ export async function checkUserModerationStatus(userId: string): Promise<{
     const { data: queueItem } = await supabase
       .from('content_moderation_queue')
       .select('id, status')
-      .eq('user_id', userId)
+      .eq('content_id', userId)
+      .eq('content_type', 'user')
       .eq('status', 'pending')
-      .single();
+      .maybeSingle();
 
     const recentRejections = rejections?.length || 0;
     const flagged = !!queueItem || recentRejections >= 5;

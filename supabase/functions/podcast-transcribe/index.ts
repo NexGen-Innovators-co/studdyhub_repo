@@ -27,7 +27,6 @@ serve(async (req) => {
     }
 
     // Download audio file
-    console.log('Downloading audio file:', file_url)
     const audioResponse = await fetch(file_url)
     if (!audioResponse.ok) {
       throw new Error(`Failed to download audio: ${audioResponse.statusText}`)
@@ -49,7 +48,6 @@ serve(async (req) => {
     const audioBase64 = btoa(binaryString)
 
     // Transcribe with Gemini
-    console.log('Sending to Gemini for transcription...')
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -96,8 +94,6 @@ Format the transcript clearly with timestamps if possible.`
       throw new Error('No transcript received from Gemini')
     }
 
-    console.log('Raw transcript length:', transcript.length)
-
     // Extract summary from transcript (first paragraph usually)
     const lines = transcript.split('\n').filter(line => line.trim())
     const summaryLine = lines.find(line => 
@@ -119,9 +115,6 @@ Format the transcript clearly with timestamps if possible.`
         summary = firstParagraph.substring(0, 200) + (firstParagraph.length > 200 ? '...' : '')
       }
     }
-
-    console.log('Transcription complete - Summary:', summary)
-    console.log('Transcript preview:', transcript.substring(0, 200))
 
     const result = {
       success: true,

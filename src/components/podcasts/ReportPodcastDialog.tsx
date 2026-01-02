@@ -59,11 +59,10 @@ export const ReportPodcastDialog: React.FC<ReportPodcastDialogProps> = ({
         .insert({
           content_type: 'podcast',
           content_id: podcastId,
-          reporter_id: user.id,
-          reason: selectedReason,
-          details: details.trim(),
+          reported_by: user.id,
+          reason: `${selectedReason}: ${details.trim()}`,
           status: 'pending',
-          priority: selectedReason === 'harassment' || selectedReason === 'inappropriate' ? 'high' : 'normal'
+          priority: selectedReason === 'harassment' || selectedReason === 'inappropriate' ? 10 : 1
         });
 
       if (error) throw error;

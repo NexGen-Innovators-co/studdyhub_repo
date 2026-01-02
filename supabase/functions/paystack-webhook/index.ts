@@ -47,7 +47,6 @@ serve(async (req) => {
     }
 
     const event = JSON.parse(body);
-    console.log('Paystack webhook event:', event.event);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -72,8 +71,6 @@ serve(async (req) => {
             paystack_customer_code: customer.customer_code,
             current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           }, { onConflict: 'user_id' });
-          
-          console.log(`Subscription created for user ${user.id}`);
         }
         break;
       }
@@ -86,8 +83,6 @@ serve(async (req) => {
           .from('subscriptions')
           .update({ status: 'cancelled' })
           .eq('paystack_sub_code', subscription_code);
-        
-        console.log(`Subscription cancelled: ${subscription_code}`);
         break;
       }
 
@@ -107,8 +102,6 @@ serve(async (req) => {
               paystack_sub_code: reference,
               current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             }, { onConflict: 'user_id' });
-            
-            console.log(`Charge successful for user ${user.id}`);
           }
         }
         break;
@@ -122,14 +115,12 @@ serve(async (req) => {
             .from('subscriptions')
             .update({ status: 'past_due' })
             .eq('paystack_sub_code', subscription.subscription_code);
-          
-          console.log(`Payment failed for subscription: ${subscription.subscription_code}`);
         }
         break;
       }
 
       default:
-        console.log(`Unhandled event type: ${event.event}`);
+        // Unhandled event type
     }
 
     return new Response(JSON.stringify({ received: true }), {

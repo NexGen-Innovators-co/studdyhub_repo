@@ -59,7 +59,7 @@ export interface NotificationPreferences {
 export interface CalendarIntegration {
   id: string;
   user_id: string;
-  provider: 'google' | 'outlook' | 'apple';
+  provider: 'google' | 'outlook';
   access_token: string;
   refresh_token: string;
   calendar_id?: string;

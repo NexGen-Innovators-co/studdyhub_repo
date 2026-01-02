@@ -653,8 +653,6 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
     const isSessionChange = prevSessionIdRef.current !== activeChatSessionId;
 
     if (isSessionChange && activeChatSessionId) {
-      //console.log('🔄 Chat session changed');
-
       // Batch state updates
       setInputMessage('');
       setAttachedFiles([]);
@@ -774,7 +772,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
       {/* Main Chat Container */}
       <div
         ref={dropZoneRef}
-        className={`flex h-[90vh] lg:h-screen pt-24 border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+        className={`flex h-[90vh] lg:h-screen pt-24 lg:pt-0 border-none relative bg-transparent dark:bg-transparent overflow-hidden font-sans ${isDragging ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
       >
         <DragOverlay isDragging={isDragging} />
 

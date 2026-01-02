@@ -22,8 +22,6 @@ class PushNotificationService {
       this.registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/'
       });
-
-      console.log('Service Worker registered successfully');
       
       // Wait for service worker to be ready
       await navigator.serviceWorker.ready;
@@ -62,7 +60,6 @@ class PushNotificationService {
       const permission = await this.requestPermission();
       
       if (permission !== 'granted') {
-        console.log('Notification permission denied');
         return null;
       }
 
@@ -77,7 +74,6 @@ class PushNotificationService {
       // Check if already subscribed
       const existingSubscription = await this.registration.pushManager.getSubscription();
       if (existingSubscription) {
-        console.log('Already subscribed to push notifications');
         
         // Check if this subscription exists in database
         const subscriptionData = existingSubscription.toJSON();
@@ -86,26 +82,25 @@ class PushNotificationService {
           .select('*')
           .eq('endpoint', subscriptionData.endpoint!)
           .eq('user_id', userId)
-          .single();
+          .maybeSingle();
         
         if (existingRecord) {
-          console.log('Subscription already in database');
           return existingRecord;
         }
         
         // Subscription exists in browser but not in database - save it
         const { data, error } = await supabase
           .from('notification_subscriptions')
-          .insert({
+          .upsert({
             user_id: userId,
             endpoint: subscriptionData.endpoint!,
             p256dh: subscriptionData.keys!.p256dh,
             auth: subscriptionData.keys!.auth,
             device_type: this.getDeviceType(),
             browser: this.getBrowserInfo()
-          })
+          }, { onConflict: 'endpoint' })
           .select()
-          .single();
+          .maybeSingle();
 
         if (error && error.code !== '23505') throw error; // Ignore duplicate key errors
         return data || existingRecord;
@@ -117,25 +112,20 @@ class PushNotificationService {
         applicationServerKey: this.urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource
       });
 
-      // Save subscription to database
+      // Save subscription to database using RPC to handle ownership changes safely
       const subscriptionData = this.subscription.toJSON();
       
       const { data, error } = await supabase
-        .from('notification_subscriptions')
-        .insert({
-          user_id: userId,
-          endpoint: subscriptionData.endpoint!,
-          p256dh: subscriptionData.keys!.p256dh,
-          auth: subscriptionData.keys!.auth,
-          device_type: this.getDeviceType(),
-          browser: this.getBrowserInfo()
-        })
-        .select()
-        .single();
+        .rpc('upsert_notification_subscription', {
+          p_endpoint: subscriptionData.endpoint!,
+          p_p256dh: subscriptionData.keys!.p256dh,
+          p_auth: subscriptionData.keys!.auth,
+          p_device_type: this.getDeviceType(),
+          p_browser: this.getBrowserInfo()
+        });
 
-      if (error && error.code !== '23505') throw error; // Ignore duplicate key errors
+      if (error) throw error;
       
-      console.log('Push notification subscription successful');
       return data;
     } catch (error) {
       console.error('Failed to subscribe to push notifications:', error);
@@ -159,7 +149,6 @@ class PushNotificationService {
         .eq('user_id', userId);
 
       this.subscription = null;
-      console.log('Push notification unsubscribed');
       return true;
     } catch (error) {
       console.error('Failed to unsubscribe from push notifications:', error);

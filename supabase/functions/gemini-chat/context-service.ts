@@ -58,7 +58,7 @@ export class UserContextService {
 
                 // Get recent quizzes
                 this.supabase.from('quizzes')
-                    .select('id, title, subject')
+                    .select('id, title')
                     .eq('user_id', userId)
                     .order('created_at', { ascending: false })
                     .limit(20)
@@ -81,7 +81,7 @@ export class UserContextService {
 async analyzeLearningPatterns(userId) {
         const [quizPatterns, notePatterns, schedulePatterns, chatPatterns, recordingPatterns] = await Promise.all([
             this.supabase.from('quiz_attempts')
-                .select('score, percentage, created_at, time_taken_seconds, quizzes(subject, source_type)')
+                .select('score, percentage, created_at, time_taken_seconds, quizzes(title, source_type)')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(50),
@@ -126,7 +126,7 @@ async analyzeLearningPatterns(userId) {
 
         // Analyze quiz performance by subject
         quizPatterns.data?.forEach((attempt) => {
-            const subject = attempt.quizzes?.subject || 'Unknown';
+            const subject = attempt.quizzes?.title || 'Unknown';
             const sourceType = attempt.quizzes?.source_type || 'unknown';
 
             if (attempt.percentage >= 80) {
@@ -269,7 +269,7 @@ async analyzeLearningPatterns(userId) {
             .from('quiz_attempts')
             .select(`
         percentage, created_at,
-        quizzes(subject)
+        quizzes(title)
       `)
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
@@ -279,7 +279,7 @@ async analyzeLearningPatterns(userId) {
         const topicProgress = new Map();
 
         quizData?.forEach((attempt, index) => {
-            const subject = attempt.quizzes?.subject || 'Unknown';
+            const subject = attempt.quizzes?.title || 'Unknown';
 
             if (!topicScores.has(subject)) {
                 topicScores.set(subject, []);

@@ -47,9 +47,9 @@ export function useNotifications() {
         .from('notification_preferences')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       
       if (data) {
         setPreferences(data);
@@ -69,7 +69,7 @@ export function useNotifications() {
             quiet_hours_enabled: false
           })
           .select()
-          .single();
+          .maybeSingle();
 
         if (createError) throw createError;
         setPreferences(newPrefs);

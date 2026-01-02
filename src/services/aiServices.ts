@@ -31,14 +31,6 @@ export const generateInlineContent = async (
     fullNoteContentTrimmed = content.slice(start, end);
   }
 
-  console.log('[aiServices] Generating inline content with:', {
-    selectedTextLength: selectedText.length,
-    actionType,
-    customInstruction: customInstruction || '(none)',
-    hasAttachedDoc: !!attachedDocumentContent,
-    selectionRange
-  });
-
   try {
     const { data, error } = await supabase.functions.invoke('generate-inline-content', {
       body: {
@@ -64,8 +56,6 @@ export const generateInlineContent = async (
 
     // Get the generated content
     let finalContent = data.generatedContent || '';
-    console.log('[aiServices] Received content length:', finalContent.length);
-    console.log('[aiServices] Content preview:', finalContent.slice(0, 200));
 
     // Clean up the response
     finalContent = finalContent.trim();
@@ -99,11 +89,8 @@ export const generateInlineContent = async (
       badStarts.forEach(regex => {
         finalContent = finalContent.replace(regex, '').trim();
       });
-    } else {
-      console.log('[aiServices] Diagram detected, preserving format');
     }
 
-    console.log('[aiServices] Final cleaned content length:', finalContent.length);
     return finalContent;
     
   } catch (error) {
