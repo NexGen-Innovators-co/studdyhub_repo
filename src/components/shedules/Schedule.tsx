@@ -1,12 +1,15 @@
 // components/Schedule.tsx
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Calendar, Clock, MapPin, Edit2, Trash2, Loader2, RefreshCw, Sparkles, History } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Clock, MapPin, Edit2, Trash2, Loader2, RefreshCw, Sparkles, History, ChevronLeft, ChevronRight, Repeat } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
+import { Checkbox } from '../ui/checkbox';
 import { ScheduleItem } from '../../types/Class';
 import { toast } from 'sonner';
 import { AppShell } from '../layout/AppShell';
@@ -15,6 +18,8 @@ import { HeroHeader } from '../layout/HeroHeader';
 import { QuickActionsCard } from '../layout/QuickActionsCard';
 import { StatsCard } from '../layout/StatsCard';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isToday, getDay, isAfter, isBefore, parseISO, addDays } from 'date-fns';
+import { cn } from '../../lib/utils';
 
 interface ScheduleProps {
   scheduleItems: ScheduleItem[];
@@ -41,6 +46,16 @@ const typeIcons = {
   other: '📌'
 };
 
+const DAYS_OF_WEEK = [
+  { label: 'S', value: 0 },
+  { label: 'M', value: 1 },
+  { label: 'T', value: 2 },
+  { label: 'W', value: 3 },
+  { label: 'T', value: 4 },
+  { label: 'F', value: 5 },
+  { label: 'S', value: 6 },
+];
+
 export const Schedule: React.FC<ScheduleProps> = ({
   scheduleItems,
   onAddItem,
@@ -49,19 +64,41 @@ export const Schedule: React.FC<ScheduleProps> = ({
   isLoading = false,
   onRefresh
 }) => {
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'today' | 'past'>('upcoming');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'upcoming' | 'today' | 'past'>('calendar');
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
+  
+  // Calendar State
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+
+  const [formData, setFormData] = useState<{
+    title: string;
+    subject: string;
+    type: ScheduleItem['type'];
+    date: string;
+    startTime: string;
+    endTime: string;
+    location: string;
+    description: string;
+    isRecurring: boolean;
+    recurrencePattern: 'daily' | 'weekly' | 'monthly';
+    recurrenceDays: number[];
+    recurrenceEndDate: string;
+  }>({
     title: '',
     subject: '',
-    type: 'class' as ScheduleItem['type'],
+    type: 'class',
     date: '',
     startTime: '',
     endTime: '',
     location: '',
-    description: ''
+    description: '',
+    isRecurring: false,
+    recurrencePattern: 'daily',
+    recurrenceDays: [],
+    recurrenceEndDate: ''
   });
 
   // Sync tab changes with global header
@@ -83,15 +120,20 @@ export const Schedule: React.FC<ScheduleProps> = ({
   }, []);
 
   const resetForm = () => {
+    const defaultDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
     setFormData({
       title: '',
       subject: '',
       type: 'class',
-      date: '',
+      date: defaultDate,
       startTime: '',
       endTime: '',
       location: '',
-      description: ''
+      description: '',
+      isRecurring: false,
+      recurrencePattern: 'weekly',
+      recurrenceDays: [],
+      recurrenceEndDate: ''
     });
     setShowForm(false);
     setEditingItem(null);
@@ -127,7 +169,14 @@ export const Schedule: React.FC<ScheduleProps> = ({
         description: formData.description,
         color: getColorForType(formData.type),
         userId: editingItem?.userId || '',
-        created_at: editingItem?.created_at || new Date().toISOString()
+        created_at: editingItem?.created_at || new Date().toISOString(),
+        
+        // Recurring fields
+        isRecurring: formData.isRecurring,
+        recurrencePattern: formData.isRecurring ? formData.recurrencePattern : undefined,
+        recurrenceDays: formData.isRecurring ? formData.recurrenceDays : undefined,
+        recurrenceEndDate: formData.isRecurring ? formData.recurrenceEndDate : undefined,
+        recurrenceInterval: 1
       };
 
       if (editingItem) {
@@ -159,7 +208,11 @@ export const Schedule: React.FC<ScheduleProps> = ({
       startTime,
       endTime,
       location: item.location || '',
-      description: item.description || ''
+      description: item.description || '',
+      isRecurring: item.isRecurring || false,
+      recurrencePattern: (item.recurrencePattern as any) || 'weekly',
+      recurrenceDays: item.recurrenceDays || [],
+      recurrenceEndDate: item.recurrenceEndDate || ''
     });
     setEditingItem(item);
     setShowForm(true);
@@ -204,7 +257,64 @@ export const Schedule: React.FC<ScheduleProps> = ({
     });
   };
 
-  // Memoized filtered and sorted items
+  // --- Calendar Logic ---
+  const handlePrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+  const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+  const handleToday = () => {
+    const today = new Date();
+    setCurrentMonth(today);
+    setSelectedDate(today);
+  };
+
+  // Generate calendar days
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart);
+    const endDate = endOfWeek(monthEnd);
+    
+    return eachDayOfInterval({ start: startDate, end: endDate });
+  }, [currentMonth]);
+
+  // Expanded events logic used for Calendar View
+  const getEventsForDay = (day: Date) => {
+    return scheduleItems.filter(item => {
+      // 1. Direct match (same day)
+      const itemStart = new Date(item.startTime);
+      if (isSameDay(day, itemStart) && !item.isRecurring) return true;
+
+      // 2. Recurring match
+      if (item.isRecurring) {
+        // Check end date constraint
+        if (item.recurrenceEndDate && isAfter(day, new Date(item.recurrenceEndDate))) return false;
+        
+        // Check start date constraint (can't happen before original start)
+        const dayStart = new Date(day);
+        dayStart.setHours(0,0,0,0);
+        const originStart = new Date(itemStart);
+        originStart.setHours(0,0,0,0);
+        
+        if (isBefore(dayStart, originStart)) return false;
+
+        if (item.recurrencePattern === 'daily') return true;
+        
+        if (item.recurrencePattern === 'weekly') {
+          // date-fns getDay: 0 (Sun) - 6 (Sat)
+          const currentDayOfWeek = getDay(day);
+          return item.recurrenceDays?.includes(currentDayOfWeek);
+        }
+        
+        if (item.recurrencePattern === 'monthly') {
+           return day.getDate() === itemStart.getDate();
+        }
+      }
+      return false;
+    });
+  };
+
+  // Memoized filtered and sorted items (Legacy logic optimized for non-recurring)
+  // For Lists: We only show original instances + occurrences within next 30 days could be added here, 
+  // but for now we keep simple list logic mostly for non-recurring or next occurrence.
   const { upcomingItems, todayItems, pastItems } = useMemo(() => {
     const now = new Date();
     const today = new Date();
@@ -213,30 +323,44 @@ export const Schedule: React.FC<ScheduleProps> = ({
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const upcoming: ScheduleItem[] = [];
-    const todayItems: ScheduleItem[] = [];
+    const todayList: ScheduleItem[] = [];
     const past: ScheduleItem[] = [];
 
+    // Simple expansion for list view (Next 30 days only)
+    const lookaheadDate = addDays(now, 60);
+
+    // Helper to add if unique (avoid duplicates if event occurs multiple times in lists)
+    // Actually, for list view, simpler is to just show "Next Occurrence" for recurring events?
+    // Let's iterate all items.
     scheduleItems.forEach(item => {
-      const itemDate = new Date(item.startTime);
-
-      if (itemDate >= now) {
-        upcoming.push(item);
-
-        // Check if it's today
-        if (itemDate >= today && itemDate < tomorrow) {
-          todayItems.push(item);
+      const itemStart = new Date(item.startTime);
+      
+      if (!item.isRecurring) {
+        if (itemStart >= now) {
+          upcoming.push(item);
+          if (itemStart >= today && itemStart < tomorrow) todayList.push(item);
+        } else {
+          past.push(item);
         }
       } else {
-        past.push(item);
+        // For recurring, find next occurrences
+        // Simplified: Check if it occurs today
+        if (getEventsForDay(new Date()).find(i => i.id === item.id)) {
+             todayList.push(item);
+        }
+        // Add to upcoming if main start is future OR it's recurring active
+        if (itemStart >= now || (item.isRecurring && (!item.recurrenceEndDate || new Date(item.recurrenceEndDate) >= now))) {
+             upcoming.push(item);
+        }
       }
     });
 
     upcoming.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     past.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
-    todayItems.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    todayList.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-    return { upcomingItems: upcoming, todayItems, pastItems: past };
-  }, [scheduleItems]);
+    return { upcomingItems: upcoming, todayItems: todayList, pastItems: past };
+  }, [scheduleItems, currentMonth]); // Depend on currentMonth to force re-calc if needed
 
   // Get minimum date for date input (today)
   const minDate = new Date().toISOString().split('T')[0];
@@ -274,7 +398,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
       <StatsCard
         title="Schedule Stats"
         items={[
-          { label: "Upcoming", value: upcomingItems.length, icon: <Calendar className="h-4 w-4 text-blue-500" /> },
+          { label: "Upcoming", value: upcomingItems.length, icon: <CalendarIcon className="h-4 w-4 text-blue-500" /> },
           { label: "Today", value: todayItems.length, icon: <Clock className="h-4 w-4 text-green-500" /> },
           { label: "Past", value: pastItems.length, icon: <History className="h-4 w-4 text-slate-500" /> },
         ]}
@@ -450,6 +574,85 @@ export const Schedule: React.FC<ScheduleProps> = ({
                     />
                   </div>
 
+                  {/* Recurring Settings */}
+                  <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="recurring-mode"
+                        checked={formData.isRecurring}
+                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isRecurring: checked }))}
+                      />
+                      <Label htmlFor="recurring-mode" className="font-medium flex items-center gap-2">
+                        <Repeat className="h-4 w-4" /> Repeat Event
+                      </Label>
+                    </div>
+
+                    {formData.isRecurring && (
+                      <div className="pl-6 space-y-4 animate-in slide-in-from-top-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Frequency</Label>
+                            <Select
+                              value={formData.recurrencePattern}
+                              onValueChange={(val: any) => setFormData(prev => ({ ...prev, recurrencePattern: val }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                           <div className="space-y-2">
+                            <Label>End Date (Optional)</Label>
+                             <Input 
+                                type="date"
+                                value={formData.recurrenceEndDate || ''}
+                                onChange={(e) => setFormData(prev => ({...prev, recurrenceEndDate: e.target.value}))}
+                                min={formData.date}
+                             />
+                           </div>
+                        </div>
+
+                         {formData.recurrencePattern === 'weekly' && (
+                           <div className="space-y-2">
+                             <Label>Repeats On</Label>
+                             <div className="flex flex-wrap gap-2">
+                               {DAYS_OF_WEEK.map((day) => {
+                                 const isSelected = formData.recurrenceDays.includes(day.value);
+                                 return (
+                                   <div
+                                     key={day.value}
+                                     onClick={() => {
+                                       setFormData(prev => ({
+                                         ...prev,
+                                         recurrenceDays: isSelected 
+                                            ? prev.recurrenceDays.filter(d => d !== day.value)
+                                            : [...prev.recurrenceDays, day.value].sort()
+                                       }));
+                                     }}
+                                     className={cn(
+                                       "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer transition-colors border",
+                                       isSelected 
+                                         ? "bg-blue-600 text-white border-blue-600" 
+                                         : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400"
+                                     )}
+                                   >
+                                     {day.label}
+                                   </div>
+                                 );
+                               })}
+                             </div>
+                           </div>
+                         )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex gap-2 pt-2">
                     <SubscriptionGuard
                       feature="Schedule Items"
@@ -497,12 +700,194 @@ export const Schedule: React.FC<ScheduleProps> = ({
                 </div>
               </CardContent>
             </Card>
+          ) : activeTab === 'calendar' ? (
+             <div className="space-y-6">
+               {/* Calendar Header */}
+               <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                 <div className="flex items-center gap-4">
+                   <h2 className="text-xl font-bold text-slate-800 dark:text-gray-100">
+                     {format(currentMonth, 'MMMM yyyy')}
+                   </h2>
+                   <div className="flex gap-1">
+                     <Button variant="outline" size="icon" onClick={handlePrevMonth}>
+                       <ChevronLeft className="h-4 w-4" />
+                     </Button>
+                     <Button variant="outline" size="icon" onClick={handleNextMonth}>
+                       <ChevronRight className="h-4 w-4" />
+                     </Button>
+                     <Button variant="outline" onClick={handleToday} className="ml-2">
+                       Today
+                     </Button>
+                   </div>
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                 {/* Calendar Grid */}
+                 <Card className="xl:col-span-2 border-none shadow-md overflow-hidden">
+                   <CardContent className="p-0">
+                     {/* Days Header */}
+                     <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                       {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                         <div key={day} className="py-3 text-center text-xs sm:text-sm font-semibold text-slate-500 uppercase tracking-wider">
+                           <span className="hidden sm:inline">{day}</span>
+                           <span className="sm:hidden">{day.charAt(0)}</span>
+                         </div>
+                       ))}
+                     </div>
+                     
+                     {/* Days Cells */}
+                     <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 dark:bg-slate-700 gap-[1px]">
+                       {calendarDays.map((day, idx) => {
+                         const events = getEventsForDay(day);
+                         const isSelected = selectedDate && isSameDay(day, selectedDate);
+                         const isCurrentMonth = isSameMonth(day, currentMonth);
+                         const isTodayDate = isToday(day);
+
+                         return (
+                           <div
+                             key={day.toISOString()}
+                             onClick={() => setSelectedDate(day)}
+                             className={cn(
+                               "min-h-[100px] sm:min-h-[120px] p-1 sm:p-2 bg-white dark:bg-slate-800 cursor-pointer transition-colors relative hover:bg-slate-50 dark:hover:bg-slate-800/80",
+                               !isCurrentMonth && "bg-slate-50 dark:bg-slate-900/20 text-slate-400",
+                               isSelected && "ring-2 ring-inset ring-blue-500 z-10"
+                             )}
+                           >
+                             <div className="flex justify-between items-start mb-1">
+                               <span className={cn(
+                                 "text-xs sm:text-sm font-medium h-6 w-6 flex items-center justify-center rounded-full",
+                                 isTodayDate 
+                                   ? "bg-blue-600 text-white" 
+                                   : "text-slate-700 dark:text-slate-300"
+                               )}>
+                                 {format(day, 'd')}
+                               </span>
+                               {events.length > 0 && (
+                                 <span className="text-[10px] sm:text-xs font-bold text-slate-400">
+                                   {events.length}
+                                 </span>
+                               )}
+                             </div>
+                             
+                             {/* Event Indicators */}
+                             <div className="space-y-1">
+                               {events.slice(0, 4).map((event, i) => (
+                                 <div 
+                                   key={i} 
+                                   className="text-[10px] sm:text-xs truncate px-1 py-0.5 rounded border-l-2 opacity-90 leading-tight"
+                                   style={{ 
+                                     backgroundColor: `${event.color}20`, 
+                                     color: event.color, // Use color text for contrast
+                                     borderColor: event.color 
+                                   }}
+                                 >
+                                   <span className="hidden sm:inline">{formatTime(new Date(event.startTime))} </span>
+                                   {event.title}
+                                 </div>
+                               ))}
+                               {events.length > 4 && (
+                                 <div className="text-[10px] text-slate-400 pl-1">
+                                   + {events.length - 4} more
+                                 </div>
+                               )}
+                             </div>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </CardContent>
+                 </Card>
+
+                 {/* Selected Day Panel */}
+                 <div className="space-y-4">
+                   <div className="flex items-center justify-between">
+                     <h3 className="font-semibold text-lg">
+                       {selectedDate ? format(selectedDate, 'EEEE, MMM d') : 'Select a date'}
+                     </h3>
+                     {selectedDate && (
+                      <SubscriptionGuard
+                        feature="Schedule Items"
+                        limitFeature="maxScheduleItems"
+                        currentCount={scheduleItems.length}
+                      >
+                       <Button size="sm" onClick={() => {
+                         setFormData(prev => ({ ...prev, date: format(selectedDate, 'yyyy-MM-dd') }));
+                         setShowForm(true);
+                       }}>
+                         <Plus className="h-4 w-4 mr-2" />
+                         Add Event
+                       </Button>
+                      </SubscriptionGuard>
+                     )}
+                   </div>
+
+                   <Card className="h-[600px] overflow-hidden flex flex-col">
+                     <CardContent className="p-4 flex-1 overflow-y-auto space-y-3">
+                       {selectedDate ? (
+                         (() => {
+                           const dayEvents = getEventsForDay(selectedDate);
+                           if (dayEvents.length === 0) {
+                             return (
+                               <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2">
+                                 <CalendarIcon className="h-10 w-10 opacity-20" />
+                                 <p className="text-sm">No events scheduled</p>
+                               </div>
+                             );
+                           }
+                           return dayEvents
+                             .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+                             .map((item) => (
+                             <Card 
+                               key={item.id} 
+                               className="border-l-4 hover:shadow-md transition-shadow cursor-pointer group relative"
+                               style={{ borderLeftColor: item.color }}
+                             >
+                               <div className="p-3">
+                                 <div className="flex justify-between items-start mb-1">
+                                   <h4 className="font-semibold text-sm truncate pr-6">{item.title}</h4>
+                                   <div className="opacity-0 group-hover:opacity-100 absolute top-2 right-2 flex gap-1 bg-white dark:bg-slate-800 p-1 rounded shadow-sm">
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleEdit(item); }}>
+                                        <Edit2 className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.title); }}>
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                   </div>
+                                 </div>
+                                 <div className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2 mb-1">
+                                   <Clock className="h-3 w-3" />
+                                   {format(new Date(item.startTime), 'h:mm a')} - {format(new Date(item.endTime), 'h:mm a')}
+                                 </div>
+                                 <div className="flex flex-wrap gap-1 mt-2">
+                                    <Badge variant="secondary" className="text-[10px] px-1 py-0 h-5">
+                                      {item.type}
+                                    </Badge>
+                                    {item.isRecurring && (
+                                      <Badge variant="outline" className="text-[10px] px-1 py-0 h-5 border-blue-200 text-blue-600 flex gap-1 items-center">
+                                        <Repeat className="h-3 w-3" />
+                                        {item.recurrencePattern}
+                                      </Badge>
+                                    )}
+                                 </div>
+                               </div>
+                             </Card>
+                           ));
+                         })()
+                       ) : (
+                         <div className="text-center text-slate-500 mt-10">Select a date to view events</div>
+                       )}
+                     </CardContent>
+                   </Card>
+                 </div>
+               </div>
+             </div>
           ) : (
             <>
               {/* Current Tab Items */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 flex items-center gap-2">
-                  {activeTab === 'upcoming' ? <Calendar className="h-5 w-5" /> :
+                  {activeTab === 'upcoming' ? <CalendarIcon className="h-5 w-5" /> :
                     activeTab === 'today' ? <Clock className="h-5 w-5" /> :
                       <History className="h-5 w-5" />}
                   {activeTab === 'upcoming' ? 'Upcoming Events' :
@@ -512,7 +897,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
                   <Card className="text-center py-12 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-800 dark:to-gray-900">
                     <CardContent>
                       {activeTab === 'upcoming' ? (
-                        <Calendar className="h-16 w-16 mx-auto text-slate-400 dark:text-gray-500 mb-4" />
+                        <CalendarIcon className="h-16 w-16 mx-auto text-slate-400 dark:text-gray-500 mb-4" />
                       ) : activeTab === 'today' ? (
                         <Clock className="h-16 w-16 mx-auto text-slate-400 dark:text-gray-500 mb-4" />
                       ) : (
@@ -573,7 +958,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
                                 )}
 
                                 <div className="flex items-center gap-2">
-                                  <Calendar className="h-4 w-4 text-blue-500" />
+                                  <CalendarIcon className="h-4 w-4 text-blue-500" />
                                   <span className="font-medium">{formatDate(new Date(item.startTime))}</span>
                                 </div>
 

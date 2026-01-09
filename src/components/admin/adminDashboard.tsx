@@ -42,7 +42,7 @@ const AdminDashboard = () => {
         <p className="text-gray-400 mt-1">Manage your platform with full control</p>
       </div>
 
-      <Tabs defaultValue="overview" className="w-full">7
+      <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 w-full mb-8 bg-gray-800 p-1 rounded-lg">
           {tabs.map(({ id, label, icon: Icon }) => (
             <TabsTrigger

@@ -6,6 +6,10 @@ import { supabase } from '../../integrations/supabase/client';
 import { Note, NoteCategory, UserProfile } from '../../types';
 import { Database } from '../../integrations/supabase/types';
 import { generateSpeech, playAudioContent } from '../../services/cloudTtsService';
+import mermaid from 'mermaid';
+import { Chart, registerables } from 'chart.js';
+
+Chart.register(...registerables);
 
 import { NoteContentArea } from './components/NoteContentArea';
 import { AISummarySection } from './components/AISummarySection';
@@ -792,7 +796,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     toast.success('Note downloaded as Markdown!');
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!content.trim()) {
       toast.info("There's no content to convert to PDF.");
       return;
@@ -836,6 +840,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         margin-top: 1em;
         margin-bottom: 0.5em;
         font-weight: bold;
+        page-break-after: avoid;
+        break-after: avoid;
       }
       h1 { font-size: 24pt; }
       h2 { font-size: 20pt; }
@@ -843,6 +849,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       p { 
         margin: 0.5em 0;
         color: #000;
+        orphans: 3;
+        widows: 3;
       }
       pre {
         background: #f5f5f5;
@@ -853,6 +861,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         font-family: 'Courier New', monospace;
         font-size: 10pt;
         margin: 1em 0;
+        page-break-inside: avoid;
+        break-inside: avoid;
       }
       code {
         background: #f5f5f5;
@@ -865,21 +875,41 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         border-collapse: collapse;
         width: 100%;
         margin: 1em 0;
+        page-break-inside: avoid;
+        break-inside: avoid;
       }
       th, td {
         border: 1px solid #ddd;
         padding: 8px;
         text-align: left;
       }
-
-      // (Stray code removed. All logic is now inside the NoteEditor component.)
+      tr {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 1em;
         margin: 1em 0;
         color: #666;
+        page-break-inside: avoid;
+        break-inside: avoid;
       }
-      img, svg {
+      img, svg, canvas {
         max-width: 100%;
         height: auto;
         margin: 1em 0;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      /* Ensure diagrams don't break across pages */
+      .diagram-container {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        display: block;
+        width: 100%;
+        margin: 1.5em 0;
+        position: relative;
       }
       a {
         color: #0066cc;
@@ -900,14 +930,125 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     document.body.appendChild(tempContainer);
 
+    // Process Chart.js diagrams
+    const chartDivs = tempContainer.querySelectorAll('div[data-chartjs]');
+    if (chartDivs.length > 0) {
+      chartDivs.forEach((div) => {
+        const configStr = div.getAttribute('data-config');
+        if (configStr) {
+          try {
+            const config = JSON.parse(configStr);
+            const canvas = document.createElement('canvas');
+            
+            // Set resolution to match A4 width (approx 800px) for readable text
+            canvas.width = 800;
+            canvas.height = 450; // 16:9 aspect ratio
+            canvas.style.width = '100%';
+            canvas.style.height = 'auto';
+            
+            div.innerHTML = '';
+            // Wrap in diagram-container
+            const wrapper = document.createElement('div');
+            wrapper.className = 'diagram-container';
+            wrapper.appendChild(canvas);
+            div.appendChild(wrapper);
+            
+            // Disable animation and responsiveness for static PDF rendering
+            const pdfConfig = {
+              ...config,
+              options: {
+                ...config.options,
+                responsive: false,
+                animation: false,
+              }
+            };
+            
+            new Chart(canvas as any, pdfConfig);
+          } catch (e) {
+            console.error('Chart.js rendering failed for PDF', e);
+            div.innerHTML = `<pre>Chart Error</pre>`;
+          }
+        }
+      });
+    }
+
+    // Process Mermaid diagrams
+    const mermaidDivs = tempContainer.querySelectorAll('div[data-mermaid]');
+    if (mermaidDivs.length > 0) {
+      try {
+        mermaid.initialize({ 
+          startOnLoad: false,
+          theme: 'default',
+          securityLevel: 'loose',
+          // Disable htmlLabels for better PDF compatibility (avoids foreignObject issues)
+          flowchart: { useMaxWidth: true, htmlLabels: false },
+        });
+        
+        await Promise.all(Array.from(mermaidDivs).map(async (div, index) => {
+          const code = div.getAttribute('data-code');
+          if (code) {
+            try {
+              const id = `mermaid-pdf-${Date.now()}-${index}`;
+              // Render SVG
+              const { svg } = await mermaid.render(id, code);
+              
+              // Wrap SVG in a container to control layout
+              // Added diagram-container class
+              div.innerHTML = `
+                <div class="diagram-container" style="width: 100%; display: flex; justify-content: center; margin: 10px 0;">
+                  ${svg}
+                </div>
+              `;
+              
+              // Fix SVG scaling for PDF
+              const svgElement = div.querySelector('svg');
+              if (svgElement) {
+                // Get natural dimensions from viewBox
+                const viewBox = svgElement.getAttribute('viewBox');
+                if (viewBox) {
+                  const parts = viewBox.split(/\s+|,/).filter(Boolean).map(parseFloat);
+                  if (parts.length === 4) {
+                    const [, , w, h] = parts;
+                    const maxWidth = 210;
+                        // Calculate aspect ratio
+                        const aspectRatio = h / w;
+                        const newHeight = maxWidth * aspectRatio;
+                        
+                        // Set explicit pixel dimensions for html2canvas
+                        svgElement.setAttribute('width', `${maxWidth}`);
+                        svgElement.setAttribute('height', `${newHeight}`);
+                        
+                        // Set CSS to enforce dimensions
+                        svgElement.style.width = `${maxWidth}px`;
+                        svgElement.style.height = `${newHeight}px`;
+                    
+                    // Ensure it scales properly without cropping
+                    svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                    svgElement.style.maxWidth = '100%';
+                    svgElement.style.display = 'block';
+                }
+              }
+            }
+            } catch (err) {
+              console.error('Mermaid rendering failed for PDF', err);
+              // Fallback to code block if rendering fails
+              div.innerHTML = `<pre class="mermaid-error">${code}</pre>`;
+            }
+          }
+        }));
+      } catch (e) {
+        console.error('Error initializing mermaid for PDF', e);
+      }
+    }
+
     window.html2pdf()
       .from(tempContainer)
       .set({
-        margin: [15, 15, 15, 15],
+        margin: [10, 10, 10, 10],
         filename: `${(title || 'untitled-note').replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: {
-          scale: 2,
+          scale: 1,
           logging: false,
           dpi: 192,
           letterRendering: true,
@@ -921,10 +1062,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           compress: true
         },
         pagebreak: {
-          mode: ['avoid-all', 'css', 'legacy'],
+          mode: ['css', 'legacy'],
           before: '.page-break-before',
           after: '.page-break-after',
-          avoid: ['pre', 'code', 'table', 'img', 'svg']
+          avoid: ['.diagram-container', 'pre', 'code', 'table', 'tr', 'img', 'svg', 'canvas', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote']
         }
       })
       .save()

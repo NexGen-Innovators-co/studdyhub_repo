@@ -115,3 +115,74 @@ export const generateInlineContent = async (
     throw new Error(errorMessage);
   }
 };
+
+export interface AIGeneratedCourse {
+  title: string;
+  code: string;
+  description: string;
+  modules: {
+    title: string;
+    description: string;
+    category: 'Lecture' | 'Notes' | 'Assignment';
+  }[];
+}
+
+export const generateCourseStructure = async (
+  topic: string,
+  level: string,
+  moduleCount: number,
+  userProfile: UserProfile
+): Promise<AIGeneratedCourse> => {
+  if (!userProfile) throw new Error('User profile required');
+
+  const prompt = `
+    Generate a structured course curriculum for: "${topic}".
+    Target Level: ${level}.
+    Number of Modules: Approximately ${moduleCount}.
+    
+    You MUST return strict JSON format ONLY. Do not include any markdown formatting or text outside the JSON.
+    Structure:
+    {
+      "title": "Course Title",
+      "code": "Suggested Course Code (e.g., CS101)",
+      "description": "Brief course description",
+      "modules": [
+        {
+          "title": "Module 1: Title",
+          "description": "What this module covers",
+          "category": "Lecture" 
+        }
+      ]
+    }
+  `;
+
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-inline-content', {
+      body: {
+        selectedText: topic,
+        fullNoteContent: '',
+        userProfile: userProfile,
+        actionType: 'generate_course_structure',
+        customInstruction: prompt,
+        attachedDocumentContent: '',
+      },
+    });
+
+    if (error) throw error;
+    
+    let content = data.generatedContent;
+    // Clean markdown if present
+    content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    try {
+      return JSON.parse(content) as AIGeneratedCourse;
+    } catch (e) {
+      console.error("Failed to parse AI response as JSON", content);
+      throw new Error("AI generated invalid structure. Please try again.");
+    }
+
+  } catch (error: any) {
+    console.error('AI Course Generation Error:', error);
+    throw new Error(error.message || 'Failed to generate course');
+  }
+};

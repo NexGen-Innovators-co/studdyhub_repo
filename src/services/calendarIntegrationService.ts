@@ -124,6 +124,16 @@ class CalendarIntegrationService {
       }
     }
 
+    // Persist the calendar event IDs to the database immediately
+    if (Object.keys(eventIds).length > 0 && scheduleItem.id) {
+      await supabase
+        .from('schedule_items')
+        .update({
+          calendar_event_id: JSON.stringify(eventIds)
+        })
+        .eq('id', scheduleItem.id);
+    }
+
     return {
       success: Object.keys(eventIds).length > 0,
       eventIds

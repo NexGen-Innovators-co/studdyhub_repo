@@ -18,7 +18,11 @@ import { Quizzes } from '../quizzes/Quizzes';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChatSessionsListMobile } from '../aiChat/Components/ChatSessionsListMobile';
 import { NotificationsPage } from '../notifications/NotificationsPage';
-import { PodcastsPage } from '../podcasts/PodcastsPage';
+import { CourseLibrary } from '../courseLibrary/CourseLibrary';
+// import { PodcastsPage } from '../podcasts/PodcastsPage';
+
+// Lazy load PodcastsPage
+const PodcastsPage = React.lazy(() => import('../podcasts/PodcastsPage').then(module => ({ default: module.PodcastsPage })));
 
 
 interface ChatSession {
@@ -35,7 +39,7 @@ import { RefObject } from 'react';
 
 interface TabContentProps {
   socialGroupId?: string; // Added
-  activeTab: 'dashboard' | 'notes' | 'recordings' | 'quizzes' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social' | 'podcasts';
+  activeTab: 'dashboard' | 'notes' | 'recordings' | 'quizzes' | 'schedule' | 'chat' | 'documents' | 'settings' | 'social' | 'podcasts' | 'library';
   activeSocialTab?: string;
   socialPostId?: string;
   podcastId?: string;
@@ -533,6 +537,15 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
         </div>
       );
 
+    case 'library':
+      return (
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
+          <ErrorBoundary>
+            <CourseLibrary />
+          </ErrorBoundary>
+        </div>
+      );
+
     case 'settings':
       return (
         <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
@@ -569,24 +582,30 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
           return (
             <div className="flex-1 overflow-hidden">
               <ErrorBoundary>
-                <PodcastsPage 
-                  searchQuery={props.searchQuery}
-                  podcastId={podcastId}
-                  onGoLive={() => {
-                    // Trigger the internal go live handler
-                    if ((window as any).__podcastGoLive) {
-                      (window as any).__podcastGoLive();
-                    }
-                  }}
-                  onCreatePodcast={() => {
-                    // Trigger the internal create podcast handler
-                    if ((window as any).__podcastCreate) {
-                      (window as any).__podcastCreate();
-                    }
-                  }}
-                  socialFeedRef={socialFeedRef}
-                  onNavigateToTab={props.onNavigateToTab}
-                />
+                <React.Suspense fallback={
+                  <div className="flex items-center justify-center h-full">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                  </div>
+                }>
+                  <PodcastsPage 
+                    searchQuery={props.searchQuery}
+                    podcastId={podcastId}
+                    onGoLive={() => {
+                      // Trigger the internal go live handler
+                      if ((window as any).__podcastGoLive) {
+                        (window as any).__podcastGoLive();
+                      }
+                    }}
+                    onCreatePodcast={() => {
+                      // Trigger the internal create podcast handler
+                      if ((window as any).__podcastCreate) {
+                        (window as any).__podcastCreate();
+                      }
+                    }}
+                    socialFeedRef={socialFeedRef}
+                    onNavigateToTab={props.onNavigateToTab}
+                  />
+                </React.Suspense>
               </ErrorBoundary>
             </div>
           );

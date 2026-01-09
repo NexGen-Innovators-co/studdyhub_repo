@@ -22,6 +22,7 @@ import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { PodcastButton } from '../dashboard/PodcastButton';
 import { Checkbox } from '../ui/checkbox';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface DocumentUploadProps {
   documents: Document[];
@@ -110,6 +111,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   onSearchChange,
 }) => {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { subscriptionLimits } = useAppContext();
   const { canUploadDocuments } = useFeatureAccess();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -142,6 +145,50 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+
+  const handleClosePreview = useCallback(() => {
+    setPreviewOpen(false);
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('preview')) {
+      searchParams.delete('preview');
+      navigate({ search: searchParams.toString() }, { replace: true });
+    }
+  }, [location.search, navigate]);
+
+  // Handle preview from URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const previewId = searchParams.get('preview');
+    
+    const fetchAndOpenPreview = async (id: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (data) {
+          setSelectedDocument(data as Document);
+          setPreviewOpen(true);
+        }
+      } catch (error) {
+        console.error('Error fetching preview document:', error);
+        toast.error('Failed to load document preview');
+      }
+    };
+
+    if (previewId) {
+      const doc = documents.find(d => d.id === previewId);
+      if (doc) {
+        setSelectedDocument(doc);
+        setPreviewOpen(true);
+      } else {
+        // Document not in current list (e.g. from library), fetch it
+        fetchAndOpenPreview(previewId);
+      }
+    }
+  }, [location.search, documents]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { loadMoreDocuments, dataPagination, folders, folderTree, appOperations, loadDataIfNeeded, dataLoading } = useAppContext();
@@ -1876,7 +1923,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPreviewOpen(false)}
+                    onClick={handleClosePreview}
                     className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                   >
                     <X className="h-4 w-4" />
@@ -1964,7 +2011,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setPreviewOpen(false);
+                          handleClosePreview();
                           triggerAnalysis(selectedDocument);
                         }}
                         disabled={isDocumentProcessing(selectedDocument.id)}
@@ -2016,7 +2063,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                     <Button
                       variant="outline"
                       onClick={() => {
-                        setPreviewOpen(false);
+                        handleClosePreview();
                         handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
                       }}
                       disabled={isUploading || isDocumentProcessing(selectedDocument.id)}

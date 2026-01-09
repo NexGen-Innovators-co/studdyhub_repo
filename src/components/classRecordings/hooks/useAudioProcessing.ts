@@ -164,12 +164,14 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
           title: fetchedRecording.title,
           subject: fetchedRecording.subject,
           audioUrl: fetchedRecording.audio_url,
+          audio_url: fetchedRecording.audio_url,
           transcript: fetchedRecording.transcript,
           summary: fetchedRecording.summary,
           duration: fetchedRecording.duration,
           date: fetchedRecording.date,
           created_at: fetchedRecording.created_at,
           userId: fetchedRecording.user_id,
+          user_id: fetchedRecording.user_id,
           document_id: fetchedRecording.document_id
         };
         onUpdateRecording(updatedRecording);
@@ -316,12 +318,14 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         title: `Uploaded Audio: ${file.name}`,
         subject: 'Uploaded Audio',
         audioUrl: urlData.publicUrl,
+        audio_url: urlData.publicUrl,
         transcript: '',
         summary: '',
         duration: Math.floor(uploadedDuration),
         date: new Date().toISOString(),
         created_at: new Date().toISOString(),
         userId: user.id,
+        user_id: user.id,
         document_id: newDocumentId
       };
 
@@ -417,12 +421,14 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         title,
         subject,
         audioUrl: publicUrl,
+        audio_url: publicUrl,
         transcript: '',
         summary: '',
         duration: Math.floor(duration),
         date: new Date().toISOString(),
         created_at: new Date().toISOString(),
         userId: user.id,
+        user_id: user.id,
         document_id: newDocumentId
       };
 
@@ -534,12 +540,14 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
             title: fetchedRecording.title,
             subject: fetchedRecording.subject,
             audioUrl: fetchedRecording.audio_url,
+            audio_url: fetchedRecording.audio_url,
             transcript: fetchedRecording.transcript,
             summary: fetchedRecording.summary,
             duration: fetchedRecording.duration,
             date: fetchedRecording.date,
             created_at: fetchedRecording.created_at,
             userId: fetchedRecording.user_id,
+            user_id: fetchedRecording.user_id,
             document_id: fetchedRecording.document_id
           };
           onUpdateRecording(updatedRecording);

@@ -9,13 +9,16 @@ import { useAppContext } from '../hooks/useAppContext';
 import { useMessageHandlers } from '../hooks/useMessageHandlers';
 import BookPagesAnimation, { LoadingScreen } from '@/components/ui/bookloader';
 import { QuickTips } from '@/components/notes/components/QuickTip';
-import { AlertTriangle, Bot, FileText, Home, Mic, RefreshCw, Users2, X } from 'lucide-react';
+import { AlertTriangle, Bot, FileText, Home, Mic, RefreshCw, Users2, X, Grid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import AIBot from '@/components/ui/aibot';
 import { Helmet } from 'react-helmet-async';
 import { SubscriptionStatusBar } from '@/components/subscription/SubscriptionStatusBar';
 import { initializePushNotifications } from '@/services/notificationInitService';
+import { Document } from '@/types/Document';
+import { supabase } from '@/integrations/supabase/client';
+import { MobileMenu } from '@/components/layout/MobileMenu';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -108,6 +111,61 @@ const Index = () => {
     handleRetryFailedMessage,
   } = useMessageHandlers();
 
+  const [externalDocuments, setExternalDocuments] = useState<Document[]>([]);
+
+  // Handle documentId from URL query params (fetch if missing)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const documentId = searchParams.get('documentId');
+    const previewId = searchParams.get('preview');
+
+    const idsToFetch: string[] = [];
+    if (documentId && !documents.find(d => d.id === documentId) && !externalDocuments.find(d => d.id === documentId)) {
+      idsToFetch.push(documentId);
+    }
+    if (previewId && !documents.find(d => d.id === previewId) && !externalDocuments.find(d => d.id === previewId)) {
+      if (!idsToFetch.includes(previewId)) {
+        idsToFetch.push(previewId);
+      }
+    }
+
+    if (idsToFetch.length > 0) {
+      const fetchDocs = async () => {
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .in('id', idsToFetch);
+
+        if (data) {
+          setExternalDocuments(prev => {
+            const existingIds = new Set(prev.map(d => d.id));
+            const newDocs = (data as Document[]).filter(d => !existingIds.has(d.id));
+            return [...prev, ...newDocs];
+          });
+        }
+      };
+      fetchDocs();
+    }
+    
+    // Always attempt to select the document if it's in the URL
+    // We do this independently of fetching to ensure the UI state reflects the URL intent immediately
+    if (documentId) {
+      // Force new chat mode if we are in a session
+      if (activeChatSessionId) {
+        dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: null });
+      }
+      if (!selectedDocumentIds.includes(documentId)) {
+        dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: [documentId] });
+      }
+    }
+  }, [location.search, documents, externalDocuments, dispatch, selectedDocumentIds, activeChatSessionId]);
+
+  const allDocuments = useMemo(() => {
+    const existingIds = new Set(documents.map(d => d.id));
+    const newDocs = externalDocuments.filter(d => !existingIds.has(d.id));
+    return [...documents, ...newDocs];
+  }, [documents, externalDocuments]);
+
   // Extract IDs from URL
   const sessionId = params.sessionId;
   const postId = params.postId;
@@ -128,6 +186,7 @@ const Index = () => {
     activeSocialTab = tab as string | undefined;
   }
   const [socialSearchQuery, setSocialSearchQuery] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const getPageSEO = () => {
     const pathname = location.pathname;
 
@@ -297,7 +356,7 @@ const Index = () => {
     recordings: recordings ?? [],
     scheduleItems: scheduleItems ?? [],
     chatMessages: filteredChatMessages ?? [],
-    documents: documents ?? [],
+    documents: allDocuments ?? [],
     userProfile,
     isAILoading,
     setIsAILoading: (loading: boolean) => dispatch({ type: 'SET_IS_AI_LOADING', payload: loading }),
@@ -536,7 +595,7 @@ const Index = () => {
                 isSpecial: true
               },
               { tab: 'social', label: 'Social', icon: Users2 },
-              { tab: 'recordings', label: 'Record', icon: Mic },
+              { tab: 'more', label: 'More', icon: Grid },
             ].map(({ tab, label, icon: Icon, size = undefined, isSpecial = false }) => {
               const isActive =
                 currentActiveTab === tab ||
@@ -549,6 +608,8 @@ const Index = () => {
                   onClick={() => {
                     if (tab === 'chat') {
                       handleNavigateToTab('chat');
+                    } else if (tab === 'more') {
+                      setIsMobileMenuOpen(true);
                     } else {
                       handleNavigateToTab(tab);
                     }
@@ -594,6 +655,16 @@ const Index = () => {
           </div>
         </nav>
       )}
+
+      <MobileMenu 
+        isOpen={isMobileMenuOpen} 
+        onClose={() => setIsMobileMenuOpen(false)} 
+        onNavigate={(tab) => {
+            handleNavigateToTab(tab);
+            setIsMobileMenuOpen(false);
+        }}
+        activeTab={currentActiveTab}
+      />
 
       <QuickTips />
     </div>

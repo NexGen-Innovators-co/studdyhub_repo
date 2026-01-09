@@ -35,7 +35,8 @@ import {
   Lightbulb,
   Shield,
   Menu,
-  Podcast
+  Podcast,
+  BookOpen
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
@@ -875,6 +876,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'schedule', name: 'Schedule', icon: Calendar },
         { id: 'chat', name: 'AI Chat', icon: MessageCircle },
         { id: 'documents', name: 'Documents', icon: Upload },
+        { id: 'library', name: 'Library', icon: BookOpen },
         { id: 'podcasts', name: 'Podcasts', icon: Podcast },
         { id: 'social', name: 'Social Feed', icon: Users },
         { id: 'settings', name: 'Settings', icon: Settings },

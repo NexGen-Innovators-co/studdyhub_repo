@@ -50,24 +50,8 @@ import { ReportPodcastDialog } from './ReportPodcastDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { getPodcastPermissions } from '@/services/podcastModerationService';
-
-interface PodcastWithMeta extends PodcastData {
-  user_id: string;
-  is_public: boolean;
-  is_live: boolean;
-  listen_count: number;
-  share_count: number;
-  cover_image_url?: string;
-  description?: string;
-  tags?: string[];
-  user?: {
-    full_name: string;
-    avatar_url?: string;
-  };
-  member_count?: number;
-  active_listeners?: number;
-  visualAssets?: JSON | null;
-}
+import { usePodcasts, PodcastWithMeta } from '@/hooks/usePodcasts';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface PodcastsPageProps {
   searchQuery?: string;
@@ -129,15 +113,15 @@ const PodcastCard = memo(({
         {/* Background Image with Overlay */}
         <div className="relative aspect-[3/4] sm:aspect-[4/5] overflow-hidden">
           {/* Cover Image */}
-          <div 
-            className="absolute inset-0 bg-gradient-to-br from-blue-500 to-pink-500"
-            style={{
-              backgroundImage: podcast.cover_image_url ? `url(${podcast.cover_image_url})` : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center'
-            }}
-          >
-            {!podcast.cover_image_url && (
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-pink-500">
+            {podcast.cover_image_url ? (
+              <img 
+                src={podcast.cover_image_url} 
+                alt={podcast.title}
+                loading="lazy"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+            ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Radio className="h-12 w-12 sm:h-16 sm:w-16 text-white opacity-30" />
               </div>
@@ -330,11 +314,22 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   onNavigateToTab
 }) => {
   const [activeTab, setActiveTab] = useState<'discover' | 'my-podcasts' | 'live'>('discover');
-  const [podcasts, setPodcasts] = useState<PodcastWithMeta[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+  const { 
+    data, 
+    fetchNextPage, 
+    hasNextPage, 
+    isFetchingNextPage, 
+    isLoading: loading 
+  } = usePodcasts(activeTab);
+  
+  const podcasts = useMemo(() => data?.pages.flat() || [], [data]);
+
+  // const [podcasts, setPodcasts] = useState<PodcastWithMeta[]>([]);
+  // const [loading, setLoading] = useState(true);
+  // const [page, setPage] = useState(1);
+  // const [hasMore, setHasMore] = useState(true);
+  // const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedPodcast, setSelectedPodcast] = useState<PodcastData | null>(null);
@@ -385,9 +380,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       if (updateError) throw updateError;
 
-      setPodcasts(prev => prev.map(p => 
-        p.id === podcastId ? { ...p, cover_image_url: publicUrl } : p
-      ));
+      queryClient.invalidateQueries({ queryKey: ['podcasts'] });
 
       toast.success('Cover image updated');
     } catch (error) {
@@ -419,9 +412,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
         if (updateError) throw updateError;
 
-        setPodcasts(prev => prev.map(p => 
-          p.id === podcast.id ? { ...p, cover_image_url: data.imageUrl } : p
-        ));
+        queryClient.invalidateQueries({ queryKey: ['podcasts'] });
 
         toast.success('AI cover generated and updated');
       }
@@ -585,8 +576,6 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
   useEffect(() => {
     fetchCurrentUser();
-    // Only fetch podcasts on first mount or when manually refreshed/tab changed
-    fetchPodcasts(1, true);
 
     // Subscribe to real-time podcast updates (optional: can be removed for less refetching)
     const channel = supabase
@@ -599,9 +588,8 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           table: 'ai_podcasts'
         },
         (payload) => {
-
           // Optionally, only update the changed podcast in state instead of refetching all
-          fetchPodcasts(1, true);
+          queryClient.invalidateQueries({ queryKey: ['podcasts'] });
         }
       )
       .subscribe();
@@ -617,183 +605,14 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     setCurrentUser(user);
   };
 
-  const fetchPodcasts = async (fetchPage = 1, reset = false) => {
-    const isInitialFetch = reset || fetchPage === 1;
-    if (isInitialFetch) setLoading(true);
-    try {
-      let query = supabase
-        .from('ai_podcasts')
-        .select(`
-          id,
-          user_id,
-          title,
-          sources,
-          script,
-          audio_segments,
-          duration_minutes,
-          style,
-          podcast_type,
-          status,
-          is_public,
-          is_live,
-          created_at,
-          updated_at,
-          cover_image_url,
-          description,
-          tags,
-          listen_count,
-          share_count,
-          visual_assets
-        `)
-        .eq('status', 'completed')
-        .order('created_at', { ascending: false })
-        .range((fetchPage - 1) * 20, fetchPage * 20 - 1);
-
-      if (activeTab === 'discover') {
-        query = query.eq('is_public', true);
-      } else if (activeTab === 'my-podcasts') {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          query = query.eq('user_id', user.id);
-        }
-      } else if (activeTab === 'live') {
-        query = query.eq('is_live', true).eq('is_public', true);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        if (!navigator.onLine) {
-          const offlinePodcasts = await offlineStorage.getAll<any>(STORES.PODCASTS);
-          if (offlinePodcasts.length > 0) {
-            setPodcasts(offlinePodcasts);
-            setLoading(false);
-            return;
-          }
-        }
-        throw error;
-      }
-
-
-      // Fetch member counts for all podcasts
-      const podcastIds = (data || []).map((p: any) => p.id);
-      let memberCounts: Record<string, number> = {};
-      if (podcastIds.length > 0) {
-        const { data: memberData, error: memberError } = await supabase
-          .from('podcast_members')
-          .select('podcast_id, id', { count: 'exact', head: false })
-          .in('podcast_id', podcastIds);
-        if (!memberError && memberData) {
-          // Count members per podcast
-          memberCounts = memberData.reduce((acc: Record<string, number>, row: any) => {
-            acc[row.podcast_id] = (acc[row.podcast_id] || 0) + 1;
-            return acc;
-          }, {});
-        }
-      }
-
-      const userIds = [...new Set((data || []).map((p: any) => p.user_id))];
-      const { data: usersData } = await supabase
-        .from('social_users')
-        .select('id, display_name, username, avatar_url')
-        .in('id', userIds);
-
-      const usersMap = new Map(
-        (usersData || []).map((u: any) => [
-          u.id,
-          {
-            full_name: u.display_name || u.username || 'Anonymous User',
-            avatar_url: u.avatar_url
-          }
-        ])
-      );
-
-      const transformedPodcasts = (data || []).map((podcast: any) => {
-        // Parse audio_segments with robust error handling
-        let audioSegments = [];
-        if (typeof podcast.audio_segments === 'string') {
-          try {
-            audioSegments = podcast.audio_segments ? JSON.parse(podcast.audio_segments) : [];
-          } catch (e) {
-
-            audioSegments = [];
-          }
-        } else {
-          audioSegments = podcast.audio_segments || [];
-        }
-
-        // Parse visual_assets with robust error handling
-        let visualAssets = null;
-        if (podcast.visual_assets) {
-          if (typeof podcast.visual_assets === 'string') {
-            try {
-              visualAssets = JSON.parse(podcast.visual_assets);
-            } catch (e) {
-
-              visualAssets = null;
-            }
-          } else {
-            visualAssets = podcast.visual_assets;
-          }
-        }
-
-        // Calculate total duration from audio segments (in minutes)
-        let totalDuration = podcast.duration_minutes || 0;
-        if (audioSegments.length > 0 && audioSegments[0].end_time !== undefined) {
-          // For live podcasts, calculate from last segment's end_time
-          const lastSegment = audioSegments[audioSegments.length - 1];
-          if (lastSegment && typeof lastSegment.end_time === 'number' && isFinite(lastSegment.end_time)) {
-            totalDuration = Math.ceil(lastSegment.end_time / 60); // Convert seconds to minutes
-          }
-        }
-
-        // Ensure duration is a valid number and not Infinity
-        if (!isFinite(totalDuration) || isNaN(totalDuration)) {
-          totalDuration = podcast.duration_minutes || 0;
-        }
-
-        return {
-          ...podcast,
-          duration: totalDuration,
-          audioSegments,
-          visualAssets,
-          sources: podcast.sources || [],
-          user: usersMap.get(podcast.user_id) || {
-            full_name: 'Anonymous User',
-            avatar_url: undefined
-          },
-          member_count: memberCounts[podcast.id] || 0,
-        };
-      });
-
-      // Save to offline storage
-      if (transformedPodcasts.length > 0) {
-        await offlineStorage.save(STORES.PODCASTS, transformedPodcasts);
-      }
-
-      if (isInitialFetch) {
-        setPodcasts(transformedPodcasts);
-      } else {
-        setPodcasts(prev => [...prev, ...transformedPodcasts]);
-      }
-      setHasMore((data || []).length === 20);
-      setPage(fetchPage);
-    } catch (error: any) {
-
-      toast.error('Failed to load podcasts');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
   // Infinite scroll for podcasts
   const podcastsScrollRef = React.useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handleScroll = () => {
-      if (!podcastsScrollRef.current || loading || !hasMore) return;
+      if (!podcastsScrollRef.current || isFetchingNextPage || !hasNextPage) return;
       const { scrollTop, scrollHeight, clientHeight } = podcastsScrollRef.current;
       if (scrollTop + clientHeight >= scrollHeight - 10) {
-        fetchPodcasts(page + 1);
+        fetchNextPage();
       }
     };
     const ref = podcastsScrollRef.current;
@@ -801,7 +620,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       ref.addEventListener('scroll', handleScroll);
       return () => ref.removeEventListener('scroll', handleScroll);
     }
-  }, [loading, hasMore, page]);
+  }, [isFetchingNextPage, hasNextPage, fetchNextPage]);
 
   const handlePlayPodcast = (podcast: PodcastWithMeta) => {
     setSelectedPodcast(podcast);
@@ -868,7 +687,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     if (!podcastToDelete) return;
 
     if (!navigator.onLine) {
-      setPodcasts(prev => prev.filter(p => p.id !== podcastToDelete.id));
+      // setPodcasts(prev => prev.filter(p => p.id !== podcastToDelete.id));
       await offlineStorage.addPendingSync('delete', STORES.PODCASTS, { id: podcastToDelete.id });
       setPodcastToDelete(null);
       setShowDeleteDialog(false);
@@ -902,7 +721,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       toast.success('Podcast deleted successfully');
       setShowDeleteDialog(false);
       setPodcastToDelete(null);
-      fetchPodcasts(); // Refresh the list
+      queryClient.invalidateQueries({ queryKey: ['podcasts'] });
     } catch (error: any) {
 
       toast.error('Failed to delete podcast: ' + error.message);
@@ -1004,17 +823,12 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       if (error) throw error;
 
-      // Optimistically update local state
-      setPodcasts(prev => prev.map(p => 
-        p.id === podcast.id ? { ...p, is_public: newPublicState } : p
-      ));
+      queryClient.invalidateQueries({ queryKey: ['podcasts'] });
 
       toast.success(newPublicState ? 'Podcast is now public' : 'Podcast is now private');
     } catch (error) {
 
       toast.error('Failed to update podcast visibility');
-      // Revert optimistic update on error
-      fetchPodcasts();
     }
   };
 
@@ -1118,7 +932,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
               ) : (
                 <>
                   {/* <div className="flex justify-end mb-4">
-                    <Button size="sm" variant="outline" onClick={() => { setRefreshing(true); fetchPodcasts(1, true); }} disabled={refreshing || loading}>
+                    <Button size="sm" variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['podcasts'] })} disabled={loading}>
                       {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Refresh'}
                     </Button>
                   </div> */}
@@ -1159,9 +973,9 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                       />
                     ))}
                   </div>
-                  {hasMore && !loading && (
+                  {hasNextPage && !loading && (
                     <div className="flex justify-center py-4">
-                      <Button size="sm" variant="outline" onClick={() => fetchPodcasts(page + 1)}>
+                      <Button size="sm" variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
                         Load More
                       </Button>
                     </div>
@@ -1188,7 +1002,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         onClose={() => setShowGoLiveDialog(false)}
         onLiveStart={(podcastId) => {
           setHostingPodcastId(podcastId);
-          fetchPodcasts();
+          queryClient.invalidateQueries({ queryKey: ['podcasts'] });
         }}
       />
 
@@ -1198,7 +1012,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           podcastId={hostingPodcastId}
           onEndStream={() => {
             setHostingPodcastId(null);
-            fetchPodcasts();
+            queryClient.invalidateQueries({ queryKey: ['podcasts'] });
           }}
         />
       )}
@@ -1343,7 +1157,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           onPodcastGenerated={(podcast) => {
             setShowPodcastGenerator(false);
             toast.success('Podcast generated successfully!');
-            fetchPodcasts(); // Refresh the list
+            queryClient.invalidateQueries({ queryKey: ['podcasts'] });
           }}
         />
       )}
@@ -1351,12 +1165,12 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       {/* Floating Action Button for Refresh */}
       <button
         aria-label="Refresh Podcasts"
-        onClick={() => fetchPodcasts(1, true)}
+        onClick={() => queryClient.invalidateQueries({ queryKey: ['podcasts'] })}
         className="fixed bottom-32 right-2 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg p-4 flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
         style={{ boxShadow: '0 4px 24px rgba(59,130,246,0.15)' }}
-        disabled={loading || refreshing}
+        disabled={loading}
       >
-        {loading || refreshing ? (
+        {loading ? (
           <Loader2 className="h-6 w-6 animate-spin" />
         ) : (
           <RefreshCcw className="h-6 w-6" />

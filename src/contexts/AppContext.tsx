@@ -396,7 +396,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Computed values
-  const currentActiveTab = useMemo((): 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard' | 'podcasts' => {
+  const currentActiveTab = useMemo((): 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard' | 'podcasts' | 'library' => {
     const path = location.pathname.split('/')[1];
     switch (path) {
       case 'notes': return 'notes';
@@ -408,6 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       case 'settings': return 'settings';
       case 'quizzes': return 'quizzes';
       case 'podcasts': return 'podcasts';
+      case 'library': return 'library';
       default: return 'dashboard';
     }
   }, [location.pathname]);
@@ -1093,9 +1094,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: currentSession.document_ids || [] });
       }
     } else if (!state.activeChatSessionId) {
-      dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: [] });
+      // Only clear if there is NO documentId in the URL (to support "Ask AI" from library)
+      const searchParams = new URLSearchParams(location.search);
+      if (!searchParams.get('documentId')) {
+        dispatch({ type: 'SET_SELECTED_DOCUMENT_IDS', payload: [] });
+      }
     }
-  }, [state.activeChatSessionId, state.chatSessions]);
+  }, [state.activeChatSessionId, state.chatSessions, location.search]);
 
   // Set active tab based on current route
   useEffect(() => {

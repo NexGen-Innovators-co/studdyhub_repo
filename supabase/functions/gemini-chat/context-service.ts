@@ -42,7 +42,7 @@ export class UserContextService {
 
                 // Get upcoming schedule
                 this.supabase.from('schedule_items')
-                    .select('id, title, start_time, subject, type')
+                    .select('id, title, start_time, subject, type, is_recurring, recurrence_pattern, recurrence_days, recurrence_end_date')
                     .eq('user_id', userId)
                     .gte('start_time', new Date().toISOString())
                     .order('start_time', { ascending: true })
@@ -93,7 +93,7 @@ async analyzeLearningPatterns(userId) {
                 .limit(50),
 
             this.supabase.from('schedule_items')
-                .select('subject, type, start_time, end_time')
+                .select('subject, type, start_time, end_time, is_recurring')
                 .eq('user_id', userId)
                 .order('start_time', { ascending: false })
                 .limit(50),

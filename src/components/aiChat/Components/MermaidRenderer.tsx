@@ -3,10 +3,12 @@ import React, { useRef, useEffect, useCallback } from 'react';
 interface MermaidRendererProps {
     mermaidContent: string;
     handleNodeClick: (nodeId: string) => void;
+    iframeRef?: React.RefObject<HTMLIFrameElement>;
 }
 
-export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ mermaidContent, handleNodeClick }) => {
-    const iframeRef = useRef<HTMLIFrameElement>(null);
+export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ mermaidContent, handleNodeClick, iframeRef: externalIframeRef }) => {
+    const internalIframeRef = useRef<HTMLIFrameElement>(null);
+    const iframeRef = externalIframeRef || internalIframeRef;
 
     const loadMermaid = useCallback(() => {
         if (iframeRef.current) {
@@ -174,7 +176,7 @@ mermaid.initialize({
     securityLevel: 'loose',
     flowchart: {
         useMaxWidth: false,
-        htmlLabels: true
+        htmlLabels: false
     }
 });
 
@@ -437,7 +439,6 @@ window.addEventListener('resize', () => {
             title="Mermaid Diagram Preview"
             className="w-full h-full bg-white dark:bg-gray-900 border-none rounded-lg shadow-inner"
             style={{ minHeight: '400px' }}
-            sandbox="allow-scripts allow-same-origin"
         />
     );
 };

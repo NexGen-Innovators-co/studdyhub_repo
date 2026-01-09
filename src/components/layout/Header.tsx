@@ -10,7 +10,11 @@ import {
   MapPin,
   Lock,
   Podcast,
-  Radio
+  Radio,
+  School,
+  Globe,
+  Library,
+  List
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../ui/button';
@@ -29,7 +33,7 @@ interface HeaderProps {
   onNewNote: () => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
-  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social' | 'quizzes' | 'podcasts';
+  activeTab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social' | 'quizzes' | 'podcasts' | 'library';
   fullName: string | null;
   avatarUrl: string | null;
   onOpenCreatePostDialog: () => void;
@@ -57,7 +61,8 @@ const tabNames: Record<HeaderProps['activeTab'], string> = {
   settings: 'Learning Settings',
   dashboard: 'Dashboard',
   social: 'Social',
-  quizzes: 'Quizzes'
+  quizzes: 'Quizzes',
+  library: 'Course Library'
 };
 
 const mainNavItems = [
@@ -71,6 +76,7 @@ const mainNavItems = [
   { label: 'Social', icon: Users2, tab: 'social' },
   { label: 'Settings', icon: Sliders, tab: 'settings' },
   { label: 'Podcasts', icon: Podcast, tab: 'podcasts' },
+  { label: 'Library', icon: Clipboard, tab: 'library' },
 ] as const;
 
 // Define section-specific tabs
@@ -116,7 +122,8 @@ const sectionTabs = {
   //   // { id: 'recent', label: 'Recent', icon: Clock },
   // ],
   schedule: [
-    { id: 'upcoming', label: 'Upcoming', icon: Calendar },
+    { id: 'calendar', label: 'Calendar', icon: Calendar },
+    { id: 'upcoming', label: 'List View', icon: List },
     { id: 'today', label: 'Today', icon: Clock },
     { id: 'past', label: 'Past', icon: History },
   ],
@@ -124,6 +131,11 @@ const sectionTabs = {
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'activity', label: 'Activity', icon: TrendingUp },
+  ],
+  library: [
+    { id: 'my-school', label: 'My School', icon: School },
+    { id: 'global', label: 'Global', icon: Globe },
+    { id: 'all', label: 'Browse All', icon: Library },
   ],
   settings: [
     { id: 'profile', label: 'Profile', icon: User },
@@ -182,6 +194,25 @@ export const Header: React.FC<HeaderProps> = ({
 
   const avatarRef = useRef<HTMLDivElement>(null);
   const appMenuRef = useRef<HTMLDivElement>(null);
+
+  // Handle outside clicks
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (appMenuRef.current && !appMenuRef.current.contains(event.target as Node)) {
+        setIsAppMenuOpen(false);
+      }
+      if (avatarRef.current && !avatarRef.current.contains(event.target as Node)) {
+        setIsAvatarMenuOpen(false);
+      }
+    };
+
+    if (isAppMenuOpen || isAvatarMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isAppMenuOpen, isAvatarMenuOpen]);
 
   // Check if PWA is already installed
   useEffect(() => {
@@ -628,8 +659,8 @@ export const Header: React.FC<HeaderProps> = ({
               </Button>
 
               {isAppMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-top-2 z-50">
-                  <div className="p-3 border-b border-slate-200 dark:border-slate-700">
+                <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-top-2 z-50 max-h-[80vh] overflow-y-auto modern-scrollbar">
+                  <div className="p-3 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
                     <p className="font-semibold">Quick Navigation</p>
                   </div>
                   {mainNavItems.map(({ label, icon: Icon, tab }) => (
@@ -756,8 +787,8 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
 
                 {isAvatarMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-top-2 z-50">
-                    <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+                  <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-top-2 z-50 max-h-[80vh] overflow-y-auto modern-scrollbar">
+                    <div className="p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
                       <p className="font-semibold truncate">{fullName || 'User'}</p>
                       <p className="text-sm text-slate-500 dark:text-slate-400">Active Learner</p>
                     </div>

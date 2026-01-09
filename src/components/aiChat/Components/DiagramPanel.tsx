@@ -4,8 +4,14 @@ import { motion } from 'framer-motion';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../ui/dropdown-menu";
+import {
   X, Download, Maximize2, Minimize2, Eye, FileCode,
-  ChevronLeft, ChevronRight, MousePointer
+  ChevronLeft, ChevronRight, MousePointer, Image as ImageIcon, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Chart, registerables } from 'chart.js';
@@ -442,29 +448,183 @@ box-sizing: border-box;
     }
   }, [effectiveDiagramType, renderContent, imageUrl, language]);
 
+  const downloadSvg = useCallback(() => {
+    let svg: SVGSVGElement | null = null;
+
+    if (effectiveDiagramType === 'mermaid' && mermaidIframeRef.current) {
+      const doc = mermaidIframeRef.current.contentDocument || mermaidIframeRef.current.contentWindow?.document;
+      svg = doc?.querySelector('svg') || null;
+    } else if (innerContentWrapperRef.current) {
+      svg = innerContentWrapperRef.current.querySelector('svg');
+    }
+
+    if (svg) {
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `diagram-${Date.now()}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('SVG downloaded!');
+    } else {
+      toast.error('Could not find SVG element. This diagram type might not support SVG export.');
+    }
+  }, [effectiveDiagramType]);
+
+  const downloadPng = useCallback(async () => {
+    try {
+      toast.info('Generating PNG...');
+      
+      if (effectiveDiagramType === 'mermaid' && mermaidIframeRef.current) {
+        // Handle Mermaid iframe capture
+        const doc = mermaidIframeRef.current.contentDocument || mermaidIframeRef.current.contentWindow?.document;
+        const svg = doc?.querySelector('svg');
+        
+        if (svg) {
+          // Get SVG data
+          const svgData = new XMLSerializer().serializeToString(svg);
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const img = new Image();
+          
+          // Get dimensions from SVG or bounding box
+          const bbox = svg.getBoundingClientRect();
+          const width = bbox.width * 2; // Scale up for quality
+          const height = bbox.height * 2;
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(svgBlob);
+          
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            if (ctx) {
+              // Fill white background
+              ctx.fillStyle = currentTheme === 'dark' ? '#282c34' : '#ffffff';
+              ctx.fillRect(0, 0, width, height);
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              try {
+                const pngUrl = canvas.toDataURL('image/png');
+                const a = document.createElement('a');
+                a.href = pngUrl;
+                a.download = `diagram-${Date.now()}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                toast.success('PNG downloaded!');
+              } catch (e) {
+                console.error('Canvas export failed:', e);
+                toast.error('Failed to export PNG. Security restriction.');
+              }
+              URL.revokeObjectURL(url);
+            }
+          };
+          img.src = url;
+          return;
+        }
+      }
+
+      if (!innerContentWrapperRef.current) return;
+      
+      // Find the actual content element to capture
+      let targetElement: HTMLElement = innerContentWrapperRef.current;
+      
+      const canvas = await html2canvas(targetElement, {
+        useCORS: true,
+        scale: 2, // Higher scale for better quality
+        logging: false,
+        backgroundColor: currentTheme === 'dark' ? '#111827' : '#ffffff',
+        ignoreElements: (element) => element.classList.contains('exclude-from-capture')
+      });
+      
+      const url = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `diagram-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.success('PNG downloaded!');
+    } catch (error) {
+      console.error('Error generating PNG:', error);
+      toast.error('Failed to generate PNG.');
+    }
+  }, [currentTheme, effectiveDiagramType]);
+
   const exportPdf = useCallback(async () => {
-    if (!containerRef.current && effectiveDiagramType !== 'slides' && effectiveDiagramType !== 'threejs') {
+    if (!innerContentWrapperRef.current && effectiveDiagramType !== 'slides' && effectiveDiagramType !== 'threejs' && effectiveDiagramType !== 'mermaid') {
       toast.error('No content to export.');
       return;
     }
     try {
       toast.info('Generating PDF...');
-      let targetElement: HTMLElement | null;
+      let targetElement: HTMLElement | null = null;
+      
       if (effectiveDiagramType === 'mermaid' && mermaidIframeRef.current) {
-        targetElement = mermaidIframeRef.current.contentDocument?.body;
+        // For Mermaid, we need to capture the SVG from the iframe
+        const doc = mermaidIframeRef.current.contentDocument || mermaidIframeRef.current.contentWindow?.document;
+        const svg = doc?.querySelector('svg');
+        
+        if (svg) {
+          // Similar to PNG export, we convert SVG to canvas first
+          const svgData = new XMLSerializer().serializeToString(svg);
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const img = new Image();
+          
+          const bbox = svg.getBoundingClientRect();
+          const width = bbox.width * 2;
+          const height = bbox.height * 2;
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(svgBlob);
+          
+          img.onload = () => {
+            if (ctx) {
+              ctx.fillStyle = '#ffffff'; // PDF usually white background
+              ctx.fillRect(0, 0, width, height);
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              const imgData = canvas.toDataURL('image/png');
+              const pdf = new jsPDF({
+                orientation: width > height ? 'l' : 'p',
+                unit: 'px',
+                format: [width, height],
+              });
+              pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+              pdf.save(`diagram-${effectiveDiagramType}.pdf`);
+              toast.success('PDF exported successfully!');
+              URL.revokeObjectURL(url);
+            }
+          };
+          img.src = url;
+          return;
+        }
       } else if (effectiveDiagramType === 'html' && htmlIframeRef.current) {
-        targetElement = htmlIframeRef.current.contentDocument?.body;
+        targetElement = htmlIframeRef.current.contentDocument?.body || null;
       } else if (effectiveDiagramType === 'slides') {
         targetElement = document.getElementById('current-slide-content');
       } else if (effectiveDiagramType === 'threejs' && threeJsCanvasRef.current) {
         targetElement = threeJsCanvasRef.current;
       } else {
-        targetElement = containerRef.current;
+        targetElement = innerContentWrapperRef.current;
       }
+
       if (!targetElement) {
         toast.error('Content element not found for PDF export.');
         return;
       }
+      
       const canvas = await html2canvas(targetElement, {
         useCORS: true,
         scale: 2,
@@ -480,7 +640,7 @@ box-sizing: border-box;
       pdf.save(`diagram-${effectiveDiagramType}.pdf`);
       toast.success('PDF exported successfully!');
     } catch (error) {
-      //console.error('Error generating PDF:', error);
+      console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
     }
   }, [effectiveDiagramType]);
@@ -558,24 +718,41 @@ ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
             </>
           )}
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={downloadContent}
-            title="Download Content"
-            className="h-8 w-8 sm:h-9 sm:w-9 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={exportPdf}
-            title="Export as PDF"
-            className="h-8 w-8 sm:h-9 sm:w-9 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-          >
-            <FileCode className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Download Options"
+                className="h-8 w-8 sm:h-9 sm:w-9 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={downloadContent}>
+                <FileCode className="mr-2 h-4 w-4" />
+                <span>Download Source ({language || 'txt'})</span>
+              </DropdownMenuItem>
+              
+              {(effectiveDiagramType === 'mermaid' || effectiveDiagramType === 'dot') && (
+                <DropdownMenuItem onClick={downloadSvg}>
+                  <ImageIcon className="mr-2 h-4 w-4" />
+                  <span>Download SVG</span>
+                </DropdownMenuItem>
+              )}
+              
+              <DropdownMenuItem onClick={downloadPng}>
+                <ImageIcon className="mr-2 h-4 w-4" />
+                <span>Download PNG Image</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem onClick={exportPdf}>
+                <FileText className="mr-2 h-4 w-4" />
+                <span>Export as PDF</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="ghost"
             size="icon"
@@ -611,7 +788,7 @@ ${isInteractiveContent ? 'cursor-grab' : ''}
               <HtmlRenderer htmlContent={renderContent} />
             )}
             {effectiveDiagramType === 'mermaid' && (
-              <MermaidRenderer mermaidContent={renderContent} handleNodeClick={handleNodeClick} />
+              <MermaidRenderer mermaidContent={renderContent} handleNodeClick={handleNodeClick} iframeRef={mermaidIframeRef} />
             )}
             {effectiveDiagramType === 'slides' && (
               <SlidesRenderer
