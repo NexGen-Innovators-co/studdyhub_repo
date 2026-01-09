@@ -18,10 +18,10 @@ const corsHeaders = {
 const ENHANCED_PROCESSING_CONFIG = {
   MAX_INPUT_TOKENS: 2 * 1024 * 1024,  // Full 2M context window
   MAX_OUTPUT_TOKENS: 8192,  // Optimal for quality responses
-  MAX_CONVERSATION_HISTORY: 100,  // Full history for better understanding
-  CONTEXT_MEMORY_WINDOW: 20,  // Increased for better context
-  SUMMARY_THRESHOLD: 15,  // Balanced summarization
-  CONTEXT_RELEVANCE_SCORE: 0.7,
+  MAX_CONVERSATION_HISTORY: 500,  // Full history for better understanding
+  CONTEXT_MEMORY_WINDOW: 100,  // Increased for better context
+  SUMMARY_THRESHOLD: 30,  // Balanced summarization
+  CONTEXT_RELEVANCE_SCORE: 0.6,
   RETRY_ATTEMPTS: 3,  // More retries for reliability
   INITIAL_RETRY_DELAY: 1000,
   MAX_RETRY_DELAY: 5000,
@@ -90,6 +90,10 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
   // 2. Execute parsed action if found
   if (action) {
     console.log(`[ActionExecution] Found action: ${action.action} with confidence ${action.confidence}`);
+
+    // Remove the action command from the response to prevent it from showing to the user
+    // Matches ACTION: COMMAND|params... until end of line
+    modifiedResponse = aiResponse.replace(/ACTION:\s*[A-Z_]+(?:\|.*)?(?:\n+|$)/g, '').trim();
 
     try {
       let result: any;
@@ -538,27 +542,40 @@ async function buildIntelligentContext(
     console.error(`${logPrefix} Error fetching summary:`, error);
   }
 
-  if (conversationHistory.length <= initialContextWindow) {
-    console.log(`${logPrefix} Using all ${conversationHistory.length} messages`);
-    return {
-      recentMessages: conversationHistory,
-      relevantOlderMessages: [],
-      conversationSummary,
-      totalMessages: conversationHistory.length,
-      summarizedMessages: 0,
-      storedTokenCount
-    };
+  // Dynamic Context Window Strategy - Maximize history usage within token limits
+  // Gemini 1.5 Pro has a 2M token window, so we can be generous with history
+  const MAX_HISTORY_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS - 100000; // Leave 100k buffer for system prompt/files
+  let currentTokens = 0;
+  
+  // Always include the summary if available
+  if (conversationSummary) {
+    currentTokens += estimateTokenCount(conversationSummary);
   }
 
-  const recentMessages = conversationHistory.slice(-initialContextWindow);
-  console.log(`${logPrefix} Using last ${recentMessages.length} messages (skipping relevance scoring)`);
+  const selectedMessages: any[] = [];
+  
+  // Iterate backwards through history to fill context window
+  for (let i = conversationHistory.length - 1; i >= 0; i--) {
+    const msg = conversationHistory[i];
+    const msgTokens = estimateTokenCount(msg.content) + 20; // +20 for role/metadata overhead
+    
+    if (currentTokens + msgTokens > MAX_HISTORY_TOKENS) {
+      console.log(`${logPrefix} Reached token limit at message ${i} (${currentTokens} tokens)`);
+      break;
+    }
+    
+    currentTokens += msgTokens;
+    selectedMessages.unshift(msg);
+  }
+
+  console.log(`${logPrefix} dynamic context: ${selectedMessages.length} messages selected (${currentTokens} estimated tokens)`);
 
   return {
-    recentMessages,
-    relevantOlderMessages: [],
+    recentMessages: selectedMessages,
+    relevantOlderMessages: [], // No need for RAG on chat history if we include it all
     conversationSummary,
     totalMessages: conversationHistory.length,
-    summarizedMessages: 0,
+    summarizedMessages: conversationHistory.length - selectedMessages.length,
     storedTokenCount
   };
 }
@@ -1178,10 +1195,9 @@ ${actionableContextText}
     }
 
     let recentMessages = conversationData.recentMessages;
-    if (recentMessages.length > 10) {
-      recentMessages = recentMessages.slice(-10);  // Reduced from 15 to 10 for speed
-      console.log(`${logPrefix} Truncated to last 10 messages`);
-    }
+    // We rely on buildIntelligentContext to provide the correct number of messages (token-based)
+    // No further truncation needed.
+
 
     if (recentMessages && recentMessages.length > 0) {
       for (const msg of recentMessages) {

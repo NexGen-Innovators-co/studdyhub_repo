@@ -271,6 +271,16 @@ const Index = () => {
         (window as any).__podcastGoLive();
       }
     },
+    onUploadDocument: () => {
+      if (currentActiveTab !== 'documents') {
+        handleNavigateToTab('documents');
+        setTimeout(() => {
+          window.dispatchEvent(new Event('trigger-document-upload'));
+        }, 300);
+      } else {
+        window.dispatchEvent(new Event('trigger-document-upload'));
+      }
+    },
     onCreatePodcast: () => {
       if ((window as any).__podcastCreate) {
         (window as any).__podcastCreate();

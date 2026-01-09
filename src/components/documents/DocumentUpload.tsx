@@ -212,6 +212,18 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
   }, [isRefreshing, user, loadDataIfNeeded]);
 
+  // Listen for trigger-document-upload event from header
+  useEffect(() => {
+    const handleTriggerUpload = () => {
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
+      }
+    };
+
+    window.addEventListener('trigger-document-upload', handleTriggerUpload);
+    return () => window.removeEventListener('trigger-document-upload', handleTriggerUpload);
+  }, []);
+
   // Folder state
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -1296,20 +1308,36 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                               {selectedFile.type.split('/')[1]?.toUpperCase()}
                             </span>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedFile(null);
-                              if (fileInputRef.current) fileInputRef.current.value = '';
-                            }}
-                            disabled={isUploading}
-                            className="mt-4 text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:border-red-300"
-                          >
-                            <XCircle className="h-4 w-4 mr-2" />
-                            Remove File
-                          </Button>
+                          <div className="flex gap-3 justify-center mt-4">
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpload();
+                              }}
+                              disabled={isUploading}
+                              className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]"
+                            >
+                              {isUploading ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <UploadCloud className="h-4 w-4 mr-2" />
+                              )}
+                              Upload
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedFile(null);
+                                if (fileInputRef.current) fileInputRef.current.value = '';
+                              }}
+                              disabled={isUploading}
+                              className="text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:border-red-300"
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-6">
