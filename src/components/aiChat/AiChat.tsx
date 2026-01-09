@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast, MenuIcon, Layout } from 'lucide-react';
+import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast, MenuIcon, Layout, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
   Menubar,
@@ -117,9 +117,6 @@ const AIChat: React.FC<AIChatProps> = ({
   isLoadingDocuments,
 }) => {
   const [inputMessage, setInputMessage] = useState('');
-  // ...existing code...
-  // The main return for the component must be here:
-  // (REMOVED: return ...)
 
   const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
   const [activePodcast, setActivePodcast] = useState<PodcastData | null>(null);
@@ -145,14 +142,22 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState('');
-  // ...rest of your hooks and logic...
-
-  // (Move the main return statement to the end of the function)
+  
+  // NEW: State for documents fetched specifically for this session/messages
+  const [extraDocuments, setExtraDocuments] = useState<Document[]>([]);
+  const [missingDocsCheckAttempted, setMissingDocsCheckAttempted] = useState<Set<string>>(new Set());
 
   // Use useMemo for merged documents instead of state
   const mergedDocuments = useMemo(() => {
+    // Combine main documents and extra fetched documents
+    const allDocs = [...documents, ...extraDocuments];
+    // Deduplicate by ID
+    const uniqueDocsMap = new Map();
+    allDocs.forEach(doc => uniqueDocsMap.set(doc.id, doc));
+    const uniqueDocs = Array.from(uniqueDocsMap.values());
+
     return [
-      ...documents,
+      ...uniqueDocs,
       ...notes.map(note => ({
         id: note.id,
         title: note.title || 'Untitled Note',
@@ -177,7 +182,86 @@ const AIChat: React.FC<AIChatProps> = ({
         vector_store_id: null,
       }))
     ];
-  }, [documents, notes]);
+  }, [documents, notes, extraDocuments]);
+
+  // Effect to fetch missing documents referenced in messages
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    const idsInMessages = messages.flatMap(m => m.attachedDocumentIds || []);
+    // add selected ids too
+    const allIdsToCheck = [...idsInMessages, ...selectedDocumentIds];
+    const uniqueIds = Array.from(new Set(allIdsToCheck));
+
+    const missingIds = uniqueIds.filter(id => {
+        // check if present in mergedDocuments (docs or notes)
+        const found = mergedDocuments.some(d => d.id === id);
+        // check if we already tried fetching it to avoid loops
+        const alreadyChecked = missingDocsCheckAttempted.has(id);
+        return !found && !alreadyChecked;
+    });
+
+    if (missingIds.length === 0) return;
+
+    // Mark as attempted immediately
+    setMissingDocsCheckAttempted(prev => {
+        const next = new Set(prev);
+        missingIds.forEach(id => next.add(id));
+        return next;
+    });
+
+    const fetchMissing = async () => {
+        try {
+            const { data } = await supabase
+                .from('documents')
+                .select('*')
+                .in('id', missingIds);
+            
+            const fetchedDocs = (data as Document[]) || [];
+            const foundIds = new Set(fetchedDocs.map(d => d.id));
+            
+            // Create placeholders for documents that truly don't exist (deleted)
+            const notFoundDocs = missingIds
+                .filter(id => !foundIds.has(id))
+                .map(id => ({
+                    id,
+                    title: 'Document Unavailable',
+                    file_name: 'Unavailable',
+                    file_type: 'unknown',
+                    file_size: 0,
+                    file_url: '',
+                    content_extracted: null,
+                    user_id: userProfile?.id || '',
+                    type: 'text' as const,
+                    processing_status: 'error' as const, // This will show error icon in UI
+                    processing_error: 'Document may have been deleted or access denied',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    processing_started_at: null,
+                    processing_completed_at: null,
+                    processing_metadata: null,
+                    extraction_model_used: null,
+                    folder_ids: [],
+                    total_processing_time_ms: 0,
+                    page_count: 0,
+                    vector_store_id: null,
+                } as Document));
+
+            if (fetchedDocs.length > 0 || notFoundDocs.length > 0) {
+                setExtraDocuments(prev => {
+                    const existingIds = new Set(prev.map(p => p.id));
+                    const newItems = [...fetchedDocs, ...notFoundDocs].filter(d => !existingIds.has(d.id));
+                    return [...prev, ...newItems];
+                });
+            }
+        } catch (err) {
+            console.error("Failed to fetch missing documents", err);
+        }
+    };
+
+    fetchMissing();
+  }, [messages, selectedDocumentIds, mergedDocuments, missingDocsCheckAttempted]);
+
 
   const [autoTypeInPanel, setAutoTypeInPanel] = useState(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
@@ -767,6 +851,38 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
     toast.info("AI correction prepared in input. Review and send to apply.");
   }, []);
 
+  const handleScrollToTop = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleScrollToBottom = () => {
+    // specific logic: if auto-scroll is disabled, this button forces it
+    if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleScroll = useCallback(async () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    
+    // Show scroll to bottom button if we are not at the bottom
+    const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 100;
+    setShowScrollToBottomButton(!isAtBottom);
+
+    // Load older messages when scrolling to top
+    if (scrollTop < 50 && hasMoreMessages && !isLoadingOlderMessages) {
+       setIsLoadingOlderMessages(true);
+       try {
+         await onLoadOlderMessages();
+       } finally {
+         setIsLoadingOlderMessages(false);
+       }
+    }
+  }, [hasMoreMessages, isLoadingOlderMessages, onLoadOlderMessages]);
+
   return (
     <>
       {/* Main Chat Container */}
@@ -778,7 +894,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
 
         {/* Chat Panel */}
         <div
-          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
+          className={`flex flex-col h-full rounded-lg panel-transition bg-transparent dark:bg-transparent transition-all duration-300 relative ${isDiagramPanelOpen ? 'flex-shrink-0' : 'flex-1'} ${isPhone() ? 'fixed inset-0 z-30 rounded-none h-screen w-screen pt-24' : ''} ${(!isDiagramPanelOpen && !activePodcast && !isPhone()) ? 'max-w-3xl mx-auto' : ''}`}
           style={isDiagramPanelOpen && !isPhone() ? { width: `calc(${100 - panelWidth}% - 1px)` } : isPhone() ? { width: '100vw', height: '100vh', left: 0, top: 0 } : { flex: 1 }}
         >
           {/* Enhanced Loading States */}
@@ -809,6 +925,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
           {/* Messages */}
           <div
             ref={chatContainerRef}
+            onScroll={handleScroll}
             className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 dark:bg-transparent flex flex-col modern-scrollbar"
             style={{ paddingBottom: '180px' }}
           >
@@ -859,20 +976,28 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
             )}
             <div ref={messagesEndRef} />
           </div>
-          {isCurrentlySending && isAiTyping && messages.length > 0 && (
-            <div className="flex justify-center font-sans">
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700">
-                <div className="flex gap-1">
-                  <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="h-2 w-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-                <span className="text-sm text-gray-600 dark:text-gray-300">sending...</span>
-              </div>
-            </div>
-          )}
+          {/* Scroll Navigation Buttons */}
+          <div className="absolute bottom-24 right-4 flex flex-col gap-2 z-20 pointer-events-auto">
+            <Button 
+              size="icon" 
+              variant="secondary" 
+              className="h-8 w-8 rounded-full shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200" 
+              onClick={handleScrollToTop}
+              title="Scroll to Top"
+            >
+              <ArrowUp className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+            </Button>
+            <Button 
+              size="icon" 
+              variant="secondary" 
+              className="h-8 w-8 rounded-full shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200" 
+              onClick={handleScrollToBottom}
+              title="Scroll to Bottom"
+            >
+              <ArrowDown className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+            </Button>
+          </div>
 
-          <div ref={messagesEndRef} />
           {/* Input area */}
           <div className={`fixed bottom-0 left-0 right-0 sm:pb-8 md:shadow-none md:static rounded-t-lg rounded-lg md:rounded-lg bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
             ${isDiagramPanelOpen ? `md:pr-[calc(${panelWidth}%+1.5rem)]` : ''}`}>

@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mermaid from 'mermaid';
 import { Chart, ChartConfiguration } from 'chart.js';
-import { Edit2, X, AlertCircle, RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, RefreshCcw, GripVertical, ChevronDown } from 'lucide-react';
+import { Edit2, X, AlertCircle, RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, RefreshCcw, GripVertical, ChevronDown, Download } from 'lucide-react';
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
 import { motion, useAnimation } from 'framer-motion';
 
@@ -31,9 +31,102 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [height, setHeight] = useState(node.attrs.height || '300px');
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const controls = useAnimation();
 
   const type = node.type.name; // chartjs | mermaid | dot
+
+  const handleDownload = async (format: 'png' | 'svg' | 'pdf') => {
+    setIsDownloadMenuOpen(false);
+    const filename = `${type}-diagram-${Date.now()}.${format}`;
+    
+    let svgElement: SVGSVGElement | null = null;
+    let canvasElement: HTMLCanvasElement | null = null;
+
+    if (type === 'chartjs') {
+        canvasElement = containerRef.current?.querySelector('canvas') || null;
+    } else if (type === 'mermaid') {
+        const shadowHost = containerRef.current?.querySelector('div');
+        if (shadowHost && shadowHost.shadowRoot) {
+            svgElement = shadowHost.shadowRoot.querySelector('svg');
+        } else {
+            svgElement = containerRef.current?.querySelector('svg') || null;
+        }
+    } else if (type === 'dot') {
+        svgElement = containerRef.current?.querySelector('svg') || null;
+    }
+
+    if (format === 'png') {
+        if (canvasElement) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvasElement.toDataURL('image/png');
+            link.click();
+        } else if (svgElement) {
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svgElement);
+            const img = new Image();
+            const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+            const url = URL.createObjectURL(svgBlob);
+            
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const bbox = svgElement!.getBoundingClientRect();
+                const width = bbox.width || 800;
+                const height = bbox.height || 600;
+                const scaleFactor = 2;
+                
+                canvas.width = width * scaleFactor;
+                canvas.height = height * scaleFactor;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.scale(scaleFactor, scaleFactor);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    try {
+                        const link = document.createElement('a');
+                        link.download = filename;
+                        link.href = canvas.toDataURL('image/png');
+                        link.click();
+                    } catch (e) {
+                        console.error('Export failed', e);
+                        alert('Could not export to PNG due to security restrictions. Try SVG or PDF.');
+                    }
+                }
+                URL.revokeObjectURL(url);
+            };
+            img.src = url;
+        }
+    } else if (format === 'svg') {
+        if (svgElement) {
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svgElement);
+            const blob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = URL.createObjectURL(blob);
+            link.click();
+        }
+    } else if (format === 'pdf') {
+        if ((window as any).html2pdf) {
+             const element = document.createElement('div');
+             element.style.padding = '20px';
+             element.style.background = 'white';
+             
+             if (canvasElement) {
+                 const img = new Image();
+                 img.src = canvasElement.toDataURL('image/png');
+                 img.style.maxWidth = '100%';
+                 element.appendChild(img);
+             } else if (svgElement) {
+                 element.innerHTML = new XMLSerializer().serializeToString(svgElement);
+             }
+             
+             (window as any).html2pdf().from(element).save(filename);
+        } else {
+            alert('PDF generation library not loaded.');
+        }
+    }
+  };
 
   const handleZoomIn = () => setScale(prev => Math.min(prev + 0.2, 3));
   const handleZoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
@@ -319,6 +412,42 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
               </button>
             </div>
           )}
+
+          {/* Download Button */}
+          <div className="relative">
+            <button
+              onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
+              className="p-1.5 bg-white dark:bg-gray-800 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm"
+              title="Download Diagram"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            
+            {isDownloadMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border rounded-md shadow-lg z-50 w-40 py-1">
+                <button
+                  onClick={() => handleDownload('png')}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Download PNG
+                </button>
+                {(type === 'mermaid' || type === 'dot') && (
+                  <button
+                    onClick={() => handleDownload('svg')}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    Download SVG
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDownload('pdf')}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Download PDF
+                </button>
+              </div>
+            )}
+          </div>
 
           <button
             onClick={() => setEditing(true)}

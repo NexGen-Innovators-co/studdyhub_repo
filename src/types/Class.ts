@@ -1,5 +1,7 @@
 // Core types for Class recordings and related functionality
 export interface ClassRecording {
+  audio_url: string;
+  user_id: any;
   id: string;
   title: string;
   subject: string;
@@ -15,13 +17,13 @@ export interface ClassRecording {
 
 // src/types/Class.ts - Update the Quiz interface
 export interface Quiz {
-  id: string;
-  classId: string;
-  title: string;
-  questions: QuizQuestion[];
-  userId: string;
-  created_at: string;
-  source_type?: 'recording' | 'notes' | 'ai'; // Add this field
+  class_id: string | null
+  created_at: string | null
+  id: string
+  questions: any | null
+  source_type: string | null
+  title: string
+  user_id: string
 }
 export interface QuizQuestion {
   id?: string; // Optional, can be generated client-side or by AI
@@ -35,8 +37,6 @@ export interface ScheduleItem {
   id: string;
   title: string;
   subject: string;
-  startTime: string;
-  endTime: string;
   location?: string;
   description?: string;
   color?: string;
@@ -44,6 +44,13 @@ export interface ScheduleItem {
   userId: string;
   created_at: string;
   calendarEventIds?: Record<string, string>;
+  isRecurring?: boolean | null
+  recurrenceDays?: number[] | null
+  recurrenceEndDate?: string | null
+  recurrenceInterval?: number | null
+  recurrencePattern?: string | null
+  startTime: string
+  endTime: string
 }
 // In types/Class.ts
 export interface Message {

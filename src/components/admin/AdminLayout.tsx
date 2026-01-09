@@ -14,7 +14,8 @@ import {
   FileText,
   Menu,
   X,
-  BarChart3
+  BarChart3,
+  BookOpen
 } from 'lucide-react';
 
 export const AdminLayout = () => {
@@ -45,6 +46,7 @@ export const AdminLayout = () => {
   const navItems = [
     { to: '/admin', icon: Home, label: 'Dashboard', perm: true },
     { to: '/admin/users', icon: Users, label: 'Users', perm: permissions.canManageUsers },
+    { to: '/admin/courses', icon: BookOpen, label: 'Courses', perm: true }, // Added Courses
     { to: '/admin/admins', icon: Shield, label: 'Admins', perm: permissions.canManageAdmins },
     { to: '/admin/moderation', icon: AlertTriangle, label: 'Moderation', perm: permissions.canModerateContent },
     { to: '/admin/settings', icon: Settings, label: 'Settings', perm: permissions.canManageSettings },

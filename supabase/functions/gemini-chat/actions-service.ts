@@ -407,6 +407,11 @@ export class StuddyHubActionsService {
         description?: string;
         location?: string;
         color?: string;
+        is_recurring?: boolean;
+        recurrence_pattern?: string;
+        recurrence_days?: number[];
+        recurrence_end_date?: string;
+        recurrence_interval?: number;
     }) {
         try {
             // Validate type
@@ -426,7 +431,12 @@ export class StuddyHubActionsService {
                     location: scheduleData.location || '',
                     color: scheduleData.color || '#3B82F6',
                     created_at: new Date().toISOString(),
-                    calendar_event_id: null // Explicitly set to null as per schema
+                    calendar_event_id: null, // Explicitly set to null as per schema
+                    is_recurring: scheduleData.is_recurring || false,
+                    recurrence_pattern: scheduleData.recurrence_pattern || null,
+                    recurrence_days: scheduleData.recurrence_days || null,
+                    recurrence_end_date: scheduleData.recurrence_end_date || null,
+                    recurrence_interval: scheduleData.recurrence_interval || 1
                 })
                 .select()
                 .single();

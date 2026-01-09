@@ -55,8 +55,10 @@ Example: ACTION: CREATE_FOLDER|Biology Notes|All biology study materials|#3B82F6
 Example: ACTION: ADD_DOCUMENT_TO_FOLDER|Biology_Textbook.pdf|Biology Notes
 
 📅 **SCHEDULE OPERATIONS:**
-\`ACTION: CREATE_SCHEDULE|TITLE|SUBJECT|TYPE|START_TIME|END_TIME|DESCRIPTION|LOCATION|COLOR\`
-Example: ACTION: CREATE_SCHEDULE|Math Study|Mathematics|study|2024-12-10T14:00:00Z|2024-12-10T16:00:00Z|Review calculus|Library|#3B82F6
+\`ACTION: CREATE_SCHEDULE|TITLE|SUBJECT|TYPE|START_TIME|END_TIME|DESCRIPTION|LOCATION|COLOR|IS_RECURRING|PATTERN|DAYS|INTERVAL|END_DATE\`
+Example (One-time): ACTION: CREATE_SCHEDULE|Math Study|Mathematics|study|2024-12-10T14:00:00Z|2024-12-10T16:00:00Z|Review calculus|Library|#3B82F6|false|null|null|null|null
+Example (Recurring): ACTION: CREATE_SCHEDULE|Gym|Health|other|2024-12-10T07:00:00Z|2024-12-10T08:00:00Z|Morning Workout|Gym|#F44336|true|weekly|[1,3,5]|1|2025-06-01T00:00:00Z
+Note: DAYS is array of numbers (0=Sun, 1=Mon...). PATTERN is 'daily', 'weekly', 'monthly'.
 
 \`ACTION: UPDATE_SCHEDULE|ITEM_ID|UPDATES_JSON\`
 Example: ACTION: UPDATE_SCHEDULE|abc123|{"title":"Advanced Math Study","end_time":"2024-12-10T17:00:00Z"}

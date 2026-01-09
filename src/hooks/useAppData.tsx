@@ -138,102 +138,26 @@ const showToastOnce = (message: string, type: 'error' | 'success' | 'info' = 'er
 };
 
 // Type definitions for Supabase responses
-interface SupabaseDocument {
-  id: string;
-  title: string;
-  file_name: string;
-  file_type: string;
-  file_size: number | null;
-  file_url: string;
-  content_extracted: string | null;
-  user_id: string;
-  type: string;
-  processing_status: string | null;
-  processing_error: string | null;
-  created_at: string;
-  updated_at: string;
-  folder_items?: Array<{ folder_id: string }>;
-  folder_ids?: string[];
-  processing_started_at?: string | null;
-  processing_completed_at?: string | null;
-  processing_metadata?: any | null;
-  extraction_model_used?: string | null;
-  total_processing_time_ms?: number | null;
-}
-
-interface SupabaseNote {
-  id: string;
-  title: string;
-  content: string | null;
-  document_id: string | null;
-  user_id: string;
-  category: string;
-  tags: string[];
-  created_at: string;
-  updated_at: string;
-  ai_summary: string | null;
-}
-
-interface SupabaseRecording {
-  id: string;
-  title: string;
-  subject: string;
-  date: string;
-  duration: number;
-  audio_url: string;
-  transcript: string;
-  summary: string;
-  created_at: string;
-  user_id: string;
-  document_id: string;
-}
-
 interface SupabaseScheduleItem {
   id: string;
-  title: string;
-  subject: string;
+  title: string | null;
+  subject: string | null;
   start_time: string;
   end_time: string;
   type: string;
-  description: string;
-  location: string;
-  color: string;
-  user_id: string;
-  created_at: string;
-  calendar_event_id?: string | null;
-}
-
-interface SupabaseQuiz {
-  id: string;
-  title: string;
-  questions: any;
-  class_id: string;
-  user_id: string;
-  created_at: string;
-  source_type?: string;
-}
-
-interface SupabaseFolder {
-  id: string;
-  user_id: string;
-  name: string;
-  parent_folder_id: string | null;
-  color: string;
   description: string | null;
+  location: string | null;
+  color: string | null;
+  user_id: string;
   created_at: string;
-  updated_at: string;
+  calendar_event_id: string | null;
+  is_recurring: boolean;
+  recurrence_pattern: string | null;
+  recurrence_interval: number | null;
+  recurrence_days: number[] | null;
+  recurrence_end_date: string | null;
 }
 
-interface SupabaseProfile {
-  id: string;
-  email: string;
-  full_name: string;
-  avatar_url: string;
-  learning_style: string;
-  learning_preferences: any;
-  created_at: string;
-  updated_at: string;
-}
 
 // Enhanced withTimeout helper with retry logic
 const withRetry = async <T,>(
@@ -470,7 +394,7 @@ export const useAppData = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard' | 'podcasts'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'social' | 'settings' | 'quizzes' | 'dashboard' | 'podcasts' | 'library'>('notes');
   const [isAILoading, setIsAILoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -717,6 +641,15 @@ export const useAppData = () => {
 
     setDataLoading('documents', true);
 
+    // Optimistically load from offline storage for initial load
+    if (isInitial) {
+      offlineStorage.getAll<Document>(STORES.DOCUMENTS).then(offlineDocs => {
+        if (offlineDocs && offlineDocs.length > 0) {
+          setDocuments(offlineDocs);
+        }
+      }).catch(err => console.warn('Failed to load offline documents:', err));
+    }
+
     try {
       const offset = isInitial ? 0 : dataPagination.documents.offset;
       const limit = isInitial ? INITIAL_LOAD_LIMITS.documents : LOAD_MORE_LIMITS.documents;
@@ -833,14 +766,23 @@ export const useAppData = () => {
 
     setDataLoading('recordings', true);
 
+    // Optimistically load from offline storage for initial load
+    if (isInitial) {
+      offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS).then(offlineRecs => {
+        if (offlineRecs && offlineRecs.length > 0) {
+          setRecordings(offlineRecs);
+        }
+      }).catch(err => console.warn('Failed to load offline recordings:', err));
+    }
+
     try {
       const limit = isInitial ? INITIAL_LOAD_LIMITS.recordings : LOAD_MORE_LIMITS.recordings;
       const offset = isInitial ? 0 : dataPagination.recordings.offset;
 
       const startTime = Date.now();
 
-      const { data, error, retriesUsed } = await withRetry<SupabaseRecording[]>(
-        () => withTimeout<SupabaseRecording[]>(
+      const { data, error, retriesUsed } = await withRetry<ClassRecording[]>(
+        () => withTimeout<ClassRecording[]>(
           supabase
             .from('class_recordings')
             .select('*', { count: 'exact' })
@@ -884,10 +826,12 @@ export const useAppData = () => {
           date: recording.date,
           duration: recording.duration || 0,
           audioUrl: recording.audio_url || '',
+          audio_url: recording.audio_url || '',
           transcript: recording.transcript || '',
           summary: recording.summary || '',
           created_at: recording.created_at,
           userId: recording.user_id,
+          user_id: recording.user_id,
           document_id: recording.document_id
         }));
 
@@ -933,6 +877,15 @@ export const useAppData = () => {
     if (!isInitial && !dataPagination.scheduleItems.hasMore) return;
 
     setDataLoading('scheduleItems', true);
+
+    // Optimistically load from offline storage for initial load
+    if (isInitial) {
+      offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE).then(offlineItems => {
+        if (offlineItems && offlineItems.length > 0) {
+          setScheduleItems(offlineItems);
+        }
+      }).catch(err => console.warn('Failed to load offline schedule:', err));
+    }
 
     try {
       const limit = isInitial ? INITIAL_LOAD_LIMITS.scheduleItems : LOAD_MORE_LIMITS.scheduleItems;
@@ -984,7 +937,12 @@ export const useAppData = () => {
           color: item.color || '#3B82F6',
           userId: item.user_id,
           created_at: item.created_at,
-          calendarEventIds: item.calendar_event_id ? JSON.parse(item.calendar_event_id) : undefined
+          calendarEventIds: item.calendar_event_id ? JSON.parse(item.calendar_event_id) : undefined,
+          isRecurring: item.is_recurring,
+          recurrencePattern: item.recurrence_pattern as any,
+          recurrenceInterval: item.recurrence_interval,
+          recurrenceDays: item.recurrence_days,
+          recurrenceEndDate: item.recurrence_end_date
         }));
 
         // Add new IDs to loaded set
@@ -1030,14 +988,23 @@ export const useAppData = () => {
 
     setDataLoading('quizzes', true);
 
+    // Optimistically load from offline storage for initial load
+    if (isInitial) {
+      offlineStorage.getAll<Quiz>(STORES.QUIZZES).then(offlineQuizzes => {
+        if (offlineQuizzes && offlineQuizzes.length > 0) {
+          setQuizzes(offlineQuizzes);
+        }
+      }).catch(err => console.warn('Failed to load offline quizzes:', err));
+    }
+
     try {
       const limit = isInitial ? INITIAL_LOAD_LIMITS.quizzes : LOAD_MORE_LIMITS.quizzes;
       const offset = isInitial ? 0 : dataPagination.quizzes.offset;
 
       const startTime = Date.now();
 
-      const { data, error, retriesUsed } = await withRetry<SupabaseQuiz[]>(
-        () => withTimeout<SupabaseQuiz[]>(
+      const { data, error, retriesUsed } = await withRetry<Quiz[]>(
+        () => withTimeout<Quiz[]>(
           supabase
             .from('quizzes')
             .select('*', { count: 'exact' })
@@ -1099,7 +1066,9 @@ export const useAppData = () => {
               explanation: q.explanation || ''
             })) : []) as QuizQuestion[],
             classId: quiz.class_id,
+            class_id: quiz.class_id,
             userId: quiz.user_id,
+            user_id: quiz.user_id,
             created_at: quiz.created_at,
             source_type: (quiz.source_type || (quiz.title?.toLowerCase().includes('ai smart') ? 'ai' : (quiz.title?.toLowerCase().includes('notes') ? 'notes' : 'recording'))) as any
           };
@@ -1164,11 +1133,28 @@ export const useAppData = () => {
 
     setDataLoading('folders', true);
 
+    // Optimistically load from offline storage for initial load
+    if (isInitial && !cached) {
+      offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS).then(offlineFolders => {
+        if (offlineFolders && offlineFolders.length > 0) {
+          setFolders(offlineFolders);
+          // buildFolderTree might not be available if defined after loadFolders in the same scope
+          // But since it's used in error handler below, we assume it works or we should check.
+          // To be safe, we can skip setFolderTree here or try/catch it.
+          try {
+             setFolderTree(buildFolderTree(offlineFolders));
+          } catch (e) {
+             console.warn('buildFolderTree not ready', e);
+          }
+        }
+      }).catch(err => console.warn('Failed to load offline folders:', err));
+    }
+
     try {
       const startTime = Date.now();
 
-      const { data, error, retriesUsed } = await withRetry<SupabaseFolder[]>(
-        () => withTimeout<SupabaseFolder[]>(
+      const { data, error, retriesUsed } = await withRetry<DocumentFolder[]>(
+        () => withTimeout<DocumentFolder[]>(
           supabase
             .from('document_folders')
             .select('*')
@@ -1264,8 +1250,8 @@ export const useAppData = () => {
     try {
       const startTime = Date.now();
 
-      const { data: profileData, error: profileError, retriesUsed } = await withRetry<SupabaseProfile>(
-        () => withTimeout<SupabaseProfile>(
+      const { data: profileData, error: profileError, retriesUsed } = await withRetry<any>(
+        () => withTimeout<UserProfile>(
           supabase
             .from('profiles')
             .select('*')
@@ -1310,6 +1296,14 @@ export const useAppData = () => {
             examples: true,
             difficulty: 'intermediate'
           },
+          bonus_ai_credits: profileData.bonus_ai_credits,
+          is_public: profileData.is_public,
+          points_balance: profileData.points_balance,
+          quiz_preferences: profileData.quiz_preferences,
+          referral_code: profileData.referral_code,
+          referral_count: profileData.referral_count,
+          school: profileData.school,
+          username: profileData.username,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()        };
       } else {
@@ -1325,6 +1319,14 @@ export const useAppData = () => {
             examples: true,
             difficulty: 'intermediate' as const
           },
+          bonus_ai_credits: 0,
+          is_public: false,
+          points_balance: 0,
+          quiz_preferences: null,
+          referral_code: null,
+          referral_count: 0,
+          school: null,
+          username: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -1365,6 +1367,14 @@ export const useAppData = () => {
           examples: true,
           difficulty: 'intermediate'
         },
+        bonus_ai_credits: 0,
+        is_public: false,
+        points_balance: 0,
+        quiz_preferences: null,
+        referral_code: null,
+        referral_count: 0,
+        school: null,
+        username: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -1399,6 +1409,15 @@ export const useAppData = () => {
       setDataPagination(prev => ({ ...prev, notes: cached.pagination }));
       setDataLoaded(prev => new Set([...prev, 'notes']));
       return;
+    }
+
+    // Optimistically load from offline storage for initial load
+    if (isInitial && !cached) {
+      offlineStorage.getAll<Note>(STORES.NOTES).then(offlineNotes => {
+        if (offlineNotes && offlineNotes.length > 0) {
+          setNotes(offlineNotes);
+        }
+      }).catch(err => console.warn('Failed to load offline notes:', err));
     }
 
     const controller = new AbortController();

@@ -22,16 +22,20 @@ export interface Document {
 }
 
 export interface UserProfile {
-  id: string;
-  email?: string;
-  full_name?: string;
-  avatar_url?: string;
-  learning_style: 'visual' | 'auditory' | 'kinesthetic' | 'reading';
-  learning_preferences: {
-    explanation_style: 'simple' | 'detailed' | 'comprehensive';
-    examples: boolean;
-    difficulty: 'beginner' | 'intermediate' | 'advanced';
-  };
-  created_at: string;
-  updated_at: string;
+  avatar_url: string | null
+  bonus_ai_credits: number | null
+  created_at: string | null
+  email: string | null
+  full_name: string | null
+  id: string
+  is_public: boolean | null
+  learning_preferences: any | null
+  learning_style: string | null
+  points_balance: number | null
+  quiz_preferences: any | null
+  referral_code: string | null
+  referral_count: number | null
+  school: string | null
+  updated_at: string | null
+  username: string | null
 }

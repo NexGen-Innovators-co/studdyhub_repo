@@ -27,7 +27,7 @@ interface UseAppOperationsProps {
   setQuizzes: (quizzes: Quiz[] | ((prev: Quiz[]) => Quiz[])) => void;
   setUserProfile: (profile: UserProfile | null) => void;
   setActiveNote: (note: Note | null) => void;
-  setActiveTab: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings') => void;
+  setActiveTab: (tab: 'notes' | 'recordings' | 'schedule' | 'chat' | 'documents' | 'settings' | 'dashboard' | 'social' | 'quizzes' | 'podcasts' | 'library') => void;
   setIsAILoading: (loading: boolean) => void;
   isRealtimeConnected?: boolean;
   refreshData?: () => void;
@@ -731,7 +731,12 @@ export const useAppOperations = ({
           description: item.description,
           location: item.location,
           color: item.color,
-          user_id: user.id
+          user_id: user.id,
+          is_recurring: item.isRecurring,
+          recurrence_pattern: item.recurrencePattern,
+          recurrence_interval: item.recurrenceInterval,
+          recurrence_days: item.recurrenceDays,
+          recurrence_end_date: item.recurrenceEndDate
         })
         .select()
         .single();
@@ -750,13 +755,19 @@ export const useAppOperations = ({
         location: data.location,
         color: data.color,
         userId: data.user_id,
-        created_at: data.created_at
+        created_at: data.created_at,
+        isRecurring: data.is_recurring,
+        recurrencePattern: data.recurrence_pattern as any,
+        recurrenceInterval: data.recurrence_interval,
+        recurrenceDays: data.recurrence_days,
+        recurrenceEndDate: data.recurrence_end_date
       };
 
       // Sync to external calendars
       try {
         const syncResult = await calendarIntegrationService.syncToCalendar(newScheduleItem, user.id);
         if (syncResult.success) {
+          // Update local object (Database is already updated by the service)
           newScheduleItem.calendarEventIds = syncResult.eventIds;
         }
       } catch (syncError) {
@@ -794,7 +805,12 @@ export const useAppOperations = ({
           type: item.type,
           description: item.description,
           location: item.location,
-          color: item.color
+          color: item.color,
+          is_recurring: item.isRecurring,
+          recurrence_pattern: item.recurrencePattern,
+          recurrence_interval: item.recurrenceInterval,
+          recurrence_days: item.recurrenceDays,
+          recurrence_end_date: item.recurrenceEndDate
         })
         .eq('id', item.id)
         .eq('user_id', user.id);
@@ -821,6 +837,7 @@ export const useAppOperations = ({
           const syncResult = await calendarIntegrationService.syncToCalendar(item, user.id);
           if (syncResult.success) {
             item.calendarEventIds = syncResult.eventIds;
+            // Database update is handled within syncToCalendar
           }
         }
       } catch (syncError) {
