@@ -16,7 +16,15 @@ export const useAiMessageTracker = () => {
     const navigate = useNavigate()
     
     useEffect(() => {
-        if (!user?.id || !isFree) return;
+        if (!user?.id || !isFree) {
+            setIsLoading(false);
+            return;
+        }
+
+        if (!navigator.onLine) {
+            setIsLoading(false);
+            return;
+        }
 
         const fetchTodayMessages = async () => {
             try {

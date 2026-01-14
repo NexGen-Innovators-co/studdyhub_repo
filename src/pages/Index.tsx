@@ -11,7 +11,7 @@ import BookPagesAnimation, { LoadingScreen } from '@/components/ui/bookloader';
 import { QuickTips } from '@/components/notes/components/QuickTip';
 import { AlertTriangle, Bot, FileText, Home, Mic, RefreshCw, Users2, X, Grid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import AIBot from '@/components/ui/aibot';
 import { Helmet } from 'react-helmet-async';
 import { SubscriptionStatusBar } from '@/components/subscription/SubscriptionStatusBar';
@@ -587,7 +587,18 @@ const Index = () => {
 
         {/* Main Content */}
         <div className="flex-1 h-full overflow-y-auto modern-scrollbar bg-gray-50 dark:bg-slate-900">
-          <TabContent {...tabContentProps} />
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentActiveTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="min-h-full"
+            >
+              <TabContent {...tabContentProps} />
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
 

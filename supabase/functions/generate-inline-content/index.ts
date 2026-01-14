@@ -112,6 +112,15 @@ TASK: ${actionType}
 		
 		basePrompt += `\n- Be helpful, clear, and concise.`;
 		basePrompt += `\n- Match the user's learning style and preferences.`;
+		basePrompt += `\n- IMPORTANT: If you mention or suggest visual aids, diagrams, flowcharts, or graphs, YOU MUST GENERATE the actual Mermaid.js code blocks for them.`;
+		basePrompt += `\n- Do not just describe what the diagrams would look like.`;
+        basePrompt += `\n- Insert the diagram code blocks directly into the text where they belong.`;
+        basePrompt += `\n- Ensure proper spacing (newlines) before and after each diagram block.`;
+        basePrompt += `\n- Example of multiple diagrams:`;
+        basePrompt += `\n  Text explanation...`;
+        basePrompt += `\n  \`\`\`mermaid graph TD; A-->B; \`\`\``;
+        basePrompt += `\n  More text...`;
+        basePrompt += `\n  \`\`\`mermaid graph TD; C-->D; \`\`\``;
 	}
 
 	return basePrompt;

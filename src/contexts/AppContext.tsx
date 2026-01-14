@@ -17,7 +17,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useAppData } from '../hooks/useAppData';
 import { useAppOperations } from '../hooks/useAppOperations';
 import { useAudioProcessing } from '../components/classRecordings/hooks/useAudioProcessing';
-import { Message, ChatSession, FileData, MessagePart } from '../types/Class';
+import { Message, ChatSession, FileData, MessagePart, ClassRecording, ScheduleItem, Quiz } from '../types/Class';
 import { Document as AppDocument, UserProfile } from '../types/Document';
 import { Note } from '../types/Note';
 import { appReducer, initialAppState, AppState, AppAction } from './appReducer';
@@ -34,12 +34,11 @@ interface AppContextType extends AppState {
   // Auth & data hooks
   user: any;
   authLoading: boolean;
-  dataLoading: boolean;
 
   // Data from useAppData
   notes: Note[];
-  recordings: any[];
-  scheduleItems: any[];
+  recordings: ClassRecording[];
+  scheduleItems: ScheduleItem[];
   allChatMessages: Message[];
   documents: AppDocument[];
   userProfile: UserProfile | null;
@@ -49,7 +48,7 @@ interface AppContextType extends AppState {
   isSidebarOpen: boolean;
   isAILoading: boolean;
   filteredNotes: Note[];
-  quizzes: any[];
+  quizzes: Quiz[];
   dataPagination: any;
 
   // Computed values
@@ -135,6 +134,8 @@ interface AppContextType extends AppState {
   // ← Added socialData to the interface
   socialData: ReturnType<typeof useSocialData>;
   refreshNotes: () => Promise<void>; // Add this
+  refreshData: (dataType: keyof DataLoadingState) => void; // Added generic refresh
+  dataLoading: DataLoadingState;
   navigateToNote: (noteId: string | null) => void; // Fix the syntax error
   subscription: Subscription | null;
   subscriptionLoading: boolean;
@@ -265,7 +266,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const {
     dataErrors,
     clearError,
-    retryLoading,
     notes,
     recordings,
     scheduleItems,
@@ -278,7 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isSidebarOpen,
     isAILoading,
     filteredNotes,
-    loading: dataLoading,
+    loading: overallLoading,
     quizzes,
     dataPagination,
     setNotes,
@@ -306,18 +306,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadFolders,
     loadSpecificDocuments,
     loadSpecificNotes,
-    refreshNotes
+    refreshNotes,
+    retryLoading,
   } = appData;
 
-  const refreshData = useCallback(() => {
-    if (user?.id) {
-      appData.retryLoading('notes');
-      appData.retryLoading('documents');
-      appData.retryLoading('quizzes');
-    }
-  }, [user?.id, appData]);
+  const refreshData = useCallback((dataType: keyof DataLoadingState) => {
+      retryLoading(dataType);
+  }, [retryLoading]);
 
-  const { syncPendingChanges } = useOfflineSync(refreshData);
+  const retryAllData = useCallback(() => {
+    if (user?.id) {
+      retryLoading('notes');
+      retryLoading('documents');
+      retryLoading('quizzes');
+    }
+  }, [user?.id, retryLoading]);
+
+  const { syncPendingChanges } = useOfflineSync(retryAllData);
 
   const addDocument = useCallback((document: AppDocument) => {
     setDocuments(prev => [document, ...prev]);
@@ -363,7 +368,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     subscriptionLimits,
     checkSubscriptionAccess,
     refreshSubscription,
-    refreshData,
+    refreshData: retryAllData,
   });
   const socialData = useSocialData(userProfile, 'newest', 'all');
   const navigateToNote = useCallback((noteId: string | null) => {
@@ -1109,7 +1114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Smart data loading based on tab activation
   useEffect(() => {
-    if (!dataLoading) {
+    if (!overallLoading) {
       switch (currentActiveTab) {
         case 'dashboard':
           loadDataIfNeeded('notes');
@@ -1137,7 +1142,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           break;
       }
     }
-  }, [currentActiveTab, loadDataIfNeeded, dataLoading]);
+  }, [currentActiveTab, loadDataIfNeeded, overallLoading]);
 
   const contextValue: AppContextType = {
     // State
@@ -1146,7 +1151,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Auth & data
     user,
     authLoading,
-    dataLoading,
     dataErrors,
     clearError,
     retryLoading,
@@ -1243,6 +1247,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsLoadingSession,
     socialData,
     refreshNotes,
+    refreshData: refreshData,
+    dataLoading: appData.dataLoading,
     navigateToNote,
     subscription,
     subscriptionLoading,

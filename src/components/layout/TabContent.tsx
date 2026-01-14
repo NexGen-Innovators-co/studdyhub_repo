@@ -3,7 +3,7 @@ import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { NotesList } from '../notes/components/NotesList';
 import { NoteEditor } from '../notes/NoteEditor';
 import { ClassRecordings } from '../classRecordings/ClassRecordings';
-import { Schedule } from '../shedules/Schedule';
+import { Schedule } from '../schedules/Schedule';
 import AIChat from '../aiChat/AiChat';
 import { DocumentUpload } from '../documents/DocumentUpload';
 import { UserSettings } from '../userSettings/UserSettings';
@@ -436,7 +436,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                 lg:translate-x-0 lg:static lg:w-80 lg:flex-shrink-0
                 fixed inset-y-0 left-0 lg:z-0 z-30 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
                 transition-transform duration-300 ease-in-out lg:transition-none
-                lg:border-r lg:border-gray-200 lg:dark:border-gray-700
+                lg:border-r lg:border-gray-200 lg:dark:border-gray-700 lg:max-h-[90vh]
               `}>
               <NotesList
                 {...notesHistoryProps}
@@ -446,7 +446,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
             </div>
 
             {/* Editor Area - Centered content */}
-            <div className="flex-1 h-full bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
+            <div className="flex-1 h-full lg:max-h-[90vh] bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
               {notesProps.activeNote ? (
                 <NoteEditor
                   note={notesProps.activeNote}

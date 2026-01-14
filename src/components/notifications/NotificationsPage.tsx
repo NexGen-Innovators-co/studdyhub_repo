@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useNotifications } from '@/hooks/useNotifications';
-import { Bell, BellOff, Check, CheckCheck, Trash2, Send, Settings, Filter } from 'lucide-react';
+import { Bell, BellOff, Check, CheckCheck, Trash2, Send, Settings, Filter, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import type { Notification } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,7 +20,17 @@ export function NotificationsPage() {
     markAsRead,
     markAllAsRead,
     deleteNotification,
+    fetchNotifications,
   } = useNotifications();
+
+  // Add refreshing state for button animation
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchNotifications();
+    setTimeout(() => setIsRefreshing(false), 500); 
+  };
 
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
 
@@ -186,6 +196,15 @@ export function NotificationsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Button
+        onClick={handleManualRefresh}
+        disabled={isRefreshing}
+        size="icon"
+        className="fixed bottom-24 right-6 lg:bottom-6 h-14 w-14 rounded-full shadow-xl z-50 bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 hover:scale-105"
+      >
+        <RefreshCw className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} />
+      </Button>
     </div>
   );
 }

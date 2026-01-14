@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
+import { useAppContext } from '../../hooks/useAppContext';
 
 interface ClassRecordingsProps {
   recordings?: ClassRecording[];
@@ -50,6 +51,7 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
   searchQuery: externalSearchQuery,
   onSearchChange,
 }) => {
+  const { refreshData, dataLoading } = useAppContext();
   const [selectedRecording, setSelectedRecording] = useState<ClassRecording | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
@@ -351,15 +353,26 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
           <div className="relative overflow-hidden rounded-2xl my-4 p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl">
             <div className="absolute inset-0 bg-black opacity-10" />
             <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-2">
-                <Headphones className="h-8 w-8" />
-                <h1 className="text-2xl sm:text-3xl font-bold">Class Recordings</h1>
+              <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Headphones className="h-8 w-8" />
+                    <h1 className="text-2xl sm:text-3xl font-bold">Class Recordings</h1>
+                  </div>
               </div>
               <p className="text-white/80 text-sm sm:text-base">
                 Record lectures, upload audio, and let AI generate notes for you
               </p>
             </div>
           </div>
+
+          <Button
+            onClick={() => refreshData('recordings')}
+            disabled={dataLoading.recordings}
+            size="icon"
+            className="fixed bottom-24 right-6 lg:bottom-6 h-14 w-14 rounded-full shadow-xl z-50 bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 hover:scale-105"
+          >
+            <RefreshCw className={`h-6 w-6 ${dataLoading.recordings ? 'animate-spin' : ''}`} />
+          </Button>
 
           {/* Search Bar */}
           <div className="mb-4">

@@ -1279,14 +1279,22 @@ export class StuddyHubActionsService {
     }
 
     // ========== ACTION PARSER ==========
-    parseActionFromText(text: string): Array<{
+    parseActionFromText(text: string): {
         action: string;
         params: Record<string, any>;
         confidence: number;
         matchedString: string;
-    }> {
+    } | null {
         const lowerText = text.toLowerCase();
         
+        // Helper to find the best match
+        let bestMatch: {
+            action: string;
+            params: Record<string, any>;
+            confidence: number;
+            matchedString: string;
+        } | null = null;
+
         // Comprehensive action detection
         const actionPatterns = [
             // NOTE ACTIONS
@@ -1506,45 +1514,23 @@ export class StuddyHubActionsService {
             }
         ];
 
-        // Store all identified actions
-        const foundActions: Array<{
-            action: string;
-            params: Record<string, any>;
-            confidence: number;
-            matchedString: string;
-        }> = [];
-
-        // First, check for explicit action markers with global search
+        // First, check for explicit action markers
         for (const pattern of actionPatterns) {
-            try {
-                // Create a global regex from the pattern
-                const globalRegex = new RegExp(pattern.pattern.source, 'g');
-                let match: RegExpExecArray | null;
-                
-                // Keep searching until no more matches found
-                while ((match = globalRegex.exec(text)) !== null) {
-                    console.log(`[ActionParser] Found explicit action: ${pattern.action}`);
-                    foundActions.push({
-                        action: pattern.action,
-                        params: pattern.extractor(match),
-                        confidence: 0.95,
-                        matchedString: match[0]
-                    });
-                }
-            } catch (error) {
-                console.error(`[ActionParser] Error processing pattern for ${pattern.action}:`, error);
+            const match = text.match(pattern.pattern);
+            if (match) {
+                console.log(`[ActionParser] Found explicit action: ${pattern.action}`);
+                return {
+                    action: pattern.action,
+                    params: pattern.extractor(match),
+                    confidence: 0.95,
+                    matchedString: match[0]
+                };
             }
         }
 
-        // If we found explicitly marked actions, prioritize them and return
-        if (foundActions.length > 0) {
-            return foundActions;
-        }
-
-        // Fallback: Natural language detection (Implicit actions)
-        // Note: For now, we only detect ONE implicit action at a time to avoid false positives
+        // Fallback: Natural language detection
         if (lowerText.includes('create a note') || lowerText.includes('make a note')) {
-            return [{
+            return {
                 action: 'CREATE_NOTE',
                 params: {
                     title: this.extractTitle(text) || 'New Note',
@@ -1554,14 +1540,14 @@ export class StuddyHubActionsService {
                 },
                 confidence: 0.7,
                 matchedString: '' // No specific string to strip for implicit/fallback actions
-            }];
+            };
         }
 
         if (lowerText.includes('make flashcards') && lowerText.includes('from note')) {
             const noteMatch = text.match(/from (?:my )?note[:\s]+"?([^"\n]+)"?/i);
             const countMatch = text.match(/(\d+)\s+(?:flashcards?|cards?)/i);
             
-            return [{
+            return {
                 action: 'CREATE_FLASHCARDS_FROM_NOTE',
                 params: {
                     noteTitle: noteMatch ? noteMatch[1].trim() : this.extractTitle(text) || 'Recent Note',
@@ -1569,11 +1555,11 @@ export class StuddyHubActionsService {
                 },
                 confidence: 0.8,
                 matchedString: ''
-            }];
+            };
         }
 
         if (lowerText.includes('schedule') || lowerText.includes('calendar')) {
-            return [{
+            return {
                 action: 'CREATE_SCHEDULE',
                 params: {
                     title: this.extractTitle(text) || 'Study Session',
@@ -1587,11 +1573,11 @@ export class StuddyHubActionsService {
                 },
                 confidence: 0.6,
                 matchedString: ''
-            }];
+            };
         }
 
         if (lowerText.includes('learning goal') || lowerText.includes('set goal')) {
-            return [{
+            return {
                 action: 'CREATE_LEARNING_GOAL',
                 params: {
                     goal_text: this.extractGoalText(text) || 'New Learning Goal',
@@ -1601,10 +1587,10 @@ export class StuddyHubActionsService {
                 },
                 confidence: 0.7,
                 matchedString: ''
-            }];
+            };
         }
 
-        return [];
+        return null;
     }
 
     private extractTitle(text: string): string | null {

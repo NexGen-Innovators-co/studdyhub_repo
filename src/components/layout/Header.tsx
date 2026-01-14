@@ -14,7 +14,8 @@ import {
   School,
   Globe,
   Library,
-  List
+  List,
+  WifiOff
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../ui/button';
@@ -28,6 +29,7 @@ import { PlanType } from '@/hooks/useSubscription';
 import { Badge } from '../ui/badge';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { NotificationCenter } from '../notifications/NotificationCenter';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 interface HeaderProps {
   onNewNote: () => void;
@@ -123,7 +125,7 @@ const sectionTabs = {
   // ],
   schedule: [
     { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'upcoming', label: 'List View', icon: List },
+    { id: 'upcoming', label: 'Upcoming', icon:  TrendingUp },
     { id: 'today', label: 'Today', icon: Clock },
     { id: 'past', label: 'Past', icon: History },
   ],
@@ -191,6 +193,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isInstalling, setIsInstalling] = useState(false);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const isOnline = useOnlineStatus();
 
   const avatarRef = useRef<HTMLDivElement>(null);
   const appMenuRef = useRef<HTMLDivElement>(null);
@@ -599,6 +602,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Install App Button Component
   const InstallAppButton = () => {
+    // Only show if installed or if installation is possible (prompt available)
+    if (!isPwaInstalled && !deferredPrompt) return null;
+
     if (isPwaInstalled) {
       return (
         <Button
@@ -744,14 +750,22 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Right: Install App + Create Button + Notifications + Avatar */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* Install App Button - Hidden on smaller screens */}
-            {/* <div className="hidden md:block">
+            <div className="hidden md:block">
               <InstallAppButton />
-            </div> */}
+            </div>
             
             {/* Subscription Badge - Hidden on mobile */}
             <div className="hidden sm:block">
               <SubscriptionBadge />
             </div>
+
+            {/* Offline Indicator in Header */}
+            {!isOnline && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive rounded-full border border-destructive/20 text-xs font-medium animate-pulse">
+                <WifiOff className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Offline</span>
+              </div>
+            )}
 
             {/* Notification Center */}
             <NotificationCenter />
@@ -897,12 +911,18 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 max-w-sm">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                <Smartphone className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                {isMobileDevice() ? (
+                  <Smartphone className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                ) : (
+                  <Download className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                )}
               </div>
               <div className="flex-1">
                 <h3 className="font-bold text-lg">Install StuddyHub</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                  Install as a mobile app for better experience and offline access.
+                  {isMobileDevice()
+                    ? 'Install as a mobile app for better experience and offline access.'
+                    : 'Install the app for better experience and offline access.'}
                 </p>
                 <div className="flex gap-2 mt-3">
                   <Button

@@ -19,16 +19,18 @@ interface FlashcardDeckProps {
   noteId: string;
   userId: string;
   onGenerate: () => void;
+  lastUpdated?: number;
+  onClose?: () => void;
 }
 
-export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({ noteId, userId, onGenerate }) => {
+export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({ noteId, userId, onGenerate, lastUpdated, onClose }) => {
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadFlashcards();
-  }, [noteId]);
+  }, [noteId, lastUpdated]);
 
   const loadFlashcards = async () => {
     try {
@@ -105,17 +107,29 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({ noteId, userId, on
           </p>
         </div>
 
-        <button
-          onClick={onGenerate}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors self-start sm:self-auto"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Generate More
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onGenerate}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors self-start sm:self-auto"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Generate More
+          </button>
+          
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              title="Close Flashcards"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Cards Grid - Fixed responsive layout */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto pb-18">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
         <AnimatePresence>
           {flashcards.map((card) => (
             <motion.div

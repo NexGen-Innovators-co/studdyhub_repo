@@ -1,8 +1,9 @@
 import { Badge } from '../../ui/badge';
-import { XCircle, Paperclip, Image, BookOpen, StickyNote } from 'lucide-react';
+import { X, Paperclip, Image as ImageIcon, BookOpen, StickyNote, FileText } from 'lucide-react';
 import { Document } from '../../../types/Document';
-import { AttachedFile } from '../AiChat';  // Adjust import if needed, or pass as prop
+import { AttachedFile } from '../AiChat';
 import { Note } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface ContextBadgesProps {
   attachedFiles: AttachedFile[];
@@ -14,51 +15,128 @@ interface ContextBadgesProps {
   selectedDocumentIds: string[];
   documents: Document[];
   notes: Note[];
+  handleRemoveFile: (fileId: string) => void;
+  onViewContent: (type: 'image' | 'text' | 'document-text', content: string | null, language?: string, imageUrl?: string) => void;
 }
 
 export const ContextBadges = ({
   attachedFiles,
-  selectedImageDocuments,
-  selectedDocumentTitles,
-  selectedNoteTitles,
-  handleRemoveAllFiles,
   onSelectionChange,
   selectedDocumentIds,
   documents,
   notes,
-}: ContextBadgesProps) => (
-  <div className="mb-3 p-3 bg-slate-100 border border-slate-200 rounded-lg flex flex-wrap items-center gap-2 dark:bg-gray-800 dark:border-gray-700">
-    <span className="text-base md:text-lg font-medium text-slate-700 dark:text-gray-200 font-claude">Context:</span>
-    {attachedFiles.length > 0 && (
-      <Badge
-        variant="secondary"
-        className="bg-orange-500/20 text-orange-800 border-orange-400 flex items-center gap-1 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700 text-sm md:text-base font-sans"
-      >
-        <Paperclip className="h-3 w-3" />
-        {attachedFiles.length} File{attachedFiles.length > 1 ? 's' : ''}
-        <XCircle
-          className="h-3 w-3 ml-1 cursor-pointer text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-200"
-          onClick={handleRemoveAllFiles}
-        />
-      </Badge>
-    )}
-    {selectedImageDocuments.length > 0 && (
-      <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
-        <Image className="h-3 w-3" /> {selectedImageDocuments.length} Image Doc{selectedImageDocuments.length > 1 ? 's' : ''}
-        <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !selectedImageDocuments.map(imgDoc => imgDoc.id).includes(id)))} />
-      </Badge>
-    )}
-    {selectedDocumentTitles.length > 0 && (
-      <Badge variant="secondary" className="bg-blue-500/20 text-blue-800 border-blue-400 flex items-center gap-1 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 text-sm md:text-base font-sans">
-        <BookOpen className="h-3 w-3 mr-1" /> {selectedDocumentTitles.length} Text Doc{selectedDocumentTitles.length > 1 ? 's' : ''}
-        <XCircle className="h-3 w-3 ml-1 cursor-pointer text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !documents.filter(doc => doc.type === 'text').map(d => d.id).includes(id)))} />
-      </Badge>
-    )}
-    {selectedNoteTitles.length > 0 && (
-      <Badge variant="secondary" className="bg-green-500/20 text-green-800 border-green-400 flex items-center gap-1 dark:bg-green-950 dark:text-green-300 dark:border-green-700 text-sm md:text-base font-sans">
-        <StickyNote className="h-3 w-3 mr-1" /> {selectedNoteTitles.length} Note{selectedNoteTitles.length > 1 ? 's' : ''}
-        <XCircle className="h-3 w-3 ml-1 cursor-pointer text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onClick={() => onSelectionChange(selectedDocumentIds.filter(id => !notes.map(n => n.id).includes(id)))} />
-      </Badge>
-    )}
-  </div>
-);
+  handleRemoveFile,
+  onViewContent
+}: ContextBadgesProps) => {
+
+  const handleRemoveDocOrNote = (id: string) => {
+    onSelectionChange(selectedDocumentIds.filter(existingId => existingId !== id));
+  };
+
+  const getDocOrNote = (id: string) => {
+    // Check notes first to preserve Note identification (Icon, etc.)
+    const note = notes.find(n => n.id === id);
+    if (note) return { type: 'note', item: note };
+
+    // Then check documents (which might include merged docs/notes if passed that way, but we caught notes above)
+    const doc = documents.find(d => d.id === id);
+    if (doc) return { type: 'document', item: doc };
+    
+    return null;
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2 mb-2 max-h-[100px] overflow-y-auto modern-scrollbar">
+      {/* Attached Files */}
+      {attachedFiles.map((file) => (
+        <Badge
+          key={file.id}
+          variant="secondary"
+          className="bg-orange-100 text-orange-800 border-orange-200 flex items-center gap-1.5 py-1 pl-2 pr-1.5 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800 cursor-pointer hover:bg-orange-200 dark:hover:bg-orange-950/60 transition-colors"
+          onClick={() => {
+             if (file.type === 'image' && file.preview) {
+                onViewContent('image', null, undefined, file.preview);
+             }
+          }}
+        >
+          {file.type === 'image' ? <ImageIcon className="h-3.5 w-3.5" /> : <Paperclip className="h-3.5 w-3.5" />}
+          <span className="max-w-[150px] truncate" title={file.file.name}>{file.file.name}</span>
+          <div
+            role="button"
+            className="rounded-full p-0.5 hover:bg-orange-300/50 dark:hover:bg-orange-800/50 ml-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRemoveFile(file.id);
+            }}
+          >
+            <X className="h-3 w-3" />
+          </div>
+        </Badge>
+      ))}
+
+      {/* Selected Documents & Notes */}
+      {selectedDocumentIds.map(id => {
+         const result = getDocOrNote(id);
+         if (!result) return null;
+         
+         const { type, item } = result;
+
+         let Icon = FileText;
+         let variantClasses = "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800";
+         let hoverClasses = "hover:bg-blue-200 dark:hover:bg-blue-950/60";
+         let closeHoverClasses = "hover:bg-blue-300/50 dark:hover:bg-blue-800/50";
+         let contentHandler = () => {};
+
+         if (type === 'document') {
+            const doc = item as Document;
+            if (doc.type === 'image') {
+                Icon = ImageIcon;
+            } else {
+                Icon = BookOpen;
+            }
+            contentHandler = () => {
+                 if (doc.content_extracted) {
+                      onViewContent('document-text', doc.content_extracted, 'markdown');
+                 } else if (doc.type ==='image' && doc.file_url) {
+                      onViewContent('image', null, undefined, doc.file_url);
+                 }
+            };
+         } else {
+            // Note
+            Icon = StickyNote;
+            variantClasses = "bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800";
+            hoverClasses = "hover:bg-green-200 dark:hover:bg-green-950/60";
+            closeHoverClasses = "hover:bg-green-300/50 dark:hover:bg-green-800/50";
+            const note = item as Note;
+             contentHandler = () => {
+                  onViewContent('document-text', note.content, 'markdown');
+             };
+         }
+
+         const title = (item as any).title || (item as any).file_name || 'Untitled';
+
+         return (
+            <Badge
+                key={id}
+                variant="secondary"
+                className={cn("flex items-center gap-1.5 py-1 pl-2 pr-1.5 cursor-pointer transition-colors border", variantClasses, hoverClasses)}
+                onClick={contentHandler}
+            >
+                <Icon className="h-3.5 w-3.5" />
+                <span className="max-w-[150px] truncate" title={title}>{title}</span>
+                <div
+                    role="button"
+                    className={cn("rounded-full p-0.5 ml-1 transition-colors", closeHoverClasses)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveDocOrNote(id);
+                    }}
+                >
+                    <X className="h-3 w-3" />
+                </div>
+            </Badge>
+         );
+      })}
+    </div>
+  );
+};

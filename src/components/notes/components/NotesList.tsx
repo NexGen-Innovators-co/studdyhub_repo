@@ -213,7 +213,7 @@ export const NotesList: React.FC<NotesListProps> = ({
   return (
     <div className={`flex flex-col h-full ${isOpen
       ? 'translate-x-0 w-72 md:w-64 lg:w-80 max-h-screen lg:max-h-[95vh] overflow-y-auto'
-      : 'h-0 lg:h-[95vh] lg:translate-x-0 lg:w-80'
+      : 'h-0 lg:h-full lg:translate-x-0 lg:w-80'
       } bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-gray-800 lg:static lg:shadow-none`}>
       {/* Mobile Header with Close Button */}
       <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-gray-800">

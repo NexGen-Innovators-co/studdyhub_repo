@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Book, Loader2, School, Globe, Library, Check, ChevronsUpDown } from 'lucide-react';
+import { Search, Book, Loader2, School, Globe, Library, Check, ChevronsUpDown, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -101,7 +101,7 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
     return null; // 'all'
   };
 
-  const { data: courses, isLoading } = useCourses(getFilter());
+  const { data: courses, isLoading, refetch } = useCourses(getFilter());
 
   const handleSaveSchool = async () => {
     if (!user || !tempSchoolName.trim()) return;
@@ -139,6 +139,15 @@ export const CourseList: React.FC<CourseListProps> = ({ onSelectCourse }) => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+           <Button 
+             variant="ghost" 
+             size="icon" 
+             onClick={() => refetch()} 
+             disabled={isLoading}
+             title="Refresh Courses"
+           >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+           </Button>
            {userSchool && (
             <Button variant="outline" size="sm" onClick={() => setIsSchoolDialogOpen(true)} className="hover:text-blue-600 hover:border-blue-200 dark:hover:border-blue-800 dark:hover:text-blue-400">
               Change School

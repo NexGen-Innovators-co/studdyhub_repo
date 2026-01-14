@@ -1,7 +1,7 @@
 // components/InlineAIEditor.tsx - IMPROVED DIAGRAM HANDLING
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '../../ui/button';
-import { Check, X, RotateCcw, Loader2, Edit3, Sparkles, ChevronDown, ChevronUp, AlertCircle, Lightbulb } from 'lucide-react';
+import { Check, X, RotateCcw, Loader2, Edit3, Sparkles, ChevronDown, ChevronUp, AlertCircle, Lightbulb, GripHorizontal } from 'lucide-react';
 import { Textarea } from '../../ui/textarea';
 import { Bar, Line, Pie, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
 import ReactMarkdown from 'react-markdown';
@@ -318,6 +318,67 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
   const [showPreview, setShowPreview] = useState(false);
   const [preservedSelectedText, setPreservedSelectedText] = useState(selectedText);
 
+  // Dragging state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [positionOverride, setPositionOverride] = useState<{ top: number, left: number } | null>(null);
+
+  // Reset drag position when visibility changes (but not just position updates, to keep it where user left it if they are just typing)
+  // Actually, if selection changes (position changes), we probably want to reset to stick to the new selection?
+  // Let's reset if isVisible goes false.
+  useEffect(() => {
+    if (!isVisible) {
+      setPositionOverride(null);
+    }
+  }, [isVisible]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (window.innerWidth < 640) return; // No dragging on mobile
+    
+    // Only allow dragging from header/grip areas, prevent conflicts
+    if ((e.target as HTMLElement).closest('button')) return; 
+
+    e.preventDefault();
+    
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setIsDragging(true);
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
+      setDragOffset({ x: offsetX, y: offsetY });
+      
+      // If we haven't overridden yet, set initial override to current computed position
+      if (!positionOverride) {
+          setPositionOverride({ top: rect.top, left: rect.left });
+      }
+    }
+  }, [positionOverride]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        setPositionOverride({
+          top: e.clientY - dragOffset.y,
+          left: e.clientX - dragOffset.x
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -491,12 +552,20 @@ export const InlineAIEditor: React.FC<InlineAIEditorProps> = ({
       }
       style={window.innerWidth < 640
         ? { left: 0, right: 0, bottom: 0, top: 'auto', width: '100vw', maxWidth: '100vw', minWidth: 0, borderRadius: '1rem 1rem 0 0' }
-        : { top: `${adjustedPosition.top}px`, left: `${adjustedPosition.left}px`, transform: 'translateX(-50%)' }
+        : positionOverride 
+            ? { top: `${positionOverride.top}px`, left: `${positionOverride.left}px`, margin: 0 }
+            : { top: `${adjustedPosition.top}px`, left: `${adjustedPosition.left}px`, transform: 'translateX(-50%)' }
       }
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-blue-50 dark:from-gray-800 dark:to-gray-800">
+      <div 
+        className={`flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-blue-50 dark:from-gray-800 dark:to-gray-800 ${window.innerWidth >= 640 ? 'cursor-move' : ''}`}
+        onMouseDown={handleMouseDown}
+      >
         <div className="flex items-center gap-3">
+          {window.innerWidth >= 640 && (
+            <GripHorizontal className="h-4 w-4 text-gray-400" />
+          )}
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-r from-blue-600 to-blue-600 text-white text-sm">
             {actionConfig.icon}
           </div>

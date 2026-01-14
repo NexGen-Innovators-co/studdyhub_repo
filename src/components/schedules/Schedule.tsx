@@ -12,6 +12,7 @@ import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
 import { ScheduleItem } from '../../types/Class';
 import { toast } from 'sonner';
+import { useAppContext } from '../../hooks/useAppContext';
 import { AppShell } from '../layout/AppShell';
 import { StickyRail } from '../layout/StickyRail';
 import { HeroHeader } from '../layout/HeroHeader';
@@ -64,6 +65,10 @@ export const Schedule: React.FC<ScheduleProps> = ({
   isLoading = false,
   onRefresh
 }) => {
+  const { refreshData, dataLoading } = useAppContext();
+  const handleRefresh = onRefresh || (() => refreshData('scheduleItems'));
+  const isRefreshing = isLoading || dataLoading.scheduleItems;
+
   const [activeTab, setActiveTab] = useState<'calendar' | 'upcoming' | 'today' | 'past'>('calendar');
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
@@ -388,11 +393,11 @@ export const Schedule: React.FC<ScheduleProps> = ({
             icon: <Plus className="h-4 w-4 text-blue-600" />,
             onClick: () => setShowForm(true),
           },
-          ...(onRefresh ? [{
-            label: isLoading ? "Refreshing..." : "Refresh",
-            icon: <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />,
-            onClick: () => onRefresh?.(),
-          }] : [])
+          {
+            label: isRefreshing ? "Refreshing..." : "Refresh",
+            icon: <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />,
+            onClick: () => handleRefresh?.(),
+          }
         ]}
       />
       <StatsCard
@@ -430,16 +435,6 @@ export const Schedule: React.FC<ScheduleProps> = ({
           gradient="from-blue-600 to-indigo-600"
           actions={
             <div className="flex gap-2">
-              {onRefresh && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onRefresh}
-                  disabled={isLoading}
-                >
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                </Button>
-              )}
               <SubscriptionGuard
                 feature="Schedule Items"
                 limitFeature="maxScheduleItems"
@@ -722,9 +717,9 @@ export const Schedule: React.FC<ScheduleProps> = ({
                  </div>
                </div>
 
-               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+               <div className="flex flex-col gap-8">
                  {/* Calendar Grid */}
-                 <Card className="xl:col-span-2 border-none shadow-md overflow-hidden">
+                 <Card className="w-full border-none shadow-md overflow-hidden">
                    <CardContent className="p-0">
                      {/* Days Header */}
                      <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
@@ -822,7 +817,7 @@ export const Schedule: React.FC<ScheduleProps> = ({
                      )}
                    </div>
 
-                   <Card className="h-[600px] overflow-hidden flex flex-col">
+                   <Card className="min-h-[400px] h-auto overflow-hidden flex flex-col">
                      <CardContent className="p-4 flex-1 overflow-y-auto space-y-3">
                        {selectedDate ? (
                          (() => {
@@ -840,37 +835,85 @@ export const Schedule: React.FC<ScheduleProps> = ({
                              .map((item) => (
                              <Card 
                                key={item.id} 
-                               className="border-l-4 hover:shadow-md transition-shadow cursor-pointer group relative"
+                               className="hover:shadow-lg transition-all duration-200 border-l-4"
                                style={{ borderLeftColor: item.color }}
                              >
-                               <div className="p-3">
-                                 <div className="flex justify-between items-start mb-1">
-                                   <h4 className="font-semibold text-sm truncate pr-6">{item.title}</h4>
-                                   <div className="opacity-0 group-hover:opacity-100 absolute top-2 right-2 flex gap-1 bg-white dark:bg-slate-800 p-1 rounded shadow-sm">
-                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleEdit(item); }}>
-                                        <Edit2 className="h-3 w-3" />
-                                      </Button>
-                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.title); }}>
-                                        <Trash2 className="h-3 w-3" />
-                                      </Button>
+                               <CardContent className="p-4">
+                                 <div className="flex items-start justify-between">
+                                   <div className="flex-1">
+                                     <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                       <span className="text-2xl">{typeIcons[item.type]}</span>
+                                       <h3 className="font-semibold text-lg text-slate-800 dark:text-gray-200">
+                                         {item.title}
+                                       </h3>
+                                       <Badge className={typeColors[item.type]}>
+                                         {item.type}
+                                       </Badge>
+                                       {item.isRecurring && (
+                                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-5 border-blue-200 text-blue-600 flex gap-1 items-center ml-2">
+                                            <Repeat className="h-3 w-3" />
+                                            {item.recurrencePattern}
+                                          </Badge>
+                                        )}
+                                     </div>
+
+                                     <div className="space-y-2 text-sm text-slate-600 dark:text-gray-300">
+                                       {item.subject && (
+                                         <div className="flex items-center gap-2">
+                                           <span className="font-medium">Subject:</span>
+                                           <span>{item.subject}</span>
+                                         </div>
+                                       )}
+
+                                       <div className="flex items-center gap-2">
+                                         <CalendarIcon className="h-4 w-4 text-blue-500" />
+                                         <span className="font-medium">{formatDate(new Date(item.startTime))}</span>
+                                       </div>
+
+                                       <div className="flex items-center gap-2">
+                                         <Clock className="h-4 w-4 text-green-500" />
+                                         <span>
+                                           {formatTime(new Date(item.startTime))} - {formatTime(new Date(item.endTime))}
+                                         </span>
+                                       </div>
+
+                                       {item.location && (
+                                         <div className="flex items-center gap-2">
+                                           <MapPin className="h-4 w-4 text-red-500" />
+                                           <span>{item.location}</span>
+                                         </div>
+                                       )}
+
+                                       {item.description && (
+                                         <p className="text-slate-500 dark:text-gray-400 mt-2 pl-6 italic">
+                                           {item.description}
+                                         </p>
+                                       )}
+                                     </div>
+                                   </div>
+
+                                   <div className="flex gap-1 ml-4 flex-col sm:flex-row">
+                                     <Button
+                                       variant="ghost"
+                                       size="sm"
+                                       onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
+                                       title="Edit"
+                                       className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                     >
+                                       <Edit2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                     </Button>
+                                     <Button
+                                       variant="ghost"
+                                       size="sm"
+                                       onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.title); }}
+                                       title="Delete"
+                                       className="hover:bg-red-50 dark:hover:bg-red-900/20"
+                                     >
+                                       <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                     </Button>
                                    </div>
                                  </div>
-                                 <div className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2 mb-1">
-                                   <Clock className="h-3 w-3" />
-                                   {format(new Date(item.startTime), 'h:mm a')} - {format(new Date(item.endTime), 'h:mm a')}
-                                 </div>
-                                 <div className="flex flex-wrap gap-1 mt-2">
-                                    <Badge variant="secondary" className="text-[10px] px-1 py-0 h-5">
-                                      {item.type}
-                                    </Badge>
-                                    {item.isRecurring && (
-                                      <Badge variant="outline" className="text-[10px] px-1 py-0 h-5 border-blue-200 text-blue-600 flex gap-1 items-center">
-                                        <Repeat className="h-3 w-3" />
-                                        {item.recurrencePattern}
-                                      </Badge>
-                                    )}
-                                 </div>
-                               </div>
+                               </CardContent>
                              </Card>
                            ));
                          })()
@@ -1015,6 +1058,16 @@ export const Schedule: React.FC<ScheduleProps> = ({
           )}
         </div>
       </div>
+      {handleRefresh && (
+        <Button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          size="icon"
+          className="fixed bottom-24 right-6 lg:bottom-6 h-14 w-14 rounded-full shadow-xl z-50 bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 hover:scale-105"
+        >
+          <RefreshCw className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </Button>
+      )}
     </AppShell>
   );
 };

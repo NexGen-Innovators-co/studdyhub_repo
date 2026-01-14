@@ -59,21 +59,23 @@ export const generateInlineContent = async (
 
     // Clean up the response
     finalContent = finalContent.trim();
+    
+    // Always attempt to remove outer "markdown" code blocks if they exist
+    // This handles cases where the LLM wraps mixed content (text + mermaid) in a specific markdown block
+    if (finalContent.startsWith('```markdown') || finalContent.startsWith('```md')) {
+        // Only strip if it also Ends with a code block, to avoid stripping valid internal start blocks (though unlikely at pos 0)
+        // We use a regex that handles the start, checks content, and the end
+        const match = finalContent.match(/^```(?:markdown|md)\n([\s\S]*?)\n```$/);
+        if (match) {
+           finalContent = match[1].trim();
+        }
+    }
 
     // Check if this is a diagram - if so, preserve the code blocks
     const isDiagram = /```(?:mermaid|chartjs|dot)/.test(finalContent);
     
     if (!isDiagram) {
-      // Only remove wrappers for non-diagram content
-      // Remove outer markdown wrapper if present
-      if (finalContent.startsWith('```markdown') || finalContent.startsWith('```md')) {
-        finalContent = finalContent
-          .replace(/^```(?:markdown|md)\n/, '')
-          .replace(/```$/, '')
-          .trim();
-      }
-
-      // Remove hallucinated intros/preambles
+      // Remove hallucinated intros/preambles for text-only responses
       const badStarts = [
         /^here\s+is\s+(an?\s+)?/i,
         /^sure,?\s*/i,

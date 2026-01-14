@@ -1018,8 +1018,10 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
                         handleRemoveAllFiles={handleRemoveAllFiles}
                         onSelectionChange={onSelectionChange}
                         selectedDocumentIds={selectedDocumentIds}
-                        documents={documents}
+                        documents={mergedDocuments}
                         notes={notes}
+                        handleRemoveFile={handleRemoveFile}
+                        onViewContent={memoizedHandleViewContent}
                       />
                     </div>
                   ) : null}

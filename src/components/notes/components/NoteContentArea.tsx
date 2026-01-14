@@ -85,6 +85,10 @@ import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import TextAlign from '@tiptap/extension-text-align';
+import TextStyle from '@tiptap/extension-text-style';
+import Color from '@tiptap/extension-color';
+import Highlight from '@tiptap/extension-highlight';
+import { FontSize } from '../extensions/FontSize';
 
 /* ---------- Syntax Highlighting ---------- */
 import { lowlight } from 'lowlight';
@@ -405,6 +409,10 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         TableHeader,
         TableCell,
         TextAlign.configure({ types: ['heading', 'paragraph'] }),
+        TextStyle,
+        Color,
+        Highlight.configure({ multicolor: true }),
+        FontSize,
         ChartJsNode,
         MermaidNode,
         DotNode,
@@ -568,6 +576,17 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
     const [generating, setGenerating] = useState(false);
     const [showDeck, setShowDeck] = useState(false);
     const [savedCards, setSavedCards] = useState<any[]>([]);
+    const [lastFlashcardUpdate, setLastFlashcardUpdate] = useState<number>(0);
+    const flashcardsRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll to flashcards when shown
+    useEffect(() => {
+      if (showDeck && flashcardsRef.current) {
+        setTimeout(() => {
+          flashcardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
+    }, [showDeck]);
 
     const generate = async () => {
       setGenerating(true);
@@ -580,6 +599,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         });
         setSavedCards(res.flashcards);
         setShowDeck(true);
+        setLastFlashcardUpdate(Date.now());
         toast.success(`Generated ${res.flashcards.length} cards`);
       } catch {
         toast.error('Failed to generate flashcards');
@@ -769,6 +789,110 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
       // Text formatting
       <React.Fragment key="format">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+               className="p-2 rounded-md transition-all duration-200 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-1"
+               title="Font Size"
+             >
+               <span className="text-xs font-medium w-4 text-center">
+                 {editor?.getAttributes('textStyle').fontSize 
+                  ? editor.getAttributes('textStyle').fontSize.replace('px', '')
+                  : '16'
+                 }
+               </span>
+               <ChevronDown className="w-3 h-3 opacity-50" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-16 max-h-48 overflow-y-auto">
+            {['12', '14', '16', '18', '20', '24', '30', '36', '48', '60', '72'].map((size) => (
+              <DropdownMenuItem
+                key={size}
+                onClick={() => editor?.chain().focus().setFontSize(`${size}px`).run()}
+                className="justify-center cursor-pointer"
+              >
+                {size}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuItem
+              onClick={() => editor?.chain().focus().unsetFontSize().run()} 
+              className="justify-center cursor-pointer text-xs text-muted-foreground border-t mt-1 pt-1"
+            >
+              Reset
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+             <button
+               className="p-2 rounded-md transition-all duration-200 hover:bg-gray-200 dark:hover:bg-gray-600 group"
+               title="Text Color"
+             >
+               <div 
+                 className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500"
+                 style={{ backgroundColor: editor?.getAttributes('textStyle').color || 'currentColor' }}
+               />
+             </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="p-2 grid grid-cols-5 gap-1 w-fit">
+            {[
+              '#000000', '#4b5563', '#9ca3af', '#ffffff', '#ef4444', 
+              '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7',
+              '#ec4899', '#6366f1', '#14b8a6', '#84cc16', '#78350f'
+            ].map((color) => (
+              <button
+                key={color}
+                onClick={() => editor?.chain().focus().setColor(color).run()}
+                className={`w-6 h-6 rounded-md hover:scale-110 transition-transform ${editor?.isActive('textStyle', { color }) ? 'ring-2 ring-offset-1 ring-blue-500' : ''}`}
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
+             <button
+                onClick={() => editor?.chain().focus().unsetColor().run()}
+                className="w-6 h-6 rounded-md hover:scale-110 transition-transform flex items-center justify-center border border-gray-200 dark:border-gray-700 bg-transparent text-xs"
+                title="Reset Color"
+              >
+                <RotateCw className="w-3 h-3" />
+              </button>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                 className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('highlight') ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                 title="Highlight"
+               >
+                 <Sparkles className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="p-2 grid grid-cols-5 gap-1 w-fit">
+              {[
+                '#fef08a', '#bbf7d0', '#bfdbfe', '#e9d5ff', '#fecaca',
+                '#fed7aa', '#e2e8f0', '#f5d0fe', '#a5f3fc', '#ddd6fe'
+              ].map((color) => (
+                <button
+                  key={color}
+                  onClick={() => editor?.chain().focus().toggleHighlight({ color }).run()}
+                   className={`w-6 h-6 rounded-md hover:scale-110 transition-transform border border-gray-100 dark:border-gray-800 ${editor?.isActive('highlight', { color }) ? 'ring-2 ring-offset-1 ring-blue-500' : ''}`}
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+               <button
+                  onClick={() => editor?.chain().focus().unsetHighlight().run()}
+                  className="w-6 h-6 rounded-md hover:scale-110 transition-transform flex items-center justify-center border border-gray-200 dark:border-gray-700 bg-transparent text-xs"
+                  title="Remove Highlight"
+                >
+                   <XCircle className="w-3 h-3" />
+                </button>
+            </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+
         <button
           onClick={() => editor?.chain().focus().toggleBold().run()}
           className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('bold') ? 'bg-blue-500 text-white shadow-md' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
@@ -1462,7 +1586,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
         </div>
 
         {/* ---------- EDITOR CONTENT ---------- */}
-        <div className="flex-1 max-h-full pb-6 overflow-y-auto relative">
+        <div className="flex-1 max-h-[75vh] min-h-[75vh] pb-6 overflow-y-auto relative">
           {isLoading && (
             <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
               <div className="text-center">
@@ -1472,7 +1596,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
             </div>
           )}
 
-          <div className="h-full max-w-full mx-auto py-4 sm:py-6">
+          <div className=" h-full max-w-full mx-auto py-4 sm:py-6">
             <EditorContent
               editor={editor}
               className="h-full  prose prose-sm sm:prose lg:prose-lg dark:prose-invert max-w-none"
@@ -1489,6 +1613,18 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
               <span className="font-medium">{content.split(/\s+/).filter(Boolean).length} words</span>
             </div>
             <div className="flex items-center gap-2 text-2xs sm:text-xs">
+              {savedCards.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setShowDeck(!showDeck)}
+                    className="flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-blue-600 dark:text-blue-400 font-medium"
+                  >
+                    <Brain className="w-3.5 h-3.5" />
+                    {showDeck ? 'Hide Deck' : 'Show Deck'}
+                  </button>
+                  <span className="hidden md:inline">•</span>
+                </>
+              )}
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                 <span className="font-medium">Ready</span>
@@ -1523,11 +1659,16 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
 
         {/* ---------- FLASHCARD DECK ---------- */}
         {showDeck && (
-          <div className="border-t border-gray-300 dark:border-gray-700 p-4 sm:p-6 bg-gray-50 dark:bg-gray-800/50">
+          <div 
+            ref={flashcardsRef}
+            className="border-t border-gray-300 dark:border-gray-700 p-4 sm:p-6 bg-gray-50 dark:bg-gray-800/50 h-[70vh] overflow-y-auto"
+          >
             <FlashcardDeck
               noteId={note?.id || ''}
               userId={userProfile?.id ?? ''}
               onGenerate={generate}
+              lastUpdated={lastFlashcardUpdate}
+              onClose={() => setShowDeck(false)}
             />
           </div>
         )}

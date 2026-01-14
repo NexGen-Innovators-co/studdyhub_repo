@@ -179,6 +179,12 @@ export const useSocialData = (
   const fetchPosts = useCallback(async (reset: boolean = false) => {
     if (!reset && (!hasMorePosts || isLoadingMorePosts)) return;
 
+    if (!navigator.onLine) {
+        setIsLoading(false);
+        setIsLoadingMorePosts(false);
+        return;
+    }
+
     try {
       setIsLoading(reset);
       if (!reset) setIsLoadingMorePosts(true);
@@ -305,6 +311,12 @@ export const useSocialData = (
   const fetchTrendingPosts = useCallback(async (reset: boolean = false) => {
     if (!reset && (!hasMoreTrendingPosts || isLoadingMorePosts)) return;
 
+    if (!navigator.onLine) {
+        setIsLoading(false);
+        setIsLoadingMorePosts(false);
+        return;
+    }
+
     try {
       setIsLoading(reset);
       if (!reset) setIsLoadingMorePosts(true);
@@ -391,6 +403,11 @@ export const useSocialData = (
   // OPTIMIZED: User posts with batching
   const fetchUserPosts = useCallback(async (reset: boolean = false) => {
     if (!reset && (!hasMoreUserPosts || isLoadingUserPosts)) return;
+
+    if (!navigator.onLine) {
+        setIsLoadingUserPosts(false);
+        return;
+    }
 
     try {
       setIsLoadingUserPosts(reset);
@@ -732,6 +749,12 @@ export const useSocialData = (
   useEffect(() => {
     const initializeSocialUser = async () => {
       try {
+        if (!navigator.onLine) {
+            setIsLoading(false);
+            setIsLoadingGroups(false);
+            return;
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           setIsLoading(false);
@@ -800,6 +823,8 @@ export const useSocialData = (
   useEffect(() => {
     const fetchViewedPosts = async () => {
       if (!currentUser?.id) return;
+
+      if (!navigator.onLine) return;
 
       try {
         const { data, error } = await supabase
