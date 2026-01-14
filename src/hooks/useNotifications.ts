@@ -20,6 +20,12 @@ export function useNotifications() {
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
 
+    if (!navigator.onLine) {
+       console.log("Offline: Skipping notification fetch");
+       setLoading(false);
+       return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('notifications')
@@ -41,6 +47,11 @@ export function useNotifications() {
   // Fetch user preferences
   const fetchPreferences = useCallback(async () => {
     if (!user) return;
+
+    if (!navigator.onLine) {
+       console.log("Offline: Skipping preferences fetch");
+       return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -239,6 +250,12 @@ export function useNotifications() {
         return;
       }
 
+      if (!navigator.onLine) {
+        console.log("Offline: Skipping notification initialization");
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       await Promise.all([
         pushNotificationService.initialize(),
@@ -254,7 +271,7 @@ export function useNotifications() {
 
   // Subscribe to real-time notifications
   useEffect(() => {
-    if (!user) return;
+    if (!user || !navigator.onLine) return;
 
     const channel = supabase
       .channel('notifications')

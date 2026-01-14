@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { createTestNotification } from '@/services/notificationHelpers';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { requestNotificationPermission, isPushNotificationsSupported } from '@/services/notificationInitService';
 
 const notificationIcons: Record<string, string> = {
   schedule_reminder: '📅',
@@ -45,6 +46,9 @@ export function NotificationCenter() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
+  const [permissionState, setPermissionState] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
 
   const handleNotificationClick = (notification: Notification) => {
     markAsRead(notification.id);
@@ -52,6 +56,17 @@ export function NotificationCenter() {
     if (notification.action_url) {
       navigate(notification.action_url);
       setIsOpen(false);
+    }
+  };
+  
+  const handleEnablePush = async () => {
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      setPermissionState('granted');
+      toast.success('Push notifications enabled!');
+    } else {
+      setPermissionState('denied');
+      toast.error('Permission denied or failed to enable.');
     }
   };
 
@@ -146,7 +161,7 @@ export function NotificationCenter() {
             <div className="p-2 bg-white dark:bg-slate-900 space-y-1">
               <Button
                 variant="ghost"
-                className="w-full justify-center text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="w-full justify-center text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent"
                 onClick={() => {
                   navigate('/dashboard?view=notifications');
                   setIsOpen(false);
@@ -154,6 +169,24 @@ export function NotificationCenter() {
               >
                 View all notifications
               </Button>
+            </div>
+          </>
+        )}
+        
+        {permissionState === 'default' && isPushNotificationsSupported() && (
+          <>
+            <Separator className="bg-slate-200 dark:bg-slate-700" />
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20">
+               <p className="text-xs text-blue-700 dark:text-blue-300 mb-2 text-center">
+                 Enable push notifications to stay updated properly even when away.
+               </p>
+               <Button 
+                 size="sm" 
+                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                 onClick={handleEnablePush}
+               >
+                 Enable Push Notifications
+               </Button>
             </div>
           </>
         )}

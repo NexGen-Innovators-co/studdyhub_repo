@@ -374,12 +374,19 @@ export const useMessageHandlers = () => {
                 .order('timestamp', { ascending: true });
 
               if (!error && messages) {
+                // Map DB snake_case to frontend camelCase
+                const mappedMessages = messages.map((msg: any) => ({
+                    ...msg,
+                    attachedDocumentIds: msg.attached_document_ids || [],
+                    attachedNoteIds: msg.attached_note_ids || []
+                }));
+
                 // Replace optimistic messages with real database messages
                 setChatMessages(prev => {
                   const withoutOptimistic = prev.filter(msg =>
                     msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
                   );
-                  return [...withoutOptimistic, ...messages];
+                  return [...withoutOptimistic, ...mappedMessages];
                 });
               } else {
                 console.error('Error fetching final messages:', error);

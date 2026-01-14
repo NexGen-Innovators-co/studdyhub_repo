@@ -182,12 +182,25 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
             <div className="relative overflow-hidden rounded-2xl my-4 p-6 sm:p-8 bg-gradient-to-r from-blue-600 to-blue-600 text-white shadow-2xl">
                 <div className="absolute inset-0 bg-black opacity-20"></div>
                 <div className="relative z-10">
-                    <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-2">
-                        Welcome back, {userProfile?.full_name?.split(' ')[0] || 'Learner'}!
-                    </h1>
-                    <p className="text-base sm:text-xl opacity-90">
-                        {hasData ? "Your mind is growing stronger every day" : "Let's start building your mind palace"}
-                    </p>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-2">
+                                Welcome back, {userProfile?.full_name?.split(' ')[0] || 'Learner'}!
+                            </h1>
+                            <p className="text-base sm:text-xl opacity-90">
+                                {hasData ? "Your mind is growing stronger every day" : "Let's start building your mind palace"}
+                            </p>
+                        </div>
+                        <Button
+                            variant="ghost" 
+                            size="icon"
+                            onClick={refresh}
+                            className="text-white hover:bg-white/20"
+                            title="Refresh Data"
+                        >
+                            <RefreshCw className="h-5 w-5" />
+                        </Button>
+                    </div>
 
                     <div className="flex flex-col sm:flex-row items-center gap-4 mt-6">
                         <div className="flex items-center gap-3">

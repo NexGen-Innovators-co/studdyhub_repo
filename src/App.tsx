@@ -28,6 +28,8 @@ import { AdminLayout } from "./components/admin/AdminLayout";
 import { HelmetProvider } from "react-helmet-async";
 import DynamicHead from "./components/seo/DynamicHead";
 import { SubscriptionPage } from "./components/subscription";
+import { AnimatePresence, motion } from "framer-motion";
+import { OfflineIndicator } from "./components/layout/OfflineIndicator";
 
 // Lazy load admin components
 const AdminDashboard = lazy(() => import("./components/admin/adminDashboard"));
@@ -53,11 +55,40 @@ const Fallback = () => (
 const AppWithSEO = () => {
   const location = useLocation();
 
+  // Determine transition key to group dashboard routes
+  const getPageKey = (pathname: string) => {
+    // List of prefixes that render the main App Shell (Index.tsx)
+    const appShellRoutes = [
+      '/dashboard', '/notes', '/note', '/recordings', '/schedule',
+      '/chat', '/documents', '/settings', '/quizzes', '/library',
+      '/podcasts', '/social'
+    ];
+    
+    // Check if current path matches any app shell route
+    const isAppShell = appShellRoutes.some(route => pathname.startsWith(route));
+    
+    // Return a constant key for all app shell routes to prevent full page transition
+    // when switching tabs inside the app
+    if (isAppShell) return 'app-shell';
+    
+    // Otherwise return the pathname for standard page transitions
+    return pathname;
+  };
+
   return (
     <>
       <DynamicHead pathname={location.pathname} />
       <Suspense fallback={<Fallback />}>
-        <Routes>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={getPageKey(location.pathname)}
+            initial={{ opacity: 0, filter: 'blur(5px)' }}
+            animate={{ opacity: 1, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, filter: 'blur(5px)' }}
+            transition={{ duration: 0.3 }}
+            className="w-full"
+          >
+            <Routes location={location}>
           {/* ==== PUBLIC ROUTES ==== */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -118,8 +149,8 @@ const AppWithSEO = () => {
 
           {/* ==== 404 NOT FOUND ==== */}
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
+        </Routes>        </motion.div>
+        </AnimatePresence>      </Suspense>
     </>
   );
 };
@@ -131,6 +162,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <OfflineIndicator />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthProvider>
             <AdminAuthProvider>

@@ -55,9 +55,10 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
     }
   }, [isEditing, editor, ai_summary]);
 
-  if (!ai_summary && !isGenerating) {
-    return null;
-  }
+  // Early return removed to allowed empty state rendering
+  // if (!ai_summary && !isGenerating) {
+  //   return null;
+  // }
 
   const handleSave = () => {
     if (onSummaryChange && editor) {
@@ -336,6 +337,14 @@ export const AISummarySection: React.FC<AISummarySectionProps> = ({
                 </Button>
               </div>
             </div>
+          ) : !ai_summary ? (
+             <div className="flex flex-col items-center justify-center h-48 lg:h-full text-center p-4 space-y-3 opacity-70">
+                <Sparkles className="h-10 w-10 text-blue-400 mb-2" />
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">No summary available</p>
+                <Button size="sm" onClick={handleRegenerate} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Generate Summary
+                </Button>
+             </div>
           ) : (
             <div className="prose prose-sm max-w-none">
               <ReactMarkdown

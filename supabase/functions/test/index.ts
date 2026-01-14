@@ -85,26 +85,22 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
   console.log(`[ActionExecution] Processing AI response for actions...`);
 
   // 1. Parse actions from the text
-  const actionsRaw = actionsService.parseActionFromText(aiResponse);
-  // Ensure array
-  const actionList = Array.isArray(actionsRaw) ? actionsRaw : (actionsRaw ? [actionsRaw] : []);
-
+  const action = actionsService.parseActionFromText(aiResponse);
 
   // 2. Execute parsed action if found
-  if (actionList.length > 0) {
-    console.log(`[ActionExecution] Found ${actionList.length} actions.`);
+  if (action) {
+    console.log(`[ActionExecution] Found action: ${action.action} with confidence ${action.confidence}`);
 
-    // First pass: Cleanup text for ALL actions
-    for (const action of actionList) {
-        if (action.matchedString) {
-            // Escape special regex chars
-           const escaped = action.matchedString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-           // Remove the matched action string and any trailing text on the same line
-           modifiedResponse = modifiedResponse.replace(new RegExp(escaped + '.*', 'g'), '').trim();
-        }
-    } 
-    // Fallback cleanup
-    modifiedResponse = modifiedResponse.replace(/ACTION:\s*[A-Z_]+(?:\|.*)?(?:\n+|$)/g, '').trim();
+    // Remove the action command from the response to prevent it from showing to the user
+    if (action.matchedString) {
+       // Escape special regex chars
+       const escaped = action.matchedString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+       // Remove the matched action string and any trailing text on the same line
+       modifiedResponse = aiResponse.replace(new RegExp(escaped + '.*', 'g'), '').trim();
+    } else { 
+       // Fallback for implicit actions or if matchedString is missing
+       modifiedResponse = aiResponse.replace(/ACTION:\s*[A-Z_]+(?:\|.*)?(?:\n+|$)/g, '').trim();
+    }
 
     // IMPORTANT: Verify user approval before executing actions automatically.
     // Currently, we'll mark them as 'proposed' instead of executing them immediately
@@ -112,10 +108,8 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
     const AUTO_EXECUTE_ENABLED = true;
 
     if (AUTO_EXECUTE_ENABLED) {
-        for (const action of actionList) {
         try {
         let result: any;
-        console.log(`[ActionExecution] Executing action: ${action.action}`);
 
         switch (action.action) {
             case 'CREATE_NOTE':
@@ -343,20 +337,17 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
 
       console.error(`[ActionExecution] Action failed: ${error.message}`);
     }
-    } // End loop
     } else {
         // Handle proposed actions (automatic execution disabled)
-        console.log(`[ActionExecution] Actions identified but automatic execution is disabled.`);
-        for (const action of actionList) {
-             executedActions.push({
-                type: action.action,
-                params: action.params,
-                result: null,
-                success: true,
-                status: 'proposed',
-                timestamp: new Date().toISOString()
-            });
-        }
+        console.log(`[ActionExecution] Action ${action.action} identified but automatic execution is disabled.`);
+        executedActions.push({
+            type: action.action,
+            params: action.params,
+            result: null,
+            success: true,
+            status: 'proposed',
+            timestamp: new Date().toISOString()
+        });
     }
   }
 

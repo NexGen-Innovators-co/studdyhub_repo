@@ -104,6 +104,11 @@ export function useSubscription(): UseSubscriptionReturn {
       return;
     }
 
+    if (!navigator.onLine) {
+       setIsLoading(false);
+       return;
+    }
+
     try {
       // Fetch subscription
       const { data: subData, error: subError } = await supabase

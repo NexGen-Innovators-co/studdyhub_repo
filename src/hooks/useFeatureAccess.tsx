@@ -44,6 +44,13 @@ export const useFeatureAccess = () => {
                 return;
             }
 
+            if (!navigator.onLine) {
+                // If offline, default to false (safe) or maybe check local storage if critical?
+                // For now, fail safe.
+                setAdminCheckLoading(false);
+                return;
+            }
+
             try {
                 const { data, error } = await supabase
                     .from('admin_users')

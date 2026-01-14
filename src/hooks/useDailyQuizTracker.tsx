@@ -14,6 +14,11 @@ export const useDailyQuizTracker = () => {
     const fetchDailyCounts = async () => {
         if (!user) return;
 
+        if (!navigator.onLine) {
+            setLoading(false);
+            return;
+        }
+
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
         try {
@@ -43,6 +48,8 @@ export const useDailyQuizTracker = () => {
 
     useEffect(() => {
         fetchDailyCounts();
+
+        if (!navigator.onLine) return;
 
         // Subscribe to realtime changes to update counts immediately
         const channel = supabase

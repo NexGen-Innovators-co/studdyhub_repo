@@ -502,15 +502,29 @@ export const useAppData = () => {
         });
 
         // Initial check with error handling and timeout
-        const getUserPromise = supabase.auth.getUser();
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Auth check timeout')), API_TIMEOUT)
-        );
+        let userUser = null;
 
-        const { data: { user } } = await Promise.race([getUserPromise, timeoutPromise]);
+        if (!navigator.onLine) {
+          const { data: { session } } = await supabase.auth.getSession();
+          userUser = session?.user || null;
+        } else {
+          const getUserPromise = supabase.auth.getUser();
+          const timeoutPromise = new Promise<any>((_, reject) =>
+            setTimeout(() => reject(new Error('Auth check timeout')), API_TIMEOUT)
+          );
 
-        if (user?.id !== currentUser?.id) {
-          setCurrentUser(user || null);
+          try {
+            const result = await Promise.race([getUserPromise, timeoutPromise]);
+            userUser = result.data?.user || null;
+          } catch (e) {
+            // Fallback to session on timeout
+            const { data: { session } } = await supabase.auth.getSession();
+            userUser = session?.user || null;
+          }
+        }
+
+        if (userUser?.id !== currentUser?.id) {
+          setCurrentUser(userUser || null);
         }
 
         return () => {
@@ -643,11 +657,26 @@ export const useAppData = () => {
 
     // Optimistically load from offline storage for initial load
     if (isInitial) {
-      offlineStorage.getAll<Document>(STORES.DOCUMENTS).then(offlineDocs => {
-        if (offlineDocs && offlineDocs.length > 0) {
-          setDocuments(offlineDocs);
+      if (!navigator.onLine) {
+        try {
+          const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
+          if (offlineDocs && offlineDocs.length > 0) {
+             setDocuments(offlineDocs);
+             offlineDocs.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
+             setDataLoaded(prev => new Set([...prev, 'documents']));
+             setDataLoading('documents', false);
+             return;
+          }
+        } catch (err) {
+          console.warn('Failed to load offline documents:', err);
         }
-      }).catch(err => console.warn('Failed to load offline documents:', err));
+      } else {
+        offlineStorage.getAll<Document>(STORES.DOCUMENTS).then(offlineDocs => {
+          if (offlineDocs && offlineDocs.length > 0) {
+            setDocuments(offlineDocs);
+          }
+        }).catch(err => console.warn('Failed to load offline documents:', err));
+      }
     }
 
     try {
@@ -768,11 +797,26 @@ export const useAppData = () => {
 
     // Optimistically load from offline storage for initial load
     if (isInitial) {
-      offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS).then(offlineRecs => {
-        if (offlineRecs && offlineRecs.length > 0) {
-          setRecordings(offlineRecs);
+      if (!navigator.onLine) {
+        try {
+          const offlineRecs = await offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS);
+          if (offlineRecs && offlineRecs.length > 0) {
+            setRecordings(offlineRecs);
+            offlineRecs.forEach(rec => loadedIdsRef.current.recordings.add(rec.id));
+            setDataLoaded(prev => new Set([...prev, 'recordings']));
+            setDataLoading('recordings', false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Failed to load offline recordings:', err);
         }
-      }).catch(err => console.warn('Failed to load offline recordings:', err));
+      } else {
+        offlineStorage.getAll<ClassRecording>(STORES.RECORDINGS).then(offlineRecs => {
+          if (offlineRecs && offlineRecs.length > 0) {
+            setRecordings(offlineRecs);
+          }
+        }).catch(err => console.warn('Failed to load offline recordings:', err));
+      }
     }
 
     try {
@@ -880,11 +924,26 @@ export const useAppData = () => {
 
     // Optimistically load from offline storage for initial load
     if (isInitial) {
-      offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE).then(offlineItems => {
-        if (offlineItems && offlineItems.length > 0) {
-          setScheduleItems(offlineItems);
+      if (!navigator.onLine) {
+        try {
+          const offlineItems = await offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE);
+          if (offlineItems && offlineItems.length > 0) {
+            setScheduleItems(offlineItems);
+            offlineItems.forEach(item => loadedIdsRef.current.scheduleItems.add(item.id));
+            setDataLoaded(prev => new Set([...prev, 'scheduleItems']));
+            setDataLoading('scheduleItems', false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Failed to load offline schedule:', err);
         }
-      }).catch(err => console.warn('Failed to load offline schedule:', err));
+      } else {
+        offlineStorage.getAll<ScheduleItem>(STORES.SCHEDULE).then(offlineItems => {
+          if (offlineItems && offlineItems.length > 0) {
+            setScheduleItems(offlineItems);
+          }
+        }).catch(err => console.warn('Failed to load offline schedule:', err));
+      }
     }
 
     try {
@@ -990,11 +1049,26 @@ export const useAppData = () => {
 
     // Optimistically load from offline storage for initial load
     if (isInitial) {
-      offlineStorage.getAll<Quiz>(STORES.QUIZZES).then(offlineQuizzes => {
-        if (offlineQuizzes && offlineQuizzes.length > 0) {
-          setQuizzes(offlineQuizzes);
+      if (!navigator.onLine) {
+        try {
+          const offlineQuizzes = await offlineStorage.getAll<Quiz>(STORES.QUIZZES);
+          if (offlineQuizzes && offlineQuizzes.length > 0) {
+            setQuizzes(offlineQuizzes);
+            offlineQuizzes.forEach(quiz => loadedIdsRef.current.quizzes.add(quiz.id));
+            setDataLoaded(prev => new Set([...prev, 'quizzes']));
+            setDataLoading('quizzes', false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Failed to load offline quizzes:', err);
         }
-      }).catch(err => console.warn('Failed to load offline quizzes:', err));
+      } else {
+        offlineStorage.getAll<Quiz>(STORES.QUIZZES).then(offlineQuizzes => {
+          if (offlineQuizzes && offlineQuizzes.length > 0) {
+            setQuizzes(offlineQuizzes);
+          }
+        }).catch(err => console.warn('Failed to load offline quizzes:', err));
+      }
     }
 
     try {
@@ -1135,19 +1209,36 @@ export const useAppData = () => {
 
     // Optimistically load from offline storage for initial load
     if (isInitial && !cached) {
-      offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS).then(offlineFolders => {
-        if (offlineFolders && offlineFolders.length > 0) {
-          setFolders(offlineFolders);
-          // buildFolderTree might not be available if defined after loadFolders in the same scope
-          // But since it's used in error handler below, we assume it works or we should check.
-          // To be safe, we can skip setFolderTree here or try/catch it.
-          try {
-             setFolderTree(buildFolderTree(offlineFolders));
-          } catch (e) {
-             console.warn('buildFolderTree not ready', e);
+      if (!navigator.onLine) {
+        try {
+          const offlineFolders = await offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS);
+          if (offlineFolders && offlineFolders.length > 0) {
+            setFolders(offlineFolders);
+            offlineFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
+            
+            // Try to build tree if function is available
+            try {
+              if (typeof buildFolderTree === 'function') {
+                setFolderTree(buildFolderTree(offlineFolders));
+              }
+            } catch (e) {
+              console.warn('Could not build folder tree offline:', e);
+            }
+            
+            setDataLoaded(prev => new Set([...prev, 'folders']));
+            setDataLoading('folders', false);
+            return;
           }
+        } catch (err) {
+          console.warn('Failed to load offline folders:', err);
         }
-      }).catch(err => console.warn('Failed to load offline folders:', err));
+      } else {
+        offlineStorage.getAll<DocumentFolder>(STORES.FOLDERS).then(offlineFolders => {
+          if (offlineFolders && offlineFolders.length > 0) {
+            setFolders(offlineFolders);
+          }
+        }).catch(err => console.warn('Failed to load offline folders:', err));
+      }
     }
 
     try {
@@ -1243,6 +1334,24 @@ export const useAppData = () => {
       setUserProfile(cached);
       setDataLoaded(prev => new Set([...prev, 'profile']));
       return;
+    }
+
+    // Offline check for profile
+    if (!navigator.onLine) {
+      try {
+        const offlineProfiles = await offlineStorage.getAll<UserProfile>(STORES.PROFILE);
+        if (offlineProfiles && offlineProfiles.length > 0) {
+          const myProfile = offlineProfiles.find(p => p.id === user.id) || offlineProfiles[0]; 
+          if (myProfile) {
+            setUserProfile(myProfile);
+            setDataLoaded(prev => new Set([...prev, 'profile']));
+            setDataLoading('profile', false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load offline profile:', e);
+      }
     }
 
     setDataLoading('profile', true);
@@ -1413,11 +1522,38 @@ export const useAppData = () => {
 
     // Optimistically load from offline storage for initial load
     if (isInitial && !cached) {
-      offlineStorage.getAll<Note>(STORES.NOTES).then(offlineNotes => {
-        if (offlineNotes && offlineNotes.length > 0) {
-          setNotes(offlineNotes);
+      // If offline, prioritize offline data and skip fetch
+      if (!navigator.onLine) {
+        try {
+          const offlineNotes = await offlineStorage.getAll<Note>(STORES.NOTES);
+          if (offlineNotes && offlineNotes.length > 0) {
+            const formattedNotes = offlineNotes.map(n => ({
+              ...n,
+              created_at: n.created_at || new Date().toISOString(),
+              updated_at: n.updated_at || new Date().toISOString()
+            }));
+            setNotes(formattedNotes);
+            formattedNotes.forEach(note => loadedIdsRef.current.notes.add(note.id));
+
+            // Set active note if needed
+            if (!activeNote && formattedNotes.length > 0) {
+               setActiveNote(formattedNotes.sort((a,b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]);
+            }
+            
+            setDataLoaded(prev => new Set([...prev, 'notes']));
+            setDataLoading('notes', false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Failed to load offline notes:', err);
         }
-      }).catch(err => console.warn('Failed to load offline notes:', err));
+      } else {
+        offlineStorage.getAll<Note>(STORES.NOTES).then(offlineNotes => {
+          if (offlineNotes && offlineNotes.length > 0) {
+            setNotes(offlineNotes);
+          }
+        }).catch(err => console.warn('Failed to load offline notes:', err));
+      }
     }
 
     const controller = new AbortController();

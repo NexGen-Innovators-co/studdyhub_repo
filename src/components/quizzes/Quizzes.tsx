@@ -20,6 +20,7 @@ import { StickyRail } from '../layout/StickyRail';
 import { HeroHeader } from '../layout/HeroHeader';
 import { QuickActionsCard } from '../layout/QuickActionsCard';
 import { StatsCard } from '../layout/StatsCard';
+import { useAppContext } from '../../hooks/useAppContext';
 import {
   Sparkles,
   BookOpen,
@@ -30,7 +31,8 @@ import {
   Play,
   History,
   Trophy,
-  BarChart3
+  BarChart3,
+  RefreshCw,
 } from 'lucide-react';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { useDailyQuizTracker } from '../../hooks/useDailyQuizTracker';
@@ -79,11 +81,12 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
   useRealtimeSyncForQuizzes({
     userId,
     onQuizUpdate: (quiz) => {
-      onGenerateQuiz(recordings.find(r => r.id === quiz.classId)!, quiz);
+      onGenerateQuiz(recordings.find(r => r.id === quiz.class_id)!, quiz);
     },
     onStatsUpdate: fetchUserStats,
   });
   const { dailyCounts } = useDailyQuizTracker();
+  const { refreshData, dataLoading } = useAppContext();
 
   // Sync tab changes with global header
   useEffect(() => {
@@ -125,7 +128,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
   };
 
   const handleSelectQuiz = (quiz: Quiz) => {
-    const recording = recordings.find(r => r.id === quiz.classId);
+    const recording = recordings.find(r => r.id === quiz.class_id);
     setQuizMode({ recording: recording!, quiz });
   };
 
@@ -137,7 +140,7 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
 
   // Filter quizzes based on search
   const filteredQuizzes = quizzes.filter(quiz => {
-    const recording = recordings.find(r => r.id === quiz.classId);
+    const recording = recordings.find(r => r.id === quiz.class_id);
     const searchLower = searchQuery.toLowerCase();
     
     return (
@@ -278,7 +281,17 @@ export const Quizzes: React.FC<QuizzesProps> = ({ quizzes, recordings, onGenerat
           subtitle="Test your knowledge and track your learning progress"
           icon={<Sparkles className="h-8 w-8 text-yellow-300" />}
           gradient="from-blue-600 to-indigo-600"
+          actions={null}
         />
+        
+        <Button
+          onClick={() => refreshData('quizzes')}
+          disabled={dataLoading.quizzes}
+          size="icon"
+          className="fixed bottom-24 right-6 lg:bottom-6 h-14 w-14 rounded-full shadow-xl z-50 bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 hover:scale-105"
+        >
+          <RefreshCw className={`h-6 w-6 ${dataLoading.quizzes ? 'animate-spin' : ''}`} />
+        </Button>
 
         {/* Search Bar */}
         {(activeTab === 'recordings' || activeTab === 'history') && (

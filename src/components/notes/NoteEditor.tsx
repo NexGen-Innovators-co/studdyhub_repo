@@ -8,6 +8,8 @@ import { Database } from '../../integrations/supabase/types';
 import { generateSpeech, playAudioContent } from '../../services/cloudTtsService';
 import mermaid from 'mermaid';
 import { Chart, registerables } from 'chart.js';
+import { Button } from '../ui/button';
+import { Sparkles, RotateCw } from 'lucide-react';
 
 Chart.register(...registerables);
 
@@ -19,7 +21,6 @@ import { AudioOptionsSection } from './components/AudioOptionsSection';
 // Dialogs
 import { SectionSelectionDialog } from './components/SectionSelectionDialog';
 import { DocumentViewerDialog } from './components/DocumentViewerDialog';
-import { RotateCw } from 'lucide-react';
 import { set } from 'date-fns';
 import '../../noteStyle.css'
 // Explicitly type the supabase client for better type inference with custom tables
@@ -1483,7 +1484,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               }}
             />
           </div>
-          {(note.ai_summary || isGeneratingSummary) && isSummaryVisible && (
+          {isSummaryVisible && (
             <AISummarySection
               ai_summary={note.ai_summary}
               isSummaryVisible={isSummaryVisible}
@@ -1492,6 +1493,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               onRegenerateSummary={handleRegenerateSummary}
               isGenerating={isGeneratingSummary}
             />
+          )}
+
+          {!isSummaryVisible && (
+            <Button
+              onClick={() => setIsSummaryVisible(true)}
+              size="icon"
+              className="fixed bottom-24 right-6 lg:bottom-6 h-14 w-14 rounded-full shadow-xl z-50 bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 hover:scale-105"
+              title="Show AI Summary"
+            >
+              <Sparkles className="h-6 w-6" />
+            </Button>
           )}
 
 

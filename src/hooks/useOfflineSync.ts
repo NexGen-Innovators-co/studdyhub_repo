@@ -13,6 +13,7 @@ export const useOfflineSync = (refreshData: () => void) => {
     
     // Sort by timestamp to maintain order
     const sortedSync = [...pendingSync].sort((a, b) => a.timestamp - b.timestamp);
+    let syncedCount = 0;
 
     for (const item of sortedSync) {
       try {
@@ -68,6 +69,7 @@ export const useOfflineSync = (refreshData: () => void) => {
 
         if (!error) {
           await offlineStorage.removePendingSync(item.id);
+          syncedCount++;
         } else {
           console.error(`Failed to sync item ${item.id}:`, error);
         }
@@ -76,8 +78,10 @@ export const useOfflineSync = (refreshData: () => void) => {
       }
     }
 
-    toast.success('Offline changes synchronized');
-    refreshData();
+    if (syncedCount > 0) {
+      toast.success(`Synchronized ${syncedCount} offline changes`);
+      refreshData();
+    }
   }, [refreshData]);
 
   useEffect(() => {
