@@ -55,6 +55,7 @@ import {
   Plus, // Add Plus icon
   FilePlus, // Add FilePlus icon
   Lightbulb, // Add Lightbulb icon
+  Highlighter, // Changed from Sparkles for better semantic meaning
 } from 'lucide-react';
 import { supabase } from '../../../integrations/supabase/client';
 
@@ -865,7 +866,7 @@ export const NoteContentArea = forwardRef<any, NoteContentAreaProps>(
                  className={`p-2 rounded-md transition-all duration-200 ${editor?.isActive('highlight') ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
                  title="Highlight"
                >
-                 <Sparkles className="w-4 h-4" />
+                 <Highlighter className="w-4 h-4" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="p-2 grid grid-cols-5 gap-1 w-fit">

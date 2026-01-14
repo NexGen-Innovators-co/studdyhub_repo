@@ -38,19 +38,46 @@ export function useCalendarIntegration() {
       const left = window.screenX + (window.outerWidth - width) / 2;
       const top = window.screenY + (window.outerHeight - height) / 2;
       
+      // Use noopener for security, but this prevents accessing popup properties
+      // Instead, we'll listen for a postMessage from the popup or rely on user refreshing
       const popup = window.open(
         authUrl,
         'Google Calendar Authorization',
         `width=${width},height=${height},left=${left},top=${top}`
       );
 
-      // Listen for OAuth callback
+      // Handle popup closure detection safely
+      // Cross-Origin-Opener-Policy can block access to popup.closed
       const checkPopup = setInterval(() => {
-        if (popup && popup.closed) {
+        try {
+          if (popup && popup.closed) {
+            clearInterval(checkPopup);
+            fetchIntegrations(); // Refresh integrations
+          }
+        } catch (e) {
+          // If we can't check closed state due to security policies, just clear interval
+          // The popup will post a message when done anyway (if implemented)
           clearInterval(checkPopup);
-          fetchIntegrations(); // Refresh integrations
         }
       }, 1000);
+
+      // Listen for success message from popup (window.opener.postMessage)
+      const messageHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'calendar-auth-success') {
+          clearInterval(checkPopup);
+          popup?.close();
+          fetchIntegrations();
+          toast.success('Calendar connected successfully');
+          window.removeEventListener('message', messageHandler);
+        } else if (event.data?.type === 'calendar-auth-error') {
+          clearInterval(checkPopup);
+          popup?.close();
+          toast.error(`Connection failed: ${event.data.error}`);
+          window.removeEventListener('message', messageHandler);
+        }
+      };
+      
+      window.addEventListener('message', messageHandler);
 
     } catch (error) {
       console.error('Error connecting to Google Calendar:', error);
@@ -77,13 +104,35 @@ export function useCalendarIntegration() {
         `width=${width},height=${height},left=${left},top=${top}`
       );
 
-      // Listen for OAuth callback
+       // Handle popup closure detection safely
       const checkPopup = setInterval(() => {
-        if (popup && popup.closed) {
+        try {
+          if (popup && popup.closed) {
+            clearInterval(checkPopup);
+            fetchIntegrations(); // Refresh integrations
+          }
+        } catch (e) {
           clearInterval(checkPopup);
-          fetchIntegrations(); // Refresh integrations
         }
       }, 1000);
+
+      // Listen for success message from popup
+      const messageHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'calendar-auth-success') {
+          clearInterval(checkPopup);
+          popup?.close();
+          fetchIntegrations();
+          toast.success('Calendar connected successfully');
+          window.removeEventListener('message', messageHandler);
+        } else if (event.data?.type === 'calendar-auth-error') {
+          clearInterval(checkPopup);
+          popup?.close();
+          toast.error(`Connection failed: ${event.data.error}`);
+          window.removeEventListener('message', messageHandler);
+        }
+      };
+      
+      window.addEventListener('message', messageHandler);
 
     } catch (error) {
       console.error('Error connecting to Outlook Calendar:', error);

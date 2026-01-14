@@ -186,10 +186,10 @@ export const Schedule: React.FC<ScheduleProps> = ({
 
       if (editingItem) {
         await onUpdateItem(scheduleItem);
-        toast.success('Schedule item updated successfully');
+        // Toast handled by hook
       } else {
         await onAddItem(scheduleItem);
-        toast.success('Schedule item added successfully');
+        // Toast handled by hook
       }
 
       resetForm();

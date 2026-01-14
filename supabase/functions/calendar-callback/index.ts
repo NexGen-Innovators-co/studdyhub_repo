@@ -6,12 +6,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID')!
 const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET')!
-const GOOGLE_REDIRECT_URI = Deno.env.get('GOOGLE_REDIRECT_URI') || 'https://your-project.supabase.co/functions/v1/calendar-callback'
+const GOOGLE_REDIRECT_URI = Deno.env.get('GOOGLE_REDIRECT_URI') || 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/calendar-callback'
 
 const MICROSOFT_CLIENT_ID = Deno.env.get('MICROSOFT_CLIENT_ID')!
 const MICROSOFT_CLIENT_SECRET = Deno.env.get('MICROSOFT_CLIENT_SECRET')!
-const MICROSOFT_REDIRECT_URI = Deno.env.get('MICROSOFT_REDIRECT_URI') || 'https://your-project.supabase.co/functions/v1/calendar-callback'
-
+const MICROSOFT_REDIRECT_URI = Deno.env.get('MICROSOFT_REDIRECT_URI') || 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/calendar-callback'
 interface TokenResponse {
   access_token: string
   refresh_token?: string

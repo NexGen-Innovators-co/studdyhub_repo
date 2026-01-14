@@ -764,21 +764,41 @@ export const useAppOperations = ({
       };
 
       // Sync to external calendars
+      let syncAttempted = false;
+      let syncSuccess = false;
+
       try {
-        const syncResult = await calendarIntegrationService.syncToCalendar(newScheduleItem, user.id);
-        if (syncResult.success) {
-          // Update local object (Database is already updated by the service)
-          newScheduleItem.calendarEventIds = syncResult.eventIds;
+        // Check if user has active integrations to determine if we should expect a sync
+        const integrations = await calendarIntegrationService.getIntegrations(user.id);
+        
+        if (integrations.length > 0) {
+          syncAttempted = true;
+          const syncResult = await calendarIntegrationService.syncToCalendar(newScheduleItem, user.id);
+          if (syncResult.success) {
+            // Update local object (Database is already updated by the service)
+            newScheduleItem.calendarEventIds = syncResult.eventIds;
+            syncSuccess = true;
+          }
         }
       } catch (syncError) {
         console.error('Failed to sync to external calendar:', syncError);
       }
 
       setScheduleItems(prev => [...prev, newScheduleItem]);
-      toast.success('Schedule item added successfully');
+      
+      if (syncAttempted) {
+        if (syncSuccess) {
+          toast.success('Schedule added and synced to calendar');
+        } else {
+          toast.warning('Schedule added locally, but calendar sync failed. Check your integrations.');
+        }
+      } else {
+        toast.success('Schedule item added successfully');
+      }
     } catch (error) {
       //console.error('Error adding schedule item:', error);
-      toast.error('Failed to add schedule item');
+      // Re-throw to allow component to handle form state
+      throw error;
     }
   }, [setScheduleItems]);
 
@@ -818,37 +838,59 @@ export const useAppOperations = ({
       if (error) throw error;
 
       // Update external calendars
+      let syncStatus = 'no-sync';
       try {
+        const integrations = await calendarIntegrationService.getIntegrations(user.id);
+        
         if (item.calendarEventIds) {
-          const integrations = await calendarIntegrationService.getIntegrations(user.id);
+          let hasFailures = false;
+          let hasSuccess = false;
+
           for (const integration of integrations) {
             const eventId = item.calendarEventIds[integration.provider];
             if (eventId) {
-              await calendarIntegrationService.updateCalendarEvent(
+              const success = await calendarIntegrationService.updateCalendarEvent(
                 item, 
                 eventId, 
                 integration.provider, 
                 integration
               );
+              if (success) hasSuccess = true;
+              else hasFailures = true;
             }
           }
-        } else {
-          // Try to sync if not already synced
+          
+          if (hasSuccess && !hasFailures) syncStatus = 'success';
+          else if (hasFailures) syncStatus = 'partial-failure';
+        } else if (integrations.length > 0) {
+          // Try to sync if not already synced but user has integrations
           const syncResult = await calendarIntegrationService.syncToCalendar(item, user.id);
           if (syncResult.success) {
             item.calendarEventIds = syncResult.eventIds;
             // Database update is handled within syncToCalendar
+            syncStatus = 'success';
+          } else {
+            syncStatus = 'failed';
           }
         }
       } catch (syncError) {
         console.error('Failed to update external calendar:', syncError);
+        syncStatus = 'error';
       }
 
       setScheduleItems(prev => prev.map(i => i.id === item.id ? item : i));
-      toast.success('Schedule item updated successfully');
+      
+      if (syncStatus === 'success') {
+        toast.success('Schedule updated and synced to calendar');
+      } else if (syncStatus === 'partial-failure' || syncStatus === 'failed' || syncStatus === 'error') {
+        toast.warning('Schedule updated locally, but calendar sync failed.');
+      } else {
+        toast.success('Schedule item updated successfully');
+      }
     } catch (error) {
       //console.error('Error updating schedule item:', error);
-      toast.error('Failed to update schedule item');
+      // Re-throw to allow component to handle form state
+      throw error;
     }
   }, [setScheduleItems]);
 
