@@ -39,6 +39,8 @@ import { HeroHeader } from '../layout/HeroHeader';
 import { QuickActionsCard } from '../layout/QuickActionsCard';
 import { StatsCard } from '../layout/StatsCard';
 import { requestNotificationPermission, getPushService } from '@/services/notificationInitService';
+import { CalendarIntegrationSettings } from '../settings/CalendarIntegrationSettings';
+import { Separator } from '../ui/separator';
 
 interface UserSettingsProps {
   profile: UserProfile | null;
@@ -1115,6 +1117,10 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
               </div>
 
               <div className="space-y-6">
+                {/* Calendar Integration */}
+                <CalendarIntegrationSettings />
+                <Separator />
+
                 {/* Notification Channels */}
                 <div className="space-y-4">
                   <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Notification Channels</h3>
