@@ -763,6 +763,34 @@ export const useAppOperations = ({
         recurrenceEndDate: data.recurrence_end_date
       };
 
+      // Create internal reminder if enabled
+      try {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        
+        // Attempt to get preferences, but default to TRUE if they haven't set them yet
+        // This ensures new users get reminders by default
+        const { data: pref } = await supabase
+          .from('notification_preferences')
+          .select('schedule_reminders, reminder_time')
+          .eq('user_id', currentUser?.id)
+          .maybeSingle();
+
+        const shouldSetReminder = pref ? pref.schedule_reminders : true;
+        const reminderTime = pref?.reminder_time || 15;
+
+        if (shouldSetReminder) {
+           await supabase
+             .from('schedule_reminders')
+             .insert({
+               schedule_id: newScheduleItem.id,
+               reminder_minutes: reminderTime,
+               notification_sent: false
+             });
+        }
+      } catch (remError) {
+        console.error('Failed to create reminder:', remError);
+      }
+
       // Sync to external calendars
       let syncAttempted = false;
       let syncSuccess = false;
@@ -836,6 +864,16 @@ export const useAppOperations = ({
         .eq('user_id', user.id);
 
       if (error) throw error;
+
+      // Reset reminder status if exists
+      try {
+        await supabase
+          .from('schedule_reminders')
+          .update({ notification_sent: false, notification_sent_at: null })
+          .eq('schedule_id', item.id);
+      } catch (remError) {
+        console.error('Failed to reset reminder:', remError);
+      }
 
       // Update external calendars
       let syncStatus = 'no-sync';

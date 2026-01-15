@@ -171,7 +171,12 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
             end_time: action.params.end_time,
             description: action.params.description,
             location: action.params.location,
-            color: action.params.color
+            color: action.params.color,
+            is_recurring: action.params.is_recurring,
+            recurrence_pattern: action.params.recurrence_pattern,
+            recurrence_days: action.params.recurrence_days,
+            recurrence_interval: action.params.recurrence_interval,
+            recurrence_end_date: action.params.recurrence_end_date
           });
           break;
 

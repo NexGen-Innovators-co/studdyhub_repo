@@ -94,7 +94,7 @@ export const useStreamingChat = (): StreamingChatHook => {
       }
 
       // Build the URL for the edge function with streaming enabled
-      const functionUrl = `${supabaseUrl}/functions/v1/test`;
+      const functionUrl = `${supabaseUrl}/functions/v1/gemini-chat`;
       
       // Create URL with query parameters for authentication
       const url = new URL(functionUrl);
