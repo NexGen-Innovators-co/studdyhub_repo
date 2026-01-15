@@ -35,12 +35,30 @@ import { useAppContext } from '@/hooks/useAppContext';
  * Modal dialog showing a detailed comparison of all subscription plans
  * and their feature limits. Helps users understand what they get with each tier.
  */
-export const SubscriptionLimitsModal: React.FC<{ trigger?: React.ReactNode }> = ({
+interface SubscriptionLimitsModalProps {
+    trigger?: React.ReactNode;
+    isOpen?: boolean;
+    onClose?: () => void;
+}
+
+export const SubscriptionLimitsModal: React.FC<SubscriptionLimitsModalProps> = ({
   trigger,
+  isOpen,
+  onClose
 }) => {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const { subscriptionTier } = useAppContext();
   const navigate = useNavigate();
+
+  const isControlled = isOpen !== undefined;
+  const open = isControlled ? isOpen : internalOpen;
+  const setOpen = (val: boolean) => {
+      if (isControlled) {
+          if (!val && onClose) onClose();
+      } else {
+          setInternalOpen(val);
+      }
+  };
 
   const features = [
     {

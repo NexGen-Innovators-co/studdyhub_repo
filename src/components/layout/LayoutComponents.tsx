@@ -231,20 +231,23 @@ export const AppHeader: React.FC<{
         <a href="/#features" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
           Features
         </a>
-        <a href="/#testimonials" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
-          Testimonials
-        </a>
-        <a href="/#cta" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
+        <Link to="/documentation-page" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
+          Docs
+        </Link>
+        <Link to="/pricing" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
           Pricing
-        </a>
+        </Link>
         <Link to="/about-us" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
           About
+        </Link>
+        <Link to="/contact" className="text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium">
+          Contact
         </Link>
         <Button
           onClick={() => navigate('/auth')}
           className="px-5 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
         >
-          Get Started
+          Sign In
         </Button>
         <Button
           variant="outline"
@@ -323,26 +326,33 @@ export const AppHeader: React.FC<{
             >
               Features
             </a>
-            <a
-              href="/#testimonials"
+            <Link
+              to="/documentation-page"
               className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
-              Testimonials
-            </a>
-            <a
-              href="/#cta"
+              Documentation
+            </Link>
+            <Link
+              to="/pricing"
               className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
               Pricing
-            </a>
+            </Link>
             <Link
               to="/about-us"
               className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"
               onClick={() => setIsMenuOpen(false)}
             >
               About
+            </Link>
+            <Link
+              to="/contact"
+              className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors font-medium"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Contact
             </Link>
             <hr className="border-gray-200 dark:border-gray-700" />
             <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
@@ -400,9 +410,10 @@ export const AppFooter: React.FC = () => {
             <h4 className="font-bold text-gray-900 dark:text-white mb-4">Product</h4>
             <ul className="space-y-3">
               <li><a href="/#features" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Features</a></li>
-              <li><Link to="/api" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">API</Link></li>
-              <li><Link to="/integrations" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Integrations</Link></li>
-              <li><a href="/#cta" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Pricing</a></li>
+              <li><Link to="/documentation-page" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Documentation</Link></li>
+              <li><Link to="/user-guide-page" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">User Guide</Link></li>
+              <li><Link to="/api" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">API Reference</Link></li>
+              <li><Link to="/pricing" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Pricing</Link></li>
             </ul>
           </div>
 

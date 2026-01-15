@@ -20,6 +20,7 @@ export type FeatureName =
     | 'maxChatSessions'
     | 'maxDocuments'  // Added
     | 'maxDocumentSize' // Added
+    | 'maxPodcasts' // Added
 
 export const useFeatureAccess = () => {
     const {
@@ -134,6 +135,7 @@ export const useFeatureAccess = () => {
         maxScheduleItems: (getLimit('maxScheduleItems') as number) || (isAdmin ? Infinity : 20),
         maxDailyQuizzes: (getLimit('maxDailyQuizzes') as number) || (isAdmin ? Infinity : (subscriptionTier === 'free' ? 1 : 100)),
         maxChatSessions: (getLimit('maxChatSessions') as number) || (isAdmin ? Infinity : 10),
+        maxPodcasts: (getLimit('maxPodcasts') as number) || (isAdmin ? Infinity : 1),
 
         // Usage tracking helpers
         getUsagePercentage: (feature: FeatureName, currentCount: number) => {

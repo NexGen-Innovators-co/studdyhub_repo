@@ -10,8 +10,8 @@ const Integrations: React.FC = () => {
             category: "Cloud Storage",
             icon: Cloud,
             items: [
-                { name: "Google Drive", status: "Available", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
-                { name: "Dropbox", status: "Available", color: "bg-gradient-to-r from-blue-400 to-blue-500" },
+                { name: "Google Drive", status: "Coming Soon", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
+                { name: "Dropbox", status: "Coming Soon", color: "bg-gradient-to-r from-blue-400 to-blue-500" },
                 { name: "OneDrive", status: "Coming Soon", color: "bg-gradient-to-r from-blue-600 to-blue-700" }
             ]
         },
@@ -19,25 +19,25 @@ const Integrations: React.FC = () => {
             category: "Communication",
             icon: MessageSquare,
             items: [
-                { name: "Slack", status: "Available", color: "bg-gradient-to-r from-purple-500 to-purple-600" },
-                { name: "Microsoft Teams", status: "Available", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
-                { name: "Discord", status: "Coming Soon", color: "bg-gradient-to-r from-indigo-500 to-indigo-600" }
+                { name: "Slack", status: "Planned", color: "bg-gradient-to-r from-purple-500 to-purple-600" },
+                { name: "Microsoft Teams", status: "Planned", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
+                { name: "Discord", status: "Planned", color: "bg-gradient-to-r from-indigo-500 to-indigo-600" }
             ]
         },
         {
             category: "Productivity",
             icon: Calendar,
             items: [
-                { name: "Google Calendar", status: "Available", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
-                { name: "Outlook Calendar", status: "Available", color: "bg-gradient-to-r from-blue-600 to-blue-700" },
-                { name: "Notion", status: "Available", color: "bg-gradient-to-r from-gray-800 to-black" }
+                { name: "Google Calendar", status: "In Development", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
+                { name: "Outlook Calendar", status: "Planned", color: "bg-gradient-to-r from-blue-600 to-blue-700" },
+                { name: "Notion", status: "Planned", color: "bg-gradient-to-r from-gray-800 to-black" }
             ]
         },
         {
             category: "Documents",
             icon: FileText,
             items: [
-                { name: "Google Docs", status: "Available", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
+                { name: "Google Docs", status: "Coming Soon", color: "bg-gradient-to-r from-blue-500 to-blue-600" },
                 { name: "Microsoft Word", status: "Coming Soon", color: "bg-gradient-to-r from-blue-600 to-blue-700" },
                 { name: "PDF Tools", status: "Available", color: "bg-gradient-to-r from-red-500 to-red-600" }
             ]

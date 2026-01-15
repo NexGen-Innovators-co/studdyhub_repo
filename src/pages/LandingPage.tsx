@@ -1,14 +1,13 @@
 // src/pages/LandingPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Button } from '../components/ui/button';
-import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, ChevronLeft, ChevronRight, Loader2, Mic, MessageSquare, Brain, LayoutDashboard } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { AppLayout, ContentContainer } from '../components/layout/LayoutComponents'
 // Update src/pages/LandingPage.tsx - Add this after features section
 import { ScreenshotGallery } from '../components/layout/ScreenshotGallery';
-// Add these screenshots data (you'll replace with your actual screenshots)
-// Update in src/pages/LandingPage.tsx
 const appScreenshots = [
   {
     id: 1,
@@ -69,7 +68,6 @@ const appScreenshots = [
 ];
 
 const LandingPage: React.FC = () => {
-  const [isVisible, setIsVisible] = useState(false);
   const [activeFeature, setActiveFeature] = useState(0);
   const [currentTestimonialIndex, setCurrentTestimonialIndex] = useState(0);
   const [appStats, setAppStats] = useState({
@@ -83,7 +81,6 @@ const LandingPage: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    setIsVisible(true);
     const featureInterval = setInterval(() => {
       setActiveFeature((prev) => (prev + 1) % features.length);
     }, 4000);
@@ -178,7 +175,7 @@ const LandingPage: React.FC = () => {
       content: "The voice recording feature with AI transcription is a game-changer for my research interviews. Absolutely incredible!",
       rating: 5,
       verified: true,
-      imageUrl: "/testimonial3.jpg"
+      imageUrl: '/testimonial3.jpg'
     },
     {
       name: "Dr. Effah Emmanuel",
@@ -187,8 +184,8 @@ const LandingPage: React.FC = () => {
       content: "Finally, an AI tool that actually understands my learning style. My productivity has increased by 300%!",
       rating: 5,
       verified: true,
-      imageUrl: "/testimonial2.jpg"
-    }
+      imageUrl: '/testimonial2.jpg'
+    },
   ];
 
   const nextTestimonial = () => {
@@ -222,47 +219,47 @@ const LandingPage: React.FC = () => {
 
   const features = [
     {
-      icon: Users,
-      title: "Intelligent Note-Taking",
-      description: "Automatically summarize, organize, and extract key insights from your notes. Ask questions and get instant answers based on your content.",
+      icon: LayoutDashboard,
+      title: "Smart Dashboard",
+      description: "Visual overview of your learning curves. Track daily progress, recent activities, and upcoming tasks in one central hub.",
       color: "bg-blue-600"
     },
     {
-      icon: FileText,
-      title: "Effortless Recording Analysis",
-      description: "Transcribe lectures, meetings, and discussions. AI identifies key topics, speakers, and creates actionable summaries.",
-      color: "bg-green-600"
-    },
-    {
-      icon: Award,
-      title: "Optimized Scheduling",
-      description: "Manage your academic and personal schedule with AI assistance. Get smart reminders and optimize your time.",
+      icon: MessageSquare,
+      title: "AI Chat Assistant",
+      description: "24/7 study companion. Ask questions, clarify doubts, and generate study guides based on your specific curriculum.",
       color: "bg-indigo-600"
     },
     {
-      icon: Zap,
-      title: "Contextual AI Chat",
-      description: "Engage in natural conversations with an AI assistant that understands your context from notes and documents.",
+      icon: FileText,
+      title: "Intelligent Notes",
+      description: "Next-gen editor with AI-powered autocompletion, formatting, and instant summarization of your thought process.",
+      color: "bg-green-600"
+    },
+    {
+      icon: Brain,
+      title: "Document Analysis",
+      description: "Turn static PDFs into interactive knowledge. Upload course materials and chat directly with your documents.",
       color: "bg-orange-600"
     },
     {
-      icon: Shield,
-      title: "Smart Document Insights",
-      description: "Upload and analyze various document types. The AI extracts key information and makes it searchable and usable.",
+      icon: Mic,
+      title: "Lecture Transcription",
+      description: "Never miss a detail. Record lectures directly in the app and get accurate, searchable text transcripts automatically.",
       color: "bg-red-600"
     },
     {
-      icon: Globe,
-      title: "Personalized Learning Paths",
-      description: "Customize AI responses to match your unique learning style (visual, auditory, kinesthetic, reading/writing).",
-      color: "bg-blue-600"
+      icon: Users,
+      title: "Social Learning",
+      description: "Connect with classmates, share notes, and form study groups to master subjects together.",
+      color: "bg-purple-600"
     }
   ];
 
   return (
     <AppLayout>
       {/* Hero Section */}
-      <section className="min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased overflow-x-hidden">
+      <section className="relative min-h-screen bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased overflow-x-hidden flex items-center justify-center">
         <video
           src="https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/video_2025-12-06_08-58-44.mp4"
           autoPlay
@@ -274,61 +271,94 @@ const LandingPage: React.FC = () => {
         >
           Your browser does not support the video tag.
         </video>
+        
+        {/* Overlay gradient for better text readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/80 dark:from-black/30 dark:to-black/80 pointer-events-none" />
 
-        <div className={`relative z-10 max-w-5xl mx-auto text-center transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
-          }`}>
-          <img
-            src="/siteimage.png"
-            alt="StuddyHub AI logo"
-            className="w-48 h-48 sm:w-64 sm:h-64 mx-auto mb-6 object-contain"
-          />
+        <div className="relative z-10 max-w-5xl mx-auto text-center px-4 pt-20">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          >
+            <img
+              src="/siteimage.png"
+              alt="StuddyHub AI logo"
+              className="w-48 h-48 sm:w-64 sm:h-64 mx-auto mb-6 object-contain drop-shadow-2xl filter"
+            />
+          </motion.div>
 
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold mb-6 shadow-sm dark:bg-blue-900/30 dark:text-blue-300">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.6 }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100/90 backdrop-blur-sm text-blue-700 rounded-full text-sm font-semibold mb-6 shadow-sm dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+          >
             <Zap className="h-4 w-4" />
             <span>Intelligent Learning, Simplified</span>
-          </div>
+          </motion.div>
 
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight text-gray-900 dark:text-white">
-            Transform Your <span className="text-blue-600 dark:text-blue-400">Academic Journey</span>
-          </h1>
+          <motion.h1 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
+            className="text-4xl md:text-5xl lg:text-7xl font-bold mb-6 leading-tight text-gray-900 dark:text-white tracking-tight"
+          >
+            Transform Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">Academic Journey</span>
+          </motion.h1>
 
-          <p className="text-lg md:text-xl text-gray-700 dark:text-gray-300 mb-10 max-w-3xl mx-auto leading-relaxed">
+          <motion.p 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.6 }}
+            className="text-lg md:text-2xl text-gray-700 dark:text-gray-200 mb-10 max-w-3xl mx-auto leading-relaxed font-medium"
+          >
             Your intelligent companion for seamless learning, organization, and productivity.
             Elevate how you take notes, record ideas, and manage your academic life with cutting-edge AI.
-          </p>
+          </motion.p>
 
-          <div className="flex flex-col sm:flex-row justify-center gap-4 mb-16">
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.6 }}
+            className="flex flex-col sm:flex-row justify-center gap-4 mb-20"
+          >
             <Link to="/auth">
-              <Button className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-lg shadow-xl hover:shadow-2xl transition-all transform hover:scale-105">
-                Start Free Trial <ArrowRight className="h-5 w-5 ml-2" />
+              <Button className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl rounded-xl shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 border-0 ring-4 ring-blue-500/20">
+                Start Free Trial <ArrowRight className="h-6 w-6 ml-2" />
               </Button>
             </Link>
             <a href="https://kegsrvnywshxyucgjxml.supabase.co/storage/v1/object/public/documents/video_2025-12-06_08-58-44.mp4" target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" className="px-8 py-3 border-2 border-gray-300 text-gray-700 font-bold text-lg rounded-lg hover:bg-gray-100 transition-all transform hover:scale-105 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
-                Watch Demo <Play className="h-5 w-5 ml-2" />
+              <Button variant="outline" className="px-8 py-4 border-2 border-gray-300/50 backdrop-blur-sm bg-white/50 dark:bg-gray-900/50 text-gray-800 font-bold text-xl rounded-xl hover:bg-white dark:hover:bg-gray-800 transition-all transform hover:scale-105 dark:border-gray-700 dark:text-gray-200">
+                Watch Demo <Play className="h-6 w-6 ml-2" />
               </Button>
             </a>
-          </div>
+          </motion.div>
 
-          <div className="flex flex-wrap justify-center items-center gap-6 md:gap-8 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex items-center gap-2">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8, duration: 1 }}
+            className="flex flex-wrap justify-center items-center gap-6 md:gap-10 text-sm md:text-base text-gray-600 dark:text-gray-300 font-medium"
+          >
+            <div className="flex items-center gap-2 bg-white/60 dark:bg-black/40 px-4 py-2 rounded-full backdrop-blur-md shadow-sm border border-gray-100 dark:border-gray-800">
               <Shield className="h-4 w-4 text-green-600" />
               <span>Secure & Private</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-white/60 dark:bg-black/40 px-4 py-2 rounded-full backdrop-blur-md shadow-sm border border-gray-100 dark:border-gray-800">
               <Globe className="h-4 w-4 text-blue-600" />
               <span>Global Community</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-white/60 dark:bg-black/40 px-4 py-2 rounded-full backdrop-blur-md shadow-sm border border-gray-100 dark:border-gray-800">
               <Award className="h-4 w-4 text-yellow-600" />
               <span>Award-Winning Innovation</span>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* Stats Section */}
-      <section className="py-12 md:py-16 bg-white dark:bg-gray-900">
+      <section className="py-12 md:py-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
         <ContentContainer>
           {loadingStats ? (
             <div className="flex justify-center items-center h-32">
@@ -336,69 +366,96 @@ const LandingPage: React.FC = () => {
               <p className="ml-4 text-gray-600 dark:text-gray-400">Loading stats...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-              <div className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-blue-100 text-blue-600 rounded-full mb-4 dark:bg-blue-900/30 dark:text-blue-400">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6, staggerChildren: 0.1 }}
+              className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8"
+            >
+              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
+                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-blue-100 text-blue-600 rounded-full mb-4 dark:bg-blue-900/30 dark:text-blue-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <Users className="h-6 w-6 md:h-7 md:w-7" />
                 </div>
                 <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.activeUsers}</div>
                 <div className="text-gray-600 dark:text-gray-400 font-medium">Active Users</div>
               </div>
-              <div className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-blue-100 text-blue-600 rounded-full mb-4 dark:bg-blue-900/30 dark:text-blue-400">
+              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
+                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-green-100 text-green-600 rounded-full mb-4 dark:bg-green-900/30 dark:text-green-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <FileText className="h-6 w-6 md:h-7 md:w-7" />
                 </div>
                 <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.notesProcessed}</div>
                 <div className="text-gray-600 dark:text-gray-400 font-medium">Notes Processed</div>
               </div>
-              <div className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-blue-100 text-blue-600 rounded-full mb-4 dark:bg-blue-900/30 dark:text-blue-400">
+              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
+                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-purple-100 text-purple-600 rounded-full mb-4 dark:bg-purple-900/30 dark:text-purple-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <TrendingUp className="h-6 w-6 md:h-7 md:w-7" />
                 </div>
                 <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.uptime}</div>
                 <div className="text-gray-600 dark:text-gray-400 font-medium">Uptime</div>
               </div>
-              <div className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-blue-100 text-blue-600 rounded-full mb-4 dark:bg-blue-900/30 dark:text-blue-400">
+              <div className="text-center group hover:-translate-y-1 transition-transform duration-300">
+                <div className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-yellow-100 text-yellow-600 rounded-full mb-4 dark:bg-yellow-900/30 dark:text-yellow-400 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <Star className="h-6 w-6 md:h-7 md:w-7" />
                 </div>
                 <div className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">{appStats.userRating}</div>
                 <div className="text-gray-600 dark:text-gray-400 font-medium">User Rating</div>
               </div>
-            </div>
+            </motion.div>
           )}
         </ContentContainer>
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-12 md:py-16 bg-gray-50 dark:bg-gray-950">
+      <section id="features" className="py-20 md:py-24 bg-gray-50/50 dark:bg-gray-950/50">
         <ContentContainer>
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold mb-4 shadow-sm dark:bg-blue-900/30 dark:text-blue-300">
+          <div className="text-center mb-16 space-y-4">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold shadow-sm dark:bg-blue-900/30 dark:text-blue-300"
+            >
               <Zap className="h-4 w-4" />
               <span>Core Capabilities</span>
-            </div>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900 dark:text-white">
-              Everything You Need to <span className="text-blue-600 dark:text-blue-400">Thrive</span>
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            </motion.div>
+            <motion.h2 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white"
+            >
+              Everything You Need to <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">Thrive</span>
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed"
+            >
               Discover how our intelligent features can transform your learning experience and boost your productivity.
-            </p>
+            </motion.p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
-              <div
+              <motion.div
                 key={index}
-                className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 transform hover:-translate-y-1"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                className="group bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700/50 hover:shadow-2xl hover:border-blue-500/30 dark:hover:border-blue-400/30 transition-all duration-300"
                 onMouseEnter={() => setActiveFeature(index)}
               >
-                <div className={`inline-flex items-center justify-center w-14 h-14 ${feature.color} text-white rounded-full mb-4 shadow-md`}>
+                <div className={`inline-flex items-center justify-center w-14 h-14 ${feature.color} bg-opacity-90 text-white rounded-2xl mb-6 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300`}>
                   {React.createElement(feature.icon, { className: "h-7 w-7" })}
                 </div>
-                <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white">{feature.title}</h3>
-                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{feature.description}</p>
-              </div>
+                <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{feature.title}</h3>
+                <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-base">{feature.description}</p>
+              </motion.div>
             ))}
           </div>
         </ContentContainer>
@@ -455,85 +512,112 @@ const LandingPage: React.FC = () => {
         </ContentContainer>
       </section>
       {/* Testimonials Section */}
-      <section id="testimonials" className="py-12 md:py-16 bg-white dark:bg-gray-900">
+      <section id="testimonials" className="py-20 md:py-24 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
         <ContentContainer>
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold mb-4 shadow-sm dark:bg-blue-900/30 dark:text-blue-300">
+          <div className="text-center mb-16 space-y-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-full text-sm font-semibold shadow-sm dark:bg-yellow-900/30 dark:text-yellow-400"
+            >
               <Star className="h-4 w-4 text-yellow-500" />
               <span>Trusted by Our Community</span>
-            </div>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900 dark:text-white">
-              What Our <span className="text-blue-600 dark:text-blue-400">Users Say</span>
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Hear directly from students and professionals who are transforming their productivity with StuddyHub AI.
-            </p>
-          </div>
-
-          <div ref={carouselRef} className="relative w-full max-w-4xl mx-auto overflow-hidden rounded-xl">
-            <div
-              className="flex transition-transform duration-700 ease-in-out"
-              style={{ transform: `translateX(-${currentTestimonialIndex * 100}%)` }}
+            </motion.div>
+            <motion.h2 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white"
             >
-              {testimonials.map((testimonial, index) => (
-                <div key={index} className="w-full flex-shrink-0 p-6 bg-gray-50 dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center mb-6">
-                    <div className="flex items-center justify-center w-12 h-12 rounded-full overflow-hidden mr-4">
-                      {testimonial.imageUrl ? (
-                        <img src={testimonial.imageUrl} alt={`${testimonial.name}'s avatar`} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-blue-600 flex items-center justify-center text-white font-bold">
-                          {testimonial.avatar}
+              What Our <span className="text-blue-600 dark:text-blue-400">Users Say</span>
+            </motion.h2>
+            <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.2 }}
+            className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed"
+            >
+              Hear directly from students and professionals who are transforming their productivity with StuddyHub AI.
+            </motion.p>
+          </div>
+          
+          <div className="relative max-w-5xl mx-auto px-4 sm:px-12">
+            {/* Background Decorations for Immersiveness */}
+            <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div ref={carouselRef} className="relative w-full overflow-hidden rounded-2xl shadow-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+              <div
+                className="flex transition-transform duration-700 cubic-bezier(0.4, 0, 0.2, 1)"
+                style={{ transform: `translateX(-${currentTestimonialIndex * 100}%)` }}
+              >
+                {testimonials.map((testimonial, index) => (
+                  <div key={index} className="w-full flex-shrink-0 p-8 md:p-12">
+                    <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+                      <div className="flex-shrink-0">
+                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-lg border-4 border-white dark:border-gray-700">
+                          {testimonial.imageUrl ? (
+                            <img src={testimonial.imageUrl} alt={`${testimonial.name}'s avatar`} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
+                              {testimonial.avatar}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                        {testimonial.name}
-                        {testimonial.verified && (
-                          <svg className="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        )}
                       </div>
-                      <div className="text-gray-600 dark:text-gray-400 text-sm">{testimonial.role}</div>
+                      <div className="flex-1 text-center md:text-left">
+                        <div className="flex justify-center md:justify-start mb-3">
+                          {[...Array(testimonial.rating)].map((_, i) => (
+                            <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                          ))}
+                        </div>
+                        <blockquote className="text-xl md:text-2xl font-medium text-gray-800 dark:text-gray-200 leading-relaxed italic mb-6">
+                            "{testimonial.content}"
+                        </blockquote>
+                        <div>
+                          <div className="font-bold text-lg text-gray-900 dark:text-white flex items-center justify-center md:justify-start gap-2">
+                            {testimonial.name}
+                            {testimonial.verified && (
+                              <svg className="h-5 w-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="text-blue-600 dark:text-blue-400 font-medium">{testimonial.role}</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex mb-4">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                    ))}
-                  </div>
-                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed italic">
-                    "{testimonial.content}"
-                  </p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
             <Button
               onClick={prevTestimonial}
-              className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/80 dark:bg-gray-700/80 p-2 rounded-full shadow-md hover:bg-white dark:hover:bg-gray-700 transition-colors z-10 ml-4"
+              className="absolute left-0 top-1/2 -translate-y-1/2 -ml-2 sm:-ml-5 bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:scale-110 transition-all z-10"
               aria-label="Previous testimonial"
             >
-              <ChevronLeft className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+              <ChevronLeft className="h-6 w-6" />
             </Button>
             <Button
               onClick={nextTestimonial}
-              className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/80 dark:bg-gray-700/80 p-2 rounded-full shadow-md hover:bg-white dark:hover:bg-gray-700 transition-colors z-10 mr-4"
+              className="absolute right-0 top-1/2 -translate-y-1/2 -mr-2 sm:-mr-5 bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:scale-110 transition-all z-10"
               aria-label="Next testimonial"
             >
-              <ChevronRight className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+              <ChevronRight className="h-6 w-6" />
             </Button>
 
-            <div className="flex justify-center mt-6 gap-2">
+            <div className="flex justify-center mt-8 gap-3">
               {testimonials.map((_, index) => (
                 <button
                   key={index}
                   onClick={() => setCurrentTestimonialIndex(index)}
-                  className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentTestimonialIndex
-                    ? 'bg-blue-600 dark:bg-blue-400 w-4'
-                    : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
+                  className={`h-2 rounded-full transition-all duration-300 ${index === currentTestimonialIndex
+                    ? 'bg-blue-600 dark:bg-blue-400 w-8'
+                    : 'bg-gray-300 dark:bg-gray-600 w-2 hover:bg-gray-400 dark:hover:bg-gray-500'
                     }`}
                   aria-label={`Go to testimonial ${index + 1}`}
                 />
@@ -544,20 +628,45 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* Call to Action Section */}
-      <section id="cta" className="py-12 md:py-16 bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-800 dark:to-blue-900 text-white">
-        <ContentContainer>
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">
-              Ready to <span className="text-yellow-300">Elevate</span> Your Learning?
-            </h2>
-            <p className="text-lg md:text-xl opacity-90 mb-8">
+      <section id="cta" className="relative py-20 md:py-28 overflow-hidden">
+        {/* Background Gradients */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-700 via-blue-800 to-indigo-900 dark:from-blue-900 dark:to-gray-900" />
+        <div className="absolute top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20" />
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500/30 rounded-full blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-purple-500/30 rounded-full blur-3xl" />
+
+        <ContentContainer className="relative z-10">
+          <div className="max-w-4xl mx-auto text-center space-y-8">
+            <motion.h2 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-4xl md:text-6xl font-bold text-white tracking-tight"
+            >
+              Ready to <span className="text-yellow-300 inline-block transform hover:scale-105 transition-transform duration-300 cursor-default">Elevate</span> Your Learning?
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="text-xl md:text-2xl text-blue-100 max-w-2xl mx-auto leading-relaxed"
+            >
               Join thousands of students and professionals who've revolutionized their productivity with StuddyHub AI.
-            </p>
-            <Link to="/auth">
-              <Button className="px-8 py-3 bg-white text-blue-600 hover:bg-gray-100 font-bold text-lg rounded-lg shadow-xl hover:shadow-2xl transition-all transform hover:scale-105">
-                Start Your Free Trial <ArrowRight className="h-5 w-5 ml-2" />
-              </Button>
-            </Link>
+            </motion.p>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+            >
+              <Link to="/auth">
+                <Button className="px-10 py-6 bg-white text-blue-700 hover:bg-gray-50 font-bold text-xl rounded-2xl shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 border-0 ring-4 ring-blue-500/30">
+                  Start Your Free Trial <ArrowRight className="h-6 w-6 ml-2" />
+                </Button>
+              </Link>
+            </motion.div>
+            <p className="text-sm text-blue-200 mt-4">No credit card required • 14-day free trial</p>
           </div>
         </ContentContainer>
       </section>

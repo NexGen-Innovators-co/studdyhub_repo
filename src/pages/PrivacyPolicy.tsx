@@ -9,7 +9,7 @@ const PrivacyPolicy: React.FC = () => {
             icon: Shield,
             title: "Information We Collect",
             points: [
-                "Account information (name, email, password)",
+                "Account information (name, email)",
                 "Usage data and interaction logs",
                 "Uploaded content (notes, documents, recordings)",
                 "Technical information (device, browser, IP)"

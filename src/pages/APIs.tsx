@@ -56,7 +56,7 @@ const APIPage: React.FC = () => {
                         </p>
                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
                             <Zap className="h-4 w-4" />
-                            Base URL: https://api.studdyhub.ai/v1
+                            Status: <span className="opacity-75 font-normal ml-1">Coming Soon (Internal Beta)</span>
                         </div>
                     </Card>
 
@@ -84,7 +84,11 @@ const APIPage: React.FC = () => {
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Quick Start Example</h3>
                     <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4">
                         <pre className="text-sm">
-                            {`// JavaScript Example
+                            {`// Upcoming Feature Preview
+// Our Public API is currently under development.
+// Soon you'll be able to:
+
+/*
 const summarizeText = async (text) => {
   const response = await fetch('https://api.studdyhub.ai/v1/summarize', {
     method: 'POST',
@@ -99,16 +103,16 @@ const summarizeText = async (text) => {
   });
   
   return await response.json();
-};`}
+};
+*/`}
                         </pre>
                     </div>
                     <div className="flex flex-wrap gap-4">
-                        <a
-                            href="/api-docs"
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+                        <span
+                            className="px-4 py-2 bg-gray-400 cursor-not-allowed text-white rounded-lg font-medium opacity-70"
                         >
-                            View Full Documentation
-                        </a>
+                            Documentation Coming Soon
+                        </span>
                         <a
                             href="/contact"
                             className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg font-medium"

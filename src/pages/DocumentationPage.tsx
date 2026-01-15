@@ -8,21 +8,21 @@ const DocumentationPage: React.FC = () => {
     const documentationSections = [
         {
             icon: Book,
-            title: "Getting Started",
-            description: "Begin your journey with StuddyHub AI",
+            title: "User Guide",
+            description: "Complete guide to StuddyHub AI features",
             items: [
-                "Quick Start Guide",
-                "Account Setup",
-                "Basic Navigation",
-                "First Steps Tutorial"
+                "Getting Started",
+                "Note Taking & AI",
+                "Recording Lectures",
+                "Study Tools"
             ],
-            link: "/docs/getting-started",
+            link: "/user-guide-page",
             color: "from-blue-500 to-blue-700"
         },
         {
             icon: Code,
             title: "API Reference",
-            description: "Complete API documentation",
+            description: "Developers & Integration",
             items: [
                 "Authentication",
                 "Endpoints",
@@ -33,30 +33,17 @@ const DocumentationPage: React.FC = () => {
             color: "from-green-500 to-green-700"
         },
         {
-            icon: FileText,
-            title: "User Guides",
-            description: "Step-by-step instructions",
+            icon: HelpCircle,
+            title: "Support",
+            description: "Get help when you need it",
             items: [
-                "Note Management",
-                "Recording Features",
-                "AI Assistant",
-                "Learning Tools"
+                "FAQs",
+                "Contact Support",
+                "Troubleshooting",
+                "Feedback"
             ],
-            link: "/user-guide-page",
+            link: "/contact",
             color: "from-purple-500 to-purple-700"
-        },
-        {
-            icon: Video,
-            title: "Tutorials",
-            description: "Video and interactive guides",
-            items: [
-                "Video Tutorials",
-                "Interactive Demos",
-                "Case Studies",
-                "Tips & Tricks"
-            ],
-            link: "/tutorials",
-            color: "from-orange-500 to-orange-700"
         }
     ];
 
@@ -71,11 +58,11 @@ const DocumentationPage: React.FC = () => {
         },
         {
             question: "Can I export my notes and data?",
-            answer: "Yes, you can export all your data in multiple formats including PDF, CSV, and Markdown."
+            answer: "Currently we only support PDF export, but we are working on other formats."
         },
         {
             question: "How do I contact support?",
-            answer: "Use our contact form or email support@studdyhub.ai. We typically respond within 24 hours."
+            answer: "Use our contact form or email studdyhubai@gmail.com. We typically respond within 24 hours."
         }
     ];
 
@@ -89,7 +76,7 @@ const DocumentationPage: React.FC = () => {
                 />
 
                 <div className="mb-12">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                         {documentationSections.map((section, index) => (
                             <Link to={section.link} key={index}>
                                 <Card className="h-full hover:shadow-xl transition-all hover:-translate-y-1 group">
@@ -116,7 +103,7 @@ const DocumentationPage: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-8">
                     <Card>
                         <div className="flex items-center gap-3 mb-6">
                             <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -136,50 +123,6 @@ const DocumentationPage: React.FC = () => {
                                     </p>
                                 </div>
                             ))}
-                        </div>
-                    </Card>
-
-                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="h-10 w-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                                <Download className="h-5 w-5 text-white" />
-                            </div>
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Download Resources</h2>
-                        </div>
-
-                        <div className="space-y-4">
-                            <a
-                                href="/docs/user-guide.pdf"
-                                className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg hover:shadow-md transition-shadow"
-                            >
-                                <div>
-                                    <h4 className="font-medium text-gray-900 dark:text-white mb-1">Complete User Guide</h4>
-                                    <p className="text-gray-600 dark:text-gray-400 text-sm">PDF • 2.4 MB</p>
-                                </div>
-                                <Download className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                            </a>
-
-                            <a
-                                href="/docs/api-reference.pdf"
-                                className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg hover:shadow-md transition-shadow"
-                            >
-                                <div>
-                                    <h4 className="font-medium text-gray-900 dark:text-white mb-1">API Reference</h4>
-                                    <p className="text-gray-600 dark:text-gray-400 text-sm">PDF • 1.8 MB</p>
-                                </div>
-                                <Download className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                            </a>
-
-                            <a
-                                href="/docs/quick-start.pdf"
-                                className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg hover:shadow-md transition-shadow"
-                            >
-                                <div>
-                                    <h4 className="font-medium text-gray-900 dark:text-white mb-1">Quick Start Guide</h4>
-                                    <p className="text-gray-600 dark:text-gray-400 text-sm">PDF • 1.2 MB</p>
-                                </div>
-                                <Download className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                            </a>
                         </div>
                     </Card>
                 </div>
