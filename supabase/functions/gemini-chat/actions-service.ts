@@ -1349,18 +1349,44 @@ export class StuddyHubActionsService {
             
             // SCHEDULE ACTIONS
             {
-                pattern: /ACTION:\s*CREATE_SCHEDULE\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
+                pattern: /ACTION:\s*CREATE_SCHEDULE\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)(?:\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*))?/,
                 action: 'CREATE_SCHEDULE',
-                extractor: (match: RegExpMatchArray) => ({
-                    title: match[1].trim(),
-                    subject: match[2].trim(),
-                    type: match[3].trim() as any || 'study',
-                    start_time: match[4].trim(),
-                    end_time: match[5].trim(),
-                    description: match[6].trim(),
-                    location: match[7].trim(),
-                    color: match[8].trim() || '#3B82F6'
-                })
+                extractor: (match: RegExpMatchArray) => {
+                    const params: any = {
+                        title: match[1].trim(),
+                        subject: match[2].trim(),
+                        type: match[3].trim() as any || 'study',
+                        start_time: match[4].trim(),
+                        end_time: match[5].trim(),
+                        description: match[6].trim(),
+                        location: match[7].trim(),
+                        color: match[8].trim() || '#3B82F6'
+                    };
+
+                    // Add recurring params if present
+                    if (match[9]) {
+                        params.is_recurring = match[9].trim() === 'true';
+                        params.recurrence_pattern = match[10]?.trim() !== 'null' ? match[10]?.trim() : null;
+                        
+                        // Parse days array if present
+                        const daysStr = match[11]?.trim();
+                        if (daysStr && daysStr !== 'null' && daysStr.startsWith('[')) {
+                            try {
+                                params.recurrence_days = JSON.parse(daysStr);
+                            } catch (e) {
+                                console.warn('[ActionParser] Failed to parse recurrence days:', daysStr);
+                                params.recurrence_days = [];
+                            }
+                        } else {
+                            params.recurrence_days = [];
+                        }
+
+                        params.recurrence_interval = parseInt(match[12]?.trim() || '1');
+                        params.recurrence_end_date = match[13]?.trim() !== 'null' ? match[13]?.trim() : null;
+                    }
+
+                    return params;
+                }
             },
             {
                 pattern: /ACTION:\s*UPDATE_SCHEDULE\|([^|]+)\|([^|]+)/,
