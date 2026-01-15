@@ -359,7 +359,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
             ) : (
                 <>
                     {/* Tabs */}
-                    <div className="flex gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-2xl p-2 shadow-xl mb-8">
+                    {/* <div className="flex gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-2xl p-2 shadow-xl mb-8">
                         {(['overview', 'analytics', 'activity'] as const).map(tab => (
                             <Button
                                 key={tab}
@@ -374,7 +374,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onNavigateToTab, onC
                                     tab === 'analytics' ? 'Analytics' : 'Activity'}
                             </Button>
                         ))}
-                    </div>
+                    </div> */}
 
                     {/* Overview Tab */}
                     {activeTab === 'overview' && (

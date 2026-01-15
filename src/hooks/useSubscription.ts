@@ -20,6 +20,7 @@ export interface SubscriptionLimits {
   maxFolders: number; // Added
   maxScheduleItems: number; // Added
   maxDailyQuizzes: number; // Added
+  maxPodcasts: number; // Added
 }
 
 export interface Subscription {
@@ -46,6 +47,7 @@ const PLAN_LIMITS: Record<PlanType, SubscriptionLimits> = {
     maxFolders: 3,
     maxScheduleItems: 10,
     maxDailyQuizzes: 1,
+    maxPodcasts: 1,
   },
   scholar: {
     maxAiMessages: 50,
@@ -61,6 +63,7 @@ const PLAN_LIMITS: Record<PlanType, SubscriptionLimits> = {
     maxFolders: 10,
     maxScheduleItems: 50,
     maxDailyQuizzes: 10,
+    maxPodcasts: 5,
   },
   genius: {
     maxAiMessages: Infinity,
@@ -76,6 +79,7 @@ const PLAN_LIMITS: Record<PlanType, SubscriptionLimits> = {
     maxFolders: Infinity,
     maxScheduleItems: Infinity,
     maxDailyQuizzes: 100,
+    maxPodcasts: Infinity,
   },
 };
 

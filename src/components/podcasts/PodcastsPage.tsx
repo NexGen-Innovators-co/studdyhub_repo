@@ -51,7 +51,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { getPodcastPermissions } from '@/services/podcastModerationService';
 import { usePodcasts, PodcastWithMeta } from '@/hooks/usePodcasts';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
+import { SubscriptionLimitsModal } from '../subscription/SubscriptionLimitsModal';
 
 interface PodcastsPageProps {
   searchQuery?: string;
@@ -315,6 +317,36 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 }) => {
   const [activeTab, setActiveTab] = useState<'discover' | 'my-podcasts' | 'live'>('discover');
   const queryClient = useQueryClient();
+  const { isFeatureBlocked } = useFeatureAccess();
+  const [showLimitsModal, setShowLimitsModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Fetch count of own podcasts
+  const { data: myPodcastCount = 0 } = useQuery({
+     queryKey: ['my-podcast-count', currentUser?.id],
+     queryFn: async () => {
+         if (!currentUser?.id) return 0;
+         const { count, error } = await supabase
+             .from('ai_podcasts')
+             .select('*', { count: 'exact', head: true })
+             .eq('user_id', currentUser.id);
+         if(error) {
+             console.error('Error fetching podcast count:', error);
+             return 0;
+         }
+         return count || 0;
+     },
+     enabled: !!currentUser?.id
+  });
+
+  const handleCreatePodcast = () => {
+      if (isFeatureBlocked('maxPodcasts', myPodcastCount)) {
+          setShowLimitsModal(true);
+      } else {
+          setShowPodcastGenerator(true);
+      }
+  };
+
   const { 
     data, 
     fetchNextPage, 
@@ -333,7 +365,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedPodcast, setSelectedPodcast] = useState<PodcastData | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  // const [currentUser, setCurrentUser] = useState<any>(null); // MOVED UP
   const [showGoLiveDialog, setShowGoLiveDialog] = useState(false);
   const [livePodcastId, setLivePodcastId] = useState<string | null>(null);
   const [hostingPodcastId, setHostingPodcastId] = useState<string | null>(null);
@@ -543,7 +575,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       (window as any).__podcastGoLive = () => setShowGoLiveDialog(true);
     }
     if (onCreatePodcast) {
-      (window as any).__podcastCreate = () => setShowPodcastGenerator(true);
+      (window as any).__podcastCreate = () => handleCreatePodcast();
     }
     return () => {
       delete (window as any).__podcastGoLive;
@@ -921,7 +953,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                   )}
                   {!searchQuery && activeTab === 'my-podcasts' && (
                     <Button
-                      onClick={() => setShowPodcastGenerator(true)}
+                      onClick={handleCreatePodcast}
                       className="bg-gradient-to-r from-blue-500 to-pink-500"
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -1161,6 +1193,11 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           }}
         />
       )}
+
+      <SubscriptionLimitsModal
+        isOpen={showLimitsModal}
+        onClose={() => setShowLimitsModal(false)}
+      />
 
       {/* Floating Action Button for Refresh */}
       <button

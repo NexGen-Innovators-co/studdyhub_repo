@@ -85,18 +85,29 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
     });
   }, []);
 
-  const triggerAudioProcessing = useCallback(async (fileUrl: string, documentId: string, targetLang: string = 'en') => {
+  const triggerAudioProcessing = useCallback(async (fileUrl: string, documentId: string, targetLang: string = 'en', recordingId?: string) => {
     setIsProcessingAudio(true);
-    const toastId = toast.loading('Sending audio for AI processing (transcription, summary)...');
+    const toastId = toast.loading('Sending audio for AI processing...');
     try {
       const { data, error } = await supabase.functions.invoke('gemini-audio-processor', {
         body: {
           file_url: fileUrl,
           target_language: targetLang,
+          recording_id: recordingId // Pass ID for background processing
         },
       });
 
       if (error) throw error;
+      
+      // Handle Background Processing Response (202 Accepted)
+      if (data?.status === 'pending') {
+         toast.success('Processing started in background. You will be notified when complete.', { id: toastId });
+         setIsProcessingAudio(false);
+         // Update local processing status if needed via onUpdateRecording logic, 
+         // but the optimisic UI should handle "processing" state.
+         return; 
+      }
+
       if (!data || !data.transcript || !data.summary) {
         throw new Error('Invalid response from audio processor: Missing transcript or summary.');
       }
@@ -352,7 +363,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
       toast.success('Audio file uploaded. Initiating AI processing...', { id: toastId });
       onAddRecording(newRecording);
 
-      await triggerAudioProcessing(urlData.publicUrl, newDocumentId);
+      await triggerAudioProcessing(urlData.publicUrl, newDocumentId, 'en', newRecording.id);
 
     } catch (error: any) {
       let errorMessage = 'An unknown error occurred during audio upload.';
@@ -453,7 +464,7 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
       onAddRecording(newRecording);
       toast.success('Recording saved, initiating AI processing...', { id: toastId });
 
-      await triggerAudioProcessing(publicUrl, newDocumentId);
+      await triggerAudioProcessing(publicUrl, newDocumentId, 'en', newRecording.id);
 
     } catch (error: any) {
       let errorMessage = 'Failed to process recording.';

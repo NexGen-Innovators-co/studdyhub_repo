@@ -3,15 +3,14 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 // Define the expected request body structure
 interface RequestBody {
-  file_url: string;
-  target_language?: string; // Optional target language for translation
-  // Removed user_id and document_id as they are no longer needed for job tracking within the function
+  file_url?: string;
+  recording_id?: string; // If provided, uses async background processing
+  target_language?: string; 
 }
 
 // Initialize Supabase client
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!; // Using service role key for secure operations if needed
+const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!; 
 
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: {
@@ -23,29 +22,141 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
+// Declare EdgeRuntime for background tasks
+declare const EdgeRuntime: { waitUntil: (promise: Promise<any>) => void };
+
+async function processAudioBackground(recordingId: string, fileUrl: string, targetLanguage: string) {
+  try {
+    console.log(`[Background] Starting processing for ${recordingId}`);
+    
+    // 1. Mark as processing
+    await supabase
+      .from('class_recordings')
+      .update({ processing_status: 'processing' })
+      .eq('id', recordingId);
+
+    // 2. Fetch Audio
+    const audioResponse = await fetch(fileUrl);
+    if (!audioResponse.ok) throw new Error(`Failed to fetch audio: ${audioResponse.statusText}`);
+    const audioBlob = await audioResponse.blob();
+
+    // 3. Convert to Base64 (Chunking/Streaming needed for very large files, but keeping simple for now)
+    // NOTE: For files > 20MB, we should implement Gemini File API Upload
+    const base64Audio = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result.split(',')[1]);
+        } else {
+          reject(new Error("FileReader did not return a string result."));
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(audioBlob);
+    });
+
+    // 4. Call Gemini
+    const transcriptionPayload = {
+      contents: [{
+        role: "user",
+        parts: [
+          { text: "Transcribe the following audio into text. Provide a summary as well in JSON format: { \"transcript\": \"...\", \"summary\": \"...\", \"duration\": 0 }." },
+          {
+            inlineData: {
+              mimeType: audioBlob.type || 'audio/webm',
+              data: base64Audio,
+            },
+          },
+        ],
+      }],
+      generationConfig: { responseMimeType: "application/json" }
+    };
+
+    const transcriptionResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(transcriptionPayload),
+    });
+
+    if (!transcriptionResponse.ok) {
+      const errorText = await transcriptionResponse.text();
+      throw new Error(`Gemini transcription failed: ${transcriptionResponse.status} - ${errorText}`);
+    }
+
+    const result = await transcriptionResponse.json();
+    const jsonContent = JSON.parse(result?.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
+
+    // 5. Update DB
+    const { error: updateError } = await supabase
+      .from('class_recordings')
+      .update({
+        transcript: jsonContent.transcript || '',
+        summary: jsonContent.summary || '',
+        duration: jsonContent.duration || 0,
+        processing_status: 'completed',
+        processing_error: null
+      })
+      .eq('id', recordingId);
+
+    if (updateError) throw updateError;
+    console.log(`[Background] Completed ${recordingId}`);
+
+  } catch (error: any) {
+    console.error(`[Background] Failed ${recordingId}:`, error);
+    await supabase
+      .from('class_recordings')
+      .update({ 
+        processing_status: 'failed',
+        processing_error: error.message 
+      })
+      .eq('id', recordingId);
+  }
+}
 
 serve(async (req) => {
-  // Define CORS headers directly within the function
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   };
 
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { file_url, target_language = 'en' }: RequestBody = await req.json();
+    const { file_url, recording_id, target_language = 'en' }: RequestBody = await req.json();
 
-    if (!file_url) {
-      return new Response(JSON.stringify({ error: 'file_url is required' }), {
+    if (!file_url && !recording_id) {
+       return new Response(JSON.stringify({ error: 'file_url OR recording_id is required' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
       });
     }
 
+    // === NEW: Background Processing Path ===
+    if (recording_id && file_url) {
+        console.log(`[Handler] Received background job for ${recording_id}`);
+        
+        // Return 202 Accepted immediately
+        const promise = processAudioBackground(recording_id, file_url, target_language);
+        if (typeof EdgeRuntime !== 'undefined') {
+            EdgeRuntime.waitUntil(promise);
+        } else {
+             // Fallback for dev: await but warn
+             processAudioBackground(recording_id, file_url, target_language); // Fire and forget in local
+        }
+
+        return new Response(JSON.stringify({ 
+            message: 'Processing started in background', 
+            status: 'pending',
+            id: recording_id 
+        }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 202 
+        });
+    }
+
+    // === OLD: Synchronous Path (Legacy Support) ===
+    if (!file_url) throw new Error("File URL required for sync mode");
+    
     // 1. Fetch the audio file
     const audioResponse = await fetch(file_url);
     if (!audioResponse.ok) {

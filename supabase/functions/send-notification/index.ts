@@ -169,9 +169,26 @@ serve(async (req) => {
       })
     }
 
-    // Parse request body
-    const body: NotificationRequest = await req.json()
-    const { user_id, user_ids, type, title, message, data, save_to_db = true } = body
+    const body = await req.json()
+    
+    // Handle Supabase Database Webhook payload
+    let notificationRequest: NotificationRequest
+    
+    if (body.type === 'INSERT' && body.table === 'notifications' && body.record) {
+      const record = body.record
+      notificationRequest = {
+        user_id: record.user_id,
+        type: record.type,
+        title: record.title,
+        message: record.message,
+        data: record.data,
+        save_to_db: false // Already in DB
+      }
+    } else {
+      notificationRequest = body
+    }
+
+    const { user_id, user_ids, type, title, message, data, save_to_db = true } = notificationRequest
 
     // Validate required fields
     if (!type || !title || !message) {
