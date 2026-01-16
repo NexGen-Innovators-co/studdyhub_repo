@@ -24,6 +24,7 @@ export interface CreateNotificationParams {
   message: string;
   data?: Record<string, any>;
   expiresAt?: Date;
+  saveToDb?: boolean;
 }
 
 /**
@@ -40,7 +41,7 @@ export async function createNotification(params: CreateNotificationParams): Prom
         title: params.title,
         message: params.message,
         data: params.data,
-        save_to_db: true
+        save_to_db: params.saveToDb !== undefined ? params.saveToDb : true
       }
     });
 

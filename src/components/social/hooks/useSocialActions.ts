@@ -7,7 +7,7 @@ import { extractHashtags, generateShareText } from '../utils/postUtils';
 import { Privacy } from '../types/social';
 import { v4 as uuidv4 } from 'uuid';
 import { offlineStorage, STORES } from '../../../utils/offlineStorage';
-
+import { createNotification } from '../../../services/notificationHelpers';
 
 export const useSocialActions = (
   currentUser: SocialUserWithDetails | null,
@@ -542,14 +542,23 @@ export const useSocialActions = (
 
         const post = posts.find(p => p.id === postId);
         if (post && post.author_id !== userId) {
-          await supabase.from('social_notifications').insert({
-            user_id: post.author_id,
-            type: 'like',
+          let actorName = currentUser?.display_name;
+          if (!actorName) {
+            const { data: actor } = await supabase
+              .from('social_users')
+              .select('display_name')
+              .eq('id', userId)
+              .single();
+            actorName = actor?.display_name || 'Someone';
+          }
+
+          await createNotification({
+            userId: post.author_id,
+            type: 'social_like',
             title: 'New like on your post',
-            message: `${currentUser?.display_name} liked your post`,
-            data: { post_id: postId, user_id: userId },
-            actor_id: userId,
-            post_id: postId
+            message: `${actorName} liked your post`,
+            data: { post_id: postId, actor_id: userId },
+            saveToDb: false
           });
         }
       }
@@ -705,15 +714,24 @@ export const useSocialActions = (
           await refetchCurrentUser();
         }
 
+        let actorName = currentUser?.display_name;
+        if (!actorName) {
+          const { data: actor } = await supabase
+            .from('social_users')
+            .select('display_name')
+            .eq('id', user.id)
+            .single();
+          actorName = actor?.display_name || 'Someone';
+        }
+
         // Create notification
-        await supabase.from('social_notifications').insert({
-          user_id: userId,
-          type: 'follow',
+        await createNotification({
+          userId: userId,
+          type: 'social_follow',
           title: 'New follower',
-          message: `${currentUser?.display_name} started following you`,
-          data: { user_id: user.id },
-          actor_id: user.id,
-          post_id: null
+          message: `${actorName} started following you`,
+          data: { actor_id: user.id },
+          saveToDb: false
         });
 
         // Remove from suggested users list
