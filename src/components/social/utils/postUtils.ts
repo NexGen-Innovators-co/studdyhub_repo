@@ -16,9 +16,9 @@ export const extractHashtags = (content: string): string[] => {
 };
 
 export const extractLinks = (content: string): string[] => {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
   const links = content.match(urlRegex) || [];
-  return [...new Set(links)];
+  return [...new Set(links.map(link => link.replace(/[.,!?;:]+$/, '')))];
 };
 
 export const removeHashtagsFromContent = (content: string): string => {
@@ -31,23 +31,45 @@ export const formatPostContent = (content: string): string => {
 };
 
 export const renderContentWithClickableLinks = (content: string): React.ReactNode => {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
   const parts = content.split(urlRegex);
   
   return parts.map((part, index) => {
     if (part.match(urlRegex)) {
-      return React.createElement(
+      let href = part;
+      let display = part;
+      let suffix = '';
+
+      // Handle common trailing punctuation
+      const trailingPunctuation = /[.,!?;:]+$/;
+      const match = part.match(trailingPunctuation);
+      if (match) {
+        suffix = match[0];
+        display = part.substring(0, part.length - suffix.length);
+        href = display;
+      }
+
+      if (!href.startsWith('http') && href.startsWith('www.')) {
+        href = 'https://' + href;
+      }
+      
+      const link = React.createElement(
         'a',
         {
-          key: index,
-          href: part,
+          key: `link-${index}`,
+          href: href,
           target: '_blank',
           rel: 'noopener noreferrer',
           className: 'text-blue-600 dark:text-blue-400 hover:underline',
           onClick: (e: React.MouseEvent) => e.stopPropagation()
         },
-        part
+        display
       );
+
+      if (suffix) {
+        return React.createElement(React.Fragment, { key: index }, link, suffix);
+      }
+      return link;
     }
     return React.createElement('span', { key: index }, part);
   });

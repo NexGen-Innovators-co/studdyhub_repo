@@ -25,6 +25,7 @@ import {
   Clock,
   Calendar
 } from 'lucide-react';
+import { renderContentWithClickableLinks } from '../utils/postUtils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1076,7 +1077,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           </div>
                         ) : (
                           message.content && (
-                            <p className="text-sm whitespace-pre-wrap px-2 break-words leading-relaxed">{message.content}</p>
+                            <div className="text-sm whitespace-pre-wrap px-2 break-words leading-relaxed">
+                              {renderContentWithClickableLinks(message.content)}
+                            </div>
                           )
                         )}
 

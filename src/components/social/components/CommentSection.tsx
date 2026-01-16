@@ -6,7 +6,7 @@ import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
 import { Send, RefreshCw } from 'lucide-react';
 import { CommentSectionProps } from '../types/social';
-import { getTimeAgo } from '../utils/postUtils';
+import { getTimeAgo, renderContentWithClickableLinks } from '../utils/postUtils';
 
 export const CommentSection: React.FC<CommentSectionProps> = ({
   postId,
@@ -59,7 +59,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                     {getTimeAgo(comment.created_at)}
                   </span>
                 </div>
-                <p className="text-sm">{comment.content}</p>
+                <div className="text-sm">{renderContentWithClickableLinks(comment.content)}</div>
               </div>
             </div>
           ))}
