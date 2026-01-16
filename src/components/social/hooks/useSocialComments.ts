@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { SocialCommentWithDetails, SocialUserWithDetails, SocialPostWithDetails } from '../../../integrations/supabase/socialTypes';
 import { toast } from 'sonner';
+import { createNotification } from '../../../services/notificationHelpers';
 
 export const useSocialComments = (
   currentUser: SocialUserWithDetails | null,
@@ -101,14 +102,23 @@ export const useSocialComments = (
       // Create notification for post author
       const post = posts.find(p => p.id === postId);
       if (post && post.author_id !== user.id) {
-        await supabase.from('social_notifications').insert({
-          user_id: post.author_id,
-          type: 'comment',
+        let actorName = currentUser?.display_name;
+        if (!actorName) {
+          const { data: actor } = await supabase
+            .from('social_users')
+            .select('display_name')
+            .eq('id', user.id)
+            .single();
+          actorName = actor?.display_name || 'Someone';
+        }
+
+        await createNotification({
+          userId: post.author_id,
+          type: 'social_comment',
           title: 'New comment on your post',
-          message: `${currentUser?.display_name} commented on your post`,
-          data: { post_id: postId, comment_id: comment.id },
-          actor_id: user.id, // Added
-          post_id: postId // Added
+          message: `${actorName} commented on your post`,
+          data: { post_id: postId, comment_id: comment.id, actor_id: user.id },
+          saveToDb: false
         });
       }
 

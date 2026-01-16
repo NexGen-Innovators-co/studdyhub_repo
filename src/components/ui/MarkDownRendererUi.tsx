@@ -1,6 +1,7 @@
 // src/components/ui/MarkdownRenderer.tsx
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -18,6 +19,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   return (
     <div className={`markdown-content ${className}`} style={{ maxHeight }}>
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         components={{
           code({ node, inline, className, children, ...props }: any) {
             const match = /language-(\w+)/.exec(className || '');

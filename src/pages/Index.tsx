@@ -587,18 +587,9 @@ const Index = () => {
 
         {/* Main Content */}
         <div className="flex-1 h-full overflow-y-auto modern-scrollbar bg-gray-50 dark:bg-slate-900">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentActiveTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-              className="min-h-full"
-            >
-              <TabContent {...tabContentProps} />
-            </motion.div>
-          </AnimatePresence>
+          <div className="min-h-full">
+            <TabContent {...tabContentProps} />
+          </div>
         </div>
       </div>
 

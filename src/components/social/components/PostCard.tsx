@@ -38,7 +38,7 @@ import {
 import { toast } from 'sonner';
 import { PostCardProps } from '../types/social';
 import { CommentSection } from './CommentSection';
-import { getTimeAgo, removeHashtagsFromContent, renderContentWithClickableLinks } from '../utils/postUtils';
+import { getTimeAgo, removeHashtagsFromContent, renderContentWithClickableLinks, convertNakedUrlsToMarkdown } from '../utils/postUtils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../ui/dialog';
 import { SocialPostWithDetails } from '@/integrations/supabase/socialTypes';
 import { ReportDialog } from './ReportDialog';
@@ -389,8 +389,13 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
     const isOwnPost = currentUser?.id === post.author_id;
     // Don't use removeHashtagsFromContent as it collapses newlines which breaks markdown
-    const cleanedContent = (post.content || '').replace(/#\w+/g, '');
+    let cleanedContent = (post.content || '').replace(/#\w+/g, '');
+    
+    // Auto-linkify naked URLs (like studdyhub.vercel.app) to markdown
+    cleanedContent = convertNakedUrlsToMarkdown(cleanedContent);
+
     const isLongContent = cleanedContent.length > 280;
+
 
 
     const handleLike = async () => {
@@ -743,7 +748,8 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
         ref={cardRef}
         onClick={(e) => {
           const target = e.target as HTMLElement;
-          if (!target.closest('button, a, input, textarea, video, [role="menuitem"],span') && onClick) {
+          // Updated to exclude 'a' tags specifically to allow link clicking
+          if (!target.closest('button, input, textarea, video, [role="menuitem"], span, a') && onClick) {
             onClick(post.id);
           }
         }}

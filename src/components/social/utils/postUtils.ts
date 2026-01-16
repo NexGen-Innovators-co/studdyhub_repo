@@ -75,6 +75,17 @@ export const renderContentWithClickableLinks = (content: string): React.ReactNod
   });
 };
 
+export const convertNakedUrlsToMarkdown = (content: string): string => {
+  // Regex to match domains like example.com, studdyhub.vercel.app
+  // Excludes items already starting with http/https/www (handled separately or fine)
+  // We want to turn " studdyhub.vercel.app " into " [studdyhub.vercel.app](https://studdyhub.vercel.app) "
+  
+  return content.replace(/(\s|^)(?!(?:https?:\/\/|www\.|@|#))([a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]{2,}|[a-zA-Z0-9-]+\.[a-z]{2,})(\/[^\s]*)?/g, (match, prefix, domain, path) => {
+      const url = domain + (path || '');
+      return `${prefix}[${url}](https://${url})`;
+  });
+};
+
 export const validatePostContent = (content: string): boolean => {
   return content.trim().length > 0 && content.length <= 500;
 };
