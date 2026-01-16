@@ -54,6 +54,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Podcast } from 'lucide-react';
+import { MarkdownRenderer } from '../../ui/MarkDownRendererUi';
 
 interface PostCardWithViewTrackingProps extends PostCardProps {
   onPostView?: (postId: string) => void;
@@ -368,6 +369,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
       newComment,
       onCommentChange,
       onSubmitComment,
+      isAddingComment,
       currentUser,
       onClick,
       onDeletePost,
@@ -386,7 +388,8 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
     const [isSharing, setIsSharing] = useState(false);
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
     const isOwnPost = currentUser?.id === post.author_id;
-    const cleanedContent = removeHashtagsFromContent(post.content || '');
+    // Don't use removeHashtagsFromContent as it collapses newlines which breaks markdown
+    const cleanedContent = (post.content || '').replace(/#\w+/g, '');
     const isLongContent = cleanedContent.length > 280;
 
 
@@ -824,20 +827,30 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                   </div>
                 </div>
               ) : (
-                <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 px-4 whitespace-pre-wrap break-words">
-                  {isLongContent && !isContentExpanded ? (
-                    <>
-                      {renderContentWithClickableLinks(cleanedContent.slice(0, 280))}...
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setIsContentExpanded(true); }}
-                        className="text-blue-600 hover:underline ml-1 font-medium"
-                      >
-                        More
-                      </button>
-                    </>
-                  ) : (
-                    renderContentWithClickableLinks(cleanedContent)
-                  )}
+                <div className="px-4 text-[15px] leading-relaxed text-slate-800 dark:text-slate-200">
+                    <div className={`relative ${!isContentExpanded && isLongContent ? 'max-h-[300px] overflow-hidden' : ''}`}>
+                         <MarkdownRenderer content={cleanedContent} className="prose dark:prose-invert max-w-none text-slate-800 dark:text-slate-200" />
+                         {!isContentExpanded && isLongContent && (
+                            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-slate-900 to-transparent flex items-end justify-center pb-2">
+                                <Button
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={(e) => { e.stopPropagation(); setIsContentExpanded(true); }}
+                                    className="bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-900 text-blue-600 dark:text-blue-400 font-medium shadow-sm border border-slate-100 dark:border-slate-800 backdrop-blur-sm"
+                                >
+                                    Show more
+                                </Button>
+                            </div>
+                         )}
+                    </div>
+                     {isContentExpanded && isLongContent && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setIsContentExpanded(false); }}
+                            className="mt-2 text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline flex items-center gap-1"
+                        >
+                            Show less
+                        </button>
+                    )}
                 </div>
               )}
 
@@ -922,6 +935,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
                 onCommentChange={onCommentChange}
                 onSubmitComment={onSubmitComment}
                 currentUser={currentUser}
+                isAddingComment={isAddingComment}
               />
             </div>
           )}

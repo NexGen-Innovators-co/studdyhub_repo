@@ -1098,22 +1098,34 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
             // Use the provided onNavigateToTab prop to switch to the social tab, then open modal
             if (onNavigateToTab) {
               onNavigateToTab('social');
-              setTimeout(() => {
-                if (socialFeedRef?.current) {
-                  socialFeedRef.current.openCreatePostDialog({ 
-                    content, 
-                    coverUrl,
-                    metadata: {
-                      type: 'podcast',
-                      podcastId: podcast.id,
-                      title: podcast.title,
-                      description: podcast.description || '',
-                      coverUrl: podcast.cover_image_url,
-                      authorName: podcast.user?.full_name || 'Anonymous'
-                    }
-                  });
+              
+              const payload = { 
+                content, 
+                coverUrl,
+                metadata: {
+                  type: 'podcast',
+                  podcastId: podcast.id,
+                  title: podcast.title,
+                  description: podcast.description || '',
+                  coverUrl: podcast.cover_image_url,
+                  authorName: podcast.user?.full_name || 'Anonymous'
                 }
-              }, 300);
+              };
+
+              // Poll for the socialFeedRef availability since component mounting might take time
+              let attempts = 0;
+              const maxAttempts = 20; // 2 seconds max
+              const checkRef = () => {
+                if (socialFeedRef?.current) {
+                  socialFeedRef.current.openCreatePostDialog(payload);
+                } else if (attempts < maxAttempts) {
+                  attempts++;
+                  setTimeout(checkRef, 100);
+                }
+              };
+              
+              // Start checking after a small delay to allow render cycle to start
+              setTimeout(checkRef, 100);
             } else {
               // fallback: open modal directly if no tab switch function
               if (socialFeedRef?.current) {

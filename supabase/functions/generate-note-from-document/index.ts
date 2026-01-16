@@ -266,7 +266,7 @@ serve(async (req) => {
         }
 
         // 4. Parse request body
-        const { documentId, userProfile, selectedSection } = await req.json(); // Destructure selectedSection
+        const { documentId, userProfile, selectedSection, noteId } = await req.json(); // Destructure selectedSection and noteId
         if (!documentId || !userProfile) {
             return new Response(JSON.stringify({
                 error: 'Missing documentId or userProfile'
@@ -314,8 +314,8 @@ serve(async (req) => {
         // 7.5. Process image placeholders in the AI-generated content
         aiContent = await processImagePlaceholders(aiContent, user.id, supabaseServiceRoleClient);
 
-        // 8. Save the new note to the database
-        const newNotePayload = {
+        // 8. Save the new note to the database (or update existing if noteId provided)
+        const notePayload = {
             user_id: user.id,
             document_id: documentId,
             title: `${document.title}${selectedSection ? ` - ${selectedSection}` : ''}`, // Add section to title
@@ -327,17 +327,43 @@ serve(async (req) => {
                 document.title.toLowerCase().replace(/\s+/g, '-'),
                 ...(selectedSection ? [selectedSection.toLowerCase().replace(/\s+/g, '-')] : []) // Add selected section as tag
             ],
-            ai_summary: extractSummary(aiContent)
+            ai_summary: extractSummary(aiContent),
+            updated_at: new Date().toISOString()
         };
 
-        const { data: newNote, error: insertError } = await supabaseClient.from('notes').insert(newNotePayload).select().single();
-        if (insertError) {
-            //console.error('Note insert error:', insertError.message);
-            throw new Error('Failed to save the generated note. Check database constraints.');
+        let resultData;
+        
+        if (noteId) {
+             // Update existing note
+             const { data: updatedNote, error: updateError } = await supabaseClient
+                .from('notes')
+                .update(notePayload)
+                .eq('id', noteId)
+                .eq('user_id', user.id)
+                .select()
+                .single();
+                
+             if (updateError) {
+                 throw new Error('Failed to update the existing note. ' + updateError.message);
+             }
+             resultData = updatedNote;
+        } else {
+             // Insert new note
+             const { data: newNote, error: insertError } = await supabaseClient
+                .from('notes')
+                .insert(notePayload)
+                .select()
+                .single();
+                
+             if (insertError) {
+                //console.error('Note insert error:', insertError.message);
+                throw new Error('Failed to save the generated note. Check database constraints.');
+             }
+             resultData = newNote;
         }
 
-        // 9. Return the new note to the client
-        return new Response(JSON.stringify(newNote), {
+        // 9. Return the note to the client
+        return new Response(JSON.stringify(resultData), {
             status: 200,
             headers: {
                 ...corsHeaders,

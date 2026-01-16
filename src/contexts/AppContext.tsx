@@ -337,7 +337,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Audio processing
   const audioProcessing = useAudioProcessing({
     onAddRecording: (rec) => setRecordings(prev => [...prev, rec]),
-    onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r))
+    onUpdateRecording: (rec) => setRecordings(prev => prev.map(r => r.id === rec.id ? rec : r)),
+    onNoteCreated: (note) => setNotes(prev => [note, ...prev]),
+    onRefreshNotes: refreshNotes
   });
   const enhancedDataLoading = useMemo(() => ({
     ...appData.dataLoading,

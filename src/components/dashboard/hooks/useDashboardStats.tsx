@@ -60,7 +60,7 @@ export interface DashboardStats {
   engagementScore: number;
   lastFetched: number;
 }
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours (effectively manual refresh only)
 const statsCache: Record<string, { data: DashboardStats; timestamp: number }> = {};
 
 // Prevent simultaneous fetches across dashboard and app context

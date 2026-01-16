@@ -41,6 +41,10 @@ const PAGE_SIZE = 20;
 export const usePodcasts = (activeTab: PodcastTab) => {
   return useInfiniteQuery({
     queryKey: ['podcasts', activeTab],
+    staleTime: 1000 * 60 * 30, // 30 mins - Data stays "fresh" (no background refetch)
+    gcTime: 1000 * 60 * 60, // 1 hour - Keep in cache even if component unmounts
+    refetchOnMount: false, // Don't refetch when mounting
+    refetchOnWindowFocus: false, // Don't refetch on window focus
     queryFn: async ({ pageParam = 1 }) => {
       try {
         let query = supabase

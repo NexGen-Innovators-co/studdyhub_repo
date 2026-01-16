@@ -19,7 +19,7 @@ BEGIN
     WHERE id = NEW.post_id;
 
     -- Ignore if commenting on own post
-    IF post_owner_id IS NOT NULL AND post_owner_id != NEW.user_id THEN
+    IF post_owner_id IS NOT NULL AND post_owner_id != NEW.author_id THEN
         preview_text := substring(NEW.content from 1 for 50);
         IF length(NEW.content) > 50 THEN
             preview_text := preview_text || '...';

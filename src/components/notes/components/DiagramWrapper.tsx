@@ -66,20 +66,31 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
             const serializer = new XMLSerializer();
             const svgString = serializer.serializeToString(svgElement);
             const img = new Image();
-            const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
-            const url = URL.createObjectURL(svgBlob);
+            // Important: Set crossOrigin to anonymous to prevent tainted canvas
+            img.crossOrigin = 'anonymous';
+            
+            // Use Data URI instead of Blob URL to better handle security contexts
+            const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
             
             img.onload = () => {
                 const canvas = document.createElement('canvas');
+                // Use default size if getBoundingClientRect returns 0 (e.g. if element is hidden)
                 const bbox = svgElement!.getBoundingClientRect();
                 const width = bbox.width || 800;
                 const height = bbox.height || 600;
-                const scaleFactor = 2;
+                
+                // Increase scale for better quality
+                const scaleFactor = 2; 
                 
                 canvas.width = width * scaleFactor;
                 canvas.height = height * scaleFactor;
+                
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
+                    // Fill white background (transparent backgrounds can look black in some viewers)
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
                     ctx.scale(scaleFactor, scaleFactor);
                     ctx.drawImage(img, 0, 0, width, height);
                     try {
@@ -92,9 +103,8 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
                         alert('Could not export to PNG due to security restrictions. Try SVG or PDF.');
                     }
                 }
-                URL.revokeObjectURL(url);
             };
-            img.src = url;
+            img.src = svgBase64;
         }
     } else if (format === 'svg') {
         if (svgElement) {

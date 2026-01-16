@@ -140,6 +140,7 @@ export const useSocialData = (
   const [isLoadingSuggestedUsers, setIsLoadingSuggestedUsers] = useState(false);
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
   const [isLoadingMoreGroups, setIsLoadingMoreGroups] = useState(false);
+  const isFetchedRef = useRef(false); // Ref to track if data has already been fetched to prevent refetch on mount if data exists
 
   const [postsOffset, setPostsOffset] = useState(0);
   const [trendingPostsOffset, setTrendingPostsOffset] = useState(0);
@@ -186,7 +187,10 @@ export const useSocialData = (
     }
 
     try {
-      setIsLoading(reset);
+      // Only show main loading spinner if we don't have any posts yet
+      if (reset) {
+        setIsLoading(posts.length === 0);
+      }
       if (!reset) setIsLoadingMorePosts(true);
 
       const currentOffset = reset ? 0 : postsOffset;
@@ -318,7 +322,10 @@ export const useSocialData = (
     }
 
     try {
-      setIsLoading(reset);
+      if (reset) {
+        // Only show spinner if we don't have data
+        setIsLoading(trendingPosts.length === 0); 
+      }
       if (!reset) setIsLoadingMorePosts(true);
 
       const currentOffset = reset ? 0 : trendingPostsOffset;
@@ -410,7 +417,9 @@ export const useSocialData = (
     }
 
     try {
-      setIsLoadingUserPosts(reset);
+      if (reset) {
+        setIsLoadingUserPosts(userPosts.length === 0);
+      }
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -652,7 +661,9 @@ export const useSocialData = (
 
     try {
       setIsLoadingMoreGroups(!reset);
-      if (reset) setIsLoadingGroups(true);
+      if (reset) {
+        setIsLoadingGroups(groups.length === 0);
+      }
 
       // OPTIMIZED: Single query with proper filtering
       // We fetch all groups to allow discovery, and then check membership
@@ -1212,15 +1223,18 @@ export const useSocialData = (
     setHasMoreSuggestedUsers(true);
     setHasMoreGroups(true);
 
-    setPosts([]);
-    setTrendingPosts([]);
-    setUserPosts([]);
+    // Don't clear posts immediately to avoid UI flash/loading state if we have cached data
+    // setPosts([]);
+    // setTrendingPosts([]);
+    // setUserPosts([]);
+    // setGroups([]);
+    
     setSuggestedUsers([]);
-    setGroups([]);
     // Clear any buffered new posts when resetting
     setNewPostsBuffer([]);
     setHasNewPosts(false);
 
+    // Pass false for loading if we have data? No, fetchPosts decides.
     fetchPosts(true);
     fetchTrendingPosts(true);
     fetchUserPosts(true);
@@ -1253,7 +1267,12 @@ export const useSocialData = (
       }
 
       try {
-        setIsLoadingSuggestedUsers(true);
+        if (reset) {
+             if (suggestedUsers.length === 0) setIsLoadingSuggestedUsers(true);
+        } else {
+             setIsLoadingSuggestedUsers(true);
+        }
+        
         if (reset) {
           setSuggestedUsersOffset(0);
           setSuggestedUsers([]);

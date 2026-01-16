@@ -536,6 +536,7 @@ export const useSocialActions = (
 
         if (insertError) {
           toast.error('Failed to like post');
+          console.error('Error liking post:', insertError);
           return;
         }
 

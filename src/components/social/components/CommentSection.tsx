@@ -16,6 +16,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   onCommentChange,
   onSubmitComment,
   currentUser,
+  isAddingComment,
 }) => {
   const { canPostSocials } = useFeatureAccess();
   const canInteract = canPostSocials();
@@ -90,10 +91,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
               <Button
                 size="sm"
                 onClick={handleSubmit}
-                disabled={!newComment.trim() || !canInteract}
+                disabled={!newComment.trim() || !canInteract || isAddingComment}
                 title={!canInteract ? 'Upgrade to comment' : 'Send comment'}
               >
-                {!canInteract ? <Send className="h-4 w-4 opacity-50" /> : <Send className="h-4 w-4" />}
+                {!canInteract ? <Send className="h-4 w-4 opacity-50" /> : isAddingComment ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
           </div>

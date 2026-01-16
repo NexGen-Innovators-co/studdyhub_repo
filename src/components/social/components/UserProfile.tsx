@@ -27,6 +27,7 @@ export const UserProfile: React.FC<any> = ({
   getNewCommentContent,
   onCommentChange,
   onSubmitComment,
+  isAddingComment,
   currentUser,
   onPostView,
   onClick,
@@ -570,6 +571,7 @@ export const UserProfile: React.FC<any> = ({
                     isLoadingComments={isLoadingPostComments(post.id)}
                     newComment={getNewCommentContent(post.id)}
                     onCommentChange={(c) => onCommentChange(post.id, c)}
+                    isAddingComment={isAddingComment?.(post.id)}
                     onSubmitComment={() => onSubmitComment(post.id)}
                     onDeletePost={onDeletePost}
                     onEditPost={onEditPost}
@@ -653,6 +655,7 @@ export const UserProfile: React.FC<any> = ({
                     isLoadingComments={isLoadingPostComments(post.id)}
                     newComment={getNewCommentContent(post.id)}
                     onCommentChange={(c) => onCommentChange(post.id, c)}
+                    isAddingComment={isAddingComment?.(post.id)}
                     onSubmitComment={() => onSubmitComment(post.id)}
                     onDeletePost={onDeletePost}
                     onEditPost={onEditPost}

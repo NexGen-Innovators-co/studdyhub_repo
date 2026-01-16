@@ -106,7 +106,15 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
     handlePlayAudio,
     handlePauseAudio,
     handleAudioEnded,
+    checkAndFixDurations
   } = useAudioProcessing({ onAddRecording, onUpdateRecording });
+
+  // Automatically check for and fix invalid durations in recordings
+  useEffect(() => {
+    if (recordings?.length > 0) {
+      checkAndFixDurations(recordings);
+    }
+  }, [recordings, checkAndFixDurations]);
 
   // Realtime sync for recordings only
   useRealtimeSync({
@@ -474,8 +482,8 @@ export const ClassRecordings: React.FC<ClassRecordingsProps> = ({
                           {/* Content */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <h3 className="font-semibold text-base truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-semibold truncate text-base group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1 pr-2">
                                   {recording.title}
                                 </h3>
                                 <div className="flex flex-wrap items-center gap-2 mt-1">

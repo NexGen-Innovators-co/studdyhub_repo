@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { ClassRecording, Quiz } from '../../../types/Class';
+import { toast } from 'sonner';
 
 interface UseRealtimeSyncProps {
   userId: string;
@@ -32,7 +33,26 @@ export const useRealtimeSync = ({
         },
         (payload) => {
           if (payload.new) {
-            onRecordingUpdate(payload.new as ClassRecording);
+            const newRec = payload.new as ClassRecording;
+            const oldRec = payload.old as ClassRecording | null;
+
+            // Notify on completion
+            if (newRec.processing_status === 'completed' && oldRec?.processing_status === 'processing') {
+                toast.success(`Processing complete for: ${newRec.title}`);
+            }
+             // Notify on failure
+            if (newRec.processing_status === 'failed' && oldRec?.processing_status === 'processing') {
+                toast.error(`Processing failed for: ${newRec.title}`);
+            }
+
+            // Transform raw payload to match ClassRecording interface expected by UI
+            const transformedRec: ClassRecording = {
+              ...newRec,
+              audioUrl: newRec.audio_url || newRec.audioUrl, // Ensure compatible field
+              userId: newRec.user_id || newRec.userId // Ensure compatible field
+            };
+
+            onRecordingUpdate(transformedRec);
           }
         }
       )

@@ -196,7 +196,7 @@ export const SubscriptionLimitsModal: React.FC<SubscriptionLimitsModalProps> = (
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+      {/* <DialogTrigger asChild>
         {trigger ? (
           trigger
         ) : (
@@ -204,7 +204,7 @@ export const SubscriptionLimitsModal: React.FC<SubscriptionLimitsModalProps> = (
             View All Plans
           </Button>
         )}
-      </DialogTrigger>
+      </DialogTrigger> */}
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-3xl">Compare Subscription Plans</DialogTitle>

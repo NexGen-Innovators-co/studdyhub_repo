@@ -5,9 +5,13 @@ import { generateId } from '../utils/helpers';
 import { ClassRecording } from '../../../types/Class';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
+import { Note } from '../../../types/Note';
+
 interface UseAudioProcessingProps {
   onAddRecording: (recording: ClassRecording) => void;
   onUpdateRecording: (recording: ClassRecording) => void;
+  onNoteCreated?: (note: Note) => void;
+  onRefreshNotes?: () => Promise<void>;
 }
 
 interface AudioDetails {
@@ -17,7 +21,7 @@ interface AudioDetails {
   document_id: string;
 }
 
-export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAudioProcessingProps) => {
+export const useAudioProcessing = ({ onAddRecording, onUpdateRecording, onNoteCreated, onRefreshNotes }: UseAudioProcessingProps) => {
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [uploadedAudioDetails, setUploadedAudioDetails] = useState<AudioDetails | null>(null);
   const [isAudioOptionsVisible, setIsAudioOptionsVisible] = useState(false);
@@ -26,6 +30,66 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isGeneratingNote, setIsGeneratingNote] = useState(false);
   const [translatedContent, setTranslatedContent] = useState<string | null>(null);
+
+  const checkAndFixDurations = useCallback(async (recordings: ClassRecording[]) => {
+    // Filter for recordings that have invalid duration but have content we can use
+    const invalidRecordings = recordings.filter(
+      r => (r.duration === 0 || r.duration === null) && (r.transcript || r.audioUrl)
+    );
+
+    if (invalidRecordings.length === 0) return;
+
+    // console.log(`Found ${invalidRecordings.length} recordings with invalid duration. Attempting fix...`);
+
+    for (const recording of invalidRecordings) {
+      let newDuration = 0;
+
+      // Plan A: Estimate from transcript (Fastest, cheapest)
+      if (recording.transcript && recording.transcript.length > 50) {
+          const wordCount = recording.transcript.split(/\s+/).length;
+          // Approx 150 words per minute
+          newDuration = Math.ceil((wordCount / 150) * 60);
+      }
+
+      // Plan B: Retrieve from audio metadata (if Plan A failed or too short)
+      // Only do this if we have no transcript estimate
+      if ((newDuration === 0) && recording.audioUrl) {
+         try {
+             // Create a temporary audio element to check metadata
+             const tempAudio = new Audio(recording.audioUrl);
+             // Wait for metadata with a timeout
+             const duration = await new Promise<number>((resolve) => {
+                 const timeout = setTimeout(() => resolve(0), 5000);
+                 tempAudio.onloadedmetadata = () => {
+                     clearTimeout(timeout);
+                     resolve(tempAudio.duration);
+                 };
+                 tempAudio.onerror = () => {
+                     clearTimeout(timeout);
+                     resolve(0);
+                 }
+             });
+             if (duration > 0) newDuration = Math.floor(duration);
+         } catch (e) {
+             // Ignore error
+         }
+      }
+
+      // Apply update if we found a valid duration
+      if (newDuration > 0) {
+        const { error } = await supabase
+          .from('class_recordings')
+          .update({ duration: newDuration })
+          .eq('id', recording.id);
+        
+        if (!error) {
+             // Update local state immediately
+             onUpdateRecording({ ...recording, duration: newDuration });
+             // toast.success(`Fixed duration for "${recording.title}"`);
+        }
+      }
+    }
+  }, [onUpdateRecording]);
 
   const triggerAudioUpload = useCallback(() => {
     audioInputRef.current?.click();
@@ -274,6 +338,14 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
       return;
     }
 
+    // Supabase Free Tier Limit Check (50MB)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    if (file.size > MAX_FILE_SIZE) {
+        toast.error('File exceeds the 50MB upload limit. Please compress the audio or split it into smaller parts.', { duration: 5000 });
+        if (event.target) event.target.value = '';
+        return;
+    }
+
     setIsProcessingAudio(true);
     const toastId = toast.loading('Uploading audio file...');
 
@@ -285,7 +357,12 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
         .from('documents')
         .upload(filePath, file);
 
-      if (uploadError) throw new Error(`Audio upload failed: ${uploadError.message}`);
+      if (uploadError) {
+        if (uploadError.message.includes('The object exceeded the maximum allowed size')) {
+          throw new Error('File is too large. Please ask an admin to increase the "documents" bucket size limit in Supabase.');
+        }
+        throw new Error(`Audio upload failed: ${uploadError.message}`);
+      }
 
       const { data: urlData } = supabase.storage
         .from('documents')
@@ -524,48 +601,19 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
 
       if (generationError) throw new Error(generationError.message || 'Failed to generate note.');
 
-      const { error: updateRecordingError } = await supabase
-        .from('class_recordings')
-        .update({
-          transcript: newNote.content,
-          summary: newNote.ai_summary,
-        })
-        .eq('document_id', recording.document_id)
-        .eq('user_id', user.id);
-
-      if (updateRecordingError) {
-        //console.error('Failed to update class recording with generated note:', updateRecordingError.message);
-        toast.error('Note generated, but failed to update recording details.', { id: toastId });
-      } else {
-        toast.success('Note generated and recording updated!', { id: toastId });
-        const { data: fetchedRecording, error: fetchError } = await supabase
-          .from('class_recordings')
-          .select('*')
-          .eq('document_id', recording.document_id)
-          .eq('user_id', user.id)
-          .single();
-
-        if (fetchedRecording && !fetchError) {
-          const updatedRecording: ClassRecording = {
-            id: fetchedRecording.id,
-            title: fetchedRecording.title,
-            subject: fetchedRecording.subject,
-            audioUrl: fetchedRecording.audio_url,
-            audio_url: fetchedRecording.audio_url,
-            transcript: fetchedRecording.transcript,
-            summary: fetchedRecording.summary,
-            duration: fetchedRecording.duration,
-            date: fetchedRecording.date,
-            created_at: fetchedRecording.created_at,
-            userId: fetchedRecording.user_id,
-            user_id: fetchedRecording.user_id,
-            document_id: fetchedRecording.document_id
-          };
-          onUpdateRecording(updatedRecording);
-        } else {
-          //console.error('Failed to refetch updated recording:', fetchError?.message);
-        }
+      // Safely update the client-side state if the callback is provided
+      if (newNote && onNoteCreated) {
+        onNoteCreated(newNote);
       }
+      
+      // Ensure local data is consistent with server
+      if (onRefreshNotes) {
+        onRefreshNotes(); 
+      }
+
+      // Notify success - the Edge Function already inserted the note into the 'notes' table
+      toast.success('Note generated successfully! Check your Notes tab.', { id: toastId });
+
 
     } catch (error: any) {
       let errorMessage = 'Failed to start audio note generation.';
@@ -623,5 +671,6 @@ export const useAudioProcessing = ({ onAddRecording, onUpdateRecording }: UseAud
     handleClearAudioProcessing,
     setTranslatedContent,
     triggerAudioProcessing,
+    checkAndFixDurations // Exported function
   };
 };
