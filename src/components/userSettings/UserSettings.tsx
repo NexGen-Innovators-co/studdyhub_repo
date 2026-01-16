@@ -165,12 +165,12 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         setPushNotifications(false);
         toast.success('Push notifications disabled');
       } catch (error) {
-        console.error('Error unsubscribing:', error);
-        setPushNotifications(false);
+        console.error('Error disabling push notifications:', error);
         toast.error('Failed to disable push notifications');
       }
     }
   };
+
 
   // Sync tab changes with global header
   useEffect(() => {

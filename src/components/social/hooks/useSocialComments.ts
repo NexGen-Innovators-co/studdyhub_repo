@@ -10,6 +10,7 @@ export const useSocialComments = (
   const [comments, setComments] = useState<Record<string, SocialCommentWithDetails[]>>({});
   const [newComment, setNewComment] = useState<Record<string, string>>({});
   const [loadingComments, setLoadingComments] = useState<Set<string>>(new Set());
+  const [addingComments, setAddingComments] = useState<Set<string>>(new Set());
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
 
   const fetchComments = async (postId: string) => {
@@ -44,6 +45,8 @@ export const useSocialComments = (
   const addComment = async (postId: string) => {
     const content = newComment[postId]?.trim();
     if (!content) return;
+    
+    setAddingComments(prev => new Set([...prev, postId]));
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -110,9 +113,17 @@ export const useSocialComments = (
       }
 
       toast.success('Comment added!');
+      return true;
     } catch (error) {
 
       toast.error('Failed to add comment');
+      return false;
+    } finally {
+      setAddingComments(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(postId);
+        return newSet;
+      });
     }
   };
 
@@ -139,6 +150,7 @@ export const useSocialComments = (
   const isPostExpanded = (postId: string) => expandedPosts.has(postId);
   const getPostComments = (postId: string) => comments[postId] || [];
   const isLoadingPostComments = (postId: string) => loadingComments.has(postId);
+  const isAddingComment = (postId: string) => addingComments.has(postId);
   const getNewCommentContent = (postId: string) => newComment[postId] || '';
 
   return {
@@ -149,6 +161,7 @@ export const useSocialComments = (
     isPostExpanded,
     getPostComments,
     isLoadingPostComments,
+    isAddingComment,
     getNewCommentContent,
   };
 };

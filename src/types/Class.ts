@@ -13,6 +13,7 @@ export interface ClassRecording {
   created_at: string;
   userId: string;
   document_id?: string | null;
+  processing_status?: 'pending' | 'processing' | 'completed' | 'failed' | null;
 }
 
 // src/types/Class.ts - Update the Quiz interface

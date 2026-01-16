@@ -262,7 +262,23 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
 
             {/* Tab Content */}
             <div className="p-4 sm:p-5">
-              {activeSection === 'transcript' && (
+              {/* === CHECK PROCESSING STATE === */}
+              {recording.processing_status === 'processing' || recording.processing_status === 'pending' ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <div className="relative">
+                    <RefreshCw className="h-10 w-10 text-blue-500 animate-spin" />
+                    <Sparkles className="h-4 w-4 text-yellow-400 absolute -top-1 -right-1 animate-pulse" />
+                  </div>
+                  <div className="text-center space-y-2">
+                    <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Processing Audio</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                       AI is currently transcribing and summarizing your audio. This may take a few moments.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                {activeSection === 'transcript' && (
                 <div className="relative">
                   {recording.transcript ? (
                     <>
@@ -287,7 +303,9 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
                     </>
                   ) : (
                     <div className="text-center py-8">
-                      <Clipboard className="h-10 w-10 sm:h-12 sm:w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                       <Button onClick={() => onReprocessAudio(recording)} variant="outline" size="sm" className="mb-2">
+                          <RefreshCw className="h-4 w-4 mr-2"/> Generage Transcript
+                       </Button>
                       <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">No transcript available</p>
                     </div>
                   )}
@@ -298,17 +316,19 @@ export const RecordingDetailsPanel: React.FC<RecordingDetailsPanelProps> = ({
                 <div>
                   {recording.summary ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none">
-                      <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                      <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed max-h-64 overflow-y-auto modern-scrollbar">
                         {recording.summary}
                       </p>
                     </div>
                   ) : (
                     <div className="text-center py-8">
                       <Sparkles className="h-10 w-10 sm:h-12 sm:w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">No AI summary available</p>
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">No summary available</p>
                     </div>
                   )}
                 </div>
+              )}
+                </>
               )}
             </div>
           </div>

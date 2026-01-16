@@ -314,7 +314,7 @@ Listen here: ${shareUrl}`;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto w-[95vw] p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5" />
@@ -326,22 +326,26 @@ Listen here: ${shareUrl}`;
         </DialogHeader>
 
         <Tabs defaultValue="link" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-4 mb-4">
             <TabsTrigger value="link">
-              <Link className="h-4 w-4 mr-2" />
-              Link
+              <Link className="h-4 w-4 mr-2 hidden sm:inline" />
+              <span className="sm:hidden">Link</span>
+              <span className="hidden sm:inline">Link</span>
             </TabsTrigger>
             <TabsTrigger value="social">
-              <Globe className="h-4 w-4 mr-2" />
-              Social
+              <Globe className="h-4 w-4 mr-2 hidden sm:inline" />
+               <span className="sm:hidden">Feed</span>
+               <span className="hidden sm:inline">Social</span>
             </TabsTrigger>
             <TabsTrigger value="friends">
-              <Users className="h-4 w-4 mr-2" />
-              Friends
+              <Users className="h-4 w-4 mr-2 hidden sm:inline" />
+              <span className="sm:hidden">Friends</span>
+              <span className="hidden sm:inline">Friends</span>
             </TabsTrigger>
             <TabsTrigger value="groups">
-              <MessageCircle className="h-4 w-4 mr-2" />
-              Groups
+              <MessageCircle className="h-4 w-4 mr-2 hidden sm:inline" />
+              <span className="sm:hidden">Groups</span>
+              <span className="hidden sm:inline">Groups</span>
             </TabsTrigger>
           </TabsList>
 
@@ -350,7 +354,7 @@ Listen here: ${shareUrl}`;
               <Label>Share Link</Label>
               <div className="flex gap-2">
                 <Input value={shareUrl} readOnly className="flex-1" />
-                <Button onClick={handleCopyLink} variant="outline">
+                <Button onClick={handleCopyLink} variant="outline" size="icon">
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
@@ -358,11 +362,11 @@ Listen here: ${shareUrl}`;
 
             <div className="space-y-2">
               <Label>Share on External Platforms</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('twitter')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <Twitter className="h-4 w-4 mr-2 text-blue-400" />
                   Twitter/X
@@ -370,7 +374,7 @@ Listen here: ${shareUrl}`;
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('facebook')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <Facebook className="h-4 w-4 mr-2 text-blue-600" />
                   Facebook
@@ -378,7 +382,7 @@ Listen here: ${shareUrl}`;
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('whatsapp')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <MessageCircle className="h-4 w-4 mr-2 text-green-600" />
                   WhatsApp
@@ -386,7 +390,7 @@ Listen here: ${shareUrl}`;
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('telegram')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <Send className="h-4 w-4 mr-2 text-blue-500" />
                   Telegram
@@ -394,7 +398,7 @@ Listen here: ${shareUrl}`;
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('linkedin')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <Linkedin className="h-4 w-4 mr-2 text-blue-700" />
                   LinkedIn
@@ -402,7 +406,7 @@ Listen here: ${shareUrl}`;
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('reddit')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <MessageSquare className="h-4 w-4 mr-2 text-orange-600" />
                   Reddit
@@ -410,7 +414,7 @@ Listen here: ${shareUrl}`;
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('pinterest')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <Share2 className="h-4 w-4 mr-2 text-red-600" />
                   Pinterest
@@ -418,7 +422,7 @@ Listen here: ${shareUrl}`;
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('tiktok')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <Music className="h-4 w-4 mr-2 text-black dark:text-white" />
                   TikTok
@@ -426,7 +430,7 @@ Listen here: ${shareUrl}`;
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('messenger')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <MessageCircle className="h-4 w-4 mr-2 text-blue-500" />
                   Messenger
@@ -434,7 +438,7 @@ Listen here: ${shareUrl}`;
                 <Button
                   variant="outline"
                   onClick={() => handleShareToExternalPlatform('email')}
-                  className="justify-start"
+                  className="justify-start w-full"
                 >
                   <Mail className="h-4 w-4 mr-2" />
                   Email

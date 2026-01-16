@@ -397,6 +397,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
     isPostExpanded,
     getPostComments,
     isLoadingPostComments,
+    isAddingComment,
     getNewCommentContent,
   } = useSocialComments(currentUser, posts);
 
@@ -932,7 +933,17 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
             isLoadingComments={isLoadingPostComments(post.id)}
             newComment={getNewCommentContent(post.id)}
             onCommentChange={(c) => updateNewComment(post.id, c)}
-            onSubmitComment={() => addComment(post.id)}
+            isAddingComment={isAddingComment(post.id)}
+            onSubmitComment={async () => {
+              const success = await addComment(post.id);
+              if (success) {
+                const updatePost = (p: SocialPostWithDetails) => 
+                  p.id === post.id ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p;
+                setPosts(prev => prev.map(updatePost));
+                setTrendingPosts(prev => prev.map(updatePost));
+                setUserPosts(prev => prev.map(updatePost));
+              }
+            }}
             onPostView={trackPostView}
             onClick={() => navigate(`/social/post/${post.id}`)}
             onDeletePost={deletePost}
@@ -955,7 +966,17 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
             isLoadingComments={isLoadingPostComments(post.id)}
             newComment={getNewCommentContent(post.id)}
             onCommentChange={(c) => updateNewComment(post.id, c)}
-            onSubmitComment={() => addComment(post.id)}
+            isAddingComment={isAddingComment(post.id)}
+            onSubmitComment={async () => {
+              const success = await addComment(post.id);
+              if (success) {
+                const updatePost = (p: SocialPostWithDetails) => 
+                  p.id === post.id ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p;
+                setPosts(prev => prev.map(updatePost));
+                setTrendingPosts(prev => prev.map(updatePost));
+                setUserPosts(prev => prev.map(updatePost));
+              }
+            }}
             onPostView={trackPostView}
             onClick={() => navigate(`/social/post/${post.id}`)}
             onDeletePost={deletePost}
@@ -1252,20 +1273,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                       </div>
                     )}
 
-                    <CreatePostDialog
-                      isOpen={showPostDialog}
-                      onOpenChange={setShowPostDialog}
-                      content={newPostContent}
-                      onContentChange={setNewPostContent}
-                      privacy={selectedPrivacy}
-                      onPrivacyChange={setSelectedPrivacy}
-                      selectedFiles={selectedFiles}
-                      onFilesChange={setSelectedFiles}
-                      onSubmit={handleCreatePost}
-                      isUploading={isUploading}
-                      currentUser={currentUser}
-                      metadata={postMetadata}
-                    />
+                    {/* CreatePostDialog moved to be accessible from all tabs */}
 
                     {/* People Search Results */}
                     {effectiveSearch.trim() && filteredUsers.length > 0 && (
@@ -1403,7 +1411,17 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                       isLoadingPostComments={isLoadingPostComments}
                       getNewCommentContent={getNewCommentContent}
                       onCommentChange={updateNewComment}
-                      onSubmitComment={addComment}
+                      isAddingComment={isAddingComment}
+                      onSubmitComment={async (postId: string) => {
+                        const success = await addComment(postId);
+                        if (success) {
+                          const updatePost = (p: SocialPostWithDetails) => 
+                            p.id === postId ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p;
+                          setPosts(prev => prev.map(updatePost));
+                          setTrendingPosts(prev => prev.map(updatePost));
+                          setUserPosts(prev => prev.map(updatePost));
+                        }
+                      }}
                       currentUser={currentUser}
                       refetchPosts={refetchUserPosts}
                       onPostView={trackPostView}
@@ -1454,7 +1472,17 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                         isLoadingPostComments={isLoadingPostComments}
                         getNewCommentContent={getNewCommentContent}
                         onCommentChange={updateNewComment}
-                        onSubmitComment={addComment}
+                        isAddingComment={isAddingComment}
+                        onSubmitComment={async (postId: string) => {
+                          const success = await addComment(postId);
+                          if (success) {
+                            const updatePost = (p: SocialPostWithDetails) => 
+                              p.id === postId ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p;
+                            setPosts(prev => prev.map(updatePost));
+                            setTrendingPosts(prev => prev.map(updatePost));
+                            setUserPosts(prev => prev.map(updatePost));
+                          }
+                        }}
                         onPostView={trackPostView}
                         onDeletePost={deletePost}
                         onEditPost={editPost}
@@ -1890,6 +1918,24 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
         currentUserId={currentUser?.id || ''}
         onShare={handleSharePostMessage}
         isSharing={isSendingMessage}
+      />
+
+      {/* Create Post Dialog - Restored */}
+      <CreatePostDialog
+        isOpen={showPostDialog}
+        onOpenChange={setShowPostDialog}
+        content={newPostContent}
+        onContentChange={setNewPostContent}
+        privacy={selectedPrivacy}
+        onPrivacyChange={setSelectedPrivacy}
+        selectedFiles={selectedFiles}
+        onFilesChange={setSelectedFiles}
+        onSubmit={handleCreatePost}
+        isUploading={isUploading}
+        currentUser={currentUser}
+        metadata={postMetadata}
+        disabled={!canCreatePosts}
+        upgradeMessage="You've reached your daily post limit. Upgrade to Premium for unlimited posts!"
       />
     </div>
   );

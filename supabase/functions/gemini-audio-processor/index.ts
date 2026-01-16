@@ -25,48 +25,105 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 // Declare EdgeRuntime for background tasks
 declare const EdgeRuntime: { waitUntil: (promise: Promise<any>) => void };
 
+// Helper to upload large files to Gemini via File API
+async function uploadToGemini(url: string, mimeType: string): Promise<string> {
+  // 1. Fetch file as stream/buffer
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch file for upload: ${response.statusText}`);
+  const data = await response.blob(); 
+  
+  // NOTE: For true streaming without loading into memory, we'd pipe headers, 
+  // but Deno 'fetch' + Supabase Storage URLs behave better with Blob in this environment for now.
+  // The 'Memory Limit' usually comes from Base64 conversion + JSON stringifying.
+  // By uploading raw bytes, we avoid the Base64 overhead (33% larger) and the massive JSON string.
+
+  // 2. Initial Resumable Upload Request (if larger than 5MB usually, but straightforward to just use media upload for now)
+  // Using Simple Upload for simplicity in this context (up to 200MB usually fine via this endpoint)
+  const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`;
+  
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'X-Goog-Upload-Protocol': 'raw',
+      'X-Goog-Upload-Header-Content-Length': data.size.toString(),
+      'X-Goog-Upload-File-Name': 'audio_recording', // Optional
+      'Content-Type': mimeType,
+    },
+    body: data 
+  });
+
+  if (!uploadResponse.ok) {
+    const err = await uploadResponse.text();
+    throw new Error(`Gemini File Upload failed: ${err}`);
+  }
+
+  const uploadResult = await uploadResponse.json();
+  const fileUri = uploadResult.file.uri;
+  console.log(`[Gemini] File uploaded successfully: ${fileUri}`);
+  return fileUri;
+}
+
 async function processAudioBackground(recordingId: string, fileUrl: string, targetLanguage: string) {
   try {
     console.log(`[Background] Starting processing for ${recordingId}`);
     
-    // 1. Mark as processing
-    await supabase
+    // 1. Mark as processing and fetch current duration to preserve it
+    const { data: currentRec } = await supabase
       .from('class_recordings')
       .update({ processing_status: 'processing' })
-      .eq('id', recordingId);
+      .eq('id', recordingId)
+      .select('duration, document_id') // Fetch document_id too
+      .single();
 
-    // 2. Fetch Audio
-    const audioResponse = await fetch(fileUrl);
-    if (!audioResponse.ok) throw new Error(`Failed to fetch audio: ${audioResponse.statusText}`);
-    const audioBlob = await audioResponse.blob();
+    // 2. Decide Strategy based on file size (optimistic guess) or default to File API for safety
+    // Using File API is safer for memory limits on Edge Functions
+    let contentPart = {};
 
-    // 3. Convert to Base64 (Chunking/Streaming needed for very large files, but keeping simple for now)
-    // NOTE: For files > 20MB, we should implement Gemini File API Upload
-    const base64Audio = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result.split(',')[1]);
-        } else {
-          reject(new Error("FileReader did not return a string result."));
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(audioBlob);
-    });
+    try {
+        // Attempt to upload to Gemini File API to avoid memory limits
+        const fileUri = await uploadToGemini(fileUrl, 'audio/mp3'); // Defaulting/Detecting mime type is better
+        contentPart = {
+            fileData: {
+                mimeType: 'audio/mp3', // Gemini handles most audio
+                fileUri: fileUri
+            }
+        };
+    } catch (uploadError) {
+        console.warn("Gemini File Upload failed, falling back to legacy inline method (risky for memory)", uploadError);
+        
+        // Fallback: Legacy Inline Method
+        const audioResponse = await fetch(fileUrl);
+        if (!audioResponse.ok) throw new Error(`Failed to fetch audio: ${audioResponse.statusText}`);
+        const audioBlob = await audioResponse.blob();
+        
+        const base64Audio = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (typeof reader.result === 'string') {
+              resolve(reader.result.split(',')[1]);
+            } else {
+              reject(new Error("FileReader did not return a string result."));
+            }
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(audioBlob);
+        });
+        
+        contentPart = {
+            inlineData: {
+              mimeType: audioBlob.type || 'audio/webm',
+              data: base64Audio,
+            },
+        };
+    }
 
     // 4. Call Gemini
     const transcriptionPayload = {
       contents: [{
         role: "user",
         parts: [
-          { text: "Transcribe the following audio into text. Provide a summary as well in JSON format: { \"transcript\": \"...\", \"summary\": \"...\", \"duration\": 0 }." },
-          {
-            inlineData: {
-              mimeType: audioBlob.type || 'audio/webm',
-              data: base64Audio,
-            },
-          },
+          { text: "Transcribe the following audio into text. Provide a summary as well in JSON format: { \"transcript\": \"...\", \"summary\": \"...\", \"duration\": 0 }. The duration should be the estimated length of the audio in seconds." },
+          contentPart
         ],
       }],
       generationConfig: { responseMimeType: "application/json" }
@@ -86,19 +143,53 @@ async function processAudioBackground(recordingId: string, fileUrl: string, targ
     const result = await transcriptionResponse.json();
     const jsonContent = JSON.parse(result?.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
 
+    // Calculate final duration logic
+    // 1. Start with existing duration from DB (trust frontend calculation if available)
+    let finalDuration = currentRec?.duration || 0;
+    
+    // 2. If no existing duration, try the AI-provided duration
+    if (!finalDuration || finalDuration === 0) {
+        // Parse AI duration safely (handle "120s" or string numbers)
+        const rawAiDuration = jsonContent.duration;
+        if (rawAiDuration) {
+           const parsed = parseInt(String(rawAiDuration).replace(/[^0-9]/g, ''), 10);
+           if (!isNaN(parsed) && parsed > 0) {
+               finalDuration = parsed;
+           }
+        }
+    }
+    
+    // 3. Last resort: Estimate from word count
+    if ((!finalDuration || finalDuration === 0) && jsonContent.transcript) {
+         // Approx 150 words per minute => 2.5 words per second
+         const wordCount = jsonContent.transcript.split(/\s+/).length;
+         finalDuration = Math.ceil((wordCount / 150) * 60);
+    }
+
     // 5. Update DB
     const { error: updateError } = await supabase
       .from('class_recordings')
       .update({
         transcript: jsonContent.transcript || '',
         summary: jsonContent.summary || '',
-        duration: jsonContent.duration || 0,
+        duration: finalDuration,
         processing_status: 'completed',
         processing_error: null
       })
       .eq('id', recordingId);
 
     if (updateError) throw updateError;
+
+    // 6. Also update the linked Document if it exists
+    if (currentRec?.document_id) {
+       await supabase.from('documents').update({
+          content_extracted: jsonContent.transcript || '',
+          processing_status: 'completed',
+          processing_error: null,
+          updated_at: new Date().toISOString()
+       }).eq('id', currentRec.document_id);
+    }
+
     console.log(`[Background] Completed ${recordingId}`);
 
   } catch (error: any) {

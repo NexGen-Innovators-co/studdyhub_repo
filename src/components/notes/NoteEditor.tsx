@@ -508,11 +508,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
 
     try {
-      const requestBody = {
+      const requestBody: any = {
         documentId: documentIdForGeneration,
         userProfile: user,
         selectedSection: selectedSection,
       };
+
+      // Pass the note ID if we are updating an existing note
+      if (targetNote.id && targetNote.id !== 'new') {
+        requestBody.noteId = targetNote.id;
+      }
 
       const { data: aiGeneratedNote, error: generationError } = await supabase.functions.invoke(
         'generate-note-from-document',
@@ -528,64 +533,26 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         ai_summary: aiGeneratedNote.ai_summary,
         updated_at: new Date().toISOString(),
         document_id: documentIdForGeneration,
+        // Ensure properties returned from server are respected if available
+        ...(aiGeneratedNote.id ? { id: aiGeneratedNote.id } : {})
       };
-
-      // For existing notes, validate ID before update
-      if (targetNote.id) {
-        if (!updatedNote.id) {
-          throw new Error('Note ID is missing during update');
-        }
-
-        const { error: updateNoteError } = await supabase
-          .from('notes')
-          .update({
-            title: updatedNote.title,
-            content: updatedNote.content,
-            ai_summary: updatedNote.ai_summary,
-            updated_at: new Date().toISOString(),
-            document_id: updatedNote.document_id,
-          })
-          .eq('id', updatedNote.id) // This line was causing the error
-          .eq('user_id', user.id);
-
-        if (updateNoteError) throw updateNoteError;
-
-        onNoteUpdate(updatedNote);
-        toast.success('Note updated from document!', { id: toastId });
-      } else {
-        // Create new note logic remains the same
-        const { data: newNoteData, error: createNoteError } = await supabase
-          .from('notes')
-          .insert({
-            title: updatedNote.title,
-            content: updatedNote.content,
-            category: updatedNote.category,
-            tags: updatedNote.tags,
-            user_id: user.id,
-            ai_summary: updatedNote.ai_summary,
-            document_id: updatedNote.document_id,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (createNoteError) throw createNoteError;
-
-        onNoteUpdate({
-          ...updatedNote,
-          id: newNoteData.id,
-          created_at: new Date(newNoteData.created_at).toISOString(),
-          updated_at: new Date(newNoteData.updated_at).toISOString(),
-        });
-
-        toast.success('New note generated from document!', { id: toastId });
+      
+      // If we got a new ID from server (for new notes), ensure we use it
+      if (aiGeneratedNote.id && targetNote.id === 'new') {
+          updatedNote.id = aiGeneratedNote.id; 
       }
-
+      
+      // Update local state immediately
+      onNoteUpdate(updatedNote);
       setContent(updatedNote.content);
-      setTitle(updatedNote.title);
-
-    } catch (error) {
+      
+      // We don't need to manually update Supabase again here because the Edge Function 
+      // now handles the database UPSERT (Insert or Update).
+      // We only need to ensure the local context is refreshed.
+      
+      toast.success('Note updated from document!', { id: toastId });
+      
+    } catch (error: any) {
       let errorMessage = 'An unknown error occurred.';
 
       if (error instanceof FunctionsHttpError) {

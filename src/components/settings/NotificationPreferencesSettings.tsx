@@ -8,11 +8,14 @@ import { Separator } from '../ui/separator';
 import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { NotificationPreferences } from '@/types/Notification';
 
 export function NotificationPreferencesSettings() {
   const { preferences: currentPreferences, updatePreferences, subscribe, unsubscribe } = useNotifications();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [saving, setSaving] = useState(false);
@@ -80,6 +83,7 @@ export function NotificationPreferencesSettings() {
       });
     }
   };
+
 
   if (!preferences) {
     return (

@@ -396,222 +396,243 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     props.onCreateNew,
   ]);
 
-  switch (activeTab) {
-    case 'dashboard':
-      // Check if we should show notifications view
-      if (showNotifications) {
-        return (
-          <div className="flex-1 overflow-y-auto modern-scrollbar dark:bg-transparent">
-            <ErrorBoundary>
-              <NotificationsPage />
-            </ErrorBoundary>
-          </div>
-        );
-      }
-      
-      return (
-        <div className="flex-1 pb-6 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-transparent">
-          <ErrorBoundary>
-            <Dashboard {...dashboardProps} />
-          </ErrorBoundary>
-        </div>
-      );
+  // Keep track of visited tabs to maintain state/cache
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set());
 
-    case 'notes':
-      return (
-        <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
-          {/* Centered Container with max-width */}
-          <div className="w-full h-full max-w-[1400px] mx-auto flex relative lg:shadow-2xl">
-            {/* Click overlay for mobile when sidebar is open */}
-            {isNotesHistoryOpen && (
-              <div
-                className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
-                onClick={onToggleNotesHistory}
-              />
-            )}
+  // Update visited tabs
+  useEffect(() => {
+    setVisitedTabs(prev => {
+      const newCtx = new Set(prev);
+      newCtx.add(activeTab);
+      return newCtx;
+    });
+  }, [activeTab]);
 
-            {/* Notes List - Sidebar */}
-            <div className={`
-                ${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
-                lg:translate-x-0 lg:static lg:w-80 lg:flex-shrink-0
-                fixed inset-y-0 left-0 lg:z-0 z-30 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
-                transition-transform duration-300 ease-in-out lg:transition-none
-                lg:border-r lg:border-gray-200 lg:dark:border-gray-700 lg:max-h-[90vh]
-              `}>
-              <NotesList
-                {...notesHistoryProps}
-                isOpen={isNotesHistoryOpen}
-                onClose={onToggleNotesHistory}
-              />
-            </div>
+  // Always connect the ref when it exists (SocialFeed is mounted hidden)
+  useEffect(() => {
+    if (props.setSocialFeedRef && socialFeedRef.current) {
+      props.setSocialFeedRef(socialFeedRef);
+    }
+  });
 
-            {/* Editor Area - Centered content */}
-            <div className="flex-1 h-full lg:max-h-[90vh] bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
-              {notesProps.activeNote ? (
-                <NoteEditor
-                  note={notesProps.activeNote}
-                  onNoteUpdate={notesProps.onNoteUpdate}
-                  userProfile={userProfile}
-                  onToggleNotesHistory={onToggleNotesHistory}
-                  isNotesHistoryOpen={isNotesHistoryOpen}
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
-                  <div className="text-center">
-                    <div className="text-4xl sm:text-6xl mb-4">📝</div>
-                    <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
-                    <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
+  const isSocialOrPodcastActive = activeTab === 'social' || activeTab === 'podcasts';
+  const shouldRenderSocial = activeTab === 'social' || visitedTabs.has('social') || isSocialOrPodcastActive;
+  const shouldRenderPodcasts = activeTab === 'podcasts' || visitedTabs.has('podcasts') || isSocialOrPodcastActive;
+
+  return (
+    <>
+      {/* OTHER TABS - Controlled by Switch (Unmount when inactive) */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden" style={{ display: !isSocialOrPodcastActive ? 'flex' : 'none' }}>
+        {(() => {
+          switch (activeTab) {
+            case 'dashboard':
+              // Check if we should show notifications view
+              if (showNotifications) {
+                return (
+                  <div className="flex-1 overflow-y-auto modern-scrollbar dark:bg-transparent">
+                    <ErrorBoundary>
+                      <NotificationsPage />
+                    </ErrorBoundary>
+                  </div>
+                );
+              }
+              return (
+                <div className="flex-1 pb-6 p-3 sm:p-6 overflow-y-auto modern-scrollbar dark:bg-transparent">
+                  <ErrorBoundary>
+                    <Dashboard {...dashboardProps} />
+                  </ErrorBoundary>
+                </div>
+              );
+
+            case 'notes':
+              return (
+                <div className="h-full w-full flex items-center justify-center dark:bg-transparent overflow-hidden">
+                  {/* Centered Container with max-width */}
+                  <div className="w-full h-full max-w-[1400px] mx-auto flex relative lg:shadow-2xl">
+                    {/* Click overlay for mobile when sidebar is open */}
+                    {isNotesHistoryOpen && (
+                      <div
+                        className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+                        onClick={onToggleNotesHistory}
+                      />
+                    )}
+
+                    {/* Notes List - Sidebar */}
+                    <div className={`
+                        ${isNotesHistoryOpen ? 'translate-x-0' : '-translate-x-full'}
+                        lg:translate-x-0 lg:static lg:w-80 lg:flex-shrink-0
+                        fixed inset-y-0 left-0 lg:z-0 z-30 w-72 bg-white dark:bg-slate-900 shadow-lg lg:shadow-none
+                        transition-transform duration-300 ease-in-out lg:transition-none
+                        lg:border-r lg:border-gray-200 lg:dark:border-gray-700 lg:max-h-[90vh]
+                      `}>
+                      <NotesList
+                        {...notesHistoryProps}
+                        isOpen={isNotesHistoryOpen}
+                        onClose={onToggleNotesHistory}
+                      />
+                    </div>
+
+                    {/* Editor Area - Centered content */}
+                    <div className="flex-1 h-full lg:max-h-[90vh] bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
+                      {notesProps.activeNote ? (
+                        <NoteEditor
+                          note={notesProps.activeNote}
+                          onNoteUpdate={notesProps.onNoteUpdate}
+                          userProfile={userProfile}
+                          onToggleNotesHistory={onToggleNotesHistory}
+                          isNotesHistoryOpen={isNotesHistoryOpen}
+                        />
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-slate-400 p-4 dark:text-gray-500">
+                          <div className="text-center">
+                            <div className="text-4xl sm:text-6xl mb-4">📝</div>
+                            <h3 className="text-lg sm:text-xl font-medium mb-2">No note selected</h3>
+                            <p className="text-sm sm:text-base">Select a note to start editing or create a new one</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
+              );
 
-    case 'recordings':
-      return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleRecordingsScroll}>
-          <ErrorBoundary>
-            <ClassRecordings {...recordingsProps} />
-          </ErrorBoundary>
-        </div>
-      );
+            case 'recordings':
+              return (
+                <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleRecordingsScroll}>
+                  <ErrorBoundary>
+                    <ClassRecordings {...recordingsProps} />
+                  </ErrorBoundary>
+                </div>
+              );
 
-    case 'quizzes':
-      return (
-        <div className="flex-1 overflow-y-auto modern-scrollbar dark:bg-transparent">
+            case 'quizzes':
+              return (
+                <div className="flex-1 overflow-y-auto modern-scrollbar dark:bg-transparent">
+                  <ErrorBoundary>
+                    <Quizzes
+                      quizzes={props.quizzes}
+                      recordings={props.recordings ?? []}
+                      onGenerateQuiz={props.onGenerateQuiz}
+                      userId={props.userProfile?.id || ''}
+                    />
+                  </ErrorBoundary>
+                </div>
+              );
+
+            case 'schedule':
+              return (
+                <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
+                  <Schedule {...scheduleProps} />
+                </div>
+              );
+
+            case 'chat':
+              const isMobile = window.innerWidth < 1024;
+              const showSessionList = isMobile && (location.pathname === '/chat' || !props.activeChatSessionId);
+
+              return showSessionList ? (
+                // Mobile: Full screen session list
+                <div className="flex-1 flex flex-col min-h-0 bg-gray-50 dark:bg-slate-900">
+                  <ChatSessionsListMobile
+                    chatSessions={props.chatSessions ?? []}
+                    activeChatSessionId={props.activeChatSessionId}
+                    onSessionSelect={(sessionId) => {
+                      props.dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionId });
+                      navigate(`/chat/${sessionId}`);
+                    }}
+                    onNewChatSession={async () => {
+                      const newId = await props.onNewChatSession();
+                      if (newId) navigate(`/chat/${newId}`);
+                    }}
+                    onDeleteChatSession={props.onDeleteChatSession}
+                    onRenameChatSession={props.onRenameChatSession}
+                    hasMoreChatSessions={props.hasMoreChatSessions}
+                    onLoadMoreChatSessions={props.onLoadMoreChatSessions}
+                    isLoading={props.isLoadingChatSessions ?? false}
+                  />
+                </div>
+              ) : (
+                // Desktop: Side-by-side OR Mobile: Full chat
+                <div className="flex-1 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+                  <AIChat {...chatProps} setIsLoading={props.setIsAILoading} />
+                </div>
+              );
+            case 'documents':
+              return (
+                <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleDocumentsScroll}>
+                  <DocumentUpload {...documentsProps} />
+                </div>
+              );
+
+            case 'library':
+              return (
+                <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
+                  <ErrorBoundary>
+                    <CourseLibrary />
+                  </ErrorBoundary>
+                </div>
+              );
+
+            case 'settings':
+              return (
+                <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
+                  <UserSettings
+                    profile={props.userProfile}
+                    onProfileUpdate={props.onProfileUpdate}
+                  />
+                </div>
+              );
+              
+            default:
+              return null;
+          }
+        })()}
+      </div>
+
+      {/* PERSISTENT VIEWS: Social & Podcasts (Load once, keep alive) */}
+      {shouldRenderSocial && (
+        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" style={{ display: activeTab === 'social' ? 'block' : 'none', height: activeTab === 'social' ? '100%' : '0px' }}>
           <ErrorBoundary>
-            <Quizzes
-              quizzes={props.quizzes}
-              recordings={props.recordings ?? []}
-              onGenerateQuiz={props.onGenerateQuiz}
-              userId={props.userProfile?.id || ''}
+            <SocialFeed
+              key="social-feed-component"
+              ref={socialFeedRef}
+              activeTab={props.activeSocialTab}
+              postId={props.socialPostId}
+              searchQuery={props.socialSearchQuery}
+              onSearchChange={props.onSocialSearchChange}
             />
           </ErrorBoundary>
         </div>
-      );
+      )}
 
-    case 'schedule':
-      return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-          <Schedule {...scheduleProps} />
-        </div>
-      );
-
-    case 'chat':
-      const isMobile = window.innerWidth < 1024;
-      const showSessionList = isMobile && (location.pathname === '/chat' || !props.activeChatSessionId);
-
-      return showSessionList ? (
-        // Mobile: Full screen session list
-        <div className="flex-1 flex flex-col min-h-0 bg-gray-50 dark:bg-slate-900">
-          <ChatSessionsListMobile
-            chatSessions={props.chatSessions ?? []}
-            activeChatSessionId={props.activeChatSessionId}
-            onSessionSelect={(sessionId) => {
-              props.dispatch({ type: 'SET_ACTIVE_CHAT_SESSION', payload: sessionId });
-              navigate(`/chat/${sessionId}`);
-            }}
-            onNewChatSession={async () => {
-              const newId = await props.onNewChatSession();
-              if (newId) navigate(`/chat/${newId}`);
-            }}
-            onDeleteChatSession={props.onDeleteChatSession}
-            onRenameChatSession={props.onRenameChatSession}
-            hasMoreChatSessions={props.hasMoreChatSessions}
-            onLoadMoreChatSessions={props.onLoadMoreChatSessions}
-            isLoading={props.isLoadingChatSessions ?? false}
-          />
-        </div>
-      ) : (
-        // Desktop: Side-by-side OR Mobile: Full chat
-        <div className="flex-1 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
-          <AIChat {...chatProps} setIsLoading={props.setIsAILoading} />
-        </div>
-      );
-    case 'documents':
-      return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleDocumentsScroll}>
-          <DocumentUpload {...documentsProps} />
-        </div>
-      );
-
-    case 'library':
-      return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-          <ErrorBoundary>
-            <CourseLibrary />
-          </ErrorBoundary>
-        </div>
-      );
-
-    case 'settings':
-      return (
-        <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-          <UserSettings
-            profile={props.userProfile}
-            onProfileUpdate={props.onProfileUpdate}
-          />
-        </div>
-      );
-
-    // In TabContent.tsx
-        // --- SocialFeed ref shared for both social and podcasts tabs ---
-        // Define socialFeedRef at the top of the component (not inside the switch)
-        // (This patch assumes you will move this line to the top of the component)
-        // const socialFeedRef = useRef<SocialFeedHandle>(null);
-
-        case 'social': {
-          if (props.setSocialFeedRef) props.setSocialFeedRef(socialFeedRef);
-          return (
-            <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent">
-              <ErrorBoundary>
-                <SocialFeed
-                  ref={socialFeedRef}
-                  activeTab={props.activeSocialTab}
-                  postId={props.socialPostId}
-                  searchQuery={props.socialSearchQuery}
-                  onSearchChange={props.onSocialSearchChange}
+      {shouldRenderPodcasts && (
+        <div className="flex-1 overflow-hidden" style={{ display: activeTab === 'podcasts' ? 'block' : 'none', height: activeTab === 'podcasts' ? '100%' : '0px' }}>
+            <ErrorBoundary>
+              <React.Suspense fallback={
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                </div>
+              }>
+                <PodcastsPage 
+                  searchQuery={props.searchQuery}
+                  podcastId={podcastId}
+                  onGoLive={() => {
+                    if ((window as any).__podcastGoLive) {
+                      (window as any).__podcastGoLive();
+                    }
+                  }}
+                  onCreatePodcast={() => {
+                    if ((window as any).__podcastCreate) {
+                      (window as any).__podcastCreate();
+                    }
+                  }}
+                  socialFeedRef={socialFeedRef}
+                  onNavigateToTab={props.onNavigateToTab}
                 />
-              </ErrorBoundary>
-            </div>
-          );
-        }
-        case 'podcasts':
-          return (
-            <div className="flex-1 overflow-hidden">
-              <ErrorBoundary>
-                <React.Suspense fallback={
-                  <div className="flex items-center justify-center h-full">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                  </div>
-                }>
-                  <PodcastsPage 
-                    searchQuery={props.searchQuery}
-                    podcastId={podcastId}
-                    onGoLive={() => {
-                      // Trigger the internal go live handler
-                      if ((window as any).__podcastGoLive) {
-                        (window as any).__podcastGoLive();
-                      }
-                    }}
-                    onCreatePodcast={() => {
-                      // Trigger the internal create podcast handler
-                      if ((window as any).__podcastCreate) {
-                        (window as any).__podcastCreate();
-                      }
-                    }}
-                    socialFeedRef={socialFeedRef}
-                    onNavigateToTab={props.onNavigateToTab}
-                  />
-                </React.Suspense>
-              </ErrorBoundary>
-            </div>
-          );
-
-    
-    default:
-      return null;
-  }
+              </React.Suspense>
+            </ErrorBoundary>
+        </div>
+      )}
+    </>
+  );
 };

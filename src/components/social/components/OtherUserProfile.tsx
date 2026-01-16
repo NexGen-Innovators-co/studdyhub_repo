@@ -20,6 +20,7 @@ interface OtherUserProfileProps {
     getNewCommentContent: (postId: string) => string;
     onCommentChange: (postId: string, content: string) => void;
     onSubmitComment: (postId: string) => void;
+    isAddingComment?: (postId: string) => boolean;
     onPostView: (postId: string) => void;
     onDeletePost?: (postId: string) => Promise<boolean>;
     onEditPost?: (postId: string, content: string) => Promise<boolean>;
@@ -287,6 +288,7 @@ export const OtherUserProfile: React.FC<OtherUserProfileProps> = (props) => {
                 getNewCommentContent={props.getNewCommentContent}
                 onCommentChange={props.onCommentChange}
                 onSubmitComment={props.onSubmitComment}
+                isAddingComment={props.isAddingComment}
                 currentUser={props.currentUser}
                 onPostView={props.onPostView}
                 onClick={(postId: string) => navigate(`/social/post/${postId}`)}

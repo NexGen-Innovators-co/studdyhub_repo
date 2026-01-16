@@ -17,6 +17,7 @@ export interface PostCardProps {
   newComment: string;
   onCommentChange: (content: string) => void;
   onSubmitComment: () => void;
+  isAddingComment?: boolean;
   currentUser: SocialUserWithDetails | null;
   onClick?: (postId:string) => void; 
 }
@@ -43,6 +44,7 @@ export interface CommentSectionProps {
   onCommentChange: (content: string) => void;
   onSubmitComment: () => void;
   currentUser: SocialUserWithDetails | null;
+  isAddingComment?: boolean;
 }
 
 // Enhanced interface for suggested users with recommendation scoring
