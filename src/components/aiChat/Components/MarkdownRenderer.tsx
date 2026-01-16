@@ -195,6 +195,25 @@ export const MemoizedMarkdownRenderer: React.FC<MemoizedMarkdownRendererProps> =
         {...props}
       />
     ),
+    img: ({ src, alt, ...props }) => (
+      <div className="my-4 relative group rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 max-w-full bg-gray-50 dark:bg-gray-900/50">
+        <img
+          src={src}
+          alt={alt || 'Generated Image'}
+          className="w-full h-auto max-h-[500px] object-contain cursor-pointer hover:opacity-95 transition-opacity"
+          onClick={() => onViewDiagram('image', undefined, undefined, src)}
+          loading="lazy"
+          {...props}
+        />
+        <div className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-sm"
+             onClick={(e) => {
+               e.stopPropagation();
+               onViewDiagram('image', undefined, undefined, src);
+             }}>
+          <Maximize2 className="w-4 h-4 text-white" />
+        </div>
+      </div>
+    ),
     table: (props) => (
       <div className="overflow-x-auto border border-gray-200 dark:border-gray-700">
         <table
