@@ -233,15 +233,19 @@ serve(async (req) => {
           .single()
 
         // Check if push notifications are enabled
-        if (!preferences?.push_notifications) {
-          results.skipped++
-          continue
+        // If preferences exist and explicitly disabled, skip. 
+        // If preferences are missing, we proceed (assuming they might still have subscriptions).
+        if (preferences && preferences.push_notifications === false) {
+           console.log(`User ${userId} has disabled push notifications in preferences`);
+           results.skipped++;
+           continue;
         }
 
-        // Check if notification type is enabled
-        if (!isNotificationTypeEnabled(preferences, type)) {
-          results.skipped++
-          continue
+        // Check if notification type is enabled (only if preferences exist)
+        if (preferences && !isNotificationTypeEnabled(preferences, type)) {
+          console.log(`User ${userId} has disabled notifications of type ${type}`);
+          results.skipped++;
+          continue;
         }
 
         // Check quiet hours
