@@ -104,6 +104,11 @@ Example: ACTION: UPDATE_STATS|{"total_xp":1000,"current_streak":5}
 \`ACTION: AWARD_ACHIEVEMENT|BADGE_NAME\`
 Example: ACTION: AWARD_ACHIEVEMENT|Quiz Master
 
+🎨 **IMAGE GENERATION:**
+\`ACTION: GENERATE_IMAGE|PROMPT\`
+Example: ACTION: GENERATE_IMAGE|A diagram of the human heart
+Use this when the user asks to "generate", "create", "draw", or "show" an image.
+
 📱 **SOCIAL OPERATIONS:**
 \`ACTION: CREATE_POST|CONTENT|PRIVACY|GROUP_NAME\`
 Example: ACTION: CREATE_POST|Just aced my biology quiz!|public|null

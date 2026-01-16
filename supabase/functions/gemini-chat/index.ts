@@ -118,6 +118,15 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
         console.log(`[ActionExecution] Executing action: ${action.action}`);
 
         switch (action.action) {
+            case 'GENERATE_IMAGE':
+                console.log(`[ActionExecution] Generating image: ${action.params.prompt}`);
+                result = await actionsService.generateImage(userId, action.params.prompt);
+                // If successful, append the image markdown to the response
+                if (result.success && result.imageUrl) {
+                    modifiedResponse += `\n\n![Generated Image](${result.imageUrl})\n\n`;
+                }
+                break;
+
             case 'CREATE_NOTE':
           console.log(`[ActionExecution] Creating note: ${action.params.title}`);
           result = await actionsService.createNote(userId, action.params);

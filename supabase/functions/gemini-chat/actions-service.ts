@@ -168,6 +168,40 @@ export class StuddyHubActionsService {
     }
 
     // ========== NOTE OPERATIONS ==========
+    async generateImage(userId: string, prompt: string) {
+        try {
+            console.log(`[ActionService] Generating image for prompt: "${prompt}"`);
+            
+            const { data, error } = await this.supabase.functions.invoke('generate-image-from-text', {
+                body: { 
+                    description: prompt,
+                    userId: userId
+                }
+            });
+
+            if (error) {
+                console.error('[ActionService] Error generating image:', error);
+                // Return descriptive error 
+                return { success: false, error: `Image generation failed: ${error.message || 'Unknown error'}` };
+            }
+
+            if (!data || !data.imageUrl) {
+                console.error('[ActionService] No image URL in response:', data);
+                return { success: false, error: 'No image was generated' };
+            }
+
+            return { 
+                success: true, 
+                imageUrl: data.imageUrl, 
+                message: `🎨 Generated image for: "${prompt}"`,
+                prompt: prompt
+            };
+        } catch (error: any) {
+            console.error('[ActionService] Exception generating image:', error);
+            return { success: false, error: `Failed to generate image: ${error.message}` };
+        }
+    }
+
     async createNote(userId: string, noteData: {
         title: string;
         content?: string;
@@ -1289,6 +1323,14 @@ export class StuddyHubActionsService {
         
         // Comprehensive action detection
         const actionPatterns = [
+            // IMAGE GENERATION
+            {
+                pattern: /ACTION:\s*GENERATE_IMAGE\|([^|\n]+)/,
+                action: 'GENERATE_IMAGE',
+                extractor: (match: RegExpMatchArray) => ({
+                    prompt: match[1].trim()
+                })
+            },
             // NOTE ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_NOTE\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,

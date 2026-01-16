@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast, MenuIcon, Layout, ArrowUp, ArrowDown } from 'lucide-react';
+import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast, MenuIcon, Layout, ArrowUp, ArrowDown, Image } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
   Menubar,
@@ -34,6 +34,8 @@ import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { useAiMessageTracker } from '@/hooks/useAiMessageTracker';
 import { PodcastGenerator, type PodcastData } from './PodcastGenerator';
 import { PodcastPanel } from './Components/PodcastPanel';
+import { ImageGenerator } from './Components/ImageGenerator';
+import { useImageGenerationDetector } from '@/hooks/useImageGenerationDetector';
 
 export interface AttachedFile {
   file: File;
@@ -121,6 +123,8 @@ const AIChat: React.FC<AIChatProps> = ({
   const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
   const [activePodcast, setActivePodcast] = useState<PodcastData | null>(null);
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
+  const [showImageGenerator, setShowImageGenerator] = useState(false);
+  const [detectedImagePrompt, setDetectedImagePrompt] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   // NEW: Enable streaming by default, persist to localStorage
@@ -405,6 +409,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
   }, []);
   const userMessagesToday = useAiMessageTracker().messagesToday;
   const { checkAiMessageLimit } = useAiMessageTracker();
+  const { detectImageGenerationRequest } = useImageGenerationDetector();
 
   // Persist streaming mode preference
   useEffect(() => {
@@ -462,6 +467,16 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
     
     if (isRecognizing) {
       stopRecognition();
+    }
+    
+    // Check if this is an image generation request
+    const imageDetection = detectImageGenerationRequest(inputMessage);
+    if (imageDetection.isImageRequest && imageDetection.extractedPrompt) {
+      // Open image generator with the detected prompt
+      setDetectedImagePrompt(imageDetection.extractedPrompt);
+      setShowImageGenerator(true);
+      setInputMessage(''); // Clear the input
+      return;
     }
     
     // Check limit BEFORE attempting to send
@@ -640,7 +655,8 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
     checkAiMessageLimit,
     messages,
     isRecognizing,
-    stopRecognition
+    stopRecognition,
+    detectImageGenerationRequest
   ]);
   const handleMarkMessageDisplayed = useCallback(async (messageId: string) => {
     if (!userProfile?.id || !activeChatSessionId) {
@@ -798,6 +814,31 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
 
   const handleRemoveFile = useCallback((fileId: string) => {
     setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
+  }, []);
+
+  const handleImageGenerated = useCallback((imageUrl: string, prompt: string) => {
+    // Create a file object from the generated image URL
+    fetch(imageUrl)
+      .then(res => res.blob())
+      .then(blob => {
+        const file = new File([blob], `generated-${Date.now()}.png`, { type: 'image/png' });
+        const fileId = generateId();
+        const attachedFile: AttachedFile = {
+          file,
+          preview: imageUrl,
+          type: 'image',
+          id: fileId
+        };
+        setAttachedFiles(prev => [...prev, attachedFile]);
+        // Optionally add the prompt to the input message
+        if (prompt && !inputMessage.trim()) {
+          setInputMessage(`Generated image: ${prompt}`);
+        }
+      })
+      .catch(error => {
+        console.error('Error adding generated image:', error);
+        toast.error('Failed to add generated image to chat.');
+      });
   }, []);
 
   const handleRemoveAllFiles = useCallback(() => {
@@ -1085,6 +1126,14 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
                               Generate AI Podcast
                             </span>
                           </MenubarItem>
+                          <MenubarItem onClick={() => setShowImageGenerator(true)} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                            <span className="flex items-center">
+                              <motion.span whileHover={{ scale: 1.25 }} className="text-purple-500">
+                                <Image className="h-5 w-5 mr-2" />
+                              </motion.span>
+                              Generate AI Image
+                            </span>
+                          </MenubarItem>
                           <MenubarItem onClick={() => setAutoTypeInPanel(prev => !prev)}>
                             <span className="flex items-center">
                               <motion.span whileHover={{ scale: 1.25 }} className={autoTypeInPanel ? 'text-green-500' : 'text-gray-500'}>
@@ -1114,7 +1163,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
                           handleSendMessage(e);
                         }
                       }}
-                      placeholder="What do you want to know? (You can also drag and drop files here)"
+                      placeholder="What do you want to know? (Type '/image' or 'generate image' for AI image generation)"
                       className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[82px] dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
                       disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
                       rows={1}
@@ -1215,6 +1264,18 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
                 setActivePodcast(podcast);
                 setShowPodcastGenerator(false);
               }}
+            />
+          )}
+          {showImageGenerator && userProfile?.id && (
+            <ImageGenerator
+              isOpen={showImageGenerator}
+              onClose={() => {
+                setShowImageGenerator(false);
+                setDetectedImagePrompt('');
+              }}
+              userId={userProfile.id}
+              onImageGenerated={handleImageGenerated}
+              initialPrompt={detectedImagePrompt}
             />
           )}
           <ConfirmationModal
