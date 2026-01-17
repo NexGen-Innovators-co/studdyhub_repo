@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { createPodcastNotification } from '@/services/notificationHelpers';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ManageMembersDialogProps {
@@ -114,6 +115,16 @@ export const ManageMembersDialog: React.FC<ManageMembersDialogProps> = ({
 
       if (error) throw error;
 
+      await createPodcastNotification(
+        memberId,
+        'podcast_created',
+        podcastTitle,
+        podcastId,
+        {
+          roleChanged: newRole,
+          // If available, add icon/image here
+        }
+      );
       toast.success(`Role updated to ${newRole}`);
       loadMembers();
     } catch (error) {
@@ -133,6 +144,16 @@ export const ManageMembersDialog: React.FC<ManageMembersDialogProps> = ({
 
       if (error) throw error;
 
+      await createPodcastNotification(
+        memberId,
+        'podcast_deleted',
+        podcastTitle,
+        podcastId,
+        {
+          removed: true,
+          // If available, add icon/image here
+        }
+      );
       toast.success(`${memberName} removed from podcast`);
       loadMembers();
     } catch (error) {

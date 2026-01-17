@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { createPodcastNotification } from '@/services/notificationHelpers';
 
 interface InviteMembersDialogProps {
   isOpen: boolean;
@@ -57,6 +58,21 @@ export const InviteMembersDialog: React.FC<InviteMembersDialogProps> = ({
   const [selectedUsers, setSelectedUsers] = useState<UserSearchResult[]>([]);
   const [selectedRole, setSelectedRole] = useState<'co-host' | 'listener'>('listener');
   const [inviteMessage, setInviteMessage] = useState('');
+  const [podcast, setPodcast] = useState<any>(null);
+
+  // Fetch podcast object when dialog opens or podcastId changes
+  useEffect(() => {
+    if (!isOpen || !podcastId) return;
+    const fetchPodcast = async () => {
+      const { data, error } = await supabase
+        .from('ai_podcasts')
+        .select('id, title, cover_image_url')
+        .eq('id', podcastId)
+        .single();
+      if (!error && data) setPodcast(data);
+    };
+    fetchPodcast();
+  }, [isOpen, podcastId]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
@@ -132,9 +148,22 @@ export const InviteMembersDialog: React.FC<InviteMembersDialogProps> = ({
         .insert(invites);
 
       if (inviteError) throw inviteError;
-
-      toast.success(`Sent ${selectedUsers.length} invite${selectedUsers.length > 1 ? 's' : ''} successfully!`);
       
+      // Notify each invited user
+      await Promise.all(selectedUsers.map(u =>
+        createPodcastNotification(
+          u.id,
+          'podcast_created',
+          podcastTitle,
+          podcastId,
+          {
+            invited: true,
+            icon: u.avatar_url,
+            image: podcast?.cover_image_url
+          }
+        )
+      ));
+      toast.success(`Sent ${selectedUsers.length} invite${selectedUsers.length > 1 ? 's' : ''} successfully!`);
       // Reset and close
       setSelectedUsers([]);
       setInviteMessage('');

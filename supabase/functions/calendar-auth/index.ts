@@ -4,10 +4,10 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 
 const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID')!
-const GOOGLE_REDIRECT_URI = Deno.env.get('GOOGLE_REDIRECT_URI') || 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/calendar-callback'
+const GOOGLE_REDIRECT_URI = Deno.env.get('GOOGLE_REDIRECT_URI')!
 
 const MICROSOFT_CLIENT_ID = Deno.env.get('MICROSOFT_CLIENT_ID')!
-const MICROSOFT_REDIRECT_URI = Deno.env.get('MICROSOFT_REDIRECT_URI') || 'https://kegsrvnywshxyucgjxml.supabase.co/functions/v1/calendar-callback'
+const MICROSOFT_REDIRECT_URI = Deno.env.get('MICROSOFT_REDIRECT_URI')!
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

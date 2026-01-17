@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { createPodcastNotification } from '@/services/notificationHelpers';
 
 interface PodcastWithMeta {
   id: string;
@@ -196,20 +197,19 @@ ${podcast.duration || 0} minutes of great content
       // Create a direct message or notification
       const message = `Hey! Check out this podcast: "${podcast.title}" (${podcast.duration || 0} min)\n\nListen here: ${shareUrl}`;
 
-      // For now, we'll create a notification
-      const { error } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: friend.id,
-          type: 'podcast_share',
-          title: 'Podcast Shared with You',
-          message: message,
-          action_url: shareUrl,
-          read: false
-        });
-
-      if (error) throw error;
-
+      // Send push notification
+      await createPodcastNotification(
+        friend.id,
+        'podcast_created',
+        podcast.title,
+        podcast.id,
+        {
+          shared: true,
+          shareUrl,
+          icon: podcast.user?.avatar_url,
+          image: podcast.cover_image_url
+        }
+      );
       await trackShare('direct_message', 'friend');
       toast.success(`Shared with ${friend.display_name || friend.username}!`);
     } catch (error) {
