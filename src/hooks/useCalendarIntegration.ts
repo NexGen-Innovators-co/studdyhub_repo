@@ -25,120 +25,29 @@ export function useCalendarIntegration() {
     }
   }, [user]);
 
-  // Connect to Google Calendar
+  // Connect to Google Calendar (redirect flow)
   const connectGoogle = useCallback(async () => {
     if (!user) return;
-
     try {
       const authUrl = await calendarIntegrationService.connectGoogleCalendar(user.id);
-      
-      // Open OAuth popup
-      const width = 600;
-      const height = 700;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-      
-      // Use noopener for security, but this prevents accessing popup properties
-      // Instead, we'll listen for a postMessage from the popup or rely on user refreshing
-      const popup = window.open(
-        authUrl,
-        'Google Calendar Authorization',
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
-
-      // Handle popup closure detection safely
-      // Cross-Origin-Opener-Policy can block access to popup.closed
-      const checkPopup = setInterval(() => {
-        try {
-          if (popup && popup.closed) {
-            clearInterval(checkPopup);
-            fetchIntegrations(); // Refresh integrations
-          }
-        } catch (e) {
-          // If we can't check closed state due to security policies, just clear interval
-          // The popup will post a message when done anyway (if implemented)
-          clearInterval(checkPopup);
-        }
-      }, 1000);
-
-      // Listen for success message from popup (window.opener.postMessage)
-      const messageHandler = (event: MessageEvent) => {
-        if (event.data?.type === 'calendar-auth-success') {
-          clearInterval(checkPopup);
-          popup?.close();
-          fetchIntegrations();
-          toast.success('Calendar connected successfully');
-          window.removeEventListener('message', messageHandler);
-        } else if (event.data?.type === 'calendar-auth-error') {
-          clearInterval(checkPopup);
-          popup?.close();
-          toast.error(`Connection failed: ${event.data.error}`);
-          window.removeEventListener('message', messageHandler);
-        }
-      };
-      
-      window.addEventListener('message', messageHandler);
-
+      window.location.href = authUrl;
     } catch (error) {
       console.error('Error connecting to Google Calendar:', error);
       toast.error('Failed to connect to Google Calendar');
     }
-  }, [user, fetchIntegrations]);
+  }, [user]);
 
-  // Connect to Outlook Calendar
+  // Connect to Outlook Calendar (redirect flow)
   const connectOutlook = useCallback(async () => {
     if (!user) return;
-
     try {
       const authUrl = await calendarIntegrationService.connectOutlookCalendar(user.id);
-      
-      // Open OAuth popup
-      const width = 600;
-      const height = 700;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-      
-      const popup = window.open(
-        authUrl,
-        'Outlook Calendar Authorization',
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
-
-       // Handle popup closure detection safely
-      const checkPopup = setInterval(() => {
-        try {
-          if (popup && popup.closed) {
-            clearInterval(checkPopup);
-            fetchIntegrations(); // Refresh integrations
-          }
-        } catch (e) {
-          clearInterval(checkPopup);
-        }
-      }, 1000);
-
-      // Listen for success message from popup
-      const messageHandler = (event: MessageEvent) => {
-        if (event.data?.type === 'calendar-auth-success') {
-          clearInterval(checkPopup);
-          popup?.close();
-          fetchIntegrations();
-          toast.success('Calendar connected successfully');
-          window.removeEventListener('message', messageHandler);
-        } else if (event.data?.type === 'calendar-auth-error') {
-          clearInterval(checkPopup);
-          popup?.close();
-          toast.error(`Connection failed: ${event.data.error}`);
-          window.removeEventListener('message', messageHandler);
-        }
-      };
-      
-      window.addEventListener('message', messageHandler);
-
+      window.location.href = authUrl;
     } catch (error) {
       console.error('Error connecting to Outlook Calendar:', error);
       toast.error('Failed to connect to Outlook Calendar');
     }
-  }, [user, fetchIntegrations]);
+  }, [user]);
 
   // Disconnect calendar
   const disconnect = useCallback(async (integrationId: string) => {
