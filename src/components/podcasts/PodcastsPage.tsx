@@ -51,6 +51,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { getPodcastPermissions } from '@/services/podcastModerationService';
 import { usePodcasts, PodcastWithMeta } from '@/hooks/usePodcasts';
+import { createPodcastNotification } from '@/services/notificationHelpers';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { SubscriptionLimitsModal } from '../subscription/SubscriptionLimitsModal';
@@ -715,6 +716,33 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     }
   };
 
+  // Helper to get all member user IDs for a podcast
+  const getPodcastMemberUserIds = async (podcastId: string): Promise<string[]> => {
+    const { data, error } = await supabase
+      .from('podcast_members')
+      .select('user_id')
+      .eq('podcast_id', podcastId);
+    if (error || !data) return [];
+    return data.map((m: any) => m.user_id);
+  };
+
+  const handlePodcastCreated = async (podcast) => {
+    // Notify all members (including owner)
+    const memberIds = await getPodcastMemberUserIds(podcast.id);
+    await Promise.all(memberIds.map(uid =>
+      createPodcastNotification(
+        uid,
+        'podcast_created',
+        podcast.title,
+        podcast.id,
+        {
+          icon: podcast.user?.avatar_url,
+          image: podcast.cover_image_url
+        }
+      )
+    ));
+  };
+
   const handleDeletePodcast = async () => {
     if (!podcastToDelete) return;
 
@@ -749,6 +777,21 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         .eq('id', podcastToDelete.id);
 
       if (error) throw error;
+
+      // Send notification to all podcast members
+      const memberIds = await getPodcastMemberUserIds(podcastToDelete.id);
+      await Promise.all(memberIds.map(uid =>
+        createPodcastNotification(
+          uid,
+          'podcast_deleted',
+          podcastToDelete.title,
+          podcastToDelete.id,
+          {
+            icon: podcastToDelete.user?.avatar_url,
+            image: podcastToDelete.cover_image_url
+          }
+        )
+      ));
 
       toast.success('Podcast deleted successfully');
       setShowDeleteDialog(false);
@@ -1198,10 +1241,11 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       {showPodcastGenerator && (
         <PodcastGenerator
           onClose={() => setShowPodcastGenerator(false)}
-          onPodcastGenerated={(podcast) => {
+          onPodcastGenerated={async (podcast) => {
             setShowPodcastGenerator(false);
             toast.success('Podcast generated successfully!');
             queryClient.invalidateQueries({ queryKey: ['podcasts'] });
+            await handlePodcastCreated(podcast);
           }}
         />
       )}

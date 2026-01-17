@@ -52,7 +52,8 @@ async function sendWebPush(
     const pushPayload = JSON.stringify({
       title: payload.title,
       body: payload.message,
-      icon: '/icon-192.png',
+      icon: payload.icon || '/icon-192.png',
+      image: payload.image,
       badge: '/badge-72.png',
       tag: payload.type,
       data: payload.data || {},
@@ -276,6 +277,8 @@ serve(async (req) => {
           type,
           title,
           message,
+          icon: notificationRequest.icon,
+          image: notificationRequest.image,
           data: {
             type, // critical for service worker routing
             action_url,

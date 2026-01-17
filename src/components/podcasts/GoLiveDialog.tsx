@@ -29,6 +29,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '../ui/alert';
 import { checkPodcastCreationEligibility } from '@/services/podcastModerationService';
+import { createPodcastNotification } from '@/services/notificationHelpers';
 
 interface GoLiveDialogProps {
   isOpen: boolean;
@@ -130,6 +131,25 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
             privacy: 'public'
           });
       }
+
+      // Send notification to all podcast members (including owner)
+      const { data: members } = await supabase
+        .from('podcast_members')
+        .select('user_id')
+        .eq('podcast_id', podcast.id);
+      const memberIds = (members || []).map((m: any) => m.user_id);
+      await Promise.all(memberIds.map(uid =>
+        createPodcastNotification(
+          uid,
+          'podcast_live',
+          title.trim(),
+          podcast.id,
+          {
+            icon: podcast.user?.avatar_url,
+            image: podcast.cover_image_url
+          }
+        )
+      ));
 
       toast.success('You are now live! 🎙️');
       onLiveStart?.(podcast.id);

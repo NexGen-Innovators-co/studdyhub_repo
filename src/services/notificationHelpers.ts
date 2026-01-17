@@ -15,13 +15,57 @@ export type NotificationType =
   | 'social_follow'
   | 'social_mention'
   | 'ai_limit_warning'
-  | 'subscription_renewal';
+  | 'subscription_renewal'
+  | 'podcast_created'
+  | 'podcast_live'
+  | 'podcast_deleted';
+/**
+ * Create a podcast notification (created, live, deleted)
+ */
+export async function createPodcastNotification(
+  userId: string,
+  type: 'podcast_created' | 'podcast_live' | 'podcast_deleted',
+  podcastTitle: string,
+  podcastId: string,
+  extra?: { [key: string]: any }
+): Promise<Notification | null> {
+  let title = '';
+  let message = '';
+  let icon = undefined;
+  let image = undefined;
+  // Try to get cover image and avatar from extra
+  if (extra) {
+    if (extra.coverUrl) image = extra.coverUrl;
+    if (extra.avatarUrl) icon = extra.avatarUrl;
+  }
+  if (type === 'podcast_created') {
+    title = 'New Podcast Created';
+    message = `A new podcast "${podcastTitle}" was created.`;
+  } else if (type === 'podcast_live') {
+    title = 'Live Podcast Started';
+    message = `The podcast "${podcastTitle}" is now live!`;
+  } else if (type === 'podcast_deleted') {
+    title = 'Podcast Deleted';
+    message = `The podcast "${podcastTitle}" was deleted.`;
+  }
+  return createNotification({
+    userId,
+    type,
+    title,
+    message,
+    icon,
+    image,
+    data: { podcastId, podcastTitle, ...extra }
+  });
+}
 
 export interface CreateNotificationParams {
   userId: string;
   type: NotificationType;
   title: string;
   message: string;
+  icon?: string;
+  image?: string;
   data?: Record<string, any>;
   expiresAt?: Date;
   saveToDb?: boolean;
@@ -32,6 +76,9 @@ export interface CreateNotificationParams {
  * This will automatically trigger real-time updates and push notifications
  * Uses the edge function to bypass RLS policies
  */
+/**
+ * Core notification creation function used by all helpers
+ */
 export async function createNotification(params: CreateNotificationParams): Promise<Notification | null> {
   try {
     const { data, error } = await supabase.functions.invoke('send-notification', {
@@ -40,6 +87,8 @@ export async function createNotification(params: CreateNotificationParams): Prom
         type: params.type,
         title: params.title,
         message: params.message,
+        icon: params.icon,
+        image: params.image,
         data: params.data,
         save_to_db: params.saveToDb !== undefined ? params.saveToDb : true
       }

@@ -94,9 +94,9 @@ self.addEventListener('push', (event) => {
     const title = data.title || 'StuddyHub';
     const options = {
       body: data.body || data.message || 'You have a new notification',
-      icon: data.icon || '/icon-192x192.png',
+      icon: data.icon || (data.data && data.data.avatarUrl) || '/icon-192x192.png',
       badge: data.badge || '/badge-72x72.png',
-      image: data.image,
+      image: data.image || (data.data && (data.data.coverUrl || data.data.imageUrl)),
       data: data.data || {},
       tag: data.tag || 'studdyhub-notification',
       requireInteraction: data.requireInteraction || false,

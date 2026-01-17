@@ -558,6 +558,8 @@ export const useSocialActions = (
             title: 'New like on your post',
             message: `${actorName} liked your post`,
             data: { post_id: postId, actor_id: userId },
+            icon: currentUser?.avatar_url,
+            image: post?.media?.[0]?.url,
             saveToDb: false
           });
         }
@@ -731,6 +733,7 @@ export const useSocialActions = (
           title: 'New follower',
           message: `${actorName} started following you`,
           data: { actor_id: user.id },
+          icon: currentUser?.avatar_url,
           saveToDb: false
         });
 
