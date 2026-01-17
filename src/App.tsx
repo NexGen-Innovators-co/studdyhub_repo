@@ -30,6 +30,7 @@ import DynamicHead from "./components/seo/DynamicHead";
 import { SubscriptionPage } from "./components/subscription";
 import { AnimatePresence, motion } from "framer-motion";
 import { OfflineIndicator } from "./components/layout/OfflineIndicator";
+import CalendarCallback from "./pages/CalendarCallback";
 
 // Lazy load admin components
 const AdminDashboard = lazy(() => import("./components/admin/adminDashboard"));
@@ -103,6 +104,7 @@ const AppWithSEO = () => {
           <Route path="/user-guide-page" element={<UserGuidePage />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/calendar-callback" element={<CalendarCallback />} />
 
           {/* ==== AUTHENTICATED APP ROUTES (Non-Social) ==== */}
           <Route path="/dashboard" element={<Index />} />
