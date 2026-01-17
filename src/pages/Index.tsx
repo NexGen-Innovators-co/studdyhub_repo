@@ -15,7 +15,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AIBot from '@/components/ui/aibot';
 import { Helmet } from 'react-helmet-async';
 import { SubscriptionStatusBar } from '@/components/subscription/SubscriptionStatusBar';
-import { initializePushNotifications } from '@/services/notificationInitService';
+import { initializePushNotifications, getNotificationPermissionStatus, requestNotificationPermission } from '@/services/notificationInitService';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Document } from '@/types/Document';
 import { supabase } from '@/integrations/supabase/client';
 import { MobileMenu } from '@/components/layout/MobileMenu';
@@ -24,20 +26,6 @@ const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
-
-  let activeSocialTab: string | undefined;
-  let socialPostId: string | undefined;
-  let socialGroupId: string | undefined;
-
-  if (location.pathname.startsWith('/social/group/')) {
-    activeSocialTab = 'group';
-    socialGroupId = params.groupId;
-  } else if (location.pathname.startsWith('/social/post/')) {
-    activeSocialTab = 'post';
-    socialPostId = params.postId;
-  } else {
-    activeSocialTab = params.tab as string | undefined;
-  }
 
   // Context
   const {
@@ -103,6 +91,43 @@ const Index = () => {
     daysRemaining,
     bonusAiCredits,
   } = useAppContext();
+
+  // Notifications modal state and logic (now inside Index to access 'user')
+  const { preferences } = useNotifications();
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [requestingPermission, setRequestingPermission] = useState(false);
+
+  // Show onboarding modal if push_notifications is enabled and permission is 'default'
+  useEffect(() => {
+    if (user && preferences?.push_notifications) {
+      const permission = getNotificationPermissionStatus();
+      if (permission === 'default') {
+        setShowNotificationModal(true);
+      }
+    }
+  }, [user, preferences]);
+
+  // Handler for enabling push notifications
+  const handleEnablePushNotifications = async () => {
+    setRequestingPermission(true);
+    await requestNotificationPermission();
+    setRequestingPermission(false);
+    setShowNotificationModal(false);
+  };
+
+  let activeSocialTab: string | undefined;
+  let socialPostId: string | undefined;
+  let socialGroupId: string | undefined;
+
+  if (location.pathname.startsWith('/social/group/')) {
+    activeSocialTab = 'group';
+    socialGroupId = params.groupId;
+  } else if (location.pathname.startsWith('/social/post/')) {
+    activeSocialTab = 'post';
+    socialPostId = params.postId;
+  } else {
+    activeSocialTab = params.tab as string | undefined;
+  }
 
   const {
     handleSubmitMessage,
@@ -556,6 +581,26 @@ const Index = () => {
   return (
 
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 overflow-hidden">
+
+      {/* Onboarding Notification Modal */}
+      <Dialog open={showNotificationModal} onOpenChange={setShowNotificationModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enable Push Notifications?</DialogTitle>
+            <DialogDescription>
+              Stay up to date with schedule reminders, social updates, and important alerts. You can change this later in Settings.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowNotificationModal(false)} variant="outline" disabled={requestingPermission}>
+              Not Now
+            </Button>
+            <Button onClick={handleEnablePushNotifications} disabled={requestingPermission}>
+              {requestingPermission ? 'Enabling...' : 'Enable Notifications'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Smart Responsive Header */}
       {pageSEO && (
         <Helmet>

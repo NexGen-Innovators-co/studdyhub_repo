@@ -766,7 +766,6 @@ export const useAppOperations = ({
       // Create internal reminder if enabled
       try {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
-        
         // Attempt to get preferences, but default to TRUE if they haven't set them yet
         // This ensures new users get reminders by default
         const { data: pref } = await supabase
@@ -779,15 +778,28 @@ export const useAppOperations = ({
         const reminderTime = pref?.reminder_time || 15;
 
         if (shouldSetReminder) {
-           await supabase
-             .from('schedule_reminders')
-             .insert({
-               schedule_id: newScheduleItem.id,
-               reminder_minutes: reminderTime,
-               notification_sent: false
-             });
+          const { data: reminderData, error: reminderError } = await supabase
+            .from('schedule_reminders')
+            .insert({
+              schedule_id: newScheduleItem.id,
+              reminder_minutes: reminderTime,
+              notification_sent: false
+            })
+            .select()
+            .single();
+
+          if (reminderError) {
+            toast.error('Failed to create schedule reminder: ' + reminderError.message);
+            console.error('Failed to create schedule reminder:', reminderError);
+          } else {
+            toast.success('Schedule reminder created successfully!');
+            console.log('Schedule reminder insert result:', reminderData);
+          }
+        } else {
+          toast('Schedule reminders are disabled in your preferences. No reminder created.');
         }
       } catch (remError) {
+        toast.error('Unexpected error creating schedule reminder. See console for details.');
         console.error('Failed to create reminder:', remError);
       }
 
