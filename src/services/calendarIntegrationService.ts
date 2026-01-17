@@ -31,14 +31,19 @@ class CalendarIntegrationService {
   /**
    * Initiate Google Calendar OAuth flow
    */
+
   async connectGoogleCalendar(userId: string): Promise<string> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
     const { data, error } = await supabase.functions.invoke('calendar-auth', {
       body: {
         provider: 'google',
         userId
+      },
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
       }
     });
-
     if (error) throw error;
     return data.authUrl;
   }
@@ -47,13 +52,17 @@ class CalendarIntegrationService {
    * Initiate Outlook Calendar OAuth flow
    */
   async connectOutlookCalendar(userId: string): Promise<string> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
     const { data, error } = await supabase.functions.invoke('calendar-auth', {
       body: {
         provider: 'outlook',
         userId
+      },
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
       }
     });
-
     if (error) throw error;
     return data.authUrl;
   }
@@ -66,14 +75,18 @@ class CalendarIntegrationService {
     code: string,
     userId: string
   ): Promise<CalendarIntegration> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
     const { data, error } = await supabase.functions.invoke('calendar-callback', {
       body: {
         provider,
         code,
         userId
+      },
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
       }
     });
-
     if (error) throw error;
     return data;
   }
