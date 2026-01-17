@@ -1803,7 +1803,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
               h-11 w-11 rounded-full bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 
               shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center
               border border-slate-100 dark:border-slate-800 backdrop-blur-sm
-              ${isScrolled || hasNewPosts ? 'translate-y-0 opacity-100' : 'translate-y-16 opacity-0'}
+              ${isScrolled || hasNewPosts ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-0 opacity-0 pointer-events-none'}
             `}
               aria-label="Refresh feed"
               title="Refresh"
@@ -1817,7 +1817,7 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
               className={`
               h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg hover:shadow-xl 
               transition-all duration-300 flex items-center justify-center backdrop-blur-sm
-              ${isScrolledDeep ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-50'}
+              ${isScrolledDeep ? 'translate-y-0 opacity-100 scale-100 pointer-events-auto' : 'translate-y-0 opacity-0 scale-50 pointer-events-none'}
             `}
               aria-label="Scroll to top"
               title="Back to top"
@@ -1833,8 +1833,8 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
               text-white shadow-lg hover:shadow-2xl transition-all duration-300 
               flex items-center justify-center backdrop-blur-sm ring-4 ring-blue-500/20
               ${isScrolled || showChatList || totalUnread > 0
-                  ? 'translate-y-0 opacity-100 scale-100'
-                  : 'translate-y-24 opacity-0 scale-75'}
+                  ? 'translate-y-0 opacity-100 scale-100 pointer-events-auto'
+                  : 'translate-y-0 opacity-0 scale-75 pointer-events-none'}
             `}
               aria-label="Open messages"
               title="Messages"
@@ -1844,9 +1844,6 @@ export const SocialFeed = forwardRef<SocialFeedHandle, SocialFeedProps>(
                 <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center animate-pulse ring-2 ring-white">
                   {totalUnread > 99 ? '99+' : totalUnread}
                 </span>
-              )}
-              {showChatList && (
-                <span className="absolute -inset-2 rounded-full bg-blue-600/30 animate-ping" />
               )}
             </button>
           </div>

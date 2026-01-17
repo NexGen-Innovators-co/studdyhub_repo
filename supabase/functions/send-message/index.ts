@@ -92,6 +92,50 @@ serve(async (req) => {
       return createErrorResponse('Failed to send message', 500);
     }
 
+    // Notify other participants (Fire and Forget)
+    (async () => {
+      try {
+        // Fetch participants (excluding sender)
+        // Try 'chat_session_members' or 'chat_session_participants' - guessing participants based on context
+        const { data: participants } = await supabase
+          .from('chat_session_participants') 
+          .select('user_id')
+          .eq('session_id', chat_session_id)
+          .neq('user_id', userId);
+        
+        // If table name is different (e.g. social_group_members for group chats?), this might fail.
+        // But for direct messages, usually there is a mapping table.
+        // Assuming 'chat_session_participants' exists.
+
+        if (participants && participants.length > 0) {
+           const recipientIds = participants.map((p: any) => p.user_id);
+           
+           // Get sender name
+           const { data: sender } = await supabase.from('social_users').select('display_name').eq('id', userId).single();
+           const senderName = sender?.display_name || 'Someone';
+           
+           // Truncate message
+           const preview = message_content.length > 50 ? message_content.substring(0, 50) + '...' : message_content;
+
+           await supabase.functions.invoke('send-notification', {
+              body: {
+                  user_ids: recipientIds,
+                  type: 'message',
+                  title: `Message from ${senderName}`,
+                  message: preview,
+                  data: { 
+                      chat_session_id: chat_session_id,
+                      actor_id: userId,
+                      url: `/social?chat_session_id=${chat_session_id}` // Best effort deep link
+                  }
+              }
+           });
+        }
+      } catch (e) {
+        console.error('Failed to notify chat participants:', e);
+      }
+    })();
+
     return new Response(JSON.stringify({
       success: true,
       message
