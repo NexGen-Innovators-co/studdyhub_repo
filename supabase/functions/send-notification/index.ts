@@ -3,10 +3,17 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import webpush from 'npm:web-push@3.6.7'
 
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') || 'mailto:support@studdyhub.com'
+
+webpush.setVapidDetails(
+  VAPID_SUBJECT,
+  VAPID_PUBLIC_KEY,
+  VAPID_PRIVATE_KEY
+)
 
 interface NotificationRequest {
   user_id?: string
@@ -33,7 +40,7 @@ async function sendWebPush(
   payload: any
 ): Promise<boolean> {
   try {
-    const subscriptionData = {
+    const pushSubscription = {
       endpoint: subscription.endpoint,
       keys: {
         p256dh: subscription.p256dh,
@@ -53,67 +60,19 @@ async function sendWebPush(
       timestamp: Date.now(),
     })
 
-    // Create VAPID authorization header
-    const vapidHeaders = await createVAPIDHeaders(
-      subscription.endpoint,
-      VAPID_PUBLIC_KEY,
-      VAPID_PRIVATE_KEY,
-      VAPID_SUBJECT
+    await webpush.sendNotification(
+      pushSubscription,
+      pushPayload
     )
 
-    // Send the push notification
-    const response = await fetch(subscription.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'Content-Encoding': 'aes128gcm',
-        'TTL': '86400',
-        ...vapidHeaders,
-      },
-      body: pushPayload,
-    })
-
-    if (!response.ok) {
-      console.error(`Push failed for ${subscription.id}:`, response.status, response.statusText)
-      
-      // If subscription is invalid (410), return false to delete it
-      if (response.status === 410) {
-        return false
-      }
-    }
-
     return true
-  } catch (error) {
+  } catch (error: any) {
+    if (error.statusCode === 410 || error.statusCode === 404) {
+      console.log(`Subscription gone for ${subscription.id}`)
+      return false
+    }
     console.error(`Error sending push to ${subscription.id}:`, error)
-    return true // Keep subscription on network errors
-  }
-}
-
-// Create VAPID authorization headers
-async function createVAPIDHeaders(
-  endpoint: string,
-  publicKey: string,
-  privateKey: string,
-  subject: string
-): Promise<Record<string, string>> {
-  // Extract the origin from the endpoint
-  const url = new URL(endpoint)
-  const audience = `${url.protocol}//${url.host}`
-
-  // Create JWT claims
-  const jwtClaims = {
-    aud: audience,
-    exp: Math.floor(Date.now() / 1000) + 12 * 60 * 60, // 12 hours
-    sub: subject,
-  }
-
-  // For simplicity, using a basic implementation
-  // In production, you might want to use a proper JWT library
-  const header = btoa(JSON.stringify({ typ: 'JWT', alg: 'ES256' }))
-  const payload = btoa(JSON.stringify(jwtClaims))
-  
-  return {
-    Authorization: `vapid t=${header}.${payload}, k=${publicKey}`,
+    return true // Keep subscription on other errors
   }
 }
 
@@ -296,12 +255,30 @@ serve(async (req) => {
           continue
         }
 
+        // Determine action URL based on type
+        let action_url = '/dashboard'
+        if (['like', 'comment', 'mention', 'social_share', 'social_comment', 'social_mention'].includes(type)) {
+          if (data?.post_id) action_url = `/social/post/${data.post_id}`
+          else action_url = '/social'
+        } else if (['follow', 'social_follow'].includes(type)) {
+          if (data?.actor_id) action_url = `/social/profile/${data.actor_id}`
+          else action_url = '/social'
+        } else if (['schedule_reminder', 'assignment_due'].includes(type)) {
+          action_url = '/schedule'
+        } else if (type === 'quiz_due') {
+          action_url = '/quizzes'
+        } else if (data?.url) {
+          action_url = data.url
+        }
+
         // Send push notification to each subscription
         const pushPayload = {
           type,
           title,
           message,
           data: {
+            type, // critical for service worker routing
+            action_url,
             ...data,
             notification_id: notificationId,
           },

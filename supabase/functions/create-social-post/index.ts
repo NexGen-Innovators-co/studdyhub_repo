@@ -332,6 +332,79 @@ Respond in JSON format:
       }
     }
 
+    // Trigger Notifications (Fire and Forget)
+    (async () => {
+      try {
+        // Fetch author profile for the name
+        const { data: author } = await supabase
+          .from('social_users')
+          .select('display_name')
+          .eq('id', userId)
+          .single();
+        
+        const authorName = author?.display_name || 'Someone';
+        let recipientIds: string[] = [];
+        let title = 'New Post';
+        let message = '';
+        let type = 'social_post';
+
+        if (group_id) {
+          // Group Post Notification
+          const { data: members } = await supabase
+            .from('social_group_members')
+            .select('user_id')
+            .eq('group_id', group_id)
+            .neq('user_id', userId); // Exclude self
+          
+          if (members && members.length > 0) {
+             recipientIds = members.map(m => m.user_id);
+             type = 'group_post';
+             
+             // Fetch group name
+             const { data: group } = await supabase.from('social_groups').select('name').eq('id', group_id).single();
+             const groupName = group?.name || 'Group';
+             
+             title = `New post in ${groupName}`;
+             message = `${authorName} posted in ${groupName}`;
+          }
+        } else if (privacy !== 'private') {
+           // Follower Notification
+           const { data: followers } = await supabase
+             .from('social_follows')
+             .select('follower_id')
+             .eq('following_id', userId);
+             
+           if (followers && followers.length > 0) {
+             recipientIds = followers.map(f => f.follower_id);
+             type = 'social_post';
+             title = `New post from ${authorName}`;
+             message = `${authorName} shared a new post`;
+           }
+        }
+
+        if (recipientIds.length > 0) {
+          // Batch user_ids to avoid massive requests (optional, but good practice)
+          // For now, send all at once as send-notification handles looping
+          await supabase.functions.invoke('send-notification', {
+            body: {
+              user_ids: recipientIds,
+              type: type,
+              title: title,
+              message: message,
+              data: {
+                post_id: post.id,
+                actor_id: userId,
+                group_id: group_id,
+                url: group_id ? `/social/groups/${group_id}` : `/social/post/${post.id}` 
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error triggering notifications:', err);
+      }
+    })();
+
     return new Response(JSON.stringify({
       success: true,
       post

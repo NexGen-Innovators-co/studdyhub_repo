@@ -1,6 +1,10 @@
 import { serve } from "https://deno.land/std@0.170.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { corsHeaders } from "../_shared/cors.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -173,6 +177,35 @@ serve(async (req: Request) => {
       if (insertError) {
         console.error("Error adding like:", insertError);
         return createErrorResponse("Failed to like post", 500);
+      }
+
+      // Check if not self-like, then send notification
+      if (post.id) { // We have post.id, but we need post author
+          const { data: postDetails } = await supabase
+             .from('social_posts')
+             .select('author_id')
+             .eq('id', postId)
+             .single();
+          
+          if (postDetails && postDetails.author_id !== userId) {
+             // Get liker name
+             const { data: liker } = await supabase.from('social_users').select('display_name').eq('id', userId).single();
+             const likerName = liker?.display_name || 'Someone';
+
+             await supabase.functions.invoke('send-notification', {
+                body: {
+                    user_ids: [postDetails.author_id],
+                    type: 'like',
+                    title: 'New Like',
+                    message: `${likerName} liked your post`,
+                    data: {
+                        post_id: postId,
+                        actor_id: userId,
+                        type: 'like'
+                    }
+                }
+             })
+          }
       }
 
       return createSuccessResponse(
