@@ -62,9 +62,10 @@ export interface AppState {
 }
 
 export const initialAppState: AppState = {
-  currentTheme: (typeof window !== 'undefined' 
-    ? (localStorage.getItem('theme') as 'light' | 'dark') || 'dark' 
-    : 'dark'),
+  currentTheme: (typeof window !== 'undefined'
+    ? (localStorage.getItem('theme') as 'light' | 'dark')
+      || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : 'light'),
   chatSessions: [],
   activeChatSessionId: null,
   selectedDocumentIds: [],

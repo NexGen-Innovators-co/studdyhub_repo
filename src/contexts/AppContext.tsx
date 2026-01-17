@@ -384,12 +384,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof document !== 'undefined') {
       const html = document.documentElement;
-      if (state.currentTheme === 'dark') {
+      let theme = state.currentTheme;
+      // If no theme is set, use system preference
+      if (!theme) {
+        theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      if (theme === 'dark') {
         html.classList.add('dark');
       } else {
         html.classList.remove('dark');
       }
-      localStorage.setItem('theme', state.currentTheme);
+      localStorage.setItem('theme', theme);
     }
   }, [state.currentTheme]);
   useEffect(() => {
