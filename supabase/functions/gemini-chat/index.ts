@@ -1991,68 +1991,136 @@ serve(async (req) => {
     let filesMetadata: any[] = [];
     let attachedContext = '';
     const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
-
-    if (hasFiles) {
-      const processorUrl = Deno.env.get('file-processor');
-      if (!processorUrl) throw new Error('FILE_PROCESSOR_URL not configured');
-
-      let processorResponse;
-      if (contentType.includes('multipart/form-data')) {
-        const formData = new FormData();
-        formData.append('userId', userId);
-        for (const file of rawFiles) {
-          formData.append('file', file);
-        }
-
-        processorResponse = await fetch(processorUrl, {
-          method: 'POST',
-          body: formData
-        });
-      } else {
-        const body = JSON.stringify({
-          userId,
-          files: jsonFiles
-        });
-
-        processorResponse = await fetch(processorUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body
-        });
-      }
-
-      if (!processorResponse.ok) {
-        const errorBody = await processorResponse.text();
-        console.error(`File processor error: ${processorResponse.status} - ${errorBody}`);
-
-        const errorMessageData = {
-          userId,
-          sessionId,
-          content: `I encountered an issue processing your files. Please try uploading them again or contact support if the problem persists.`,
-          role: 'assistant',
-          isError: true,
-          attachedDocumentIds: attachedDocumentIds.length > 0 ? attachedDocumentIds : null,
-          attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
-          imageUrl: imageUrl,
-          imageMimeType: imageMimeType
-        };
-
-        await saveChatMessage(errorMessageData);
-        throw new Error(`Failed to process files: ${processorResponse.statusText}`);
-      }
-
-      const processedData = await processorResponse.json();
-      uploadedDocumentIds = processedData.documentIds || [];
-      filesMetadata = processedData.filesMetadata || [];
-      processingResults = processedData.processingResults || [];
-    }
-
+    
     let userMessageId: string | null = null;
     let userMessageTimestamp: string | null = null;
     let aiMessageId: string | null = null;
     let aiMessageTimestamp: string | null = null;
+
+if (hasFiles) {
+  const processorUrl = Deno.env.get('DOCUMENT_PROCESSOR_URL'); // ✅ Fixed
+  if (!processorUrl) throw new Error('DOCUMENT_PROCESSOR_URL not configured');
+
+  let processorResponse;
+  if (contentType.includes('multipart/form-data')) {
+    const formData = new FormData();
+    formData.append('userId', userId);
+    for (const file of rawFiles) {
+      formData.append('file', file);
+    }
+
+    processorResponse = await fetch(processorUrl, {
+      method: 'POST',
+      headers: {
+        // ✅ Add authorization headers
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'apikey': supabaseServiceKey
+      },
+      body: formData
+    });
+  } else {
+    const body = JSON.stringify({
+      userId,
+      files: jsonFiles
+    });
+
+    processorResponse = await fetch(processorUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // ✅ Add authorization headers
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'apikey': supabaseServiceKey
+      },
+      body
+    });
+  }
+
+  if (!processorResponse.ok) {
+    const errorBody = await processorResponse.text();
+    console.error(`Document processor error: ${processorResponse.status} - ${errorBody}`);
+
+    // ✅ Send user-friendly error message
+    const errorMessage = {
+      userId,
+      sessionId,
+      content: `❌ I encountered an issue processing your documents:\n\n${errorBody}\n\nPlease try:\n• Uploading smaller files\n• Using a different file format\n• Uploading one file at a time\n\nYou can still continue our conversation without the files.`,
+      role: 'assistant',
+      isError: true,
+      attachedDocumentIds: attachedDocumentIds.length > 0 ? attachedDocumentIds : null,
+      attachedNoteIds: attachedNoteIds.length > 0 ? attachedNoteIds : null,
+      imageUrl: imageUrl,
+      imageMimeType: imageMimeType
+    };
+
+    const savedErrorMessage = await saveChatMessage(errorMessage);
+    
+    // ✅ Return error response immediately instead of continuing
+    return new Response(JSON.stringify({
+      error: 'Document processing failed',
+      errorDetails: errorBody,
+      aiMessageId: savedErrorMessage?.id,
+      aiMessageTimestamp: savedErrorMessage?.timestamp,
+      userMessageId,
+      userMessageTimestamp,
+      sessionId,
+      userId,
+      success: false
+    }), {
+      status: 400,
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+  }
+
+  const processedData = await processorResponse.json();
+  uploadedDocumentIds = processedData.uploadedDocumentIds || [];
+  filesMetadata = processedData.filesMetadata || [];
+  processingResults = processedData.processingResults || [];
+  
+  // ✅ Check for partial failures
+  const failedFiles = processedData.processingResults?.filter(
+    (result: any) => result.status === 'failed'
+  ) || [];
+  
+  if (failedFiles.length > 0 && failedFiles.length < processedData.processingResults.length) {
+    // Partial failure - some succeeded, some failed
+    console.warn(`Partial document processing failure: ${failedFiles.length}/${processedData.processingResults.length} files failed`);
+  } else if (failedFiles.length === processedData.processingResults.length) {
+    // Total failure - all files failed
+    const errorMessage = {
+      userId,
+      sessionId,
+      content: `❌ All ${failedFiles.length} file(s) failed to process:\n\n${
+        failedFiles.map((f: any) => `• ${f.name}: ${f.error || 'Unknown error'}`).join('\n')
+      }\n\nPlease check the file formats and try again.`,
+      role: 'assistant',
+      isError: true
+    };
+
+    const savedErrorMessage = await saveChatMessage(errorMessage);
+    
+    return new Response(JSON.stringify({
+      error: 'All documents failed to process',
+      errorDetails: failedFiles,
+      aiMessageId: savedErrorMessage?.id,
+      aiMessageTimestamp: savedErrorMessage?.timestamp,
+      userMessageId,
+      userMessageTimestamp,
+      sessionId,
+      userId,
+      success: false
+    }), {
+      status: 400,
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+  }
+}
 
     const allDocumentIds = [
       ...new Set([

@@ -99,7 +99,7 @@ export const ManageMembersDialog: React.FC<ManageMembersDialogProps> = ({
       
       setMembers(transformedMembers);
     } catch (error) {
-      console.error('Error loading members:', error);
+      //console.error('Error loading members:', error);
       toast.error('Failed to load members');
     } finally {
       setLoading(false);
@@ -128,7 +128,7 @@ export const ManageMembersDialog: React.FC<ManageMembersDialogProps> = ({
       toast.success(`Role updated to ${newRole}`);
       loadMembers();
     } catch (error) {
-      console.error('Error changing role:', error);
+      //console.error('Error changing role:', error);
       toast.error('Failed to update role');
     }
   };
@@ -157,7 +157,7 @@ export const ManageMembersDialog: React.FC<ManageMembersDialogProps> = ({
       toast.success(`${memberName} removed from podcast`);
       loadMembers();
     } catch (error) {
-      console.error('Error removing member:', error);
+      //console.error('Error removing member:', error);
       toast.error('Failed to remove member');
     }
   };

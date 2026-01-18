@@ -114,7 +114,7 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
         playPromise.catch(err => {
-          console.error('Audio play error:', err);
+          //console.error('Audio play error:', err);
           // If auto-play fails, we might need user interaction
           if (err.name === 'NotAllowedError') {
             toast.info('Click anywhere to enable audio', {
@@ -233,7 +233,7 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
         setPodcast(data);
       }
     } catch (error) {
-      console.error('Error loading podcast:', error);
+      //console.error('Error loading podcast:', error);
       toast.error('Failed to load podcast');
     }
   };
@@ -277,7 +277,7 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
         setListeners([]);
       }
     } catch (error) {
-      console.error('Error loading listeners:', error);
+      //console.error('Error loading listeners:', error);
     }
   };
 
@@ -294,7 +294,7 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
 
       setIsListening(true);
     } catch (error) {
-      console.error('Error joining as listener:', error);
+      //console.error('Error joining as listener:', error);
     }
   };
 
@@ -314,7 +314,7 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
 
       setIsListening(false);
     } catch (error) {
-      console.error('Error leaving:', error);
+      //console.error('Error leaving:', error);
     }
   };
 

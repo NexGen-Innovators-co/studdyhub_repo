@@ -24,7 +24,7 @@ import BookPagesAnimation from '../ui/bookloader';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 import { useTextToSpeech } from './hooks/useTextToSpeech';
-import { getFileType, validateFile, stripCodeBlocks, generateOptimisticId } from './utils/helpers';
+import { getFileType, validateFile, stripCodeBlocks, generateOptimisticId, overrideTsMimeType } from './utils/helpers';
 import { ContextBadges } from './Components/ContextBadges';
 import { DragOverlay } from './Components/DragOverlay';
 import { state } from 'mermaid/dist/rendering-util/rendering-elements/shapes/state.js';
@@ -367,16 +367,18 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
     const validFiles: AttachedFile[] = [];
 
     files.forEach(file => {
-      const validation = validateFile(file);
+      // Always override .ts file MIME type if needed
+      const safeFile = overrideTsMimeType(file);
+      const validation = validateFile(safeFile);
       if (!validation.isValid) {
         toast.error(validation.error);
         return;
       }
 
       const fileId = generateId();
-      const fileType = getFileType(file);
+      const fileType = getFileType(safeFile);
       const attachedFile: AttachedFile = {
-        file,
+        file: safeFile,
         type: fileType,
         id: fileId
       };
@@ -388,9 +390,9 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
           setAttachedFiles(prev => [...prev, attachedFile]);
         };
         reader.onerror = () => {
-          toast.error(`Failed to load image: ${file.name}`);
+          toast.error(`Failed to load image: ${safeFile.name}`);
         };
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(safeFile);
       } else {
         validFiles.push(attachedFile);
       }
@@ -546,7 +548,9 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
 
       const filesForBackend = await Promise.all(
         attachedFiles.map(async (attachedFile) => {
-          const fileType = getFileType(attachedFile.file);
+          // Always override .ts file MIME type if needed before sending
+          const safeFile = overrideTsMimeType(attachedFile.file);
+          const fileType = getFileType(safeFile);
           let data: string | null = null;
           let content: string | null = null;
 
@@ -555,19 +559,19 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
             const base64Promise = new Promise<string>((resolve, reject) => {
               reader.onloadend = () => resolve(reader.result as string);
               reader.onerror = () => reject(new Error('Failed to read file'));
-              reader.readAsDataURL(attachedFile.file);
+              reader.readAsDataURL(safeFile);
             });
 
             const base64Result = await base64Promise;
             data = base64Result.split(',')[1];
 
-            if (fileType === 'document' || attachedFile.file.type.startsWith('text/')) {
+            if (fileType === 'document' || safeFile.type.startsWith('text/')) {
               try {
                 const textReader = new FileReader();
                 const textPromise = new Promise<string>((resolve, reject) => {
                   textReader.onloadend = () => resolve(textReader.result as string);
                   textReader.onerror = () => reject(new Error('Failed to read text content'));
-                  textReader.readAsText(attachedFile.file);
+                  textReader.readAsText(safeFile);
                 });
                 content = await textPromise;
               } catch (textError) {
@@ -576,16 +580,16 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
             }
           } catch (error) {
 
-            toast.error(`Failed to process file: ${attachedFile.file.name}`);
+            toast.error(`Failed to process file: ${safeFile.name}`);
             throw error;
           }
 
           return {
-            name: attachedFile.file.name,
-            mimeType: attachedFile.file.type,
+            name: safeFile.name,
+            mimeType: safeFile.type,
             data,
             type: fileType,
-            size: attachedFile.file.size,
+            size: safeFile.size,
             content,
             processing_status: 'pending',
             processing_error: null,
@@ -1226,7 +1230,8 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
                     />
                     <input
                       type="file"
-                      accept="*/*"
+                      // Accept all types except dangerous ones (UI hint only, backend will check too)
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.xml,.html,.css,.js,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.tif,.ico,.heic,.heif,.mp3,.wav,.mp4,.mov,.avi,.zip,.rar,.7z,.tar,.gz,.md,.rtf,.odt,.ods,.odp,.pages,.numbers,.key,.c,.cpp,.h,.hpp,.py,.java,.rb,.go,.php,.ts,.tsx,.m,.sh,.bat,.ps1,.yml,.yaml,.ini,.log,.tex,.epub,.mobi,.azw,.ibooks,.cbz,.cbr,.mpg,.mpeg,.ogg,.oga,.ogv,.webm,.flac,.aac,.m4a,.wav,.aiff,.alac,.opus,.amr,.mid,.midi,.3gp,.3g2,.mkv,.wmv,.flv,.swf,.asf,.vob,.rm,.ram,.mov,.qt,.f4v,.f4p,.f4a,.f4b,.ts,.m2ts,.mts,.mxf,.gpx,.geojson,.kml,.kmz,.gml,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg"
                       multiple
                       ref={fileInputRef}
                       onChange={handleFileChange}

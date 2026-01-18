@@ -102,7 +102,7 @@ export const InviteMembersDialog: React.FC<InviteMembersDialogProps> = ({
 
         setSearchResults(filtered);
       } catch (error) {
-        console.error('Error searching users:', error);
+        //console.error('Error searching users:', error);
       } finally {
         setIsSearching(false);
       }
@@ -170,7 +170,7 @@ export const InviteMembersDialog: React.FC<InviteMembersDialogProps> = ({
       setSearchQuery('');
       onClose();
     } catch (error: any) {
-      console.error('Error sending invites:', error);
+      //console.error('Error sending invites:', error);
       toast.error('Failed to send invites: ' + error.message);
     } finally {
       setIsSending(false);

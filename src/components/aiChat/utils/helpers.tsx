@@ -34,6 +34,11 @@ export const getFileType = (file: File): 'image' | 'document' | 'other' => {
     'application/javascript'
   ];
 
+  const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+  // Special case: treat .ts files as TypeScript documents
+  if (fileExtension === '.ts') {
+    return 'document';
+  }
   if (imageTypes.includes(file.type)) {
     return 'image';
   } else if (documentTypes.includes(file.type)) {
@@ -65,26 +70,41 @@ export const formatFileSize = (bytes: number): string => {
 
 export const validateFile = (file: File): { isValid: boolean; error?: string } => {
   const MAX_FILE_SIZE = 25 * 1024 * 1024;
-
   if (file.size > MAX_FILE_SIZE) {
     return {
       isValid: false,
       error: `File size (${formatFileSize(file.size)}) exceeds the 25MB limit. Please choose a smaller file.`
     };
   }
-
-  const problematicExtensions = ['.exe', '.bat', '.cmd', '.scr', '.com', '.pif'];
+  // Only block truly dangerous extensions
+  const dangerousExtensions = ['.exe', '.bat', '.cmd', '.scr', '.com', '.pif', '.js', '.sh'];
   const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-
-  if (problematicExtensions.includes(fileExtension)) {
+  if (dangerousExtensions.includes(fileExtension)) {
     return {
       isValid: false,
       error: 'This file type is not supported for security reasons.'
     };
   }
-
+  // Special case: allow .ts files (TypeScript)
+  if (fileExtension === '.ts') {
+    return { isValid: true };
+  }
+  // Accept all other types (let backend decide)
   return { isValid: true };
-};
+
+// Helper to override MIME type for .ts files when sending to backend
+// Usage: if (file.name.endsWith('.ts')) file = overrideTsMimeType(file);
+}
+
+// Utility to override MIME type for .ts files
+export function overrideTsMimeType(file: File): File {
+  if (file.name.toLowerCase().endsWith('.ts') && file.type === 'video/vnd.dlna.mpeg-tts') {
+    // Create a new File object with the correct MIME type
+    return new window.File([file], file.name, { type: 'text/typescript' });
+  }
+  return file;
+}
+
 
 export const stripCodeBlocks = (content: string): string => {
   let cleanedContent = content;

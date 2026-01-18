@@ -64,11 +64,11 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
   // Debug log for visualAssets (must be inside component to access podcast prop)
   useEffect(() => {
     if (podcast && podcast.visualAssets) {
-      // eslint-disable-next-line no-console
-      console.log('PodcastPanel visualAssets:', podcast.visualAssets);
+      // eslint-disable-next-line no-//console
+      //console.log('PodcastPanel visualAssets:', podcast.visualAssets);
       podcast.visualAssets.forEach((asset, idx) => {
-        // eslint-disable-next-line no-console
-        console.log(`Asset #${idx} url:`, asset.url);
+        // eslint-disable-next-line no-//console
+        //console.log(`Asset #${idx} url:`, asset.url);
       });
     }
   }, [podcast]);
@@ -167,7 +167,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
         cleanedAudio = cleanedAudio.replace(/[\r\n\s]/g, '');
         audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
       } else {
-        console.error('No audio source found in segment:', segment);
+        //console.error('No audio source found in segment:', segment);
         toast.error('Audio not available for this segment');
         return;
       }
@@ -198,7 +198,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
       };
 
       audio.onerror = (e) => {
-        console.error('Audio playback error:', e);
+        //console.error('Audio playback error:', e);
         toast.error(`Failed to play segment ${index + 1}`);
         setIsPlaying(false);
       };
@@ -209,13 +209,13 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
           setCurrentSegment(index);
         })
         .catch(err => {
-          console.error('Play error:', err);
+          //console.error('Play error:', err);
           toast.error('Failed to play audio');
           setIsPlaying(false);
         });
 
     } catch (err) {
-      console.error('Audio creation error:', err);
+      //console.error('Audio creation error:', err);
       toast.error('Invalid audio data');
       setIsPlaying(false);
     }
@@ -259,7 +259,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
     
     // Check if duration is valid before seeking
     if (!isFinite(audioRef.current.duration) || audioRef.current.duration === 0) {
-      console.warn('Audio duration not ready yet');
+      //console.warn('Audio duration not ready yet');
       return;
     }
     
@@ -336,7 +336,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
       
       toast.success('Podcast downloaded successfully!', { id: loadingToast });
     } catch (error) {
-      console.error('Download error:', error);
+      //console.error('Download error:', error);
       toast.error('Failed to download podcast', { id: loadingToast });
     }
   };
@@ -416,7 +416,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
         .single();
       
       if (fetchError) {
-        console.error('Podcast fetch error:', fetchError);
+        //console.error('Podcast fetch error:', fetchError);
         toast.error('Podcast not found in database', { id: loadingToast });
         return;
       }
@@ -429,7 +429,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
           .eq('id', podcast.id);
         
         if (updateError) {
-          console.error('Update error:', updateError);
+          //console.error('Update error:', updateError);
           toast.error('Failed to make podcast public', { id: loadingToast });
           return;
         }
@@ -466,7 +466,7 @@ Generated with StuddyHub AI Podcasts!`;
       
       toast.success('Podcast shared to your social feed! (Made public)', { id: loadingToast });
     } catch (error) {
-      console.error('Share error:', error);
+      //console.error('Share error:', error);
       toast.error('Failed to share podcast', { id: loadingToast });
     }
   };

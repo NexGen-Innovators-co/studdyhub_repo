@@ -66,7 +66,7 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
       const result = await checkPodcastCreationEligibility(user.id);
       setEligibility(result);
     } catch (error) {
-      console.error('Error checking eligibility:', error);
+      //console.error('Error checking eligibility:', error);
     } finally {
       setCheckingEligibility(false);
     }
@@ -161,7 +161,7 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
       setTags('');
       setIsPublic(true);
     } catch (error: any) {
-      console.error('Error starting live podcast:', error);
+      //console.error('Error starting live podcast:', error);
       toast.error('Failed to start live stream: ' + error.message);
     } finally {
       setIsStarting(false);
