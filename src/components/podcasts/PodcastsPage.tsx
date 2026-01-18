@@ -332,7 +332,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
              .select('*', { count: 'exact', head: true })
              .eq('user_id', currentUser.id);
          if(error) {
-             console.error('Error fetching podcast count:', error);
+             //console.error('Error fetching podcast count:', error);
              return 0;
          }
          return count || 0;
@@ -417,7 +417,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       toast.success('Cover image updated');
     } catch (error) {
-      console.error('Error updating cover:', error);
+      //console.error('Error updating cover:', error);
       toast.error('Failed to update cover');
     } finally {
       setIsUpdatingCover(null);
@@ -450,7 +450,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         toast.success('AI cover generated and updated');
       }
     } catch (error) {
-      console.error('Error generating AI cover:', error);
+      //console.error('Error generating AI cover:', error);
       toast.error('Failed to generate AI cover');
     } finally {
       setIsGeneratingAiCover(null);
@@ -560,7 +560,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
             incrementListenCount(data.id);
           }
         } catch (err) {
-          console.error('Error fetching podcast by ID:', err);
+          //console.error('Error fetching podcast by ID:', err);
           toast.error('Podcast not found');
         }
       };

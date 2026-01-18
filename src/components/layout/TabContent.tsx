@@ -559,7 +559,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
               );
             case 'documents':
               return (
-                <div className="flex-1 p-3 sm:p-0 overflow-y-auto modern-scrollbar dark:bg-transparent" onScroll={handleDocumentsScroll}>
+                <div className="flex-1 p-3 sm:p-0 overflow-y-hidden dark:bg-transparent" onScroll={handleDocumentsScroll}>
                   <DocumentUpload {...documentsProps} />
                 </div>
               );
@@ -591,7 +591,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
       {/* PERSISTENT VIEWS: Social & Podcasts (Load once, keep alive) */}
       {shouldRenderSocial && (
-        <div className="flex-1 p-0 sm:p-0 overflow-y-hidden modern-scrollbar dark:bg-transparent" style={{ display: activeTab === 'social' ? 'block' : 'none', height: activeTab === 'social' ? '100%' : '0px' }}>
+        <div className="flex-1 p-4 sm:p-0 overflow-y-scroll  modern-scrollbar dark:bg-transparent" style={{ display: activeTab === 'social' ? 'block' : 'none', height: activeTab === 'social' ? '100%' : '0px' }}>
           <ErrorBoundary>
             <SocialFeed
               key="social-feed-component"

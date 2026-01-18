@@ -1,3 +1,4 @@
+
 // src/components/DocumentUpload.tsx
 import React, { useState, useRef, useCallback, useMemo, useEffect, lazy, Suspense } from 'react';
 import {
@@ -23,6 +24,7 @@ import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { PodcastButton } from '../dashboard/PodcastButton';
 import { Checkbox } from '../ui/checkbox';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { a } from 'node_modules/framer-motion/dist/types.d-Cjd591yU';
 
 interface DocumentUploadProps {
   documents: Document[];
@@ -145,7 +147,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-
+ // Inside DocumentUpload component
+const { 
+  documents: contextDocuments, // <--- Add this
+  loadMoreDocuments, 
+  dataPagination, 
+  folders, 
+  folderTree, 
+  appOperations, 
+  loadDataIfNeeded, 
+  dataLoading 
+} = useAppContext();
+const isLoading = dataLoading?.documents || false; 
+// Create a merged source of truth. Prefer Context, fallback to props.
+const allDocuments = contextDocuments || documents;
   const handleClosePreview = useCallback(() => {
     setPreviewOpen(false);
     const searchParams = new URLSearchParams(location.search);
@@ -189,9 +204,22 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       }
     }
   }, [location.search, documents]);
-
+// Utility to override .ts file MIME type to text/typescript (fixes browser misclassification)
+function overrideTsMimeType(file: File): File {
+  if (file && file.name.toLowerCase().endsWith('.ts') && file.type === 'video/vnd.dlna.mpeg-tts') {
+    try {
+      // Use a Blob to create a new File with the correct MIME type
+      const blob = file.slice(0, file.size, 'text/typescript');
+      return new (window.File as { new(fileBits: BlobPart[], fileName: string, options?: FilePropertyBag): File })([blob], file.name, { type: 'text/typescript', lastModified: file.lastModified });
+    } catch {
+      // If File constructor fails, fallback to original file
+      return file;
+    }
+  }
+  return file;
+}
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { loadMoreDocuments, dataPagination, folders, folderTree, appOperations, loadDataIfNeeded, dataLoading } = useAppContext();
+
 
   const handleManualRefresh = useCallback(async () => {
     if (isRefreshing || !user?.id) return;
@@ -248,7 +276,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [documentToMove, setDocumentToMove] = useState<Document | null>(null);
   const [moveFolderDialogOpen, setMoveFolderDialogOpen] = useState(false);
   const [folderToMove, setFolderToMove] = useState<DocumentFolder | null>(null);
-
+  
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   // 4. Add handler to open move dialog for documents:
   const handleMoveDocument = useCallback((document: Document) => {
     setDocumentToMove(document);
@@ -481,7 +510,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   // Document statistics
   const documentStats = useMemo(() => {
     const stats = {
-      all: documents.length,
+      all: allDocuments.length,
       image: 0,
       video: 0,
       audio: 0,
@@ -496,27 +525,26 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       failed: 0
     };
 
-    documents.forEach(doc => {
-      const category = getFileCategory(doc.file_type);
-      stats[category as keyof typeof stats]++;
-      stats[doc.processing_status as keyof typeof stats]++;
-    });
+    allDocuments.forEach(doc => { 
+    const category = getFileCategory(doc.file_type);
+    stats[category as keyof typeof stats]++;
+    stats[doc.processing_status as keyof typeof stats]++;
+  });
 
     return stats;
-  }, [documents]);
+  }, [allDocuments]);
 
   // Filter and sort documents
   const filteredAndSortedDocuments = useMemo(() => {
-    let filtered = documents.filter(doc => {
-      const matchesSearch = doc.title.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
-        doc.content_extracted?.toLowerCase().includes(effectiveSearch.toLowerCase());
+     let filtered = allDocuments.filter(doc => {
+    const matchesSearch = doc.title.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
+      doc.content_extracted?.toLowerCase().includes(effectiveSearch.toLowerCase());
 
-      const matchesCategory = selectedCategory === 'all' || getFileCategory(doc.file_type) === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || getFileCategory(doc.file_type) === selectedCategory;
+    const matchesStatus = selectedStatus === 'all' || doc.processing_status === selectedStatus;
 
-      const matchesStatus = selectedStatus === 'all' || doc.processing_status === selectedStatus;
-
-      return matchesSearch && matchesCategory && matchesStatus;
-    });
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
 
     // Sort documents
     filtered.sort((a, b) => {
@@ -550,9 +578,11 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     });
 
     return filtered;
-  }, [documents, effectiveSearch, selectedCategory, selectedStatus, sortBy, sortOrder]);
+  }, [allDocuments, effectiveSearch, selectedCategory, selectedStatus, sortBy, sortOrder]);
 
   const handleFileSelection = useCallback((file: File) => {
+    // Fix .ts files being misclassified as video
+    file = overrideTsMimeType(file);
     const MAX_FILE_SIZE_MB = 200;
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
       toast.error(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`);
@@ -561,23 +591,66 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       return;
     }
 
-    const allowedTypes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml', 'image/tiff', 'image/tif', 'image/ico', 'image/heic', 'image/heif',
-      'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/rtf', 'application/vnd.oasis.opendocument.text', 'application/vnd.oasis.opendocument.spreadsheet', 'application/vnd.oasis.opendocument.presentation',
-      'text/plain', 'text/csv', 'text/markdown', 'text/html', 'text/xml', 'application/json', 'application/xml',
-      'text/javascript', 'application/javascript', 'text/typescript', 'application/typescript', 'text/css', 'text/x-python', 'text/x-java', 'text/x-c', 'text/x-cpp', 'text/x-csharp', 'text/x-php', 'text/x-ruby', 'text/x-go', 'text/x-rust', 'text/x-sql',
-      'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed', 'application/x-tar', 'application/gzip',
-      'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/m4a', 'audio/webm', 'audio/flac',
-      'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/webm', 'video/mkv'
+    // Block only clearly unsafe types (executables, scripts, etc.)
+    const forbiddenExtensions = [
+      '.exe', '.bat', '.cmd', '.sh', '.msi', '.apk', '.com', '.scr', '.pif', '.cpl', '.jar', '.vb', '.vbs', '.wsf', '.ps1', '.gadget', '.reg', '.dll', '.sys', '.drv', '.asp', '.aspx', '.cgi', '.pl', '.php', '.pyc', '.pyo', '.so', '.dylib', '.bin', '.run', '.app', '.deb', '.rpm', '.pkg', '.service', '.lnk', '.inf', '.hta', '.msc', '.msp', '.mst', '.ocx', '.sct', '.shb', '.shs', '.url', '.js', '.jse', '.ws', '.wsf', '.wsh', '.hta', '.msu', '.msh', '.msh1', '.msh2', '.mshxml', '.msh1xml', '.msh2xml', '.scf', '.lnk', '.iso', '.img', '.vhd', '.vhdx', '.vmdk', '.ova', '.ovf', '.vdi', '.vbox', '.qcow', '.qcow2', '.vhd', '.vhdx', '.vmdk', '.ova', '.ovf', '.vdi', '.vbox', '.qcow', '.qcow2'
     ];
-
-    if (!allowedTypes.includes(file.type)) {
-      toast.error('Unsupported file type. Please check the allowed file types.');
+    const fileName = file.name.toLowerCase();
+    if (forbiddenExtensions.some(ext => fileName.endsWith(ext))) {
+      toast.error('This file type is not allowed for security reasons.');
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
+    // Optionally, block files with MIME types that are known to be dangerous
+    const forbiddenMimeTypes = [
+      'application/x-msdownload',
+      'application/x-msdos-program',
+      'application/x-msinstaller',
+      'application/x-executable',
+      'application/x-sh',
+      'application/x-bat',
+      'application/x-cmd',
+      'application/x-dosexec',
+      'application/x-shellscript',
+      'application/x-elf',
+      'application/x-dosexec',
+      'application/x-msi',
+      'application/x-ms-shortcut',
+      'application/x-msdownload',
+      'application/x-msdos-program',
+      'application/x-msinstaller',
+      'application/x-executable',
+      'application/x-sh',
+      'application/x-bat',
+      'application/x-cmd',
+      'application/x-dosexec',
+      'application/x-shellscript',
+      'application/x-elf',
+      'application/x-msi',
+      'application/x-ms-shortcut',
+      'application/x-msdownload',
+      'application/x-msdos-program',
+      'application/x-msinstaller',
+      'application/x-executable',
+      'application/x-sh',
+      'application/x-bat',
+      'application/x-cmd',
+      'application/x-dosexec',
+      'application/x-shellscript',
+      'application/x-elf',
+      'application/x-msi',
+      'application/x-ms-shortcut',
+    ];
+    if (forbiddenMimeTypes.includes(file.type)) {
+      toast.error('This file type is not allowed for security reasons.');
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // Allow all other files; backend will handle unsupported types
     setSelectedFile(file);
   }, []);
 
@@ -934,42 +1007,40 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
   };
 
-  // OBSERVER
-  const observer = useRef<IntersectionObserver | null>(null);
-  const lastDocumentElementRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (dataLoading) {
-        return;
+  // Replace your existing observer logic with this:
+const observer = useRef<IntersectionObserver | null>(null);
+const lastDocumentElementRef = useCallback(
+  (node: HTMLDivElement | null) => {
+    // FIX: Check the boolean 'isLoading', not the object 'dataLoading'
+    if (isLoading) return; 
+
+    if (observer.current) {
+      observer.current.disconnect();
+    }
+
+    observer.current = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          dataPagination.documents.hasMore
+        ) {
+          // console.log('Load more triggered'); 
+          loadMoreDocuments();
+        }
+      },
+      { 
+        root: scrollContainerRef.current,
+        threshold: 0.1,
+        rootMargin: "100px"
       }
+    );
 
-      if (observer.current) {
-        observer.current.disconnect();
-      }
-
-      observer.current = new IntersectionObserver(
-        (entries) => {
-          if (
-            entries[0].isIntersecting &&
-            dataPagination.documents.hasMore &&
-            !dataLoading
-          ) {
-            loadMoreDocuments();
-          }
-        },
-        { threshold: 0.1 }
-      );
-
-      if (node) {
-        observer.current.observe(node);
-      }
-    },
-    [
-      loadMoreDocuments,
-      dataPagination.documents.hasMore,
-      dataLoading,
-    ]
-  );
-
+    if (node) {
+      observer.current.observe(node);
+    }
+  },
+  [loadMoreDocuments, dataPagination.documents.hasMore, isLoading] // FIX: Dependency
+);
   // Calculate document counts per folder
   const documentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1075,21 +1146,21 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
 
     // Check for duplicates
-    const documentIds = documents.map(doc => doc.id);
+    const documentIds = allDocuments.map(doc => doc.id);
     const uniqueIds = new Set(documentIds);
 
     if (documentIds.length !== uniqueIds.size) {
       // Remove duplicates if found
-      const uniqueDocuments = documents.filter((doc, index) =>
-        documents.findIndex(d => d.id === doc.id) === index
+      const uniqueDocuments = allDocuments.filter((doc, index) =>
+        allDocuments.findIndex(d => d.id === doc.id) === index
       );
 
-      if (uniqueDocuments.length !== documents.length) {
+      if (uniqueDocuments.length !== allDocuments.length) {
         // You might want to update the parent state here
         // or handle this in your data loading logic
       }
     }
-  }, [documents]);
+  }, [allDocuments]);
 
   // Filter documents by selected folder with deduplication
   const filteredDocumentsByFolder = useMemo(() => {
@@ -1126,8 +1197,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   }, [selectedFolderId, filteredAndSortedDocuments, folders]);
 
   return (
-    <div className="min-h-screen p-4 md:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-[50vh] max-w-7xl max-h-[90vh] overflow-auto mx-auto p-4 md:p-6 lg:p-8 shadow-sm">
         {/* Enhanced Header */}
         <div className="text-center mb-8 md:mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-2 mb-4 bg-blue-100 dark:bg-blue-500/20 rounded-full text-blue-700 dark:text-blue-300 text-sm font-medium">
@@ -1160,52 +1230,51 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
         {/* Main Content Area */}
         <div className="grid grid-cols-12 gap-6">
-          {/* Left Sidebar - Folder Tree */}
+          {/* Left Sidebar - Folder Tree (Sticky) */}
           <div className="col-span-12 lg:col-span-3">
-            <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm sticky top-6">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-semibold">Folders</CardTitle>
-                  <SubscriptionGuard
-                    feature="Folders"
-                    limitFeature="maxFolders"
-                    currentCount={folders.length}
-                  >
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCreateFolder(null)}
-                      className="h-8 w-8 p-0"
+            <div className="lg:sticky lg:top-6 h-fit">
+              <Card className="border-0 shadow-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-semibold">Folders</CardTitle>
+                    <SubscriptionGuard
+                      feature="Folders"
+                      limitFeature="maxFolders"
+                      currentCount={folders.length}
                     >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </SubscriptionGuard>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Suspense fallback={<FolderTreeSkeleton />}>
-                  <LazyFolderTree
-                    folderTree={folderTree}
-                    selectedFolderId={selectedFolderId}
-                    onFolderSelect={setSelectedFolderId}
-                    onCreateFolder={handleCreateFolder}
-                    onRenameFolder={handleRenameFolder}
-                    onDeleteFolder={handleDeleteFolder}
-                    onMoveFolder={handleMoveFolder}
-                    expandedFolders={expandedFolders}
-                    onToggleExpand={handleToggleExpand}
-                    documentCounts={documentCounts}
-                  />
-                </Suspense>
-              </CardContent>
-            </Card>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCreateFolder(null)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </SubscriptionGuard>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Suspense fallback={<FolderTreeSkeleton />}>
+                    <LazyFolderTree
+                      folderTree={folderTree}
+                      selectedFolderId={selectedFolderId}
+                      onFolderSelect={setSelectedFolderId}
+                      onCreateFolder={handleCreateFolder}
+                      onRenameFolder={handleRenameFolder}
+                      onDeleteFolder={handleDeleteFolder}
+                      onMoveFolder={handleMoveFolder}
+                      expandedFolders={expandedFolders}
+                      onToggleExpand={handleToggleExpand}
+                      documentCounts={documentCounts}
+                    />
+                  </Suspense>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
           {/* Main Content - Documents */}
-          <div className="col-span-12 lg:col-span-9">
-            {/* Enhanced Upload Area */}
-
-
+          <div className="col-span-12 lg:col-span-9 flex flex-col ">
             {/* Enhanced Upload Area - SubscriptionGuard wraps Card */}
             <SubscriptionGuard
               feature="Documents"
@@ -1511,7 +1580,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             </div>
 
             {/* Documents Display */}
-            <div className="space-y-6">
+            <div ref={scrollContainerRef} className="space-y-6 max-h-[80vh] overflow-auto pb-8">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-200">
                   {selectedFolderId
@@ -1520,7 +1589,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 </h2>
               </div>
 
-              {filteredDocumentsByFolder.length === 0 && !dataLoading ? (
+              {/* Initial loading skeletons */}
+              {dataLoading && filteredDocumentsByFolder.length === 0 ? (
+                viewMode === 'grid' ? <DocumentGridSkeleton /> : <DocumentListSkeleton />
+              ) : filteredDocumentsByFolder.length === 0 ? (
                 <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
                   <CardContent className="p-12 text-center">
                     <div className="w-24 h-24 mx-auto mb-6 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
@@ -1576,10 +1648,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   >
                     {filteredDocumentsByFolder.map((doc, idx) => {
                       const isLast = idx === filteredDocumentsByFolder.length - 1;
-
                       // Create a unique key that includes the index to prevent duplicates
                       const uniqueKey = `${doc.id}-${idx}`;
-
                       return (
                         <Card
                           key={uniqueKey}
@@ -1852,6 +1922,36 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   </div>
                 </Suspense>
               )}
+            {/* Loading More / No More Indicator */}
+            {(dataPagination?.documents?.hasMore || isLoading) && (
+              <div
+                key="loading-indicator"
+                className={`w-full flex flex-col justify-center items-center py-8 ${viewMode === 'grid' ? 'col-span-full' : ''}`}
+              >
+                {isLoading ? ( // FIX: Use isLoading boolean
+                  /* CASE 1: Actually Loading - Show Spinner */
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="font-medium">Fetching more documents...</span>
+                  </div>
+                ) : (
+                  /* CASE 2: Idle but has more - Show Scroll Hint or Manual Button */
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="text-sm text-slate-400 dark:text-gray-500">
+                      Scroll to load more
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => loadMoreDocuments()}
+                      className="text-xs text-blue-500 hover:text-blue-600"
+                    >
+                      Click here if not loading
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
             </div>
           </div>
         </div>
@@ -2106,36 +2206,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             </div>
           </Suspense>
         )}
-        {/* Loading More / No More Indicator */}
-        {(dataPagination?.documents?.hasMore || dataLoading) && (
-          <div
-            key="loading-indicator"
-            className={`w-full flex justify-center items-center py-12 ${viewMode === 'grid' ? 'col-span-full' : ''
-              }`}
-            style={{ minHeight: '120px' }}
-          >
-            {dataPagination?.documents?.hasMore && !dataLoading ? (
-              <div className="flex items-center gap-3 text-slate-600 dark:text-gray-400">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span>Loading more documents...</span>
-              </div>
-            ) : (
-              <span className="text-sm text-slate-400 dark:text-gray-500">
-                Scroll to load more
-              </span>
-            )}
-          </div>
-        )}
-
-        {!dataPagination?.documents?.hasMore && filteredDocumentsByFolder.length > 0 && (
-          <div
-            key="no-more-indicator"
-            className="flex justify-center items-center py-4 text-slate-500 dark:text-slate-400 col-span-full"
-          >
-            No more documents to load.
-          </div>
-        )}
+        
       </div>
-    </div>
   );
 };

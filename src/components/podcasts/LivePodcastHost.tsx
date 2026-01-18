@@ -139,7 +139,7 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
       if (error) throw error;
       setPodcast(data);
     } catch (error) {
-      console.error('Error loading podcast:', error);
+      //console.error('Error loading podcast:', error);
       toast.error('Failed to load podcast');
     }
   };
@@ -182,7 +182,7 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
         setListeners([]);
       }
     } catch (error) {
-      console.error('Error loading listeners:', error);
+      //console.error('Error loading listeners:', error);
     }
   };
 
@@ -204,7 +204,7 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
           });
 
         if (uploadError) {
-          console.error('Error uploading audio:', uploadError);
+          //console.error('Error uploading audio:', uploadError);
           toast.error('Failed to save audio recording');
           toast.dismiss('ending-stream');
         } else {
@@ -247,7 +247,7 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
               .single();
 
             if (checkError || !existingPodcast) {
-              console.error('Podcast not found before update:', checkError, existingPodcast);
+              //console.error('Podcast not found before update:', checkError, existingPodcast);
               throw new Error('Podcast not found in database');
             }
 
@@ -259,7 +259,7 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
               .select();
 
             if (updateError) {
-              console.error('Error updating podcast:', updateError);
+              //console.error('Error updating podcast:', updateError);
               throw updateError;
             }
 
@@ -271,7 +271,7 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
               .single();
 
             if (!verifyPodcast || verifyPodcast.is_live !== false) {
-              console.error('Update failed - podcast still live:', verifyPodcast);
+              //console.error('Update failed - podcast still live:', verifyPodcast);
               throw new Error('Failed to update podcast status');
             }
 
@@ -282,7 +282,7 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
               duration: 5000
             });
           } catch (transcriptionError: any) {
-            console.error('Transcription error:', transcriptionError);
+            //console.error('Transcription error:', transcriptionError);
             
             // Save without transcript if it fails
             await supabase
@@ -335,7 +335,7 @@ export const LivePodcastHost: React.FC<LivePodcastHostProps> = ({
       // Close the modal and refresh
       onEndStream();
     } catch (error: any) {
-      console.error('Error ending stream:', error);
+      //console.error('Error ending stream:', error);
       toast.dismiss('ending-stream');
       toast.dismiss('transcribing');
       toast.error('Failed to end stream: ' + error.message);

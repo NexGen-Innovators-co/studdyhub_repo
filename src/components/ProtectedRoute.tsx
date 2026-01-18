@@ -47,7 +47,7 @@ export const ProtectedRoute = ({ children, resourceType }: ProtectedRouteProps) 
                     }, 1000);
                 }
             } catch (error) {
-                //console.error('Access verification failed:', error);
+                ////console.error('Access verification failed:', error);
                 setHasAccess(false);
                 navigate('/dashboard', { replace: true });
             } finally {
