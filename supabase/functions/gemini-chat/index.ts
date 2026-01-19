@@ -89,6 +89,37 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
   // Ensure array
   const actionList = Array.isArray(actionsRaw) ? actionsRaw : (actionsRaw ? [actionsRaw] : []);
 
+  // Detect if user confirmed but no ACTION marker is present (for debugging)
+  if (aiResponse.match(/(yes|ok|sure|do it|please proceed|go ahead)/i) && actionList.length === 0) {
+    console.warn('[ActionExecution][WARNING] User confirmed an action but no ACTION: marker was found in the AI response. The requested operation will NOT be executed. Ensure the AI outputs the correct ACTION: marker after confirmation.');
+
+    // Backend fallback: re-prompt the AI for the ACTION: marker and retry ONCE
+    // Only do this if not already a retry (avoid infinite loop)
+    if (!aiResponse.includes('[RETRY_ACTION_MARKER]')) {
+      const promptEngine = new EnhancedPromptEngine();
+      const fallbackPrompt = `You must output the correct ACTION: marker for the confirmed operation. The user just confirmed an action (e.g., posting to the social feed), but your last reply did NOT include the required ACTION: marker. Please reply with ONLY the correct ACTION: marker for the confirmed action, nothing else.\n\n[RETRY_ACTION_MARKER]`;
+      // Call the LLM again with the fallback prompt and the last user/AI turns
+      // (Assume agenticCore.generateGeminiCompletion is available and takes a prompt and context)
+      try {
+        const retryResponse = await agenticCore.generateGeminiCompletion({
+          prompt: fallbackPrompt,
+          userId,
+          sessionId,
+          contextOverride: aiResponse
+        });
+        // Try to execute actions from the retry response
+        const retryResult = await executeAIActions(userId, sessionId, retryResponse);
+        // Merge executed actions and return
+        return {
+          executedActions: retryResult.executedActions,
+          modifiedResponse: retryResult.modifiedResponse
+        };
+      } catch (err) {
+        console.error('[ActionExecution][Fallback] Failed to re-prompt for ACTION marker:', err);
+      }
+    }
+  }
+
 
   // 2. Execute parsed action if found
   if (actionList.length > 0) {
@@ -109,7 +140,8 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
     // IMPORTANT: Verify user approval before executing actions automatically.
     // Currently, we'll mark them as 'proposed' instead of executing them immediately
     // to solve the issue of unapproved automatic actions.
-    const AUTO_EXECUTE_ENABLED = true;
+    // Only execute actions after explicit user confirmation.
+      const AUTO_EXECUTE_ENABLED = true;
 
     if (AUTO_EXECUTE_ENABLED) {
         for (const action of actionList) {
@@ -118,6 +150,78 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
         console.log(`[ActionExecution] Executing action: ${action.action}`);
 
         switch (action.action) {
+
+                    case 'CREATE_RICH_POST':
+                      console.log(`[ActionExecution] Creating rich post`);
+                      // Parse media files if provided as JSON string
+                      let mediaFiles = [];
+                      try {
+                         if(action.params.media_json) mediaFiles = JSON.parse(action.params.media_json);
+                      } catch(e) { console.error("Error parsing media JSON", e); }
+
+                      result = await actionsService.createRichSocialPost(userId, {
+                        content: action.params.content,
+                        privacy: action.params.privacy || 'public',
+                        groupId: action.params.group_id,
+                        mediaFiles: mediaFiles
+                      });
+                      break;
+
+                    case 'ENGAGE_SOCIAL':
+                      console.log(`[ActionExecution] Social engagement`);
+                      result = await actionsService.engageSocial(userId, {
+                        action: action.params.action,
+                        targetId: action.params.target_id,
+                        content: action.params.content
+                      });
+                      break;
+
+                    case 'GENERATE_PODCAST':
+                      console.log(`[ActionExecution] Generating podcast`);
+                      // Parse source IDs (comma separated or JSON)
+                      let sourceIds = [];
+                      try {
+                        sourceIds = action.params.source_ids.includes('[') 
+                            ? JSON.parse(action.params.source_ids) 
+                            : action.params.source_ids.split(',');
+                      } catch(e) { sourceIds = []; }
+
+                      result = await actionsService.generatePodcast(userId, {
+                        title: action.params.title,
+                        sourceIds: sourceIds,
+                        style: action.params.style || 'casual'
+                      });
+                      break;
+
+                    case 'CREATE_GROUP':
+                      console.log(`[ActionExecution] Creating group`);
+                      result = await actionsService.createStudyGroup(userId, {
+                        name: action.params.name,
+                        description: action.params.description,
+                        category: action.params.category
+                      });
+                      break;
+
+                    case 'SCHEDULE_GROUP_EVENT':
+                      console.log(`[ActionExecution] Scheduling event`);
+                      result = await actionsService.scheduleGroupEvent(userId, {
+                        groupId: action.params.group_id,
+                        title: action.params.title,
+                        startTime: action.params.start_time,
+                        endTime: action.params.end_time
+                      });
+                      break;
+
+                    case 'CREATE_COURSE':
+                      // Only admins can create courses. Users are not allowed.
+                      console.warn('[ActionExecution] CREATE_COURSE action attempted by non-admin user. Skipping execution.');
+                      result = { success: false, error: 'Only admins can create courses. You can view available courses, but not create them.' };
+                      break;
+
+                    case 'GET_REFERRAL_CODE':
+                       result = await actionsService.getReferralCode(userId);
+                       if(result.success) modifiedResponse += `\n\n**Your Referral Code:** ${result.code}`;
+                       break;
             case 'GENERATE_IMAGE':
                 console.log(`[ActionExecution] Generating image: ${action.params.prompt}`);
                 result = await actionsService.generateImage(userId, action.params.prompt);
@@ -299,14 +403,14 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
           result = await actionsService.awardAchievement(userId, action.params.badgeName);
           break;
 
-        case 'CREATE_POST':
-          console.log(`[ActionExecution] Creating social post`);
-          result = await actionsService.createSocialPost(userId, {
-            content: action.params.content,
-            privacy: action.params.privacy,
-            group_name: action.params.group_name
-          });
-          break;
+        // case 'CREATE_RICH_POST':
+        //   console.log(`[ActionExecution] Creating social post`);
+        //   result = await actionsService.createSocialPost(userId, {
+        //     content: action.params.content,
+        //     privacy: action.params.privacy,
+        //     group_name: action.params.group_name
+        //   });
+        //   break;
 
         case 'UPDATE_USER_MEMORY':
           console.log(`[ActionExecution] Updating user memory`);
@@ -1474,23 +1578,45 @@ async function extractUserFacts(userMessage: string, aiResponse: string, userId:
     }
   ];
 
-  for (const { pattern, type, key } of preferencePatterns) {
-    const matches = userMessage.matchAll(pattern);
-    for (const match of matches) {
-      if (match[2]) {
-        const value = match[2].trim();
-        if (value.length > 3 && value.length < 100) {
+  // Helper to extract facts from any text (user or AI)
+  function extractFromText(text: string, source: string) {
+    for (const { pattern, type, key } of preferencePatterns) {
+      const matches = text.matchAll(pattern);
+      for (const match of matches) {
+        if (match[2]) {
+          const value = match[2].trim();
+          if (value.length > 3 && value.length < 100) {
+            facts.push({
+              fact_type: type,
+              fact_key: key,
+              fact_value: value,
+              confidence_score: 0.8,
+              source_session_id: sessionId
+            });
+            console.log(`[extractUserFacts] Matched fact from ${source}: type=${type}, key=${key}, value=${value}`);
+          }
+        }
+      }
+    }
+    for (const pattern of topicPatterns) {
+      const matches = text.match(pattern) || [];
+      for (const match of matches) {
+        if (match && !facts.some((f) => f.fact_value.toLowerCase() === match.toLowerCase())) {
           facts.push({
-            fact_type: type,
-            fact_key: key,
-            fact_value: value,
-            confidence_score: 0.8,
+            fact_type: 'interest',
+            fact_key: 'discussed_topics',
+            fact_value: match.toLowerCase(),
+            confidence_score: 0.7,
             source_session_id: sessionId
           });
+          console.log(`[extractUserFacts] Matched topic from ${source}: ${match.toLowerCase()}`);
         }
       }
     }
   }
+
+  extractFromText(userMessage, 'user');
+  extractFromText(aiResponse, 'ai');
 
   const topicPatterns = [
     /(genetics|biology|aviation|flight|birds|science|math|history|literature|programming|technology)/gi
@@ -1507,6 +1633,33 @@ async function extractUserFacts(userMessage: string, aiResponse: string, userId:
           confidence_score: 0.7,
           source_session_id: sessionId
         });
+        console.log(`[extractUserFacts] Matched topic: ${match.toLowerCase()}`);
+      }
+    }
+  }
+
+  console.log(`[extractUserFacts] Extracted facts:`, facts);
+
+  // If the AI response contains a section like "Here are the key 'learning facts' I know about you:", try to parse bullet points as facts
+  const aiFactSectionMatch = aiResponse.match(/Here are the key ["']?learning facts["']?[^\n]*\n([\s\S]+?)(?:\n\n|$)/i);
+  if (aiFactSectionMatch) {
+    const lines = aiFactSectionMatch[1].split(/\n|\*/).map(l => l.trim()).filter(l => l.length > 0);
+    for (const line of lines) {
+      // Try to extract a key-value pair from the line
+      const colonIdx = line.indexOf(':');
+      if (colonIdx > 0) {
+        const key = line.slice(0, colonIdx).replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '').toLowerCase();
+        const value = line.slice(colonIdx + 1).trim();
+        if (value.length > 3 && value.length < 200) {
+          facts.push({
+            fact_type: 'ai_inferred',
+            fact_key: key,
+            fact_value: value,
+            confidence_score: 0.6,
+            source_session_id: sessionId
+          });
+          console.log(`[extractUserFacts] Inferred from AI summary: key=${key}, value=${value}`);
+        }
       }
     }
   }

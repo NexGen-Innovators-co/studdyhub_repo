@@ -7,6 +7,8 @@ import xml2js from 'https://esm.sh/xml2js@0.5.0';
 import Papa from 'https://esm.sh/papaparse@5.4.1';
 import cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.min.js';
+
+import workerCode from 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.js?raw';
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -881,57 +883,64 @@ ${chunk}`;
 }
 /**
  * Enhanced PDF processing with PDF.js for complete text extraction
- */ async function extractPdfTextWithPdfjs(buffer) {
+ */async function extractPdfTextWithPdfjs(buffer: Uint8Array) {
   try {
-    // Set up PDF.js worker URL
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
-    const loadingTask = pdfjsLib.getDocument({
-      data: buffer
-    });
+    // FIX: Use CDN worker URL directly instead of fetching and creating blob
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+
+    const loadingTask = pdfjsLib.getDocument({ data: buffer });
     const pdf = await loadingTask.promise;
     let fullText = '';
     const totalPages = pdf.numPages;
+    
     console.log(`Processing PDF with ${totalPages} pages using PDF.js`);
+
+    if (totalPages > 500) {
+      console.warn(`Very large PDF (${totalPages} pages). Processing may be slow.`);
+    }
+
     // Process each page
-    for(let pageNum = 1; pageNum <= totalPages; pageNum++){
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
       try {
         const page = await pdf.getPage(pageNum);
         const textContent = await page.getTextContent();
-        // Extract text items and maintain positioning
         let pageText = `\n--- Page ${pageNum} ---\n`;
+
         // Sort items by position to maintain reading order
-        const items = textContent.items.sort((a, b)=>{
-          // Sort by Y position (top to bottom), then X position (left to right)
+        const items = textContent.items.sort((a: any, b: any) => {
           const yDiff = Math.abs(a.transform[5] - b.transform[5]);
           if (yDiff > 5) {
             return b.transform[5] - a.transform[5]; // Higher Y first
           }
           return a.transform[4] - b.transform[4]; // Left to right
         });
-        let currentY = null;
-        for (const item of items){
-          const y = Math.round(item.transform[5]);
-          // Add line break for new line
-          if (currentY !== null && Math.abs(currentY - y) > 5) {
-            pageText += '\n';
+
+        let currentY: number | null = null;
+        for (const item of items) {
+          if ('str' in item && 'transform' in item) {
+            const y = Math.round(item.transform[5]);
+            if (currentY !== null && Math.abs(currentY - y) > 5) {
+              pageText += '\n';
+            }
+            pageText += item.str + ' ';
+            currentY = y;
           }
-          pageText += item.str + ' ';
-          currentY = y;
         }
+
         fullText += pageText + '\n';
-        // Clean up page resources
         page.cleanup();
-      } catch (pageError) {
+      } catch (pageError: any) {
         console.error(`Error processing page ${pageNum}:`, pageError);
-        fullText += `\n[Error processing page ${pageNum}: ${pageError.message}]\n`;
+        fullText += `\n[Error processing page ${pageNum}: ${pageError?.message || String(pageError)}]\n`;
       }
     }
-    // Clean up PDF resources
+
     pdf.cleanup();
     return fullText.trim();
-  } catch (error) {
+  } catch (error: any) {
     console.error('PDF.js extraction failed:', error);
-    throw new Error(`PDF.js extraction failed: ${error.message}`);
+    throw new Error(`PDF.js extraction failed: ${error?.message || String(error)}`);
   }
 }
 /**
@@ -1165,21 +1174,34 @@ ${chunk}`;
 }
 /**
  * Enhanced file processing with multiple library attempts
- */ async function processWithMultipleLibraries(file, geminiApiKey) {
-  const buffer = Uint8Array.from(atob(file.data), (c)=>c.charCodeAt(0));
+ */ 
+async function processWithMultipleLibraries(file: any, geminiApiKey: string) {
+  const buffer = Uint8Array.from(atob(file.data), (c) => c.charCodeAt(0));
   let extractedText = '';
   let processingMethod = 'unknown';
+
   try {
-    switch(file.mimeType){
+    switch (file.mimeType) {
       case 'application/pdf':
         try {
-          // Try PDF.js first for most complete extraction
+          // Try PDF.js first
           extractedText = await extractPdfTextWithPdfjs(buffer);
           processingMethod = 'pdfjs';
           console.log(`PDF processed with PDF.js: ${extractedText.length} characters`);
+          
+          // If PDF.js extraction seems too short, also try Gemini
+          if (extractedText.length < file.size * 0.5 && file.size > 50000) {
+            console.log('PDF.js extraction seems incomplete, augmenting with Gemini API...');
+            await processDocumentWithExtractionAndChunking(file, geminiApiKey);
+            
+            // If Gemini got more content, use it; otherwise keep PDF.js result
+            if (file.content && file.content.length > extractedText.length) {
+              console.log(`Gemini extraction got more content: ${file.content.length} vs ${extractedText.length}`);
+              return; // Use Gemini's result
+            }
+          }
         } catch (pdfError) {
-          console.log('PDF.js failed, falling back to Gemini API');
-          // Fallback to Gemini API
+          console.log('PDF.js failed, falling back to Gemini API:', pdfError);
           return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
         }
         break;
@@ -1289,26 +1311,10 @@ ${chunk}`;
         }
         break;
       default:
-        // For other file types, use existing processing
         return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
     }
-    // If extraction was successful but content is very large, chunk it for processing
-    if (extractedText.length > ENHANCED_PROCESSING_CONFIG.INTELLIGENT_CHUNK_SIZE) {
-      console.log(`Large extracted content (${extractedText.length} chars), applying intelligent chunking`);
-      const chunks = createIntelligentChunks(extractedText, file.type);
-      const prompt = `${EXTRACTION_PROMPTS[file.type] || EXTRACTION_PROMPTS.document}
 
-CONTENT WAS EXTRACTED USING: ${processingMethod}
-PROCESSING INSTRUCTIONS:
-- This content was already extracted using ${processingMethod}
-- Focus on organizing, structuring, and enhancing the extracted content
-- Preserve all data and information completely
-- Improve formatting and readability where possible
-- Maintain all relationships and context`;
-      file.content = await processChunkedContent(chunks, prompt, geminiApiKey);
-    } else {
-      file.content = extractedText;
-    }
+    file.content = extractedText;
     file.processing_metadata = {
       ...file.processing_metadata,
       extractionMethod: processingMethod,
@@ -1316,10 +1322,10 @@ PROCESSING INSTRUCTIONS:
       contentLength: file.content.length,
       originalContentLength: extractedText.length
     };
+
     console.log(`Successfully processed ${file.name} using ${processingMethod}: ${file.content.length} characters`);
-  } catch (error) {
+  } catch (error: any) {
     console.error(`All library processing failed for ${file.name}:`, error);
-    // Final fallback to Gemini API
     return await processDocumentWithExtractionAndChunking(file, geminiApiKey);
   }
 }
@@ -1410,37 +1416,124 @@ CSV CONTENT TO PROCESS:`;
   }
 }
 /**
- * Process documents with Gemini extraction and intelligent chunking
- */ async function processDocumentWithExtractionAndChunking(file, geminiApiKey) {
+ * Enhanced document processing with progressive extraction for large files
+ */
+async function processDocumentWithExtractionAndChunking(file: any, geminiApiKey: string) {
   const prompt = EXTRACTION_PROMPTS[file.type] || EXTRACTION_PROMPTS.document;
-  // First attempt: try to process the entire file
+  
+  // First attempt - full extraction
   const contents = [
-    {
-      role: 'user',
+    { 
+      role: 'user', 
       parts: [
-        {
-          text: prompt
-        },
-        {
-          inlineData: {
-            mimeType: file.mimeType,
-            data: file.data
-          }
-        }
-      ]
+        { text: prompt }, 
+        { inlineData: { mimeType: file.mimeType, data: file.data } }
+      ] 
     }
   ];
+
   const response = await callEnhancedGeminiAPI(contents, geminiApiKey);
-  if (response.success && response.content) {
-    // Check if we got complete extraction or if it was truncated
-    if (response.content.includes('[TRUNCATED') || response.content.length < file.size * 0.001) {
-      console.log(`Initial extraction may be incomplete for ${file.name}, attempting advanced processing...`);
-    }
-    file.content = response.content;
-  } else {
+  
+  if (!response.success || !response.content) {
     throw new Error(response.error || 'Failed to extract document content');
   }
+
+  let extractedContent = response.content;
+  const estimatedTotalChars = file.size * 2; // Rough estimate
+  
+  // Check if extraction seems incomplete
+  const isIncomplete = 
+    extractedContent.includes('[TRUNCATED') ||
+    extractedContent.includes('...') && extractedContent.length < estimatedTotalChars * 0.3 ||
+    extractedContent.endsWith('...') ||
+    extractedContent.length < 5000 && file.size > 100000;
+
+  if (isIncomplete) {
+    console.log(`Initial extraction incomplete for ${file.name}. Attempting continuation extraction...`);
+    
+    // Try up to 3 continuation passes
+    let attemptCount = 0;
+    const maxAttempts = 3;
+    
+    while (attemptCount < maxAttempts && extractedContent.length < estimatedTotalChars * 0.7) {
+      attemptCount++;
+      
+      // Get last 500 chars to understand where we stopped
+      const lastChars = extractedContent.slice(-500);
+      
+      const continuationPrompt = `${prompt}
+
+CONTINUATION EXTRACTION - ATTEMPT ${attemptCount}:
+The previous extraction stopped here:
+"""
+${lastChars}
+"""
+
+CRITICAL INSTRUCTIONS:
+1. Continue extracting from EXACTLY where the previous extraction ended
+2. Do NOT repeat content from the previous extraction
+3. Extract ALL remaining content until the absolute end of the document
+4. If you reach the end, explicitly state: [END OF DOCUMENT]
+5. Maintain the same formatting and structure as before
+
+Continue the extraction now:`;
+
+      const continuationContents = [
+        { 
+          role: 'user', 
+          parts: [
+            { text: continuationPrompt }, 
+            { inlineData: { mimeType: file.mimeType, data: file.data } }
+          ] 
+        }
+      ];
+
+      try {
+        const continuationResponse = await callEnhancedGeminiAPI(continuationContents, geminiApiKey);
+        
+        if (continuationResponse.success && continuationResponse.content) {
+          const newContent = continuationResponse.content;
+          
+          // Check if we got meaningful new content
+          if (newContent.length < 100 || newContent.includes('[END OF DOCUMENT]')) {
+            console.log(`Reached end of document at attempt ${attemptCount}`);
+            if (newContent.includes('[END OF DOCUMENT]')) {
+              // Remove the marker before appending
+              extractedContent += '\n\n' + newContent.replace('[END OF DOCUMENT]', '').trim();
+            }
+            break;
+          }
+          
+          // Find overlap and merge
+          const overlap = findOverlapLength(extractedContent.slice(-500), newContent.slice(0, 500));
+          const contentToAdd = overlap > 50 ? newContent.slice(overlap) : newContent;
+          
+          extractedContent += '\n\n' + contentToAdd;
+          
+          console.log(`Continuation ${attemptCount}: Added ${contentToAdd.length} chars. Total: ${extractedContent.length}`);
+          
+          // Add delay between continuation attempts
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } else {
+          console.error(`Continuation attempt ${attemptCount} failed:`, continuationResponse.error);
+          break;
+        }
+      } catch (error: any) {
+        console.error(`Error in continuation attempt ${attemptCount}:`, error);
+        break;
+      }
+    }
+    
+    if (extractedContent.length < estimatedTotalChars * 0.5) {
+      extractedContent += '\n\n[WARNING: Extraction may be incomplete. The document is very large. Consider splitting it into smaller parts for complete extraction.]';
+    }
+  }
+
+  file.content = extractedContent;
+  
+  console.log(`Final extraction for ${file.name}: ${extractedContent.length} characters`);
 }
+
 /**
  * Process images with comprehensive vision analysis
  */ async function processImageWithVision(file, geminiApiKey) {
@@ -1778,12 +1871,22 @@ This is an archive file that contains compressed data. Without extraction capabi
     processing_metadata: null
   };
 }
-/**
-* Upload file to Supabase storage
-*/ async function uploadFileToStorage(file, userId) {
+
+// Utility to sanitize filenames for storage keys
+function sanitizeFileName(name) {
+  // Remove or replace characters not allowed in storage keys
+  return name
+    .replace(/[^a-zA-Z0-9._-]/g, '_') // Only allow safe chars
+    .replace(/_+/g, '_') // Collapse multiple underscores
+    .replace(/^_+|_+$/g, '') // Trim underscores
+    .substring(0, 128); // Limit length for safety
+}
+
+ async function uploadFileToStorage(file, userId) {
   try {
     const bucketName = 'chat-documents';
-    const filePath = `${userId}/${crypto.randomUUID()}-${file.name}`;
+    const safeFileName = sanitizeFileName(file.name);
+    const filePath = `${userId}/${crypto.randomUUID()}-${safeFileName}`;
     let fileDataToUpload;
     if (file.data) {
       const binaryString = atob(file.data);
