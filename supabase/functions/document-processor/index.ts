@@ -8,34 +8,48 @@ import Papa from 'https://esm.sh/papaparse@5.4.1';
 import cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.min.js';
 
-import workerCode from 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.js?raw';
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
-// Enhanced Processing Configuration with Zero-Truncation Philosophy
+// ============================================================================
+// STEP 1: UPDATE PROCESSING CONFIGURATION
+// ============================================================================
+
 const ENHANCED_PROCESSING_CONFIG = {
-  // Gemini 2.0 Flash specifications
+  // Gemini 2.0 Flash specifications - INCREASED OUTPUT TOKENS
   MAX_INPUT_TOKENS: 2 * 1024 * 1024,
-  MAX_OUTPUT_TOKENS: 8192,
+  MAX_OUTPUT_TOKENS: 65536, // Increased from 8192 to maximum for Gemini 2.0
   CHUNK_OVERLAP: 500,
-  // Enhanced chunking strategy for complete content extraction
+  
+  // Enhanced chunking strategy
   INTELLIGENT_CHUNK_SIZE: 1.8 * 1024 * 1024,
   MIN_CHUNK_SIZE: 100 * 1024,
+  
   // Processing priorities
   BATCH_SIZE: 3,
   RETRY_ATTEMPTS: 3,
   RATE_LIMIT_DELAY: 1000,
-  // Content management - no truncation limits
+  
+  // Continuation extraction settings
+  MAX_CONTINUATION_ATTEMPTS: 5, // Increased from 3
+  CONTINUATION_DELAY: 2500, // Delay between continuation attempts
+  
+  // Content management
   MAX_TOTAL_CONTEXT: 4 * 1024 * 1024,
   MAX_SINGLE_FILE_CONTENT: Infinity,
+  
   // Context Memory Configuration
   MAX_CONVERSATION_HISTORY: 50,
   CONTEXT_MEMORY_WINDOW: 30,
   SUMMARY_THRESHOLD: 20,
-  CONTEXT_RELEVANCE_SCORE: 0.7
+  CONTEXT_RELEVANCE_SCORE: 0.7,
+  
+  // PDF-specific settings
+  PDF_PAGES_PER_CHUNK: 50, // For page-by-page processing
+  LARGE_PDF_THRESHOLD: 100 // Pages threshold for chunked processing
 };
 // Enhanced file type mappings with processing strategies
 const ENHANCED_FILE_TYPES = {
@@ -1612,6 +1626,7 @@ Continue the extraction now:`;
     throw new Error(response.error || 'Failed to analyze video');
   }
 }
+
 /**
  * Process archive files with metadata extraction
  */ async function processArchiveWithMetadata(file, geminiApiKey) {
