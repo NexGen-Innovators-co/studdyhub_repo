@@ -1703,4 +1703,175 @@ export class StuddyHubActionsService {
         const hashtags = text.match(/#(\w+)/g);
         return hashtags ? hashtags.map(tag => tag.substring(1)) : [];
     }
+    // ==================================================================
+    // 📱 SOCIAL MEDIA ACTIONS
+    // ==================================================================
+
+    async createRichSocialPost(userId: string, params: { 
+        content: string, 
+        privacy: 'public' | 'followers' | 'private', 
+        groupId?: string,
+        mediaFiles?: { url: string, type: 'image'|'video'|'document', mimeType: string }[] 
+    }) {
+        // 1. Create Post
+        const { data: post, error: postError } = await this.supabase
+            .from('social_posts')
+            .insert({
+                author_id: userId,
+                content: params.content,
+                privacy: params.privacy,
+                group_id: params.groupId === 'null' ? null : params.groupId
+            })
+            .select()
+            .single();
+
+        if (postError) throw new Error(`Failed to create post: ${postError.message}`);
+
+        // 2. Attach Media (if provided)
+        if (params.mediaFiles && params.mediaFiles.length > 0) {
+            const mediaInserts = params.mediaFiles.map((file: any) => ({
+                post_id: post.id,
+                url: file.url,
+                type: file.type,
+                mime_type: file.mimeType,
+                filename: 'attachment',
+                size_bytes: 0
+            }));
+
+            const { error: mediaError } = await this.supabase
+                .from('social_media')
+                .insert(mediaInserts);
+                
+            if (mediaError) console.error('Error attaching media:', mediaError);
+        }
+
+        return { success: true, message: "Social post created successfully", data: post };
+    }
+
+    async engageSocial(userId: string, params: { action: 'like' | 'comment', targetId: string, content?: string }) {
+        if (params.action === 'like') {
+            const { error } = await this.supabase
+                .from('social_likes')
+                .insert({ user_id: userId, post_id: params.targetId });
+            
+            // Ignore duplicate key errors (already liked)
+            if (error && error.code !== '23505') throw new Error(`Like failed: ${error.message}`);
+            return { success: true, message: "Post liked" };
+        } 
+        
+        if (params.action === 'comment' && params.content) {
+            const { error } = await this.supabase.from('social_comments').insert({
+                author_id: userId,
+                post_id: params.targetId,
+                content: params.content
+            });
+            if (error) throw new Error(`Comment failed: ${error.message}`);
+            return { success: true, message: "Comment added" };
+        }
+        return { success: false, error: "Invalid action" };
+    }
+
+    // ==================================================================
+    // 🎙️ PODCAST ACTIONS
+    // ==================================================================
+
+    async generatePodcast(userId: string, params: { 
+        title: string, 
+        sourceIds: string[], 
+        style: 'casual'|'educational'|'deep-dive' 
+    }) {
+        const { data, error } = await this.supabase.from('ai_podcasts').insert({
+            user_id: userId,
+            title: params.title,
+            sources: params.sourceIds,
+            style: params.style,
+            status: 'processing', // Triggers background edge function
+            script: '', 
+            audio_segments: {}, 
+            duration_minutes: 0,
+            podcast_type: 'audio'
+        }).select().single();
+
+        if (error) throw new Error(`Podcast generation failed: ${error.message}`);
+        return { success: true, message: "Podcast generation started", data };
+    }
+
+    // ==================================================================
+    // 👥 GROUP & EVENT ACTIONS
+    // ==================================================================
+
+    async createStudyGroup(userId: string, params: { name: string, description: string, category: string }) {
+        // 1. Create Group
+        const { data: group, error } = await this.supabase.from('social_groups').insert({
+            name: params.name,
+            description: params.description,
+            category: params.category,
+            created_by: userId,
+            privacy: 'public'
+        }).select().single();
+
+        if (error) throw new Error(`Group creation failed: ${error.message}`);
+
+        // 2. Add Creator as Admin
+        await this.supabase.from('social_group_members').insert({
+            group_id: group.id,
+            user_id: userId,
+            role: 'admin',
+            status: 'active'
+        });
+
+        return { success: true, message: `Group '${params.name}' created`, data: group };
+    }
+
+    async scheduleGroupEvent(userId: string, params: { 
+        groupId: string, 
+        title: string, 
+        startTime: string, 
+        endTime: string 
+    }) {
+        const { data, error } = await this.supabase.from('social_events').insert({
+            organizer_id: userId,
+            group_id: params.groupId,
+            title: params.title,
+            start_date: params.startTime,
+            end_date: params.endTime,
+            is_online: true
+        }).select().single();
+
+        if (error) throw new Error(`Event scheduling failed: ${error.message}`);
+        
+        // Auto-attend organizer
+        await this.supabase.from('social_event_attendees').insert({
+            event_id: data.id,
+            user_id: userId,
+            status: 'attending'
+        });
+
+        return { success: true, message: "Group event scheduled", data };
+    }
+
+    // ==================================================================
+    // 🎓 COURSE ACTIONS
+    // ==================================================================
+
+    async createCourse(userId: string, params: { code: string, title: string, description: string }) {
+        const { data, error } = await this.supabase.from('courses').insert({
+            code: params.code,
+            title: params.title,
+            description: params.description
+        }).select().single();
+
+        if (error) throw new Error(`Course creation failed: ${error.message}`);
+        return { success: true, message: `Course ${params.code} created`, data };
+    }
+
+    async getReferralCode(userId: string) {
+        const { data } = await this.supabase.from('profiles').select('referral_code').eq('id', userId).single();
+        if (data?.referral_code) return { success: true, code: data.referral_code };
+        
+        // Generate if missing
+        const newCode = `STUDY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        await this.supabase.from('profiles').update({ referral_code: newCode }).eq('id', userId);
+        return { success: true, code: newCode };
+    }
 }

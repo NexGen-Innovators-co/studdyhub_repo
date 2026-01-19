@@ -115,7 +115,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { subscriptionLimits } = useAppContext();
+  const { subscriptionLimits, forceRefreshDocuments } = useAppContext();
   const { canUploadDocuments } = useFeatureAccess();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -780,8 +780,9 @@ function overrideTsMimeType(file: File): File {
 
         // IMPORTANT: Refresh documents to get the latest data with folder_ids
         // This ensures the document count is updated correctly
-        if (user?.id) {
-          await loadDataIfNeeded('documents');
+
+        if (user?.id && forceRefreshDocuments) {
+          await forceRefreshDocuments();
         }
 
         toast.success(

@@ -2159,6 +2159,7 @@ export const useAppData = () => {
       }
     }, [currentUser, loadNotesPage, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadFolders, setNotes, setRecordings, setScheduleItems, setDocuments, setQuizzes, setFolders]),
 
+
     // Lazy loading functions
     loadDataIfNeeded: useCallback((dataType: keyof DataLoadingState) => {
       if (!currentUser?.id || dataLoaded.has(dataType) || dataLoading[dataType]) return;
@@ -2177,6 +2178,16 @@ export const useAppData = () => {
         loaders[dataType]();
       }
     }, [currentUser, dataLoaded, dataLoading, loadRecordingsPage, loadSchedulePage, loadDocumentsPage, loadQuizzesPage, loadNotesPage, loadUserProfile, loadFolders]),
+
+    // Force refresh function (always fetches, even if already loaded)
+    forceRefreshDocuments: useCallback(() => {
+      return new Promise<void>((resolve) => {
+        if (!currentUser?.id) return resolve();
+        setDocuments([]);
+        loadDocumentsPage(currentUser.id, true);
+        resolve();
+      });
+    }, [currentUser, loadDocumentsPage, setDocuments]),
 
     // Load more functions
     loadMoreNotes: useCallback(() => currentUser?.id && loadNotesPage(currentUser.id, false), [currentUser, loadNotesPage]),

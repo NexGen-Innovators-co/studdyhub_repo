@@ -109,6 +109,7 @@ interface AppContextType extends AppState {
   loadMoreSchedule: () => void;
   loadMoreQuizzes: () => void;
   addDocument: (document: AppDocument) => void; // Add this function
+  forceRefreshDocuments: () => Promise<void>; // Added for context consumers
   folders: DocumentFolder[];
   folderTree: FolderTreeNode[];
   setFolders: (folders: DocumentFolder[] | ((prev: DocumentFolder[]) => DocumentFolder[])) => void;
@@ -294,6 +295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveTab,
     setIsAILoading,
     loadDataIfNeeded,
+    forceRefreshDocuments,
     loadMoreNotes,
     loadMoreRecordings,
     loadMoreDocuments,
@@ -1265,6 +1267,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshSubscription,
     daysRemaining,
     bonusAiCredits,
+    forceRefreshDocuments,
   };
 
   return (
