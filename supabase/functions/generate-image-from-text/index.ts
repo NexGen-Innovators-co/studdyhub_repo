@@ -100,7 +100,7 @@ serve(async (req) => {
         const accessToken = tokenData.access_token;
 
         // Call Vertex AI Imagen endpoint
-        const imagenEndpoint = `https://${region}-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/${region}/publishers/google/models/imagegeneration@006:predict`;
+        const imagenEndpoint = `https://${region}-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/${region}/publishers/google/models/imagen-4.0-generate-001:predict`;
         const imagenRes = await fetch(imagenEndpoint, {
             method: "POST",
             headers: {
@@ -115,7 +115,8 @@ serve(async (req) => {
                 ],
                 parameters: {
                     sampleCount: 1,
-                    imageSize: "1024x1024"
+                    sampleImageSize: "1K",
+                    aspectRatio: "1:1"
                 }
             })
         });
