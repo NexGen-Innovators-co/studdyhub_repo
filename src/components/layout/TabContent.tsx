@@ -591,7 +591,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
       {/* PERSISTENT VIEWS: Social & Podcasts (Load once, keep alive) */}
       {shouldRenderSocial && (
-        <div className="flex-1 p-4 sm:p-0 overflow-y-scroll  modern-scrollbar dark:bg-transparent" style={{ display: activeTab === 'social' ? 'block' : 'none', height: activeTab === 'social' ? '100%' : '0px' }}>
+        <div className="flex-1 p-0 sm:p-0 overflow-y-scroll  modern-scrollbar dark:bg-transparent" style={{ display: activeTab === 'social' ? 'block' : 'none', height: activeTab === 'social' ? '100%' : '0px' }}>
           <ErrorBoundary>
             <SocialFeed
               key="social-feed-component"

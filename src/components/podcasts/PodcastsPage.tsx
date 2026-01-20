@@ -38,8 +38,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { offlineStorage, STORES } from '@/utils/offlineStorage';
-import { PodcastPanel } from '../aiChat/Components/PodcastPanel';
-import { PodcastData, PodcastGenerator } from '../aiChat/PodcastGenerator';
+import { PodcastPanel } from './PodcastPanel';
+import { PodcastData, PodcastGenerator } from './PodcastGenerator';
 import { GoLiveDialog } from './GoLiveDialog';
 import { LivePodcastViewer } from './LivePodcastViewer';
 import { LivePodcastHost } from './LivePodcastHost';
@@ -52,9 +52,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { getPodcastPermissions } from '@/services/podcastModerationService';
 import { usePodcasts, PodcastWithMeta } from '@/hooks/usePodcasts';
 import { createPodcastNotification } from '@/services/notificationHelpers';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { SubscriptionLimitsModal } from '../subscription/SubscriptionLimitsModal';
+import { useNavigate } from 'react-router-dom';
 
 interface PodcastsPageProps {
   searchQuery?: string;
@@ -81,7 +82,7 @@ const PodcastCard = memo(({
   onJoinLive,
   isUpdatingCover,
   isGeneratingAiCover,
-  fileInputRef
+  navigate // Pass navigate as a prop
 }: { 
   podcast: PodcastWithMeta; 
   isOwner: boolean;
@@ -98,6 +99,8 @@ const PodcastCard = memo(({
   isUpdatingCover: string | null;
   isGeneratingAiCover: string | null;
   fileInputRef: React.RefObject<HTMLInputElement>;
+  onSelect: (p: PodcastWithMeta) => void; // New prop type
+  navigate: (path: string) => void; // Add navigate prop type
 }) => {
   const [showActions, setShowActions] = useState(false);
   
@@ -199,6 +202,7 @@ const PodcastCard = memo(({
                       onJoinLive(podcast.id);
                     } else {
                       onPlay(podcast);
+                      navigate(`/podcasts/${podcast.id}`); // Update the URL with the podcast ID
                     }
                   }}
                   className="flex-1 border-white/30 bg-white/10 hover:bg-white/20 text-blue-600 font-semibold text-xs sm:text-sm h-8 sm:h-9 backdrop-blur-sm"
@@ -313,14 +317,17 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   podcastId,
   onGoLive,
   onCreatePodcast,
+  onNavigateToTab, // Destructure onNavigateToTab here
   socialFeedRef,
-  onNavigateToTab
 }) => {
+  const navigate = useNavigate(); // Initialize navigate here
+
   const [activeTab, setActiveTab] = useState<'discover' | 'my-podcasts' | 'live'>('discover');
   const queryClient = useQueryClient();
   const { isFeatureBlocked } = useFeatureAccess();
   const [showLimitsModal, setShowLimitsModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  // const navigate = useNavigate(); // Initialize navigate here
 
   // Fetch count of own podcasts
   const { data: myPodcastCount = 0 } = useQuery({
@@ -358,7 +365,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   
   const podcasts = useMemo(() => data?.pages.flat() || [], [data]);
 
-  // const [podcasts, setPodcasts] = useState<PodcastWithMeta[]>([]);
+  // const [podcasts, setPodcasts] = useState<PodcastWithMeta[]>();
   // const [loading, setLoading] = useState(true);
   // const [page, setPage] = useState(1);
   // const [hasMore, setHasMore] = useState(true);
@@ -553,7 +560,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                 full_name: 'Anonymous User',
                 avatar_url: undefined
               },
-              member_count: 0, // Will be updated if needed
+              member_count: 0 // Will be updated if needed
             };
 
             setSelectedPodcast(podcastWithMeta);
@@ -915,6 +922,12 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     );
   }, [podcasts, deferredSearchQuery]);
 
+  // Update the URL when a podcast is selected
+  const handleSelectPodcast = (podcast: PodcastWithMeta) => {
+    setSelectedPodcast(podcast);
+    navigate(`/podcasts/${podcast.id}`); // Update the URL with the podcast ID
+  };
+
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-blue-50/30 dark:from-slate-950 dark:to-blue-950/20">
       {/* Search Bar */}
@@ -1042,9 +1055,11 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                           setShowReportDialog(true);
                         }}
                         onJoinLive={(id) => setLivePodcastId(id)}
+                        onSelect={handleSelectPodcast} // Pass the new prop
                         isUpdatingCover={isUpdatingCover}
                         isGeneratingAiCover={isGeneratingAiCover}
                         fileInputRef={fileInputRef}
+                        navigate={navigate} // Pass navigate prop
                       />
                     ))}
                   </div>
