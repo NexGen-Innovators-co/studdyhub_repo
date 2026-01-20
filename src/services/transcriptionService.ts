@@ -77,6 +77,9 @@ export const generatePodcastScript = async (
   title: string,
   duration: number
 ): Promise<string> => {
+  // Sanitize the transcript to remove unwanted characters
+  const sanitizedTranscript = transcript.replace(/`/g, '');
+
   try {
     const { data, error } = await supabase.functions.invoke('gemini-chat', {
       body: {
@@ -87,8 +90,7 @@ export const generatePodcastScript = async (
 Title: ${title}
 Duration: ${Math.floor(duration / 60)} minutes
 
-Transcript:
-${transcript}
+Transcript: ${sanitizedTranscript}
 
 Format the script with:
 - Clear speaker labels (Host, Guest, etc.)

@@ -78,11 +78,11 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700">
+      <DialogContent className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 max-h-screen overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold text-slate-800 dark:text-gray-200">Create Post</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 p-6">
+        <div className="space-y-4">
           {!canPostSocials && (
             <Alert className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
               <Lock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
@@ -108,7 +108,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
           />
 
           {metadata?.type === 'podcast' && (
-            <div className="p-3 border border-slate-200 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-900/50 flex gap-3">
+            <div className="p-3 border border-slate-200 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-900/50 flex gap-3 max-w-full" style={{ maxWidth: '400px' }}>
               {metadata.coverUrl && (
                 <img 
                   src={metadata.coverUrl} 
@@ -117,7 +117,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
                 />
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-gray-100 truncate">
+                <p className="text-sm font-medium text-slate-900 dark:text-gray-100 truncate  overflow-hidden max-w-full">
                   {metadata.title}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-gray-400 line-clamp-2">

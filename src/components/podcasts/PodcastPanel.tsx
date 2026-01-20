@@ -1,17 +1,17 @@
 // PodcastPanel.tsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Button } from '../../ui/button';
-import { Badge } from '../../ui/badge';
-import { ScrollArea } from '../../ui/scroll-area';
-import { Progress } from '../../ui/progress';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { ScrollArea } from '../ui/scroll-area';
+import { Progress } from '../ui/progress';
 import {
   X, Play, Pause, Download, Maximize2, Minimize2,
   Volume2, VolumeX, SkipForward, SkipBack, Loader2,
-  Share2, Users, Clock, Sparkles, Radio
+  Share2, Users, Clock, Sparkles, Radio, RefreshCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../../../integrations/supabase/client';
+import { supabase } from '../../integrations/supabase/client';
 
 interface AudioSegment {
   speaker: string;
@@ -84,6 +84,10 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [showPrompts, setShowPrompts] = useState(false); // State to toggle prompts
+  const [podcastData, setPodcastData] = useState<PodcastData | null>(null);
+  const [showTranscript, setShowTranscript] = useState(false); // State to toggle transcript visibility
+  const [replay, setReplay] = useState(false); // State to handle replay functionality
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -97,6 +101,47 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
         audioRef.current = null;
       }
     };
+  }, [podcast?.id]);
+
+  // Fetch podcast data
+  const fetchPodcastData = async (podcastId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('ai_podcasts')
+        .select('id, title, is_public, audio_segments, duration_minutes, style, cover_image_url, script, sources, created_at') // Updated duration to duration_minutes
+        .eq('id', podcastId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching podcast data:', error);
+        toast.error('Failed to load podcast data. Please try again later.');
+        return null;
+      }
+
+      // Transform the API response to match the PodcastData type
+      const transformedData = {
+        ...data,
+        audioSegments: data.audio_segments, // Map snake_case to camelCase
+        duration: data.duration_minutes, // Map duration_minutes to duration
+      };
+
+      return transformedData;
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('An unexpected error occurred. Please try again later.');
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (podcast?.id) {
+      fetchPodcastData(podcast.id).then((data) => {
+        if (data) {
+          // Update state with fetched data
+          setPodcastData(data);
+        }
+      });
+    }
   }, [podcast?.id]);
 
   // Handle resize
@@ -160,11 +205,8 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
         audio = new Audio(segment.audio_url);
       } else if (segment.audioContent) {
         // Generated podcast - use base64 audio
-        let cleanedAudio = segment.audioContent.trim();
-        if (cleanedAudio.includes(',')) {
-          cleanedAudio = cleanedAudio.split(',')[1];
-        }
-        cleanedAudio = cleanedAudio.replace(/[\r\n\s]/g, '');
+        // Sanitize audioContent to remove backticks
+        const cleanedAudio = segment.audioContent.replace(/`/g, '').trim();
         audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
       } else {
         //console.error('No audio source found in segment:', segment);
@@ -194,11 +236,12 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
           setIsPlaying(false);
           setProgress(0);
           setCurrentTime(0);
+          setReplay(true); // Set replay state
         }
       };
 
       audio.onerror = (e) => {
-        //console.error('Audio playback error:', e);
+        console.error('Audio playback error:', e, 'Audio source:', segment.audio_url || segment.audioContent);
         toast.error(`Failed to play segment ${index + 1}`);
         setIsPlaying(false);
       };
@@ -209,7 +252,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
           setCurrentSegment(index);
         })
         .catch(err => {
-          //console.error('Play error:', err);
+          console.error('Play error:', err, 'Audio source:', segment.audio_url || segment.audioContent);
           toast.error('Failed to play audio');
           setIsPlaying(false);
         });
@@ -222,6 +265,12 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
   }, [podcast]);
 
   const handlePlayPause = () => {
+    if (replay) {
+      setReplay(false); // Reset replay state
+      playSegment(0); // Replay from the beginning
+      return;
+    }
+
     if (!audioRef.current) {
       playSegment(currentSegment);
       return;
@@ -488,37 +537,26 @@ Generated with StuddyHub AI Podcasts!`;
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed right-0 top-0 h-full bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col border-l border-slate-200 dark:border-slate-700"
+      className="fixed right-0 top-0 h-full bg-white text-black dark:bg-blue-900 shadow-2xl z-50 flex flex-col border-l border-slate-200 dark:border-slate-700"
       style={{ width: `${containerWidth}%` }}
     >
-      {/* Resize Handle */}
-      {!isFullScreen && (
-        <div
-          onMouseDown={handleMouseDown}
-          className={`absolute left-0 top-0 w-1 h-full cursor-ew-resize hover:bg-blue-500 dark:hover:bg-blue-400 transition-colors ${
-            isResizing ? 'bg-blue-500 dark:bg-blue-400' : 'bg-transparent'
-          }`}
-        />
-      )}
-
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-800">
+      <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-200 via-blue-300 to-blue-400 dark:from-blue-800 dark:to-blue-900">
         <div className="flex items-center gap-3">
-          <Radio className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          <Radio className="h-6 w-6 text-white" />
           <div>
-            <h3 className="font-bold text-slate-900 dark:text-slate-100">AI Podcast</h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
+            <h3 className="font-bold text-white">AI Podcast</h3>
+            <p className="text-xs text-white/80">
               {podcast.audioSegments.length} segments • {podcast.duration} min
             </p>
           </div>
         </div>
-        
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setIsFullScreen(!isFullScreen)}
-            className="h-8 w-8"
+            className="h-8 w-8 text-white"
           >
             {isFullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
@@ -526,7 +564,7 @@ Generated with StuddyHub AI Podcasts!`;
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="h-8 w-8"
+            className="h-8 w-8 text-white"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -536,77 +574,50 @@ Generated with StuddyHub AI Podcasts!`;
       {/* Content */}
       <div className="flex-1 flex flex-col overflow-y-auto">
         {/* Podcast Info */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
             {podcast.title}
           </h2>
-          
           <div className="flex flex-wrap gap-2 mb-3">
-            <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
               <Sparkles className="h-3 w-3 mr-1" />
               {podcast.style}
             </Badge>
-            {podcast.sources.map((source, index) => (
-              <Badge key={index} variant="outline" className="text-xs">
-                {source}
-              </Badge>
-            ))}
           </div>
         </div>
 
         {/* Visual Assets Display (for image-audio, video, live-stream types) */}
         {podcast.visualAssets && podcast.visualAssets.length > 0 && (
           <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center justify-between mb-3">
               <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                 {podcast.podcastType === 'video' ? '🎥 Video Podcast' : 
                  podcast.podcastType === 'live-stream' ? '🔴 Live Stream' : 
                  '🖼️ Visual Podcast'}
               </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPrompts(!showPrompts)}
+                className="text-xs"
+              >
+                {showPrompts ? 'Hide Prompts' : 'Show Prompts'}
+              </Button>
             </div>
             
             {/* Current visual based on playback time */}
             {podcast.visualAssets.map((asset, index) => {
-              // Show asset if current segment/time matches
               let isCurrentAsset = false;
               if (asset.type === 'image' && typeof asset.segmentIndex === 'number') {
-                // Find the next image asset with a higher segmentIndex
                 const nextImageAsset = podcast.visualAssets
                   .filter((a) => a.type === 'image' && typeof a.segmentIndex === 'number' && a.segmentIndex! > asset.segmentIndex!)
                   .sort((a, b) => (a.segmentIndex! - b.segmentIndex!))[0];
                 if (nextImageAsset) {
                   isCurrentAsset = currentSegment >= asset.segmentIndex && currentSegment < nextImageAsset.segmentIndex!;
                 } else {
-                  // Only show if currentSegment matches or is after this asset's segmentIndex, but not after the last segment
                   isCurrentAsset = currentSegment >= asset.segmentIndex && currentSegment < podcast.audioSegments.length;
                 }
-                // Only render if this asset is the one for the current segment range
                 if (!isCurrentAsset) return null;
-              } else if (
-                index === 0 &&
-                podcast.cover_image_url &&
-                podcast.visualAssets.filter(a => a.type === 'image' && typeof a.segmentIndex === 'number').every(imgAsset => {
-                  // All image assets are out of range
-                  const nextImageAsset = podcast.visualAssets
-                    .filter((a) => a.type === 'image' && typeof a.segmentIndex === 'number' && a.segmentIndex! > imgAsset.segmentIndex!)
-                    .sort((a, b) => (a.segmentIndex! - b.segmentIndex!))[0];
-                  if (nextImageAsset) {
-                    return !(currentSegment >= imgAsset.segmentIndex && currentSegment < nextImageAsset.segmentIndex!);
-                  } else {
-                    return !(currentSegment >= imgAsset.segmentIndex && currentSegment < podcast.audioSegments.length);
-                  }
-                })
-              ) {
-                // Show cover image if all image assets are out of range
-                return (
-                  <div key="cover-image" className="relative rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 aspect-video">
-                    <img
-                      src={podcast.cover_image_url}
-                      alt="Podcast Cover"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                );
               } else if (asset.type === 'video' && typeof asset.timestamp === 'number') {
                 const nextAsset = podcast.visualAssets![index + 1];
                 isCurrentAsset = currentTime >= asset.timestamp && (!nextAsset || currentTime < nextAsset.timestamp);
@@ -634,15 +645,17 @@ Generated with StuddyHub AI Podcasts!`;
                       }}
                     />
                   )}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">
-                        {asset.type === 'video' ? '🎥 Video' : '🖼️ Image'}
-                      </Badge>
-                      <p className="text-white text-sm font-medium flex-1">{asset.concept}</p>
+                  {showPrompts && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {asset.type === 'video' ? '🎥 Video' : '🖼️ Image'}
+                        </Badge>
+                        <p className="text-white text-sm font-medium flex-1">{asset.concept}</p>
+                      </div>
+                      <p className="text-white/80 text-xs mt-1">{asset.description}</p>
                     </div>
-                    <p className="text-white/80 text-xs mt-1">{asset.description}</p>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -739,12 +752,18 @@ Generated with StuddyHub AI Podcasts!`;
               <SkipBack className="h-5 w-5" />
             </Button>
 
+            {/* Update the play/pause button to reflect replay state */}
             <Button
               onClick={handlePlayPause}
-              size="icon"
-              className="h-14 w-14 bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
+              className="h-10 w-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"
             >
-              {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" />}
+              {replay ? (
+                <RefreshCcw className="h-6 w-6" /> // Replay icon
+              ) : isPlaying ? (
+                <Pause className="h-6 w-6" /> // Pause icon
+              ) : (
+                <Play className="h-6 w-6" /> // Play icon
+              )}
             </Button>
 
             <Button
@@ -795,38 +814,49 @@ Generated with StuddyHub AI Podcasts!`;
         {/* Transcript */}
         <div className="flex-shrink-0 mb-4">
           <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-            <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">
-              Full Transcript
-            </h4>
-          </div>
-          
-          <div className="px-4 pb-4">
-            <div className="space-y-4">
-              {podcast.audioSegments.map((segment, index) => (
-                <button
-                  key={index}
-                  onClick={() => playSegment(index)}
-                  className={`w-full text-left p-3 rounded-lg transition-all ${
-                    currentSegment === index
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 dark:border-blue-400'
-                      : 'bg-slate-50 dark:bg-slate-800 border-2 border-transparent hover:border-slate-300 dark:hover:border-slate-600'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      {segment.speaker}
-                    </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      #{index + 1}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    {segment.text}
-                  </p>
-                </button>
-              ))}
+            <div className="flex justify-between items-center">
+              <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">
+                Full Transcript
+              </h4>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowTranscript(!showTranscript)}
+                className="text-xs"
+              >
+                {showTranscript ? 'Hide' : 'Show'}
+              </Button>
             </div>
           </div>
+          {showTranscript && (
+            <div className="px-4 pb-4">
+              <div className="space-y-4">
+                {podcast.audioSegments.map((segment, index) => (
+                  <button
+                    key={index}
+                    onClick={() => playSegment(index)}
+                    className={`w-full text-left p-3 rounded-lg transition-all ${
+                      currentSegment === index
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 dark:border-blue-400'
+                        : 'bg-slate-50 dark:bg-slate-800 border-2 border-transparent hover:border-slate-300 dark:hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {segment.speaker}
+                      </span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        #{index + 1}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {segment.text}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

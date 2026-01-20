@@ -403,15 +403,13 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
         }
 
         // Use the generate-image-from-text edge function to upload and get a public URL for each image
-        for (let i = 0; i < concepts.length && i < 5; i++) {
+        for (let i = 0; i < concepts.length; i++) {
           const concept = concepts[i];
           let description = (typeof concept.description === 'string' && concept.description.trim())
             ? concept.description.trim()
             : `${concept.concept || sources.join(", ") || 'the topic'}`;
 
-          // Add style enhancer for educational, colorful, engaging images
-          const styleEnhancer = "Vibrant and colorful educational illustration with glowing elements, open books with dynamic pages, floating holographic interfaces, soft lighting, modern 3D rendered style, bright gradients, engaging learning atmosphere, professional but playful design, depth of field, cinematic composition";
-          description = `${description}. ${styleEnhancer}`;
+                   description = `${description}. `;
 
           let imageUrl = "";
           try {

@@ -32,8 +32,8 @@ import { AppContext } from '@/contexts/AppContext';
 import { initialAppState } from '@/contexts/appReducer';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { useAiMessageTracker } from '@/hooks/useAiMessageTracker';
-import { PodcastGenerator, type PodcastData } from './PodcastGenerator';
-import { PodcastPanel } from './Components/PodcastPanel';
+import { PodcastGenerator, type PodcastData } from '../podcasts/PodcastGenerator';
+import { PodcastPanel } from '../podcasts/PodcastPanel';
 import { ImageGenerator } from './Components/ImageGenerator';
 import { useImageGenerationDetector } from '@/hooks/useImageGenerationDetector';
 

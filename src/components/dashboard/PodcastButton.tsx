@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import { Podcast, Loader2 } from 'lucide-react';
-import { PodcastGenerator } from '../aiChat/PodcastGenerator';
+import { PodcastGenerator } from '../podcasts/PodcastGenerator';
 import { checkPodcastCreationEligibility } from '@/services/podcastModerationService';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
