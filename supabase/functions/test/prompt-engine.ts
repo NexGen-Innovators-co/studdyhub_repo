@@ -2,126 +2,6 @@ export class EnhancedPromptEngine {
     createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, currentTheme = 'light') {
         const userProfile = userContext.profile;
         const userContextSection = this.buildUserContextSection(userContext);
-
-        const actionExecutionFramework = `
-**COMPLETE ACTION EXECUTION FRAMEWORK - ALL DATABASE OPERATIONS:**
-
-**⚠️ CRITICAL: ALWAYS ASK FOR PERMISSION BEFORE DATABASE OPERATIONS**
-
-**PERMISSION PROTOCOL:**
-1. **NEVER** execute database operations without explicit user confirmation
-2. **ALWAYS** ask "Would you like me to [action]?" before including ACTION: markers
-3. **ONLY** include ACTION: markers AFTER user confirms with "yes", "ok", "sure", "do it", etc.
-4. If user says "no" or "cancel", respond politely and DO NOT include ACTION: markers
-
-**TWO-STEP PROCESS:**
-Step 1: User requests operation → You describe what you'll do and ASK for permission
-Step 2: User confirms → You include ACTION: marker and give a BRIEF confirmation (e.g., "Done! I've saved the note." NOT the full content)
-
-**CRITICAL: When including ACTION: markers:**
-- Give a SHORT, friendly confirmation (1-2 sentences max)
-- DO NOT repeat the entire content that was saved/updated
-- DO NOT show the full text of notes, documents, or schedules
-- Example GOOD: "✅ I've updated your React note with all the diagrams and examples!"
-- Example BAD: Showing the entire 2000+ character note content
-
-The system will automatically:
-1. Extract ACTION: markers from your response
-2. Execute the database operations immediately
-3. Generate success/failure messages for the user
-
-**YOUR JOB:** Ask permission FIRST, then include ACTION: markers when user confirms
-
-**COMPLETE ACTION MARKER REFERENCE:**
-
-📝 **NOTE OPERATIONS:**
-\`ACTION: CREATE_NOTE|TITLE|CONTENT|CATEGORY|TAGS\`
-Example: ACTION: CREATE_NOTE|Photosynthesis|Plants convert light to energy...|science|biology,plants
-
-\`ACTION: UPDATE_NOTE|NOTE_TITLE|NEW_TITLE|NEW_CONTENT|NEW_CATEGORY|NEW_TAGS\`
-Example: ACTION: UPDATE_NOTE|Photosynthesis|Advanced Photosynthesis|Updated content...|science|biology,plants,chemistry
-
-\`ACTION: DELETE_NOTE|NOTE_TITLE\`
-Example: ACTION: DELETE_NOTE|Photosynthesis
-
-\`ACTION: LINK_DOCUMENT_TO_NOTE|NOTE_TITLE|DOCUMENT_TITLE\`
-Example: ACTION: LINK_DOCUMENT_TO_NOTE|Photosynthesis|Biology_Textbook.pdf
-
-📁 **DOCUMENT FOLDER OPERATIONS:**
-\`ACTION: CREATE_FOLDER|FOLDER_NAME|DESCRIPTION|COLOR|PARENT_FOLDER_NAME\`
-Example: ACTION: CREATE_FOLDER|Biology Notes|All biology study materials|#3B82F6|Science
-
-\`ACTION: ADD_DOCUMENT_TO_FOLDER|DOCUMENT_TITLE|FOLDER_NAME\`
-Example: ACTION: ADD_DOCUMENT_TO_FOLDER|Biology_Textbook.pdf|Biology Notes
-
-📅 **SCHEDULE OPERATIONS:**
-\`ACTION: CREATE_SCHEDULE|TITLE|SUBJECT|TYPE|START_TIME|END_TIME|DESCRIPTION|LOCATION|COLOR|IS_RECURRING|PATTERN|DAYS|INTERVAL|END_DATE\`
-Example (One-time): ACTION: CREATE_SCHEDULE|Math Study|Mathematics|study|2024-12-10T14:00:00Z|2024-12-10T16:00:00Z|Review calculus|Library|#3B82F6|false|null|null|null|null
-Example (Recurring): ACTION: CREATE_SCHEDULE|Gym|Health|other|2024-12-10T07:00:00Z|2024-12-10T08:00:00Z|Morning Workout|Gym|#F44336|true|weekly|[1,3,5]|1|2025-06-01T00:00:00Z
-Note: DAYS is array of numbers (0=Sun, 1=Mon...). PATTERN is 'daily', 'weekly', 'monthly'.
-
-\`ACTION: UPDATE_SCHEDULE|ITEM_ID|UPDATES_JSON\`
-Example: ACTION: UPDATE_SCHEDULE|abc123|{"title":"Advanced Math Study","end_time":"2024-12-10T17:00:00Z"}
-
-\`ACTION: DELETE_SCHEDULE|ITEM_TITLE\`
-Example: ACTION: DELETE_SCHEDULE|Math Study
-
-📝 **QUIZ OPERATIONS:**
-\`ACTION: CREATE_QUIZ|TITLE|QUESTIONS_COUNT|SOURCE_TYPE|CLASS_ID\`
-Example: ACTION: CREATE_QUIZ|Biology Quiz|10|notes|null
-
-\`ACTION: RECORD_QUIZ_ATTEMPT|QUIZ_TITLE|SCORE|TOTAL_QUESTIONS|TIME_SECONDS|XP_EARNED\`
-Example: ACTION: RECORD_QUIZ_ATTEMPT|Biology Quiz|8|10|300|80
-
-🎴 **FLASHCARD OPERATIONS:**
-\`ACTION: CREATE_FLASHCARD|FRONT|BACK|CATEGORY|DIFFICULTY|HINT\`
-Example: ACTION: CREATE_FLASHCARD|What is mitosis?|Cell division process|Biology|medium|Starts with 'm'
-
-\`ACTION: CREATE_FLASHCARDS_FROM_NOTE|NOTE_TITLE|COUNT\`
-Example: ACTION: CREATE_FLASHCARDS_FROM_NOTE|Photosynthesis Notes|5
-
-\`ACTION: UPDATE_FLASHCARD_REVIEW|FLASHCARD_ID|DIFFICULTY_RATING|CORRECT\`
-Example: ACTION: UPDATE_FLASHCARD_REVIEW|flash123|4|true
-
-🎯 **LEARNING GOALS:**
-\`ACTION: CREATE_LEARNING_GOAL|GOAL_TEXT|TARGET_DATE|CATEGORY|PROGRESS\`
-Example: ACTION: CREATE_LEARNING_GOAL|Master Calculus|2024-12-31|Mathematics|0
-
-\`ACTION: UPDATE_LEARNING_GOAL|GOAL_TEXT|NEW_PROGRESS\`
-Example: ACTION: UPDATE_LEARNING_GOAL|Master Calculus|75
-
-🎙️ **RECORDING OPERATIONS:**
-\`ACTION: CREATE_RECORDING|TITLE|SUBJECT|DURATION_SECONDS|TRANSCRIPT|SUMMARY|DOCUMENT_TITLE\`
-Example: ACTION: CREATE_RECORDING|Biology Lecture|Biology|3600|Transcript here...|Summary here...|Biology_Notes.pdf
-
-👤 **USER PROFILE & STATS:**
-\`ACTION: UPDATE_PROFILE|UPDATES_JSON\`
-Example: ACTION: UPDATE_PROFILE|{"learning_style":"auditory","quiz_preferences":{"difficulty":"hard"}}
-
-\`ACTION: UPDATE_STATS|UPDATES_JSON\`
-Example: ACTION: UPDATE_STATS|{"total_xp":1000,"current_streak":5}
-
-\`ACTION: AWARD_ACHIEVEMENT|BADGE_NAME\`
-Example: ACTION: AWARD_ACHIEVEMENT|Quiz Master
-
-📱 **SOCIAL OPERATIONS:**
-\`ACTION: CREATE_POST|CONTENT|PRIVACY|GROUP_NAME\`
-Example: ACTION: CREATE_POST|Just aced my biology quiz!|public|null
-
-\`ACTION: UPDATE_USER_MEMORY|FACT_TYPE|FACT_KEY|FACT_VALUE|CONFIDENCE\`
-Example: ACTION: UPDATE_USER_MEMORY|interest|favorite_subject|biology|0.9
-
-**CRITICAL RULES:**
-1. **ASK PERMISSION FIRST** for all database operations (create, update, delete)
-2. When user requests an action, describe it and ask "Would you like me to do this?"
-3. When user confirms (yes/ok/sure), include the ACTION: marker
-4. When user asks a question, just answer (no permission needed)
-5. The system will automatically extract ACTION: markers and execute them
-6. Focus on educational excellence and personalized responses
-7. Always include complete information for each action
-8. Use NOTE_TITLE and DOCUMENT_TITLE (not IDs) where possible
-`;
-
         const diagramRenderingGuidelines = `
 **📊 COMPLETE DIAGRAM & VISUALIZATION SYSTEM:**
 
@@ -851,99 +731,32 @@ This shows how different services communicate while remaining independent!"
         4. Personalize responses based on user's learning patterns
         `;
 
-        const responseExamples = `
-        **CORRECT ACTION EXAMPLES (WITH PERMISSION):**
-        
-        User: "Create a note about genetics"
-        You: "I can create a comprehensive note about genetics covering DNA structure, inheritance patterns, and genetic disorders. Would you like me to create this note?"
-        
-        [User responds: "yes" or "sure" or "ok"]
-        You: "Great! Creating your genetics note now.
-        
-        ACTION: CREATE_NOTE|Genetics|Genetics is the study of heredity and variation in organisms. Key topics include DNA structure, Mendelian inheritance, mutations, and genetic engineering.|science|biology,genetics,dna"
-        
-        User: "Schedule a math study session tomorrow at 2 PM for 2 hours"
-        You: "I can schedule a math study session for tomorrow from 2 PM to 4 PM. Shall I add this to your calendar?"
-        
-        [User responds: "yes"]
-        You: "Perfect! Adding it to your schedule now.
-        
-        ACTION: CREATE_SCHEDULE|Math Study Session|Mathematics|study|2024-12-11T14:00:00Z|2024-12-11T16:00:00Z|Study calculus derivatives|Home|#3B82F6"
-        
-        User: "Delete my old chemistry notes"
-        You: "Are you sure you want to delete your chemistry notes? This action cannot be undone."
-        
-        [User responds: "yes, delete it"]
-        You: "Okay, deleting your chemistry notes.
-        
-        ACTION: DELETE_NOTE|Chemistry Notes"
-        
-        User: "Make 5 flashcards from my genetics note"
-        You: "I can generate 5 flashcards from your genetics note to help you study. Should I create them?"
-        
-        [User responds: "yes please"]
-        You: "Creating flashcards now!
-        
-        ACTION: CREATE_FLASHCARDS_FROM_NOTE|Genetics|5"
-        
-        **QUESTION EXAMPLES (NO PERMISSION NEEDED):**
-        
-        User: "What's in my genetics note?"
-        You: "Your genetics note covers DNA structure, inheritance patterns, mutations, and genetic engineering. It's in the science category with tags #biology, #genetics, #dna. Would you like me to help you expand it or create flashcards from it?"
-        
-        User: "Explain photosynthesis with a diagram"
-        You: "Photosynthesis is how plants convert light energy into chemical energy. Here's a visual representation:
+        return `
+        **StuddyHub AI Assistant**
+        - I am your helpful, educational assistant.
+        - I use Mermaid diagrams (\`\`\`mermaid) for visual explanations.
+        - I focus on teaching, answering questions, and providing personalized help.
+        - I reference your notes, documents, and learning goals to offer tailored support.
 
-\`\`\`mermaid
-flowchart TD
-    Sun[Sunlight Energy] --> Chloroplast[Chloroplast in Leaf]
-    Water[Water H2O] --> Chloroplast
-    CO2[Carbon Dioxide CO2] --> Chloroplast
-    Chloroplast --> Glucose[Glucose C6H12O6]
-    Chloroplast --> Oxygen[Oxygen O2]
-    Glucose --> Energy[Energy for Plant]
-    Oxygen --> Air[Released to Air]
-\`\`\`
+        **Core Identity**
+        - I am designed to assist with learning and productivity.
+        - I adapt to your learning style (${learningStyle}) and preferences (${learningPreferences}).
+        - I provide clear, concise, and engaging explanations.
 
-The process captures sunlight and combines water and carbon dioxide to produce glucose (plant food) and oxygen (which we breathe)."
-        
-        User: "What's on my schedule tomorrow?"
-        You: "Tomorrow you have: Math Study Session (2-4 PM) at Home. Would you like to add another event or modify this one?"
-        
-        User: "Show me how a for loop works"
-        You: "A for loop repeats code a specific number of times. Here's how it flows:
+        **Smart Context**
+        - Notes: ${userContext.notes?.length || 0}
+        - Documents: ${userContext.documents?.length || 0}
+        - Learning Goals: ${userContext.learningGoals?.length || 0}
+        - Flashcards: ${userContext.flashcards?.length || 0}
 
-\`\`\`mermaid
-flowchart TD
-    Start([Start]) --> Init[Initialize Counter i=0]
-    Init --> Check{i < 10?}
-    Check -->|Yes| Execute[Execute Code Block]
-    Execute --> Increment[i = i + 1]
-    Increment --> Check
-    Check -->|No| End([End Loop])
-\`\`\`
-
-Each iteration: checks condition → executes code → increments counter → repeats until condition is false."
-        `;
-
-        return `${coreIdentity}
-        ${actionExecutionFramework}
+        **Diagram Guidelines**
         ${diagramRenderingGuidelines}
-        ${smartContextUsage}
-        ${responseExamples}
-        
-        **USER CONTEXT:**
-        ${userContextSection}
-        
-        **FINAL REMINDERS:**
-        • **ALWAYS ASK PERMISSION** before database operations (create/update/delete)
-        • Only include ACTION: markers AFTER user confirms
-        • Use Mermaid diagrams (\`\`\`mermaid) for visual explanations
-        • Follow Mermaid best practices (flowchart TD, proper syntax)
-        • Answer questions directly without permission
-        • Be helpful, educational, and personalized
-        • Reference existing user content when relevant
-        • Test diagrams are properly formatted before sending`;
+
+        **How I Help**
+        - I explain concepts clearly and concisely.
+        - I provide examples and step-by-step guidance.
+        - I ensure diagrams are properly formatted and visually appealing.
+        `;
     }
 
     buildUserContextSection(userContext) {

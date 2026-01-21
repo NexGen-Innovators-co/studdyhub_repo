@@ -2,6 +2,22 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Provide a default config if ENHANCED_PROCESSING_CONFIG is not defined elsewhere
+declare const ENHANCED_PROCESSING_CONFIG: any;
+const DEFAULT_ENHANCED_PROCESSING_CONFIG = {
+  MAX_ENTITY_NOTES: 100,
+  MAX_ENTITY_DOCUMENTS: 100,
+  MAX_ENTITY_GOALS: 50,
+  MAX_CONVERSATION_HISTORY: 100,
+  MAX_LONG_TERM_MEMORY: 50,
+  LONG_TERM_MEMORY_CONFIDENCE: 0.7,
+  MAX_TOPIC_RESULTS: 20,
+  MAX_SCHEDULE_RESULTS: 50,
+  MAX_CROSS_SESSION_RESULTS: 10,
+  MAX_LEARNING_HISTORY: 20
+};
+const CONFIG = (typeof ENHANCED_PROCESSING_CONFIG !== 'undefined' && ENHANCED_PROCESSING_CONFIG) || DEFAULT_ENHANCED_PROCESSING_CONFIG;
+
 /**
  * AGENTIC MECHANISMS IMPLEMENTED:
  * 
@@ -203,6 +219,8 @@ export class AgenticCore {
    */
   async getWorkingMemory(sessionId: string, userId: string): Promise<any> {
     // Get recent conversation from current session
+    // Use the enhanced config for max history
+    const MAX_HISTORY = CONFIG.MAX_CONVERSATION_HISTORY;
     const { data: recentMessages } = await this.supabase
       .from('chat_messages')
       .select('content, role, timestamp, attached_document_ids, attached_note_ids')
@@ -210,7 +228,7 @@ export class AgenticCore {
       .eq('user_id', userId)
       .eq('is_error', false)
       .order('timestamp', { ascending: false })
-      .limit(20);
+      .limit(MAX_HISTORY);
 
     return {
       recentMessages: recentMessages || [],
@@ -220,14 +238,16 @@ export class AgenticCore {
   }
 
   async getLongTermMemory(userId: string): Promise<any> {
-    // Get user learning patterns and preferences
+    // Use dynamic config for limits and confidence threshold
+    const MAX_MEMORY = CONFIG.MAX_LONG_TERM_MEMORY;
+    const CONFIDENCE_THRESHOLD = CONFIG.LONG_TERM_MEMORY_CONFIDENCE;
     const { data: userMemory } = await this.supabase
       .from('ai_user_memory')
       .select('*')
       .eq('user_id', userId)
-      .gte('confidence_score', 0.7)
+      .gte('confidence_score', CONFIDENCE_THRESHOLD)
       .order('last_referenced', { ascending: false })
-      .limit(50);
+      .limit(MAX_MEMORY);
 
     return {
       facts: userMemory || [],
@@ -327,10 +347,13 @@ export class AgenticCore {
     const queryLower = query.toLowerCase();
 
     // Fetch user's content to match against
+    const NOTES_LIMIT = CONFIG.MAX_ENTITY_NOTES;
+    const DOCS_LIMIT = CONFIG.MAX_ENTITY_DOCUMENTS;
+    const GOALS_LIMIT = CONFIG.MAX_ENTITY_GOALS;
     const [notes, documents, goals] = await Promise.all([
-      this.supabase.from('notes').select('id, title').eq('user_id', userId).limit(100),
-      this.supabase.from('documents').select('id, title').eq('user_id', userId).limit(100),
-      this.supabase.from('user_learning_goals').select('id, goal_text').eq('user_id', userId).limit(50)
+      this.supabase.from('notes').select('id, title').eq('user_id', userId).limit(NOTES_LIMIT),
+      this.supabase.from('documents').select('id, title').eq('user_id', userId).limit(DOCS_LIMIT),
+      this.supabase.from('user_learning_goals').select('id, goal_text').eq('user_id', userId).limit(GOALS_LIMIT)
     ]);
 
     // Match notes
@@ -477,23 +500,66 @@ export class AgenticCore {
     const results: RetrievalResult[] = [];
 
     if (entity.resolvedId) {
-      const table = entity.type === 'note' ? 'notes' : entity.type === 'document' ? 'documents' : null;
-      if (table) {
-        const { data } = await this.supabase
-          .from(table)
-          .select('*')
+      if (entity.type === 'document') {
+        // Fetch document and its attached media, plus direct file/image fields
+        const { data: document } = await this.supabase
+          .from('documents')
+          .select('*, social_media(id, url, type, mime_type, filename, size_bytes, created_at)')
           .eq('id', entity.resolvedId)
           .single();
 
-        if (data) {
+        if (document) {
+          // Collect all possible file/image references
+          const attachments: any[] = [];
+          if (document.social_media && Array.isArray(document.social_media)) {
+            attachments.push(...document.social_media);
+          }
+          if (document.file_url) {
+            attachments.push({ url: document.file_url, type: 'file', mime_type: document.file_mime_type || '', filename: document.filename || '', size_bytes: document.size_bytes || 0 });
+          }
+          if (document.image_url) {
+            attachments.push({ url: document.image_url, type: 'image', mime_type: document.image_mime_type || '', filename: document.image_filename || '', size_bytes: document.image_size_bytes || 0 });
+          }
+          if (document.attachments && Array.isArray(document.attachments)) {
+            attachments.push(...document.attachments);
+          }
+
           results.push({
-            type: entity.type,
-            id: data.id,
-            title: data.title,
+            type: 'document',
+            id: document.id,
+            title: document.title,
             relevanceScore: 1.0,
-            temporalScore: this.calculateTemporalScore(data.updated_at || data.created_at),
-            content: data.content || data.content_extracted,
-            metadata: data
+            temporalScore: this.calculateTemporalScore(document.updated_at || document.created_at),
+            content: document.content || document.content_extracted,
+            metadata: { ...document, attachments }
+          });
+        }
+      } else if (entity.type === 'note') {
+        // Fetch note and check for direct file/image fields
+        const { data: note } = await this.supabase
+          .from('notes')
+          .select('*')
+          .eq('id', entity.resolvedId)
+          .single();
+        if (note) {
+          const attachments: any[] = [];
+          if (note.file_url) {
+            attachments.push({ url: note.file_url, type: 'file', mime_type: note.file_mime_type || '', filename: note.filename || '', size_bytes: note.size_bytes || 0 });
+          }
+          if (note.image_url) {
+            attachments.push({ url: note.image_url, type: 'image', mime_type: note.image_mime_type || '', filename: note.image_filename || '', size_bytes: note.image_size_bytes || 0 });
+          }
+          if (note.attachments && Array.isArray(note.attachments)) {
+            attachments.push(...note.attachments);
+          }
+          results.push({
+            type: 'note',
+            id: note.id,
+            title: note.title,
+            relevanceScore: 1.0,
+            temporalScore: this.calculateTemporalScore(note.updated_at || note.created_at),
+            content: note.content,
+            metadata: { ...note, attachments }
           });
         }
       }
@@ -519,12 +585,13 @@ export class AgenticCore {
     const results: RetrievalResult[] = [];
 
     // Search in notes
+    const TOPIC_LIMIT = CONFIG.MAX_TOPIC_RESULTS;
     const { data: notes } = await this.supabase
       .from('notes')
       .select('*')
       .eq('user_id', userId)
       .or(topics.map(t => `title.ilike.%${t}%,content.ilike.%${t}%,tags.cs.{${t}}`).join(','))
-      .limit(20);
+      .limit(TOPIC_LIMIT);
 
     notes?.forEach((note: any) => {
       results.push({
@@ -547,12 +614,14 @@ export class AgenticCore {
     const results: RetrievalResult[] = [];
 
     // Retrieve from multiple tables based on time range
+    const SCHEDULE_LIMIT = CONFIG.MAX_SCHEDULE_RESULTS;
     const { data: schedules } = await this.supabase
       .from('schedule_items')
       .select('*')
       .eq('user_id', userId)
       .gte('start_time', timeRange.start)
-      .lte('start_time', timeRange.end);
+      .lte('start_time', timeRange.end)
+      .limit(SCHEDULE_LIMIT);
 
     schedules?.forEach((item: any) => {
       results.push({
@@ -577,13 +646,14 @@ export class AgenticCore {
     const results: RetrievalResult[] = [];
 
     // Find relevant past sessions
+    const SESSION_LIMIT = CONFIG.MAX_CROSS_SESSION_RESULTS;
     const { data: sessions } = await this.supabase
       .from('chat_sessions')
       .select('id, title, context_summary, last_message_at')
       .eq('user_id', userId)
       .neq('id', sessionId)
       .order('last_message_at', { ascending: false })
-      .limit(10);
+      .limit(SESSION_LIMIT);
 
     sessions?.forEach((session: any) => {
       const relevance = this.calculateSessionRelevance(session, topics);
@@ -760,12 +830,13 @@ export class AgenticCore {
 
   private async getLearningHistory(userId: string, topics: string[]): Promise<any> {
     // Get quiz history related to topics
+    const QUIZ_LIMIT = CONFIG.MAX_LEARNING_HISTORY;
     const { data: quizzes } = await this.supabase
       .from('quiz_attempts')
       .select('*, quizzes(title)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(QUIZ_LIMIT);
 
     return quizzes || [];
   }

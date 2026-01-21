@@ -8,6 +8,140 @@ export class StuddyHubActionsService {
         this.supabase = createClient(supabaseUrl, supabaseKey);
     }
 
+
+
+    // ========== GENERIC DB ACTION EXECUTOR ==========
+    async executeDbAction(
+        userId: string,
+        table: string,
+        operation: 'INSERT' | 'UPDATE' | 'DELETE' | 'SELECT',
+        data: any = {},
+        filters: any = {},
+        order: any = null,
+        limit: number | null = null
+    ): Promise<{ success: boolean; data?: any; error?: string }> {
+        console.log(`[ActionsService] Executing ${operation} on ${table}`);
+        const allowedTables = [
+            'achievements', 'admin_activity_logs', 'admin_system_settings', 'admin_users', 'ai_podcasts',
+            'ai_user_memory', 'app_stats', 'audio_processing_results', 'badges', 'calendar_integrations',
+            'chat_messages', 'chat_sessions', 'class_recordings', 'content_moderation_log',
+            'content_moderation_queue', 'course_materials', 'courses', 'document_folder_items',
+            'document_folders', 'documents', 'error_logs', 'failed_chunks', 'flashcards',
+            'learning_topic_connections', 'notes', 'notification_preferences', 'notification_subscriptions',
+            'notifications', 'podcast_invites', 'podcast_listeners', 'podcast_members', 'podcast_shares',
+            'profiles', 'quiz_attempts', 'quizzes', 'referrals', 'schedule_items', 'schedule_reminders',
+            'schema_agent_audit', 'social_bookmarks', 'social_chat_message_media', 'social_chat_message_reads',
+            'social_chat_message_resources', 'social_chat_messages', 'social_chat_sessions',
+            'social_comment_media', 'social_comments', 'social_event_attendees', 'social_events',
+            'social_follows', 'social_group_members', 'social_groups', 'social_hashtags', 'social_likes',
+            'social_media', 'social_notifications', 'social_post_hashtags', 'social_post_tags',
+            'social_post_views', 'social_posts', 'social_reports', 'social_shares', 'social_tags',
+            'social_users', 'subscriptions', 'system_settings', 'user_learning_goals', 'user_stats'
+        ];
+
+        if (!allowedTables.includes(table)) {
+            return { success: false, error: `Table '${table}' is not whitelisted for AI actions.` };
+        }
+
+        // Helper to recursively replace "auth.uid" with actual userId
+        const replaceAuthUid = (obj: any): any => {
+            if (typeof obj === 'string') {
+                return obj === 'auth.uid' ? userId : obj;
+            }
+            if (Array.isArray(obj)) {
+                return obj.map(replaceAuthUid);
+            }
+            if (typeof obj === 'object' && obj !== null) {
+                const newObj: any = {};
+                for (const key in obj) {
+                    newObj[key] = replaceAuthUid(obj[key]);
+                }
+                return newObj;
+            }
+            return obj;
+        };
+
+        const cleanData = replaceAuthUid(data);
+        const cleanFilters = replaceAuthUid(filters);
+
+        try {
+            let query = this.supabase.from(table);
+
+            if (operation === 'INSERT') {
+                if (!cleanData.user_id) {
+                    cleanData.user_id = userId;
+                }
+
+                const { data: result, error } = await query.insert(cleanData).select();
+                if (error) throw error;
+                return { success: true, data: result };
+
+            } else if (operation === 'UPDATE') {
+                if (Object.keys(cleanFilters).length === 0) {
+                    return { success: false, error: 'UPDATE operation requires filters (e.g. { id: ... })' };
+                }
+
+                const { data: result, error } = await query.update(cleanData).match(cleanFilters).select();
+                if (error) throw error;
+                return { success: true, data: result };
+
+            } else if (operation === 'DELETE') {
+                if (Object.keys(cleanFilters).length === 0) {
+                    return { success: false, error: 'DELETE operation requires filters' };
+                }
+
+                const { error } = await query.delete().match(cleanFilters);
+                if (error) throw error;
+                return { success: true, data: { status: 'deleted' } };
+
+            } else if (operation === 'SELECT') {
+                let selectQuery = query.select();
+                if (cleanFilters) {
+                    selectQuery = selectQuery.match(cleanFilters);
+                }
+                if (order) {
+                    let column = '';
+                    let ascending = true;
+
+                    if (typeof order === 'string') {
+                        // Handle "column.asc" or "column.desc"
+                        if (order.includes('.')) {
+                            const [col, dir] = order.split('.');
+                            column = col;
+                            ascending = dir.toLowerCase() !== 'desc';
+                        } else {
+                            column = order;
+                            ascending = true;
+                        }
+                    } else if (typeof order === 'object' && order.column) {
+                        column = order.column;
+                        ascending = order.direction !== 'desc';
+                    }
+
+                    if (column) {
+                        console.log(`[ActionsService] Ordering by ${column} (${ascending ? 'asc' : 'desc'})`);
+                        selectQuery = selectQuery.order(column, { ascending });
+                    }
+                }
+                if (limit) {
+                    selectQuery = selectQuery.limit(Number(limit));
+                } else {
+                    selectQuery = selectQuery.limit(10); // Default limit
+                }
+
+                const { data: result, error } = await selectQuery;
+                if (error) throw error;
+                return { success: true, data: result };
+            }
+
+            return { success: false, error: `Unsupported operation: ${operation}` };
+
+        } catch (error: any) {
+            console.error(`[ActionsService] Error executing ${operation}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
     // ========== HELPER METHODS ==========
     private async getNoteIdByTitle(userId: string, noteTitle: string): Promise<string | null> {
         try {
@@ -26,7 +160,7 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('title', `%${noteTitle}%`)
                     .limit(1);
-                
+
                 return notes?.[0]?.id || null;
             }
             return note.id;
@@ -53,7 +187,7 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('title', `%${documentTitle}%`)
                     .limit(1);
-                
+
                 return documents?.[0]?.id || null;
             }
             return document.id;
@@ -79,7 +213,7 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('name', `%${folderName}%`)
                     .limit(1);
-                
+
                 return folders?.[0]?.id || null;
             }
             return folder.id;
@@ -105,7 +239,7 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('title', `%${quizTitle}%`)
                     .limit(1);
-                
+
                 return quizzes?.[0]?.id || null;
             }
             return quiz.id;
@@ -131,7 +265,7 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('goal_text', `%${goalText}%`)
                     .limit(1);
-                
+
                 return goals?.[0] || null;
             }
             return goal;
@@ -157,7 +291,7 @@ export class StuddyHubActionsService {
                     .eq('user_id', userId)
                     .ilike('title', `%${itemTitle}%`)
                     .limit(1);
-                
+
                 return items?.[0] || null;
             }
             return item;
@@ -168,6 +302,40 @@ export class StuddyHubActionsService {
     }
 
     // ========== NOTE OPERATIONS ==========
+    async generateImage(userId: string, prompt: string) {
+        try {
+            console.log(`[ActionService] Generating image for prompt: "${prompt}"`);
+
+            const { data, error } = await this.supabase.functions.invoke('generate-image-from-text', {
+                body: {
+                    description: prompt,
+                    userId: userId
+                }
+            });
+
+            if (error) {
+                console.error('[ActionService] Error generating image:', error);
+                // Return descriptive error 
+                return { success: false, error: `Image generation failed: ${error.message || 'Unknown error'}` };
+            }
+
+            if (!data || !data.imageUrl) {
+                console.error('[ActionService] No image URL in response:', data);
+                return { success: false, error: 'No image was generated' };
+            }
+
+            return {
+                success: true,
+                imageUrl: data.imageUrl,
+                message: `🎨 Generated image for: "${prompt}"`,
+                prompt: prompt
+            };
+        } catch (error: any) {
+            console.error('[ActionService] Exception generating image:', error);
+            return { success: false, error: `Failed to generate image: ${error.message}` };
+        }
+    }
+
     async createNote(userId: string, noteData: {
         title: string;
         content?: string;
@@ -274,7 +442,7 @@ export class StuddyHubActionsService {
         try {
             const noteId = await this.getNoteIdByTitle(userId, noteTitle);
             const documentId = await this.getDocumentIdByTitle(userId, documentTitle);
-            
+
             if (!noteId) return { success: false, error: `Note "${noteTitle}" not found` };
             if (!documentId) return { success: false, error: `Document "${documentTitle}" not found` };
 
@@ -353,7 +521,7 @@ export class StuddyHubActionsService {
         try {
             const documentId = await this.getDocumentIdByTitle(userId, documentTitle);
             const folderId = await this.getFolderIdByName(userId, folderName);
-            
+
             if (!documentId) return { success: false, error: `Document "${documentTitle}" not found` };
             if (!folderId) return { success: false, error: `Folder "${folderName}" not found` };
 
@@ -850,9 +1018,9 @@ export class StuddyHubActionsService {
                 xpReward = 10; // XP for significant progress
             }
 
-            return { 
-                success: true, 
-                goal: data, 
+            return {
+                success: true,
+                goal: data,
                 message: `🎯 Updated goal progress to ${progress}%`,
                 xp_reward: xpReward
             };
@@ -950,20 +1118,20 @@ export class StuddyHubActionsService {
             };
 
             const newStats = { ...baseStats };
-            
+
             // Handle increments for cumulative counters
             if (updates.total_xp !== undefined) newStats.total_xp = (baseStats.total_xp || 0) + updates.total_xp;
             if (updates.total_quizzes_attempted !== undefined) newStats.total_quizzes_attempted = (baseStats.total_quizzes_attempted || 0) + updates.total_quizzes_attempted;
             if (updates.total_quizzes_completed !== undefined) newStats.total_quizzes_completed = (baseStats.total_quizzes_completed || 0) + updates.total_quizzes_completed;
             if (updates.total_study_time_seconds !== undefined) newStats.total_study_time_seconds = (baseStats.total_study_time_seconds || 0) + updates.total_study_time_seconds;
-            
+
             // For other fields, overwrite or merge
             if (updates.current_streak !== undefined) newStats.current_streak = updates.current_streak;
             if (updates.longest_streak !== undefined) newStats.longest_streak = updates.longest_streak;
             if (updates.average_score !== undefined) newStats.average_score = updates.average_score;
             if (updates.weak_areas !== undefined) newStats.weak_areas = updates.weak_areas;
             if (updates.badges_earned !== undefined) {
-                 newStats.badges_earned = [...new Set([...(baseStats.badges_earned || []), ...updates.badges_earned])];
+                newStats.badges_earned = [...new Set([...(baseStats.badges_earned || []), ...updates.badges_earned])];
             }
 
             newStats.updated_at = new Date().toISOString();
@@ -1012,8 +1180,8 @@ export class StuddyHubActionsService {
                 return { success: false, error: error.message };
             }
 
-            return { 
-                success: true, 
+            return {
+                success: true,
                 profile: data,
                 message: `👤 Updated profile preferences`
             };
@@ -1129,11 +1297,11 @@ export class StuddyHubActionsService {
             const updates: any = {
                 badges_earned: [data.badges?.name || badgeName]
             };
-            
+
             if (data.badges?.xp_reward) {
                 updates.total_xp = data.badges.xp_reward;
             }
-            
+
             await this.updateUserStats(userId, updates);
 
             return {
@@ -1257,14 +1425,14 @@ export class StuddyHubActionsService {
         const words = content.toLowerCase().split(/\s+/);
         const commonWords = new Set(['the', 'and', 'for', 'with', 'this', 'that', 'have', 'from']);
         const terms = new Set<string>();
-        
+
         for (const word of words) {
             const cleaned = word.replace(/[^\w]/g, '');
             if (cleaned.length > 4 && !commonWords.has(cleaned)) {
                 terms.add(cleaned);
             }
         }
-        
+
         return Array.from(terms).slice(0, 10);
     }
 
@@ -1279,24 +1447,24 @@ export class StuddyHubActionsService {
     }
 
     // ========== ACTION PARSER ==========
-    parseActionFromText(text: string): {
+    parseActionFromText(text: string): Array<{
         action: string;
         params: Record<string, any>;
         confidence: number;
         matchedString: string;
-    } | null {
+    }> {
         const lowerText = text.toLowerCase();
-        
-        // Helper to find the best match
-        let bestMatch: {
-            action: string;
-            params: Record<string, any>;
-            confidence: number;
-            matchedString: string;
-        } | null = null;
 
         // Comprehensive action detection
         const actionPatterns = [
+            // IMAGE GENERATION
+            {
+                pattern: /ACTION:\s*GENERATE_IMAGE\|([^|\n]+)/,
+                action: 'GENERATE_IMAGE',
+                extractor: (match: RegExpMatchArray) => ({
+                    prompt: match[1].trim()
+                })
+            },
             // NOTE ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_NOTE\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
@@ -1334,7 +1502,7 @@ export class StuddyHubActionsService {
                     documentTitle: match[2].trim()
                 })
             },
-            
+
             // FOLDER ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_FOLDER\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
@@ -1354,21 +1522,47 @@ export class StuddyHubActionsService {
                     folderName: match[2].trim()
                 })
             },
-            
+
             // SCHEDULE ACTIONS
             {
-                pattern: /ACTION:\s*CREATE_SCHEDULE\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
+                pattern: /ACTION:\s*CREATE_SCHEDULE\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)(?:\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*))?/,
                 action: 'CREATE_SCHEDULE',
-                extractor: (match: RegExpMatchArray) => ({
-                    title: match[1].trim(),
-                    subject: match[2].trim(),
-                    type: match[3].trim() as any || 'study',
-                    start_time: match[4].trim(),
-                    end_time: match[5].trim(),
-                    description: match[6].trim(),
-                    location: match[7].trim(),
-                    color: match[8].trim() || '#3B82F6'
-                })
+                extractor: (match: RegExpMatchArray) => {
+                    const params: any = {
+                        title: match[1].trim(),
+                        subject: match[2].trim(),
+                        type: match[3].trim() as any || 'study',
+                        start_time: match[4].trim(),
+                        end_time: match[5].trim(),
+                        description: match[6].trim(),
+                        location: match[7].trim(),
+                        color: match[8].trim() || '#3B82F6'
+                    };
+
+                    // Add recurring params if present
+                    if (match[9]) {
+                        params.is_recurring = match[9].trim() === 'true';
+                        params.recurrence_pattern = match[10]?.trim() !== 'null' ? match[10]?.trim() : null;
+
+                        // Parse days array if present
+                        const daysStr = match[11]?.trim();
+                        if (daysStr && daysStr !== 'null' && daysStr.startsWith('[')) {
+                            try {
+                                params.recurrence_days = JSON.parse(daysStr);
+                            } catch (e) {
+                                console.warn('[ActionParser] Failed to parse recurrence days:', daysStr);
+                                params.recurrence_days = [];
+                            }
+                        } else {
+                            params.recurrence_days = [];
+                        }
+
+                        params.recurrence_interval = parseInt(match[12]?.trim() || '1');
+                        params.recurrence_end_date = match[13]?.trim() !== 'null' ? match[13]?.trim() : null;
+                    }
+
+                    return params;
+                }
             },
             {
                 pattern: /ACTION:\s*UPDATE_SCHEDULE\|([^|]+)\|([^|]+)/,
@@ -1385,7 +1579,7 @@ export class StuddyHubActionsService {
                     itemTitle: match[1].trim()
                 })
             },
-            
+
             // FLASHCARD ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_FLASHCARDS_FROM_NOTE\|([^|]+)\|(\d+)/,
@@ -1406,7 +1600,7 @@ export class StuddyHubActionsService {
                     hint: match[5].trim() || null
                 })
             },
-            
+
             // LEARNING GOAL ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_LEARNING_GOAL\|([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)/,
@@ -1426,9 +1620,9 @@ export class StuddyHubActionsService {
                     progress: parseInt(match[2].trim())
                 })
             },
-            
+
             // QUIZ ACTIONS
-           {
+            {
                 pattern: /ACTION:\s*CREATE_QUIZ\|([^|]+)\|(\d+)\|([^|]*)\|([^|]*)/,
                 action: 'CREATE_QUIZ',
                 extractor: (match: RegExpMatchArray) => {
@@ -1452,7 +1646,7 @@ export class StuddyHubActionsService {
                     xp_earned: parseInt(match[5].trim())
                 })
             },
-            
+
             // RECORDING ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_RECORDING\|([^|]+)\|([^|]+)\|(\d+)\|([^|]*)\|([^|]*)\|([^|]*)/,
@@ -1466,7 +1660,7 @@ export class StuddyHubActionsService {
                     document_title: match[6].trim()
                 })
             },
-            
+
             // PROFILE & STATS ACTIONS
             {
                 pattern: /ACTION:\s*UPDATE_PROFILE\|([^|]+)/,
@@ -1489,7 +1683,7 @@ export class StuddyHubActionsService {
                     badgeName: match[1].trim()
                 })
             },
-            
+
             // SOCIAL ACTIONS
             {
                 pattern: /ACTION:\s*CREATE_POST\|([^|]+)\|([^|]*)\|([^|]*)/,
@@ -1500,7 +1694,7 @@ export class StuddyHubActionsService {
                     group_name: match[3].trim() || null
                 })
             },
-            
+
             // MEMORY ACTIONS
             {
                 pattern: /ACTION:\s*UPDATE_USER_MEMORY\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]*)/,
@@ -1514,23 +1708,45 @@ export class StuddyHubActionsService {
             }
         ];
 
-        // First, check for explicit action markers
+        // Store all identified actions
+        const foundActions: Array<{
+            action: string;
+            params: Record<string, any>;
+            confidence: number;
+            matchedString: string;
+        }> = [];
+
+        // First, check for explicit action markers with global search
         for (const pattern of actionPatterns) {
-            const match = text.match(pattern.pattern);
-            if (match) {
-                console.log(`[ActionParser] Found explicit action: ${pattern.action}`);
-                return {
-                    action: pattern.action,
-                    params: pattern.extractor(match),
-                    confidence: 0.95,
-                    matchedString: match[0]
-                };
+            try {
+                // Create a global regex from the pattern
+                const globalRegex = new RegExp(pattern.pattern.source, 'g');
+                let match: RegExpExecArray | null;
+
+                // Keep searching until no more matches found
+                while ((match = globalRegex.exec(text)) !== null) {
+                    console.log(`[ActionParser] Found explicit action: ${pattern.action}`);
+                    foundActions.push({
+                        action: pattern.action,
+                        params: pattern.extractor(match),
+                        confidence: 0.95,
+                        matchedString: match[0]
+                    });
+                }
+            } catch (error) {
+                console.error(`[ActionParser] Error processing pattern for ${pattern.action}:`, error);
             }
         }
 
-        // Fallback: Natural language detection
+        // If we found explicitly marked actions, prioritize them and return
+        if (foundActions.length > 0) {
+            return foundActions;
+        }
+
+        // Fallback: Natural language detection (Implicit actions)
+        // Note: For now, we only detect ONE implicit action at a time to avoid false positives
         if (lowerText.includes('create a note') || lowerText.includes('make a note')) {
-            return {
+            return [{
                 action: 'CREATE_NOTE',
                 params: {
                     title: this.extractTitle(text) || 'New Note',
@@ -1540,14 +1756,14 @@ export class StuddyHubActionsService {
                 },
                 confidence: 0.7,
                 matchedString: '' // No specific string to strip for implicit/fallback actions
-            };
+            }];
         }
 
         if (lowerText.includes('make flashcards') && lowerText.includes('from note')) {
             const noteMatch = text.match(/from (?:my )?note[:\s]+"?([^"\n]+)"?/i);
             const countMatch = text.match(/(\d+)\s+(?:flashcards?|cards?)/i);
-            
-            return {
+
+            return [{
                 action: 'CREATE_FLASHCARDS_FROM_NOTE',
                 params: {
                     noteTitle: noteMatch ? noteMatch[1].trim() : this.extractTitle(text) || 'Recent Note',
@@ -1555,11 +1771,11 @@ export class StuddyHubActionsService {
                 },
                 confidence: 0.8,
                 matchedString: ''
-            };
+            }];
         }
 
         if (lowerText.includes('schedule') || lowerText.includes('calendar')) {
-            return {
+            return [{
                 action: 'CREATE_SCHEDULE',
                 params: {
                     title: this.extractTitle(text) || 'Study Session',
@@ -1573,11 +1789,11 @@ export class StuddyHubActionsService {
                 },
                 confidence: 0.6,
                 matchedString: ''
-            };
+            }];
         }
 
         if (lowerText.includes('learning goal') || lowerText.includes('set goal')) {
-            return {
+            return [{
                 action: 'CREATE_LEARNING_GOAL',
                 params: {
                     goal_text: this.extractGoalText(text) || 'New Learning Goal',
@@ -1587,10 +1803,10 @@ export class StuddyHubActionsService {
                 },
                 confidence: 0.7,
                 matchedString: ''
-            };
+            }];
         }
 
-        return null;
+        return [];
     }
 
     private extractTitle(text: string): string | null {
@@ -1620,5 +1836,204 @@ export class StuddyHubActionsService {
         // Also look for hashtags
         const hashtags = text.match(/#(\w+)/g);
         return hashtags ? hashtags.map(tag => tag.substring(1)) : [];
+    }
+    // ==================================================================
+    // 📱 SOCIAL MEDIA ACTIONS
+    // ==================================================================
+
+    async createRichSocialPost(userId: string, params: {
+        content: string,
+        privacy: 'public' | 'followers' | 'private',
+        groupId?: string,
+        mediaFiles?: { url: string, type: 'image' | 'video' | 'document', mimeType: string }[]
+    }) {
+        // 0. Ensure social user exists
+        const { data: socialUser } = await this.supabase
+            .from('social_users')
+            .select('id')
+            .eq('id', userId)
+            .single();
+
+        if (!socialUser) {
+            const { data: profile } = await this.supabase
+                .from('profiles')
+                .select('full_name, username, email')
+                .eq('id', userId)
+                .single();
+
+            await this.supabase
+                .from('social_users')
+                .insert({
+                    id: userId,
+                    username: profile?.username || `user_${userId.substring(0, 8)}`,
+                    display_name: profile?.full_name || 'User',
+                    email: profile?.email,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                });
+        }
+
+        // 1. Create Post
+        const { data: post, error: postError } = await this.supabase
+            .from('social_posts')
+            .insert({
+                author_id: userId,
+                content: params.content,
+                privacy: params.privacy,
+                group_id: params.groupId === 'null' ? null : params.groupId,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (postError) throw new Error(`Failed to create post: ${postError.message}`);
+
+        // 2. Attach Media (if provided)
+        if (params.mediaFiles && params.mediaFiles.length > 0) {
+            const mediaInserts = params.mediaFiles.map((file: any) => ({
+                post_id: post.id,
+                url: file.url,
+                type: file.type,
+                mime_type: file.mimeType,
+                filename: 'attachment',
+                size_bytes: 0
+            }));
+
+            const { error: mediaError } = await this.supabase
+                .from('social_media')
+                .insert(mediaInserts);
+
+            if (mediaError) console.error('Error attaching media:', mediaError);
+        }
+
+        return { success: true, message: "Social post created successfully", data: post };
+    }
+
+    async engageSocial(userId: string, params: { action: 'like' | 'comment', targetId: string, content?: string }) {
+        if (params.action === 'like') {
+            const { error } = await this.supabase
+                .from('social_likes')
+                .insert({ user_id: userId, post_id: params.targetId });
+
+            // Ignore duplicate key errors (already liked)
+            if (error && error.code !== '23505') throw new Error(`Like failed: ${error.message}`);
+            return { success: true, message: "Post liked" };
+        }
+
+        if (params.action === 'comment' && params.content) {
+            const { error } = await this.supabase.from('social_comments').insert({
+                author_id: userId,
+                post_id: params.targetId,
+                content: params.content
+            });
+            if (error) throw new Error(`Comment failed: ${error.message}`);
+            return { success: true, message: "Comment added" };
+        }
+        return { success: false, error: "Invalid action" };
+    }
+
+    // ==================================================================
+    // 🎙️ PODCAST ACTIONS
+    // ==================================================================
+
+    async generatePodcast(userId: string, params: {
+        title: string,
+        sourceIds: string[],
+        style: 'casual' | 'educational' | 'deep-dive'
+    }) {
+        const { data, error } = await this.supabase.from('ai_podcasts').insert({
+            user_id: userId,
+            title: params.title,
+            sources: params.sourceIds,
+            style: params.style,
+            status: 'processing', // Triggers background edge function
+            script: '',
+            audio_segments: {},
+            duration_minutes: 0,
+            podcast_type: 'audio'
+        }).select().single();
+
+        if (error) throw new Error(`Podcast generation failed: ${error.message}`);
+        return { success: true, message: "Podcast generation started", data };
+    }
+
+    // ==================================================================
+    // 👥 GROUP & EVENT ACTIONS
+    // ==================================================================
+
+    async createStudyGroup(userId: string, params: { name: string, description: string, category: string }) {
+        // 1. Create Group
+        const { data: group, error } = await this.supabase.from('social_groups').insert({
+            name: params.name,
+            description: params.description,
+            category: params.category,
+            created_by: userId,
+            privacy: 'public'
+        }).select().single();
+
+        if (error) throw new Error(`Group creation failed: ${error.message}`);
+
+        // 2. Add Creator as Admin
+        await this.supabase.from('social_group_members').insert({
+            group_id: group.id,
+            user_id: userId,
+            role: 'admin',
+            status: 'active'
+        });
+
+        return { success: true, message: `Group '${params.name}' created`, data: group };
+    }
+
+    async scheduleGroupEvent(userId: string, params: {
+        groupId: string,
+        title: string,
+        startTime: string,
+        endTime: string
+    }) {
+        const { data, error } = await this.supabase.from('social_events').insert({
+            organizer_id: userId,
+            group_id: params.groupId,
+            title: params.title,
+            start_date: params.startTime,
+            end_date: params.endTime,
+            is_online: true
+        }).select().single();
+
+        if (error) throw new Error(`Event scheduling failed: ${error.message}`);
+
+        // Auto-attend organizer
+        await this.supabase.from('social_event_attendees').insert({
+            event_id: data.id,
+            user_id: userId,
+            status: 'attending'
+        });
+
+        return { success: true, message: "Group event scheduled", data };
+    }
+
+    // ==================================================================
+    // 🎓 COURSE ACTIONS
+    // ==================================================================
+
+    async createCourse(userId: string, params: { code: string, title: string, description: string }) {
+        const { data, error } = await this.supabase.from('courses').insert({
+            code: params.code,
+            title: params.title,
+            description: params.description
+        }).select().single();
+
+        if (error) throw new Error(`Course creation failed: ${error.message}`);
+        return { success: true, message: `Course ${params.code} created`, data };
+    }
+
+    async getReferralCode(userId: string) {
+        const { data } = await this.supabase.from('profiles').select('referral_code').eq('id', userId).single();
+        if (data?.referral_code) return { success: true, code: data.referral_code };
+
+        // Generate if missing
+        const newCode = `STUDY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        await this.supabase.from('profiles').update({ referral_code: newCode }).eq('id', userId);
+        return { success: true, code: newCode };
     }
 }

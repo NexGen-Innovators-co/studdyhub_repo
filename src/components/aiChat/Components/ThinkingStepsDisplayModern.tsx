@@ -246,6 +246,11 @@ export const ThinkingStepsDisplay = memo(({ steps, isStreaming, className }: Thi
                     {/* Duration or metadata badge */}
                     {step.metadata && (
                       <div className="flex gap-1 flex-shrink-0">
+                        {step.metadata.index !== undefined && step.metadata.total !== undefined && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
+                            {step.metadata.index + 1}/{step.metadata.total}
+                          </span>
+                        )}
                         {step.metadata.count !== undefined && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
                             {step.metadata.count}
@@ -284,13 +289,17 @@ export const ThinkingStepsDisplay = memo(({ steps, isStreaming, className }: Thi
                                 </span>
                               )}
                               {step.metadata.entities && Array.isArray(step.metadata.entities) && step.metadata.entities.length > 0 && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
-                                  {step.metadata.entities.length} entities
-                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {step.metadata.entities.map((entity: string, i: number) => (
+                                    <span key={i} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+                                      {entity}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
-                              {step.metadata.contextItems !== undefined && (
+                              {step.metadata.contextCount !== undefined && (
                                 <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
-                                  {step.metadata.contextItems} items
+                                  {step.metadata.contextCount} context items
                                 </span>
                               )}
                               {step.metadata.confidence !== undefined && (
@@ -298,6 +307,21 @@ export const ThinkingStepsDisplay = memo(({ steps, isStreaming, className }: Thi
                                   {Math.round(step.metadata.confidence * 100)}% confidence
                                 </span>
                               )}
+                              {step.metadata.issues && Array.isArray(step.metadata.issues) && step.metadata.issues.length > 0 && (
+                                <div className="w-full flex flex-col gap-1 mt-1">
+                                  {step.metadata.issues.map((issue: string, i: number) => (
+                                    <span key={i} className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                      <ChevronRight className="w-2 h-2" /> {issue}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {(step.metadata.msgCount !== undefined || step.metadata.factCount !== undefined) && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                                  {step.metadata.msgCount || 0} msgs • {step.metadata.factCount || 0} facts
+                                </span>
+                              )}
+                              {/* Action details hidden to maintain user-friendly interface */}
                             </div>
                           )}
                         </div>
