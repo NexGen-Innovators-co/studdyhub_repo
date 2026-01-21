@@ -11,57 +11,43 @@ export class UserContextService {
     // Add this method for action support - OPTIMIZED FOR ACCURACY
     async getActionableContext(userId: string) {
         try {
-            // Run comprehensive parallel queries for full context
             const [
                 notesResult,
                 documentsResult,
                 foldersResult,
                 scheduleResult,
                 goalsResult,
-                quizzesResult
+                quizzesResult,
+                // NEW: Fetch Groups, Podcasts, Courses
+                groupsResult,
+                podcastsResult,
+                coursesResult
             ] = await Promise.all([
-                // Get comprehensive notes list
-                this.supabase.from('notes')
-                    .select('id, title, category, tags, ai_summary')
-                    .eq('user_id', userId)
-                    .order('updated_at', { ascending: false })
-                    .limit(50),
+                // 1-6 Existing queries
+                this.supabase.from('notes').select('id, title, category, tags').eq('user_id', userId).limit(50),
+                this.supabase.from('documents').select('id, title, type').eq('user_id', userId).limit(50),
+                this.supabase.from('document_folders').select('id, name').eq('user_id', userId),
+                this.supabase.from('schedule_items').select('*').eq('user_id', userId).limit(30),
+                this.supabase.from('user_learning_goals').select('*').eq('user_id', userId).limit(20),
+                this.supabase.from('quizzes').select('id, title').eq('user_id', userId).limit(20),
 
-                // Get comprehensive documents list
-                this.supabase.from('documents')
-                    .select('id, title, type, processing_status')
-                    .eq('user_id', userId)
-                    .order('updated_at', { ascending: false })
-                    .limit(50),
+                // 7. Social Groups (Created by user)
+                this.supabase.from('social_groups')
+                    .select('id, name, category')
+                    .eq('created_by', userId)
+                    .limit(10),
 
-                // Get folder structure for organization
-                this.supabase.from('document_folders')
-                    .select('id, name, parent_folder_id, color')
-                    .eq('user_id', userId)
-                    .order('updated_at', { ascending: false }),
-
-                // Get upcoming schedule
-                this.supabase.from('schedule_items')
-                    .select('id, title, start_time, subject, type, is_recurring, recurrence_pattern, recurrence_days, recurrence_end_date')
-                    .eq('user_id', userId)
-                    .gte('start_time', new Date().toISOString())
-                    .order('start_time', { ascending: true })
-                    .limit(30),
-
-                // Get all active goals
-                this.supabase.from('user_learning_goals')
-                    .select('id, goal_text, progress, target_date')
-                    .eq('user_id', userId)
-                    .eq('is_completed', false)
-                    .order('updated_at', { ascending: false })
-                    .limit(20),
-
-                // Get recent quizzes
-                this.supabase.from('quizzes')
-                    .select('id, title')
+                // 8. AI Podcasts
+                this.supabase.from('ai_podcasts')
+                    .select('id, title, status')
                     .eq('user_id', userId)
                     .order('created_at', { ascending: false })
-                    .limit(20)
+                    .limit(5),
+
+                // 9. Courses
+                this.supabase.from('courses')
+                    .select('id, code, title')
+                    .limit(10)
             ]);
 
             return {
@@ -71,7 +57,10 @@ export class UserContextService {
                 schedule: scheduleResult.data || [],
                 goals: goalsResult.data || [],
                 quizzes: quizzesResult.data || [],
-                flashcards: []  // Can be added if needed
+                // New Context
+                groups: groupsResult.data || [],
+                podcasts: podcastsResult.data || [],
+                courses: coursesResult.data || []
             };
         } catch (error) {
             console.error('[ContextService] Error getting actionable context:', error);
@@ -484,7 +473,8 @@ async analyzeLearningPatterns(userId) {
     async updateUserMemory(userId, facts) {
         try {
             for (const fact of facts) {
-                const { data: existing } = await this.supabase
+                console.log(`[updateUserMemory] Processing fact:`, fact);
+                const { data: existing, error: selectError } = await this.supabase
                     .from('ai_user_memory')
                     .select('id, confidence_score, referenced_count')
                     .eq('user_id', userId)
@@ -492,9 +482,12 @@ async analyzeLearningPatterns(userId) {
                     .eq('fact_key', fact.fact_key)
                     .eq('fact_value', fact.fact_value)
                     .maybeSingle();
+                if (selectError) {
+                    console.error('[updateUserMemory] Error selecting existing fact:', selectError);
+                }
 
                 if (existing) {
-                    await this.supabase
+                    const { error: updateError } = await this.supabase
                         .from('ai_user_memory')
                         .update({
                             confidence_score: Math.min(1.0, existing.confidence_score + 0.1),
@@ -502,8 +495,13 @@ async analyzeLearningPatterns(userId) {
                             referenced_count: (existing.referenced_count || 0) + 1
                         })
                         .eq('id', existing.id);
+                    if (updateError) {
+                        console.error('[updateUserMemory] Error updating fact:', updateError);
+                    } else {
+                        console.log(`[updateUserMemory] Updated existing fact:`, existing.id);
+                    }
                 } else {
-                    await this.supabase
+                    const { error: insertError } = await this.supabase
                         .from('ai_user_memory')
                         .insert({
                             user_id: userId,
@@ -515,6 +513,11 @@ async analyzeLearningPatterns(userId) {
                             last_referenced: new Date().toISOString(),
                             referenced_count: 1
                         });
+                    if (insertError) {
+                        console.error('[updateUserMemory] Error inserting new fact:', insertError);
+                    } else {
+                        console.log(`[updateUserMemory] Inserted new fact for user:`, userId);
+                    }
                 }
             }
         } catch (error) {

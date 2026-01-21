@@ -1,3 +1,4 @@
+/// <reference lib="deno.ns" />
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { UserContextService } from './context-service.ts';
@@ -6,6 +7,8 @@ import { StuddyHubActionsService } from './actions-service.ts';
 import { AgenticCore, type UserIntent, type EntityMention } from './agentic-core.ts';
 import { createStreamResponse, StreamingHandler } from './streaming-handler.ts';
 import { createSubscriptionValidator, createErrorResponse } from '../utils/subscription-validator.ts';
+import { executeParsedActions, runAction, AI_ACTION_SCHEMA, getFriendlyActionLabel } from './actions-helper.ts';
+import { DB_SCHEMA_DEFINITION } from './db_schema.ts';
 
 // Define CORS headers for cross-origin requests
 const corsHeaders = {
@@ -85,269 +88,394 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
   console.log(`[ActionExecution] Processing AI response for actions...`);
 
   // 1. Parse actions from the text
-  const action = actionsService.parseActionFromText(aiResponse);
+  const actionsRaw = actionsService.parseActionFromText(aiResponse);
+  // Ensure array
+  const actionList = Array.isArray(actionsRaw) ? actionsRaw : (actionsRaw ? [actionsRaw] : []);
+
+  // Detect if user confirmed but no ACTION marker is present (for debugging)
+  if (aiResponse.match(/(yes|ok|sure|do it|please proceed|go ahead)/i) && actionList.length === 0) {
+    console.warn('[ActionExecution][WARNING] User confirmed an action but no ACTION: marker was found in the AI response. The requested operation will NOT be executed. Ensure the AI outputs the correct ACTION: marker after confirmation.');
+
+    // Backend fallback: re-prompt the AI for the ACTION: marker and retry ONCE
+    // Only do this if not already a retry (avoid infinite loop)
+    if (!aiResponse.includes('[RETRY_ACTION_MARKER]')) {
+      const promptEngine = new EnhancedPromptEngine();
+      const fallbackPrompt = `You must output the correct ACTION: marker for the confirmed operation. The user just confirmed an action (e.g., posting to the social feed), but your last reply did NOT include the required ACTION: marker. Please reply with ONLY the correct ACTION: marker for the confirmed action, nothing else.\n\n[RETRY_ACTION_MARKER]`;
+      // Call the LLM again with the fallback prompt and the last user/AI turns
+      // (Assume agenticCore.generateGeminiCompletion is available and takes a prompt and context)
+      try {
+        const retryContents = [{ role: 'model', parts: [{ text: aiResponse }] }, { role: 'user', parts: [{ text: fallbackPrompt }] }];
+        const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
+        const retryApiResult = await callEnhancedGeminiAPI(retryContents, geminiApiKey);
+        const retryResponse = retryApiResult.content || '';
+        // Try to execute actions from the retry response
+        const retryResult = await executeAIActions(userId, sessionId, retryResponse);
+        // Merge executed actions and return
+        return {
+          executedActions: retryResult.executedActions,
+          modifiedResponse: retryResult.modifiedResponse
+        };
+      } catch (err) {
+        console.error('[ActionExecution][Fallback] Failed to re-prompt for ACTION marker:', err);
+      }
+    }
+  }
+
 
   // 2. Execute parsed action if found
-  if (action) {
-    console.log(`[ActionExecution] Found action: ${action.action} with confidence ${action.confidence}`);
+  if (actionList.length > 0) {
+    console.log(`[ActionExecution] Found ${actionList.length} actions.`);
 
-    // Remove the action command from the response to prevent it from showing to the user
-    if (action.matchedString) {
-       // Escape special regex chars
-       const escaped = action.matchedString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-       // Remove the matched action string and any trailing text on the same line
-       modifiedResponse = aiResponse.replace(new RegExp(escaped + '.*', 'g'), '').trim();
-    } else { 
-       // Fallback for implicit actions or if matchedString is missing
-       modifiedResponse = aiResponse.replace(/ACTION:\s*[A-Z_]+(?:\|.*)?(?:\n+|$)/g, '').trim();
+    // First pass: Cleanup text for ALL actions
+    for (const action of actionList) {
+      if (action.matchedString) {
+        // Escape special regex chars
+        const escaped = action.matchedString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Remove the matched action string and any trailing text on the same line
+        modifiedResponse = modifiedResponse.replace(new RegExp(escaped + '.*', 'g'), '').trim();
+      }
     }
+    // Fallback cleanup
+    modifiedResponse = modifiedResponse.replace(/ACTION:\s*[A-Z_]+(?:\|.*)?(?:\n+|$)/g, '').trim();
 
     // IMPORTANT: Verify user approval before executing actions automatically.
     // Currently, we'll mark them as 'proposed' instead of executing them immediately
     // to solve the issue of unapproved automatic actions.
+    // Only execute actions after explicit user confirmation.
     const AUTO_EXECUTE_ENABLED = true;
 
     if (AUTO_EXECUTE_ENABLED) {
+      for (const action of actionList) {
         try {
-        let result: any;
+          let result: any;
+          console.log(`[ActionExecution] Executing action: ${action.action}`);
 
-        switch (action.action) {
+          switch (action.action) {
+
+            case 'CREATE_RICH_POST':
+              console.log(`[ActionExecution] Creating rich post`);
+              // Parse media files if provided as JSON string
+              let mediaFiles = [];
+              try {
+                if (action.params.media_json) mediaFiles = JSON.parse(action.params.media_json);
+              } catch (e) { console.error("Error parsing media JSON", e); }
+
+              result = await actionsService.createRichSocialPost(userId, {
+                content: action.params.content,
+                privacy: action.params.privacy || 'public',
+                groupId: action.params.group_id,
+                mediaFiles: mediaFiles
+              });
+              break;
+
+            case 'ENGAGE_SOCIAL':
+              console.log(`[ActionExecution] Social engagement`);
+              result = await actionsService.engageSocial(userId, {
+                action: action.params.action,
+                targetId: action.params.target_id,
+                content: action.params.content
+              });
+              break;
+
+            case 'GENERATE_PODCAST':
+              console.log(`[ActionExecution] Generating podcast`);
+              // Parse source IDs (comma separated or JSON)
+              let sourceIds = [];
+              try {
+                sourceIds = action.params.source_ids.includes('[')
+                  ? JSON.parse(action.params.source_ids)
+                  : action.params.source_ids.split(',');
+              } catch (e) { sourceIds = []; }
+
+              result = await actionsService.generatePodcast(userId, {
+                title: action.params.title,
+                sourceIds: sourceIds,
+                style: action.params.style || 'casual'
+              });
+              break;
+
+            case 'CREATE_GROUP':
+              console.log(`[ActionExecution] Creating group`);
+              result = await actionsService.createStudyGroup(userId, {
+                name: action.params.name,
+                description: action.params.description,
+                category: action.params.category
+              });
+              break;
+
+            case 'SCHEDULE_GROUP_EVENT':
+              console.log(`[ActionExecution] Scheduling event`);
+              result = await actionsService.scheduleGroupEvent(userId, {
+                groupId: action.params.group_id,
+                title: action.params.title,
+                startTime: action.params.start_time,
+                endTime: action.params.end_time
+              });
+              break;
+
+            case 'CREATE_COURSE':
+              // Only admins can create courses. Users are not allowed.
+              console.warn('[ActionExecution] CREATE_COURSE action attempted by non-admin user. Skipping execution.');
+              result = { success: false, error: 'Only admins can create courses. You can view available courses, but not create them.' };
+              break;
+
+            case 'GET_REFERRAL_CODE':
+              result = await actionsService.getReferralCode(userId);
+              if (result.success) modifiedResponse += `\n\n**Your Referral Code:** ${result.code}`;
+              break;
+            case 'GENERATE_IMAGE':
+              console.log(`[ActionExecution] Generating image: ${action.params.prompt}`);
+              result = await actionsService.generateImage(userId, action.params.prompt);
+              // If successful, append the image markdown to the response
+              if (result.success && result.imageUrl) {
+                modifiedResponse += `\n\n![Generated Image](${result.imageUrl})\n\n`;
+              }
+              break;
+
             case 'CREATE_NOTE':
-          console.log(`[ActionExecution] Creating note: ${action.params.title}`);
-          result = await actionsService.createNote(userId, action.params);
-          break;
+              console.log(`[ActionExecution] Creating note: ${action.params.title}`);
+              result = await actionsService.createNote(userId, action.params);
+              break;
 
-        case 'UPDATE_NOTE':
-          console.log(`[ActionExecution] Updating note: ${action.params.noteTitle}`);
-          result = await actionsService.updateNote(userId, action.params.noteTitle, {
-            title: action.params.title,
-            content: action.params.content,
-            category: action.params.category,
-            tags: action.params.tags
+            case 'UPDATE_NOTE':
+              console.log(`[ActionExecution] Updating note: ${action.params.noteTitle}`);
+              result = await actionsService.updateNote(userId, action.params.noteTitle, {
+                title: action.params.title,
+                content: action.params.content,
+                category: action.params.category,
+                tags: action.params.tags
+              });
+              break;
+
+            case 'DELETE_NOTE':
+              console.log(`[ActionExecution] Deleting note: ${action.params.noteTitle}`);
+              result = await actionsService.deleteNote(userId, action.params.noteTitle);
+              break;
+
+            case 'LINK_DOCUMENT_TO_NOTE':
+              console.log(`[ActionExecution] Linking document to note`);
+              result = await actionsService.linkDocumentToNote(
+                userId,
+                action.params.noteTitle,
+                action.params.documentTitle
+              );
+              break;
+
+            case 'CREATE_FOLDER':
+              console.log(`[ActionExecution] Creating folder: ${action.params.name}`);
+              result = await actionsService.createDocumentFolder(userId, action.params);
+              break;
+
+            case 'ADD_DOCUMENT_TO_FOLDER':
+              console.log(`[ActionExecution] Adding document to folder`);
+              result = await actionsService.addDocumentToFolder(
+                userId,
+                action.params.documentTitle,
+                action.params.folderName
+              );
+              break;
+
+            case 'CREATE_SCHEDULE':
+              console.log(`[ActionExecution] Creating schedule: ${action.params.title}`);
+              result = await actionsService.createScheduleItem(userId, {
+                title: action.params.title,
+                subject: action.params.subject,
+                type: action.params.type,
+                start_time: action.params.start_time,
+                end_time: action.params.end_time,
+                description: action.params.description,
+                location: action.params.location,
+                color: action.params.color,
+                is_recurring: action.params.is_recurring,
+                recurrence_pattern: action.params.recurrence_pattern,
+                recurrence_days: action.params.recurrence_days,
+                recurrence_interval: action.params.recurrence_interval,
+                recurrence_end_date: action.params.recurrence_end_date
+              });
+              break;
+
+            case 'UPDATE_SCHEDULE':
+              console.log(`[ActionExecution] Updating schedule item`);
+              result = await actionsService.updateScheduleItem(
+                userId,
+                action.params.itemTitle,
+                action.params.updates
+              );
+              break;
+
+            case 'DELETE_SCHEDULE':
+              console.log(`[ActionExecution] Deleting schedule item: ${action.params.itemTitle}`);
+              result = await actionsService.deleteScheduleItem(userId, action.params.itemTitle);
+              break;
+
+            case 'CREATE_FLASHCARDS_FROM_NOTE':
+              console.log(`[ActionExecution] Creating flashcards from note: ${action.params.noteTitle}`);
+              result = await actionsService.createFlashcardsFromNote(
+                userId,
+                action.params.noteTitle,
+                action.params.count
+              );
+              break;
+
+            case 'CREATE_FLASHCARD':
+              console.log(`[ActionExecution] Creating flashcard`);
+              result = await actionsService.createFlashcard(userId, {
+                front: action.params.front,
+                back: action.params.back,
+                category: action.params.category,
+                difficulty: action.params.difficulty,
+                hint: action.params.hint
+              });
+              break;
+
+            case 'CREATE_LEARNING_GOAL':
+              console.log(`[ActionExecution] Creating learning goal: ${action.params.goal_text}`);
+              result = await actionsService.createLearningGoal(userId, {
+                goal_text: action.params.goal_text,
+                target_date: action.params.target_date,
+                progress: action.params.progress,
+                category: action.params.category
+              });
+              break;
+
+            case 'UPDATE_LEARNING_GOAL':
+              console.log(`[ActionExecution] Updating learning goal: ${action.params.goalText}`);
+              result = await actionsService.updateLearningGoalProgress(
+                userId,
+                action.params.goalText,
+                action.params.progress
+              );
+              break;
+
+            case 'CREATE_QUIZ':
+              console.log(`[ActionExecution] Creating quiz: ${action.params.title}`);
+              // Generate questions based on count
+              const questions = Array(action.params.question_count || 5).fill(0).map((_, i) => ({
+                question: `Question ${i + 1} about the topic?`,
+                options: ['Option A', 'Option B', 'Option C', 'Option D'],
+                correct_answer: Math.floor(Math.random() * 4),
+                explanation: 'Explanation for the correct answer'
+              }));
+
+              result = await actionsService.createQuiz(userId, {
+                title: action.params.title,
+                questions: questions,
+                source_type: action.params.source_type,
+                class_id: action.params.class_id
+              });
+              break;
+
+            case 'RECORD_QUIZ_ATTEMPT':
+              console.log(`[ActionExecution] Recording quiz attempt`);
+              result = await actionsService.recordQuizAttempt(userId, action.params.quizTitle, {
+                score: action.params.score,
+                total_questions: action.params.total_questions,
+                percentage: Math.round((action.params.score / action.params.total_questions) * 100),
+                time_taken_seconds: action.params.time_taken_seconds,
+                answers: [],
+                xp_earned: action.params.xp_earned
+              });
+              break;
+
+            case 'CREATE_RECORDING':
+              console.log(`[ActionExecution] Creating recording: ${action.params.title}`);
+              result = await actionsService.createClassRecording(userId, {
+                title: action.params.title,
+                subject: action.params.subject,
+                duration: action.params.duration,
+                transcript: action.params.transcript,
+                summary: action.params.summary,
+                document_title: action.params.document_title
+              });
+              break;
+
+            case 'UPDATE_PROFILE':
+              console.log(`[ActionExecution] Updating profile`);
+              result = await actionsService.updateUserProfile(userId, action.params.updates);
+              break;
+
+            case 'UPDATE_STATS':
+              console.log(`[ActionExecution] Updating stats`);
+              result = await actionsService.updateUserStats(userId, action.params.updates);
+              break;
+
+            case 'AWARD_ACHIEVEMENT':
+              console.log(`[ActionExecution] Awarding achievement: ${action.params.badgeName}`);
+              result = await actionsService.awardAchievement(userId, action.params.badgeName);
+              break;
+
+            // case 'CREATE_RICH_POST':
+            //   console.log(`[ActionExecution] Creating social post`);
+            //   result = await actionsService.createSocialPost(userId, {
+            //     content: action.params.content,
+            //     privacy: action.params.privacy,
+            //     group_name: action.params.group_name
+            //   });
+            //   break;
+
+            case 'UPDATE_USER_MEMORY':
+              console.log(`[ActionExecution] Updating user memory`);
+              result = await actionsService.updateUserMemory(userId, {
+                fact_type: action.params.fact_type,
+                fact_key: action.params.fact_key,
+                fact_value: action.params.fact_value,
+                confidence_score: action.params.confidence_score,
+                source_session_id: sessionId
+              });
+              break;
+
+            default:
+              console.log(`[ActionExecution] Unknown action: ${action.action}`);
+              result = { success: false, error: `Unknown action: ${action.action}` };
+          }
+
+          if (result) {
+            executedActions.push({
+              type: action.action,
+              success: result.success,
+              data: result,
+              timestamp: new Date().toISOString()
+            });
+
+            // Don't add execution messages to the response - just log them
+            console.log(`[ActionExecution] ${action.action}: ${result.success ? 'SUCCESS' : 'FAILED'}`);
+            if (result.success) {
+              console.log(`  ${result.message}`);
+              if (result.xp_reward && result.xp_reward > 0) {
+                console.log(`  XP Reward: +${result.xp_reward}`);
+              }
+            } else {
+              console.error(`  Error: ${result.error || 'Action failed'}`);
+            }
+
+            // Keep the original AI response without adding execution messages
+            // The AI's original response already includes its natural language
+          }
+        } catch (error: any) {
+          console.error(`[ActionExecution] Error executing action ${action.action}:`, error);
+          executedActions.push({
+            type: action.action,
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
           });
-          break;
 
-        case 'DELETE_NOTE':
-          console.log(`[ActionExecution] Deleting note: ${action.params.noteTitle}`);
-          result = await actionsService.deleteNote(userId, action.params.noteTitle);
-          break;
-
-        case 'LINK_DOCUMENT_TO_NOTE':
-          console.log(`[ActionExecution] Linking document to note`);
-          result = await actionsService.linkDocumentToNote(
-            userId, 
-            action.params.noteTitle, 
-            action.params.documentTitle
-          );
-          break;
-
-        case 'CREATE_FOLDER':
-          console.log(`[ActionExecution] Creating folder: ${action.params.name}`);
-          result = await actionsService.createDocumentFolder(userId, action.params);
-          break;
-
-        case 'ADD_DOCUMENT_TO_FOLDER':
-          console.log(`[ActionExecution] Adding document to folder`);
-          result = await actionsService.addDocumentToFolder(
-            userId,
-            action.params.documentTitle,
-            action.params.folderName
-          );
-          break;
-
-        case 'CREATE_SCHEDULE':
-          console.log(`[ActionExecution] Creating schedule: ${action.params.title}`);
-          result = await actionsService.createScheduleItem(userId, {
-            title: action.params.title,
-            subject: action.params.subject,
-            type: action.params.type,
-            start_time: action.params.start_time,
-            end_time: action.params.end_time,
-            description: action.params.description,
-            location: action.params.location,
-            color: action.params.color
-          });
-          break;
-
-        case 'UPDATE_SCHEDULE':
-          console.log(`[ActionExecution] Updating schedule item`);
-          result = await actionsService.updateScheduleItem(
-            userId,
-            action.params.itemTitle,
-            action.params.updates
-          );
-          break;
-
-        case 'DELETE_SCHEDULE':
-          console.log(`[ActionExecution] Deleting schedule item: ${action.params.itemTitle}`);
-          result = await actionsService.deleteScheduleItem(userId, action.params.itemTitle);
-          break;
-
-        case 'CREATE_FLASHCARDS_FROM_NOTE':
-          console.log(`[ActionExecution] Creating flashcards from note: ${action.params.noteTitle}`);
-          result = await actionsService.createFlashcardsFromNote(
-            userId,
-            action.params.noteTitle,
-            action.params.count
-          );
-          break;
-
-        case 'CREATE_FLASHCARD':
-          console.log(`[ActionExecution] Creating flashcard`);
-          result = await actionsService.createFlashcard(userId, {
-            front: action.params.front,
-            back: action.params.back,
-            category: action.params.category,
-            difficulty: action.params.difficulty,
-            hint: action.params.hint
-          });
-          break;
-
-        case 'CREATE_LEARNING_GOAL':
-          console.log(`[ActionExecution] Creating learning goal: ${action.params.goal_text}`);
-          result = await actionsService.createLearningGoal(userId, {
-            goal_text: action.params.goal_text,
-            target_date: action.params.target_date,
-            progress: action.params.progress,
-            category: action.params.category
-          });
-          break;
-
-        case 'UPDATE_LEARNING_GOAL':
-          console.log(`[ActionExecution] Updating learning goal: ${action.params.goalText}`);
-          result = await actionsService.updateLearningGoalProgress(
-            userId,
-            action.params.goalText,
-            action.params.progress
-          );
-          break;
-
-        case 'CREATE_QUIZ':
-          console.log(`[ActionExecution] Creating quiz: ${action.params.title}`);
-          // Generate questions based on count
-          const questions = Array(action.params.question_count || 5).fill(0).map((_, i) => ({
-            question: `Question ${i + 1} about the topic?`,
-            options: ['Option A', 'Option B', 'Option C', 'Option D'],
-            correct_answer: Math.floor(Math.random() * 4),
-            explanation: 'Explanation for the correct answer'
-          }));
-
-          result = await actionsService.createQuiz(userId, {
-            title: action.params.title,
-            questions: questions,
-            source_type: action.params.source_type,
-            class_id: action.params.class_id
-          });
-          break;
-
-        case 'RECORD_QUIZ_ATTEMPT':
-          console.log(`[ActionExecution] Recording quiz attempt`);
-          result = await actionsService.recordQuizAttempt(userId, action.params.quizTitle, {
-            score: action.params.score,
-            total_questions: action.params.total_questions,
-            percentage: Math.round((action.params.score / action.params.total_questions) * 100),
-            time_taken_seconds: action.params.time_taken_seconds,
-            answers: [],
-            xp_earned: action.params.xp_earned
-          });
-          break;
-
-        case 'CREATE_RECORDING':
-          console.log(`[ActionExecution] Creating recording: ${action.params.title}`);
-          result = await actionsService.createClassRecording(userId, {
-            title: action.params.title,
-            subject: action.params.subject,
-            duration: action.params.duration,
-            transcript: action.params.transcript,
-            summary: action.params.summary,
-            document_title: action.params.document_title
-          });
-          break;
-
-        case 'UPDATE_PROFILE':
-          console.log(`[ActionExecution] Updating profile`);
-          result = await actionsService.updateUserProfile(userId, action.params.updates);
-          break;
-
-        case 'UPDATE_STATS':
-          console.log(`[ActionExecution] Updating stats`);
-          result = await actionsService.updateUserStats(userId, action.params.updates);
-          break;
-
-        case 'AWARD_ACHIEVEMENT':
-          console.log(`[ActionExecution] Awarding achievement: ${action.params.badgeName}`);
-          result = await actionsService.awardAchievement(userId, action.params.badgeName);
-          break;
-
-        case 'CREATE_POST':
-          console.log(`[ActionExecution] Creating social post`);
-          result = await actionsService.createSocialPost(userId, {
-            content: action.params.content,
-            privacy: action.params.privacy,
-            group_name: action.params.group_name
-          });
-          break;
-
-        case 'UPDATE_USER_MEMORY':
-          console.log(`[ActionExecution] Updating user memory`);
-          result = await actionsService.updateUserMemory(userId, {
-            fact_type: action.params.fact_type,
-            fact_key: action.params.fact_key,
-            fact_value: action.params.fact_value,
-            confidence_score: action.params.confidence_score,
-            source_session_id: sessionId
-          });
-          break;
-
-        default:
-          console.log(`[ActionExecution] Unknown action: ${action.action}`);
-          result = { success: false, error: `Unknown action: ${action.action}` };
-      }
-
-      if (result) {
+          console.error(`[ActionExecution] Action failed: ${error.message}`);
+        }
+      } // End loop
+    } else {
+      // Handle proposed actions (automatic execution disabled)
+      console.log(`[ActionExecution] Actions identified but automatic execution is disabled.`);
+      for (const action of actionList) {
         executedActions.push({
           type: action.action,
-          success: result.success,
-          data: result,
+          params: action.params,
+          result: null,
+          success: true,
+          status: 'proposed',
           timestamp: new Date().toISOString()
         });
-
-        // Don't add execution messages to the response - just log them
-        console.log(`[ActionExecution] ${action.action}: ${result.success ? 'SUCCESS' : 'FAILED'}`);
-        if (result.success) {
-          console.log(`  ${result.message}`);
-          if (result.xp_reward && result.xp_reward > 0) {
-            console.log(`  XP Reward: +${result.xp_reward}`);
-          }
-        } else {
-          console.error(`  Error: ${result.error || 'Action failed'}`);
-        }
-        
-        // Keep the original AI response without adding execution messages
-        // The AI's original response already includes its natural language
       }
-    } catch (error: any) {
-      console.error(`[ActionExecution] Error executing action ${action.action}:`, error);
-      executedActions.push({
-        type: action.action,
-        success: false,
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
-
-      console.error(`[ActionExecution] Action failed: ${error.message}`);
-    }
-    } else {
-        // Handle proposed actions (automatic execution disabled)
-        console.log(`[ActionExecution] Action ${action.action} identified but automatic execution is disabled.`);
-        executedActions.push({
-            type: action.action,
-            params: action.params,
-            result: null,
-            success: true,
-            status: 'proposed',
-            timestamp: new Date().toISOString()
-        });
     }
   }
 
@@ -571,24 +699,24 @@ async function buildIntelligentContext(
   // Gemini 1.5 Pro has a 2M token window, so we can be generous with history
   const MAX_HISTORY_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS - 100000; // Leave 100k buffer for system prompt/files
   let currentTokens = 0;
-  
+
   // Always include the summary if available
   if (conversationSummary) {
     currentTokens += estimateTokenCount(conversationSummary);
   }
 
   const selectedMessages: any[] = [];
-  
+
   // Iterate backwards through history to fill context window
   for (let i = conversationHistory.length - 1; i >= 0; i--) {
     const msg = conversationHistory[i];
     const msgTokens = estimateTokenCount(msg.content) + 20; // +20 for role/metadata overhead
-    
+
     if (currentTokens + msgTokens > MAX_HISTORY_TOKENS) {
       console.log(`${logPrefix} Reached token limit at message ${i} (${currentTokens} tokens)`);
       break;
     }
-    
+
     currentTokens += msgTokens;
     selectedMessages.unshift(msg);
   }
@@ -660,7 +788,7 @@ async function buildAttachedContext(documentIds: string[], noteIds: string[], us
 
         if (doc.content_extracted) {
           // Truncate long content
-          const truncatedContent = doc.content_extracted.length > MAX_CONTENT_LENGTH 
+          const truncatedContent = doc.content_extracted.length > MAX_CONTENT_LENGTH
             ? doc.content_extracted.substring(0, MAX_CONTENT_LENGTH) + '... [Content truncated for performance]'
             : doc.content_extracted;
           context += `Content: ${truncatedContent}\n`;
@@ -792,7 +920,7 @@ const generateChatTitle = async (sessionId: string, userId: string, initialMessa
         .eq('user_id', userId)
         .order('timestamp', { ascending: false })
         .limit(6);
-      
+
       if (recentMessages && recentMessages.length > 0) {
         contextMessages = recentMessages
           .reverse()
@@ -841,19 +969,19 @@ const maybeUpdateSessionTitle = async (sessionId: string, userId: string, messag
   try {
     // Update title on message 1, 4, and 8 to refine based on conversation context
     const shouldUpdateTitle = messageCount === 1 || messageCount === 4 || messageCount === 8;
-    
+
     if (!shouldUpdateTitle) return;
 
     console.log(`🔄 Updating session title (message ${messageCount})...`);
-    
+
     const newTitle = await generateChatTitle(sessionId, userId, latestMessage, messageCount);
-    
+
     const { error } = await supabase
       .from('chat_sessions')
       .update({ title: newTitle })
       .eq('id', sessionId)
       .eq('user_id', userId);
-    
+
     if (error) {
       console.error('❌ Error updating session title:', error);
     } else {
@@ -904,10 +1032,10 @@ async function ensureChatSession(userId: string, sessionId: string, newDocumentI
       if (updateError) {
         console.error('Error updating chat session:', updateError);
       }
-      
+
       // Update title if needed based on message count
       if (initialMessage) {
-        maybeUpdateSessionTitle(sessionId, userId, newMessageCount, initialMessage).catch(err => 
+        maybeUpdateSessionTitle(sessionId, userId, newMessageCount, initialMessage).catch(err =>
           console.error('Error updating title:', err)
         );
       }
@@ -1087,23 +1215,23 @@ function buildUserMemoryContext(userContext: any): string | null {
 
 function buildActionableContextText(actionableContext: any): string {
   const sections: string[] = [];
-  
+
   if (actionableContext.notes?.length > 0) {
     sections.push(`📝 Available Notes: ${actionableContext.notes.map((n: any) => n.title).join(', ')}`);
   }
-  
+
   if (actionableContext.documents?.length > 0) {
     sections.push(`📄 Available Documents: ${actionableContext.documents.map((d: any) => d.title).join(', ')}`);
   }
-  
+
   if (actionableContext.folders?.length > 0) {
     sections.push(`📁 Available Folders: ${actionableContext.folders.map((f: any) => f.name).join(', ')}`);
   }
-  
+
   if (actionableContext.goals?.length > 0) {
     sections.push(`🎯 Active Goals: ${actionableContext.goals.map((g: any) => g.goal_text).join(', ')}`);
   }
-  
+
   return sections.join('\n');
 }
 
@@ -1129,7 +1257,7 @@ async function buildEnhancedGeminiConversation(
     const crossSessionContext = await contextService.getCrossSessionContext(userId, sessionId, currentMessage);
     const actionableContext = await contextService.getActionableContext(userId);
     const actionableContextText = buildActionableContextText(actionableContext);
-    
+
     const userProfile = userContext.profile;
     let userName = 'User';
 
@@ -1313,24 +1441,32 @@ ${actionableContextText}
   }
 }
 
-async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string): Promise<{
+async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, configOverrides: any = {}): Promise<{
   success: boolean;
   content?: string;
   error?: string;
   userMessage?: string;
 }> {
-  const apiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent');
+  const apiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent'); // Updated model version for better JSON adherence
   apiUrl.searchParams.append('key', geminiApiKey);
 
-  const requestBody = {
+  // Extract systemInstruction from configOverrides if present
+  const { systemInstruction, ...generationConfig } = configOverrides;
+
+  const requestBody: any = {
     contents,
     generationConfig: {
       temperature: 0.8,
-      maxOutputTokens: 4096,  // Reduced for summary generation speed
+      maxOutputTokens: 4096,
       topK: 40,
-      topP: 0.95
+      topP: 0.95,
+      ...generationConfig
     }
   };
+
+  if (systemInstruction) {
+    requestBody.systemInstruction = systemInstruction;
+  }
 
   for (let attempt = 0; attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS; attempt++) {
     try {
@@ -1451,23 +1587,45 @@ async function extractUserFacts(userMessage: string, aiResponse: string, userId:
     }
   ];
 
-  for (const { pattern, type, key } of preferencePatterns) {
-    const matches = userMessage.matchAll(pattern);
-    for (const match of matches) {
-      if (match[2]) {
-        const value = match[2].trim();
-        if (value.length > 3 && value.length < 100) {
+  // Helper to extract facts from any text (user or AI)
+  function extractFromText(text: string, source: string) {
+    for (const { pattern, type, key } of preferencePatterns) {
+      const matches = text.matchAll(pattern);
+      for (const match of matches) {
+        if (match[2]) {
+          const value = match[2].trim();
+          if (value.length > 3 && value.length < 100) {
+            facts.push({
+              fact_type: type,
+              fact_key: key,
+              fact_value: value,
+              confidence_score: 0.8,
+              source_session_id: sessionId
+            });
+            console.log(`[extractUserFacts] Matched fact from ${source}: type=${type}, key=${key}, value=${value}`);
+          }
+        }
+      }
+    }
+    for (const pattern of topicPatterns) {
+      const matches = text.match(pattern) || [];
+      for (const match of matches) {
+        if (match && !facts.some((f) => f.fact_value.toLowerCase() === match.toLowerCase())) {
           facts.push({
-            fact_type: type,
-            fact_key: key,
-            fact_value: value,
-            confidence_score: 0.8,
+            fact_type: 'interest',
+            fact_key: 'discussed_topics',
+            fact_value: match.toLowerCase(),
+            confidence_score: 0.7,
             source_session_id: sessionId
           });
+          console.log(`[extractUserFacts] Matched topic from ${source}: ${match.toLowerCase()}`);
         }
       }
     }
   }
+
+  extractFromText(userMessage, 'user');
+  extractFromText(aiResponse, 'ai');
 
   const topicPatterns = [
     /(genetics|biology|aviation|flight|birds|science|math|history|literature|programming|technology)/gi
@@ -1484,6 +1642,33 @@ async function extractUserFacts(userMessage: string, aiResponse: string, userId:
           confidence_score: 0.7,
           source_session_id: sessionId
         });
+        console.log(`[extractUserFacts] Matched topic: ${match.toLowerCase()}`);
+      }
+    }
+  }
+
+  console.log(`[extractUserFacts] Extracted facts:`, facts);
+
+  // If the AI response contains a section like "Here are the key 'learning facts' I know about you:", try to parse bullet points as facts
+  const aiFactSectionMatch = aiResponse.match(/Here are the key ["']?learning facts["']?[^\n]*\n([\s\S]+?)(?:\n\n|$)/i);
+  if (aiFactSectionMatch) {
+    const lines = aiFactSectionMatch[1].split(/\n|\*/).map(l => l.trim()).filter(l => l.length > 0);
+    for (const line of lines) {
+      // Try to extract a key-value pair from the line
+      const colonIdx = line.indexOf(':');
+      if (colonIdx > 0) {
+        const key = line.slice(0, colonIdx).replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '').toLowerCase();
+        const value = line.slice(colonIdx + 1).trim();
+        if (value.length > 3 && value.length < 200) {
+          facts.push({
+            fact_type: 'ai_inferred',
+            fact_key: key,
+            fact_value: value,
+            confidence_score: 0.6,
+            source_session_id: sessionId
+          });
+          console.log(`[extractUserFacts] Inferred from AI summary: key=${key}, value=${value}`);
+        }
       }
     }
   }
@@ -1513,12 +1698,12 @@ async function handleStreamingResponse(
   (async () => {
     try {
       console.log('🚀 Starting streaming response for message:', message.substring(0, 50));
-      
+
       // Step 1: Understanding Phase
       handler.sendThinkingStep(
         'understanding',
         'Analyzing your request',
-        'Reading and understanding your message...',
+        'Interpreting message intent and key entities...',
         'in-progress'
       );
       console.log('✅ Sent understanding step (in-progress)');
@@ -1526,7 +1711,7 @@ async function handleStreamingResponse(
       console.log('📚 Getting conversation history...');
       const conversationHistory = await getConversationHistory(userId, sessionId);
       console.log('✅ Retrieved conversation history:', conversationHistory.length, 'messages');
-      
+
       let userIntent: UserIntent;
       try {
         console.log('🧠 Understanding query...');
@@ -1548,10 +1733,13 @@ async function handleStreamingResponse(
       }
 
       console.log('📤 Sending understanding complete step...');
+      const entitiesPreview = (userIntent.entities || []).length > 0
+        ? ` (Entities: ${(userIntent.entities || []).map(e => e.value).join(', ')})`
+        : '';
       handler.sendThinkingStep(
         'understanding',
         'Query understood',
-        `Intent: ${userIntent.primary}, Entities: ${userIntent.entities?.length || 0}, Complexity: ${userIntent.complexity}`,
+        `Recognized intent: ${userIntent.primary}${entitiesPreview}. Complexity: ${userIntent.complexity}`,
         'completed',
         { intent: userIntent.primary, entities: (userIntent.entities || []).map((e: EntityMention) => `${e.type}:${e.value}`) }
       );
@@ -1559,10 +1747,14 @@ async function handleStreamingResponse(
 
       // Step 2: Retrieval Phase
       console.log('🔍 Starting retrieval phase...');
+      const retrievalDetail = userIntent.entities?.length > 0
+        ? `Searching for relevant data about ${userIntent.entities.map(e => e.value).join(', ')}...`
+        : 'Searching through your notes, documents, and past conversations...';
+
       handler.sendThinkingStep(
         'retrieval',
         'Gathering relevant information',
-        'Searching through your notes, documents, and past conversations...',
+        retrievalDetail,
         'in-progress'
       );
 
@@ -1637,7 +1829,8 @@ async function handleStreamingResponse(
         'memory',
         'Memory loaded',
         `Loaded ${workingMemory.recentMessages?.length || 0} recent messages, ${longTermMemory.facts?.length || 0} learned facts`,
-        'completed'
+        'completed',
+        { msgCount: workingMemory.recentMessages?.length || 0, factCount: longTermMemory.facts?.length || 0 }
       );
       console.log('✅ Memory phase complete');
 
@@ -1649,7 +1842,7 @@ async function handleStreamingResponse(
         attachedContext = await buildAttachedContext(allDocumentIds, attachedNoteIds, userId);
         console.log('✅ Attached context built:', attachedContext.length, 'characters');
       }
-      
+
       // Add semantically retrieved context
       if (relevantContext && relevantContext.length > 0) {
         console.log('🔗 Adding semantic context...');
@@ -1663,10 +1856,10 @@ async function handleStreamingResponse(
         });
         console.log('✅ Semantic context added');
       }
-      
+
       attachedContext += '\n\n=== REASONING CHAIN ===\n';
       attachedContext += (reasoningChain || []).join('\n');
-      
+
       if (episodicMemory.relevantSessions?.length > 0) {
         console.log('📋 Adding episodic memory...');
         attachedContext += '\n\n=== RELEVANT PAST DISCUSSIONS ===\n';
@@ -1681,49 +1874,124 @@ async function handleStreamingResponse(
       const conversationData = await buildEnhancedGeminiConversation(userId, sessionId, message, [], attachedContext, systemPrompt);
       console.log('✅ Prompt built with', conversationData.contents.length, 'conversation parts');
 
-      // Generate response
-      console.log('⚙️ Starting action phase...');
+      // =========================================================================
+      // STEP 5: ACTION PLANNING (JSON)
+      // =========================================================================
+      console.log('⚙️ Starting Action Planning phase...');
       handler.sendThinkingStep(
         'action',
-        'Generating response',
-        'Crafting a personalized, accurate response based on all gathered information...',
+        'Planning actions',
+        'Determining necessary operations based on your request...',
         'in-progress'
       );
 
-      console.log('🤖 Calling Gemini API...');
+      const actionSystemPrompt = `You are an AI assistant that manages database operations, image generation, and social tasks.
+      Analyze the user's request and the conversation context.
+      
+      Here is the Database Schema you must use for database operations:
+      ${DB_SCHEMA_DEFINITION}
+      
+      Determine which actions (database, image generation, social engagement, etc.) are needed.
+      Return a JSON object following this schema:
+      ${JSON.stringify(AI_ACTION_SCHEMA)}
+      
+      If no actions are needed, return an empty actions array.
+      Do NOT include any markdown formatting. Return raw JSON only.
+      Strictly follow the table names and structures provided in the schema for DB_ACTION.`;
+
+      // Copy contents for action planning
+      const actionContents = [...conversationData.contents];
+      actionContents.push({
+        role: 'user',
+        parts: [{ text: "Determine the actions to take. Return JSON only." }]
+      });
+
+      console.log('🤖 Calling Gemini API for Action Plan...');
       const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
       if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
 
-      const geminiApiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent');
-      geminiApiUrl.searchParams.append('key', geminiApiKey);
-
-      const requestBody = {
-        contents: conversationData.contents,
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 8192
-        },
-        systemInstruction: conversationData.systemInstruction || undefined
-      };
-
-      console.log('🚀 Sending request to Gemini...');
-      const response = await fetch(geminiApiUrl.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+      const actionResponse = await callEnhancedGeminiAPI(actionContents, geminiApiKey, {
+        responseMimeType: "application/json",
+        systemInstruction: { parts: [{ text: actionSystemPrompt }] }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Gemini API error:', response.status, errorText);
-        throw new Error(`API error: ${response.status}`);
+      let executedActions: any[] = [];
+      let finalResponseContext = attachedContext;
+
+      if (actionResponse.success && actionResponse.content) {
+        try {
+          console.log('📥 Parsing Action Plan JSON:', actionResponse.content);
+          const actionPlan = JSON.parse(actionResponse.content);
+
+          if (actionPlan.actions && actionPlan.actions.length > 0) {
+            executedActions = await executeParsedActions(
+              actionsService,
+              userId,
+              sessionId,
+              actionPlan.actions,
+              (action, index, total) => {
+                const actionLabel = getFriendlyActionLabel(action.type, action.params);
+                handler.sendThinkingStep(
+                  'action',
+                  `Action ${index + 1}/${total}`,
+                  `${actionLabel}...`,
+                  'in-progress',
+                  { action, index, total }
+                );
+              }
+            );
+
+            finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS ===\n';
+            finalResponseContext += JSON.stringify(executedActions, null, 2);
+
+            handler.sendThinkingStep(
+              'action',
+              'Actions executed',
+              `Successfully executed ${executedActions.filter(a => a.success).length} out of ${executedActions.length} actions.`,
+              'completed'
+            );
+          } else {
+            console.log('No actions planned.');
+            handler.sendThinkingStep(
+              'action',
+              'No actions needed',
+              'Proceeding to response...',
+              'completed',
+              { actionCount: 0 }
+            );
+          }
+        } catch (e) {
+          console.error('Failed to parse action plan:', e);
+          handler.sendThinkingStep('action', 'Action Planning Failed', 'Could not parse action plan', 'failed');
+        }
+      } else {
+        console.warn('Action planning API call failed or returned empty');
       }
 
-      console.log('📥 Parsing Gemini response...');
-      const data = await response.json();
-      let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      // =========================================================================
+      // STEP 6: FINAL RESPONSE GENERATION (Text)
+      // =========================================================================
+      console.log('🏁 Generating Final Response...');
+
+      const finalContents = [...conversationData.contents];
+      if (executedActions.length > 0) {
+        finalContents.push({
+          role: 'user',
+          parts: [{ text: `System Update: The following actions were executed successfully. Use these results to formulate your response to the user.\n\nResults: ${JSON.stringify(executedActions)}` }]
+        });
+      }
+
+      console.log('🤖 Calling Gemini API for Final Response...');
+
+      const finalResponse = await callEnhancedGeminiAPI(finalContents, geminiApiKey, {
+        systemInstruction: conversationData.systemInstruction
+      });
+
+      if (!finalResponse.success || !finalResponse.content) {
+        throw new Error('Failed to generate final response');
+      }
+
+      let generatedText = finalResponse.content;
       console.log('✅ Generated response:', generatedText.length, 'characters');
 
       handler.sendThinkingStep(
@@ -1763,11 +2031,7 @@ async function handleStreamingResponse(
         { confidence: verification.confidence, issues: verification.issues }
       );
 
-      // Execute actions
-      console.log('⚙️ Executing AI actions...');
-      const actionResult = await executeAIActions(userId, sessionId, generatedText);
-      generatedText = actionResult.modifiedResponse;
-      console.log('✅ Actions executed:', actionResult.executedActions.length, 'actions');
+      console.log('✅ Actions executed (summary):', executedActions.length, 'actions');
 
       // Save AI message
       console.log('💾 Saving AI message...');
@@ -1794,7 +2058,7 @@ async function handleStreamingResponse(
         userMessageTimestamp,
         sessionId,
         userId,
-        executedActions: actionResult.executedActions
+        executedActions: executedActions
       });
       console.log('✅ Final response sent, closing stream');
 
@@ -1921,7 +2185,7 @@ serve(async (req) => {
     // Validate AI message limit before processing
     const validator = createSubscriptionValidator();
     const limitCheck = await validator.checkAiMessageLimit(userId);
-    
+
     if (!limitCheck.allowed) {
       return createErrorResponse(limitCheck.message || 'AI message limit exceeded', 403);
     }
@@ -1929,7 +2193,7 @@ serve(async (req) => {
     // **VALIDATE FILE COUNT LIMIT**
     const totalFiles = rawFiles.length + jsonFiles.length;
     const MAX_FILES_PER_REQUEST = 10;
-    
+
     if (totalFiles > MAX_FILES_PER_REQUEST) {
       return new Response(JSON.stringify({
         error: `Too many files attached. Maximum is ${MAX_FILES_PER_REQUEST} files per request.`,
@@ -1946,7 +2210,7 @@ serve(async (req) => {
     // **VALIDATE INDIVIDUAL FILE SIZES**
     const MAX_FILE_SIZE_MB = 20; // 20MB per file
     const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-    
+
     for (const file of rawFiles) {
       if (file.size > MAX_FILE_SIZE_BYTES) {
         return new Response(JSON.stringify({
@@ -1969,9 +2233,14 @@ serve(async (req) => {
     let attachedContext = '';
     const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
 
+    let userMessageId: string | null = null;
+    let userMessageTimestamp: string | null = null;
+    let aiMessageId: string | null = null;
+    let aiMessageTimestamp: string | null = null;
+
     if (hasFiles) {
-      const processorUrl = Deno.env.get('file-processor');
-      if (!processorUrl) throw new Error('FILE_PROCESSOR_URL not configured');
+      const processorUrl = Deno.env.get('DOCUMENT_PROCESSOR_URL'); // ✅ Fixed
+      if (!processorUrl) throw new Error('DOCUMENT_PROCESSOR_URL not configured');
 
       let processorResponse;
       if (contentType.includes('multipart/form-data')) {
@@ -1983,6 +2252,11 @@ serve(async (req) => {
 
         processorResponse = await fetch(processorUrl, {
           method: 'POST',
+          headers: {
+            // ✅ Add authorization headers
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'apikey': supabaseServiceKey
+          },
           body: formData
         });
       } else {
@@ -1994,7 +2268,10 @@ serve(async (req) => {
         processorResponse = await fetch(processorUrl, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            // ✅ Add authorization headers
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'apikey': supabaseServiceKey
           },
           body
         });
@@ -2002,12 +2279,13 @@ serve(async (req) => {
 
       if (!processorResponse.ok) {
         const errorBody = await processorResponse.text();
-        console.error(`File processor error: ${processorResponse.status} - ${errorBody}`);
+        console.error(`Document processor error: ${processorResponse.status} - ${errorBody}`);
 
-        const errorMessageData = {
+        // ✅ Send user-friendly error message
+        const errorMessage = {
           userId,
           sessionId,
-          content: `I encountered an issue processing your files. Please try uploading them again or contact support if the problem persists.`,
+          content: `❌ I encountered an issue processing your documents:\n\n${errorBody}\n\nPlease try:\n• Uploading smaller files\n• Using a different file format\n• Uploading one file at a time\n\nYou can still continue our conversation without the files.`,
           role: 'assistant',
           isError: true,
           attachedDocumentIds: attachedDocumentIds.length > 0 ? attachedDocumentIds : null,
@@ -2016,20 +2294,73 @@ serve(async (req) => {
           imageMimeType: imageMimeType
         };
 
-        await saveChatMessage(errorMessageData);
-        throw new Error(`Failed to process files: ${processorResponse.statusText}`);
+        const savedErrorMessage = await saveChatMessage(errorMessage);
+
+        // ✅ Return error response immediately instead of continuing
+        return new Response(JSON.stringify({
+          error: 'Document processing failed',
+          errorDetails: errorBody,
+          aiMessageId: savedErrorMessage?.id,
+          aiMessageTimestamp: savedErrorMessage?.timestamp,
+          userMessageId,
+          userMessageTimestamp,
+          sessionId,
+          userId,
+          success: false
+        }), {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        });
       }
 
       const processedData = await processorResponse.json();
-      uploadedDocumentIds = processedData.documentIds || [];
+      uploadedDocumentIds = processedData.uploadedDocumentIds || [];
       filesMetadata = processedData.filesMetadata || [];
       processingResults = processedData.processingResults || [];
-    }
 
-    let userMessageId: string | null = null;
-    let userMessageTimestamp: string | null = null;
-    let aiMessageId: string | null = null;
-    let aiMessageTimestamp: string | null = null;
+      // ✅ Check for partial failures
+      const failedFiles = processedData.processingResults?.filter(
+        (result: any) => result.status === 'failed'
+      ) || [];
+
+      if (failedFiles.length > 0 && failedFiles.length < processedData.processingResults.length) {
+        // Partial failure - some succeeded, some failed
+        console.warn(`Partial document processing failure: ${failedFiles.length}/${processedData.processingResults.length} files failed`);
+      } else if (failedFiles.length === processedData.processingResults.length) {
+        // Total failure - all files failed
+        const errorMessage = {
+          userId,
+          sessionId,
+          content: `❌ All ${failedFiles.length} file(s) failed to process:\n\n${failedFiles.map((f: any) => `• ${f.name}: ${f.error || 'Unknown error'}`).join('\n')
+            }\n\nPlease check the file formats and try again.`,
+          role: 'assistant',
+          isError: true
+        };
+
+        const savedErrorMessage = await saveChatMessage(errorMessage);
+
+        return new Response(JSON.stringify({
+          error: 'All documents failed to process',
+          errorDetails: failedFiles,
+          aiMessageId: savedErrorMessage?.id,
+          aiMessageTimestamp: savedErrorMessage?.timestamp,
+          userMessageId,
+          userMessageTimestamp,
+          sessionId,
+          userId,
+          success: false
+        }), {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        });
+      }
+    }
 
     const allDocumentIds = [
       ...new Set([
@@ -2084,23 +2415,23 @@ serve(async (req) => {
 
     // ========== AGENTIC UNDERSTANDING PHASE ==========
     console.log('[Agentic] Starting advanced query understanding...');
-    
+
     // Get conversation history for context
     const conversationHistory = await getConversationHistory(userId, sessionId);
-    
+
     // Step 1: Understand user intent deeply
     const userIntent = await agenticCore.understandQuery(message, userId, conversationHistory);
     console.log(`[Agentic] Intent: ${userIntent.primary}, Complexity: ${userIntent.complexity}, Confidence: ${userIntent.confidence}`);
     console.log(`[Agentic] Entities detected: ${userIntent.entities.map(e => `${e.type}:${e.value}`).join(', ')}`);
-    
+
     // Step 2: Retrieve relevant context using semantic understanding
     const relevantContext = await agenticCore.retrieveRelevantContext(userIntent, userId, sessionId);
     console.log(`[Agentic] Retrieved ${relevantContext.length} relevant context items`);
-    
+
     // Step 3: Build reasoning chain
     const reasoningChain = await agenticCore.buildReasoningChain(userIntent, relevantContext, message);
     console.log(`[Agentic] Reasoning steps: ${reasoningChain.length}`);
-    
+
     // Step 4: Get comprehensive memory
     const [workingMemory, longTermMemory, episodicMemory] = await Promise.all([
       agenticCore.getWorkingMemory(sessionId, userId),
@@ -2108,7 +2439,7 @@ serve(async (req) => {
       agenticCore.getEpisodicMemory(userId, message)
     ]);
     console.log(`[Agentic] Memory loaded - Working: ${workingMemory.recentMessages?.length || 0} msgs, LongTerm: ${longTermMemory.facts?.length || 0} facts`);
-    
+
     // Step 5: Select appropriate tools if needed
     const selectedTools = await agenticCore.selectTools(userIntent, relevantContext);
     if (selectedTools.length > 0) {
@@ -2120,7 +2451,7 @@ serve(async (req) => {
     if (allDocumentIds.length > 0 || attachedNoteIds.length > 0) {
       attachedContext = await buildAttachedContext(allDocumentIds, attachedNoteIds, userId);
     }
-    
+
     // Add semantically retrieved context
     if (relevantContext.length > 0) {
       attachedContext += '\n\n=== SEMANTICALLY RELEVANT CONTEXT ===\n';
@@ -2132,11 +2463,11 @@ serve(async (req) => {
         }
       });
     }
-    
+
     // Add reasoning chain to system understanding
     attachedContext += '\n\n=== REASONING CHAIN ===\n';
     attachedContext += reasoningChain.join('\n');
-    
+
     // Add memory context
     if (episodicMemory.relevantSessions?.length > 0) {
       attachedContext += '\n\n=== RELEVANT PAST DISCUSSIONS ===\n';
@@ -2144,7 +2475,7 @@ serve(async (req) => {
         attachedContext += `- ${sess.title}: ${sess.context_summary || 'No summary'}\n`;
       });
     }
-    
+
     console.log('[Agentic] Context building complete');
 
     const userContext = await contextService.getUserContext(userId);
@@ -2154,7 +2485,7 @@ serve(async (req) => {
 
     // **TOKEN VALIDATION**: Estimate total token count before sending to Gemini
     let totalEstimatedTokens = 0;
-    
+
     // Estimate tokens from conversation contents
     for (const content of conversationData.contents) {
       if (content.parts) {
@@ -2169,7 +2500,7 @@ serve(async (req) => {
         }
       }
     }
-    
+
     // Estimate tokens from system instruction
     if (conversationData.systemInstruction?.parts) {
       for (const part of conversationData.systemInstruction.parts) {
@@ -2178,10 +2509,10 @@ serve(async (req) => {
         }
       }
     }
-    
+
     // Check if exceeding token limit
     const MAX_SAFE_INPUT_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS * 0.9; // 90% of max for safety
-    
+
     if (totalEstimatedTokens > MAX_SAFE_INPUT_TOKENS) {
       console.error(`[TokenValidation] Estimated tokens (${totalEstimatedTokens}) exceeds safe limit (${MAX_SAFE_INPUT_TOKENS})`);
       return new Response(JSON.stringify({
@@ -2197,7 +2528,7 @@ serve(async (req) => {
         }
       });
     }
-    
+
     console.log(`[TokenValidation] Estimated input tokens: ${totalEstimatedTokens} (within safe limit: ${MAX_SAFE_INPUT_TOKENS})`);
 
     if (message || hasFiles || attachedContext) {
@@ -2321,34 +2652,34 @@ serve(async (req) => {
     if (!generatedText) {
       generatedText = `I apologize, but I wasn't able to generate a response at this time. Your message has been saved, and you can try asking again.`;
     }
-    
+
     // ========== AGENTIC VERIFICATION PHASE ==========
     if (apiCallSuccess && generatedText) {
       console.log('[Agentic] Verifying response quality...');
       const verification = await agenticCore.verifyResponse(generatedText, userIntent, relevantContext);
       console.log(`[Agentic] Response confidence: ${(verification.confidence * 100).toFixed(1)}%`);
-      
+
       if (verification.issues.length > 0) {
         console.warn(`[Agentic] Issues detected: ${verification.issues.join(', ')}`);
-        
+
         // If confidence is too low, add clarification
         if (verification.confidence < 0.5) {
           generatedText += '\n\n_Note: I may not have all the information needed for a complete answer. Please let me know if you need clarification._';
         }
       }
-      
+
       // If we identified missing information during understanding, ask for it
       if (userIntent.confidence < 0.7 && userIntent.entities.some(e => !e.resolvedId)) {
         const unresolvedEntities = userIntent.entities.filter(e => !e.resolvedId);
         generatedText += `\n\n_I noticed you mentioned: ${unresolvedEntities.map(e => e.value).join(', ')}. Could you clarify which specific ${unresolvedEntities[0].type} you're referring to?_`;
       }
     }
-    
+
     console.log(`[Main] Checking for actions in AI response...`);
     const actionResult = await executeAIActions(userId, sessionId, generatedText);
     generatedText = actionResult.modifiedResponse;
 
-    
+
     if (apiCallSuccess && generatedText) {
       try {
         const extractedFacts = await extractUserFacts(message, generatedText, userId, sessionId);

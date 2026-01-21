@@ -205,11 +205,11 @@ export const useMessageHandlers = () => {
 
       const tokenEstimate = estimateChatRequestTokens({
         message: messageContent,
-        files: processedFiles.map(f => ({ 
-          content: f.content, 
-          data: f.data, 
-          mimeType: f.mimeType, 
-          type: f.type 
+        files: processedFiles.map(f => ({
+          content: f.content,
+          data: f.data,
+          mimeType: f.mimeType,
+          type: f.type
         })),
         documentsContext: currentAttachedContext,
         conversationHistory: conversationHistory,
@@ -219,8 +219,8 @@ export const useMessageHandlers = () => {
       if (tokenEstimate.exceedsLimit) {
         toast.error(
           'Content too large to process',
-          { 
-            description: `Total: ${formatTokenCount(tokenEstimate.totalTokens)}. Maximum is ${formatTokenCount(TOKEN_LIMITS.GEMINI_MAX_INPUT)}. Please reduce the number of attachments or message length.` 
+          {
+            description: `Total: ${formatTokenCount(tokenEstimate.totalTokens)}. Maximum is ${formatTokenCount(TOKEN_LIMITS.GEMINI_MAX_INPUT)}. Please reduce the number of attachments or message length.`
           }
         );
         dispatch({ type: 'SET_IS_SUBMITTING_USER_MESSAGE', payload: false });
@@ -376,9 +376,9 @@ export const useMessageHandlers = () => {
               if (!error && messages) {
                 // Map DB snake_case to frontend camelCase
                 const mappedMessages = messages.map((msg: any) => ({
-                    ...msg,
-                    attachedDocumentIds: msg.attached_document_ids || [],
-                    attachedNoteIds: msg.attached_note_ids || []
+                  ...msg,
+                  attachedDocumentIds: msg.attached_document_ids || [],
+                  attachedNoteIds: msg.attached_note_ids || []
                 }));
 
                 // Replace optimistic messages with real database messages
@@ -418,7 +418,7 @@ export const useMessageHandlers = () => {
                   has_been_displayed: false,
                   thinking_steps: accumulatedDataRef.current?.thinkingSteps || [],
                 };
-                
+
                 setChatMessages(prev => {
                   const withoutOptimistic = prev.filter(msg =>
                     msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
@@ -483,94 +483,94 @@ export const useMessageHandlers = () => {
           },
         });
 
-      if (error) {
-        ////console.error('Edge function error:', error);
-        throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
-      }
-
-      if (!data || !data.response) {
-        throw new Error('Empty response from AI service');
-      }
-
-      ////console.log('[handleSubmitMessage] Backend response:', data);
-
-      // **Replace optimistic messages with real messages from response**
-      // Backend should return userMessageId and aiMessageId
-      const realUserMessage: Message = {
-        id: data.userMessageId || optimisticUserMessageId,
-        content: messageContent || '[Files attached]',
-        role: 'user',
-        timestamp: data.timestamp || new Date().toISOString(),
-        isError: false,
-        attachedDocumentIds: finalAttachedDocumentIds,
-        attachedNoteIds: finalAttachedNoteIds,
-        session_id: currentSessionId,
-        has_been_displayed: true,
-        image_url: imageUrl,
-        image_mime_type: imageMimeType,
-        files_metadata: processedFiles.length > 0 ? JSON.stringify(processedFiles) : undefined,
-      };
-
-      const realAiMessage: Message = {
-        id: data.aiMessageId || optimisticAiMessageId,
-        content: data.response,
-        role: 'assistant',
-        timestamp: data.timestamp || new Date().toISOString(),
-        isError: false,
-        attachedDocumentIds: [],
-        attachedNoteIds: [],
-        session_id: currentSessionId,
-        has_been_displayed: false,
-      };
-
-      // //console.log('[handleSubmitMessage] Replacing optimistic messages with real IDs:', {
-      //   userMessageId: realUserMessage.id,
-      //   aiMessageId: realAiMessage.id
-      // });
-
-      // Update UI with real messages
-      setChatMessages(prev => {
-        // Remove optimistic messages
-        const withoutOptimistic = prev.filter(msg =>
-          msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
-        );
-
-        // Add real messages
-        const newMessages = [...withoutOptimistic, realUserMessage, realAiMessage];
-        
-        // Save to offline storage
-        offlineStorage.saveAll(STORES.CHAT_MESSAGES, [realUserMessage, realAiMessage]);
-        
-        return newMessages;
-      });
-
-      // Update the session with the new title if provided
-      if (data.title) {
-        dispatch({
-          type: 'UPDATE_CHAT_SESSION',
-          payload: {
-            id: currentSessionId,
-            updates: {
-              last_message_at: new Date().toISOString(),
-              title: data.title,
-              document_ids: [...new Set([...selectedDocumentIds, ...finalAttachedDocumentIds])],
-            }
-          }
-        });
-      }
-
-      if (processedFiles.length > 0) {
-        const successful = processedFiles.filter(f => f.processing_status === 'completed').length;
-        const failed = processedFiles.filter(f => f.processing_status === 'failed').length;
-
-        if (successful > 0 && failed === 0) {
-          toast.success(`Successfully processed ${successful} file${successful > 1 ? 's' : ''}`);
-        } else if (successful > 0 && failed > 0) {
-          toast.warning(`Processed ${successful} file${successful > 1 ? 's' : ''}, ${failed} failed`);
-        } else if (failed > 0) {
-          toast.error(`Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
+        if (error) {
+          ////console.error('Edge function error:', error);
+          throw new Error(`AI service error: ${error.message || 'Unknown error'}`);
         }
-      }
+
+        if (!data || !data.response) {
+          throw new Error('Empty response from AI service');
+        }
+
+        ////console.log('[handleSubmitMessage] Backend response:', data);
+
+        // **Replace optimistic messages with real messages from response**
+        // Backend should return userMessageId and aiMessageId
+        const realUserMessage: Message = {
+          id: data.userMessageId || optimisticUserMessageId,
+          content: messageContent || '[Files attached]',
+          role: 'user',
+          timestamp: data.timestamp || new Date().toISOString(),
+          isError: false,
+          attachedDocumentIds: finalAttachedDocumentIds,
+          attachedNoteIds: finalAttachedNoteIds,
+          session_id: currentSessionId,
+          has_been_displayed: true,
+          image_url: imageUrl,
+          image_mime_type: imageMimeType,
+          files_metadata: processedFiles.length > 0 ? JSON.stringify(processedFiles) : undefined,
+        };
+
+        const realAiMessage: Message = {
+          id: data.aiMessageId || optimisticAiMessageId,
+          content: data.response,
+          role: 'assistant',
+          timestamp: data.timestamp || new Date().toISOString(),
+          isError: false,
+          attachedDocumentIds: [],
+          attachedNoteIds: [],
+          session_id: currentSessionId,
+          has_been_displayed: false,
+        };
+
+        // //console.log('[handleSubmitMessage] Replacing optimistic messages with real IDs:', {
+        //   userMessageId: realUserMessage.id,
+        //   aiMessageId: realAiMessage.id
+        // });
+
+        // Update UI with real messages
+        setChatMessages(prev => {
+          // Remove optimistic messages
+          const withoutOptimistic = prev.filter(msg =>
+            msg.id !== optimisticUserMessageId && msg.id !== optimisticAiMessageId
+          );
+
+          // Add real messages
+          const newMessages = [...withoutOptimistic, realUserMessage, realAiMessage];
+
+          // Save to offline storage
+          offlineStorage.saveAll(STORES.CHAT_MESSAGES, [realUserMessage, realAiMessage]);
+
+          return newMessages;
+        });
+
+        // Update the session with the new title if provided
+        if (data.title) {
+          dispatch({
+            type: 'UPDATE_CHAT_SESSION',
+            payload: {
+              id: currentSessionId,
+              updates: {
+                last_message_at: new Date().toISOString(),
+                title: data.title,
+                document_ids: [...new Set([...selectedDocumentIds, ...finalAttachedDocumentIds])],
+              }
+            }
+          });
+        }
+
+        if (processedFiles.length > 0) {
+          const successful = processedFiles.filter(f => f.processing_status === 'completed').length;
+          const failed = processedFiles.filter(f => f.processing_status === 'failed').length;
+
+          if (successful > 0 && failed === 0) {
+            toast.success(`Successfully processed ${successful} file${successful > 1 ? 's' : ''}`);
+          } else if (successful > 0 && failed > 0) {
+            toast.warning(`Processed ${successful} file${successful > 1 ? 's' : ''}, ${failed} failed`);
+          } else if (failed > 0) {
+            toast.error(`Failed to process ${failed} file${failed > 1 ? 's' : ''}`);
+          }
+        }
       } else {
         // === OFFLINE MODE ===
         const offlineAiMessage: Message = {
