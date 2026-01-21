@@ -25,7 +25,14 @@ export const useMessageHandlers = () => {
     selectedDocumentIds,
   } = useAppContext();
 
-  const { startStreaming, stopStreaming, streamingState, accumulatedDataRef } = useStreamingChat();
+  const {
+    startStreaming,
+    stopStreaming,
+    pauseStreaming,
+    resumeStreaming,
+    streamingState,
+    accumulatedDataRef
+  } = useStreamingChat();
 
   const buildRichContext = useCallback((
     documentIdsToInclude: string[],
@@ -389,7 +396,7 @@ export const useMessageHandlers = () => {
                   return [...withoutOptimistic, ...mappedMessages];
                 });
               } else {
-                console.error('Error fetching final messages:', error);
+                //console.error('Error fetching final messages:', error);
                 // Fallback: create messages from finalData
                 const realUserMessage: Message = {
                   id: userMessageId,
@@ -427,7 +434,7 @@ export const useMessageHandlers = () => {
                 });
               }
             } else {
-              console.error('Missing message IDs in finalData');
+              //console.error('Missing message IDs in finalData');
             }
 
             // Update the session title if provided
@@ -652,6 +659,8 @@ export const useMessageHandlers = () => {
     dispatch,
     selectedDocumentIds,
     setChatMessages,
+    startStreaming,
+    accumulatedDataRef,
   ]);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
@@ -703,19 +712,16 @@ export const useMessageHandlers = () => {
       return;
     }
 
-    if (!lastAssistantMessage) {
-      toast.info('No previous AI message to regenerate.');
-      return;
+    // Mark message as updating in UI if it exists
+    if (lastAssistantMessage) {
+      setChatMessages(prevAllMessages =>
+        (prevAllMessages || []).map(msg =>
+          msg.id === lastAssistantMessage.id
+            ? { ...msg, content: '', isError: false, isLoading: true, thinking_steps: [] }
+            : msg
+        )
+      );
     }
-
-    // Mark message as updating in UI
-    setChatMessages(prevAllMessages =>
-      (prevAllMessages || []).map(msg =>
-        msg.id === lastAssistantMessage.id
-          ? { ...msg, content: 'Regenerating...', isError: false }
-          : msg
-      )
-    );
 
     toast.info('Regenerating response...');
 
@@ -724,23 +730,25 @@ export const useMessageHandlers = () => {
         lastUserMessageContent,
         lastUserMessage.attachedDocumentIds,
         lastUserMessage.attachedNoteIds,
+        lastUserMessage.image_url,
+        lastUserMessage.image_mime_type,
         undefined,
+        lastAssistantMessage?.id || null,
         undefined,
-        undefined,
-        lastAssistantMessage.id,
-        undefined,
+        true // Enable streaming for regeneration
       );
     } catch (error) {
-      ////console.error('Error regenerating response:', error);
       toast.error('Failed to regenerate response');
 
-      setChatMessages(prevAllMessages =>
-        (prevAllMessages || []).map(msg =>
-          msg.id === lastAssistantMessage.id
-            ? { ...msg, isError: true }
-            : msg
-        )
-      );
+      if (lastAssistantMessage) {
+        setChatMessages(prevAllMessages =>
+          (prevAllMessages || []).map(msg =>
+            msg.id === lastAssistantMessage.id
+              ? { ...msg, isError: true, isLoading: false }
+              : msg
+          )
+        );
+      }
     }
   }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmitMessage]);
 
@@ -765,7 +773,7 @@ export const useMessageHandlers = () => {
     setChatMessages(prevAllMessages =>
       (prevAllMessages || []).map(msg =>
         msg.id === failedAiMessageId
-          ? { ...msg, content: 'Retrying...', isError: false }
+          ? { ...msg, content: '', isError: false, isLoading: true }
           : msg
       )
     );
@@ -777,31 +785,160 @@ export const useMessageHandlers = () => {
         originalUserMessageContent,
         lastUserMessage.attachedDocumentIds,
         lastUserMessage.attachedNoteIds,
-        undefined,
-        undefined,
+        lastUserMessage.image_url,
+        lastUserMessage.image_mime_type,
         undefined,
         failedAiMessageId,
         undefined,
+        true // Enable streaming for retry
       );
     } catch (error) {
-      ////console.error('Error retrying message:', error);
       toast.error('Failed to retry message');
 
       setChatMessages(prevAllMessages =>
         (prevAllMessages || []).map(msg =>
           msg.id === failedAiMessageId
-            ? { ...msg, isError: true }
+            ? { ...msg, isError: true, isLoading: false }
             : msg
         )
       );
     }
   }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmitMessage]);
 
+  const handleInterruptMessage = useCallback(() => {
+    stopStreaming();
+    toast.info('AI response interrupted.');
+  }, [stopStreaming]);
+
+  const handlePauseGeneration = useCallback(() => {
+    pauseStreaming();
+    toast.info('AI response paused.');
+  }, [pauseStreaming]);
+
+  const handleResumeGeneration = useCallback(async (lastUserMessageContent: string, lastAssistantMessageId: string) => {
+    if (!user || !activeChatSessionId) {
+      toast.error('Authentication required or no active chat session.');
+      return;
+    }
+
+    const lastUserMessage = filteredChatMessages.slice().reverse()
+      .find(msg => msg.role === 'user' && msg.content === lastUserMessageContent);
+
+    if (!lastUserMessage) {
+      toast.error('Could not find original user message to resume from.');
+      return;
+    }
+
+    setChatMessages(prevAllMessages =>
+      (prevAllMessages || []).map(msg =>
+        msg.id === lastAssistantMessageId
+          ? { ...msg, isError: false, isLoading: true }
+          : msg
+      )
+    );
+
+    toast.info('Resuming AI response...');
+
+    try {
+      await handleSubmitMessage(
+        lastUserMessageContent,
+        lastUserMessage.attachedDocumentIds,
+        lastUserMessage.attachedNoteIds,
+        lastUserMessage.image_url,
+        lastUserMessage.image_mime_type,
+        undefined,
+        lastAssistantMessageId,
+        undefined,
+        true // Enable streaming for resume
+      );
+    } catch (error) {
+      toast.error('Failed to resume response');
+      setChatMessages(prevAllMessages =>
+        (prevAllMessages || []).map(msg =>
+          msg.id === lastAssistantMessageId
+            ? { ...msg, isError: true, isLoading: false }
+            : msg
+        )
+      );
+    }
+  }, [user, activeChatSessionId, filteredChatMessages, setChatMessages, handleSubmitMessage]);
+
+  const handleEditAndResendMessage = useCallback(async (
+    editedUserMessageContent: string,
+    originalUserMessageId: string,
+    originalAssistantMessageId: string | null,
+    attachedDocumentIds: string[] = [],
+    attachedNoteIds: string[] = [],
+    image_url: string | null = null,
+    image_mime_type: string | null = null,
+  ) => {
+    if (!user || !activeChatSessionId) {
+      toast.error('Authentication required or no active chat session.');
+      return;
+    }
+
+    // Remove the original user message and its corresponding AI message (if any)
+    setChatMessages(prevAllMessages =>
+      (prevAllMessages || []).filter(msg =>
+        msg.id !== originalUserMessageId && msg.id !== originalAssistantMessageId
+      )
+    );
+
+    toast.info('Editing and resending message...');
+
+    try {
+      await handleSubmitMessage(
+        editedUserMessageContent,
+        attachedDocumentIds,
+        attachedNoteIds,
+        image_url,
+        image_mime_type,
+        undefined, // No parent message ID for the new user message
+        null, // No AI message to replace initially
+        undefined,
+        true // Enable streaming
+      );
+    } catch (error) {
+      toast.error('Failed to edit and resend message');
+      // Optionally re-add original messages or show error state
+    }
+  }, [user, activeChatSessionId, setChatMessages, handleSubmitMessage]);
+
+  const handleSuggestAiCorrection = useCallback(async (correctionPrompt: string) => {
+    if (!user || !activeChatSessionId) {
+      toast.error('Authentication required or no active chat session.');
+      return;
+    }
+
+    toast.info('Sending correction request to AI...');
+
+    try {
+      await handleSubmitMessage(
+        correctionPrompt,
+        [], // No specific documents unless they were already attached
+        [], // No specific notes
+        undefined,
+        undefined,
+        undefined,
+        null, // This is a new message, not an update to an old one or it can be a new exchange
+        undefined,
+        true // Enable streaming
+      );
+    } catch (error) {
+      toast.error('Failed to send correction request');
+    }
+  }, [user, activeChatSessionId, handleSubmitMessage]);
+
   return {
     handleSubmitMessage,
     handleDeleteMessage,
     handleRegenerateResponse,
     handleRetryFailedMessage,
+    handleInterruptMessage,
+    handlePauseGeneration,
+    handleResumeGeneration,
+    handleEditAndResendMessage,
+    handleSuggestAiCorrection,
     buildRichContext,
     streamingState, // Export streaming state
     stopStreaming, // Export stop streaming function
@@ -927,3 +1064,5 @@ export const useDataHelpers = () => {
     removeOptimisticNote,
   };
 };
+
+export default useMessageHandlers;

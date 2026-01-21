@@ -3,7 +3,7 @@ const SUPABASE_URL = 'https://kegsrvnywshxyucgjxml.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlZ3NydnJ5d3NoeHl1Y2dqeG1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTk1ODE1MzUsImV4cCI6MjAzNTE1NzUzNX0.1Q6tXnZQqVX5XDqKfqGx7ZwR0O0HqvQfDqYxB8qX9qQ';
 
 async function testContentModeration() {
-  console.log('Testing content moderation...\n');
+  //console.log('Testing content moderation...\n');
 
   // Test cases
   const testCases = [
@@ -45,9 +45,9 @@ async function testContentModeration() {
   ];
 
   for (const testCase of testCases) {
-    console.log(`\n🧪 Test: ${testCase.name}`);
-    console.log(`📝 Content: "${testCase.content}"`);
-    
+    //console.log(`\n🧪 Test: ${testCase.name}`);
+    //console.log(`📝 Content: "${testCase.content}"`);
+
     try {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/content-moderation`, {
         method: 'POST',
@@ -59,29 +59,29 @@ async function testContentModeration() {
       });
 
       const result = await response.json();
-      
-      console.log(`\n✅ Result:`);
-      console.log(`   Approved: ${result.approved ? '✓' : '✗'}`);
-      console.log(`   Educational: ${result.isEducational ? 'Yes' : 'No'}`);
-      console.log(`   Confidence: ${(result.confidence * 100).toFixed(1)}%`);
-      console.log(`   Educational Score: ${(result.educationalValue?.score * 100).toFixed(1)}%`);
-      console.log(`   Category: ${result.category || 'N/A'}`);
-      console.log(`   Reason: ${result.reason}`);
-      
+
+      //console.log(`\n✅ Result:`);
+      //console.log(`   Approved: ${result.approved ? '✓' : '✗'}`);
+      //console.log(`   Educational: ${result.isEducational ? 'Yes' : 'No'}`);
+      //console.log(`   Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+      //console.log(`   Educational Score: ${(result.educationalValue?.score * 100).toFixed(1)}%`);
+      //console.log(`   Category: ${result.category || 'N/A'}`);
+      //console.log(`   Reason: ${result.reason}`);
+
       if (result.suggestions && result.suggestions.length > 0) {
-        console.log(`   💡 Suggestions:`);
+        //console.log(`   💡 Suggestions:`);
         result.suggestions.forEach(s => console.log(`      - ${s}`));
       }
-      
+
       if (result.topics && result.topics.length > 0) {
-        console.log(`   🏷️  Topics: ${result.topics.join(', ')}`);
+        //console.log(`   🏷️  Topics: ${result.topics.join(', ')}`);
       }
-      
+
     } catch (error) {
-      console.error(`❌ Error: ${error.message}`);
+      //console.error(`❌ Error: ${error.message}`);
     }
-    
-    console.log('\n' + '─'.repeat(80));
+
+    //console.log('\n' + '─'.repeat(80));
   }
 }
 

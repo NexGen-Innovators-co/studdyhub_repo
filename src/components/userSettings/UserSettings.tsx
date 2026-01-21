@@ -165,7 +165,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         setPushNotifications(false);
         toast.success('Push notifications disabled');
       } catch (error) {
-        console.error('Error disabling push notifications:', error);
+        //console.error('Error disabling push notifications:', error);
         toast.error('Failed to disable push notifications');
       }
     }
@@ -541,7 +541,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
       toast.success('Notification settings saved!');
     } catch (error) {
-      console.error('Error saving notification preferences:', error);
+      //console.error('Error saving notification preferences:', error);
       toast.error('Failed to save notification settings');
     }
   };
@@ -572,7 +572,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         setReminderTime(data.reminder_time ?? 30);
       }
     } catch (error) {
-      console.error('Error loading notification preferences:', error);
+      //console.error('Error loading notification preferences:', error);
     }
   };
 
@@ -1124,7 +1124,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 {/* Notification Channels */}
                 <div className="space-y-4">
                   <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Notification Channels</h3>
-                  
+
                   <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                     <div>
                       <div className="font-medium mb-1">Push Notifications</div>
@@ -1155,7 +1155,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 {/* Notification Types */}
                 <div className="space-y-4">
                   <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Notification Types</h3>
-                  
+
                   <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                     <div>
                       <div className="font-medium mb-1">Schedule Reminders</div>
@@ -1212,7 +1212,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 {/* Reminder Timing */}
                 <div className="space-y-4">
                   <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Reminder Settings</h3>
-                  
+
                   <div className="p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                     <Label htmlFor="reminderTime" className="mb-2 block">
                       Reminder Time (minutes before)
@@ -1240,7 +1240,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 {/* Quiet Hours */}
                 <div className="space-y-4">
                   <h3 className="font-medium text-sm text-gray-600 dark:text-gray-300">Quiet Hours</h3>
-                  
+
                   <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                     <div>
                       <div className="font-medium mb-1">Enable Quiet Hours</div>

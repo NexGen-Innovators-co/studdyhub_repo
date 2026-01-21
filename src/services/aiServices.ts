@@ -45,12 +45,12 @@ export const generateInlineContent = async (
     });
 
     if (error) {
-      console.error('[aiServices] Edge function error:', error);
+      //console.error('[aiServices] Edge function error:', error);
       throw new Error(error.message || 'An unknown error occurred during inline AI generation.');
     }
 
     if (!data || !data.generatedContent) {
-      console.error('[aiServices] No generated content in response:', data);
+      //console.error('[aiServices] No generated content in response:', data);
       throw new Error('AI did not return any content. Please try again.');
     }
 
@@ -59,21 +59,21 @@ export const generateInlineContent = async (
 
     // Clean up the response
     finalContent = finalContent.trim();
-    
+
     // Always attempt to remove outer "markdown" code blocks if they exist
     // This handles cases where the LLM wraps mixed content (text + mermaid) in a specific markdown block
     if (finalContent.startsWith('```markdown') || finalContent.startsWith('```md')) {
-        // Only strip if it also Ends with a code block, to avoid stripping valid internal start blocks (though unlikely at pos 0)
-        // We use a regex that handles the start, checks content, and the end
-        const match = finalContent.match(/^```(?:markdown|md)\n([\s\S]*?)\n```$/);
-        if (match) {
-           finalContent = match[1].trim();
-        }
+      // Only strip if it also Ends with a code block, to avoid stripping valid internal start blocks (though unlikely at pos 0)
+      // We use a regex that handles the start, checks content, and the end
+      const match = finalContent.match(/^```(?:markdown|md)\n([\s\S]*?)\n```$/);
+      if (match) {
+        finalContent = match[1].trim();
+      }
     }
 
     // Check if this is a diagram - if so, preserve the code blocks
     const isDiagram = /```(?:mermaid|chartjs|dot)/.test(finalContent);
-    
+
     if (!isDiagram) {
       // Remove hallucinated intros/preambles for text-only responses
       const badStarts = [
@@ -94,26 +94,26 @@ export const generateInlineContent = async (
     }
 
     return finalContent;
-    
+
   } catch (error) {
     let errorMessage = 'Failed to generate content with AI.';
-    
+
     if (error instanceof FunctionsHttpError) {
-      console.error('[aiServices] FunctionsHttpError:', error);
+      //console.error('[aiServices] FunctionsHttpError:', error);
       errorMessage = `AI generation failed: ${error.context?.statusText || 'Unknown error'}`;
-      
+
       if (error.message.includes("The model is overloaded")) {
         errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
       }
     } else if (error instanceof Error) {
-      console.error('[aiServices] Error:', error.message);
+      //console.error('[aiServices] Error:', error.message);
       errorMessage = error.message;
-      
+
       if (error.message.includes("The model is overloaded")) {
         errorMessage = "AI model is currently overloaded. Please try again in a few moments.";
       }
     }
-    
+
     throw new Error(errorMessage);
   }
 };
@@ -171,20 +171,20 @@ export const generateCourseStructure = async (
     });
 
     if (error) throw error;
-    
+
     let content = data.generatedContent;
     // Clean markdown if present
     content = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    
+
     try {
       return JSON.parse(content) as AIGeneratedCourse;
     } catch (e) {
-      console.error("Failed to parse AI response as JSON", content);
+      //console.error("Failed to parse AI response as JSON", content);
       throw new Error("AI generated invalid structure. Please try again.");
     }
 
   } catch (error: any) {
-    console.error('AI Course Generation Error:', error);
+    //console.error('AI Course Generation Error:', error);
     throw new Error(error.message || 'Failed to generate course');
   }
 };

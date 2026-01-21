@@ -20,7 +20,7 @@ export function useCalendarIntegration() {
       const data = await calendarIntegrationService.getIntegrations(user.id);
       setIntegrations(data);
     } catch (error) {
-      console.error('Error fetching calendar integrations:', error);
+      //console.error('Error fetching calendar integrations:', error);
       toast.error('Failed to load calendar integrations');
     }
   }, [user]);
@@ -44,7 +44,7 @@ export function useCalendarIntegration() {
       const authUrl = await calendarIntegrationService.connectOutlookCalendar(user.id);
       window.location.href = authUrl;
     } catch (error) {
-      console.error('Error connecting to Outlook Calendar:', error);
+      //console.error('Error connecting to Outlook Calendar:', error);
       toast.error('Failed to connect to Outlook Calendar');
     }
   }, [user]);
@@ -53,15 +53,15 @@ export function useCalendarIntegration() {
   const disconnect = useCallback(async (integrationId: string) => {
     try {
       const success = await calendarIntegrationService.disconnectCalendar(integrationId);
-      
+
       if (success) {
-        setIntegrations(prev => 
+        setIntegrations(prev =>
           prev.map(i => i.id === integrationId ? { ...i, sync_enabled: false } : i)
         );
         toast.success('Calendar disconnected');
       }
     } catch (error) {
-      console.error('Error disconnecting calendar:', error);
+      //console.error('Error disconnecting calendar:', error);
       toast.error('Failed to disconnect calendar');
     }
   }, []);
@@ -84,7 +84,7 @@ export function useCalendarIntegration() {
         return false;
       }
     } catch (error) {
-      console.error('Error syncing to calendar:', error);
+      //console.error('Error syncing to calendar:', error);
       toast.error('Failed to sync to calendar');
       return false;
     }
@@ -104,7 +104,7 @@ export function useCalendarIntegration() {
       toast.success(`Synced ${syncedCount} of ${scheduleItems.length} events`);
       await fetchIntegrations(); // Refresh to update last_synced_at
     } catch (error) {
-      console.error('Error syncing schedule:', error);
+      //console.error('Error syncing schedule:', error);
       toast.error('Failed to sync schedule');
     } finally {
       setSyncing(false);

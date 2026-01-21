@@ -398,7 +398,7 @@ const Auth = () => {
               toast.success('Referral bonus applied! You received 10 extra AI credits.');
             }
           } catch (refErr) {
-            console.log('Referral processing will complete after email verification');
+            //console.log('Referral processing will complete after email verification');
           }
         }
         toast.success('Account created! Please check your email for a confirmation link.');
@@ -481,7 +481,7 @@ const Auth = () => {
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
-      
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -500,7 +500,7 @@ const Auth = () => {
       // OAuth redirect will happen automatically
       toast.success('Redirecting to Google...');
     } catch (error: any) {
-      console.error('Google sign-in error:', error);
+      //console.error('Google sign-in error:', error);
       toast.error(error.message || 'Failed to sign in with Google');
     } finally {
       setIsLoading(false);

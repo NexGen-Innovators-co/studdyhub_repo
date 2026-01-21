@@ -26,14 +26,14 @@ serve(async (req) => {
     // That have NOT had a reminder sent yet
     const now = new Date()
     const futureWindow = new Date(now.getTime() + 16 * 60000) // 16 minutes from now (buffer)
-    
+
     // We strictly look for items that:
     // - Start between NOW and NOW + 15 mins
     // - Don't have a corresponding 'sent' record in schedule_reminders (or where notification_sent is false)
-    
+
     // Simplification: We check the schedule_reminders table.
     // If your app populates schedule_reminders, valid query is:
-    
+
     const { data: pendingReminders, error: remindersError } = await supabaseClient
       .from('schedule_reminders')
       .select(`
@@ -48,7 +48,7 @@ serve(async (req) => {
       `)
       .eq('notification_sent', false)
       .is('notification_sent_at', null)
-    
+
     if (remindersError) throw remindersError
 
     console.log(`Found ${pendingReminders?.length || 0} pending reminders`)
@@ -66,12 +66,12 @@ serve(async (req) => {
 
         // If trigger time is in the past (or now), it's due
         if (triggerTime <= now.getTime()) {
-           validReminders.push({
-             reminderId: reminder.id,
-             userId: item.user_id,
-             title: item.title,
-             minutesUntil: Math.round((startTime - now.getTime()) / 60000)
-           })
+          validReminders.push({
+            reminderId: reminder.id,
+            userId: item.user_id,
+            title: item.title,
+            minutesUntil: Math.round((startTime - now.getTime()) / 60000)
+          })
         }
       }
     }
@@ -84,7 +84,7 @@ serve(async (req) => {
         // Trigger send-notification function
         // We call it directly via fetch or invoke, OR allow this function to send directly if we copy logic.
         // Calling the function is cleaner separation.
-        
+
         await supabaseClient.functions.invoke('send-notification', {
           body: {
             user_id: reminder.userId,
@@ -103,7 +103,7 @@ serve(async (req) => {
             notification_sent_at: new Date().toISOString()
           })
           .eq('id', reminder.reminderId)
-          
+
       } catch (err) {
         console.error(`Failed to process reminder ${reminder.reminderId}`, err)
       }

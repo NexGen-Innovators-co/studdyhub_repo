@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useState, useRef, useEffect } from 'react';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User, File, Download, Check, Paperclip, AlertTriangle } from 'lucide-react';
+import { Copy, FileText, Image, RefreshCw, Trash2, Volume2, Pause, Square, X, Loader2, StickyNote, User, File, Download, Check, Paperclip, AlertTriangle, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemoizedMarkdownRenderer } from './MarkdownRenderer';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
@@ -58,6 +58,7 @@ interface MessageListProps {
     onBlockUpdate?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
     onBlockEnd?: (blockType: 'code' | 'mermaid' | 'html' | 'slides', content: string, language?: string, isFirstBlock?: boolean) => void;
     onDiagramCodeUpdate: (messageId: string, newCode: string) => Promise<void>;
+    onEditClick?: (message: Message) => void;
 }
 
 const getFileIcon = (file: AttachedFile) => {
@@ -168,6 +169,7 @@ export const MessageList = memo(({
     onBlockUpdate,
     onBlockEnd,
     onDiagramCodeUpdate,
+    onEditClick,
 }: MessageListProps) => {
     const lastDateRef = useRef<string | null>(null);
 
@@ -486,8 +488,8 @@ export const MessageList = memo(({
                     {/* Show thinking steps during streaming, or loader for non-streaming */}
                     {message.thinking_steps && message.thinking_steps.length > 0 ? (
                         <div className="mb-4">
-                            <ThinkingStepsDisplay 
-                                steps={message.thinking_steps} 
+                            <ThinkingStepsDisplay
+                                steps={message.thinking_steps}
                                 isStreaming={message.isStreaming || false}
                             />
                         </div>
@@ -628,6 +630,17 @@ export const MessageList = memo(({
                                     {formatTime(message.timestamp)}
                                 </span>
                                 <div className="flex gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {message.role === 'user' && onEditClick && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onEditClick(message)}
+                                            className="h-5 w-5 sm:h-6 sm:w-6 rounded-full text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-700"
+                                            title="Edit and resend"
+                                        >
+                                            <Pencil className="h-3 w-3 sm:h-4 sm:w-4" />
+                                        </Button>
+                                    )}
                                     {message.role === 'assistant' && (
                                         <>
                                             {isLastMessage && !isLoading && (
@@ -666,6 +679,7 @@ export const MessageList = memo(({
         formatDate, formatTime, onToggleUserMessageExpansion, expandedMessages, onMermaidError, onSuggestAiCorrection,
         onViewContent, enableTypingAnimation, isLoading, onMarkMessageDisplayed, autoTypeInPanel, onBlockDetected,
         onBlockUpdate, onBlockEnd, isDiagramPanelOpen, handleDiagramCodeUpdate, onRegenerateClick, copy, onDeleteClick,
+        onEditClick,
         isSpeaking, speakingMessageId, isPaused, resumeSpeech, pauseSpeech, stopSpeech, speakMessage, renderAttachments,
         messages
     ]);

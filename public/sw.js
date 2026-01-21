@@ -15,10 +15,10 @@ const ASSETS_TO_CACHE = [
 
 // Install event - Cache static assets
 self.addEventListener('install', (event) => {
-  console.log('Service Worker installing');
+  ////console.log('Service Worker installing');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('Caching static assets');
+      //console.log('Caching static assets');
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
@@ -27,13 +27,13 @@ self.addEventListener('install', (event) => {
 
 // Activate event - Clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker activating');
+  //console.log('Service Worker activating');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
+            //console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -82,10 +82,10 @@ self.addEventListener('fetch', (event) => {
 
 // Push event - Handle incoming push notifications
 self.addEventListener('push', (event) => {
-  console.log('Push event received');
-  
+  //console.log('Push event received');
+
   if (!event.data) {
-    console.log('Push event but no data');
+    //console.log('Push event but no data');
     return;
   }
 
@@ -109,13 +109,13 @@ self.addEventListener('push', (event) => {
       self.registration.showNotification(title, options)
     );
   } catch (error) {
-    console.error('Error showing notification:', error);
+    //console.error('Error showing notification:', error);
   }
 });
 
 // Notification click event
 self.addEventListener('notificationclick', (event) => {
-  console.log('Notification clicked:', event);
+  //console.log('Notification clicked:', event);
   event.notification.close();
 
   const notificationData = event.notification.data;
@@ -186,7 +186,7 @@ self.addEventListener('notificationclick', (event) => {
           });
         }
       }
-      
+
       // No window open, open a new one
       if (self.clients.openWindow) {
         return self.clients.openWindow(url);
@@ -197,8 +197,8 @@ self.addEventListener('notificationclick', (event) => {
 
 // Notification close event
 self.addEventListener('notificationclose', (event) => {
-  console.log('Notification closed:', event);
-  
+  //console.log('Notification closed:', event);
+
   // Track notification dismissal (optional)
   const notificationData = event.notification.data;
   if (notificationData && notificationData.id) {
@@ -223,7 +223,7 @@ async function syncNotifications() {
     // Fetch pending notifications from server
     const response = await fetch('/api/notifications/pending');
     const notifications = await response.json();
-    
+
     // Show each notification
     for (const notification of notifications) {
       await self.registration.showNotification(notification.title, {
@@ -233,22 +233,22 @@ async function syncNotifications() {
       });
     }
   } catch (error) {
-    console.error('Error syncing notifications:', error);
+    //console.error('Error syncing notifications:', error);
   }
 }
 
 // Message event - Handle messages from the client
 self.addEventListener('message', (event) => {
-  console.log('Service Worker received message:', event.data);
-  
+  //console.log('Service Worker received message:', event.data);
+
   if (event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
-  
+
   if (event.data.type === 'SHOW_NOTIFICATION') {
     self.registration.showNotification(event.data.title, event.data.options);
   }
 });
 
 // Service Worker is ready
-console.log('✅ Service Worker loaded successfully');
+////console.log('✅ Service Worker loaded successfully');

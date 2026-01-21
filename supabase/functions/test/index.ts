@@ -94,16 +94,12 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
 
   // Detect if user confirmed but no ACTION marker is present (for debugging)
   if (aiResponse.match(/(yes|ok|sure|do it|please proceed|go ahead)/i) && actionList.length === 0) {
-    console.warn('[ActionExecution][WARNING] User confirmed an action but no ACTION: marker was found in the AI response. The requested operation will NOT be executed. Ensure the AI outputs the correct ACTION: marker after confirmation.');
+    console.warn('[ActionExecution][WARNING] User confirmed an action but no ACTION: marker was found in the AI response.');
 
     // Backend fallback: re-prompt the AI for the ACTION: marker and retry ONCE
-    // Only do this if not already a retry (avoid infinite loop)
     if (!aiResponse.includes('[RETRY_ACTION_MARKER]')) {
-      const promptEngine = new EnhancedPromptEngine();
-      const fallbackPrompt = `You must output the correct ACTION: marker for the confirmed operation. The user just confirmed an action (e.g., posting to the social feed), but your last reply did NOT include the required ACTION: marker. Please reply with ONLY the correct ACTION: marker for the confirmed action, nothing else.\n\n[RETRY_ACTION_MARKER]`;
-      // Call the LLM again with the fallback prompt and the last user/AI turns
-      // (Assume agenticCore.generateGeminiCompletion is available and takes a prompt and context)
       try {
+        const fallbackPrompt = `You must output the correct ACTION: marker for the confirmed operation. The user just confirmed an action, but your last reply did NOT include the required ACTION: marker. Please reply with ONLY the correct ACTION: marker for the confirmed action, nothing else.\n\n[RETRY_ACTION_MARKER]`;
         const retryContents = [{ role: 'model', parts: [{ text: aiResponse }] }, { role: 'user', parts: [{ text: fallbackPrompt }] }];
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
         const retryApiResult = await callEnhancedGeminiAPI(retryContents, geminiApiKey);
@@ -121,7 +117,6 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
     }
   }
 
-
   // 2. Execute parsed action if found
   if (actionList.length > 0) {
     console.log(`[ActionExecution] Found ${actionList.length} actions.`);
@@ -132,367 +127,44 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
         // Escape special regex chars
         const escaped = action.matchedString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         // Remove the matched action string and any trailing text on the same line
-        modifiedResponse = modifiedResponse.replace(new RegExp(escaped + '.*', 'g'), '').trim();
+        modifiedResponse = modifiedResponse.replace(new RegExp(escaped, 'g'), '').trim();
       }
     }
     // Fallback cleanup
     modifiedResponse = modifiedResponse.replace(/ACTION:\s*[A-Z_]+(?:\|.*)?(?:\n+|$)/g, '').trim();
 
-    // IMPORTANT: Verify user approval before executing actions automatically.
-    // Currently, we'll mark them as 'proposed' instead of executing them immediately
-    // to solve the issue of unapproved automatic actions.
-    // Only execute actions after explicit user confirmation.
-    const AUTO_EXECUTE_ENABLED = true;
+    // 3. Actually execute them using the standardized runAction helper
+    for (const action of actionList) {
+      try {
+        console.log(`[ActionExecution] Executing action: ${action.action}`);
+        const result = await runAction(actionsService, userId, sessionId, action.action, action.params);
 
-    if (AUTO_EXECUTE_ENABLED) {
-      for (const action of actionList) {
-        try {
-          let result: any;
-          console.log(`[ActionExecution] Executing action: ${action.action}`);
-
-          switch (action.action) {
-
-            case 'CREATE_RICH_POST':
-              console.log(`[ActionExecution] Creating rich post`);
-              // Parse media files if provided as JSON string
-              let mediaFiles = [];
-              try {
-                if (action.params.media_json) mediaFiles = JSON.parse(action.params.media_json);
-              } catch (e) { console.error("Error parsing media JSON", e); }
-
-              result = await actionsService.createRichSocialPost(userId, {
-                content: action.params.content,
-                privacy: action.params.privacy || 'public',
-                groupId: action.params.group_id,
-                mediaFiles: mediaFiles
-              });
-              break;
-
-            case 'ENGAGE_SOCIAL':
-              console.log(`[ActionExecution] Social engagement`);
-              result = await actionsService.engageSocial(userId, {
-                action: action.params.action,
-                targetId: action.params.target_id,
-                content: action.params.content
-              });
-              break;
-
-            case 'GENERATE_PODCAST':
-              console.log(`[ActionExecution] Generating podcast`);
-              // Parse source IDs (comma separated or JSON)
-              let sourceIds = [];
-              try {
-                sourceIds = action.params.source_ids.includes('[')
-                  ? JSON.parse(action.params.source_ids)
-                  : action.params.source_ids.split(',');
-              } catch (e) { sourceIds = []; }
-
-              result = await actionsService.generatePodcast(userId, {
-                title: action.params.title,
-                sourceIds: sourceIds,
-                style: action.params.style || 'casual'
-              });
-              break;
-
-            case 'CREATE_GROUP':
-              console.log(`[ActionExecution] Creating group`);
-              result = await actionsService.createStudyGroup(userId, {
-                name: action.params.name,
-                description: action.params.description,
-                category: action.params.category
-              });
-              break;
-
-            case 'SCHEDULE_GROUP_EVENT':
-              console.log(`[ActionExecution] Scheduling event`);
-              result = await actionsService.scheduleGroupEvent(userId, {
-                groupId: action.params.group_id,
-                title: action.params.title,
-                startTime: action.params.start_time,
-                endTime: action.params.end_time
-              });
-              break;
-
-            case 'CREATE_COURSE':
-              // Only admins can create courses. Users are not allowed.
-              console.warn('[ActionExecution] CREATE_COURSE action attempted by non-admin user. Skipping execution.');
-              result = { success: false, error: 'Only admins can create courses. You can view available courses, but not create them.' };
-              break;
-
-            case 'GET_REFERRAL_CODE':
-              result = await actionsService.getReferralCode(userId);
-              if (result.success) modifiedResponse += `\n\n**Your Referral Code:** ${result.code}`;
-              break;
-            case 'GENERATE_IMAGE':
-              console.log(`[ActionExecution] Generating image: ${action.params.prompt}`);
-              result = await actionsService.generateImage(userId, action.params.prompt);
-              // If successful, append the image markdown to the response
-              if (result.success && result.imageUrl) {
-                modifiedResponse += `\n\n![Generated Image](${result.imageUrl})\n\n`;
-              }
-              break;
-
-            case 'CREATE_NOTE':
-              console.log(`[ActionExecution] Creating note: ${action.params.title}`);
-              result = await actionsService.createNote(userId, action.params);
-              break;
-
-            case 'UPDATE_NOTE':
-              console.log(`[ActionExecution] Updating note: ${action.params.noteTitle}`);
-              result = await actionsService.updateNote(userId, action.params.noteTitle, {
-                title: action.params.title,
-                content: action.params.content,
-                category: action.params.category,
-                tags: action.params.tags
-              });
-              break;
-
-            case 'DELETE_NOTE':
-              console.log(`[ActionExecution] Deleting note: ${action.params.noteTitle}`);
-              result = await actionsService.deleteNote(userId, action.params.noteTitle);
-              break;
-
-            case 'LINK_DOCUMENT_TO_NOTE':
-              console.log(`[ActionExecution] Linking document to note`);
-              result = await actionsService.linkDocumentToNote(
-                userId,
-                action.params.noteTitle,
-                action.params.documentTitle
-              );
-              break;
-
-            case 'CREATE_FOLDER':
-              console.log(`[ActionExecution] Creating folder: ${action.params.name}`);
-              result = await actionsService.createDocumentFolder(userId, action.params);
-              break;
-
-            case 'ADD_DOCUMENT_TO_FOLDER':
-              console.log(`[ActionExecution] Adding document to folder`);
-              result = await actionsService.addDocumentToFolder(
-                userId,
-                action.params.documentTitle,
-                action.params.folderName
-              );
-              break;
-
-            case 'CREATE_SCHEDULE':
-              console.log(`[ActionExecution] Creating schedule: ${action.params.title}`);
-              result = await actionsService.createScheduleItem(userId, {
-                title: action.params.title,
-                subject: action.params.subject,
-                type: action.params.type,
-                start_time: action.params.start_time,
-                end_time: action.params.end_time,
-                description: action.params.description,
-                location: action.params.location,
-                color: action.params.color,
-                is_recurring: action.params.is_recurring,
-                recurrence_pattern: action.params.recurrence_pattern,
-                recurrence_days: action.params.recurrence_days,
-                recurrence_interval: action.params.recurrence_interval,
-                recurrence_end_date: action.params.recurrence_end_date
-              });
-              break;
-
-            case 'UPDATE_SCHEDULE':
-              console.log(`[ActionExecution] Updating schedule item`);
-              result = await actionsService.updateScheduleItem(
-                userId,
-                action.params.itemTitle,
-                action.params.updates
-              );
-              break;
-
-            case 'DELETE_SCHEDULE':
-              console.log(`[ActionExecution] Deleting schedule item: ${action.params.itemTitle}`);
-              result = await actionsService.deleteScheduleItem(userId, action.params.itemTitle);
-              break;
-
-            case 'CREATE_FLASHCARDS_FROM_NOTE':
-              console.log(`[ActionExecution] Creating flashcards from note: ${action.params.noteTitle}`);
-              result = await actionsService.createFlashcardsFromNote(
-                userId,
-                action.params.noteTitle,
-                action.params.count
-              );
-              break;
-
-            case 'CREATE_FLASHCARD':
-              console.log(`[ActionExecution] Creating flashcard`);
-              result = await actionsService.createFlashcard(userId, {
-                front: action.params.front,
-                back: action.params.back,
-                category: action.params.category,
-                difficulty: action.params.difficulty,
-                hint: action.params.hint
-              });
-              break;
-
-            case 'CREATE_LEARNING_GOAL':
-              console.log(`[ActionExecution] Creating learning goal: ${action.params.goal_text}`);
-              result = await actionsService.createLearningGoal(userId, {
-                goal_text: action.params.goal_text,
-                target_date: action.params.target_date,
-                progress: action.params.progress,
-                category: action.params.category
-              });
-              break;
-
-            case 'UPDATE_LEARNING_GOAL':
-              console.log(`[ActionExecution] Updating learning goal: ${action.params.goalText}`);
-              result = await actionsService.updateLearningGoalProgress(
-                userId,
-                action.params.goalText,
-                action.params.progress
-              );
-              break;
-
-            case 'CREATE_QUIZ':
-              console.log(`[ActionExecution] Creating quiz: ${action.params.title}`);
-              // Generate questions based on count
-              const questions = Array(action.params.question_count || 5).fill(0).map((_, i) => ({
-                question: `Question ${i + 1} about the topic?`,
-                options: ['Option A', 'Option B', 'Option C', 'Option D'],
-                correct_answer: Math.floor(Math.random() * 4),
-                explanation: 'Explanation for the correct answer'
-              }));
-
-              result = await actionsService.createQuiz(userId, {
-                title: action.params.title,
-                questions: questions,
-                source_type: action.params.source_type,
-                class_id: action.params.class_id
-              });
-              break;
-
-            case 'RECORD_QUIZ_ATTEMPT':
-              console.log(`[ActionExecution] Recording quiz attempt`);
-              result = await actionsService.recordQuizAttempt(userId, action.params.quizTitle, {
-                score: action.params.score,
-                total_questions: action.params.total_questions,
-                percentage: Math.round((action.params.score / action.params.total_questions) * 100),
-                time_taken_seconds: action.params.time_taken_seconds,
-                answers: [],
-                xp_earned: action.params.xp_earned
-              });
-              break;
-
-            case 'CREATE_RECORDING':
-              console.log(`[ActionExecution] Creating recording: ${action.params.title}`);
-              result = await actionsService.createClassRecording(userId, {
-                title: action.params.title,
-                subject: action.params.subject,
-                duration: action.params.duration,
-                transcript: action.params.transcript,
-                summary: action.params.summary,
-                document_title: action.params.document_title
-              });
-              break;
-
-            case 'UPDATE_PROFILE':
-              console.log(`[ActionExecution] Updating profile`);
-              result = await actionsService.updateUserProfile(userId, action.params.updates);
-              break;
-
-            case 'UPDATE_STATS':
-              console.log(`[ActionExecution] Updating stats`);
-              result = await actionsService.updateUserStats(userId, action.params.updates);
-              break;
-
-            case 'AWARD_ACHIEVEMENT':
-              console.log(`[ActionExecution] Awarding achievement: ${action.params.badgeName}`);
-              result = await actionsService.awardAchievement(userId, action.params.badgeName);
-              break;
-
-            // case 'CREATE_RICH_POST':
-            //   console.log(`[ActionExecution] Creating social post`);
-            //   result = await actionsService.createSocialPost(userId, {
-            //     content: action.params.content,
-            //     privacy: action.params.privacy,
-            //     group_name: action.params.group_name
-            //   });
-            //   break;
-
-            case 'UPDATE_USER_MEMORY':
-              console.log(`[ActionExecution] Updating user memory`);
-              result = await actionsService.updateUserMemory(userId, {
-                fact_type: action.params.fact_type,
-                fact_key: action.params.fact_key,
-                fact_value: action.params.fact_value,
-                confidence_score: action.params.confidence_score,
-                source_session_id: sessionId
-              });
-              break;
-
-            default:
-              console.log(`[ActionExecution] Unknown action: ${action.action}`);
-              result = { success: false, error: `Unknown action: ${action.action}` };
-          }
-
-          if (result) {
-            executedActions.push({
-              type: action.action,
-              success: result.success,
-              data: result,
-              timestamp: new Date().toISOString()
-            });
-
-            // Don't add execution messages to the response - just log them
-            console.log(`[ActionExecution] ${action.action}: ${result.success ? 'SUCCESS' : 'FAILED'}`);
-            if (result.success) {
-              console.log(`  ${result.message}`);
-              if (result.xp_reward && result.xp_reward > 0) {
-                console.log(`  XP Reward: +${result.xp_reward}`);
-              }
-            } else {
-              console.error(`  Error: ${result.error || 'Action failed'}`);
-            }
-
-            // Keep the original AI response without adding execution messages
-            // The AI's original response already includes its natural language
-          }
-        } catch (error: any) {
-          console.error(`[ActionExecution] Error executing action ${action.action}:`, error);
-          executedActions.push({
-            type: action.action,
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-          });
-
-          console.error(`[ActionExecution] Action failed: ${error.message}`);
-        }
-      } // End loop
-    } else {
-      // Handle proposed actions (automatic execution disabled)
-      console.log(`[ActionExecution] Actions identified but automatic execution is disabled.`);
-      for (const action of actionList) {
         executedActions.push({
           type: action.action,
-          params: action.params,
-          result: null,
-          success: true,
-          status: 'proposed',
+          success: result?.success || false,
+          data: result,
+          timestamp: new Date().toISOString()
+        });
+
+        console.log(`[ActionExecution] ${action.action}: ${result?.success ? 'SUCCESS' : 'FAILED'}`);
+      } catch (err: any) {
+        console.error(`[ActionExecution] Error executing ${action.action}:`, err);
+        executedActions.push({
+          type: action.action,
+          success: false,
+          error: err.message,
           timestamp: new Date().toISOString()
         });
       }
     }
   }
 
-  // 3. Clean up any remaining action markers
-  modifiedResponse = modifiedResponse.replace(/ACTION: [^\n]+\n?/g, '');
-
-  // 4. Log summary
-  if (executedActions.length > 0) {
-    const successCount = executedActions.filter(a => a.success).length;
-    const totalCount = executedActions.length;
-    console.log(`[ActionExecution] Summary: ${successCount}/${totalCount} actions executed successfully`);
-  } else {
-    console.log(`[ActionExecution] No actions found to execute`);
-  }
-
-  return { executedActions, modifiedResponse };
+  return {
+    executedActions,
+    modifiedResponse
+  };
 }
+
 
 // ========== HELPER FUNCTIONS ==========
 async function updateSessionTokenCount(sessionId: string, userId: string, messageContent: string, operation = 'add'): Promise<{ success: boolean, tokenCount: number }> {
@@ -768,7 +440,7 @@ async function getConversationHistory(userId: string, sessionId: string, maxMess
 
 async function buildAttachedContext(documentIds: string[], noteIds: string[], userId: string): Promise<string> {
   let context = '';
-  const MAX_CONTENT_LENGTH = 3000;  // Truncate long content for speed
+  const MAX_CONTENT_LENGTH = 300000;  // Truncate long content for speed
 
   if (documentIds.length > 0) {
     const { data: documents, error } = await supabase
@@ -1993,6 +1665,29 @@ async function handleStreamingResponse(
 
       let generatedText = finalResponse.content;
       console.log('✅ Generated response:', generatedText.length, 'characters');
+
+      // ========== FALLBACK: LEGACY ACTION DETECTION ==========
+      // Some models might revert to legacy ACTION: markers instead of using the JSON plan.
+      // We check the final response for these markers and execute them as a fallback.
+      console.log('[ActionExecution] Checking for legacy ACTION: markers in final response...');
+      const fallbackResult = await executeAIActions(userId, sessionId, generatedText);
+
+      if (fallbackResult.executedActions.length > 0) {
+        console.log(`[ActionExecution] Found and executed ${fallbackResult.executedActions.length} legacy actions.`);
+
+        // Add to the main executed actions list
+        executedActions = [...executedActions, ...fallbackResult.executedActions];
+
+        // Update generated text to strip the markers
+        generatedText = fallbackResult.modifiedResponse;
+
+        handler.sendThinkingStep(
+          'action',
+          'Legacy actions processed',
+          `Executed ${fallbackResult.executedActions.length} additional actions found in response text.`,
+          'completed'
+        );
+      }
 
       handler.sendThinkingStep(
         'action',

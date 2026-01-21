@@ -14,7 +14,7 @@ export const useAiMessageTracker = () => {
     const [messagesToday, setMessagesToday] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const navigate = useNavigate()
-    
+
     useEffect(() => {
         if (!user?.id || !isFree) {
             setIsLoading(false);
@@ -40,7 +40,7 @@ export const useAiMessageTracker = () => {
                 if (error) throw error;
                 setMessagesToday(count || 0);
             } catch (error) {
-                console.error('Error fetching today messages:', error);
+                //console.error('Error fetching today messages:', error);
             } finally {
                 setIsLoading(false);
             }
@@ -89,17 +89,17 @@ export const useAiMessageTracker = () => {
         }
         return true;
     };
-    
+
     // Increment message count immediately when message is sent (for real-time feedback)
     const incrementMessageCount = useCallback(() => {
         setMessagesToday(prev => prev + 1);
     }, []);
-    
+
     // Decrement if needed (e.g., if message fails to send)
     const decrementMessageCount = useCallback(() => {
         setMessagesToday(prev => Math.max(0, prev - 1));
     }, []);
-    
+
     // Reset if date changes (midnight UTC)
     useEffect(() => {
         const checkMidnight = () => {
@@ -107,17 +107,17 @@ export const useAiMessageTracker = () => {
             const tomorrow = new Date(now);
             tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
             tomorrow.setUTCHours(0, 0, 0, 0);
-            
+
             const timeUntilMidnight = tomorrow.getTime() - now.getTime();
-            
+
             const timer = setTimeout(() => {
                 setMessagesToday(0);
                 checkMidnight(); // Reschedule for next midnight
             }, timeUntilMidnight);
-            
+
             return () => clearTimeout(timer);
         };
-        
+
         return checkMidnight();
     }, []);
 

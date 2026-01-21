@@ -88,7 +88,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
   const [podcastData, setPodcastData] = useState<PodcastData | null>(null);
   const [showTranscript, setShowTranscript] = useState(false); // State to toggle transcript visibility
   const [replay, setReplay] = useState(false); // State to handle replay functionality
-  
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastMousePos = useRef({ x: 0, y: 0 });
@@ -135,12 +135,39 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
 
   useEffect(() => {
     if (podcast?.id) {
+      // Initial fetch
       fetchPodcastData(podcast.id).then((data) => {
         if (data) {
-          // Update state with fetched data
           setPodcastData(data);
         }
       });
+
+      // Subscribe to real-time updates for this specific podcast
+      const channel = supabase
+        .channel(`podcast-panel-${podcast.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'ai_podcasts',
+            filter: `id=eq.${podcast.id}`
+          },
+          (payload) => {
+            // Refresh data when an update occurs
+            fetchPodcastData(podcast.id).then((data) => {
+              if (data) {
+                setPodcastData(data);
+                toast.info('Podcast updated in real-time');
+              }
+            });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [podcast?.id]);
 
@@ -154,17 +181,17 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      
+
       const deltaX = lastMousePos.current.x - e.clientX;
       const viewportWidth = window.innerWidth;
       const deltaPercent = (deltaX / viewportWidth) * 100;
-      
+
       setPanelWidth(prev => {
         const newWidth = Math.max(30, Math.min(80, prev + deltaPercent));
         localStorage.setItem('podcastPanelWidth', newWidth.toString());
         return newWidth;
       });
-      
+
       lastMousePos.current = { x: e.clientX, y: e.clientY };
     };
 
@@ -186,7 +213,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
   // Play audio segment
   const playSegment = useCallback((index: number) => {
     if (!podcast) return;
-    
+
     const segment = podcast.audioSegments[index];
     if (!segment) return;
 
@@ -305,18 +332,18 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioRef.current) return;
-    
+
     // Check if duration is valid before seeking
     if (!isFinite(audioRef.current.duration) || audioRef.current.duration === 0) {
       //console.warn('Audio duration not ready yet');
       return;
     }
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percentage = x / rect.width;
     const newTime = percentage * audioRef.current.duration;
-    
+
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
     setProgress(percentage * 100);
@@ -324,14 +351,14 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
 
   const downloadPodcast = async () => {
     if (!podcast) return;
-    
+
     const loadingToast = toast.loading('Preparing podcast download...');
-    
+
     try {
       // Combine all audio segments
       const audioContext = new AudioContext();
       const segments: AudioBuffer[] = [];
-      
+
       // Decode all segments
       for (const segment of podcast.audioSegments) {
         let cleanedAudio = segment.audioContent.trim();
@@ -339,29 +366,29 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
           cleanedAudio = cleanedAudio.split(',')[1];
         }
         cleanedAudio = cleanedAudio.replace(/[\r\n\s]/g, '');
-        
+
         const binaryData = atob(cleanedAudio);
         const arrayBuffer = new ArrayBuffer(binaryData.length);
         const uint8Array = new Uint8Array(arrayBuffer);
-        
+
         for (let i = 0; i < binaryData.length; i++) {
           uint8Array[i] = binaryData.charCodeAt(i);
         }
-        
+
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         segments.push(audioBuffer);
       }
-      
+
       // Calculate total length
       const totalLength = segments.reduce((sum, buffer) => sum + buffer.length, 0);
-      
+
       // Combine segments
       const combinedBuffer = audioContext.createBuffer(
         segments[0].numberOfChannels,
         totalLength,
         segments[0].sampleRate
       );
-      
+
       let offset = 0;
       for (const segment of segments) {
         for (let channel = 0; channel < segment.numberOfChannels; channel++) {
@@ -369,10 +396,10 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
         }
         offset += segment.length;
       }
-      
+
       // Convert to WAV
       const wavBlob = await audioBufferToWav(combinedBuffer);
-      
+
       // Create download link
       const url = URL.createObjectURL(wavBlob);
       const a = document.createElement('a');
@@ -382,7 +409,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       toast.success('Podcast downloaded successfully!', { id: loadingToast });
     } catch (error) {
       //console.error('Download error:', error);
@@ -396,28 +423,28 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
     const arrayBuffer = new ArrayBuffer(length);
     const view = new DataView(arrayBuffer);
     const channels: Float32Array[] = [];
-    
+
     for (let i = 0; i < buffer.numberOfChannels; i++) {
       channels.push(buffer.getChannelData(i));
     }
-    
+
     let offset = 0;
     const writeString = (str: string) => {
       for (let i = 0; i < str.length; i++) {
         view.setUint8(offset++, str.charCodeAt(i));
       }
     };
-    
+
     const writeUint32 = (value: number) => {
       view.setUint32(offset, value, true);
       offset += 4;
     };
-    
+
     const writeUint16 = (value: number) => {
       view.setUint16(offset, value, true);
       offset += 2;
     };
-    
+
     // Write WAV header
     writeString('RIFF');
     writeUint32(length - 8);
@@ -432,7 +459,7 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
     writeUint16(16); // 16-bit
     writeString('data');
     writeUint32(length - offset - 4);
-    
+
     // Interleave samples
     for (let i = 0; i < buffer.length; i++) {
       for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
@@ -441,49 +468,49 @@ export const PodcastPanel: React.FC<PodcastPanelProps> = ({
         offset += 2;
       }
     }
-    
+
     return new Blob([arrayBuffer], { type: 'audio/wav' });
   };
 
   const sharePodcast = async () => {
     if (!podcast) return;
-    
+
     const loadingToast = toast.loading('Sharing podcast...');
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Please sign in to share', { id: loadingToast });
         return;
       }
-      
+
       // Check if podcast exists in database and get its current state
       const { data: podcastData, error: fetchError } = await supabase
         .from('ai_podcasts')
         .select('id, is_public')
         .eq('id', podcast.id)
         .single();
-      
+
       if (fetchError) {
         //console.error('Podcast fetch error:', fetchError);
         toast.error('Podcast not found in database', { id: loadingToast });
         return;
       }
-      
+
       // If podcast is private, make it public before sharing
       if (!podcastData.is_public) {
         const { error: updateError } = await supabase
           .from('ai_podcasts')
           .update({ is_public: true })
           .eq('id', podcast.id);
-        
+
         if (updateError) {
           //console.error('Update error:', updateError);
           toast.error('Failed to make podcast public', { id: loadingToast });
           return;
         }
       }
-      
+
       // Create social post with link to podcast
       const podcastUrl = `${window.location.origin}/podcasts/${podcast.id}`;
       const content = `🎙️ Check out my AI-generated podcast: "${podcast.title}"
@@ -494,7 +521,7 @@ Style: ${podcast.style}
 🔗 Listen now: ${podcastUrl}
 
 Generated with StuddyHub AI Podcasts!`;
-      
+
       const { error } = await supabase
         .from('social_posts')
         .insert({
@@ -510,9 +537,9 @@ Generated with StuddyHub AI Podcasts!`;
             authorName: user.user_metadata?.full_name || user.email
           }
         });
-      
+
       if (error) throw error;
-      
+
       toast.success('Podcast shared to your social feed! (Made public)', { id: loadingToast });
     } catch (error) {
       //console.error('Share error:', error);
@@ -591,9 +618,9 @@ Generated with StuddyHub AI Podcasts!`;
           <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
             <div className="flex items-center justify-between mb-3">
               <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                {podcast.podcastType === 'video' ? '🎥 Video Podcast' : 
-                 podcast.podcastType === 'live-stream' ? '🔴 Live Stream' : 
-                 '🖼️ Visual Podcast'}
+                {podcast.podcastType === 'video' ? '🎥 Video Podcast' :
+                  podcast.podcastType === 'live-stream' ? '🔴 Live Stream' :
+                    '🖼️ Visual Podcast'}
               </Badge>
               <Button
                 variant="outline"
@@ -604,61 +631,80 @@ Generated with StuddyHub AI Podcasts!`;
                 {showPrompts ? 'Hide Prompts' : 'Show Prompts'}
               </Button>
             </div>
-            
-            {/* Current visual based on playback time */}
-            {podcast.visualAssets.map((asset, index) => {
-              let isCurrentAsset = false;
-              if (asset.type === 'image' && typeof asset.segmentIndex === 'number') {
-                const nextImageAsset = podcast.visualAssets
-                  .filter((a) => a.type === 'image' && typeof a.segmentIndex === 'number' && a.segmentIndex! > asset.segmentIndex!)
-                  .sort((a, b) => (a.segmentIndex! - b.segmentIndex!))[0];
-                if (nextImageAsset) {
-                  isCurrentAsset = currentSegment >= asset.segmentIndex && currentSegment < nextImageAsset.segmentIndex!;
-                } else {
-                  isCurrentAsset = currentSegment >= asset.segmentIndex && currentSegment < podcast.audioSegments.length;
+
+            {/* Current visual based on playback time or cover image fallback */}
+            {(() => {
+              const activeAsset = podcast.visualAssets?.find((asset, index) => {
+                if (asset.type === 'image' && typeof asset.segmentIndex === 'number') {
+                  const nextImageAsset = podcast.visualAssets
+                    .filter((a) => a.type === 'image' && typeof a.segmentIndex === 'number' && a.segmentIndex! > asset.segmentIndex!)
+                    .sort((a, b) => (a.segmentIndex! - b.segmentIndex!))[0];
+                  if (nextImageAsset) {
+                    return currentSegment >= asset.segmentIndex && currentSegment < nextImageAsset.segmentIndex!;
+                  }
+                  return currentSegment >= asset.segmentIndex && currentSegment < podcast.audioSegments.length;
+                } else if (asset.type === 'video' && typeof asset.timestamp === 'number') {
+                  const nextAsset = podcast.visualAssets![index + 1];
+                  return currentTime >= asset.timestamp && (!nextAsset || currentTime < nextAsset.timestamp);
                 }
-                if (!isCurrentAsset) return null;
-              } else if (asset.type === 'video' && typeof asset.timestamp === 'number') {
-                const nextAsset = podcast.visualAssets![index + 1];
-                isCurrentAsset = currentTime >= asset.timestamp && (!nextAsset || currentTime < nextAsset.timestamp);
-              }
-              if (!isCurrentAsset) return null;
-              return (
-                <div key={index} className="relative rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 aspect-video">
-                  {asset.type === 'video' ? (
-                    <video
-                      src={asset.url}
-                      className="w-full h-full object-cover"
-                      autoPlay
-                      loop
-                      muted={isMuted}
-                      playsInline
-                    />
-                  ) : (
-                    <img
-                      src={asset.url}
-                      alt={asset.concept}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Fallback to placeholder
-                        (e.target as HTMLImageElement).src = `https://placehold.co/1792x1024/6366f1/white?text=${encodeURIComponent(asset.concept)}`;
-                      }}
-                    />
-                  )}
-                  {showPrompts && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-xs">
-                          {asset.type === 'video' ? '🎥 Video' : '🖼️ Image'}
-                        </Badge>
-                        <p className="text-white text-sm font-medium flex-1">{asset.concept}</p>
+                return false;
+              });
+
+              if (activeAsset) {
+                return (
+                  <div className="relative rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 aspect-video">
+                    {activeAsset.type === 'video' ? (
+                      <video
+                        src={activeAsset.url}
+                        className="w-full h-full object-cover"
+                        autoPlay
+                        loop
+                        muted={isMuted}
+                        playsInline
+                      />
+                    ) : (
+                      <img
+                        src={activeAsset.url}
+                        alt={activeAsset.concept}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = `https://placehold.co/1792x1024/6366f1/white?text=${encodeURIComponent(activeAsset.concept)}`;
+                        }}
+                      />
+                    )}
+                    {showPrompts && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {activeAsset.type === 'video' ? '🎥 Video' : '🖼️ Image'}
+                          </Badge>
+                          <p className="text-white text-sm font-medium flex-1">{activeAsset.concept}</p>
+                        </div>
+                        <p className="text-white/80 text-xs mt-1">{activeAsset.description}</p>
                       </div>
-                      <p className="text-white/80 text-xs mt-1">{asset.description}</p>
+                    )}
+                  </div>
+                );
+              }
+
+              // Fallback to cover image if no active asset or no visual assets at all
+              if (podcast.cover_image_url) {
+                return (
+                  <div className="relative rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 aspect-video shadow-inner">
+                    <img
+                      src={podcast.cover_image_url}
+                      alt={podcast.title}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                      <Radio className="h-12 w-12 text-white/50 animate-pulse" />
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
 
             {/* Visual timeline */}
             <div className="mt-3 flex gap-1 overflow-x-auto">
@@ -670,12 +716,11 @@ Generated with StuddyHub AI Podcasts!`;
                       audioRef.current.currentTime = asset.timestamp;
                     }
                   }}
-                  className={`flex-shrink-0 rounded overflow-hidden border-2 transition-all relative ${
-                    currentTime >= asset.timestamp && 
+                  className={`flex-shrink-0 rounded overflow-hidden border-2 transition-all relative ${currentTime >= asset.timestamp &&
                     (!podcast.visualAssets![index + 1] || currentTime < podcast.visualAssets![index + 1].timestamp)
-                      ? 'border-purple-500 shadow-lg'
-                      : 'border-slate-300 dark:border-slate-600 hover:border-purple-300'
-                  }`}
+                    ? 'border-purple-500 shadow-lg'
+                    : 'border-slate-300 dark:border-slate-600 hover:border-purple-300'
+                    }`}
                   title={asset.concept}
                 >
                   {asset.type === 'video' ? (
@@ -713,7 +758,7 @@ Generated with StuddyHub AI Podcasts!`;
               Segment {currentSegment + 1} of {podcast.audioSegments.length}
             </span>
           </div>
-          
+
           <ScrollArea className="h-24 bg-white dark:bg-slate-900 rounded-lg p-3">
             <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
               {podcast.audioSegments[currentSegment]?.text}
@@ -724,7 +769,7 @@ Generated with StuddyHub AI Podcasts!`;
         {/* Player Controls */}
         <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0">
           {/* Progress Bar */}
-          <div 
+          <div
             className="mb-4 cursor-pointer group"
             onClick={handleProgressClick}
           >
@@ -733,7 +778,7 @@ Generated with StuddyHub AI Podcasts!`;
               <span>{formatTime(duration)}</span>
             </div>
             <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-gradient-to-r from-blue-500 to-blue-700 transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
@@ -835,11 +880,10 @@ Generated with StuddyHub AI Podcasts!`;
                   <button
                     key={index}
                     onClick={() => playSegment(index)}
-                    className={`w-full text-left p-3 rounded-lg transition-all ${
-                      currentSegment === index
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 dark:border-blue-400'
-                        : 'bg-slate-50 dark:bg-slate-800 border-2 border-transparent hover:border-slate-300 dark:hover:border-slate-600'
-                    }`}
+                    className={`w-full text-left p-3 rounded-lg transition-all ${currentSegment === index
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 dark:border-blue-400'
+                      : 'bg-slate-50 dark:bg-slate-800 border-2 border-transparent hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">

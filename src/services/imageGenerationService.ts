@@ -38,12 +38,12 @@ export const generateImage = async (
     });
 
     if (error) {
-      console.error('[imageGenerationService] Edge function error:', error);
+      //console.error('[imageGenerationService] Edge function error:', error);
       throw new Error(error.message || 'Failed to generate image.');
     }
 
     if (!data || !data.imageUrl) {
-      console.error('[imageGenerationService] No image URL in response:', data);
+      //console.error('[imageGenerationService] No image URL in response:', data);
       throw new Error('No image was generated. Please try again.');
     }
 
@@ -51,12 +51,12 @@ export const generateImage = async (
       imageUrl: data.imageUrl,
     };
   } catch (error) {
-    console.error('[imageGenerationService] Error:', error);
-    
+    //console.error('[imageGenerationService] Error:', error);
+
     if (error instanceof Error) {
       throw error;
     }
-    
+
     throw new Error('An unexpected error occurred during image generation.');
   }
 };

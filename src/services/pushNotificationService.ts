@@ -2,7 +2,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { PushNotificationPayload, NotificationSubscription } from '@/types';
 
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY ;
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
 class PushNotificationService {
   private registration: ServiceWorkerRegistration | null = null;
@@ -13,7 +13,7 @@ class PushNotificationService {
    */
   async initialize(): Promise<boolean> {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      console.warn('Push notifications not supported');
+      //console.warn('Push notifications not supported');
       return false;
     }
 
@@ -22,13 +22,13 @@ class PushNotificationService {
       this.registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/'
       });
-      
+
       // Wait for service worker to be ready
       await navigator.serviceWorker.ready;
-      
+
       return true;
     } catch (error) {
-      console.error('Service Worker registration failed:', error);
+      //console.error('Service Worker registration failed:', error);
       return false;
     }
   }
@@ -44,7 +44,7 @@ class PushNotificationService {
     if (Notification.permission === 'granted') {
       return 'granted';
     }
-    
+
     if (Notification.permission === 'denied') {
       return 'denied';
     }
@@ -58,7 +58,7 @@ class PushNotificationService {
   async subscribe(userId: string): Promise<NotificationSubscription | null> {
     try {
       const permission = await this.requestPermission();
-      
+
       if (permission !== 'granted') {
         return null;
       }
@@ -74,7 +74,7 @@ class PushNotificationService {
       // Check if already subscribed
       const existingSubscription = await this.registration.pushManager.getSubscription();
       if (existingSubscription) {
-        
+
         // Check if this subscription exists in database
         const subscriptionData = existingSubscription.toJSON();
         const { data: existingRecord } = await supabase
@@ -83,11 +83,11 @@ class PushNotificationService {
           .eq('endpoint', subscriptionData.endpoint!)
           .eq('user_id', userId)
           .maybeSingle();
-        
+
         if (existingRecord) {
           return existingRecord;
         }
-        
+
         // Subscription exists in browser but not in database - save it
         const { data, error } = await supabase
           .from('notification_subscriptions')
@@ -114,7 +114,7 @@ class PushNotificationService {
 
       // Save subscription to database using RPC to handle ownership changes safely
       const subscriptionData = this.subscription.toJSON();
-      
+
       const { data, error } = await supabase
         .rpc('upsert_notification_subscription', {
           p_endpoint: subscriptionData.endpoint!,
@@ -125,10 +125,10 @@ class PushNotificationService {
         });
 
       if (error) throw error;
-      
+
       return data;
     } catch (error) {
-      console.error('Failed to subscribe to push notifications:', error);
+      //console.error('Failed to subscribe to push notifications:', error);
       return null;
     }
   }
@@ -151,7 +151,7 @@ class PushNotificationService {
       this.subscription = null;
       return true;
     } catch (error) {
-      console.error('Failed to unsubscribe from push notifications:', error);
+      //console.error('Failed to unsubscribe from push notifications:', error);
       return false;
     }
   }
@@ -168,7 +168,7 @@ class PushNotificationService {
       this.subscription = await this.registration.pushManager.getSubscription();
       return this.subscription !== null;
     } catch (error) {
-      console.error('Error checking subscription status:', error);
+      //console.error('Error checking subscription status:', error);
       return false;
     }
   }
@@ -237,7 +237,7 @@ class PushNotificationService {
     if (Notification.permission !== 'granted') {
       return;
     }
-    
+
     if (!this.registration) {
       throw new Error('Service Worker not registered');
     }

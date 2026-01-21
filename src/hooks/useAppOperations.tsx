@@ -121,7 +121,7 @@ export const useAppOperations = ({
         // Check subscription limit BEFORE attempting creation
         const noteCount = notes.length;
         const maxNotes = subscriptionLimits.maxNotes;
-        
+
         // For free tier, strict limit checking
         if (subscriptionTier === 'free' && noteCount >= maxNotes) {
           toast.error(`Note limit reached (${maxNotes}). You have created ${noteCount} notes.`, {
@@ -133,7 +133,7 @@ export const useAppOperations = ({
           });
           return;
         }
-        
+
         // For other tiers, check against their specific limits
         if (noteCount >= maxNotes && maxNotes !== Infinity) {
           toast.error(`Note limit reached (${maxNotes}). Upgrade to create more notes.`, {
@@ -167,7 +167,7 @@ export const useAppOperations = ({
         if (!navigator.onLine) {
           await offlineStorage.save(STORES.NOTES, newNoteData);
           await offlineStorage.addPendingSync('create', 'notes', newNoteData);
-          
+
           setNotes(prev => [newNoteData, ...prev]);
           setActiveNote(newNoteData);
           setActiveTab('notes');
@@ -228,10 +228,10 @@ export const useAppOperations = ({
           ...updatedNote,
           updated_at: new Date().toISOString()
         };
-        
+
         await offlineStorage.save(STORES.NOTES, noteWithUpdatedTime);
         await offlineStorage.addPendingSync('update', 'notes', noteWithUpdatedTime);
-        
+
         setNotes(prev =>
           prev.map(note =>
             note.id === updatedNote.id ? noteWithUpdatedTime : note
@@ -287,7 +287,7 @@ export const useAppOperations = ({
       if (!navigator.onLine) {
         await offlineStorage.delete(STORES.NOTES, noteId);
         await offlineStorage.addPendingSync('delete', 'notes', { id: noteId });
-        
+
         setNotes(prev => prev.filter(note => note.id !== noteId));
         if (activeNote?.id === noteId) {
           setActiveNote(null);
@@ -359,12 +359,12 @@ export const useAppOperations = ({
       if (!navigator.onLine) {
         await offlineStorage.delete(STORES.RECORDINGS, recordingId);
         await offlineStorage.addPendingSync('delete', 'recordings', { id: recordingId });
-        
+
         if (documentId) {
           await offlineStorage.delete(STORES.DOCUMENTS, documentId);
           await offlineStorage.addPendingSync('delete', 'documents', { id: documentId });
         }
-        
+
         setRecordings(prev => prev.filter(rec => rec.id !== recordingId));
         toast.success('Recording deleted offline. Will sync when online.');
         return;
@@ -420,7 +420,7 @@ export const useAppOperations = ({
         // Check folder creation limit BEFORE attempting creation
         const folderCount = folders.length;
         const maxFolders = subscriptionLimits.maxFolders;
-        
+
         if (subscriptionTier === 'free' && folderCount >= maxFolders) {
           toast.error(`Folder limit reached (${maxFolders}). You have created ${folderCount} folders.`, {
             action: {
@@ -431,7 +431,7 @@ export const useAppOperations = ({
           });
           return null;
         }
-        
+
         if (folderCount >= maxFolders && maxFolders !== Infinity) {
           toast.error(`Folder limit reached (${maxFolders}). Upgrade to create more folders.`, {
             action: {
@@ -442,7 +442,7 @@ export const useAppOperations = ({
           return null;
         }
       }
-      
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -664,7 +664,7 @@ export const useAppOperations = ({
         if (prev.some(q => q.id === quiz.id)) return prev;
         return [quiz, ...prev];
       });
-      
+
       // If it's a recording-based quiz, we might want to update the recording's quiz count or similar
       // but for now, just adding to the quizzes list is enough for the history to update.
     } catch (error) {
@@ -680,7 +680,7 @@ export const useAppOperations = ({
         // Check schedule item limit BEFORE attempting creation
         const scheduleCount = scheduleItems?.length || 0;
         const maxScheduleItems = subscriptionLimits.maxScheduleItems;
-        
+
         if (subscriptionTier === 'free' && scheduleCount >= maxScheduleItems) {
           toast.error(`Schedule limit reached (${maxScheduleItems}). You have ${scheduleCount} scheduled items.`, {
             action: {
@@ -691,7 +691,7 @@ export const useAppOperations = ({
           });
           return;
         }
-        
+
         if (scheduleCount >= maxScheduleItems && maxScheduleItems !== Infinity) {
           toast.error(`Schedule limit reached (${maxScheduleItems}). Upgrade to add more items.`, {
             action: {
@@ -702,7 +702,7 @@ export const useAppOperations = ({
           return;
         }
       }
-      
+
       const { data: { user } = {} } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -790,17 +790,17 @@ export const useAppOperations = ({
 
           if (reminderError) {
             toast.error('Failed to create schedule reminder: ' + reminderError.message);
-            console.error('Failed to create schedule reminder:', reminderError);
+            //console.error('Failed to create schedule reminder:', reminderError);
           } else {
             toast.success('Schedule reminder created successfully!');
-            console.log('Schedule reminder insert result:', reminderData);
+            //console.log('Schedule reminder insert result:', reminderData);
           }
         } else {
           toast('Schedule reminders are disabled in your preferences. No reminder created.');
         }
       } catch (remError) {
         toast.error('Unexpected error creating schedule reminder. See console for details.');
-        console.error('Failed to create reminder:', remError);
+        //console.error('Failed to create reminder:', remError);
       }
 
       // Sync to external calendars
@@ -810,7 +810,7 @@ export const useAppOperations = ({
       try {
         // Check if user has active integrations to determine if we should expect a sync
         const integrations = await calendarIntegrationService.getIntegrations(user.id);
-        
+
         if (integrations.length > 0) {
           syncAttempted = true;
           const syncResult = await calendarIntegrationService.syncToCalendar(newScheduleItem, user.id);
@@ -821,11 +821,11 @@ export const useAppOperations = ({
           }
         }
       } catch (syncError) {
-        console.error('Failed to sync to external calendar:', syncError);
+        //console.error('Failed to sync to external calendar:', syncError);
       }
 
       setScheduleItems(prev => [...prev, newScheduleItem]);
-      
+
       if (syncAttempted) {
         if (syncSuccess) {
           toast.success('Schedule added and synced to calendar');
@@ -884,14 +884,14 @@ export const useAppOperations = ({
           .update({ notification_sent: false, notification_sent_at: null })
           .eq('schedule_id', item.id);
       } catch (remError) {
-        console.error('Failed to reset reminder:', remError);
+        //console.error('Failed to reset reminder:', remError);
       }
 
       // Update external calendars
       let syncStatus = 'no-sync';
       try {
         const integrations = await calendarIntegrationService.getIntegrations(user.id);
-        
+
         if (item.calendarEventIds) {
           let hasFailures = false;
           let hasSuccess = false;
@@ -900,16 +900,16 @@ export const useAppOperations = ({
             const eventId = item.calendarEventIds[integration.provider];
             if (eventId) {
               const success = await calendarIntegrationService.updateCalendarEvent(
-                item, 
-                eventId, 
-                integration.provider, 
+                item,
+                eventId,
+                integration.provider,
                 integration
               );
               if (success) hasSuccess = true;
               else hasFailures = true;
             }
           }
-          
+
           if (hasSuccess && !hasFailures) syncStatus = 'success';
           else if (hasFailures) syncStatus = 'partial-failure';
         } else if (integrations.length > 0) {
@@ -924,12 +924,12 @@ export const useAppOperations = ({
           }
         }
       } catch (syncError) {
-        console.error('Failed to update external calendar:', syncError);
+        //console.error('Failed to update external calendar:', syncError);
         syncStatus = 'error';
       }
 
       setScheduleItems(prev => prev.map(i => i.id === item.id ? item : i));
-      
+
       if (syncStatus === 'success') {
         toast.success('Schedule updated and synced to calendar');
       } else if (syncStatus === 'partial-failure' || syncStatus === 'failed' || syncStatus === 'error') {
@@ -974,15 +974,15 @@ export const useAppOperations = ({
             const eventId = itemToDelete.calendarEventIds[integration.provider];
             if (eventId) {
               await calendarIntegrationService.deleteCalendarEvent(
-                eventId, 
-                integration.provider, 
+                eventId,
+                integration.provider,
                 integration
               );
             }
           }
         }
       } catch (syncError) {
-        console.error('Failed to delete from external calendar:', syncError);
+        //console.error('Failed to delete from external calendar:', syncError);
       }
 
       setScheduleItems(prev => prev.filter(i => i.id !== id));
@@ -1070,7 +1070,7 @@ export const useAppOperations = ({
         // Check document upload count limit BEFORE attempting upload
         const docCount = documents.length;
         const maxDocUploads = subscriptionLimits.maxDocUploads;
-        
+
         if (subscriptionTier === 'free' && docCount >= maxDocUploads) {
           toast.error(`Document limit reached (${maxDocUploads}). You have uploaded ${docCount} documents.`, {
             action: {
@@ -1081,7 +1081,7 @@ export const useAppOperations = ({
           });
           return;
         }
-        
+
         if (docCount >= maxDocUploads && maxDocUploads !== Infinity) {
           toast.error(`Document limit reached (${maxDocUploads}). Upgrade to upload more documents.`, {
             action: {
@@ -1095,7 +1095,7 @@ export const useAppOperations = ({
         // Check file size limit
         const fileSizeMB = (document.file_size || 0) / (1024 * 1024);
         const maxSizeMB = subscriptionLimits.maxDocSize;
-        
+
         if (fileSizeMB > maxSizeMB) {
           toast.error(`File too large (${fileSizeMB.toFixed(1)}MB). Maximum allowed for your plan: ${maxSizeMB}MB.`, {
             action: {

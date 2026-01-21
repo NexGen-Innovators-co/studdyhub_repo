@@ -96,7 +96,39 @@ export const DiagramPanel = memo(({
   const [threeJsScene, setThreeJsScene] = useState<THREE.Scene | null>(null);
   const [threeJsRenderer, setThreeJsRenderer] = useState<THREE.WebGLRenderer | null>(null);
   const [threeJsCleanup, setThreeJsCleanup] = useState<(() => void) | null>(null);
+  const [mermaidError, setMermaidError] = useState<string | null>(null);
+  const [faultyCode, setFaultyCode] = useState<string | null>(null);
+
   const renderContent = useMemo(() => liveContent || diagramContent, [liveContent, diagramContent]);
+
+  // Reset errors when content changes
+  useEffect(() => {
+    setMermaidError(null);
+    setFaultyCode(null);
+  }, [renderContent, diagramType]);
+
+  const handleMermaidError = useCallback((error: string, code: string) => {
+    setMermaidError(error);
+    setFaultyCode(code);
+    toast.error('Diagram rendering error detected.');
+  }, []);
+
+  const handleFixDiagram = useCallback(() => {
+    if (!mermaidError || !faultyCode) return;
+
+    const repairPrompt = `The Mermaid diagram you generated has a syntax error: "${mermaidError}". 
+    
+    Faulty code:
+    \`\`\`mermaid
+    ${faultyCode}
+    \`\`\`
+    
+    Please fix the syntax error and provide the corrected Mermaid diagram code within a mermaid code block.`;
+
+    onSuggestAiCorrection(repairPrompt);
+    toast.info('Sending repair request to AI...');
+  }, [mermaidError, faultyCode, onSuggestAiCorrection]);
+
   const effectiveDiagramType = useMemo(() => {
     if (diagramType === 'code' && renderContent) {
       try {
@@ -156,7 +188,7 @@ export const DiagramPanel = memo(({
     const windowWidth = window.innerWidth;
     const deltaPercent = (deltaX / windowWidth) * 100;
     const newWidth = Math.min(Math.max(resizeStartWidth.current + deltaPercent, 30), 90);
-    
+
     // Update immediately for smooth visual feedback
     throttledSetPanelWidth(newWidth);
   }, [throttledSetPanelWidth]);
@@ -187,7 +219,7 @@ export const DiagramPanel = memo(({
       document.addEventListener('mouseup', handleUp);
       document.body.style.cursor = 'ew-resize';
       document.body.style.userSelect = 'none';
-      
+
       return () => {
         document.removeEventListener('mousemove', handleMove);
         document.removeEventListener('mouseup', handleUp);
@@ -478,30 +510,30 @@ box-sizing: border-box;
   const downloadPng = useCallback(async () => {
     try {
       toast.info('Generating PNG...');
-      
+
       if (effectiveDiagramType === 'mermaid' && mermaidIframeRef.current) {
         // Handle Mermaid iframe capture
         const doc = mermaidIframeRef.current.contentDocument || mermaidIframeRef.current.contentWindow?.document;
         const svg = doc?.querySelector('svg');
-        
+
         if (svg) {
           // Get SVG data
           const svgData = new XMLSerializer().serializeToString(svg);
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           const img = new Image();
-          
+
           // Get dimensions from SVG or bounding box
           const bbox = svg.getBoundingClientRect();
           const width = bbox.width * 2; // Scale up for quality
           const height = bbox.height * 2;
-          
+
           canvas.width = width;
           canvas.height = height;
-          
+
           const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
           const url = URL.createObjectURL(svgBlob);
-          
+
           img.crossOrigin = 'anonymous';
           img.onload = () => {
             if (ctx) {
@@ -509,7 +541,7 @@ box-sizing: border-box;
               ctx.fillStyle = currentTheme === 'dark' ? '#282c34' : '#ffffff';
               ctx.fillRect(0, 0, width, height);
               ctx.drawImage(img, 0, 0, width, height);
-              
+
               try {
                 const pngUrl = canvas.toDataURL('image/png');
                 const a = document.createElement('a');
@@ -532,10 +564,10 @@ box-sizing: border-box;
       }
 
       if (!innerContentWrapperRef.current) return;
-      
+
       // Find the actual content element to capture
       let targetElement: HTMLElement = innerContentWrapperRef.current;
-      
+
       const canvas = await html2canvas(targetElement, {
         useCORS: true,
         scale: 2, // Higher scale for better quality
@@ -543,7 +575,7 @@ box-sizing: border-box;
         backgroundColor: currentTheme === 'dark' ? '#111827' : '#ffffff',
         ignoreElements: (element) => element.classList.contains('exclude-from-capture')
       });
-      
+
       const url = canvas.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = url;
@@ -566,35 +598,35 @@ box-sizing: border-box;
     try {
       toast.info('Generating PDF...');
       let targetElement: HTMLElement | null = null;
-      
+
       if (effectiveDiagramType === 'mermaid' && mermaidIframeRef.current) {
         // For Mermaid, we need to capture the SVG from the iframe
         const doc = mermaidIframeRef.current.contentDocument || mermaidIframeRef.current.contentWindow?.document;
         const svg = doc?.querySelector('svg');
-        
+
         if (svg) {
           // Similar to PNG export, we convert SVG to canvas first
           const svgData = new XMLSerializer().serializeToString(svg);
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           const img = new Image();
-          
+
           const bbox = svg.getBoundingClientRect();
           const width = bbox.width * 2;
           const height = bbox.height * 2;
-          
+
           canvas.width = width;
           canvas.height = height;
-          
+
           const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
           const url = URL.createObjectURL(svgBlob);
-          
+
           img.onload = () => {
             if (ctx) {
               ctx.fillStyle = '#ffffff'; // PDF usually white background
               ctx.fillRect(0, 0, width, height);
               ctx.drawImage(img, 0, 0, width, height);
-              
+
               const imgData = canvas.toDataURL('image/png');
               const pdf = new jsPDF({
                 orientation: width > height ? 'l' : 'p',
@@ -624,7 +656,7 @@ box-sizing: border-box;
         toast.error('Content element not found for PDF export.');
         return;
       }
-      
+
       const canvas = await html2canvas(targetElement, {
         useCORS: true,
         scale: 2,
@@ -679,6 +711,17 @@ ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
 
       <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50 dark:bg-gray-800">
         <div className="flex items-center gap-2">
+          {mermaidError && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleFixDiagram}
+              className="h-8 gap-1.5 border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+            >
+              <FileCode className="h-3.5 w-3.5" />
+              Fix with AI
+            </Button>
+          )}
           <Eye className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 font-claude">Preview</h2>
           {effectiveDiagramType === 'code' && language && (
@@ -734,19 +777,19 @@ ${isResizing ? 'cursor-ew-resize' : ''} panel-transition`}
                 <FileCode className="mr-2 h-4 w-4" />
                 <span>Download Source ({language || 'txt'})</span>
               </DropdownMenuItem>
-              
+
               {(effectiveDiagramType === 'mermaid' || effectiveDiagramType === 'dot') && (
                 <DropdownMenuItem onClick={downloadSvg}>
                   <ImageIcon className="mr-2 h-4 w-4" />
                   <span>Download SVG</span>
                 </DropdownMenuItem>
               )}
-              
+
               <DropdownMenuItem onClick={downloadPng}>
                 <ImageIcon className="mr-2 h-4 w-4" />
                 <span>Download PNG Image</span>
               </DropdownMenuItem>
-              
+
               <DropdownMenuItem onClick={exportPdf}>
                 <FileText className="mr-2 h-4 w-4" />
                 <span>Export as PDF</span>
@@ -788,7 +831,12 @@ ${isInteractiveContent ? 'cursor-grab' : ''}
               <HtmlRenderer htmlContent={renderContent} />
             )}
             {effectiveDiagramType === 'mermaid' && (
-              <MermaidRenderer mermaidContent={renderContent} handleNodeClick={handleNodeClick} iframeRef={mermaidIframeRef} />
+              <MermaidRenderer
+                mermaidContent={renderContent}
+                handleNodeClick={handleNodeClick}
+                iframeRef={mermaidIframeRef}
+                onMermaidError={handleMermaidError}
+              />
             )}
             {effectiveDiagramType === 'slides' && (
               <SlidesRenderer

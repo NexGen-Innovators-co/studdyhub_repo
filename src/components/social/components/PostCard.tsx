@@ -390,7 +390,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
     const isOwnPost = currentUser?.id === post.author_id;
     // Don't use removeHashtagsFromContent as it collapses newlines which breaks markdown
     let cleanedContent = (post.content || '').replace(/#\w+/g, '');
-    
+
     // Auto-linkify naked URLs (like studdyhub.vercel.app) to markdown
     cleanedContent = convertNakedUrlsToMarkdown(cleanedContent);
 
@@ -471,7 +471,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
             try {
               return `https://wa.me/?text=${encodeURIComponent(shareUrl)}`;
             } catch (e) {
-              console.error('encodeURIComponent error (WhatsApp):', shareUrl, e);
+              //console.error('encodeURIComponent error (WhatsApp):', shareUrl, e);
               return 'https://wa.me/?text=';
             }
           })()
@@ -483,7 +483,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
             try {
               return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
             } catch (e) {
-              console.error('encodeURIComponent error (Facebook):', shareUrl, e);
+              //console.error('encodeURIComponent error (Facebook):', shareUrl, e);
               return 'https://www.facebook.com/sharer/sharer.php?u=';
             }
           })()
@@ -495,7 +495,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
             try {
               return `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
             } catch (e) {
-              console.error('encodeURIComponent error (Twitter):', shareUrl, shareText, e);
+              //console.error('encodeURIComponent error (Twitter):', shareUrl, shareText, e);
               return 'https://twitter.com/intent/tweet?url=&text=';
             }
           })()
@@ -507,7 +507,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
             try {
               return `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(shareUrl)}`;
             } catch (e) {
-              console.error('encodeURIComponent error (LinkedIn):', shareUrl, e);
+              //console.error('encodeURIComponent error (LinkedIn):', shareUrl, e);
               return 'https://www.linkedin.com/shareArticle?mini=true&url=';
             }
           })()
@@ -519,7 +519,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
             try {
               return `https://reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`;
             } catch (e) {
-              console.error('encodeURIComponent error (Reddit):', shareUrl, shareText, e);
+              //console.error('encodeURIComponent error (Reddit):', shareUrl, shareText, e);
               return 'https://reddit.com/submit?url=&title=';
             }
           })()
@@ -531,7 +531,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
             try {
               return `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
             } catch (e) {
-              console.error('encodeURIComponent error (Telegram):', shareUrl, shareText, e);
+              //console.error('encodeURIComponent error (Telegram):', shareUrl, shareText, e);
               return 'https://t.me/share/url?url=&text=';
             }
           })()
@@ -543,7 +543,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
             try {
               return `mailto:?subject=${encodeURIComponent(shareText)}&body=${encodeURIComponent(shareUrl)}`;
             } catch (e) {
-              console.error('encodeURIComponent error (Email):', shareText, shareUrl, e);
+              //console.error('encodeURIComponent error (Email):', shareText, shareUrl, e);
               return 'mailto:?subject=&body=';
             }
           })()
@@ -687,7 +687,7 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
       const coverUrl = podcastMetadata.coverUrl || podcastMetadata.cover_image_url;
 
       return (
-        <div 
+        <div
           className="mt-3 mx-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-4 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
           onClick={(e) => {
             e.stopPropagation();
@@ -698,9 +698,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
         >
           <div className="relative h-16 w-16 flex-shrink-0 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700">
             {coverUrl ? (
-              <img 
-                src={coverUrl} 
-                alt={title} 
+              <img
+                src={coverUrl}
+                alt={title}
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -730,9 +730,9 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
               )}
             </div>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
           >
             Listen
@@ -742,393 +742,393 @@ export const PostCard: React.FC<PostCardWithViewTrackingProps> = (
     };
 
     return (
-      <>     
-       <Card
-        className="border border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-500 bg-white dark:bg-slate-900 overflow-hidden max-w-[780px] mx-auto"
-        ref={cardRef}
-        onClick={(e) => {
-          const target = e.target as HTMLElement;
-          // Updated to exclude 'a' tags specifically to allow link clicking
-          if (!target.closest('button, input, textarea, video, [role="menuitem"], span, a') && onClick) {
-            onClick(post.id);
-          }
-        }}
-      >
-        <CardContent className="p-0">
-          <div className="flex gap-3">
-            <div className="flex-1 min-w-0 ">
-              <div className="p-4 pt-5 flex">
-                <div
-                  className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/social/profile/${post.author_id}`);
-                  }}
-                >
-                  {/* Avatar Column */}
-                  <div className="flex-shrink-0 ">
-                    <Avatar className="h-10 w-10 ring-2 ring-white dark:ring-slate-900 shadow-sm cursor-pointer hover:opacity-90">
-                      <AvatarImage src={post.author?.avatar_url} />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
-                        {post.author?.display_name?.[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                  </div>
-                </div>
-                {/* Header */}
-                <div className="flex items-start justify-between mb-2 px-3 flex-1">
-                  <div className="flex flex-col">
-                    <div className="flex items-center" onClick={(e) => {
+      <>
+        <Card
+          className="border border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-500 bg-white dark:bg-slate-900 overflow-hidden max-w-[780px] mx-auto"
+          ref={cardRef}
+          onClick={(e) => {
+            const target = e.target as HTMLElement;
+            // Updated to exclude 'a' tags specifically to allow link clicking
+            if (!target.closest('button, input, textarea, video, [role="menuitem"], span, a') && onClick) {
+              onClick(post.id);
+            }
+          }}
+        >
+          <CardContent className="p-0">
+            <div className="flex gap-3">
+              <div className="flex-1 min-w-0 ">
+                <div className="p-4 pt-5 flex">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={(e) => {
                       e.stopPropagation();
                       navigate(`/social/profile/${post.author_id}`);
-                    }}>
-                      <span className="font-bold text-slate-900 dark:text-slate-100 text-base hover:underline cursor-pointer">
-                        {post.author?.display_name}
-                      </span>
-                      {(post.author as any)?.is_verified && <Check className="h-3.5 w-3.5 text-blue-500 ml-1" />}
-                    </div>
-                    <div className="flex items-center text-slate-500 text-sm gap-1.5">
-                      <span>{post.author?.bio} </span>
-                    </div>
-                    <div className="flex items-center text-slate-500 text-sm gap-1.5">
-                      <span>{(post.author as any)?.followers_count || 0} followers</span>
-                      <span className="text-slate-300 dark:text-slate-700">•</span>
-                      <span className="hover:underline cursor-pointer">{getTimeAgo(post.created_at)}</span>
+                    }}
+                  >
+                    {/* Avatar Column */}
+                    <div className="flex-shrink-0 ">
+                      <Avatar className="h-10 w-10 ring-2 ring-white dark:ring-slate-900 shadow-sm cursor-pointer hover:opacity-90">
+                        <AvatarImage src={post.author?.avatar_url} />
+                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                          {post.author?.display_name?.[0]}
+                        </AvatarFallback>
+                      </Avatar>
                     </div>
                   </div>
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-2 px-3 flex-1">
+                    <div className="flex flex-col">
+                      <div className="flex items-center" onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/social/profile/${post.author_id}`);
+                      }}>
+                        <span className="font-bold text-slate-900 dark:text-slate-100 text-base hover:underline cursor-pointer">
+                          {post.author?.display_name}
+                        </span>
+                        {(post.author as any)?.is_verified && <Check className="h-3.5 w-3.5 text-blue-500 ml-1" />}
+                      </div>
+                      <div className="flex items-center text-slate-500 text-sm gap-1.5">
+                        <span>{post.author?.bio} </span>
+                      </div>
+                      <div className="flex items-center text-slate-500 text-sm gap-1.5">
+                        <span>{(post.author as any)?.followers_count || 0} followers</span>
+                        <span className="text-slate-300 dark:text-slate-700">•</span>
+                        <span className="hover:underline cursor-pointer">{getTimeAgo(post.created_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 -mt-1 -mr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100 dark:border-slate-800">
+                      <DropdownMenuItem onClick={handleCopyLink}><Copy className="mr-2 h-4 w-4" /> Copy Link</DropdownMenuItem>
+                      {isOwnPost && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setIsEditing(true)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onDeletePost?.(post.id)} className="text-red-600"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+                        </>
+                      )}
+                      {!isOwnPost && (
+                        <DropdownMenuItem onClick={() => setIsReportDialogOpen(true)}><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 -mt-1 -mr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100 dark:border-slate-800">
-                    <DropdownMenuItem onClick={handleCopyLink}><Copy className="mr-2 h-4 w-4" /> Copy Link</DropdownMenuItem>
-                    {isOwnPost && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setIsEditing(true)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onDeletePost?.(post.id)} className="text-red-600"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
-                      </>
-                    )}
-                    {!isOwnPost && (
-                      <DropdownMenuItem onClick={() => setIsReportDialogOpen(true)}><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
 
-              {/* Post Body */}
-              {isEditing ? (
-                <div className="mb-3 space-y-2 px-4" onClick={e => e.stopPropagation()}>
-                  <Textarea
-                    value={editContent}
-                    onChange={e => setEditContent(e.target.value)}
-                    className="min-h-[100px]"
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
-                    <Button size="sm" onClick={handleSaveEdit}>Save</Button>
+                {/* Post Body */}
+                {isEditing ? (
+                  <div className="mb-3 space-y-2 px-4" onClick={e => e.stopPropagation()}>
+                    <Textarea
+                      value={editContent}
+                      onChange={e => setEditContent(e.target.value)}
+                      className="min-h-[100px]"
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
+                      <Button size="sm" onClick={handleSaveEdit}>Save</Button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="px-4 text-[15px] leading-relaxed text-slate-800 dark:text-slate-200">
+                ) : (
+                  <div className="px-4 text-[15px] leading-relaxed text-slate-800 dark:text-slate-200">
                     <div className={`relative ${!isContentExpanded && isLongContent ? 'max-h-[300px] overflow-hidden' : ''}`}>
-                         <MarkdownRenderer content={cleanedContent} className="prose dark:prose-invert max-w-none text-slate-800 dark:text-slate-200" />
-                         {!isContentExpanded && isLongContent && (
-                            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-slate-900 to-transparent flex items-end justify-center pb-2">
-                                <Button
-                                    variant="ghost" 
-                                    size="sm"
-                                    onClick={(e) => { e.stopPropagation(); setIsContentExpanded(true); }}
-                                    className="bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-900 text-blue-600 dark:text-blue-400 font-medium shadow-sm border border-slate-100 dark:border-slate-800 backdrop-blur-sm"
-                                >
-                                    Show more
-                                </Button>
-                            </div>
-                         )}
+                      <MarkdownRenderer content={cleanedContent} className="prose dark:prose-invert max-w-none text-slate-800 dark:text-slate-200" />
+                      {!isContentExpanded && isLongContent && (
+                        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-slate-900 to-transparent flex items-end justify-center pb-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); setIsContentExpanded(true); }}
+                            className="bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-900 text-blue-600 dark:text-blue-400 font-medium shadow-sm border border-slate-100 dark:border-slate-800 backdrop-blur-sm"
+                          >
+                            Show more
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                     {isContentExpanded && isLongContent && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setIsContentExpanded(false); }}
-                            className="mt-2 text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline flex items-center gap-1"
-                        >
-                            Show less
-                        </button>
+                    {isContentExpanded && isLongContent && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setIsContentExpanded(false); }}
+                        className="mt-2 text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline flex items-center gap-1"
+                      >
+                        Show less
+                      </button>
                     )}
-                </div>
-              )}
-
-              {/* Podcast Preview */}
-              {isPodcast && <PodcastPreview />}
-
-              {/* Hashtags */}
-              {post.hashtags && post.hashtags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2 px-4">
-                  {post.hashtags.map((tag: any, i: number) => (
-                    <span key={i} className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer">#{tag.name}</span>
-                  ))}
-                </div>
-              )}
-
-              {/* Media */}
-              <div onClick={e => e.stopPropagation()}>
-                <MediaDisplay media={post.media} onOpenFullscreen={setFullscreenIndex} />
-              </div>
-
-              {/* Footer Actions */}
-              <div className="flex items-center border-t border-slate-200 dark:border-slate-800 mt-2 justify-between pt-2 p-4 -ml-2">
-                <ActionButton
-                  icon={Heart}
-                  count={post.likes_count}
-                  active={post.is_liked}
-                  activeColor="text-pink-600"
-                  onClick={canInteract ? handleLike : () => setShowUpgradePrompt(true)}
-                  isLoading={isLiking}
-                  isLikeButton={true}
-                  disabled={!canInteract}
-                />
-
-                <ActionButton
-                  icon={MessageCircle}
-                  count={post.comments_count}
-                  onClick={canInteract ? onComment : () => setShowUpgradePrompt(true)}
-                  disabled={!canInteract}
-                />
-
-                <ActionButton
-                  icon={Share2}
-                  label="Share"
-                  count={post.shares_count}
-                  onClick={canInteract ? handleShare : () => setShowUpgradePrompt(true)}
-                  isLoading={isSharing}
-                  disabled={!canInteract}
-                />
-
-                <ActionButton
-                  icon={Bookmark}
-                  label=""
-                  active={post.is_bookmarked}
-                  activeColor="text-blue-600"
-                  onClick={canInteract ? handleBookmark : () => setShowUpgradePrompt(true)}
-                  isLoading={isBookmarking}
-                  disabled={!canInteract}
-                />
-
-                {/* Views indicator */}
-                <div className="ml-3 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-                  <Eye className="h-4 w-4" />
-                  <span className="font-medium text-xs">{post.views_count}</span>
-                </div>
-              </div>
-
-              {/* Share Modal */}
-              {isShareModalOpen && (
-                <ShareDialog post={post} onClose={() => setIsShareModalOpen(false)} />
-              )}
-            </div>
-          </div>
-
-          {/* Comments */}
-          {isExpanded && (
-            <div className="mt-4 p-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-200">
-              <CommentSection
-                postId={post.id}
-                comments={comments}
-                isLoading={isLoadingComments}
-                newComment={newComment}
-                onCommentChange={onCommentChange}
-                onSubmitComment={onSubmitComment}
-                currentUser={currentUser}
-                isAddingComment={isAddingComment}
-              />
-            </div>
-          )}
-        </CardContent>
-
-        {/* Fullscreen Media Viewer */}
-        <Dialog open={fullscreenIndex !== null} onOpenChange={() => setFullscreenIndex(null)}>
-          <DialogContent className="w-[90vw] h-[90vh] max-w-[1200px] max-h-[800px] rounded-2xl p-0 bg-white dark:bg-slate-900 border-none">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg overflow-hidden flex flex-col lg:grid lg:grid-cols-5 lg:gap-0 h-full">
-              {/* Media Section */}
-              <div className="relative bg-black flex items-center  justify-center lg:col-span-3 overflow-hidden flex-1 h-full">
-                <DialogHeader>
-                  <DialogTitle> </DialogTitle>
-                  <DialogDescription>  </DialogDescription>
-                </DialogHeader>
-                {currentMedia && (
-                  <>
-                    {isFullscreenVideo ? (
-                      <video
-                        src={currentMedia.url}
-                        className="max-w-full max-h-full object-contain"
-                        controls
-                        autoPlay
-                        loop
-                      />
-                    ) : (
-                      <img
-                        src={currentMedia.url}
-                        alt="Fullscreen media"
-                        className="w-full h-full object-contain"
-                      />
-                    )}
-                  </>
-                )}
-
-                {post.media.length > 1 && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-1/2 left-4 transform -translate-y-1/2 text-white bg-black/50 hover:bg-black/70 rounded-full"
-                      onClick={handlePrev}
-                    >
-                      <ChevronLeft className="h-6 w-6" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-1/2 right-4 transform -translate-y-1/2 text-white bg-black/50 hover:bg-black/70 rounded-full"
-                      onClick={handleNext}
-                    >
-                      <ChevronRight className="h-6 w-6" />
-                    </Button>
-                  </>
-                )}
-              </div>
-
-              {/* Content Section */}
-              <div className="p-4 lg:col-span-2 lg:overflow-y-auto flex flex-col border border-slate-200 dark:border-slate-800">
-                {/* Header */}
-                <div className="flex items-center gap-3 mb-4">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={post.author?.avatar_url} />
-                    <AvatarFallback>{post.author?.display_name?.[0]}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-1">
-                      <span className="font-bold text-slate-900 dark:text-slate-100">{post.author?.display_name}</span>
-                      {(post.author as any)?.is_verified && <Check className="h-3.5 w-3.5 text-blue-500" />}
-                    </div>
-                    <div className="text-sm text-slate-500">
-                      {(post.author as any)?.followers_count || 0} followers · {getTimeAgo(post.created_at)}
-                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Post Content */}
-                <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 mb-4">
-                  {renderContentWithClickableLinks(cleanedContent)}
-                </div>
-
-                {/* Podcast Preview in Fullscreen */}
+                {/* Podcast Preview */}
                 {isPodcast && <PodcastPreview />}
 
                 {/* Hashtags */}
                 {post.hashtags && post.hashtags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-4">
+                  <div className="flex flex-wrap gap-2 mt-2 px-4">
                     {post.hashtags.map((tag: any, i: number) => (
                       <span key={i} className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer">#{tag.name}</span>
                     ))}
                   </div>
                 )}
 
-                {/* Reposts */}
-                {post.shares_count > 0 && (
-                  <div className="text-sm text-slate-500 mb-4">
-                    {post.shares_count} repost{post.shares_count > 1 ? 's' : ''}
-                  </div>
-                )}
+                {/* Media */}
+                <div onClick={e => e.stopPropagation()}>
+                  <MediaDisplay media={post.media} onOpenFullscreen={setFullscreenIndex} />
+                </div>
 
-                {/* Actions */}
-                <div className="flex items-center justify-between mb-4">
+                {/* Footer Actions */}
+                <div className="flex items-center border-t border-slate-200 dark:border-slate-800 mt-2 justify-between pt-2 p-4 -ml-2">
                   <ActionButton
                     icon={Heart}
-                    label="Like"
+                    count={post.likes_count}
                     active={post.is_liked}
                     activeColor="text-pink-600"
-                    onClick={handleLike}
+                    onClick={canInteract ? handleLike : () => setShowUpgradePrompt(true)}
                     isLoading={isLiking}
                     isLikeButton={true}
+                    disabled={!canInteract}
                   />
 
                   <ActionButton
                     icon={MessageCircle}
-                    label="Comment"
-                    onClick={onComment}
+                    count={post.comments_count}
+                    onClick={canInteract ? onComment : () => setShowUpgradePrompt(true)}
+                    disabled={!canInteract}
                   />
 
                   <ActionButton
                     icon={Share2}
                     label="Share"
-                    onClick={handleShare}
+                    count={post.shares_count}
+                    onClick={canInteract ? handleShare : () => setShowUpgradePrompt(true)}
                     isLoading={isSharing}
+                    disabled={!canInteract}
                   />
 
                   <ActionButton
                     icon={Bookmark}
-                    label="Bookmark"
+                    label=""
                     active={post.is_bookmarked}
                     activeColor="text-blue-600"
-                    onClick={handleBookmark}
+                    onClick={canInteract ? handleBookmark : () => setShowUpgradePrompt(true)}
                     isLoading={isBookmarking}
+                    disabled={!canInteract}
                   />
+
+                  {/* Views indicator */}
+                  <div className="ml-3 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+                    <Eye className="h-4 w-4" />
+                    <span className="font-medium text-xs">{post.views_count}</span>
+                  </div>
                 </div>
 
-                {/* Comment Input */}
-                <div className="flex items-center gap-2 mt-auto">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={currentUser?.avatar_url} />
-                    <AvatarFallback>{currentUser?.display_name?.[0]}</AvatarFallback>
-                  </Avatar>
-                  <Textarea
-                    placeholder={canInteract ? "Add a comment..." : "Upgrade to comment"}
-                    value={newComment}
-                    onChange={(e) => canInteract ? onCommentChange(e.target.value) : setShowUpgradePrompt(true)}
-                    className="flex-1 min-h-[40px] resize-none"
-                    disabled={isSubmittingComment || !canInteract}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={async () => {
-                      if (!canInteract) return setShowUpgradePrompt(true);
-                      if (isSubmittingComment || !newComment.trim()) return;
-                      setIsSubmittingComment(true);
-                      try {
-                        await onSubmitComment();
-                      } finally {
-                        setTimeout(() => setIsSubmittingComment(false), 300);
-                      }
-                    }}
-                    disabled={isSubmittingComment || !newComment.trim() || !canInteract}
-                    className={`text-blue-600 transition-all ${isSubmittingComment ? 'pulse-scale' : ''}`}
-                  >
-                    {isSubmittingComment ? (
-                      <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                    ) : (
-                      <Send className="h-5 w-5" />
-                    )}
-                  </Button>
-                </div>
+                {/* Share Modal */}
+                {isShareModalOpen && (
+                  <ShareDialog post={post} onClose={() => setIsShareModalOpen(false)} />
+                )}
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
 
-        {/* Report Dialog */}
-        <ReportDialog
-          isOpen={isReportDialogOpen}
-          onClose={() => setIsReportDialogOpen(false)}
-          postId={post.id}
-          reportedUserId={post.author_id}
-          reportType="post"
-        />
+            {/* Comments */}
+            {isExpanded && (
+              <div className="mt-4 p-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-2 fade-in duration-200">
+                <CommentSection
+                  postId={post.id}
+                  comments={comments}
+                  isLoading={isLoadingComments}
+                  newComment={newComment}
+                  onCommentChange={onCommentChange}
+                  onSubmitComment={onSubmitComment}
+                  currentUser={currentUser}
+                  isAddingComment={isAddingComment}
+                />
+              </div>
+            )}
+          </CardContent>
 
-      </Card>
-      <UpgradePrompt />
+          {/* Fullscreen Media Viewer */}
+          <Dialog open={fullscreenIndex !== null} onOpenChange={() => setFullscreenIndex(null)}>
+            <DialogContent className="w-[90vw] h-[90vh] max-w-[1200px] max-h-[800px] rounded-2xl p-0 bg-white dark:bg-slate-900 border-none">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg overflow-hidden flex flex-col lg:grid lg:grid-cols-5 lg:gap-0 h-full">
+                {/* Media Section */}
+                <div className="relative bg-black flex items-center  justify-center lg:col-span-3 overflow-hidden flex-1 h-full">
+                  <DialogHeader>
+                    <DialogTitle> </DialogTitle>
+                    <DialogDescription>  </DialogDescription>
+                  </DialogHeader>
+                  {currentMedia && (
+                    <>
+                      {isFullscreenVideo ? (
+                        <video
+                          src={currentMedia.url}
+                          className="max-w-full max-h-full object-contain"
+                          controls
+                          autoPlay
+                          loop
+                        />
+                      ) : (
+                        <img
+                          src={currentMedia.url}
+                          alt="Fullscreen media"
+                          className="w-full h-full object-contain"
+                        />
+                      )}
+                    </>
+                  )}
+
+                  {post.media.length > 1 && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-1/2 left-4 transform -translate-y-1/2 text-white bg-black/50 hover:bg-black/70 rounded-full"
+                        onClick={handlePrev}
+                      >
+                        <ChevronLeft className="h-6 w-6" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-1/2 right-4 transform -translate-y-1/2 text-white bg-black/50 hover:bg-black/70 rounded-full"
+                        onClick={handleNext}
+                      >
+                        <ChevronRight className="h-6 w-6" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+
+                {/* Content Section */}
+                <div className="p-4 lg:col-span-2 lg:overflow-y-auto flex flex-col border border-slate-200 dark:border-slate-800">
+                  {/* Header */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={post.author?.avatar_url} />
+                      <AvatarFallback>{post.author?.display_name?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{post.author?.display_name}</span>
+                        {(post.author as any)?.is_verified && <Check className="h-3.5 w-3.5 text-blue-500" />}
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        {(post.author as any)?.followers_count || 0} followers · {getTimeAgo(post.created_at)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Post Content */}
+                  <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 mb-4">
+                    {renderContentWithClickableLinks(cleanedContent)}
+                  </div>
+
+                  {/* Podcast Preview in Fullscreen */}
+                  {isPodcast && <PodcastPreview />}
+
+                  {/* Hashtags */}
+                  {post.hashtags && post.hashtags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {post.hashtags.map((tag: any, i: number) => (
+                        <span key={i} className="text-blue-600 dark:text-blue-400 text-sm hover:underline cursor-pointer">#{tag.name}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Reposts */}
+                  {post.shares_count > 0 && (
+                    <div className="text-sm text-slate-500 mb-4">
+                      {post.shares_count} repost{post.shares_count > 1 ? 's' : ''}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-between mb-4">
+                    <ActionButton
+                      icon={Heart}
+                      label="Like"
+                      active={post.is_liked}
+                      activeColor="text-pink-600"
+                      onClick={handleLike}
+                      isLoading={isLiking}
+                      isLikeButton={true}
+                    />
+
+                    <ActionButton
+                      icon={MessageCircle}
+                      label="Comment"
+                      onClick={onComment}
+                    />
+
+                    <ActionButton
+                      icon={Share2}
+                      label="Share"
+                      onClick={handleShare}
+                      isLoading={isSharing}
+                    />
+
+                    <ActionButton
+                      icon={Bookmark}
+                      label="Bookmark"
+                      active={post.is_bookmarked}
+                      activeColor="text-blue-600"
+                      onClick={handleBookmark}
+                      isLoading={isBookmarking}
+                    />
+                  </div>
+
+                  {/* Comment Input */}
+                  <div className="flex items-center gap-2 mt-auto">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={currentUser?.avatar_url} />
+                      <AvatarFallback>{currentUser?.display_name?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <Textarea
+                      placeholder={canInteract ? "Add a comment..." : "Upgrade to comment"}
+                      value={newComment}
+                      onChange={(e) => canInteract ? onCommentChange(e.target.value) : setShowUpgradePrompt(true)}
+                      className="flex-1 min-h-[40px] resize-none"
+                      disabled={isSubmittingComment || !canInteract}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={async () => {
+                        if (!canInteract) return setShowUpgradePrompt(true);
+                        if (isSubmittingComment || !newComment.trim()) return;
+                        setIsSubmittingComment(true);
+                        try {
+                          await onSubmitComment();
+                        } finally {
+                          setTimeout(() => setIsSubmittingComment(false), 300);
+                        }
+                      }}
+                      disabled={isSubmittingComment || !newComment.trim() || !canInteract}
+                      className={`text-blue-600 transition-all ${isSubmittingComment ? 'pulse-scale' : ''}`}
+                    >
+                      {isSubmittingComment ? (
+                        <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                      ) : (
+                        <Send className="h-5 w-5" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Report Dialog */}
+          <ReportDialog
+            isOpen={isReportDialogOpen}
+            onClose={() => setIsReportDialogOpen(false)}
+            postId={post.id}
+            reportedUserId={post.author_id}
+            reportType="post"
+          />
+
+        </Card>
+        <UpgradePrompt />
       </>
 
     );

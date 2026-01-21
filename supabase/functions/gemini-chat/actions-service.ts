@@ -1719,8 +1719,8 @@ export class StuddyHubActionsService {
         // First, check for explicit action markers with global search
         for (const pattern of actionPatterns) {
             try {
-                // Create a global regex from the pattern
-                const globalRegex = new RegExp(pattern.pattern.source, 'g');
+                // Create a global, case-insensitive regex from the pattern
+                const globalRegex = new RegExp(pattern.pattern.source, 'gi');
                 let match: RegExpExecArray | null;
 
                 // Keep searching until no more matches found

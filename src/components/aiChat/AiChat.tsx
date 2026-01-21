@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast, MenuIcon, Layout, ArrowUp, ArrowDown, Image } from 'lucide-react';
+import { Send, Loader2, FileText, BookOpen, StickyNote, Camera, Paperclip, Mic, ChevronDown, Podcast, MenuIcon, Layout, ArrowUp, ArrowDown, Image, Square, Pause, Play, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
   Menubar,
@@ -88,6 +88,20 @@ interface AIChatProps {
   onLoadMoreDocuments: () => void;
   hasMoreDocuments: boolean;
   isLoadingDocuments: boolean;
+  onInterruptMessage?: () => void;
+  onPauseGeneration?: () => void;
+  onResumeGeneration?: (lastUserMessageContent: string, lastAssistantMessageId: string) => Promise<void>;
+  onEditAndResendMessage?: (
+    editedUserMessageContent: string,
+    originalUserMessageId: string,
+    originalAssistantMessageId: string | null,
+    attachedDocumentIds: string[],
+    attachedNoteIds: string[],
+    imageUrl: string | null,
+    imageMimeType: string | null
+  ) => Promise<void>;
+  streamingState?: any;
+  onSuggestAiCorrection?: (prompt: string) => Promise<void>;
 }
 
 const AIChat: React.FC<AIChatProps> = ({
@@ -117,6 +131,12 @@ const AIChat: React.FC<AIChatProps> = ({
   onLoadMoreDocuments,
   hasMoreDocuments,
   isLoadingDocuments,
+  onInterruptMessage,
+  onPauseGeneration,
+  onResumeGeneration,
+  onEditAndResendMessage,
+  streamingState,
+  onSuggestAiCorrection,
 }) => {
   const [inputMessage, setInputMessage] = useState('');
 
@@ -138,6 +158,15 @@ const AIChat: React.FC<AIChatProps> = ({
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  // NEW: State for editing message
+  const [editingMessage, setEditingMessage] = useState<{
+    id: string;
+    originalAssistantId: string | null;
+    attachedDocumentIds: string[];
+    attachedNoteIds: string[];
+    imageUrl: string | null;
+    imageMimeType: string | null;
+  } | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -146,7 +175,7 @@ const AIChat: React.FC<AIChatProps> = ({
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState('');
-  
+
   // NEW: State for documents fetched specifically for this session/messages
   const [extraDocuments, setExtraDocuments] = useState<Document[]>([]);
   const [missingDocsCheckAttempted, setMissingDocsCheckAttempted] = useState<Set<string>>(new Set());
@@ -198,69 +227,69 @@ const AIChat: React.FC<AIChatProps> = ({
     const uniqueIds = Array.from(new Set(allIdsToCheck));
 
     const missingIds = uniqueIds.filter(id => {
-        // check if present in mergedDocuments (docs or notes)
-        const found = mergedDocuments.some(d => d.id === id);
-        // check if we already tried fetching it to avoid loops
-        const alreadyChecked = missingDocsCheckAttempted.has(id);
-        return !found && !alreadyChecked;
+      // check if present in mergedDocuments (docs or notes)
+      const found = mergedDocuments.some(d => d.id === id);
+      // check if we already tried fetching it to avoid loops
+      const alreadyChecked = missingDocsCheckAttempted.has(id);
+      return !found && !alreadyChecked;
     });
 
     if (missingIds.length === 0) return;
 
     // Mark as attempted immediately
     setMissingDocsCheckAttempted(prev => {
-        const next = new Set(prev);
-        missingIds.forEach(id => next.add(id));
-        return next;
+      const next = new Set(prev);
+      missingIds.forEach(id => next.add(id));
+      return next;
     });
 
     const fetchMissing = async () => {
-        try {
-            const { data } = await supabase
-                .from('documents')
-                .select('*')
-                .in('id', missingIds);
-            
-            const fetchedDocs = (data as Document[]) || [];
-            const foundIds = new Set(fetchedDocs.map(d => d.id));
-            
-            // Create placeholders for documents that truly don't exist (deleted)
-            const notFoundDocs = missingIds
-                .filter(id => !foundIds.has(id))
-                .map(id => ({
-                    id,
-                    title: 'Document Unavailable',
-                    file_name: 'Unavailable',
-                    file_type: 'unknown',
-                    file_size: 0,
-                    file_url: '',
-                    content_extracted: null,
-                    user_id: userProfile?.id || '',
-                    type: 'text' as const,
-                    processing_status: 'error' as const, // This will show error icon in UI
-                    processing_error: 'Document may have been deleted or access denied',
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                    processing_started_at: null,
-                    processing_completed_at: null,
-                    processing_metadata: null,
-                    extraction_model_used: null,
-                    folder_ids: [],
-                    total_processing_time_ms: 0,
-                    page_count: 0,
-                    vector_store_id: null,
-                } as Document));
+      try {
+        const { data } = await supabase
+          .from('documents')
+          .select('*')
+          .in('id', missingIds);
 
-            if (fetchedDocs.length > 0 || notFoundDocs.length > 0) {
-                setExtraDocuments(prev => {
-                    const existingIds = new Set(prev.map(p => p.id));
-                    const newItems = [...fetchedDocs, ...notFoundDocs].filter(d => !existingIds.has(d.id));
-                    return [...prev, ...newItems];
-                });
-            }
-        } catch (err) {
-            console.error("Failed to fetch missing documents", err);
+        const fetchedDocs = (data as Document[]) || [];
+        const foundIds = new Set(fetchedDocs.map(d => d.id));
+
+        // Create placeholders for documents that truly don't exist (deleted)
+        const notFoundDocs = missingIds
+          .filter(id => !foundIds.has(id))
+          .map(id => ({
+            id,
+            title: 'Document Unavailable',
+            file_name: 'Unavailable',
+            file_type: 'unknown',
+            file_size: 0,
+            file_url: '',
+            content_extracted: null,
+            user_id: userProfile?.id || '',
+            type: 'text' as const,
+            processing_status: 'error' as const, // This will show error icon in UI
+            processing_error: 'Document may have been deleted or access denied',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            processing_started_at: null,
+            processing_completed_at: null,
+            processing_metadata: null,
+            extraction_model_used: null,
+            folder_ids: [],
+            total_processing_time_ms: 0,
+            page_count: 0,
+            vector_store_id: null,
+          } as Document));
+
+        if (fetchedDocs.length > 0 || notFoundDocs.length > 0) {
+          setExtraDocuments(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const newItems = [...fetchedDocs, ...notFoundDocs].filter(d => !existingIds.has(d.id));
+            return [...prev, ...newItems];
+          });
         }
+      } catch (err) {
+        console.error("Failed to fetch missing documents", err);
+      }
     };
 
     fetchMissing();
@@ -298,22 +327,22 @@ const AIChat: React.FC<AIChatProps> = ({
     message: '',
     progress: 0
   });
-// MessageSkeleton: loading placeholder for messages
-const MessageSkeleton: React.FC = () => (
-  <div className="space-y-4 animate-pulse">
-    {[1, 2, 3].map((i) => (
-      <div key={i} className="flex gap-3">
-        <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
-        <div className="flex-1 space-y-2">
-          <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
-          <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
+  // MessageSkeleton: loading placeholder for messages
+  const MessageSkeleton: React.FC = () => (
+    <div className="space-y-4 animate-pulse">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex gap-3">
+          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4" />
+            <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/2" />
+          </div>
         </div>
-      </div>
-    ))}
-  </div>
-);
+      ))}
+    </div>
+  );
 
-const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: number }> = ({ isLoadingSession, messageCount }) => {
+  const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: number }> = ({ isLoadingSession, messageCount }) => {
     if (!isLoadingSession) return null;
 
     return (
@@ -338,7 +367,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
         ))}
       </div>
     );
-};
+  };
   const loadSessionDocuments = useCallback(async (sessionId: string) => {
     if (!userProfile?.id) return;
 
@@ -466,11 +495,11 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
 
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (isRecognizing) {
       stopRecognition();
     }
-    
+
     // Check if this is an image generation request
     const imageDetection = detectImageGenerationRequest(inputMessage);
     if (imageDetection.isImageRequest && imageDetection.extractedPrompt) {
@@ -480,12 +509,12 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
       setInputMessage(''); // Clear the input
       return;
     }
-    
+
     // Check limit BEFORE attempting to send
     if (!checkAiMessageLimit()) {
       return;
     }
-    
+
     if (isCurrentlySendingRef.current) {
       return;
     }
@@ -616,7 +645,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
     } catch (error: any) {
       // No need to decrement - we don't increment on send anymore
       // Message count now updates automatically via realtime
-      
+
 
       let errorMessage = 'Failed to send message.';
 
@@ -849,6 +878,33 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
     setAttachedFiles([]);
   }, []);
 
+  const handleEditClick = useCallback((message: Message) => {
+    if (message.role !== 'user') return;
+
+    setInputMessage(message.content);
+    // Find the following assistant message if it exists
+    const index = messages.findIndex(msg => msg.id === message.id);
+    const nextMsg = index !== -1 ? messages[index + 1] : null;
+    const assistantId = nextMsg?.role === 'assistant' ? nextMsg.id : null;
+
+    setEditingMessage({
+      id: message.id,
+      originalAssistantId: assistantId,
+      attachedDocumentIds: message.attachedDocumentIds || [],
+      attachedNoteIds: message.attachedNoteIds || [],
+      imageUrl: message.image_url || null,
+      imageMimeType: message.image_mime_type || null,
+    });
+
+    // Scroll to input
+    textareaRef.current?.focus();
+  }, [messages]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingMessage(null);
+    setInputMessage('');
+  }, []);
+
   const selectedDocumentTitles = useMemo(() => {
     return mergedDocuments
       .filter(doc => selectedDocumentIds.includes(doc.id) && doc.type !== 'image')
@@ -889,12 +945,16 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
   }, []);
 
   const memoizedOnSuggestAiCorrection = useCallback((prompt: string) => {
+    if (onSuggestAiCorrection) {
+      onSuggestAiCorrection(prompt);
+      return;
+    }
     setInputMessage(prompt);
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
     toast.info("AI correction prepared in input. Review and send to apply.");
-  }, []);
+  }, [onSuggestAiCorrection]);
 
   const handleScrollToTop = () => {
     if (chatContainerRef.current) {
@@ -905,26 +965,26 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
   const handleScrollToBottom = () => {
     // specific logic: if auto-scroll is disabled, this button forces it
     if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
   const handleScroll = useCallback(async () => {
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-    
+
     // Show scroll to bottom button if we are not at the bottom
     const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 100;
     setShowScrollToBottomButton(!isAtBottom);
 
     // Load older messages when scrolling to top
     if (scrollTop < 50 && hasMoreMessages && !isLoadingOlderMessages) {
-       setIsLoadingOlderMessages(true);
-       try {
-         await onLoadOlderMessages();
-       } finally {
-         setIsLoadingOlderMessages(false);
-       }
+      setIsLoadingOlderMessages(true);
+      try {
+        await onLoadOlderMessages();
+      } finally {
+        setIsLoadingOlderMessages(false);
+      }
     }
   }, [hasMoreMessages, isLoadingOlderMessages, onLoadOlderMessages]);
 
@@ -1005,6 +1065,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
                 onBlockUpdate={memoizedHandleBlockDetected}
                 onBlockEnd={memoizedHandleBlockDetected}
                 onDiagramCodeUpdate={handleDiagramCodeUpdate}
+                onEditClick={handleEditClick}
               />
             )}
             {isCurrentlySending && isAiTyping && messages.length > 0 && (
@@ -1023,19 +1084,19 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
           </div>
           {/* Scroll Navigation Buttons */}
           <div className="absolute bottom-24 right-4 flex flex-col gap-2 z-20 pointer-events-auto">
-            <Button 
-              size="icon" 
-              variant="secondary" 
-              className="h-8 w-8 rounded-full shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200" 
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8 rounded-full shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200"
               onClick={handleScrollToTop}
               title="Scroll to Top"
             >
               <ArrowUp className="h-4 w-4 text-gray-600 dark:text-gray-300" />
             </Button>
-            <Button 
-              size="icon" 
-              variant="secondary" 
-              className="h-8 w-8 rounded-full shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200" 
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8 rounded-full shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200"
               onClick={handleScrollToBottom}
               title="Scroll to Bottom"
             >
@@ -1046,136 +1107,193 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
           {/* Input area */}
           <div className={`fixed bottom-0 left-0 right-0 sm:pb-8 md:shadow-none md:static rounded-t-lg rounded-lg md:rounded-lg bg-transparent dark:bg-transparent dark:border-gray-700 font-sans z-10
             ${isDiagramPanelOpen ? `md:pr-[calc(${panelWidth}%+1.5rem)]` : ''}`}>
-              <div className={`w-full ${(!isDiagramPanelOpen && !activePodcast) ? 'max-w-3xl' : 'max-w-4xl'} mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2`}>
-                <SubscriptionGuard
-                  feature="AI Chat"
-                  limitFeature="maxAiMessages"
-                  currentCount={useAiMessageTracker().messagesToday}
-                  message="You've reached your daily AI message limit."
-                >
-                  {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
-                    <div className="mb-2">
-                      <ContextBadges
-                        attachedFiles={attachedFiles}
-                        selectedImageDocuments={selectedImageDocuments}
-                        selectedDocumentTitles={selectedDocumentTitles}
-                        selectedNoteTitles={selectedNoteTitles}
-                        handleRemoveAllFiles={handleRemoveAllFiles}
-                        onSelectionChange={onSelectionChange}
-                        selectedDocumentIds={selectedDocumentIds}
-                        documents={mergedDocuments}
-                        notes={notes}
-                        handleRemoveFile={handleRemoveFile}
-                        onViewContent={memoizedHandleViewContent}
-                      />
+            <div className={`w-full ${(!isDiagramPanelOpen && !activePodcast) ? 'max-w-3xl' : 'max-w-4xl'} mx-auto dark:bg-gray-800 border border-slate-200 bg-white rounded-lg shadow-md dark:border-gray-700 p-2`}>
+              <SubscriptionGuard
+                feature="AI Chat"
+                limitFeature="maxAiMessages"
+                currentCount={useAiMessageTracker().messagesToday}
+                message="You've reached your daily AI message limit."
+              >
+                {editingMessage && (
+                  <div className="mb-2 flex items-center justify-between px-3 py-1 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Editing Message</span>
                     </div>
-                  ) : null}
-                  <div className="flex flex-row gap-2 mt-0 sm:mt-2 w-full items-end">
-                    <Menubar className="flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg">
-                      <MenubarMenu>
-                        <MenubarTrigger className="h-10 w-10 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
-                          <MenuIcon className="h-5 w-5" />
-                        </MenubarTrigger>
-                        <MenubarContent align="end" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                          <MenubarItem onClick={() => setEnableStreamingMode(!enableStreamingMode)} className="flex items-center gap-2">
-                            <motion.div
-                              animate={enableStreamingMode ? { scale: [1, 1.2, 1] } : { scale: 1 }}
-                              transition={{ duration: 0.5, repeat: enableStreamingMode ? Infinity : 0, repeatDelay: 1 }}
-                              whileHover={{ scale: 1.25 }}
-                              className={enableStreamingMode ? 'text-pink-500' : 'text-blue-500'}
-                            >
-                              {enableStreamingMode ? '🧠' : '💬'}
-                            </motion.div>
-                            <span className="text-xs font-medium hidden sm:inline">
-                              {enableStreamingMode ? 'Thinking Mode' : 'Fast Mode'}
-                            </span>
-                          </MenubarItem>
-                          <MenubarItem onClick={isRecognizing ? stopRecognition : startRecognition} disabled={micPermissionStatus === 'checking' || isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                            <span className="flex items-center">
-                              <motion.span whileHover={{ scale: 1.25 }} className={isRecognizing ? 'text-green-500' : 'text-gray-500'}>
-                                <Mic className="h-5 w-5 mr-2" />
-                              </motion.span>
-                              {isRecognizing ? 'Stop Speech Recognition' : 'Start Speech Recognition'}
-                            </span>
-                          </MenubarItem>
-                          <MenubarItem onClick={() => cameraInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                            <span className="flex items-center">
-                              <motion.span whileHover={{ scale: 1.25 }} className="text-yellow-500">
-                                <Camera className="h-5 w-5 mr-2" />
-                              </motion.span>
-                              Take Picture
-                            </span>
-                          </MenubarItem>
-                          <MenubarItem onClick={() => fileInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                            <span className="flex items-center">
-                              <motion.span whileHover={{ scale: 1.25 }} className="text-purple-500">
-                                <Paperclip className="h-5 w-5 mr-2" />
-                              </motion.span>
-                              Upload Files
-                            </span>
-                          </MenubarItem>
-                          <MenubarItem onClick={() => setShowDocumentSelector(true)} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                            <span className="flex items-center">
-                              <motion.span whileHover={{ scale: 1.25 }} className="text-blue-500">
-                                <FileText className="h-5 w-5 mr-2" />
-                              </motion.span>
-                              {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Select Documents/Notes'}
-                            </span>
-                          </MenubarItem>
-                          <MenubarItem onClick={() => setShowPodcastGenerator(true)} disabled={selectedDocumentIds.length === 0}>
-                            <span className="flex items-center">
-                              <motion.span whileHover={{ scale: 1.25 }} className="text-pink-500">
-                                <Podcast className="h-5 w-5 mr-2" />
-                              </motion.span>
-                              Generate AI Podcast
-                            </span>
-                          </MenubarItem>
-                          <MenubarItem onClick={() => setShowImageGenerator(true)} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
-                            <span className="flex items-center">
-                              <motion.span whileHover={{ scale: 1.25 }} className="text-purple-500">
-                                <Image className="h-5 w-5 mr-2" />
-                              </motion.span>
-                              Generate AI Image
-                            </span>
-                          </MenubarItem>
-                          <MenubarItem onClick={() => setAutoTypeInPanel(prev => !prev)}>
-                            <span className="flex items-center">
-                              <motion.span whileHover={{ scale: 1.25 }} className={autoTypeInPanel ? 'text-green-500' : 'text-gray-500'}>
-                                <Layout className="h-5 w-5 mr-2" />
-                              </motion.span>
-                              {autoTypeInPanel ? 'Panel On' : 'Panel Off'}
-                            </span>
-                          </MenubarItem>
-                        </MenubarContent>
-                      </MenubarMenu>
-                    </Menubar>
-                    <textarea
-                      ref={textareaRef}
-                      value={inputMessage}
-                      onChange={(e) => {
-                        e.preventDefault();
-                        const newValue = e.target.value;
-                        setInputMessage(newValue);
-                        if (textareaRef.current) {
-                          textareaRef.current.style.height = 'auto';
-                          textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage(e);
-                        }
-                      }}
-                      placeholder="What do you want to know? (Type '/image' or 'generate image' for AI image generation)"
-                      className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[82px] dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
-                      disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
-                      rows={1}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      className="h-6 w-6 p-0 hover:bg-blue-100 dark:hover:bg-blue-800"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+                {attachedFiles.length > 0 || selectedDocumentIds.length > 0 ? (
+                  <div className="mb-2">
+                    <ContextBadges
+                      attachedFiles={attachedFiles}
+                      selectedImageDocuments={selectedImageDocuments}
+                      selectedDocumentTitles={selectedDocumentTitles}
+                      selectedNoteTitles={selectedNoteTitles}
+                      handleRemoveAllFiles={handleRemoveAllFiles}
+                      onSelectionChange={onSelectionChange}
+                      selectedDocumentIds={selectedDocumentIds}
+                      documents={mergedDocuments}
+                      notes={notes}
+                      handleRemoveFile={handleRemoveFile}
+                      onViewContent={memoizedHandleViewContent}
                     />
+                  </div>
+                ) : null}
+                <div className="flex flex-row gap-2 mt-0 sm:mt-2 w-full items-end">
+                  <Menubar className="flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg">
+                    <MenubarMenu>
+                      <MenubarTrigger className="h-10 w-10 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                        <MenuIcon className="h-5 w-5" />
+                      </MenubarTrigger>
+                      <MenubarContent align="end" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                        <MenubarItem onClick={() => setEnableStreamingMode(!enableStreamingMode)} className="flex items-center gap-2">
+                          <motion.div
+                            animate={enableStreamingMode ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+                            transition={{ duration: 0.5, repeat: enableStreamingMode ? Infinity : 0, repeatDelay: 1 }}
+                            whileHover={{ scale: 1.25 }}
+                            className={enableStreamingMode ? 'text-pink-500' : 'text-blue-500'}
+                          >
+                            {enableStreamingMode ? '🧠' : '💬'}
+                          </motion.div>
+                          <span className="text-xs font-medium hidden sm:inline">
+                            {enableStreamingMode ? 'Thinking Mode' : 'Fast Mode'}
+                          </span>
+                        </MenubarItem>
+                        <MenubarItem onClick={isRecognizing ? stopRecognition : startRecognition} disabled={micPermissionStatus === 'checking' || isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                          <span className="flex items-center">
+                            <motion.span whileHover={{ scale: 1.25 }} className={isRecognizing ? 'text-green-500' : 'text-gray-500'}>
+                              <Mic className="h-5 w-5 mr-2" />
+                            </motion.span>
+                            {isRecognizing ? 'Stop Speech Recognition' : 'Start Speech Recognition'}
+                          </span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => cameraInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                          <span className="flex items-center">
+                            <motion.span whileHover={{ scale: 1.25 }} className="text-yellow-500">
+                              <Camera className="h-5 w-5 mr-2" />
+                            </motion.span>
+                            Take Picture
+                          </span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => fileInputRef.current?.click()} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                          <span className="flex items-center">
+                            <motion.span whileHover={{ scale: 1.25 }} className="text-purple-500">
+                              <Paperclip className="h-5 w-5 mr-2" />
+                            </motion.span>
+                            Upload Files
+                          </span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => setShowDocumentSelector(true)} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                          <span className="flex items-center">
+                            <motion.span whileHover={{ scale: 1.25 }} className="text-blue-500">
+                              <FileText className="h-5 w-5 mr-2" />
+                            </motion.span>
+                            {isUpdatingDocuments ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Select Documents/Notes'}
+                          </span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => setShowPodcastGenerator(true)} disabled={selectedDocumentIds.length === 0}>
+                          <span className="flex items-center">
+                            <motion.span whileHover={{ scale: 1.25 }} className="text-pink-500">
+                              <Podcast className="h-5 w-5 mr-2" />
+                            </motion.span>
+                            Generate AI Podcast
+                          </span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => setShowImageGenerator(true)} disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}>
+                          <span className="flex items-center">
+                            <motion.span whileHover={{ scale: 1.25 }} className="text-purple-500">
+                              <Image className="h-5 w-5 mr-2" />
+                            </motion.span>
+                            Generate AI Image
+                          </span>
+                        </MenubarItem>
+                        <MenubarItem onClick={() => setAutoTypeInPanel(prev => !prev)}>
+                          <span className="flex items-center">
+                            <motion.span whileHover={{ scale: 1.25 }} className={autoTypeInPanel ? 'text-green-500' : 'text-gray-500'}>
+                              <Layout className="h-5 w-5 mr-2" />
+                            </motion.span>
+                            {autoTypeInPanel ? 'Panel On' : 'Panel Off'}
+                          </span>
+                        </MenubarItem>
+                      </MenubarContent>
+                    </MenubarMenu>
+                  </Menubar>
+                  <textarea
+                    ref={textareaRef}
+                    value={inputMessage}
+                    onChange={(e) => {
+                      e.preventDefault();
+                      const newValue = e.target.value;
+                      setInputMessage(newValue);
+                      if (textareaRef.current) {
+                        textareaRef.current.style.height = 'auto';
+                        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                      }
+                    }}
+                    placeholder="What do you want to know? (Type '/image' or 'generate image' for AI image generation)"
+                    className="w-full overflow-y-scroll modern-scrollbar text-base md:text-lg focus:outline-none focus:ring-0 resize-none overflow-hidden max-h-40 min-h-[82px] dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400 bg-white text-gray-800 placeholder-gray-600 px-3 py-2 transition-colors duration-300 font-claude"
+                    disabled={isLoading || isSubmittingUserMessage || isGeneratingImage || isUpdatingDocuments || isAiTyping}
+                    rows={1}
+                  />
+                  {streamingState?.isStreaming ? (
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          if (streamingState.isPaused) {
+                            const lastUserMsg = messages.slice().reverse().find(m => m.role === 'user');
+                            const lastAiMsg = messages.slice().reverse().find(m => m.role === 'assistant');
+                            if (lastUserMsg && lastAiMsg) {
+                              onResumeGeneration?.(lastUserMsg.content, lastAiMsg.id);
+                            }
+                          } else {
+                            onPauseGeneration?.();
+                          }
+                        }}
+                        className="bg-yellow-500 hover:bg-yellow-600 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0 transition-all duration-300"
+                        title={streamingState.isPaused ? "Resume Generation" : "Pause Generation"}
+                      >
+                        {streamingState.isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={onInterruptMessage}
+                        className="bg-red-500 hover:bg-red-600 text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0 transition-all duration-300"
+                        title="Stop Generation"
+                      >
+                        <Square className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
                     <Button
                       type="button"
                       onClick={(e) => {
-                        if (inputMessage.trim() || attachedFiles.length > 0) {
+                        if (editingMessage) {
+                          onEditAndResendMessage?.(
+                            inputMessage,
+                            editingMessage.id,
+                            editingMessage.originalAssistantId,
+                            editingMessage.attachedDocumentIds,
+                            editingMessage.attachedNoteIds,
+                            editingMessage.imageUrl,
+                            editingMessage.imageMimeType
+                          );
+                          setEditingMessage(null);
+                          setInputMessage('');
+                        } else if (inputMessage.trim() || attachedFiles.length > 0) {
                           handleSendMessage(e);
                         } else {
                           if (isRecognizing) {
@@ -1187,30 +1305,29 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
                       }}
                       disabled={
                         (isLoading ||
-                        isSubmittingUserMessage ||
-                        isGeneratingImage ||
-                        isUpdatingDocuments ||
-                        isCurrentlySending ||
-                        isAiTyping ||
-                        !isLastAiMessageDisplayed ||
-                        messages.some(msg => msg.id.startsWith('optimistic-'))) && !isRecognizing
+                          isSubmittingUserMessage ||
+                          isGeneratingImage ||
+                          isUpdatingDocuments ||
+                          isCurrentlySending ||
+                          isAiTyping ||
+                          !isLastAiMessageDisplayed ||
+                          messages.some(msg => msg.id.startsWith('optimistic-'))) && !isRecognizing
                       }
-                      className={`${
-                        isRecognizing ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'
-                      } text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0 transition-all duration-300`}
+                      className={`${isRecognizing ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'
+                        } text-white shadow-md h-10 w-10 flex-shrink-0 rounded-lg p-0 transition-all duration-300`}
                     >
                       {isSubmittingUserMessage || isCurrentlySending || isAiTyping ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (inputMessage.trim() || attachedFiles.length > 0) ? (
+                      ) : (inputMessage.trim() || attachedFiles.length > 0 || editingMessage) ? (
                         <Send className="h-4 w-4" />
                       ) : (
                         <motion.div
-                          animate={isRecognizing ? { 
+                          animate={isRecognizing ? {
                             scale: [1, 1.2, 1],
                             opacity: [1, 0.8, 1]
                           } : { scale: 1 }}
-                          transition={{ 
-                            duration: 1.5, 
+                          transition={{
+                            duration: 1.5,
                             repeat: Infinity,
                             ease: "easeInOut"
                           }}
@@ -1219,27 +1336,28 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
                         </motion.div>
                       )}
                     </Button>
-                    {/* Hidden file inputs for menu actions */}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      ref={cameraInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                    <input
-                      type="file"
-                      // Accept all types except dangerous ones (UI hint only, backend will check too)
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.xml,.html,.css,.js,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.tif,.ico,.heic,.heif,.mp3,.wav,.mp4,.mov,.avi,.zip,.rar,.7z,.tar,.gz,.md,.rtf,.odt,.ods,.odp,.pages,.numbers,.key,.c,.cpp,.h,.hpp,.py,.java,.rb,.go,.php,.ts,.tsx,.m,.sh,.bat,.ps1,.yml,.yaml,.ini,.log,.tex,.epub,.mobi,.azw,.ibooks,.cbz,.cbr,.mpg,.mpeg,.ogg,.oga,.ogv,.webm,.flac,.aac,.m4a,.wav,.aiff,.alac,.opus,.amr,.mid,.midi,.3gp,.3g2,.mkv,.wmv,.flv,.swf,.asf,.vob,.rm,.ram,.mov,.qt,.f4v,.f4p,.f4a,.f4b,.ts,.m2ts,.mts,.mxf,.gpx,.geojson,.kml,.kmz,.gml,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg"
-                      multiple
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                  </div>
-                </SubscriptionGuard>
-              </div>
+                  )}
+                  {/* Hidden file inputs for menu actions */}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    ref={cameraInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <input
+                    type="file"
+                    // Accept all types except dangerous ones (UI hint only, backend will check too)
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.xml,.html,.css,.js,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tiff,.tif,.ico,.heic,.heif,.mp3,.wav,.mp4,.mov,.avi,.zip,.rar,.7z,.tar,.gz,.md,.rtf,.odt,.ods,.odp,.pages,.numbers,.key,.c,.cpp,.h,.hpp,.py,.java,.rb,.go,.php,.ts,.tsx,.m,.sh,.bat,.ps1,.yml,.yaml,.ini,.log,.tex,.epub,.mobi,.azw,.ibooks,.cbz,.cbr,.mpg,.mpeg,.ogg,.oga,.ogv,.webm,.flac,.aac,.m4a,.wav,.aiff,.alac,.opus,.amr,.mid,.midi,.3gp,.3g2,.mkv,.wmv,.flv,.swf,.asf,.vob,.rm,.ram,.mov,.qt,.f4v,.f4p,.f4a,.f4b,.ts,.m2ts,.mts,.mxf,.gpx,.geojson,.kml,.kmz,.gml,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg,.sqlite,.db,.sql,.bak,.dmp,.accdb,.mdb,.sqlite3,.db3,.s3db,.sl3,.dbf,.csv,.tsv,.xls,.xlsx,.ods,.xml,.json,.geojson,.gml,.kml,.kmz,.shp,.dbf,.prj,.sbn,.sbx,.shx,.cpg,.qgs,.qgz,.gpkg"
+                    multiple
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
+              </SubscriptionGuard>
+            </div>
           </div>
 
           {/* Document selector and other modals */}
@@ -1352,7 +1470,7 @@ const ChatLoadingIndicator: React.FC<{ isLoadingSession: boolean; messageCount: 
       )}
     </>
   );
-// End of AIChat component
+  // End of AIChat component
 }
 
 const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
@@ -1363,6 +1481,7 @@ const arePropsEqual = (prevProps: AIChatProps, nextProps: AIChatProps) => {
     prevProps.activeChatSessionId === nextProps.activeChatSessionId &&
     prevProps.messages === nextProps.messages &&
     prevProps.selectedDocumentIds === nextProps.selectedDocumentIds &&
+    prevProps.onSuggestAiCorrection === nextProps.onSuggestAiCorrection &&
     prevProps.documents === nextProps.documents
   );
 };

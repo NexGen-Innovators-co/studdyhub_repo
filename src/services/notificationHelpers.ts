@@ -4,7 +4,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Notification } from '@/types';
 
-export type NotificationType = 
+export type NotificationType =
   | 'general'
   | 'schedule_reminder'
   | 'quiz_due'
@@ -98,7 +98,7 @@ export async function createNotification(params: CreateNotificationParams): Prom
 
     return data?.notification || null;
   } catch (error) {
-    console.error('❌ Failed to create notification:', error);
+    //console.error('❌ Failed to create notification:', error);
     return null;
   }
 }

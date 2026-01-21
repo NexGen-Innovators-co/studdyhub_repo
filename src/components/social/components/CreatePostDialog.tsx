@@ -5,7 +5,8 @@ import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { X, Loader2, Lock } from 'lucide-react';
+import { X, Loader2, Lock, Sparkles } from 'lucide-react';
+import { generateInlineContent } from '../../../services/aiServices';
 import { SocialUserWithDetails } from '../../../integrations/supabase/socialTypes';
 import { Privacy } from '../types/social';
 import { useFeatureAccess } from '../../../hooks/useFeatureAccess';
@@ -50,6 +51,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
 }) => {
   const { canPostSocials: canPostSocialsAccess, tier } = useFeatureAccess();
   const navigate = useNavigate();
+  const [isRewriting, setIsRewriting] = useState(false);
 
   const canPostSocials = disabled !== undefined ? !disabled : canPostSocialsAccess;
   const displayUpgradeMessage = upgradeMessage || 'Social posting requires Scholar plan or higher';
@@ -76,6 +78,38 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
     onSubmit();
   };
 
+  const handleAiRewrite = async () => {
+    if (!content.trim() || !currentUser) return;
+
+    setIsRewriting(true);
+    toast.info('AI is rewriting your post...');
+
+    try {
+      // Construct a minimal UserProfile for the AI service
+      const minimalProfile = {
+        id: currentUser.id,
+        full_name: currentUser.display_name,
+        avatar_url: currentUser.avatar_url || null,
+      } as any;
+
+      const response = await generateInlineContent(
+        content,
+        content,
+        minimalProfile,
+        'rewrite',
+        'Rewrite this social media post to be more engaging, professional, and clear. Maintain the original core message and any hashtags. Keep the tone suitable for a student community.'
+      );
+
+      onContentChange(response);
+      toast.success('Post rewritten!');
+    } catch (error: any) {
+      console.error('Rewrite error:', error);
+      toast.error(error.message || 'Failed to rewrite post');
+    } finally {
+      setIsRewriting(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 max-h-screen overflow-y-auto">
@@ -87,9 +121,9 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
             <Alert className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
               <Lock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
               <AlertDescription className="text-orange-800 dark:text-orange-200">
-                {displayUpgradeMessage} 
-                <Button 
-                  variant="link" 
+                {displayUpgradeMessage}
+                <Button
+                  variant="link"
                   className="text-orange-600 dark:text-orange-400 p-0 h-auto"
                   onClick={() => navigate('/subscription')}
                 >
@@ -98,21 +132,34 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
               </AlertDescription>
             </Alert>
           )}
-          <Textarea
-            value={content}
-            onChange={(e) => onContentChange(e.target.value)}
-            placeholder="What's on your mind?"
-            disabled={!canPostSocials || isUploading}
-            className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600 disabled:opacity-50"
-            rows={5}
-          />
+          <div className="relative">
+            <Textarea
+              value={content}
+              onChange={(e) => onContentChange(e.target.value)}
+              placeholder="What's on your mind?"
+              disabled={!canPostSocials || isUploading || isRewriting}
+              className="bg-white dark:bg-gray-700 text-slate-800 dark:text-gray-200 border-slate-200 dark:border-gray-600 disabled:opacity-50 pr-10 min-h-[150px]"
+              rows={5}
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              type="button"
+              className="absolute top-2 right-2 h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+              onClick={handleAiRewrite}
+              disabled={!canPostSocials || isUploading || !content.trim() || isRewriting}
+              title="Rewrite with AI"
+            >
+              {isRewriting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            </Button>
+          </div>
 
           {metadata?.type === 'podcast' && (
             <div className="p-3 border border-slate-200 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-900/50 flex gap-3 max-w-full" style={{ maxWidth: '400px' }}>
               {metadata.coverUrl && (
-                <img 
-                  src={metadata.coverUrl} 
-                  alt={metadata.title} 
+                <img
+                  src={metadata.coverUrl}
+                  alt={metadata.title}
                   className="w-16 h-16 rounded object-cover flex-shrink-0"
                 />
               )}

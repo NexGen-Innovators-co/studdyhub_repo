@@ -85,7 +85,7 @@ export const useWebRTC = ({
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
-      
+
       currentUserIdRef.current = user.id;
 
       // Set up signaling channel
@@ -96,7 +96,7 @@ export const useWebRTC = ({
         await startBroadcasting();
       }
     } catch (err: any) {
-      console.error('Error initializing WebRTC:', err);
+      //console.error('Error initializing WebRTC:', err);
       setError(err.message);
     }
   };
@@ -171,7 +171,7 @@ export const useWebRTC = ({
 
       return stream;
     } catch (err: any) {
-      console.error('Error accessing microphone:', err);
+      //console.error('Error accessing microphone:', err);
       setError('Failed to access microphone. Please grant permission.');
       throw err;
     }
@@ -181,7 +181,7 @@ export const useWebRTC = ({
     try {
       const options = { mimeType: 'audio/webm;codecs=opus' };
       const mediaRecorder = new MediaRecorder(stream, options);
-      
+
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
@@ -191,7 +191,7 @@ export const useWebRTC = ({
       mediaRecorder.start(1000); // Collect data every second
       mediaRecorderRef.current = mediaRecorder;
     } catch (err) {
-      console.error('Error starting recording:', err);
+      //console.error('Error starting recording:', err);
     }
   };
 
@@ -261,7 +261,7 @@ export const useWebRTC = ({
     pc.ontrack = (event) => {
       // Ensure the track is enabled
       event.track.enabled = true;
-      
+
       if (event.streams && event.streams[0]) {
         onRemoteStream?.(event.streams[0]);
       } else {
@@ -316,7 +316,7 @@ export const useWebRTC = ({
       }
 
       const pc = createPeerConnection(listenerId);
-      
+
       // Add local tracks to peer connection
       stream.getTracks().forEach(track => {
         track.enabled = true; // Ensure track is enabled before adding
@@ -347,7 +347,7 @@ export const useWebRTC = ({
         });
       }
     } catch (err) {
-      console.error('Error creating offer:', err);
+      //console.error('Error creating offer:', err);
     }
   };
 
@@ -387,7 +387,7 @@ export const useWebRTC = ({
         });
       }
     } catch (err) {
-      console.error('Error handling offer:', err);
+      //console.error('Error handling offer:', err);
     }
   };
 
@@ -399,7 +399,7 @@ export const useWebRTC = ({
         await applyPendingIceCandidates(payload.from, peer.connection);
       }
     } catch (err) {
-      console.error('Error handling answer:', err);
+      //console.error('Error handling answer:', err);
     }
   };
 
@@ -415,7 +415,7 @@ export const useWebRTC = ({
         pendingIceCandidatesRef.current.set(payload.from, candidates);
       }
     } catch (err) {
-      console.error('Error handling ICE candidate:', err);
+      //console.error('Error handling ICE candidate:', err);
     }
   };
 
@@ -426,7 +426,7 @@ export const useWebRTC = ({
         try {
           await pc.addIceCandidate(candidate);
         } catch (e) {
-          console.error('Error adding buffered ICE candidate:', e);
+          //console.error('Error adding buffered ICE candidate:', e);
         }
       }
       pendingIceCandidatesRef.current.delete(userId);

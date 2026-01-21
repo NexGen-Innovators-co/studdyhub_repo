@@ -42,7 +42,7 @@ export async function generateSpeech(options: CloudTtsOptions): Promise<CloudTts
       audioContent: response.data.audioContent
     };
   } catch (error: any) {
-    console.error('[CloudTTS] Error:', error);
+    //console.error('[CloudTTS] Error:', error);
     return {
       audioContent: '',
       error: error.message || 'Failed to generate speech'
@@ -64,7 +64,7 @@ export function playAudioContent(audioContent: string): HTMLAudioElement {
 
   const audio = new Audio(`data:audio/mp3;base64,${cleanedAudio}`);
   audio.play().catch(err => {
-    console.error('[CloudTTS] Playback error:', err);
+    //console.error('[CloudTTS] Playback error:', err);
     throw new Error('Failed to play audio');
   });
 
@@ -78,9 +78,9 @@ export function playAudioContent(audioContent: string): HTMLAudioElement {
  */
 export async function speakText(options: CloudTtsOptions): Promise<HTMLAudioElement | null> {
   const { audioContent, error } = await generateSpeech(options);
-  
+
   if (error || !audioContent) {
-    console.error('[CloudTTS] Speech generation failed:', error);
+    //console.error('[CloudTTS] Speech generation failed:', error);
     return null;
   }
 

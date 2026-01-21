@@ -3,10 +3,16 @@ import React, { useRef, useEffect, useCallback } from 'react';
 interface MermaidRendererProps {
     mermaidContent: string;
     handleNodeClick: (nodeId: string) => void;
+    onMermaidError?: (error: string, code: string) => void;
     iframeRef?: React.RefObject<HTMLIFrameElement>;
 }
 
-export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ mermaidContent, handleNodeClick, iframeRef: externalIframeRef }) => {
+export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
+    mermaidContent,
+    handleNodeClick,
+    onMermaidError,
+    iframeRef: externalIframeRef
+}) => {
     const internalIframeRef = useRef<HTMLIFrameElement>(null);
     const iframeRef = externalIframeRef || internalIframeRef;
 
@@ -106,6 +112,23 @@ body {
     z-index: 1000;
 }
 
+.error-container {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(220, 38, 38, 0.1);
+    border: 1px solid #ef4444;
+    color: #ef4444;
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 80%;
+    text-align: center;
+    font-family: monospace;
+    z-index: 2000;
+}
+
 /* Node hover effects */
 .node:hover {
     stroke: orange !important;
@@ -147,6 +170,11 @@ body {
     </div>
 </div>
 
+<div class="error-container" id="errorContainer">
+    <strong>Mermaid Render Error</strong>
+    <p id="errorMessage"></p>
+</div>
+
 <div class="controls">
     <button class="control-btn" id="zoomIn" title="Zoom In">+</button>
     <button class="control-btn" id="zoomOut" title="Zoom Out">−</button>
@@ -168,10 +196,12 @@ let lastTouchDistance = 0;
 const container = document.getElementById('diagramContainer');
 const wrapper = document.getElementById('mermaidWrapper');
 const zoomInfo = document.getElementById('zoomInfo');
+const errorContainer = document.getElementById('errorContainer');
+const errorMessage = document.getElementById('errorMessage');
 
-// Initialize Mermaid
+// Initialize Mermaid with custom error handler
 mermaid.initialize({ 
-    startOnLoad: true, 
+    startOnLoad: false, 
     theme: 'dark', 
     securityLevel: 'loose',
     flowchart: {
@@ -179,6 +209,18 @@ mermaid.initialize({
         htmlLabels: false
     }
 });
+
+// Custom error handling
+mermaid.parseError = function(err, hash) {
+    console.error('Mermaid parse error:', err);
+    errorContainer.style.display = 'block';
+    errorMessage.textContent = err.message || err;
+    window.parent.postMessage({ 
+        type: 'mermaidError', 
+        error: err.toString(),
+        code: \`${mermaidContent.replace(/`/g, '\\`')}\`
+    }, '*');
+};
 
 // Update transform
 function updateTransform() {
@@ -366,9 +408,13 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Initialize after Mermaid loads
-document.addEventListener('DOMContentLoaded', () => {
-    mermaid.init(undefined, ".mermaid").then(() => {
+// Render manual function
+async function renderDiagram() {
+    try {
+        await mermaid.run({
+            nodes: [document.getElementById('mermaidDiagram')]
+        });
+        
         // Add node click handlers after diagram is rendered
         const mermaidDiv = document.querySelector('.mermaid');
         if (mermaidDiv) {
@@ -383,31 +429,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     const nodeElement = target.classList.contains('node') ? target : target.closest('.node');
                     const nodeId = nodeElement.id || nodeElement.getAttribute('data-id');
                     if (nodeId) {
-                        ////console.log('Clicked node:', nodeId);
                         window.parent.postMessage({ type: 'nodeClick', nodeId: encodeURIComponent(nodeId) }, '*');
                     }
-                }
-            });
-
-            mermaidDiv.addEventListener('mouseover', (event) => {
-                const target = event.target;
-                if (target.classList.contains('node') || target.closest('.node')) {
-                    const nodeElement = target.classList.contains('node') ? target : target.closest('.node');
-                    ////console.log('Mouse over node:', nodeElement.id);
                 }
             });
         }
         
         // Auto-fit on initial load
         setTimeout(fitToScreen, 100);
-    });
-});
+    } catch (err) {
+        // Already handled by parseError usually, but just in case
+        console.error('Render error:', err);
+    }
+}
 
-// Handle window resize
-window.addEventListener('resize', () => {
-    // Optionally re-fit to screen on resize
-    // fitToScreen();
-});
+// Start rendering
+renderDiagram();
 </script>
 </body>
 </html>
@@ -416,7 +453,7 @@ window.addEventListener('resize', () => {
                 doc.close();
             }
         }
-    }, [mermaidContent, handleNodeClick]);
+    }, [mermaidContent]);
 
     useEffect(() => {
         loadMermaid();
@@ -426,12 +463,14 @@ window.addEventListener('resize', () => {
         const handleMessage = (event: MessageEvent) => {
             if (event.data.type === 'nodeClick' && event.data.nodeId) {
                 handleNodeClick(decodeURIComponent(event.data.nodeId));
+            } else if (event.data.type === 'mermaidError' && onMermaidError) {
+                onMermaidError(event.data.error, event.data.code);
             }
         };
 
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
-    }, [handleNodeClick]);
+    }, [handleNodeClick, onMermaidError]);
 
     return (
         <iframe
