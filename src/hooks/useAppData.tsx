@@ -103,31 +103,31 @@ const getErrorGroup = (message: string): string => {
 const showToastOnce = (message: string, type: 'error' | 'success' | 'info' = 'error') => {
   const now = Date.now();
   const lastShown = recentToastsRef.current.get(message);
-  
+
   // For errors, also check error group to prevent similar errors
   if (type === 'error') {
     const errorGroup = getErrorGroup(message);
     const lastGroupError = errorGroupsRef.current.get(errorGroup);
-    
+
     // If this error group was shown recently, skip
     if (lastGroupError && now - lastGroupError < ERROR_GROUP_COOLDOWN) {
       return;
     }
-    
+
     errorGroupsRef.current.set(errorGroup, now);
   }
-  
+
   if (!lastShown || now - lastShown > TOAST_COOLDOWN) {
     recentToastsRef.current.set(message, now);
     toast[type](message);
-    
+
     // Cleanup old entries
     if (recentToastsRef.current.size > 20) {
       const oldestKey = Array.from(recentToastsRef.current.entries())
         .sort((a, b) => a[1] - b[1])[0][0];
       recentToastsRef.current.delete(oldestKey);
     }
-    
+
     // Cleanup old error groups
     if (errorGroupsRef.current.size > 10) {
       const oldestGroupKey = Array.from(errorGroupsRef.current.entries())
@@ -661,14 +661,14 @@ export const useAppData = () => {
         try {
           const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
           if (offlineDocs && offlineDocs.length > 0) {
-             setDocuments(offlineDocs);
-             offlineDocs.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
-             setDataLoaded(prev => new Set([...prev, 'documents']));
-             setDataLoading('documents', false);
-             return;
+            setDocuments(offlineDocs);
+            offlineDocs.forEach(doc => loadedIdsRef.current.documents.add(doc.id));
+            setDataLoaded(prev => new Set([...prev, 'documents']));
+            setDataLoading('documents', false);
+            return;
           }
         } catch (err) {
-          console.warn('Failed to load offline documents:', err);
+          //console.warn('Failed to load offline documents:', err);
         }
       } else {
         offlineStorage.getAll<Document>(STORES.DOCUMENTS).then(offlineDocs => {
@@ -706,11 +706,11 @@ export const useAppData = () => {
 
       if (error) {
         // Check if it's a network error or QUIC protocol error
-        if (!navigator.onLine || 
-            error.message?.includes('network') || 
-            error.message?.includes('QUIC') || 
-            error.message?.includes('ERR_QUIC_PROTOCOL_ERROR') ||
-            error.message?.includes('timeout')) {
+        if (!navigator.onLine ||
+          error.message?.includes('network') ||
+          error.message?.includes('QUIC') ||
+          error.message?.includes('ERR_QUIC_PROTOCOL_ERROR') ||
+          error.message?.includes('timeout')) {
           // Try to load from IndexedDB
           const offlineDocs = await offlineStorage.getAll<Document>(STORES.DOCUMENTS);
           if (offlineDocs && offlineDocs.length > 0) {
@@ -1060,7 +1060,7 @@ export const useAppData = () => {
             return;
           }
         } catch (err) {
-          console.warn('Failed to load offline quizzes:', err);
+          //console.warn('Failed to load offline quizzes:', err);
         }
       } else {
         offlineStorage.getAll<Quiz>(STORES.QUIZZES).then(offlineQuizzes => {
@@ -1215,7 +1215,7 @@ export const useAppData = () => {
           if (offlineFolders && offlineFolders.length > 0) {
             setFolders(offlineFolders);
             offlineFolders.forEach(folder => loadedIdsRef.current.folders.add(folder.id));
-            
+
             // Try to build tree if function is available
             try {
               if (typeof buildFolderTree === 'function') {
@@ -1224,7 +1224,7 @@ export const useAppData = () => {
             } catch (e) {
               console.warn('Could not build folder tree offline:', e);
             }
-            
+
             setDataLoaded(prev => new Set([...prev, 'folders']));
             setDataLoading('folders', false);
             return;
@@ -1341,7 +1341,7 @@ export const useAppData = () => {
       try {
         const offlineProfiles = await offlineStorage.getAll<UserProfile>(STORES.PROFILE);
         if (offlineProfiles && offlineProfiles.length > 0) {
-          const myProfile = offlineProfiles.find(p => p.id === user.id) || offlineProfiles[0]; 
+          const myProfile = offlineProfiles.find(p => p.id === user.id) || offlineProfiles[0];
           if (myProfile) {
             setUserProfile(myProfile);
             setDataLoaded(prev => new Set([...prev, 'profile']));
@@ -1350,7 +1350,7 @@ export const useAppData = () => {
           }
         }
       } catch (e) {
-        console.warn('Failed to load offline profile:', e);
+        //console.warn('Failed to load offline profile:', e);
       }
     }
 
@@ -1414,7 +1414,8 @@ export const useAppData = () => {
           school: profileData.school,
           username: profileData.username,
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()        };
+          updated_at: new Date().toISOString()
+        };
       } else {
         // Create default profile
         finalProfile = {
@@ -1456,7 +1457,7 @@ export const useAppData = () => {
 
       setUserProfile(finalProfile);
       setCachedData(cacheKey, finalProfile);
-      
+
       // Save to IndexedDB for offline access
       offlineStorage.save(STORES.PROFILE, finalProfile);
 
@@ -1537,9 +1538,9 @@ export const useAppData = () => {
 
             // Set active note if needed
             if (!activeNote && formattedNotes.length > 0) {
-               setActiveNote(formattedNotes.sort((a,b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]);
+              setActiveNote(formattedNotes.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]);
             }
-            
+
             setDataLoaded(prev => new Set([...prev, 'notes']));
             setDataLoading('notes', false);
             return;
@@ -1677,7 +1678,7 @@ export const useAppData = () => {
     // Check if we already have active requests to prevent duplicate loading
     const activeCount = activeRequestsRef.current.size;
     if (activeCount > 3) {
-      console.log('Too many active requests, deferring progressive load...');
+      //console.log('Too many active requests, deferring progressive load...');
       return;
     }
 

@@ -315,7 +315,7 @@ serve(async (req) => {
         </body>
       </html>
       `,
-      { 
+      {
         status: 500,
         headers: { 'Content-Type': 'text/html' }
       }

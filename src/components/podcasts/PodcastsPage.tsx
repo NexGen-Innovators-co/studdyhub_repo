@@ -67,24 +67,50 @@ interface PodcastsPageProps {
 
 import { SocialFeedHandle } from '../social/SocialFeed';
 
-const PodcastCard = memo(({ 
-  podcast, 
-  isOwner, 
-  onPlay, 
-  onShare, 
-  onInvite, 
-  onManageMembers, 
-  onTogglePublic, 
-  onUpdateCover, 
-  onGenerateAiCover, 
-  onDelete, 
-  onReport, 
+import { Skeleton } from '../ui/skeleton';
+
+const PodcastCardSkeleton = () => (
+  <Card className="overflow-hidden border-blue-200/50 dark:border-blue-900/50 h-full flex flex-col relative rounded-2xl">
+    <div className="relative aspect-[3/4] sm:aspect-[4/5] overflow-hidden bg-slate-100 dark:bg-slate-800">
+      <div className="absolute inset-0 p-4 sm:p-5 flex flex-col justify-end gap-3 text-slate-300 dark:text-slate-700">
+        <Skeleton className="h-6 w-3/4 rounded-lg" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-6 w-6 rounded-full" />
+          <Skeleton className="h-4 w-1/2 rounded-md" />
+        </div>
+        <div className="flex gap-4 border-t border-slate-200 dark:border-slate-700 pt-3">
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="h-3 w-10" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-10 flex-1 rounded-xl" />
+          <Skeleton className="h-10 w-10 rounded-xl" />
+          <Skeleton className="h-10 w-10 rounded-xl" />
+        </div>
+      </div>
+    </div>
+  </Card>
+);
+
+const PodcastCard = memo(({
+  podcast,
+  isOwner,
+  onPlay,
+  onShare,
+  onInvite,
+  onManageMembers,
+  onTogglePublic,
+  onUpdateCover,
+  onGenerateAiCover,
+  onDelete,
+  onReport,
   onJoinLive,
   isUpdatingCover,
   isGeneratingAiCover,
   navigate // Pass navigate as a prop
-}: { 
-  podcast: PodcastWithMeta; 
+}: {
+  podcast: PodcastWithMeta;
   isOwner: boolean;
   onPlay: (p: PodcastWithMeta) => void;
   onShare: (p: PodcastWithMeta) => void;
@@ -103,7 +129,7 @@ const PodcastCard = memo(({
   navigate: (path: string) => void; // Add navigate prop type
 }) => {
   const [showActions, setShowActions] = useState(false);
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -119,13 +145,13 @@ const PodcastCard = memo(({
         {/* Background Image with Overlay */}
         <div className="relative aspect-[3/4] sm:aspect-[4/5] overflow-hidden">
           {/* Cover Image */}
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-pink-500">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-violet-500">
             {podcast.cover_image_url ? (
-              <img 
-                src={podcast.cover_image_url} 
+              <img
+                src={podcast.cover_image_url}
                 alt={podcast.title}
                 loading="lazy"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -133,177 +159,186 @@ const PodcastCard = memo(({
               </div>
             )}
           </div>
-          
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
-          
-          {/* Live Badge */}
+
+          {/* Gradient Overlay - Hidden until hover */}
+          <div className={`absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent transition-opacity duration-500 ${showActions ? 'opacity-100' : 'opacity-0'}`} />
+
+          {/* Live Badge - Animated visibility */}
           {podcast.is_live && (
-            <Badge className="absolute top-2 left-2 bg-red-500 text-white animate-pulse text-xs">
-              <Radio className="h-2.5 w-2.5 mr-1" />
-              LIVE
-            </Badge>
+            <div className={`absolute top-3 left-3 z-10 transition-all duration-300 transform ${showActions ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
+              <Badge className="bg-red-500 text-white animate-pulse text-[10px] sm:text-xs border-0 shadow-lg px-2">
+                <Radio className="h-2.5 w-2.5 mr-1" />
+                LIVE
+              </Badge>
+            </div>
           )}
 
-          {/* Privacy Badge */}
-          <Badge 
-            variant="secondary" 
-            className="absolute top-2 right-2 bg-black/60 text-white backdrop-blur-sm text-xs border-0"
-          >
-            {podcast.is_public ? <Globe className="h-2.5 w-2.5 mr-1" /> : <Lock className="h-2.5 w-2.5 mr-1" />}
-            <span className="hidden sm:inline">{podcast.is_public ? 'Public' : 'Private'}</span>
-          </Badge>
+          {/* Privacy Badge - Animated visibility */}
+          <div className={`absolute top-3 right-3 z-10 transition-all duration-300 transform ${showActions ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
+            <Badge
+              variant="secondary"
+              className="bg-black/40 text-white backdrop-blur-md text-[10px] sm:text-xs border-0 shadow-lg px-2"
+            >
+              {podcast.is_public ? <Globe className="h-2.5 w-2.5 mr-1" /> : <Lock className="h-2.5 w-2.5 mr-1" />}
+              <span className="hidden sm:inline ml-1">{podcast.is_public ? 'Public' : 'Private'}</span>
+            </Badge>
+          </div>
 
-          {/* Content Overlay - Always visible on mobile, hover on desktop */}
-          <div className="absolute inset-0 flex flex-col justify-end p-3 sm:p-4">
-            {/* Title & Author - Always visible */}
-            <div className="space-y-1.5 sm:space-y-2 mb-2">
-              <h3 className="text-white font-bold text-sm sm:text-base line-clamp-2 leading-tight">
+          {/* Content Overlay - Hidden until hover */}
+          <div className={`absolute inset-0 flex flex-col justify-end p-4 sm:p-5 transition-all duration-500 ${showActions ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
+            {/* Title & Author */}
+            <div className="space-y-2 mb-3">
+              <h3 className="text-white font-bold text-base sm:text-lg line-clamp-2 leading-tight drop-shadow-md">
                 {podcast.title}
               </h3>
-              
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Avatar className="h-5 w-5 sm:h-6 sm:w-6 ring-2 ring-white/20">
+
+              <div className="flex items-center gap-2">
+                <Avatar className="h-6 w-6 sm:h-7 sm:w-7 ring-2 ring-white/20">
                   <AvatarImage src={podcast.user?.avatar_url} />
-                  <AvatarFallback className="text-xs bg-blue-500 text-white">
+                  <AvatarFallback className="text-[10px] bg-blue-500 text-white">
                     {podcast.user?.full_name?.charAt(0) || 'U'}
                   </AvatarFallback>
                 </Avatar>
-                <span className="text-white/90 text-xs sm:text-sm font-medium truncate">
+                <span className="text-white/90 text-xs sm:text-sm font-medium truncate drop-shadow-sm">
                   {podcast.user?.full_name || 'Unknown'}
                 </span>
               </div>
             </div>
 
-            {/* Stats - Compact */}
-            <div className="flex items-center gap-2 sm:gap-3 text-xs text-white/80 mb-2">
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
+            {/* Stats - Compact Row */}
+            <div className="flex items-center gap-4 text-xs text-white/80 mb-4 border-t border-white/10 pt-3">
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
                 <span>{podcast.duration || 0}m</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Eye className="h-3 w-3" />
+              <div className="flex items-center gap-1.5">
+                <Eye className="h-3.5 w-3.5" />
                 <span>{podcast.listen_count || 0}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
+              <div className="flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5" />
                 <span>{podcast.member_count ?? 0}</span>
               </div>
             </div>
 
-            {/* Action Buttons - Toggle visibility */}
-            <div className={`transition-all duration-300 ${showActions ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
-              <div className="flex gap-1.5 sm:gap-2">
-                {/* Main Play Button */}
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (podcast.is_live) {
-                      onJoinLive(podcast.id);
-                    } else {
-                      onPlay(podcast);
-                      navigate(`/podcasts/${podcast.id}`); // Update the URL with the podcast ID
-                    }
-                  }}
-                  className="flex-1 border-white/30 bg-white/10 hover:bg-white/20 text-blue-600 font-semibold text-xs sm:text-sm h-8 sm:h-9 backdrop-blur-sm"
-                  size="sm"
-                >
-                  {podcast.is_live ? (
-                    <Radio className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                  ) : (
-                    <Play className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                  )}
-                  <span className="hidden xs:inline">{podcast.is_live ? 'Join' : 'Listen'}</span>
-                </Button>
-                
-                {/* Share Button */}
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onShare(podcast);
-                  }}
-                  className="border-white/30 bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
-                  title="Share"
-                >
-                  <Share2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                </Button>
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              {/* Main Play Button */}
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (podcast.is_live) {
+                    onJoinLive(podcast.id);
+                  } else {
+                    onPlay(podcast);
+                    navigate(`/podcasts/${podcast.id}`);
+                  }
+                }}
+                className="flex-1 bg-white text-blue-600 hover:bg-white/90 font-bold text-xs sm:text-sm h-9 sm:h-10 rounded-xl shadow-lg border-0"
+                size="sm"
+              >
+                {podcast.is_live ? (
+                  <Radio className="h-4 w-4 mr-2 animate-pulse" />
+                ) : (
+                  <Play className="h-4 w-4 mr-2" />
+                )}
+                <span>{podcast.is_live ? 'Join' : 'Listen'}</span>
+              </Button>
 
-                {/* More Options Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={(e) => e.stopPropagation()}
-                      className="border-white/30 bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm h-8 w-8 sm:h-9 sm:w-9"
-                    >
-                      <MoreVertical className="h-3 w-3 sm:h-4 sm:w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className='bg-white dark:bg-slate-800'>
-                    {isOwner && (
-                      <>
-                        <DropdownMenuItem
-                          onClick={() => onInvite(podcast)}
-                        >
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          Invite Members
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onManageMembers(podcast)}
-                        >
-                          <Users className="h-4 w-4 mr-2" />
-                          Manage Members
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onTogglePublic(podcast)}>
-                          {podcast.is_public ? <Lock className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
-                          Make {podcast.is_public ? 'Private' : 'Public'}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => onUpdateCover(podcast.id)}
-                          disabled={isUpdatingCover === podcast.id}
-                        >
-                          {isUpdatingCover === podcast.id ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <ImageIcon className="h-4 w-4 mr-2" />
-                          )}
-                          Update Cover
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onGenerateAiCover(podcast)}
-                          disabled={isGeneratingAiCover === podcast.id}
-                        >
-                          {isGeneratingAiCover === podcast.id ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Sparkles className="h-4 w-4 mr-2" />
-                          )}
-                          Generate AI Cover
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => onDelete(podcast)}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete Podcast
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    <DropdownMenuItem
-                      onClick={() => onReport(podcast)}
-                    >
-                      <Flag className="h-4 w-4 mr-2" />
-                      Report Podcast
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              {/* Share Button */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShare(podcast);
+                }}
+                className="border-white/20 bg-white/20 hover:bg-white/30 text-white backdrop-blur-md h-9 w-9 sm:h-10 sm:w-10 rounded-xl"
+                title="Share"
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+
+              {/* More Options Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={(e) => e.stopPropagation()}
+                    className="border-white/20 bg-white/20 hover:bg-white/30 text-white backdrop-blur-md h-9 w-9 sm:h-10 sm:w-10 rounded-xl"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className='bg-white dark:bg-slate-800 rounded-xl border-0 shadow-2xl'>
+                  {isOwner && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => onInvite(podcast)}
+                        className="rounded-lg m-1"
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Invite Members
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => onManageMembers(podcast)}
+                        className="rounded-lg m-1"
+                      >
+                        <Users className="h-4 w-4 mr-2" />
+                        Manage Members
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => onTogglePublic(podcast)}
+                        className="rounded-lg m-1"
+                      >
+                        {podcast.is_public ? <Lock className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
+                        Make {podcast.is_public ? 'Private' : 'Public'}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-700" />
+                      <DropdownMenuItem
+                        onClick={() => onUpdateCover(podcast.id)}
+                        disabled={isUpdatingCover === podcast.id}
+                        className="rounded-lg m-1"
+                      >
+                        {isUpdatingCover === podcast.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <ImageIcon className="h-4 w-4 mr-2" />
+                        )}
+                        Update Cover
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => onGenerateAiCover(podcast)}
+                        disabled={isGeneratingAiCover === podcast.id}
+                        className="rounded-lg m-1"
+                      >
+                        {isGeneratingAiCover === podcast.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4 mr-2" />
+                        )}
+                        Generate AI Cover
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-700" />
+                      <DropdownMenuItem
+                        onClick={() => onDelete(podcast)}
+                        className="text-red-600 focus:text-red-600 focus:bg-red-50 rounded-lg m-1 font-semibold"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Podcast
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  <DropdownMenuItem
+                    onClick={() => onReport(podcast)}
+                    className="rounded-lg m-1"
+                  >
+                    <Flag className="h-4 w-4 mr-2" />
+                    Report Podcast
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -331,38 +366,38 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
   // Fetch count of own podcasts
   const { data: myPodcastCount = 0 } = useQuery({
-     queryKey: ['my-podcast-count', currentUser?.id],
-     queryFn: async () => {
-         if (!currentUser?.id) return 0;
-         const { count, error } = await supabase
-             .from('ai_podcasts')
-             .select('*', { count: 'exact', head: true })
-             .eq('user_id', currentUser.id);
-         if(error) {
-             //console.error('Error fetching podcast count:', error);
-             return 0;
-         }
-         return count || 0;
-     },
-     enabled: !!currentUser?.id
+    queryKey: ['my-podcast-count', currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return 0;
+      const { count, error } = await supabase
+        .from('ai_podcasts')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', currentUser.id);
+      if (error) {
+        //console.error('Error fetching podcast count:', error);
+        return 0;
+      }
+      return count || 0;
+    },
+    enabled: !!currentUser?.id
   });
 
   const handleCreatePodcast = () => {
-      if (isFeatureBlocked('maxPodcasts', myPodcastCount)) {
-          setShowLimitsModal(true);
-      } else {
-          setShowPodcastGenerator(true);
-      }
+    if (isFeatureBlocked('maxPodcasts', myPodcastCount)) {
+      setShowLimitsModal(true);
+    } else {
+      setShowPodcastGenerator(true);
+    }
   };
 
-  const { 
-    data, 
-    fetchNextPage, 
-    hasNextPage, 
-    isFetchingNextPage, 
-    isLoading: loading 
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: loading
   } = usePodcasts(activeTab);
-  
+
   const podcasts = useMemo(() => data?.pages.flat() || [], [data]);
 
   // const [podcasts, setPodcasts] = useState<PodcastWithMeta[]>();
@@ -617,18 +652,18 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   useEffect(() => {
     fetchCurrentUser();
 
-    // Subscribe to real-time podcast updates (optional: can be removed for less refetching)
+    // Subscribe to all real-time podcast changes (INSERT, UPDATE, DELETE)
     const channel = supabase
-      .channel('podcast-updates')
+      .channel('podcast-all-updates')
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*', // Listen to all events
           schema: 'public',
           table: 'ai_podcasts'
         },
-        (payload) => {
-          // Optionally, only update the changed podcast in state instead of refetching all
+        () => {
+          // Force refetch everything when any change occurs
           queryClient.invalidateQueries({ queryKey: ['podcasts'] });
         }
       )
@@ -645,22 +680,20 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     setCurrentUser(user);
   };
 
-  // Infinite scroll for podcasts
-  const podcastsScrollRef = React.useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!podcastsScrollRef.current || isFetchingNextPage || !hasNextPage) return;
-      const { scrollTop, scrollHeight, clientHeight } = podcastsScrollRef.current;
-      if (scrollTop + clientHeight >= scrollHeight - 10) {
+  // Infinite scroll for podcasts using IntersectionObserver
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading) return;
+    if (observerRef.current) observerRef.current.disconnect();
+
+    observerRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
         fetchNextPage();
       }
-    };
-    const ref = podcastsScrollRef.current;
-    if (ref) {
-      ref.addEventListener('scroll', handleScroll);
-      return () => ref.removeEventListener('scroll', handleScroll);
-    }
-  }, [isFetchingNextPage, hasNextPage, fetchNextPage]);
+    });
+
+    if (node) observerRef.current.observe(node);
+  }, [loading, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handlePlayPodcast = (podcast: PodcastWithMeta) => {
     setSelectedPodcast(podcast);
@@ -881,7 +914,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       await supabase.rpc('increment_podcast_share_count', { podcast_id: podcast.id });
 
-      toast.success('Shared to social feed!', { 
+      toast.success('Shared to social feed!', {
         icon: '✨',
         action: {
           label: 'View',
@@ -897,7 +930,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   const handleTogglePublic = async (podcast: PodcastWithMeta) => {
     try {
       const newPublicState = !podcast.is_public;
-      
+
       const { error } = await supabase
         .from('ai_podcasts')
         .update({ is_public: newPublicState })
@@ -927,6 +960,26 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     setSelectedPodcast(podcast);
     navigate(`/podcasts/${podcast.id}`); // Update the URL with the podcast ID
   };
+
+  // Keep selectedPodcast metadata in sync with updates to the list
+  useEffect(() => {
+    if (selectedPodcast) {
+      const updatedMatch = podcasts.find(p => p.id === selectedPodcast.id);
+      if (updatedMatch) {
+        // Check for meaningful changes to avoid unnecessary updates
+        const hasChanged =
+          updatedMatch.title !== selectedPodcast.title ||
+          updatedMatch.cover_image_url !== selectedPodcast.cover_image_url ||
+          updatedMatch.is_public !== selectedPodcast.is_public ||
+          updatedMatch.is_live !== selectedPodcast.is_live ||
+          updatedMatch.listen_count !== selectedPodcast.listen_count;
+
+        if (hasChanged) {
+          setSelectedPodcast(prev => prev ? { ...prev, ...updatedMatch } : updatedMatch);
+        }
+      }
+    }
+  }, [podcasts, selectedPodcast?.id]);
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-blue-50/30 dark:from-slate-950 dark:to-blue-950/20">
@@ -967,11 +1020,13 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
             </div>
           </div> */}
 
-          <ScrollArea className="flex-1" ref={podcastsScrollRef}>
+          <ScrollArea className="flex-1">
             <div className="max-w-7xl mx-auto p-12 pb-24 sm:p-24 lg:p-20">
               {loading ? (
-                <div className="flex items-center justify-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6">
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <PodcastCardSkeleton key={i} />
+                  ))}
                 </div>
               ) : filteredPodcasts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -981,17 +1036,17 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                     <Podcast className="h-16 w-16 text-slate-300 dark:text-slate-700 mb-4" />
                   )}
                   <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    {searchQuery 
-                      ? 'No podcasts found' 
-                      : activeTab === 'live' 
-                        ? 'No live podcasts' 
+                    {searchQuery
+                      ? 'No podcasts found'
+                      : activeTab === 'live'
+                        ? 'No live podcasts'
                         : activeTab === 'my-podcasts'
                           ? 'No podcasts yet'
                           : 'No podcasts available'}
                   </h3>
                   <p className="text-slate-500 dark:text-slate-500 mb-4">
-                    {searchQuery 
-                      ? 'Try adjusting your search' 
+                    {searchQuery
+                      ? 'Try adjusting your search'
                       : activeTab === 'live'
                         ? 'No one is streaming live right now. Start your own live podcast!'
                         : activeTab === 'my-podcasts'
@@ -1001,7 +1056,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                   {!searchQuery && activeTab === 'live' && (
                     <Button
                       onClick={() => setShowGoLiveDialog(true)}
-                      className="bg-gradient-to-r from-red-500 to-pink-500"
+                      className="bg-gradient-to-r from-red-500 to-violet-500"
                     >
                       <Radio className="h-4 w-4 mr-2" />
                       Go Live
@@ -1010,7 +1065,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                   {!searchQuery && activeTab === 'my-podcasts' && (
                     <Button
                       onClick={handleCreatePodcast}
-                      className="bg-gradient-to-r from-blue-500 to-pink-500"
+                      className="bg-gradient-to-r from-blue-500 to-violet-500"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Create Podcast
@@ -1063,11 +1118,13 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                       />
                     ))}
                   </div>
-                  {hasNextPage && !loading && (
-                    <div className="flex justify-center py-4">
-                      <Button size="sm" variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-                        Load More
-                      </Button>
+                  {hasNextPage && (
+                    <div ref={loadMoreRef} className="flex justify-center py-8">
+                      {isFetchingNextPage ? (
+                        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                      ) : (
+                        <div className="h-1" /> // Spacer to trigger intersection
+                      )}
                     </div>
                   )}
                 </>
@@ -1156,9 +1213,9 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
             // Use the provided onNavigateToTab prop to switch to the social tab, then open modal
             if (onNavigateToTab) {
               onNavigateToTab('social');
-              
-              const payload = { 
-                content, 
+
+              const payload = {
+                content,
                 coverUrl,
                 metadata: {
                   type: 'podcast',
@@ -1181,14 +1238,14 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                   setTimeout(checkRef, 100);
                 }
               };
-              
+
               // Start checking after a small delay to allow render cycle to start
               setTimeout(checkRef, 100);
             } else {
               // fallback: open modal directly if no tab switch function
               if (socialFeedRef?.current) {
-                socialFeedRef.current.openCreatePostDialog({ 
-                  content, 
+                socialFeedRef.current.openCreatePostDialog({
+                  content,
                   coverUrl,
                   metadata: {
                     type: 'podcast',
@@ -1273,7 +1330,11 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       {/* Floating Action Button for Refresh */}
       <button
         aria-label="Refresh Podcasts"
-        onClick={() => queryClient.invalidateQueries({ queryKey: ['podcasts'] })}
+        onClick={() => {
+          queryClient.resetQueries({ queryKey: ['podcasts'] });
+          queryClient.refetchQueries({ queryKey: ['podcasts'] });
+          toast.info('Refreshing podcasts...');
+        }}
         className="fixed bottom-32 right-2 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg p-4 flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
         style={{ boxShadow: '0 4px 24px rgba(59,130,246,0.15)' }}
         disabled={loading}

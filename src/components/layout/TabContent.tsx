@@ -109,6 +109,19 @@ interface TabContentProps {
   onDeleteMessage: (messageId: string) => Promise<void>;
   onToggleNotesHistory: () => void;
   onRetryFailedMessage: (originalUserMessageContent: string, failedAiMessageId: string) => Promise<void>;
+  onInterruptMessage?: () => void;
+  onPauseGeneration?: () => void;
+  onResumeGeneration?: (lastUserMessageContent: string, lastAssistantMessageId: string) => Promise<void>;
+  onEditAndResendMessage?: (
+    editedUserMessageContent: string,
+    originalUserMessageId: string,
+    originalAssistantMessageId: string | null,
+    attachedDocumentIds: string[],
+    attachedNoteIds: string[],
+    imageUrl: string | null,
+    imageMimeType: string | null
+  ) => Promise<void>;
+  streamingState?: any;
   isSubmittingUserMessage: boolean;
   hasMoreMessages: boolean;
   onLoadOlderMessages: () => Promise<void>;
@@ -135,6 +148,7 @@ interface TabContentProps {
   refreshNotes?: () => Promise<void>;
   navigateToNote: (noteId: string | null) => void; // Fix the syntax error
   setSocialFeedRef?: (ref: RefObject<SocialFeedHandle>) => void;
+  onSuggestAiCorrection?: (prompt: string) => Promise<void>;
 }
 
 export const TabContent: React.FC<TabContentProps> = (props) => {
@@ -148,9 +162,6 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
   // Check if we should show notifications view
   const showNotifications = activeTab === 'dashboard' && searchParams.get('view') === 'notifications';
 
-  const handleSuggestAiCorrection = useCallback((prompt?: string) => {
-    toast.info(`AI correction feature for diagrams is coming soon! Prompt: ${prompt || 'No specific prompt'}`);
-  }, []);
 
   // Add this function to handle note updates from the NotesList
   const handleNoteUpdateFromList = useCallback(async (noteId: string, updates: Partial<Note>) => {
@@ -242,9 +253,14 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
     onDeleteMessage: props.onDeleteMessage,
     onRegenerateResponse: props.onRegenerateResponse,
     onRetryFailedMessage: props.onRetryFailedMessage,
+    onInterruptMessage: props.onInterruptMessage,
+    onPauseGeneration: props.onPauseGeneration,
+    onResumeGeneration: props.onResumeGeneration,
+    onEditAndResendMessage: props.onEditAndResendMessage,
+    streamingState: props.streamingState,
     isSubmittingUserMessage: props.isSubmittingUserMessage,
     userProfile: userProfile,
-    onSuggestAiCorrection: handleSuggestAiCorrection,
+    onSuggestAiCorrection: props.onSuggestAiCorrection,
     hasMoreMessages: props.hasMoreMessages,
     onLoadOlderMessages: props.onLoadOlderMessages,
     onDocumentUpdated: props.onDocumentUpdated,
@@ -318,7 +334,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       props.onRetryFailedMessage,
       props.isSubmittingUserMessage,
       userProfile,
-      handleSuggestAiCorrection,
+      props.onSuggestAiCorrection,
       props.hasMoreMessages,
       props.onLoadOlderMessages,
       props.onDocumentUpdated,
@@ -328,7 +344,12 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
       props.onMessageUpdate,
       props.hasMoreDocuments,
       props.onLoadMoreDocuments,
-      props.isLoadingDocuments
+      props.isLoadingDocuments,
+      props.onInterruptMessage,
+      props.onPauseGeneration,
+      props.onResumeGeneration,
+      props.onEditAndResendMessage,
+      props.streamingState
     ]);
 
   const documentsProps = useMemo(() => ({
@@ -582,7 +603,7 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
                   />
                 </div>
               );
-              
+
             default:
               return null;
           }
@@ -607,30 +628,30 @@ export const TabContent: React.FC<TabContentProps> = (props) => {
 
       {shouldRenderPodcasts && (
         <div className="flex-1 overflow-hidden" style={{ display: activeTab === 'podcasts' ? 'block' : 'none', height: activeTab === 'podcasts' ? '100%' : '0px' }}>
-            <ErrorBoundary>
-              <React.Suspense fallback={
-                <div className="flex items-center justify-center h-full">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                </div>
-              }>
-                <PodcastsPage 
-                  searchQuery={props.searchQuery}
-                  podcastId={podcastId}
-                  onGoLive={() => {
-                    if ((window as any).__podcastGoLive) {
-                      (window as any).__podcastGoLive();
-                    }
-                  }}
-                  onCreatePodcast={() => {
-                    if ((window as any).__podcastCreate) {
-                      (window as any).__podcastCreate();
-                    }
-                  }}
-                  socialFeedRef={socialFeedRef}
-                  onNavigateToTab={props.onNavigateToTab}
-                />
-              </React.Suspense>
-            </ErrorBoundary>
+          <ErrorBoundary>
+            <React.Suspense fallback={
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              </div>
+            }>
+              <PodcastsPage
+                searchQuery={props.searchQuery}
+                podcastId={podcastId}
+                onGoLive={() => {
+                  if ((window as any).__podcastGoLive) {
+                    (window as any).__podcastGoLive();
+                  }
+                }}
+                onCreatePodcast={() => {
+                  if ((window as any).__podcastCreate) {
+                    (window as any).__podcastCreate();
+                  }
+                }}
+                socialFeedRef={socialFeedRef}
+                onNavigateToTab={props.onNavigateToTab}
+              />
+            </React.Suspense>
+          </ErrorBoundary>
         </div>
       )}
     </>

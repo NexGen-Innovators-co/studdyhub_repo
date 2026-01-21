@@ -205,7 +205,7 @@ export const AppHeader: React.FC<{
   };
 
   return (
-    <header className={`fixed w-full px-4 md:px-8 py-4 flex justify-between items-center z-50 transition-all duration-300 ${scrollY > 50
+    <header className={`fixed top-0 left-0 w-full px-4 md:px-8 py-4 flex justify-between items-center z-50 transition-all duration-300 ${scrollY > 50
       ? 'bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md'
       : 'bg-transparent'
       }`}>

@@ -118,7 +118,7 @@ class CalendarIntegrationService {
     for (const integration of integrations) {
       try {
         const event = this.convertToCalendarEvent(scheduleItem);
-        
+
         if (integration.provider === 'google') {
           const eventId = await this.createGoogleCalendarEvent(
             integration,
@@ -133,7 +133,7 @@ class CalendarIntegrationService {
           eventIds.outlook = eventId;
         }
       } catch (error) {
-        console.error(`Failed to sync to ${integration.provider}:`, error);
+        //console.error(`Failed to sync to ${integration.provider}:`, error);
       }
     }
 
@@ -164,16 +164,16 @@ class CalendarIntegrationService {
   ): Promise<boolean> {
     try {
       const event = this.convertToCalendarEvent(scheduleItem);
-      
+
       if (provider === 'google') {
         await this.updateGoogleCalendarEvent(integration, eventId, event);
       } else if (provider === 'outlook') {
         await this.updateOutlookCalendarEvent(integration, eventId, event);
       }
-      
+
       return true;
     } catch (error) {
-      console.error(`Failed to update ${provider} calendar event:`, error);
+      //console.error(`Failed to update ${provider} calendar event:`, error);
       return false;
     }
   }
@@ -192,10 +192,10 @@ class CalendarIntegrationService {
       } else if (provider === 'outlook') {
         await this.deleteOutlookCalendarEvent(integration, eventId);
       }
-      
+
       return true;
     } catch (error) {
-      console.error(`Failed to delete ${provider} calendar event:`, error);
+      //console.error(`Failed to delete ${provider} calendar event:`, error);
       return false;
     }
   }
@@ -214,7 +214,7 @@ class CalendarIntegrationService {
         const result = await this.syncToCalendar(item, userId);
         if (result.success) {
           syncedCount++;
-          
+
           // Update schedule item with calendar event IDs
           await supabase
             .from('schedule_items')
@@ -224,7 +224,7 @@ class CalendarIntegrationService {
             .eq('id', item.id);
         }
       } catch (error) {
-        console.error(`Failed to sync item ${item.id}:`, error);
+        //console.error(`Failed to sync item ${item.id}:`, error);
       }
     }
 
@@ -250,7 +250,7 @@ class CalendarIntegrationService {
       if (error) throw error;
       return true;
     } catch (error) {
-      console.error('Failed to disconnect calendar:', error);
+      //console.error('Failed to disconnect calendar:', error);
       return false;
     }
   }
@@ -508,7 +508,7 @@ class CalendarIntegrationService {
     });
 
     if (error) throw error;
-    
+
     // Update local integration object
     integration.access_token = data.accessToken;
   }
@@ -526,7 +526,7 @@ class CalendarIntegrationService {
     });
 
     if (error) throw error;
-    
+
     // Update local integration object
     integration.access_token = data.accessToken;
   }

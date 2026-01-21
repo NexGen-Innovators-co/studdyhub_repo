@@ -1,5 +1,5 @@
 // src/components/aiChat/PodcastGenerator.tsx
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
@@ -62,10 +62,8 @@ export interface PodcastData {
   description?: string; // Optional description
   tags?: string[]; // Optional tags
   listen_count?: number; // Optional listen count
+  is_public: boolean | null
 }
-
-// Fixing the import error for PodcastContent
-const LazyPodcastContent = React.lazy(() => import('./PodcastContent')); // Ensure PodcastContent.tsx exists in the same directory
 
 export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
   selectedNoteIds = [],
@@ -88,23 +86,17 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
     requirementsMet: string[];
     requirementsNeeded: string[];
   } | null>(null);
-  
+
   // Local state for content selection
   const [localSelectedNoteIds, setLocalSelectedNoteIds] = useState<string[]>(selectedNoteIds);
   const [localSelectedDocumentIds, setLocalSelectedDocumentIds] = useState<string[]>(selectedDocumentIds);
-  const [availableNotes, setAvailableNotes] = useState<Array<{id: string, title: string, updated_at: string}>>([]);
-  const [availableDocuments, setAvailableDocuments] = useState<Array<{id: string, title: string, updated_at: string}>>([]);
+  const [availableNotes, setAvailableNotes] = useState<Array<{ id: string, title: string, updated_at: string }>>([]);
+  const [availableDocuments, setAvailableDocuments] = useState<Array<{ id: string, title: string, updated_at: string }>>([]);
   const [loadingContent, setLoadingContent] = useState(false);
   const [notesPage, setNotesPage] = useState(1);
   const [documentsPage, setDocumentsPage] = useState(1);
   const [notesHasMore, setNotesHasMore] = useState(true);
   const [documentsHasMore, setDocumentsHasMore] = useState(true);
-
-  // Pagination state for podcasts
-  const [podcasts, setPodcasts] = useState<PodcastData[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [hasMorePodcasts, setHasMorePodcasts] = useState(true);
-  const [loadingPodcasts, setLoadingPodcasts] = useState(false);
 
   // Check eligibility on mount
   useEffect(() => {
@@ -137,7 +129,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
         }
 
         const result = await checkPodcastCreationEligibility(user.id);
-        
+
         setEligibility({
           canCreate: result.canCreate,
           hasSubscription: result.requirements.hasSubscription,
@@ -207,37 +199,6 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notesPage, documentsPage]);
 
-  // Fetch podcasts
-  useEffect(() => {
-    const fetchPodcasts = async (page: number) => {
-      setLoadingPodcasts(true);
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: fetchedPodcasts, error } = await supabase
-          .from('podcasts')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .range((page - 1) * 10, page * 10 - 1);
-
-        if (error) throw error;
-
-        if (fetchedPodcasts) {
-          setPodcasts(prev => [...prev, ...fetchedPodcasts]);
-          setHasMorePodcasts(fetchedPodcasts.length === 10);
-        }
-      } catch (error) {
-        console.error('Error fetching podcasts:', error);
-      } finally {
-        setLoadingPodcasts(false);
-      }
-    };
-
-    fetchPodcasts(currentPage);
-  }, [currentPage]);
-
   // Infinite scroll for notes/documents
   const notesScrollRef = React.useRef<HTMLDivElement>(null);
   const documentsScrollRef = React.useRef<HTMLDivElement>(null);
@@ -265,16 +226,16 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
   }, [notesHasMore, documentsHasMore]);
 
   const toggleNoteSelection = (noteId: string) => {
-    setLocalSelectedNoteIds(prev => 
-      prev.includes(noteId) 
+    setLocalSelectedNoteIds(prev =>
+      prev.includes(noteId)
         ? prev.filter(id => id !== noteId)
         : [...prev, noteId]
     );
   };
 
   const toggleDocumentSelection = (docId: string) => {
-    setLocalSelectedDocumentIds(prev => 
-      prev.includes(docId) 
+    setLocalSelectedDocumentIds(prev =>
+      prev.includes(docId)
         ? prev.filter(id => id !== docId)
         : [...prev, docId]
     );
@@ -337,7 +298,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
         ...availableDocuments.filter(d => localSelectedDocumentIds.includes(d.id)).map(d => d.title)
       ];
 
-      const prompt = selectedTitles.length > 0 
+      const prompt = selectedTitles.length > 0
         ? `A professional podcast cover for a show about ${selectedTitles.join(', ')}. Modern, clean, educational style, vibrant colors.`
         : "A professional educational podcast cover, modern design, vibrant colors, clean typography.";
 
@@ -385,7 +346,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           style,
           duration,
           podcastType,
-          cover_image_url: coverImage,        
+          cover_image_url: coverImage,
         }
       });
 
@@ -395,7 +356,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
       }
 
       const result = response.data;
-      
+
       if (!result) {
         throw new Error('No response data received from server');
       }
@@ -421,61 +382,437 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
     }
   };
 
-  // Fixing the undefined 'loadMorePodcasts' function
-  const loadMorePodcasts = () => {
-    if (hasMorePodcasts && !loadingPodcasts) {
-      setCurrentPage((prev) => prev + 1);
-    }
-  };
-    
   return (
-    <div className="bg-white dark:bg-slate-900 p-6 rounded-lg shadow-lg">
-      <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-purple-600" />
-              Generate AI Podcast
-            </DialogTitle>
-            <DialogDescription>
-              Create a conversational podcast from your selected content
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-purple-600" />
+            Generate AI Podcast
+          </DialogTitle>
+          <DialogDescription>
+            Create a conversational podcast from your selected content
+          </DialogDescription>
+        </DialogHeader>
 
-          <Suspense fallback={<div>Loading content...</div>}>
-            <LazyPodcastContent
-              selectedNoteIds={selectedNoteIds}
-              selectedDocumentIds={selectedDocumentIds}
-              onClose={onClose}
-              onPodcastGenerated={onPodcastGenerated}
-            />
-          </Suspense>
-
-          {/* Render podcasts */}
-          <div className="mt-4">
-            <h3 className="text-lg font-semibold">Your Podcasts</h3>
-            <div>
-              {podcasts.map(podcast => (
-                <div key={podcast.id} className="border-b py-2">
-                  <Link to={`/podcast/${podcast.id}`} className="text-blue-600 hover:underline truncate block max-w-full">
-                    {podcast.title}
-                  </Link>
-                  <p className="text-sm text-gray-500">{podcast.description}</p>
-                </div>
-              ))}
+        <div className="overflow-y-auto max-h-[calc(85vh-120px)] pr-2">
+          {checkingEligibility ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+              <span className="ml-2 text-sm text-muted-foreground">Checking eligibility...</span>
             </div>
-
-            {/* Load more button */}
-            {hasMorePodcasts && (
-              <div className="flex justify-center mt-4">
-                <Button onClick={loadMorePodcasts} disabled={loadingPodcasts}>
-                  {loadingPodcasts ? 'Loading...' : 'Load More Podcasts'}
+          ) : !eligibility?.canCreate ? (
+            <div className="space-y-4">
+              <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <h3 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
+                  Podcast Generation Requirements
+                </h3>
+                <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
+                  To generate AI podcasts, you need to meet one of the following:
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2 text-sm">
+                    {eligibility?.hasSubscription ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    )}
+                    <span className={eligibility?.hasSubscription ? 'text-green-700 dark:text-green-400' : 'text-yellow-800 dark:text-yellow-200'}>
+                      Active Scholar or Genius subscription
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm">
+                    {eligibility?.hasAchievements ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    )}
+                    <span className={eligibility?.hasAchievements ? 'text-green-700 dark:text-green-400' : 'text-yellow-800 dark:text-yellow-200'}>
+                      3+ badges AND (5+ notes OR 3+ quizzes completed)
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm">
+                    <Award className="h-5 w-5 text-purple-500 flex-shrink-0" />
+                    <span className="text-yellow-800 dark:text-yellow-200">
+                      Verified Creator badge
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button asChild className="flex-1">
+                  <Link to="/subscription">
+                    View Subscription Plans
+                  </Link>
+                </Button>
+                <Button variant="outline" onClick={onClose}>
+                  Close
                 </Button>
               </div>
-            )}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Content Selection */}
+              <div>
+                <Label className="text-sm font-medium mb-3 block">Select Content for Podcast</Label>
+
+                {loadingContent ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                    <span className="ml-2 text-sm text-muted-foreground">Loading your content...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Notes Selection */}
+                    {availableNotes.length > 0 && (
+                      <div className="border rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <FileText className="h-4 w-4 text-purple-600" />
+                          <Label className="text-sm font-medium">Notes ({availableNotes.length})</Label>
+                        </div>
+                        <ScrollArea className="h-[150px]" ref={notesScrollRef}>
+                          <div className="space-y-2">
+                            {availableNotes.map(note => (
+                              <div key={note.id} className="flex items-start space-x-2 p-2 rounded hover:bg-accent">
+                                <Checkbox
+                                  id={`note-${note.id}`}
+                                  checked={localSelectedNoteIds.includes(note.id)}
+                                  onCheckedChange={() => toggleNoteSelection(note.id)}
+                                />
+                                <label
+                                  htmlFor={`note-${note.id}`}
+                                  className="flex-1 text-sm cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                  <div className="font-medium">{note.title}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {new Date(note.updated_at).toLocaleDateString()}
+                                  </div>
+                                </label>
+                              </div>
+                            ))}
+                            {notesHasMore && (
+                              <div className="flex justify-center py-2">
+                                <Button size="sm" variant="outline" onClick={() => setNotesPage(p => p + 1)} disabled={loadingContent}>
+                                  {loadingContent ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Load More'}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    )}
+
+                    {/* Documents Selection */}
+                    {availableDocuments.length > 0 && (
+                      <div className="border rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <File className="h-4 w-4 text-blue-600" />
+                          <Label className="text-sm font-medium">Documents ({availableDocuments.length})</Label>
+                        </div>
+                        <ScrollArea className="h-[150px]" ref={documentsScrollRef}>
+                          <div className="space-y-2">
+                            {availableDocuments.map(doc => (
+                              <div key={doc.id} className="flex items-start space-x-2 p-2 rounded hover:bg-accent">
+                                <Checkbox
+                                  id={`doc-${doc.id}`}
+                                  checked={localSelectedDocumentIds.includes(doc.id)}
+                                  onCheckedChange={() => toggleDocumentSelection(doc.id)}
+                                />
+                                <label
+                                  htmlFor={`doc-${doc.id}`}
+                                  className="flex-1 text-sm cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                  <div className="font-medium">{doc.title}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {new Date(doc.updated_at).toLocaleDateString()}
+                                  </div>
+                                </label>
+                              </div>
+                            ))}
+                            {documentsHasMore && (
+                              <div className="flex justify-center py-2">
+                                <Button size="sm" variant="outline" onClick={() => setDocumentsPage(p => p + 1)} disabled={loadingContent}>
+                                  {loadingContent ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Load More'}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    )}
+
+                    {availableNotes.length === 0 && availableDocuments.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <p className="mb-2">No content available yet.</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            onClose?.();
+                            window.location.href = '/chat';
+                          }}
+                        >
+                          Create Notes in AI Chat
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Selection Summary */}
+                    {(localSelectedNoteIds.length > 0 || localSelectedDocumentIds.length > 0) && (
+                      <div className="flex items-center gap-2 text-sm bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <span className="text-green-900 dark:text-green-100">
+                          Selected: {localSelectedNoteIds.length} note{localSelectedNoteIds.length !== 1 ? 's' : ''}
+                          {localSelectedDocumentIds.length > 0 && (
+                            <> • {localSelectedDocumentIds.length} document{localSelectedDocumentIds.length !== 1 ? 's' : ''}</>
+                          )}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Info message if nothing selected */}
+                    {localSelectedNoteIds.length === 0 && localSelectedDocumentIds.length === 0 && (availableNotes.length > 0 || availableDocuments.length > 0) && (
+                      <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                        <Sparkles className="h-4 w-4 inline mr-2 text-blue-600" />
+                        No content selected. We'll use your 5 most recent notes to generate the podcast.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Selected Sources - Hidden now, replaced by selection above */}
+              {/* 
+          <div>
+            <Label className="text-sm font-medium mb-2 block">Selected Sources</Label>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              {selectedNoteIds.length} note{selectedNoteIds.length !== 1 ? 's' : ''}
+              {selectedDocumentIds.length > 0 && (
+                <>
+                  <span>•</span>
+                  {selectedDocumentIds.length} document{selectedDocumentIds.length !== 1 ? 's' : ''}
+                </>
+              )}
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+          */}
+
+              {/* Cover Image Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="text-sm font-medium block">Cover Image (Optional)</Label>
+                  {!coverImage && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs gap-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                      onClick={handleGenerateAiCover}
+                      disabled={isGeneratingAiCover || isUploadingImage}
+                    >
+                      {isGeneratingAiCover ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      Generate with AI
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-col gap-4">
+                  {coverImage ? (
+                    <div className="relative w-full aspect-video rounded-lg overflow-hidden border group">
+                      <img
+                        src={coverImage}
+                        alt="Podcast cover"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => setCoverImage(null)}
+                        className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center w-full">
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-accent/50 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          {isUploadingImage ? (
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                          ) : (
+                            <>
+                              <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
+                              <p className="text-sm text-muted-foreground">Click to upload cover image</p>
+                              <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                            </>
+                          )}
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          disabled={isUploadingImage || isGeneratingAiCover}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Podcast Type Selection */}
+              <div>
+                <Label className="text-sm font-medium mb-3 block">Podcast Type</Label>
+                <RadioGroup value={podcastType} onValueChange={(v) => setPodcastType(v as any)}>
+                  <div className="space-y-3">
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="audio" id="audio" />
+                      <div className="flex-1">
+                        <Label htmlFor="audio" className="cursor-pointer font-medium flex items-center gap-2">
+                          <Headphones className="h-4 w-4" />
+                          Audio Only
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Traditional audio podcast - perfect for listening on the go
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="image-audio" id="image-audio" />
+                      <div className="flex-1">
+                        <Label htmlFor="image-audio" className="cursor-pointer font-medium flex items-center gap-2">
+                          <ImageIcon className="h-4 w-4" />
+                          Image + Audio
+                          <Badge variant="secondary" className="text-xs">AI Generated</Badge>
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Audio with AI-generated visual illustrations for key concepts
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="video" id="video" />
+                      <div className="flex-1">
+                        <Label htmlFor="video" className="cursor-pointer font-medium flex items-center gap-2">
+                          <Video className="h-4 w-4" />
+                          Video Podcast
+                          <Badge variant="secondary" className="text-xs">AI Generated</Badge>
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Full video with animated visuals, slides, and dynamic content
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="live-stream" id="live-stream" />
+                      <div className="flex-1">
+                        <Label htmlFor="live-stream" className="cursor-pointer font-medium flex items-center gap-2">
+                          <Radio className="h-4 w-4 text-red-500" />
+                          Live AI Stream
+                          <Badge variant="destructive" className="text-xs">Premium</Badge>
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Real-time AI-powered video stream with interactive visuals
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Style Selection */}
+              <div>
+                <Label className="text-sm font-medium mb-3 block">Podcast Style</Label>
+                <RadioGroup value={style} onValueChange={(v) => setStyle(v as any)}>
+                  <div className="space-y-3">
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="casual" id="casual" />
+                      <div className="flex-1">
+                        <Label htmlFor="casual" className="cursor-pointer font-medium">
+                          Casual Chat
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Friendly conversation between two hosts, like chatting over coffee
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="educational" id="educational" />
+                      <div className="flex-1">
+                        <Label htmlFor="educational" className="cursor-pointer font-medium">
+                          Educational
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Informative discussion breaking down complex concepts clearly
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="deep-dive" id="deep-dive" />
+                      <div className="flex-1">
+                        <Label htmlFor="deep-dive" className="cursor-pointer font-medium">
+                          Deep Dive
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Analytical exploration of nuances and connections
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Duration Selection */}
+              <div>
+                <Label className="text-sm font-medium mb-3 block">Duration</Label>
+                <RadioGroup value={duration} onValueChange={(v) => setDuration(v as any)}>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="flex items-center space-x-2 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="short" id="short" />
+                      <Label htmlFor="short" className="cursor-pointer">
+                        5-7 min
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="medium" id="medium" />
+                      <Label htmlFor="medium" className="cursor-pointer">
+                        12-15 min
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                      <RadioGroupItem value="long" id="long" />
+                      <Label htmlFor="long" className="cursor-pointer">
+                        25-30 min
+                      </Label>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Generate Button */}
+              <Button
+                onClick={generatePodcast}
+                disabled={isGenerating || !eligibility?.canCreate}
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                size="lg"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Generating Podcast...
+                  </>
+                ) : (
+                  <>
+                    <Podcast className="mr-2 h-5 w-5" />
+                    Generate Podcast
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };

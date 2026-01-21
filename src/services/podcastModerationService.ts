@@ -113,7 +113,7 @@ export async function checkPodcastCreationEligibility(
       },
     };
   } catch (error) {
-    console.error('Error checking podcast eligibility:', error);
+    //console.error('Error checking podcast eligibility:', error);
     return {
       canCreate: false,
       reason: 'Unable to verify eligibility. Please try again.',

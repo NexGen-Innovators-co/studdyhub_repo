@@ -45,7 +45,7 @@ class OfflineStorage {
       };
 
       request.onerror = (event) => {
-        console.error('IndexedDB error:', (event.target as IDBOpenDBRequest).error);
+        //console.error('IndexedDB error:', (event.target as IDBOpenDBRequest).error);
         reject((event.target as IDBOpenDBRequest).error);
       };
     });
@@ -80,7 +80,7 @@ class OfflineStorage {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
-      
+
       const items = Array.isArray(data) ? data : [data];
       items.forEach(item => store.put(item));
 

@@ -41,10 +41,10 @@ const PAGE_SIZE = 20;
 export const usePodcasts = (activeTab: PodcastTab) => {
   return useInfiniteQuery({
     queryKey: ['podcasts', activeTab],
-    staleTime: 1000 * 60 * 30, // 30 mins - Data stays "fresh" (no background refetch)
-    gcTime: 1000 * 60 * 60, // 1 hour - Keep in cache even if component unmounts
-    refetchOnMount: false, // Don't refetch when mounting
-    refetchOnWindowFocus: false, // Don't refetch on window focus
+    staleTime: 1000 * 60 * 5, // 5 minutes stale time
+    gcTime: 1000 * 60 * 30, // 30 minutes cache time
+    refetchOnMount: true, // Refetch when component mounts to ensure fresh data
+    refetchOnWindowFocus: true, // Refetch on window focus
     queryFn: async ({ pageParam = 1 }) => {
       try {
         let query = supabase
@@ -53,9 +53,6 @@ export const usePodcasts = (activeTab: PodcastTab) => {
             id,
             user_id,
             title,
-            sources,
-            script,
-            audio_segments,
             duration_minutes,
             style,
             podcast_type,
@@ -68,8 +65,7 @@ export const usePodcasts = (activeTab: PodcastTab) => {
             description,
             tags,
             listen_count,
-            share_count,
-            visual_assets
+            share_count
           `)
           .eq('status', 'completed')
           .order('created_at', { ascending: false })
@@ -82,8 +78,8 @@ export const usePodcasts = (activeTab: PodcastTab) => {
           if (user) {
             query = query.eq('user_id', user.id);
           } else {
-             // If no user, return empty for my-podcasts
-             return [];
+            // If no user, return empty for my-podcasts
+            return [];
           }
         } else if (activeTab === 'live') {
           query = query.eq('is_live', true).eq('is_public', true);
@@ -98,14 +94,14 @@ export const usePodcasts = (activeTab: PodcastTab) => {
               // Note: Offline storage might return all podcasts, not paginated/filtered correctly
               // For simplicity, we return what we have. 
               // Ideally we should filter offline data too.
-              return offlinePodcasts; 
+              return offlinePodcasts;
             }
           }
           throw error;
         }
 
         if (!data || data.length === 0) {
-            return [];
+          return [];
         }
 
         // Fetch member counts for all podcasts
@@ -214,7 +210,5 @@ export const usePodcasts = (activeTab: PodcastTab) => {
     getNextPageParam: (lastPage, allPages) => {
       return lastPage.length === PAGE_SIZE ? allPages.length + 1 : undefined;
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
   });
 };

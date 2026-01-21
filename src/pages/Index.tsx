@@ -134,6 +134,12 @@ const Index = () => {
     handleDeleteMessage,
     handleRegenerateResponse,
     handleRetryFailedMessage,
+    handleInterruptMessage,
+    handlePauseGeneration,
+    handleResumeGeneration,
+    handleEditAndResendMessage,
+    handleSuggestAiCorrection,
+    streamingState,
   } = useMessageHandlers();
 
   const [externalDocuments, setExternalDocuments] = useState<Document[]>([]);
@@ -171,7 +177,7 @@ const Index = () => {
       };
       fetchDocs();
     }
-    
+
     // Always attempt to select the document if it's in the URL
     // We do this independently of fetching to ensure the UI state reflects the URL intent immediately
     if (documentId) {
@@ -432,6 +438,10 @@ const Index = () => {
     onRegenerateResponse: handleRegenerateResponse,
     isSubmittingUserMessage,
     onRetryFailedMessage: handleRetryFailedMessage,
+    onResumeGeneration: handleResumeGeneration,
+    onEditAndResendMessage: handleEditAndResendMessage,
+    onSuggestAiCorrection: handleSuggestAiCorrection,
+    streamingState,
     hasMoreMessages,
     onLoadOlderMessages: handleLoadOlderChatMessages,
     isLoadingSessionMessages,
@@ -530,7 +540,7 @@ const Index = () => {
       // Small delay to ensure service worker is registered
       const timer = setTimeout(() => {
         initializePushNotifications().catch(error => {
-          console.error('Failed to initialize push notifications:', error);
+          //console.error('Failed to initialize push notifications:', error);
         });
       }, 1000);
 
@@ -713,12 +723,12 @@ const Index = () => {
         </nav>
       )}
 
-      <MobileMenu 
-        isOpen={isMobileMenuOpen} 
-        onClose={() => setIsMobileMenuOpen(false)} 
+      <MobileMenu
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
         onNavigate={(tab) => {
-            handleNavigateToTab(tab);
-            setIsMobileMenuOpen(false);
+          handleNavigateToTab(tab);
+          setIsMobileMenuOpen(false);
         }}
         activeTab={currentActiveTab}
       />

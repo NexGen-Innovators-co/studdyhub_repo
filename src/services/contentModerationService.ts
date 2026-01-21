@@ -28,7 +28,7 @@ export async function moderateContent(
 ): Promise<ContentModerationResult> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    
+
     if (!session) {
       throw new Error('Authentication required');
     }
@@ -48,7 +48,7 @@ export async function moderateContent(
 
     return response.data as ContentModerationResult;
   } catch (error: any) {
-    console.error('Content moderation error:', error);
+    //console.error('Content moderation error:', error);
     throw error;
   }
 }
@@ -89,7 +89,7 @@ export async function checkUserModerationStatus(userId: string): Promise<{
       canPost
     };
   } catch (error) {
-    console.error('Error checking moderation status:', error);
+    //console.error('Error checking moderation status:', error);
     return { flagged: false, recentRejections: 0, canPost: true };
   }
 }
@@ -149,7 +149,7 @@ export async function getModerationStats(days: number = 7) {
       categoryDistribution: categoryStats
     };
   } catch (error) {
-    console.error('Error fetching moderation stats:', error);
+    //console.error('Error fetching moderation stats:', error);
     return {
       total: 0,
       approved: 0,
@@ -184,7 +184,7 @@ export async function appealModeration(
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error submitting appeal:', error);
+    //console.error('Error submitting appeal:', error);
     throw error;
   }
 }

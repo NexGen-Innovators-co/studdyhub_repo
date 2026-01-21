@@ -12,7 +12,7 @@ const mdProcessor = unified()
   .use(remarkRehype)
   .use(rehypeStringify);
 
-const turndown = new TurndownService({ 
+const turndown = new TurndownService({
   headingStyle: 'atx',
   codeBlockStyle: 'fenced'
 });
@@ -55,34 +55,34 @@ export const convertMarkdownToHtml = (markdown: string): string => {
       if (className.includes('language-chartjs') || text.trim().startsWith('{"type":') || text.includes('"datasets"')) {
         const chartDiv = document.createElement('div');
         chartDiv.setAttribute('data-chartjs', '');
-        
+
         let finalConfig = text.trim();
         let height = '400px';
-        
+
         const heightMatch = finalConfig.match(/^\/\/ height: ([\w\d]+px)/);
         if (heightMatch) {
           height = heightMatch[1];
           finalConfig = finalConfig.replace(/^\/\/ height: [\w\d]+px\n?/, '');
         }
-        
+
         chartDiv.setAttribute('data-config', finalConfig);
         chartDiv.setAttribute('data-height', height);
         parent.replaceWith(chartDiv);
-      } 
+      }
       // Check for Mermaid
       else if (className.includes('language-mermaid') || text.trim().startsWith('graph ') || text.trim().startsWith('sequenceDiagram') || text.trim().startsWith('gantt')) {
         const mermaidDiv = document.createElement('div');
         mermaidDiv.setAttribute('data-mermaid', '');
-        
+
         let finalCode = text.trim();
         let height = '300px';
-        
+
         const heightMatch = finalCode.match(/^%% height: ([\w\d]+px)/);
         if (heightMatch) {
           height = heightMatch[1];
           finalCode = finalCode.replace(/^%% height: [\w\d]+px\n?/, '');
         }
-        
+
         mermaidDiv.setAttribute('data-code', finalCode);
         mermaidDiv.setAttribute('data-height', height);
         parent.replaceWith(mermaidDiv);
@@ -91,16 +91,16 @@ export const convertMarkdownToHtml = (markdown: string): string => {
       else if (className.includes('language-dot') || className.includes('language-graphviz') || text.trim().startsWith('digraph ') || text.trim().startsWith('graph {')) {
         const dotDiv = document.createElement('div');
         dotDiv.setAttribute('data-dot', '');
-        
+
         let finalCode = text.trim();
         let height = '300px';
-        
+
         const heightMatch = finalCode.match(/^\/\* height: ([\w\d]+px) \*\//);
         if (heightMatch) {
           height = heightMatch[1];
           finalCode = finalCode.replace(/^\/\* height: [\w\d]+px \*\/ \n?/, '');
         }
-        
+
         dotDiv.setAttribute('data-code', finalCode);
         dotDiv.setAttribute('data-height', height);
         parent.replaceWith(dotDiv);
@@ -109,7 +109,7 @@ export const convertMarkdownToHtml = (markdown: string): string => {
 
     return tempDiv.innerHTML;
   } catch (error) {
-    console.error('Error converting markdown to HTML:', error);
+    //console.error('Error converting markdown to HTML:', error);
     return markdown;
   }
 };
@@ -156,7 +156,7 @@ export const convertHtmlToMarkdown = (html: string): string => {
 
     return turndown.turndown(tempDiv.innerHTML);
   } catch (error) {
-    console.error('Error converting HTML to markdown:', error);
+    //console.error('Error converting HTML to markdown:', error);
     return html;
   }
 };

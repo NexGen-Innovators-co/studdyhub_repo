@@ -60,7 +60,7 @@ export const transcribeAudio = async (
       duration: data.duration
     };
   } catch (error: any) {
-    console.error('Error transcribing audio:', error);
+    //console.error('Error transcribing audio:', error);
     throw new Error(`Transcription failed: ${error.message || 'Unknown error'}`);
   }
 };
@@ -109,7 +109,7 @@ Format the script with:
 
     return data?.response || transcript;
   } catch (error) {
-    console.error('Error generating script:', error);
+    //console.error('Error generating script:', error);
     // Return original transcript if formatting fails
     return transcript;
   }
@@ -144,7 +144,7 @@ export const transcribeLivePodcast = async (
     });
 
     if (error) {
-      console.error('Transcription error:', error);
+      //console.error('Transcription error:', error);
       throw error;
     }
 
@@ -166,7 +166,7 @@ export const transcribeLivePodcast = async (
       summary: data.summary || 'Live podcast recording'
     };
   } catch (error: any) {
-    console.error('Error in live podcast transcription:', error);
+    //console.error('Error in live podcast transcription:', error);
     throw new Error(`Transcription failed: ${error.message || 'Unknown error'}`);
   }
 };

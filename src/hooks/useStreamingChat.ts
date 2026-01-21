@@ -7,6 +7,7 @@ import { supabaseUrl } from '@/integrations/supabase/client';
 
 interface StreamingState {
   isStreaming: boolean;
+  isPaused: boolean;
   error: string | null;
   currentMessageId: string | null;
 }
@@ -21,6 +22,8 @@ interface StreamingChatHook {
   streamingState: StreamingState;
   startStreaming: (params: StreamingParams) => Promise<void>;
   stopStreaming: () => void;
+  pauseStreaming: () => void;
+  resumeStreaming: () => void;
   accumulatedDataRef: React.MutableRefObject<StreamedData>;
 }
 
@@ -40,7 +43,7 @@ interface StreamingParams {
   aiMessageIdToUpdate?: string | null;
   onThinkingStep: (step: ThinkingStep) => void;
   onContentChunk: (chunk: string) => void;
-  onComplete: (finalMessage: Message) => void;
+  onComplete: (finalMessage: any) => void; // Changed to any to match backend response
   onError: (error: string) => void;
 }
 
@@ -51,11 +54,14 @@ interface StreamingParams {
 export const useStreamingChat = (): StreamingChatHook => {
   const [streamingState, setStreamingState] = useState<StreamingState>({
     isStreaming: false,
+    isPaused: false,
     error: null,
     currentMessageId: null,
   });
 
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isPausedRef = useRef<boolean>(false);
+  const bufferRef = useRef<{ type: string; data: any }[]>([]);
   const accumulatedDataRef = useRef<StreamedData>({
     thinkingSteps: [],
     content: '',
@@ -63,29 +69,53 @@ export const useStreamingChat = (): StreamingChatHook => {
   });
 
   const stopStreaming = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
-    setStreamingState({
+    setStreamingState(prev => ({
+      ...prev,
       isStreaming: false,
+      isPaused: false,
       error: null,
       currentMessageId: null,
-    });
-    accumulatedDataRef.current = {
-      thinkingSteps: [],
-      content: '',
-      isDone: false,
-    };
+    }));
+    isPausedRef.current = false;
+    bufferRef.current = [];
+    // Note: We don't reset accumulatedDataRef here because onComplete might need it
+  }, []);
+
+  const pauseStreaming = useCallback(() => {
+    setStreamingState(prev => ({ ...prev, isPaused: true }));
+    isPausedRef.current = true;
+  }, []);
+
+  const resumeStreaming = useCallback(() => {
+    setStreamingState(prev => ({ ...prev, isPaused: false }));
+    isPausedRef.current = false;
+
+    // Process buffered data
+    if (bufferRef.current.length > 0) {
+      // We don't have direct access to the callbacks here easily without a complex setup
+      // but the main loop in startStreaming will handle it if we check isPausedRef
+    }
   }, []);
 
   const startStreaming = useCallback(async (params: StreamingParams) => {
+    // Stop any existing stream
+    stopStreaming();
+
     // Reset accumulated data
     accumulatedDataRef.current = {
       thinkingSteps: [],
       content: '',
       isDone: false,
     };
+
+    abortControllerRef.current = new AbortController();
+    isPausedRef.current = false;
+    bufferRef.current = [];
+
     try {
       // Get the session for authentication
       const { data: { session }, error: authError } = await supabase.auth.getSession();
@@ -95,11 +125,8 @@ export const useStreamingChat = (): StreamingChatHook => {
 
       // Build the URL for the edge function with streaming enabled
       const functionUrl = `${supabaseUrl}/functions/v1/gemini-chat`;
-      
-      // Create URL with query parameters for authentication
       const url = new URL(functionUrl);
-      
-      // Prepare the request body
+
       const requestBody = {
         ...params,
         enableStreaming: true,
@@ -107,12 +134,11 @@ export const useStreamingChat = (): StreamingChatHook => {
 
       setStreamingState({
         isStreaming: true,
+        isPaused: false,
         error: null,
         currentMessageId: params.aiMessageIdToUpdate || null,
       });
 
-      // Use fetch with streaming instead of EventSource (EventSource doesn't support POST)
-      
       const response = await fetch(url.toString(), {
         method: 'POST',
         headers: {
@@ -120,93 +146,63 @@ export const useStreamingChat = (): StreamingChatHook => {
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(requestBody),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ [Streaming] Request failed:', response.status, errorText);
         throw new Error(`Streaming failed (${response.status}): ${errorText || response.statusText}`);
       }
 
       if (!response.body) {
         throw new Error('Response body is null');
       }
-      
-      
-      // Check if this is actually a streaming response
+
       const contentType = response.headers.get('content-type');
       if (!contentType?.includes('text/event-stream')) {
-        console.warn('⚠️ [Streaming] Response is not SSE, falling back to regular mode');
-        toast.info('Streaming not available - using fast mode', {
-          description: 'The edge function may need to be updated for streaming support'
-        });
-        // Response is not SSE, treat as regular JSON
+        //console.warn('⚠️ [Streaming] Response is not SSE, falling back to regular mode');
         const data = await response.json();
         if (data.response) {
-          // Simulate immediate completion
           params.onContentChunk(data.response);
-          const finalMessage: Message = {
-            id: data.aiMessageId || uuidv4(),
-            content: data.response,
-            role: 'assistant',
-            timestamp: data.timestamp || new Date().toISOString(),
-            isError: false,
-            attachedDocumentIds: [],
-            attachedNoteIds: [],
-            session_id: params.sessionId,
-            has_been_displayed: false,
-            thinking_steps: [],
-            isStreaming: false,
-          };
-          params.onComplete(finalMessage);
+          params.onComplete(data);
           stopStreaming();
           return;
         }
         throw new Error('Invalid response format');
       }
 
-      // Read the stream
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let eventCount = 0;
       let lastEventTime = Date.now();
-      const STREAM_TIMEOUT = 60000; // 60 seconds
+      const STREAM_TIMEOUT = 60000;
 
-      // Set up timeout watcher
       const timeoutCheck = setInterval(() => {
         const timeSinceLastEvent = Date.now() - lastEventTime;
         if (timeSinceLastEvent > STREAM_TIMEOUT) {
-          console.error('⏱️ [Streaming] Timeout - no events for 60s');
-          reader.cancel();
+          //console.error('⏱️ [Streaming] Timeout - no events for 60s');
+          if (abortControllerRef.current) abortControllerRef.current.abort();
         }
       }, 5000);
 
       try {
         while (true) {
+          // Check for abortion
+          if (abortControllerRef.current?.signal.aborted) break;
+
           const { done, value } = await reader.read();
-          
-          if (done) {
-            break;
-          }
+          if (done) break;
 
           lastEventTime = Date.now();
-
-          // Decode the chunk and add to buffer
           const chunk = decoder.decode(value, { stream: true });
           buffer += chunk;
 
-          // Process complete SSE events (separated by double newlines)
           const events = buffer.split('\n\n');
-          buffer = events.pop() || ''; // Keep incomplete event in buffer
+          buffer = events.pop() || '';
 
           for (const event of events) {
             if (!event.trim()) continue;
-            eventCount++;
 
-            // Parse SSE format - handle both formats:
-            // Format 1: "event: type\ndata: json"
-            // Format 2: "data: {"type":"...","data":{...}}"
             const lines = event.split('\n');
             let eventType = '';
             let eventData = '';
@@ -219,7 +215,6 @@ export const useStreamingChat = (): StreamingChatHook => {
               }
             }
 
-            // If no explicit event type, try parsing the data to get type
             if (!eventType && eventData) {
               try {
                 const parsed = JSON.parse(eventData);
@@ -227,10 +222,7 @@ export const useStreamingChat = (): StreamingChatHook => {
                   eventType = parsed.type;
                   eventData = JSON.stringify(parsed.data || parsed);
                 }
-              } catch {
-                // Not JSON, skip
-                continue;
-              }
+              } catch { continue; }
             }
 
             if (!eventType || !eventData) continue;
@@ -238,78 +230,67 @@ export const useStreamingChat = (): StreamingChatHook => {
             try {
               const data = JSON.parse(eventData);
 
+              // PAUSE LOGIC: If paused, wait before proceeding
+              while (isPausedRef.current) {
+                await new Promise(r => setTimeout(r, 100));
+                if (abortControllerRef.current?.signal.aborted) break;
+              }
+
+              if (abortControllerRef.current?.signal.aborted) break;
+
               switch (eventType) {
                 case 'thinking_step':
-                  // New thinking step received
-                  const thinkingStep = data as ThinkingStep;
-                  accumulatedDataRef.current.thinkingSteps.push(thinkingStep);
-                  params.onThinkingStep(thinkingStep);
+                  accumulatedDataRef.current.thinkingSteps.push(data);
+                  params.onThinkingStep(data);
                   break;
-
                 case 'content':
-                  // Content chunk received
                   accumulatedDataRef.current.content += data.chunk;
                   params.onContentChunk(data.chunk);
                   break;
-
                 case 'done':
-                  // Stream complete
                   accumulatedDataRef.current.isDone = true;
-                  // Pass the raw backend data which includes userMessageId, aiMessageId, etc.
                   params.onComplete(data);
                   clearInterval(timeoutCheck);
                   stopStreaming();
-                  return;
-
+                  return; // Important: loop ends successfully
                 case 'error':
-                  // Error received from backend
-                  console.error('❌ [Streaming] Backend error:', data);
-                  const errorMsg = data.message || data.error || JSON.stringify(data) || 'Unknown streaming error';
-                  throw new Error(`Backend error: ${errorMsg}`);
+                  throw new Error(`Backend error: ${data.message || 'Unknown streaming error'}`);
               }
-            } catch (parseError) {
-              console.error('❌ [Streaming] Error parsing SSE event:', parseError, 'Event data:', eventData);
+            } catch (e) {
+              //console.error('❌ [Streaming] Event processing error:', e);
             }
           }
         }
       } finally {
         clearInterval(timeoutCheck);
+        reader.releaseLock();
       }
 
-      // If we reach here without a 'done' event, handle gracefully
+      // Handle cases where loop ends without 'done' event (like abortion or natural end)
       if (!accumulatedDataRef.current.isDone) {
-        console.warn('⚠️ [Streaming] Stream ended without done event');
-
-        // If we have content, treat as success (graceful degradation)
         if (accumulatedDataRef.current.content || accumulatedDataRef.current.thinkingSteps.length > 0) {
-          const messageId = uuidv4();
-          const finalMessage: Message = {
-            id: messageId,
-            content: accumulatedDataRef.current.content || 'Response generation was interrupted.',
-            role: 'assistant',
-            timestamp: new Date().toISOString(),
-            isError: false,
-            attachedDocumentIds: [],
-            attachedNoteIds: [],
-            session_id: params.sessionId,
-            has_been_displayed: false,
-            thinking_steps: accumulatedDataRef.current.thinkingSteps,
-            isStreaming: false,
-          };
-          params.onComplete(finalMessage);
-          stopStreaming();
-          return;
+          // INTERRUPTED but has data - act as if complete with what we have
+          params.onComplete({
+            response: accumulatedDataRef.current.content,
+            thinkingSteps: accumulatedDataRef.current.thinkingSteps,
+            interrupted: true
+          });
         }
-
-        throw new Error('Stream ended unexpectedly without any data. The edge function may not be configured for streaming.');
+        stopStreaming();
       }
 
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown streaming error';
-      console.error('❌ [Streaming] Fatal error:', error);
-      
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        //console.log('🛑 [Streaming] Stream aborted by user');
+        return;
+      }
+
+      const errorMessage = error.message || 'Unknown streaming error';
+      //console.error('❌ [Streaming] Fatal error:', error);
+
       setStreamingState({
         isStreaming: false,
+        isPaused: false,
         error: errorMessage,
         currentMessageId: null,
       });
@@ -323,6 +304,8 @@ export const useStreamingChat = (): StreamingChatHook => {
     streamingState,
     startStreaming,
     stopStreaming,
+    pauseStreaming,
+    resumeStreaming,
     accumulatedDataRef,
   };
 };

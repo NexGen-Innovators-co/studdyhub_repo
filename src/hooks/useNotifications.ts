@@ -21,9 +21,9 @@ export function useNotifications() {
     if (!user) return;
 
     if (!navigator.onLine) {
-       console.log("Offline: Skipping notification fetch");
-       setLoading(false);
-       return;
+      //console.log("Offline: Skipping notification fetch");
+      setLoading(false);
+      return;
     }
 
     try {
@@ -35,11 +35,11 @@ export function useNotifications() {
         .limit(50);
 
       if (error) throw error;
-      
+
       setNotifications(data || []);
       setUnreadCount(data?.filter(n => !n.read).length || 0);
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      //console.error('Error fetching notifications:', error);
       toast.error('Failed to load notifications');
     }
   }, [user]);
@@ -49,8 +49,8 @@ export function useNotifications() {
     if (!user) return;
 
     if (!navigator.onLine) {
-       console.log("Offline: Skipping preferences fetch");
-       return;
+      //console.log("Offline: Skipping preferences fetch");
+      return;
     }
 
     try {
@@ -61,7 +61,7 @@ export function useNotifications() {
         .maybeSingle();
 
       if (error) throw error;
-      
+
       if (data) {
         setPreferences(data);
       } else {
@@ -86,7 +86,7 @@ export function useNotifications() {
         setPreferences(newPrefs);
       }
     } catch (error) {
-      console.error('Error fetching preferences:', error);
+      //console.error('Error fetching preferences:', error);
     }
   }, [user]);
 
@@ -111,7 +111,7 @@ export function useNotifications() {
       }
       return false;
     } catch (error) {
-      console.error('Error subscribing to push notifications:', error);
+      //console.error('Error subscribing to push notifications:', error);
       toast.error('Failed to enable push notifications');
       return false;
     }
@@ -130,7 +130,7 @@ export function useNotifications() {
       }
       return false;
     } catch (error) {
-      console.error('Error unsubscribing from push notifications:', error);
+      //console.error('Error unsubscribing from push notifications:', error);
       toast.error('Failed to disable push notifications');
       return false;
     }
@@ -154,7 +154,7 @@ export function useNotifications() {
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      //console.error('Error marking notification as read:', error);
       toast.error('Failed to update notification');
     }
   }, [user]);
@@ -176,7 +176,7 @@ export function useNotifications() {
       setUnreadCount(0);
       toast.success('All notifications marked as read');
     } catch (error) {
-      console.error('Error marking all as read:', error);
+      //console.error('Error marking all as read:', error);
       toast.error('Failed to update notifications');
     }
   }, [user]);
@@ -200,7 +200,7 @@ export function useNotifications() {
         return notification && !notification.read ? prev - 1 : prev;
       });
     } catch (error) {
-      console.error('Error deleting notification:', error);
+      //console.error('Error deleting notification:', error);
       toast.error('Failed to delete notification');
     }
   }, [user, notifications]);
@@ -224,7 +224,7 @@ export function useNotifications() {
       setPreferences(data);
       toast.success('Notification preferences updated');
     } catch (error) {
-      console.error('Error updating preferences:', error);
+      //console.error('Error updating preferences:', error);
       toast.error('Failed to update preferences');
     }
   }, [user, preferences]);
@@ -251,7 +251,7 @@ export function useNotifications() {
       }
 
       if (!navigator.onLine) {
-        console.log("Offline: Skipping notification initialization");
+        //console.log("Offline: Skipping notification initialization");
         setLoading(false);
         return;
       }
@@ -285,7 +285,7 @@ export function useNotifications() {
         },
         (payload) => {
           const newNotification = payload.new as Notification;
-          
+
           setNotifications(prev => [newNotification, ...prev]);
           setUnreadCount(prev => prev + 1);
 
@@ -330,7 +330,7 @@ export function useNotifications() {
               }
             }
           });
-          
+
           // Show browser notification if enabled
           if (preferences?.push_notifications && isSubscribed) {
             pushNotificationService.showLocalNotification({

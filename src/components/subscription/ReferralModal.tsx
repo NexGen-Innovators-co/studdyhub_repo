@@ -36,7 +36,7 @@ const ensureReferralCode = async (userId: string): Promise<string | null> => {
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching profile:', fetchError);
+      //console.error('Error fetching profile:', fetchError);
       return null;
     }
 
@@ -65,7 +65,7 @@ const ensureReferralCode = async (userId: string): Promise<string | null> => {
         .maybeSingle();
 
       if (codeCheckError) {
-        console.error('Error checking referral code:', codeCheckError);
+        //console.error('Error checking referral code:', codeCheckError);
         break;
       }
 
@@ -82,7 +82,7 @@ const ensureReferralCode = async (userId: string): Promise<string | null> => {
           .eq('id', userId);
 
         if (updateError) {
-          console.error('Error updating referral code:', updateError);
+          //console.error('Error updating referral code:', updateError);
           return null;
         }
 
@@ -104,13 +104,13 @@ const ensureReferralCode = async (userId: string): Promise<string | null> => {
       .eq('id', userId);
 
     if (updateError) {
-      console.error('Error updating fallback referral code:', updateError);
+      //console.error('Error updating fallback referral code:', updateError);
       return null;
     }
 
     return fallbackCode;
   } catch (error) {
-    console.error('Error ensuring referral code:', error);
+    //console.error('Error ensuring referral code:', error);
     return null;
   }
 };
@@ -210,7 +210,7 @@ export function ReferralModal({ open, onOpenChange }: ReferralModalProps) {
         .single();
 
       if (profileError) {
-        console.error('Error fetching profile data:', profileError);
+        //console.error('Error fetching profile data:', profileError);
         // If there's an error, use the code we just generated
         if (code) {
           // The code was generated, but we couldn't fetch the count
@@ -239,7 +239,7 @@ export function ReferralModal({ open, onOpenChange }: ReferralModalProps) {
       }
 
     } catch (error) {
-      console.error('Error in fetchReferralData:', error);
+      //console.error('Error in fetchReferralData:', error);
       toast.error('Failed to load referral data');
     } finally {
       setIsLoading(false);
@@ -298,7 +298,7 @@ export function ReferralModal({ open, onOpenChange }: ReferralModalProps) {
         toast.error('Failed to generate referral code');
       }
     } catch (error) {
-      console.error('Error generating referral code:', error);
+      //console.error('Error generating referral code:', error);
       toast.error('Failed to generate referral code');
     } finally {
       setIsGeneratingCode(false);

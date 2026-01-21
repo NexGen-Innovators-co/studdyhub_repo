@@ -16,7 +16,7 @@ export async function initializePushNotifications(): Promise<boolean> {
   if (initializationAttempted) {
     return false;
   }
-  
+
   initializationAttempted = true;
 
   try {
@@ -50,7 +50,7 @@ export async function initializePushNotifications(): Promise<boolean> {
 
     // Check current permission status
     const permission = await Notification.permission;
-    
+
     if (permission === 'granted') {
       // Auto-subscribe if permission already granted
       await pushService.subscribe(user.id);
@@ -62,7 +62,7 @@ export async function initializePushNotifications(): Promise<boolean> {
       return false;
     }
   } catch (error) {
-    console.error('Error initializing push notifications:', error);
+    //console.error('Error initializing push notifications:', error);
     return false;
   }
 }
@@ -74,7 +74,7 @@ export async function initializePushNotifications(): Promise<boolean> {
 export async function requestNotificationPermission(): Promise<boolean> {
   try {
     const permission = await Notification.requestPermission();
-    
+
     if (permission === 'granted') {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -87,7 +87,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
       return false;
     }
   } catch (error) {
-    console.error('❌ [Init] Error requesting notification permission:', error);
+    //console.error('❌ [Init] Error requesting notification permission:', error);
     return false;
   }
   return false;

@@ -35,7 +35,7 @@ export const fixDiagram = async (request: DiagramFixRequest): Promise<DiagramFix
       suggestions: data.suggestions || ['Try simplifying the content', 'Check for syntax errors']
     };
   } catch (error) {
-    //console.error('Error fixing diagram:', error);
+    ////console.error('Error fixing diagram:', error);
 
     // Fallback fixes based on diagram type
     return generateFallbackFix(request);

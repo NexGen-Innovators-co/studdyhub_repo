@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '../components/ui/button';
-import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, ChevronLeft, ChevronRight, Loader2, Mic, MessageSquare, Brain, LayoutDashboard } from 'lucide-react';
+import { Sparkles, ArrowRight, Play, Shield, Globe, Award, Users, FileText, TrendingUp, Star, Zap, ChevronLeft, ChevronRight, Loader2, Mic, MessageSquare, Brain, LayoutDashboard, ArrowUp } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { AppLayout, ContentContainer } from '../components/layout/LayoutComponents'
 // Update src/pages/LandingPage.tsx - Add this after features section
@@ -77,8 +77,22 @@ const LandingPage: React.FC = () => {
     userRating: '0/5',
   });
   const [loadingStats, setLoadingStats] = useState(true);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const carouselRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // Handle scroll-to-top button visibility
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const featureInterval = setInterval(() => {
@@ -271,7 +285,7 @@ const LandingPage: React.FC = () => {
         >
           Your browser does not support the video tag.
         </video>
-        
+
         {/* Overlay gradient for better text readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/80 dark:from-black/30 dark:to-black/80 pointer-events-none" />
 
@@ -288,7 +302,7 @@ const LandingPage: React.FC = () => {
             />
           </motion.div>
 
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
@@ -298,7 +312,7 @@ const LandingPage: React.FC = () => {
             <span>Intelligent Learning, Simplified</span>
           </motion.div>
 
-          <motion.h1 
+          <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.6 }}
@@ -307,7 +321,7 @@ const LandingPage: React.FC = () => {
             Transform Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">Academic Journey</span>
           </motion.h1>
 
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.6 }}
@@ -317,7 +331,7 @@ const LandingPage: React.FC = () => {
             Elevate how you take notes, record ideas, and manage your academic life with cutting-edge AI.
           </motion.p>
 
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5, duration: 0.6 }}
@@ -335,7 +349,7 @@ const LandingPage: React.FC = () => {
             </a>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.8, duration: 1 }}
@@ -366,7 +380,7 @@ const LandingPage: React.FC = () => {
               <p className="ml-4 text-gray-600 dark:text-gray-400">Loading stats...</p>
             </div>
           ) : (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
@@ -410,7 +424,7 @@ const LandingPage: React.FC = () => {
       <section id="features" className="py-20 md:py-24 bg-gray-50/50 dark:bg-gray-950/50">
         <ContentContainer>
           <div className="text-center mb-16 space-y-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -419,7 +433,7 @@ const LandingPage: React.FC = () => {
               <Zap className="h-4 w-4" />
               <span>Core Capabilities</span>
             </motion.div>
-            <motion.h2 
+            <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -428,7 +442,7 @@ const LandingPage: React.FC = () => {
             >
               Everything You Need to <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">Thrive</span>
             </motion.h2>
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -515,7 +529,7 @@ const LandingPage: React.FC = () => {
       <section id="testimonials" className="py-20 md:py-24 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
         <ContentContainer>
           <div className="text-center mb-16 space-y-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
@@ -524,7 +538,7 @@ const LandingPage: React.FC = () => {
               <Star className="h-4 w-4 text-yellow-500" />
               <span>Trusted by Our Community</span>
             </motion.div>
-            <motion.h2 
+            <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -533,17 +547,17 @@ const LandingPage: React.FC = () => {
             >
               What Our <span className="text-blue-600 dark:text-blue-400">Users Say</span>
             </motion.h2>
-            <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.2 }}
-            className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed"
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed"
             >
               Hear directly from students and professionals who are transforming their productivity with StuddyHub AI.
             </motion.p>
           </div>
-          
+
           <div className="relative max-w-5xl mx-auto px-4 sm:px-12">
             {/* Background Decorations for Immersiveness */}
             <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -575,7 +589,7 @@ const LandingPage: React.FC = () => {
                           ))}
                         </div>
                         <blockquote className="text-xl md:text-2xl font-medium text-gray-800 dark:text-gray-200 leading-relaxed italic mb-6">
-                            "{testimonial.content}"
+                          "{testimonial.content}"
                         </blockquote>
                         <div>
                           <div className="font-bold text-lg text-gray-900 dark:text-white flex items-center justify-center md:justify-start gap-2">
@@ -637,7 +651,7 @@ const LandingPage: React.FC = () => {
 
         <ContentContainer className="relative z-10">
           <div className="max-w-4xl mx-auto text-center space-y-8">
-            <motion.h2 
+            <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -645,7 +659,7 @@ const LandingPage: React.FC = () => {
             >
               Ready to <span className="text-yellow-300 inline-block transform hover:scale-105 transition-transform duration-300 cursor-default">Elevate</span> Your Learning?
             </motion.h2>
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -654,7 +668,7 @@ const LandingPage: React.FC = () => {
             >
               Join thousands of students and professionals who've revolutionized their productivity with StuddyHub AI.
             </motion.p>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
@@ -670,6 +684,33 @@ const LandingPage: React.FC = () => {
           </div>
         </ContentContainer>
       </section>
+
+      {/* Scroll to Top Button */}
+      {showScrollTop && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8, y: 20 }}
+          animate={{
+            opacity: 1,
+            scale: 1,
+            y: 0,
+          }}
+          exit={{ opacity: 0, scale: 0.8, y: 20 }}
+          whileHover={{
+            scale: 1.1,
+            y: -5,
+            boxShadow: "0 20px 40px rgba(59, 130, 246, 0.4)"
+          }}
+          whileTap={{ scale: 0.95 }}
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 z-50 p-4 bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-full shadow-2xl transition-all duration-300"
+          style={{
+            boxShadow: "0 10px 30px rgba(59, 130, 246, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1) inset"
+          }}
+          aria-label="Scroll to top"
+        >
+          <ArrowUp className="h-6 w-6" />
+        </motion.button>
+      )}
     </AppLayout >
   );
 };

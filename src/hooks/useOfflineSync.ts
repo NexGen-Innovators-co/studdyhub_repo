@@ -10,7 +10,7 @@ export const useOfflineSync = (refreshData: () => void) => {
   const syncPendingChanges = useCallback(async () => {
     const pendingSync = await offlineStorage.getPendingSync();
     if (pendingSync.length === 0) return;
-    
+
     // Sort by timestamp to maintain order
     const sortedSync = [...pendingSync].sort((a, b) => a.timestamp - b.timestamp);
     let syncedCount = 0;
@@ -54,7 +54,7 @@ export const useOfflineSync = (refreshData: () => void) => {
           error = updateError;
         } else if (action === 'delete') {
           let query = supabase.from(tableName).delete();
-          
+
           if (tableName === 'social_likes' || tableName === 'social_bookmarks') {
             query = query.eq('post_id', data.post_id).eq('user_id', data.user_id);
           } else if (tableName === 'podcast_listeners') {
@@ -62,7 +62,7 @@ export const useOfflineSync = (refreshData: () => void) => {
           } else {
             query = query.eq('id', data.id);
           }
-          
+
           const { error: deleteError } = await query;
           error = deleteError;
         }
@@ -71,10 +71,10 @@ export const useOfflineSync = (refreshData: () => void) => {
           await offlineStorage.removePendingSync(item.id);
           syncedCount++;
         } else {
-          console.error(`Failed to sync item ${item.id}:`, error);
+          //console.error(`Failed to sync item ${item.id}:`, error);
         }
       } catch (err) {
-        console.error(`Error syncing item ${item.id}:`, err);
+        //console.error(`Error syncing item ${item.id}:`, err);
       }
     }
 
@@ -90,7 +90,7 @@ export const useOfflineSync = (refreshData: () => void) => {
     };
 
     window.addEventListener('online', handleOnline);
-    
+
     // Initial check
     if (navigator.onLine) {
       syncPendingChanges();

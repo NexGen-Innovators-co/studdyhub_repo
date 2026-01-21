@@ -109,8 +109,8 @@ export function useSubscription(): UseSubscriptionReturn {
     }
 
     if (!navigator.onLine) {
-       setIsLoading(false);
-       return;
+      setIsLoading(false);
+      return;
     }
 
     try {
@@ -122,7 +122,7 @@ export function useSubscription(): UseSubscriptionReturn {
         .maybeSingle();
 
       if (subError && subError.code !== 'PGRST116') {
-        console.error('Error fetching subscription:', subError);
+        //console.error('Error fetching subscription:', subError);
       }
 
       if (subData) {
@@ -147,7 +147,7 @@ export function useSubscription(): UseSubscriptionReturn {
 
       setBonusAiCredits(profileData?.bonus_ai_credits || 0);
     } catch (error) {
-      console.error('Error in fetchSubscription:', error);
+      //console.error('Error in fetchSubscription:', error);
     } finally {
       setIsLoading(false);
     }

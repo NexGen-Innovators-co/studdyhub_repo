@@ -690,7 +690,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             supabase.from('documents').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).range(0, ITEMS_PER_PAGE - 1),
             supabase.from('class_recordings').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).range(0, ITEMS_PER_PAGE - 1)
           ]);
-          
+
           if (notesResult.data) {
             setUserNotes(notesResult.data);
             setHasMoreNotes(notesResult.data.length === ITEMS_PER_PAGE);
@@ -707,7 +707,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             setRecordingsOffset(ITEMS_PER_PAGE);
           }
         } catch (error) {
-          console.error('Error fetching resources:', error);
+          //console.error('Error fetching resources:', error);
           toast.error('Failed to load resources');
         } finally {
           setIsLoadingResources(false);
@@ -755,14 +755,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         .eq('user_id', currentUserId)
         .order('created_at', { ascending: false })
         .range(notesOffset, notesOffset + ITEMS_PER_PAGE - 1);
-      
+
       if (data) {
         setUserNotes(prev => [...prev, ...data]);
         setHasMoreNotes(data.length === ITEMS_PER_PAGE);
         setNotesOffset(prev => prev + ITEMS_PER_PAGE);
       }
     } catch (error) {
-      console.error('Error loading more notes:', error);
+      //console.error('Error loading more notes:', error);
     } finally {
       setIsLoadingMore(false);
     }
@@ -778,7 +778,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         .eq('user_id', currentUserId)
         .order('created_at', { ascending: false })
         .range(documentsOffset, documentsOffset + ITEMS_PER_PAGE - 1);
-      
+
       if (data) {
         setUserDocuments(prev => [...prev, ...data]);
         setHasMoreDocuments(data.length === ITEMS_PER_PAGE);
@@ -801,14 +801,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         .eq('user_id', currentUserId)
         .order('created_at', { ascending: false })
         .range(recordingsOffset, recordingsOffset + ITEMS_PER_PAGE - 1);
-      
+
       if (data) {
         setUserClassRecordings(prev => [...prev, ...data]);
         setHasMoreRecordings(data.length === ITEMS_PER_PAGE);
         setRecordingsOffset(prev => prev + ITEMS_PER_PAGE);
       }
     } catch (error) {
-      console.error('Error loading more recordings:', error);
+      //console.error('Error loading more recordings:', error);
     } finally {
       setIsLoadingMore(false);
     }

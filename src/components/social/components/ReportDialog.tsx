@@ -93,7 +93,7 @@ export const ReportDialog: React.FC<ReportDialogProps> = ({
       setSelectedReason('');
       setDescription('');
     } catch (error) {
-      console.error('Error submitting report:', error);
+      //console.error('Error submitting report:', error);
       toast.error('Failed to submit report. Please try again.');
     } finally {
       setIsSubmitting(false);

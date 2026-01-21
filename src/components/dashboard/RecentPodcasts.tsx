@@ -54,14 +54,30 @@ export const RecentPodcasts: React.FC = () => {
 
       const { data, error } = await supabase
         .from('ai_podcasts')
-        .select('*')
+        .select(`
+          id,
+          title,
+          audio_segments,
+          duration_minutes,
+          style,
+          created_at,
+          cover_image_url,
+          description
+        `)
         .eq('user_id', user.id)
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
         .limit(5);
 
       if (error) throw error;
-      setPodcasts(data || []);
+
+      // Transform data to match PodcastData interface
+      const transformedData = (data || []).map(podcast => ({
+        ...podcast,
+        duration: podcast.duration_minutes || 0,
+      }));
+
+      setPodcasts(transformedData);
     } catch (error: any) {
 
     } finally {
@@ -80,9 +96,9 @@ export const RecentPodcasts: React.FC = () => {
       // Play first segment
       if (podcast.audio_segments && podcast.audio_segments.length > 0) {
         const firstSegment = podcast.audio_segments[0];
-        
+
         let audio: HTMLAudioElement;
-        
+
         // Check if this is a live podcast with audio_url or generated podcast with audioContent
         if (firstSegment.audio_url) {
           // Live podcast - use storage URL directly
@@ -92,7 +108,7 @@ export const RecentPodcasts: React.FC = () => {
           const audioBlob = await fetch(`data:audio/mp3;base64,${firstSegment.audioContent}`).then(r => r.blob());
           const audioUrl = URL.createObjectURL(audioBlob);
           audio = new Audio(audioUrl);
-          
+
           audio.onended = () => {
             URL.revokeObjectURL(audioUrl);
           };
@@ -101,11 +117,11 @@ export const RecentPodcasts: React.FC = () => {
           setPlaying(null);
           return;
         }
-        
+
         audio.onended = () => {
           setPlaying(null);
         };
-        
+
         audio.play();
       }
     } catch (error: any) {
@@ -117,7 +133,7 @@ export const RecentPodcasts: React.FC = () => {
   const downloadPodcast = async (podcast: PodcastData) => {
     try {
       toast.info('Preparing download...');
-      
+
       // Combine all audio segments
       const audioBuffers = await Promise.all(
         podcast.audio_segments.map(async (segment) => {
@@ -145,7 +161,7 @@ export const RecentPodcasts: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       toast.success('Podcast downloaded!');
     } catch (error: any) {
       toast.error('Failed to download podcast');
