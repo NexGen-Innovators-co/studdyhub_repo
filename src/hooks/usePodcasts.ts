@@ -1,18 +1,32 @@
+// hooks/usePodcasts.ts - Fixed with optimized queries
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { offlineStorage, STORES } from '@/utils/offlineStorage';
 import { toast } from 'sonner';
+
+// Match database schema exactly
+export interface AudioSegment {
+  speaker: string;
+  text: string;
+  audioContent?: string;
+  audio_url?: string;
+  index: number;
+  start_time?: number;
+  end_time?: number;
+}
 
 export interface PodcastWithMeta {
   id: string;
   user_id: string;
   title: string;
   sources: any[];
-  script: any;
+  script: string;
   audio_segments: any;
+  audioSegments: AudioSegment[]; // Parsed version
   duration_minutes: number;
+  duration: number; // Calculated version
   style: string;
-  podcast_type: string;
+  podcast_type: string | null;
   status: string;
   is_public: boolean;
   is_live: boolean;
@@ -24,78 +38,71 @@ export interface PodcastWithMeta {
   listen_count: number;
   share_count: number;
   visual_assets: any;
-  duration: number;
-  audioSegments: any[];
-  visualAssets: any;
+  visualAssets: any; // Parsed version
   user: {
     full_name: string;
     avatar_url?: string;
+    username?: string; // Add username field
   };
   member_count: number;
+  audio_url?: string | null; // Add audio_url field
 }
-
 type PodcastTab = 'discover' | 'my-podcasts' | 'live';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 12; // Reduced from 20 for better performance
 
 export const usePodcasts = (activeTab: PodcastTab) => {
   return useInfiniteQuery({
     queryKey: ['podcasts', activeTab],
-    staleTime: 1000 * 60 * 5, // 5 minutes stale time
-    gcTime: 1000 * 60 * 30, // 30 minutes cache time
-    refetchOnMount: true, // Refetch when component mounts to ensure fresh data
-    refetchOnWindowFocus: true, // Refetch on window focus
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     queryFn: async ({ pageParam = 1 }) => {
       try {
+        // First, get current user (if needed)
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        // Build base query
         let query = supabase
           .from('ai_podcasts')
           .select(`
             id,
             user_id,
             title,
+            description,
+            cover_image_url,
             duration_minutes,
-            style,
-            podcast_type,
-            status,
             is_public,
             is_live,
             created_at,
-            updated_at,
-            cover_image_url,
-            description,
-            tags,
             listen_count,
-            share_count
-          `)
+            share_count,
+            tags
+          `, { count: 'exact' })
           .eq('status', 'completed')
           .order('created_at', { ascending: false })
           .range((pageParam - 1) * PAGE_SIZE, pageParam * PAGE_SIZE - 1);
 
+        // Apply tab-specific filters
         if (activeTab === 'discover') {
           query = query.eq('is_public', true);
         } else if (activeTab === 'my-podcasts') {
-          const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             query = query.eq('user_id', user.id);
           } else {
-            // If no user, return empty for my-podcasts
             return [];
           }
         } else if (activeTab === 'live') {
           query = query.eq('is_live', true).eq('is_public', true);
         }
 
-        const { data, error } = await query;
+        const { data, error, count } = await query;
 
         if (error) {
           if (!navigator.onLine) {
             const offlinePodcasts = await offlineStorage.getAll<any>(STORES.PODCASTS);
-            if (offlinePodcasts.length > 0) {
-              // Note: Offline storage might return all podcasts, not paginated/filtered correctly
-              // For simplicity, we return what we have. 
-              // Ideally we should filter offline data too.
-              return offlinePodcasts;
-            }
+            return offlinePodcasts;
           }
           throw error;
         }
@@ -104,92 +111,77 @@ export const usePodcasts = (activeTab: PodcastTab) => {
           return [];
         }
 
-        // Fetch member counts for all podcasts
-        const podcastIds = data.map((p: any) => p.id);
-        let memberCounts: Record<string, number> = {};
-        if (podcastIds.length > 0) {
-          const { data: memberData, error: memberError } = await supabase
-            .from('podcast_members')
-            .select('podcast_id, id', { count: 'exact', head: false })
-            .in('podcast_id', podcastIds);
-          if (!memberError && memberData) {
-            // Count members per podcast
-            memberCounts = memberData.reduce((acc: Record<string, number>, row: any) => {
-              acc[row.podcast_id] = (acc[row.podcast_id] || 0) + 1;
-              return acc;
-            }, {});
-          }
-        }
-
+        // FIX: Fetch user data from social_users table instead of profiles
         const userIds = [...new Set(data.map((p: any) => p.user_id))];
         const { data: usersData } = await supabase
           .from('social_users')
-          .select('id, display_name, username, avatar_url')
+          .select('id, display_name, avatar_url, username')
           .in('id', userIds);
 
         const usersMap = new Map(
           (usersData || []).map((u: any) => [
             u.id,
             {
-              full_name: u.display_name || u.username || 'Anonymous User',
-              avatar_url: u.avatar_url
+              full_name: u.display_name || 'Anonymous User',
+              avatar_url: u.avatar_url,
+              username: u.username || ''
             }
           ])
         );
 
+        // OPTIMIZATION: Batch fetch member counts in a single query
+        const podcastIds = data.map((p: any) => p.id);
+        const { data: memberData, error: memberError } = await supabase
+          .from('podcast_members')
+          .select('podcast_id')
+          .in('podcast_id', podcastIds);
+
+        const memberCounts = new Map<string, number>();
+        if (!memberError && memberData) {
+          memberData.forEach((row: any) => {
+            memberCounts.set(row.podcast_id, (memberCounts.get(row.podcast_id) || 0) + 1);
+          });
+        }
+
+        // Transform podcasts with minimal data
         const transformedPodcasts: PodcastWithMeta[] = data.map((podcast: any) => {
-          // Parse audio_segments with robust error handling
-          let audioSegments = [];
-          if (typeof podcast.audio_segments === 'string') {
-            try {
-              audioSegments = podcast.audio_segments ? JSON.parse(podcast.audio_segments) : [];
-            } catch (e) {
-              audioSegments = [];
-            }
-          } else {
-            audioSegments = podcast.audio_segments || [];
-          }
-
-          // Parse visual_assets with robust error handling
+          // Parse audio_segments and visual_assets only when needed
+          let audioSegments: AudioSegment[] = [];
           let visualAssets = null;
-          if (podcast.visual_assets) {
-            if (typeof podcast.visual_assets === 'string') {
-              try {
-                visualAssets = JSON.parse(podcast.visual_assets);
-              } catch (e) {
-                visualAssets = null;
-              }
-            } else {
-              visualAssets = podcast.visual_assets;
-            }
-          }
 
-          // Calculate total duration from audio segments (in minutes)
+          // Calculate duration
           let totalDuration = podcast.duration_minutes || 0;
-          if (audioSegments.length > 0 && audioSegments[0].end_time !== undefined) {
-            // For live podcasts, calculate from last segment's end_time
-            const lastSegment = audioSegments[audioSegments.length - 1];
-            if (lastSegment && typeof lastSegment.end_time === 'number' && isFinite(lastSegment.end_time)) {
-              totalDuration = Math.ceil(lastSegment.end_time / 60); // Convert seconds to minutes
-            }
-          }
-
-          // Ensure duration is a valid number and not Infinity
-          if (!isFinite(totalDuration) || isNaN(totalDuration)) {
-            totalDuration = podcast.duration_minutes || 0;
-          }
 
           return {
             ...podcast,
+            id: podcast.id,
+            user_id: podcast.user_id,
+            title: podcast.title,
+            description: podcast.description || '',
+            cover_image_url: podcast.cover_image_url || null,
             duration: totalDuration,
-            audioSegments,
-            visualAssets,
-            sources: podcast.sources || [],
+            audioSegments, // Empty - will be fetched on demand
+            visualAssets, // Empty - will be fetched on demand
+            audio_segments: null, // Don't store raw data
+            visual_assets: null, // Don't store raw data
+            sources: [], // Will be fetched on demand
+            script: '', // Will be fetched on demand
+            style: '', // Will be fetched on demand
+            podcast_type: null, // Will be fetched on demand
+            status: 'completed',
             user: usersMap.get(podcast.user_id) || {
               full_name: 'Anonymous User',
-              avatar_url: undefined
+              avatar_url: undefined,
+              username: ''
             },
-            member_count: memberCounts[podcast.id] || 0,
+            member_count: memberCounts.get(podcast.id) || 0,
+            is_public: podcast.is_public || false,
+            is_live: podcast.is_live || false,
+            listen_count: podcast.listen_count || 0,
+            share_count: podcast.share_count || 0,
+            tags: podcast.tags || [],
+            created_at: podcast.created_at,
+            updated_at: podcast.created_at // Use created_at as fallback
           };
         });
 
@@ -202,8 +194,19 @@ export const usePodcasts = (activeTab: PodcastTab) => {
 
       } catch (error: any) {
         console.error('Error fetching podcasts:', error);
+        
+        // If offline, try to get from local storage
+        if (!navigator.onLine) {
+          try {
+            const offlinePodcasts = await offlineStorage.getAll<any>(STORES.PODCASTS);
+            return offlinePodcasts;
+          } catch (offlineError) {
+            console.error('Offline storage error:', offlineError);
+          }
+        }
+        
         toast.error('Failed to load podcasts');
-        throw error;
+        return []; // Return empty array instead of throwing to prevent UI crash
       }
     },
     initialPageParam: 1,
@@ -211,4 +214,116 @@ export const usePodcasts = (activeTab: PodcastTab) => {
       return lastPage.length === PAGE_SIZE ? allPages.length + 1 : undefined;
     },
   });
+};
+
+// Also update the fetchFullPodcastData function to use social_users
+export const fetchFullPodcastData = async (podcastId: string): Promise<PodcastWithMeta | null> => {
+  try {
+    // First, get the basic podcast data
+    const { data: podcastData, error: podcastError } = await supabase
+      .from('ai_podcasts')
+      .select('*')
+      .eq('id', podcastId)
+      .single();
+
+    if (podcastError || !podcastData) {
+      throw new Error(podcastError?.message || 'Podcast not found');
+    }
+
+    // FIX: Fetch user data from social_users table
+    const { data: userData, error: userError } = await supabase
+      .from('social_users')
+      .select('id, display_name, avatar_url, username')
+      .eq('id', podcastData.user_id)
+      .single();
+
+    if (userError) {
+      console.warn('Error fetching social user:', userError);
+    }
+
+    // Parse audio_segments
+    let audioSegments: AudioSegment[] = [];
+    if (typeof podcastData.audio_segments === 'string') {
+      try {
+        audioSegments = JSON.parse(podcastData.audio_segments);
+      } catch (e) {
+        console.error('Error parsing audio_segments:', e);
+        audioSegments = [];
+      }
+    } else {
+      audioSegments = podcastData.audio_segments || [];
+    }
+
+    // Parse visual_assets
+    let visualAssets = null;
+    if (podcastData.visual_assets) {
+      if (typeof podcastData.visual_assets === 'string') {
+        try {
+          visualAssets = JSON.parse(podcastData.visual_assets);
+        } catch (e) {
+          console.error('Error parsing visual_assets:', e);
+          visualAssets = null;
+        }
+      } else {
+        visualAssets = podcastData.visual_assets;
+      }
+    }
+
+    // Calculate duration
+    let totalDuration = podcastData.duration_minutes || 0;
+    if (audioSegments.length > 0 && audioSegments[0].end_time !== undefined) {
+      const lastSegment = audioSegments[audioSegments.length - 1];
+      if (lastSegment && typeof lastSegment.end_time === 'number' && isFinite(lastSegment.end_time)) {
+        totalDuration = Math.ceil(lastSegment.end_time / 60);
+      }
+    }
+
+    // Get member count
+    const { count: memberCount } = await supabase
+      .from('podcast_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('podcast_id', podcastId);
+
+    // Get sources safely
+    const sources = Array.isArray(podcastData.sources) ? podcastData.sources : [];
+
+    // Get script safely
+    const script = typeof podcastData.script === 'string' ? podcastData.script : '';
+
+    return {
+      ...podcastData,
+      id: podcastData.id,
+      user_id: podcastData.user_id,
+      title: podcastData.title || 'Untitled Podcast',
+      description: podcastData.description || '',
+      cover_image_url: podcastData.cover_image_url || null,
+      duration: totalDuration,
+      audioSegments,
+      visualAssets,
+      sources,
+      script,
+      style: podcastData.style || '',
+      podcast_type: podcastData.podcast_type || null,
+      status: podcastData.status || 'completed',
+      user: {
+        full_name: userData?.display_name || 'Anonymous User',
+        avatar_url: userData?.avatar_url,
+        username: userData?.username || ''
+      },
+      member_count: memberCount || 0,
+      is_public: podcastData.is_public || false,
+      is_live: podcastData.is_live || false,
+      listen_count: podcastData.listen_count || 0,
+      share_count: podcastData.share_count || 0,
+      tags: podcastData.tags || [],
+      created_at: podcastData.created_at,
+      updated_at: podcastData.updated_at || podcastData.created_at,
+      audio_segments: podcastData.audio_segments,
+      visual_assets: podcastData.visual_assets,
+    } as PodcastWithMeta;
+
+  } catch (error) {
+    console.error('Error fetching full podcast data:', error);
+    return null;
+  }
 };

@@ -1,4 +1,4 @@
-// PodcastsPage.tsx
+// PodcastsPage.tsx - Complete fixed version
 import React, { useState, useEffect, useCallback, useRef, useMemo, useDeferredValue, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/button';
@@ -50,7 +50,7 @@ import { ReportPodcastDialog } from './ReportPodcastDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { getPodcastPermissions } from '@/services/podcastModerationService';
-import { usePodcasts, PodcastWithMeta } from '@/hooks/usePodcasts';
+import { usePodcasts, PodcastWithMeta, fetchFullPodcastData } from '@/hooks/usePodcasts';
 import { createPodcastNotification } from '@/services/notificationHelpers';
 import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
@@ -106,9 +106,11 @@ const PodcastCard = memo(({
   onDelete,
   onReport,
   onJoinLive,
+  onSelect,
   isUpdatingCover,
   isGeneratingAiCover,
-  navigate // Pass navigate as a prop
+  navigate,
+  fileInputRef
 }: {
   podcast: PodcastWithMeta;
   isOwner: boolean;
@@ -121,12 +123,12 @@ const PodcastCard = memo(({
   onGenerateAiCover: (p: PodcastWithMeta) => void;
   onDelete: (p: PodcastWithMeta) => void;
   onReport: (p: PodcastWithMeta) => void;
-  onJoinLive: (id: string) => void;
+  onJoinLive: (id: string, asHost?: boolean) => void;
+  onSelect: (p: PodcastWithMeta) => void;
   isUpdatingCover: string | null;
   isGeneratingAiCover: string | null;
+  navigate: (path: string) => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
-  onSelect: (p: PodcastWithMeta) => void; // New prop type
-  navigate: (path: string) => void; // Add navigate prop type
 }) => {
   const [showActions, setShowActions] = useState(false);
 
@@ -228,9 +230,11 @@ const PodcastCard = memo(({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (podcast.is_live) {
-                    onJoinLive(podcast.id);
+                    // Owners should continue hosting; other users join as listeners
+                    onJoinLive(podcast.id, isOwner);
                   } else {
                     onPlay(podcast);
+                    onSelect(podcast);
                     navigate(`/podcasts/${podcast.id}`);
                   }
                 }}
@@ -242,7 +246,7 @@ const PodcastCard = memo(({
                 ) : (
                   <Play className="h-4 w-4 mr-2" />
                 )}
-                <span>{podcast.is_live ? 'Join' : 'Listen'}</span>
+                <span>{podcast.is_live ? (isOwner ? 'Continue' : 'Join') : 'Listen'}</span>
               </Button>
 
               {/* Share Button */}
@@ -275,21 +279,30 @@ const PodcastCard = memo(({
                   {isOwner && (
                     <>
                       <DropdownMenuItem
-                        onClick={() => onInvite(podcast)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onInvite(podcast);
+                        }}
                         className="rounded-lg m-1"
                       >
                         <UserPlus className="h-4 w-4 mr-2" />
                         Invite Members
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => onManageMembers(podcast)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onManageMembers(podcast);
+                        }}
                         className="rounded-lg m-1"
                       >
                         <Users className="h-4 w-4 mr-2" />
                         Manage Members
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => onTogglePublic(podcast)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTogglePublic(podcast);
+                        }}
                         className="rounded-lg m-1"
                       >
                         {podcast.is_public ? <Lock className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
@@ -297,7 +310,10 @@ const PodcastCard = memo(({
                       </DropdownMenuItem>
                       <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-700" />
                       <DropdownMenuItem
-                        onClick={() => onUpdateCover(podcast.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateCover(podcast.id);
+                        }}
                         disabled={isUpdatingCover === podcast.id}
                         className="rounded-lg m-1"
                       >
@@ -309,7 +325,10 @@ const PodcastCard = memo(({
                         Update Cover
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => onGenerateAiCover(podcast)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onGenerateAiCover(podcast);
+                        }}
                         disabled={isGeneratingAiCover === podcast.id}
                         className="rounded-lg m-1"
                       >
@@ -322,7 +341,10 @@ const PodcastCard = memo(({
                       </DropdownMenuItem>
                       <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-700" />
                       <DropdownMenuItem
-                        onClick={() => onDelete(podcast)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(podcast);
+                        }}
                         className="text-red-600 focus:text-red-600 focus:bg-red-50 rounded-lg m-1 font-semibold"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
@@ -331,7 +353,10 @@ const PodcastCard = memo(({
                     </>
                   )}
                   <DropdownMenuItem
-                    onClick={() => onReport(podcast)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReport(podcast);
+                    }}
                     className="rounded-lg m-1"
                   >
                     <Flag className="h-4 w-4 mr-2" />
@@ -347,22 +372,56 @@ const PodcastCard = memo(({
   );
 });
 
+PodcastCard.displayName = 'PodcastCard';
+
 export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.RefObject<SocialFeedHandle> }> = ({
   searchQuery: externalSearchQuery = '',
   podcastId,
   onGoLive,
   onCreatePodcast,
-  onNavigateToTab, // Destructure onNavigateToTab here
+  onNavigateToTab,
   socialFeedRef,
 }) => {
-  const navigate = useNavigate(); // Initialize navigate here
-
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'discover' | 'my-podcasts' | 'live'>('discover');
   const queryClient = useQueryClient();
   const { isFeatureBlocked } = useFeatureAccess();
   const [showLimitsModal, setShowLimitsModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  // const navigate = useNavigate(); // Initialize navigate here
+  const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [selectedPodcast, setSelectedPodcast] = useState<PodcastWithMeta | null>(null);
+  const [showGoLiveDialog, setShowGoLiveDialog] = useState(false);
+  const [livePodcastId, setLivePodcastId] = useState<string | null>(null);
+  const [hostingPodcastId, setHostingPodcastId] = useState<string | null>(null);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [showMembersDialog, setShowMembersDialog] = useState(false);
+  const [selectedPodcastForManagement, setSelectedPodcastForManagement] = useState<PodcastWithMeta | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [selectedPodcastForShare, setSelectedPodcastForShare] = useState<PodcastWithMeta | null>(null);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [selectedPodcastForReport, setSelectedPodcastForReport] = useState<PodcastWithMeta | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [podcastToDelete, setPodcastToDelete] = useState<PodcastWithMeta | null>(null);
+  const [deletingPodcast, setDeletingPodcast] = useState(false);
+  const [listenedPodcasts, setListenedPodcasts] = useState<Set<string>>(new Set());
+  const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
+  const [isUpdatingCover, setIsUpdatingCover] = useState<string | null>(null);
+  const [isGeneratingAiCover, setIsGeneratingAiCover] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Audio control ref
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: loading
+  } = usePodcasts(activeTab);
+
+  const podcasts = useMemo(() => data?.pages.flat() || [], [data]);
 
   // Fetch count of own podcasts
   const { data: myPodcastCount = 0 } = useQuery({
@@ -389,44 +448,51 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       setShowPodcastGenerator(true);
     }
   };
+// In PodcastsPage.tsx, add this function
+const loadFullPodcastData = async (podcastId: string) => {
+  const fullData = await fetchFullPodcastData(podcastId);
+  if (fullData) {
+    setSelectedPodcast(fullData);
+    incrementListenCount(podcastId);
+    navigate(`/podcasts/${podcastId}`);
+  } else {
+    toast.error('Failed to load podcast details');
+  }
+};
+  // Handle podcast selection with audio cleanup
+  const handleSelectPodcast = useCallback(async (podcast: PodcastWithMeta) => {
+    // Stop any currently playing audio immediately
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      } catch (e) {}
+      audioRef.current = null;
+    }
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading: loading
-  } = usePodcasts(activeTab);
+    // Immediately set the selected podcast so the panel can show loading state
+    setSelectedPodcast(podcast);
+    incrementListenCount(podcast.id);
+    navigate(`/podcasts/${podcast.id}`);
 
-  const podcasts = useMemo(() => data?.pages.flat() || [], [data]);
+    // If we only have minimal data, fetch full data in background and update selection
+    if (!podcast.audioSegments || podcast.audioSegments.length === 0) {
+      loadFullPodcastData(podcast.id).catch(err => {
+        //console.error('Error loading full podcast data:', err);
+      });
+    }
+  }, [navigate]);
 
-  // const [podcasts, setPodcasts] = useState<PodcastWithMeta[]>();
-  // const [loading, setLoading] = useState(true);
-  // const [page, setPage] = useState(1);
-  // const [hasMore, setHasMore] = useState(true);
-  // const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-  const [selectedPodcast, setSelectedPodcast] = useState<PodcastData | null>(null);
-  // const [currentUser, setCurrentUser] = useState<any>(null); // MOVED UP
-  const [showGoLiveDialog, setShowGoLiveDialog] = useState(false);
-  const [livePodcastId, setLivePodcastId] = useState<string | null>(null);
-  const [hostingPodcastId, setHostingPodcastId] = useState<string | null>(null);
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
-  const [showMembersDialog, setShowMembersDialog] = useState(false);
-  const [selectedPodcastForManagement, setSelectedPodcastForManagement] = useState<PodcastWithMeta | null>(null);
-  const [showShareDialog, setShowShareDialog] = useState(false);
-  const [selectedPodcastForShare, setSelectedPodcastForShare] = useState<PodcastWithMeta | null>(null);
-  const [showReportDialog, setShowReportDialog] = useState(false);
-  const [selectedPodcastForReport, setSelectedPodcastForReport] = useState<PodcastWithMeta | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [podcastToDelete, setPodcastToDelete] = useState<PodcastWithMeta | null>(null);
-  const [deletingPodcast, setDeletingPodcast] = useState(false);
-  const [listenedPodcasts, setListenedPodcasts] = useState<Set<string>>(new Set());
-  const [showPodcastGenerator, setShowPodcastGenerator] = useState(false);
-  const [isUpdatingCover, setIsUpdatingCover] = useState<string | null>(null);
-  const [isGeneratingAiCover, setIsGeneratingAiCover] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Handle close podcast panel with audio cleanup
+  const handleClosePodcastPanel = useCallback(() => {
+    // Stop audio when panel is closed
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setSelectedPodcast(null);
+    navigate('/podcasts');
+  }, [navigate]);
 
   const handleUpdateCover = async (podcastId: string, file: File) => {
     setIsUpdatingCover(podcastId);
@@ -598,8 +664,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
               member_count: 0 // Will be updated if needed
             };
 
-            setSelectedPodcast(podcastWithMeta);
-            incrementListenCount(data.id);
+            handleSelectPodcast(podcastWithMeta);
           }
         } catch (err) {
           //console.error('Error fetching podcast by ID:', err);
@@ -609,7 +674,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       fetchAndSelectPodcast();
     }
-  }, [podcastId]);
+  }, [podcastId, handleSelectPodcast]);
 
   // Wire up external handlers
   useEffect(() => {
@@ -647,7 +712,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     return () => {
       window.removeEventListener('section-tab-change', handleTabChange as EventListener);
     };
-  }, [onGoLive, onCreatePodcast]);
+  }, []);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -672,8 +737,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     return () => {
       supabase.removeChannel(channel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, queryClient]);
 
   const fetchCurrentUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -703,14 +767,12 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
   const incrementListenCount = async (podcastId: string) => {
     // Check if this podcast has already been counted in this session
     if (listenedPodcasts.has(podcastId)) {
-
       return;
     }
 
     try {
       // Check if the current user is already a listener in the podcast_listeners table
       if (!currentUser) {
-
         return;
       }
 
@@ -728,14 +790,12 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         .maybeSingle();
 
       if (listenerError) {
-
         return;
       }
 
       if (existingListener) {
         // User is already a listener in the DB, do not increment
         setListenedPodcasts(prev => new Set(prev).add(podcastId));
-
         return;
       }
 
@@ -744,7 +804,6 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         .from('podcast_listeners')
         .insert({ podcast_id: podcastId, user_id: currentUser.id });
       if (insertError) {
-
         return;
       }
 
@@ -752,7 +811,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       // Mark this podcast as listened to in this session
       setListenedPodcasts(prev => new Set(prev).add(podcastId));
     } catch (error) {
-
+      //console.error('Error incrementing listen count:', error);
     }
   };
 
@@ -787,7 +846,6 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     if (!podcastToDelete) return;
 
     if (!navigator.onLine) {
-      // setPodcasts(prev => prev.filter(p => p.id !== podcastToDelete.id));
       await offlineStorage.addPendingSync('delete', STORES.PODCASTS, { id: podcastToDelete.id });
       setPodcastToDelete(null);
       setShowDeleteDialog(false);
@@ -838,7 +896,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       setPodcastToDelete(null);
       queryClient.invalidateQueries({ queryKey: ['podcasts'] });
     } catch (error: any) {
-
+      //console.error('Error deleting podcast:', error);
       toast.error('Failed to delete podcast: ' + error.message);
     } finally {
       setDeletingPodcast(false);
@@ -857,18 +915,14 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
         return;
       }
 
-      // Create a social post with podcast reference
-      // Note: Store podcast info in content for now since metadata column doesn't exist
-      // Build podcast link and cover image
       const podcastUrl = `${window.location.origin}/podcasts/${podcast.id}`;
 
-      // Create the social post (without image attached yet)
       const { data: post, error } = await supabase
         .from('social_posts')
         .insert({
           author_id: currentUser.id,
           content:
-            `🎙️ Check out my new podcast: ${podcast.title}\n\nDuration: ${podcast.duration || 0} minutes\n\n` +
+            `ðŸŽ™ï¸ Check out my new podcast: ${podcast.title}\n\nDuration: ${podcast.duration || 0} minutes\n\n` +
             `Listen now on StuddyHub Podcasts: ${podcastUrl}`,
           privacy: 'public',
           metadata: {
@@ -887,9 +941,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       // Attach the cover image as a file to the post if it exists
       if (post && podcast.cover_image_url) {
-        // Use the cover_image_url as the file URL, and guess the mime type as image/jpeg or image/png
         const mimeType = podcast.cover_image_url.endsWith('.png') ? 'image/png' : 'image/jpeg';
-        // Use 0 for size_bytes if unknown (required by supabase schema)
         const { error: mediaError } = await supabase.from('social_media').insert({
           post_id: post.id,
           url: podcast.cover_image_url,
@@ -899,7 +951,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           size_bytes: 0
         });
         if (mediaError) {
-
+          //console.error('Media attachment error:', mediaError);
           toast.error('Podcast shared, but failed to attach cover image.');
         }
       }
@@ -915,14 +967,14 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       await supabase.rpc('increment_podcast_share_count', { podcast_id: podcast.id });
 
       toast.success('Shared to social feed!', {
-        icon: '✨',
+        icon: 'âœ¨',
         action: {
           label: 'View',
           onClick: () => window.location.href = '/social'
         }
       });
     } catch (error) {
-
+      //console.error('Error sharing to social feed:', error);
       toast.error('Failed to share to social feed');
     }
   };
@@ -942,7 +994,7 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
 
       toast.success(newPublicState ? 'Podcast is now public' : 'Podcast is now private');
     } catch (error) {
-
+      //console.error('Error toggling podcast public status:', error);
       toast.error('Failed to update podcast visibility');
     }
   };
@@ -954,12 +1006,6 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       podcast.tags?.some(tag => tag.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
     );
   }, [podcasts, deferredSearchQuery]);
-
-  // Update the URL when a podcast is selected
-  const handleSelectPodcast = (podcast: PodcastWithMeta) => {
-    setSelectedPodcast(podcast);
-    navigate(`/podcasts/${podcast.id}`); // Update the URL with the podcast ID
-  };
 
   // Keep selectedPodcast metadata in sync with updates to the list
   useEffect(() => {
@@ -981,6 +1027,79 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
     }
   }, [podcasts, selectedPodcast?.id]);
 
+  // Render podcast panel
+  const renderPodcastPanel = () => {
+    if (!selectedPodcast) return null;
+
+    // Determine if this is a live podcast or AI-generated
+    const isLivePodcast = selectedPodcast.is_live;
+    
+    // Derive audioSegments: prefer parsed `audioSegments`, then try raw `audio_segments` JSON
+    let audioSegments = selectedPodcast.audioSegments || [];
+    if ((!audioSegments || audioSegments.length === 0) && selectedPodcast.audio_segments) {
+      try {
+        audioSegments = typeof selectedPodcast.audio_segments === 'string'
+          ? JSON.parse(selectedPodcast.audio_segments)
+          : selectedPodcast.audio_segments || [];
+      } catch (e) {
+        audioSegments = [];
+      }
+    }
+
+    const podcastData: PodcastData = {
+      id: selectedPodcast.id,
+      title: selectedPodcast.title,
+      description: selectedPodcast.description || null,
+      script: selectedPodcast.script || '',
+      audioSegments: audioSegments,
+      duration: selectedPodcast.duration || 0,
+      sources: selectedPodcast.sources || [],
+      style: selectedPodcast.style || '',
+      created_at: selectedPodcast.created_at || new Date().toISOString(),
+      podcast_type: (['audio', 'image-audio', 'video', 'live-stream'].includes(selectedPodcast.podcast_type as string)
+        ? (selectedPodcast.podcast_type as 'audio' | 'image-audio' | 'video' | 'live-stream')
+        : null),
+      visual_assets: selectedPodcast.visualAssets || null,
+      cover_image_url: selectedPodcast.cover_image_url || null,
+      is_live: selectedPodcast.is_live || false,
+      tags: selectedPodcast.tags || null,
+      listen_count: selectedPodcast.listen_count || 0,
+      share_count: selectedPodcast.share_count || 0,
+      user_id: selectedPodcast.user_id,
+      user: selectedPodcast.user
+        ? {
+            id: selectedPodcast.user_id,
+            full_name: selectedPodcast.user.full_name || 'Anonymous User',
+            avatar_url: selectedPodcast.user.avatar_url || '',
+            username: selectedPodcast.user.username || '',
+          }
+        : undefined,
+      is_public: selectedPodcast.is_public || false,
+      // audio_url is stored inside audio_segments for recordings; not a top-level column
+    };
+
+    return (
+      <PodcastPanel
+        key={selectedPodcast.id}
+        podcast={podcastData}
+        onClose={handleClosePodcastPanel}
+        isOpen={!!selectedPodcast}
+        onPodcastSelect={(podcastId) => {
+          // Handle related podcast selection
+          const relatedPodcast = podcasts.find(p => p.id === podcastId);
+          if (relatedPodcast) {
+            handleSelectPodcast(relatedPodcast);
+          }
+        }}
+        ref={(panelRef) => {
+          if (panelRef && panelRef.audioRef) {
+            audioRef.current = panelRef.audioRef.current;
+          }
+        }}
+      />
+    );
+  };
+
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-blue-50/30 dark:from-slate-950 dark:to-blue-950/20">
       {/* Search Bar */}
@@ -1001,34 +1120,15 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
-          {/* <div className="border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 ">
-            <div className="max-w-7xl mx-auto px-6">
-              <TabsList className="bg-transparent hidden sm:block">
-                <TabsTrigger value="discover" className="hidden sm:inline-flex data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900">
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Discover
-                </TabsTrigger>
-                <TabsTrigger value="my-podcasts" className="hidden sm:inline-flex data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900">
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  My Podcasts
-                </TabsTrigger>
-                <TabsTrigger value="live" className="hidden sm:inline-flex data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900">
-                  <Globe className="h-4 w-4 mr-2" />
-                  Live Now
-                </TabsTrigger>
-              </TabsList>
-            </div>
-          </div> */}
-
           <ScrollArea className="flex-1">
-            <div className="max-w-7xl mx-auto p-12 pb-24 sm:p-24 lg:p-20">
+            <div className="max-w-7xl mx-auto p-2 pb-24 sm:p-24 lg:p-20">
               {loading ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6">
                   {Array.from({ length: 12 }).map((_, i) => (
                     <PodcastCardSkeleton key={i} />
                   ))}
                 </div>
-              ) : filteredPodcasts.length === 0 ? (
+              ) : filteredPodcasts.length === 0 && !isFetchingNextPage ? (
                 <div className="flex flex-col items-center justify-center h-64 text-center">
                   {activeTab === 'live' ? (
                     <Radio className="h-16 w-16 text-slate-300 dark:text-slate-700 mb-4" />
@@ -1074,58 +1174,68 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                 </div>
               ) : (
                 <>
-                  {/* <div className="flex justify-end mb-4">
-                    <Button size="sm" variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['podcasts'] })} disabled={loading}>
-                      {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Refresh'}
-                    </Button>
-                  </div> */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6">
-                    {filteredPodcasts.map((podcast) => (
-                      <PodcastCard
-                        key={podcast.id}
-                        podcast={podcast}
-                        isOwner={podcast.user_id === currentUser?.id}
-                        onPlay={handlePlayPodcast}
-                        onShare={handleSharePodcast}
-                        onInvite={(p) => {
-                          setSelectedPodcastForManagement(p);
-                          setShowInviteDialog(true);
-                        }}
-                        onManageMembers={(p) => {
-                          setSelectedPodcastForManagement(p);
-                          setShowMembersDialog(true);
-                        }}
-                        onTogglePublic={handleTogglePublic}
-                        onUpdateCover={(id) => {
-                          setIsUpdatingCover(id);
-                          fileInputRef.current?.click();
-                        }}
-                        onGenerateAiCover={handleGenerateAiCoverForExisting}
-                        onDelete={(p) => {
-                          setPodcastToDelete(p);
-                          setShowDeleteDialog(true);
-                        }}
-                        onReport={(p) => {
-                          setSelectedPodcastForReport(p);
-                          setShowReportDialog(true);
-                        }}
-                        onJoinLive={(id) => setLivePodcastId(id)}
-                        onSelect={handleSelectPodcast} // Pass the new prop
-                        isUpdatingCover={isUpdatingCover}
-                        isGeneratingAiCover={isGeneratingAiCover}
-                        fileInputRef={fileInputRef}
-                        navigate={navigate} // Pass navigate prop
-                      />
-                    ))}
-                  </div>
-                  {hasNextPage && (
-                    <div ref={loadMoreRef} className="flex justify-center py-8">
-                      {isFetchingNextPage ? (
-                        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                      ) : (
-                        <div className="h-1" /> // Spacer to trigger intersection
+                  {/* Render Podcast Panel if podcast is selected */}
+                  {selectedPodcast && renderPodcastPanel()}
+                  
+                  {/* Render Podcast Cards if no podcast is selected */}
+                  {!selectedPodcast && (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6">
+                        {filteredPodcasts.map((podcast) => (
+                          <PodcastCard
+                            key={podcast.id}
+                            podcast={podcast}
+                            isOwner={podcast.user_id === currentUser?.id}
+                            onPlay={handlePlayPodcast}
+                            onShare={handleSharePodcast}
+                            onInvite={(p) => {
+                              setSelectedPodcastForManagement(p);
+                              setShowInviteDialog(true);
+                            }}
+                            onManageMembers={(p) => {
+                              setSelectedPodcastForManagement(p);
+                              setShowMembersDialog(true);
+                            }}
+                            onTogglePublic={handleTogglePublic}
+                            onUpdateCover={(id) => {
+                              setIsUpdatingCover(id);
+                              fileInputRef.current?.click();
+                            }}
+                            onGenerateAiCover={handleGenerateAiCoverForExisting}
+                            onDelete={(p) => {
+                              setPodcastToDelete(p);
+                              setShowDeleteDialog(true);
+                            }}
+                            onReport={(p) => {
+                              setSelectedPodcastForReport(p);
+                              setShowReportDialog(true);
+                            }}
+                            onJoinLive={(id, asHost) => {
+                              if (asHost) {
+                                setHostingPodcastId(id);
+                              } else {
+                                setLivePodcastId(id);
+                              }
+                            }}
+                            onSelect={handleSelectPodcast}
+                            isUpdatingCover={isUpdatingCover}
+                            isGeneratingAiCover={isGeneratingAiCover}
+                            fileInputRef={fileInputRef}
+                            navigate={navigate}
+                          />
+                        ))}
+                      </div>
+
+                      {hasNextPage && (
+                        <div ref={loadMoreRef} className="flex justify-center py-8">
+                          {isFetchingNextPage ? (
+                            <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                          ) : (
+                            <div className="h-1" />
+                          )}
+                        </div>
                       )}
-                    </div>
+                    </>
                   )}
                 </>
               )}
@@ -1133,15 +1243,6 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           </ScrollArea>
         </Tabs>
       </div>
-
-      {/* Podcast Player Panel */}
-      {selectedPodcast && (
-        <PodcastPanel
-          podcast={selectedPodcast}
-          onClose={() => setSelectedPodcast(null)}
-          isOpen={!!selectedPodcast}
-        />
-      )}
 
       {/* Go Live Dialog */}
       <GoLiveDialog
@@ -1210,7 +1311,6 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
           podcast={selectedPodcastForShare}
           currentUser={currentUser}
           onShareToFeedDraft={({ content, coverUrl, podcast }) => {
-            // Use the provided onNavigateToTab prop to switch to the social tab, then open modal
             if (onNavigateToTab) {
               onNavigateToTab('social');
 
@@ -1227,9 +1327,8 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                 }
               };
 
-              // Poll for the socialFeedRef availability since component mounting might take time
               let attempts = 0;
-              const maxAttempts = 20; // 2 seconds max
+              const maxAttempts = 20;
               const checkRef = () => {
                 if (socialFeedRef?.current) {
                   socialFeedRef.current.openCreatePostDialog(payload);
@@ -1239,10 +1338,8 @@ export const PodcastsPage: React.FC<PodcastsPageProps & { socialFeedRef?: React.
                 }
               };
 
-              // Start checking after a small delay to allow render cycle to start
               setTimeout(checkRef, 100);
             } else {
-              // fallback: open modal directly if no tab switch function
               if (socialFeedRef?.current) {
                 socialFeedRef.current.openCreatePostDialog({
                   content,

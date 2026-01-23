@@ -54,11 +54,18 @@ export async function checkPodcastCreationEligibility(
       subscription.status === 'active' &&
       (subscription.plan_type === 'scholar' || subscription.plan_type === 'genius');
 
-    // Check badges/achievements
-    const { data: badges, count: badgeCount } = await supabase
-      .from('user_badges')
-      .select('badge_id', { count: 'exact' })
-      .eq('user_id', userId);
+    // Check badges/achievements - use `achievements` table (schema: achievements.badge_id -> badges.id)
+    let badgeCount = 0;
+    try {
+      const { data, count } = await supabase
+        .from('achievements')
+        .select('badge_id', { count: 'exact' })
+        .eq('user_id', userId);
+      badgeCount = count || 0;
+    } catch (err: any) {
+      if (process.env.NODE_ENV !== 'production') console.debug('achievements query failed', err?.message || err);
+      badgeCount = 0;
+    }
 
     const hasMinBadges = (badgeCount || 0) >= 3; // Require at least 3 badges
 
@@ -76,14 +83,20 @@ export async function checkPodcastCreationEligibility(
     const hasMinActivity = (notesCount || 0) >= 5 || (quizzesCount || 0) >= 3;
 
     // Check if user has verification badge (for free users with achievements)
-    const { data: verificationBadge } = await supabase
-      .from('user_badges')
-      .select('badge_id')
-      .eq('user_id', userId)
-      .eq('badge_id', 'verified_creator') // Assuming a special badge exists
-      .maybeSingle();
-
-    const hasVerification = !!verificationBadge;
+    // Check verification badge by joining `achievements` -> `badges` and matching badge name
+    let hasVerification = false;
+    try {
+      const { data: verification } = await supabase
+        .from('achievements')
+        .select('badge_id, badges(name)')
+        .eq('user_id', userId)
+        .eq('badges.name', 'verified_creator')
+        .maybeSingle();
+      hasVerification = !!verification;
+    } catch (err: any) {
+      if (process.env.NODE_ENV !== 'production') console.debug('achievements verification check failed', err?.message || err);
+      hasVerification = false;
+    }
 
     // Determine eligibility
     const canCreate =

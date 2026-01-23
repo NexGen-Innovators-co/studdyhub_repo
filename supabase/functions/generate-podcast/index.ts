@@ -36,15 +36,15 @@ serve(async (req) => {
 
       try {
         console.log("[OAuth] Service account JSON length:", gcpServiceAccountJson.length);
-        
+
         let cleanedJson = gcpServiceAccountJson.trim();
         if (cleanedJson.startsWith('"') && cleanedJson.endsWith('"')) {
           cleanedJson = cleanedJson.slice(1, -1);
         }
         cleanedJson = cleanedJson.replace(/\\"/g, '"');
-        
+
         const serviceAccount = JSON.parse(cleanedJson);
-        
+
         const header = { alg: "RS256", typ: "JWT" };
         const now = Math.floor(Date.now() / 1000);
         const payload = {
@@ -55,18 +55,18 @@ serve(async (req) => {
           iat: now
         };
 
-        const base64url = (str: string) => 
+        const base64url = (str: string) =>
           btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-        
+
         const encodedHeader = base64url(JSON.stringify(header));
         const encodedPayload = base64url(JSON.stringify(payload));
         const unsignedToken = `${encodedHeader}.${encodedPayload}`;
 
         const privateKey = serviceAccount.private_key
           .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g, '');
-        
+
         const binaryKey = Uint8Array.from(atob(privateKey), c => c.charCodeAt(0));
-        
+
         const cryptoKey = await crypto.subtle.importKey(
           "pkcs8",
           binaryKey,
@@ -85,7 +85,7 @@ serve(async (req) => {
         const encodedSignature = base64url(
           String.fromCharCode(...new Uint8Array(signature))
         );
-        
+
         const jwt = `${unsignedToken}.${encodedSignature}`;
 
         const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -131,11 +131,11 @@ serve(async (req) => {
       throw new Error("Invalid request body - expected JSON");
     }
 
-    const { 
-      noteIds = [], 
-      documentIds = [], 
-      style = 'educational', 
-      duration = 'medium', 
+    const {
+      noteIds = [],
+      documentIds = [],
+      style = 'educational',
+      duration = 'medium',
       podcastType = 'audio',
       cover_image_url: providedCoverImageUrl
     } = body;
@@ -194,9 +194,9 @@ serve(async (req) => {
     }
 
     // 2. Generate podcast script using Gemini
-    
+
     const scriptPrompt = generateScriptPrompt(content, sources, style, duration);
-    
+
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiApiKey}`,
       {
@@ -215,23 +215,62 @@ serve(async (req) => {
     );
 
     const geminiData = await geminiResponse.json();
-    
+
     // Validate Gemini response structure
     if (!geminiData || !geminiData.candidates || geminiData.candidates.length === 0) {
       console.error("[Podcast] Invalid script generation response:", JSON.stringify(geminiData));
       throw new Error("Failed to generate podcast script - invalid API response");
     }
-    
+
     const candidate = geminiData.candidates[0];
     if (!candidate || !candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
       console.error("[Podcast] Invalid script candidate structure:", JSON.stringify(candidate));
       throw new Error("Failed to generate podcast script - invalid response structure");
     }
-    
+
     const script = candidate.content.parts[0].text || "";
 
     if (!script) {
       throw new Error("Failed to generate podcast script");
+    }
+
+    // 2.5. Generate an engaging title for the podcast
+    let podcastTitle = `Podcast: ${sources.join(", ")}`; // Fallback title
+    try {
+      const titlePrompt = `Based on this podcast script, generate a catchy, engaging title (maximum 60 characters). The title should capture the main topic and be interesting to listeners. Return ONLY the title text, nothing else.
+
+Script excerpt:
+${script.substring(0, 1500)}
+
+Title:`;
+
+      const titleResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: titlePrompt }] }],
+            generationConfig: {
+              temperature: 0.8,
+              maxOutputTokens: 100
+            }
+          })
+        }
+      );
+
+      if (titleResponse.ok) {
+        const titleData = await titleResponse.json();
+        const generatedTitle = titleData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (generatedTitle && generatedTitle.length > 0 && generatedTitle.length <= 100) {
+          // Remove quotes if present
+          podcastTitle = generatedTitle.replace(/^["']|["']$/g, '');
+          console.log(`[Podcast] Generated title: ${podcastTitle}`);
+        }
+      }
+    } catch (titleError) {
+      console.error("[Podcast] Title generation error:", titleError);
+      // Keep fallback title
     }
 
     // 3. Parse script into segments (Host A and Host B)
@@ -241,7 +280,7 @@ serve(async (req) => {
     const audioSegments = await Promise.all(
       segments.map(async (segment, index) => {
         const voice = segment.speaker === 'Thomas' ? 'en-US-Neural2-D' : 'en-US-Neural2-C';
-        
+
         // Clean the text: remove stage directions and action indicators
         let cleanedText = segment.text
           .replace(/\[laughs?\]/gi, '') // Remove [laugh] or [laughs]
@@ -250,12 +289,12 @@ serve(async (req) => {
           .replace(/\*.*?\*/g, '') // Remove *emphasis* markers
           .replace(/\s+/g, ' ') // Normalize whitespace
           .trim();
-        
+
         // If text is empty after cleaning, skip it
         if (!cleanedText) {
           return null;
         }
-        
+
         const ttsResponse = await fetch(
           `https://texttospeech.googleapis.com/v1/text:synthesize?key=${geminiApiKey}`,
           {
@@ -283,11 +322,11 @@ serve(async (req) => {
         }
 
         const ttsData = await ttsResponse.json();
-        
+
         if (!ttsData.audioContent) {
           throw new Error(`TTS response missing audioContent for segment ${index}`);
         }
-        
+
         return {
           speaker: segment.speaker,
           audioContent: ttsData.audioContent,
@@ -303,33 +342,33 @@ serve(async (req) => {
     // 4.5. Generate images for visual podcast types
     let visualAssets: any[] = [];
     let coverImageUrl = providedCoverImageUrl || '';
-    
+
     if (!coverImageUrl && (podcastType === 'image-audio' || podcastType === 'video' || podcastType === 'live-stream')) {
-    // Generate a cover image for the podcast (use first concept or a summary prompt)
-    try {
-      let coverPrompt = '';
-      if (visualAssets.length > 0 && visualAssets[0].description) {
-        coverPrompt = visualAssets[0].description;
-      } else {
-        coverPrompt = `A vibrant, professional educational podcast cover about ${sources.join(", ") || 'the topic'}, modern design, clean typography, bright gradients, engaging, 3D rendered style, cinematic composition`;
+      // Generate a cover image for the podcast (use first concept or a summary prompt)
+      try {
+        let coverPrompt = '';
+        if (visualAssets.length > 0 && visualAssets[0].description) {
+          coverPrompt = visualAssets[0].description;
+        } else {
+          coverPrompt = `A vibrant, professional educational podcast cover about ${sources.join(", ") || 'the topic'}, modern design, clean typography, bright gradients, engaging, 3D rendered style, cinematic composition`;
+        }
+        const coverRes = await fetch(`${supabaseUrl}/functions/v1/generate-image-from-text`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseKey}`
+          },
+          body: JSON.stringify({ description: coverPrompt, userId: user.id })
+        });
+        if (coverRes.ok) {
+          const coverData = await coverRes.json();
+          coverImageUrl = coverData.imageUrl;
+        } else {
+          console.error('[Podcast] Cover image upload error:', await coverRes.text());
+        }
+      } catch (coverError) {
+        console.error('[Podcast] Cover image generation exception:', coverError);
       }
-      const coverRes = await fetch(`${supabaseUrl}/functions/v1/generate-image-from-text`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseKey}`
-        },
-        body: JSON.stringify({ description: coverPrompt, userId: user.id })
-      });
-      if (coverRes.ok) {
-        const coverData = await coverRes.json();
-        coverImageUrl = coverData.imageUrl;
-      } else {
-        console.error('[Podcast] Cover image upload error:', await coverRes.text());
-      }
-    } catch (coverError) {
-      console.error('[Podcast] Cover image generation exception:', coverError);
-    }
 
       try {
         // Extract key concepts for image generation (3-5 images per podcast)
@@ -349,7 +388,7 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
               contents: [{ parts: [{ text: conceptPrompt }] }],
               generationConfig: {
                 temperature: 0.7,
-                maxOutputTokens: 1000
+                maxOutputTokens: 10048  // Increased from 1000 to prevent MAX_TOKENS errors
               }
             })
           }
@@ -360,13 +399,20 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
         }
 
         const conceptData = await conceptResponse.json();
-        if (!conceptData.candidates || !conceptData.candidates[0]?.content?.parts?.[0]?.text) {
-          console.error("[Podcast] Invalid concept response structure:", JSON.stringify(conceptData));
-          throw new Error("Failed to extract concepts - invalid response structure");
+
+        // Check for MAX_TOKENS or empty response
+        const candidate = conceptData.candidates?.[0];
+        const finishReason = candidate?.finishReason;
+
+        if (finishReason === "MAX_TOKENS" || !candidate?.content?.parts?.[0]?.text) {
+          console.error("[Podcast] Concept extraction hit token limit or returned empty content:", JSON.stringify(conceptData));
+          console.log("[Podcast] Using fallback concepts due to API limitation");
+          // Use fallback - will be handled by the catch block below
+          throw new Error("Failed to extract concepts - response truncated or empty");
         }
 
         const conceptText = conceptData.candidates[0].content.parts[0].text;
-        let concepts: Array<{concept: string, description: string}> = [];
+        let concepts: Array<{ concept: string, description: string }> = [];
         try {
           const jsonMatch = conceptText.match(/\[[\s\S]*\]/);
           if (jsonMatch) {
@@ -409,7 +455,7 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
             ? concept.description.trim()
             : `${concept.concept || sources.join(", ") || 'the topic'}`;
 
-                   description = `${description}. `;
+          description = `${description}. `;
 
           let imageUrl = "";
           try {
@@ -449,18 +495,18 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
         // For video podcast type, generate video clips using Veo 3
         if (podcastType === 'video' && visualAssets.length > 0 && accessToken) {
           console.log(`[Podcast] Generating video clips with Veo 3...`);
-          
+
           try {
             // Generate maximum 2 videos to avoid timeout (each takes ~8-10 seconds)
             for (let i = 0; i < Math.min(concepts.length, 2); i++) {
               const concept = concepts[i];
               const videoPrompt = `Professional educational video: ${concept.description}. Modern design, clean typography, smooth animations. Educational style.`;
-              
+
               // Replace this line in your code:
-const veoResponse = await fetch(
-  `https://us-central1-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/us-central1/publishers/google/models/veo-3.1-fast-preview:predict`,
-  // Changed from veo-3.0-generate-001 to veo-3.1-fast-preview
-  {
+              const veoResponse = await fetch(
+                `https://us-central1-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/us-central1/publishers/google/models/veo-3.1-fast-preview:predict`,
+                // Changed from veo-3.0-generate-001 to veo-3.1-fast-preview
+                {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
@@ -483,16 +529,16 @@ const veoResponse = await fetch(
               if (veoResponse.ok) {
                 const veoData = await veoResponse.json();
                 console.log(`[Podcast] Veo response:`, JSON.stringify(veoData).substring(0, 200));
-                
+
                 // Check if this is a long-running operation
                 if (veoData.name && veoData.name.includes('operations')) {
                   console.log(`[Podcast] Veo returned operation ID: ${veoData.name} - skipping (long-running)`);
                 } else if (veoData.predictions && veoData.predictions[0]) {
                   const prediction = veoData.predictions[0];
-                  const videoBase64 = prediction.bytesBase64Encoded || 
-                                     prediction.video_bytes || 
-                                     prediction.generatedVideo?.bytesBase64Encoded;
-                  
+                  const videoBase64 = prediction.bytesBase64Encoded ||
+                    prediction.video_bytes ||
+                    prediction.generatedVideo?.bytesBase64Encoded;
+
                   if (videoBase64) {
                     visualAssets.push({
                       type: 'video',
@@ -540,7 +586,7 @@ const veoResponse = await fetch(
       .from("ai_podcasts")
       .insert({
         user_id: user.id,
-        title: `Podcast: ${sources.join(", ")}`,
+        title: podcastTitle,
         sources: sources,
         script: script,
         audio_segments: validAudioSegments,

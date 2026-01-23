@@ -1,4 +1,4 @@
-// useWebRTC.ts - Hook for managing WebRTC peer connections for live audio streaming
+// useWebRTC.ts - Fixed version for live audio streaming
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
@@ -6,13 +6,20 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 interface WebRTCConfig {
   podcastId: string;
   isHost: boolean;
+  isCohost?: boolean;
   onConnectionStateChange?: (state: RTCPeerConnectionState) => void;
   onRemoteStream?: (stream: MediaStream) => void;
+  onParticipantJoined?: (userId: string, stream: MediaStream) => void;
+  onParticipantLeft?: (userId: string) => void;
+  onPermissionRequest?: (userId: string, requestType: 'speak' | 'cohost') => void;
+  onPermissionGranted?: (userId: string, requestType: 'speak' | 'cohost') => void;
+  onPermissionRevoked?: (userId: string) => void;
 }
 
 interface PeerConnection {
   userId: string;
   connection: RTCPeerConnection;
+  stream?: MediaStream;
 }
 
 const ICE_SERVERS = [
@@ -22,11 +29,23 @@ const ICE_SERVERS = [
   { urls: 'stun:stun3.l.google.com:19302' },
   { urls: 'stun:stun4.l.google.com:19302' },
 ];
+
+const DEBUG = true;
+const log = (...args: any[]) => {
+  if (DEBUG) console.log('[WebRTC]', ...args);
+};
+
 export const useWebRTC = ({
   podcastId,
   isHost,
+  isCohost = false,
   onConnectionStateChange,
-  onRemoteStream
+  onRemoteStream,
+  onParticipantJoined,
+  onParticipantLeft,
+  onPermissionRequest,
+  onPermissionGranted,
+  onPermissionRevoked
 }: WebRTCConfig) => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -34,6 +53,9 @@ export const useWebRTC = ({
   const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'poor' | 'disconnected'>('disconnected');
   const [error, setError] = useState<string | null>(null);
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+  const [participants, setParticipants] = useState<Map<string, { stream: MediaStream; isSpeaking: boolean; isMuted: boolean }>>(new Map());
+  const [permissionRequests, setPermissionRequests] = useState<Array<{userId: string, requestType: 'speak' | 'cohost', timestamp: number}>>([]);
+  const [isCohostMode, setIsCohostMode] = useState(isCohost);
 
   const peerConnectionsRef = useRef<Map<string, PeerConnection>>(new Map());
   const signalingChannelRef = useRef<RealtimeChannel | null>(null);
@@ -43,6 +65,8 @@ export const useWebRTC = ({
   const localStreamRef = useRef<MediaStream | null>(null);
   const pendingIceCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const pendingListenersRef = useRef<Set<string>>(new Set());
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analysersRef = useRef<Map<string, AnalyserNode>>(new Map());
 
   // Initialize WebRTC
   useEffect(() => {
@@ -51,34 +75,18 @@ export const useWebRTC = ({
     return () => {
       cleanup();
     };
-  }, [podcastId, isHost]);
+  }, [podcastId, isHost, isCohost]);
 
   // Handle pending listeners when host stream becomes available
   useEffect(() => {
-    if (isHost && localStream && pendingListenersRef.current.size > 0) {
+    if ((isHost || isCohostMode) && localStream && pendingListenersRef.current.size > 0) {
+      log('Processing pending listeners:', pendingListenersRef.current.size);
       pendingListenersRef.current.forEach(listenerId => {
         createOfferForListener(listenerId);
       });
       pendingListenersRef.current.clear();
     }
-  }, [localStream, isHost]);
-
-  // Periodically re-announce presence if not connected (for listeners)
-  useEffect(() => {
-    if (isHost || isConnected) return;
-
-    const interval = setInterval(() => {
-      if (signalingChannelRef.current && currentUserIdRef.current) {
-        signalingChannelRef.current.send({
-          type: 'broadcast',
-          event: 'listener-joined',
-          payload: { userId: currentUserIdRef.current }
-        });
-      }
-    }, 10000); // Increased to 10s to avoid interrupting handshake
-
-    return () => clearInterval(interval);
-  }, [isHost, isConnected]);
+  }, [localStream, isHost, isCohostMode]);
 
   const initializeWebRTC = async () => {
     try {
@@ -87,70 +95,181 @@ export const useWebRTC = ({
       if (!user) throw new Error('User not authenticated');
 
       currentUserIdRef.current = user.id;
+      log('Initializing WebRTC for user:', user.id, 'isHost:', isHost, 'isCohost:', isCohost);
+
+      // Check if user is co-host
+      if (isCohost) {
+        const { data: cohostData } = await supabase
+          .from('podcast_cohosts')
+          .select('*')
+          .eq('podcast_id', podcastId)
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .single();
+        
+        if (cohostData) {
+          setIsCohostMode(true);
+          log('User is a co-host');
+        }
+      }
 
       // Set up signaling channel
       setupSignalingChannel();
 
-      // If host, start capturing audio
-      if (isHost) {
+      // If host or cohost, start capturing audio
+      if (isHost || isCohostMode) {
         await startBroadcasting();
       }
     } catch (err: any) {
-      //console.error('Error initializing WebRTC:', err);
+      log('Error initializing WebRTC:', err);
       setError(err.message);
     }
   };
 
   const setupSignalingChannel = () => {
+    // If a channel exists and is subscribed, don't recreate
+    if (signalingChannelRef.current && (signalingChannelRef.current as any).state === 'SUBSCRIBED') {
+      log('Signaling channel already exists and subscribed');
+      return;
+    }
+
+    // Clean up existing channel if present
+    if (signalingChannelRef.current) {
+      try { signalingChannelRef.current.unsubscribe(); } catch (e) {}
+      signalingChannelRef.current = null;
+    }
+
     const channel = supabase.channel(`podcast-webrtc-${podcastId}`, {
       config: {
-        broadcast: { ack: true }
+        broadcast: { ack: true, self: true }
       }
     });
 
     signalingChannelRef.current = channel;
+    log('Setting up new signaling channel');
 
     channel
       .on('broadcast', { event: 'offer' }, async ({ payload }) => {
         if (payload.to === currentUserIdRef.current) {
+          log('Received offer from:', payload.from);
           await handleOffer(payload);
         }
       })
       .on('broadcast', { event: 'answer' }, async ({ payload }) => {
         if (payload.to === currentUserIdRef.current) {
+          log('Received answer from:', payload.from);
           await handleAnswer(payload);
         }
       })
       .on('broadcast', { event: 'ice-candidate' }, async ({ payload }) => {
         if (payload.to === currentUserIdRef.current) {
+          log('Received ICE candidate from:', payload.from);
           await handleIceCandidate(payload);
         }
       })
       .on('broadcast', { event: 'listener-joined' }, async ({ payload }) => {
-        if (isHost && payload.userId !== currentUserIdRef.current) {
+        log('Listener joined:', payload.userId);
+        if ((isHost || isCohostMode) && payload.userId !== currentUserIdRef.current) {
           if (localStreamRef.current) {
             await createOfferForListener(payload.userId);
           } else {
+            log('Buffering listener until stream is ready:', payload.userId);
             pendingListenersRef.current.add(payload.userId);
           }
         }
       })
+      .on('broadcast', { event: 'permission-request' }, ({ payload }) => {
+        if (isHost || isCohostMode) {
+          log('Permission request from:', payload.userId, 'type:', payload.requestType);
+          setPermissionRequests(prev => [...prev, {
+            userId: payload.userId,
+            requestType: payload.requestType,
+            timestamp: payload.timestamp
+          }]);
+          onPermissionRequest?.(payload.userId, payload.requestType);
+        }
+      })
+      .on('broadcast', { event: 'permission-granted' }, ({ payload }) => {
+        log('Received permission-granted:', payload.userId, payload.requestType);
+        if (payload.userId === currentUserIdRef.current) {
+          log('Permission granted to me:', payload.requestType);
+          setIsCohostMode(payload.requestType === 'cohost');
+          onPermissionGranted?.(payload.userId, payload.requestType);
+
+          if (payload.requestType === 'speak' || payload.requestType === 'cohost') {
+            startBroadcasting();
+          }
+        }
+      })
+      .on('broadcast', { event: 'permission-revoked' }, ({ payload }) => {
+        log('Received permission-revoked:', payload.userId);
+        if (payload.userId === currentUserIdRef.current) {
+          log('Permission revoked from me');
+          setIsCohostMode(false);
+          onPermissionRevoked?.(payload.userId);
+
+          if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => track.stop());
+            setLocalStream(null);
+            localStreamRef.current = null;
+            setIsMuted(false);
+          }
+        }
+      })
+      .on('broadcast', { event: 'participant-muted' }, ({ payload }) => {
+        setParticipants(prev => {
+          const newMap = new Map(prev);
+          const participant = newMap.get(payload.userId);
+          if (participant) {
+            newMap.set(payload.userId, {
+              ...participant,
+              isMuted: payload.muted
+            });
+          }
+          return newMap;
+        });
+      })
+      .on('broadcast', { event: 'participant-speaking' }, ({ payload }) => {
+        setParticipants(prev => {
+          const newMap = new Map(prev);
+          const participant = newMap.get(payload.userId);
+          if (participant) {
+            newMap.set(payload.userId, {
+              ...participant,
+              isSpeaking: payload.isSpeaking
+            });
+          }
+          return newMap;
+        });
+      })
+      .on('system', { event: 'channel_error' }, (event) => {
+        log('Channel error:', event);
+        setTimeout(() => {
+          if ((signalingChannelRef.current as any)?.state !== 'SUBSCRIBED') {
+            log('Reconnecting channel after error...');
+            setupSignalingChannel();
+          }
+        }, 1000);
+      })
       .subscribe((status) => {
+        log('Signaling channel status:', status);
         if (status === 'SUBSCRIBED') {
           // Announce presence
-          if (!isHost) {
+          if (!isHost && !isCohostMode) {
+            log('Announcing listener presence');
             channel.send({
               type: 'broadcast',
               event: 'listener-joined',
-              payload: { userId: currentUserIdRef.current }
-            });
+              payload: { userId: currentUserIdRef.current, timestamp: Date.now() }
+            }).catch((e) => log('Error announcing presence:', e));
           }
         }
       });
   };
 
-  const startBroadcasting = async () => {
+  const startBroadcasting = async (): Promise<MediaStream> => {
     try {
+      log('Starting broadcasting...');
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -159,21 +278,115 @@ export const useWebRTC = ({
         }
       });
 
+      log('Got media stream, track count:', stream.getTracks().length);
       setLocalStream(stream);
       localStreamRef.current = stream;
       setIsConnected(true);
       setConnectionQuality('excellent');
 
-      // Start recording the audio stream
+      // Start recording the audio stream if host
       if (isHost) {
         startRecording(stream);
       }
 
+      // Setup audio analysis for speaking detection
+      if (isHost || isCohostMode) {
+        setupAudioAnalysis(stream, currentUserIdRef.current!);
+      }
+
       return stream;
     } catch (err: any) {
-      //console.error('Error accessing microphone:', err);
+      log('Error accessing microphone:', err);
       setError('Failed to access microphone. Please grant permission.');
       throw err;
+    }
+  };
+
+  const setupAudioAnalysis = (stream: MediaStream, userId: string) => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext();
+      }
+
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      const analyser = audioContextRef.current.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.3;
+      
+      source.connect(analyser);
+      analysersRef.current.set(userId, analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let lastSpeakingState = false;
+      let speakingTimeout: NodeJS.Timeout;
+
+      const checkAudioLevel = () => {
+        if (!analysersRef.current.has(userId)) return;
+
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        const isSpeaking = average > 20;
+
+        if (isSpeaking !== lastSpeakingState) {
+          lastSpeakingState = isSpeaking;
+          
+          // Broadcast speaking state change
+          if (signalingChannelRef.current) {
+            signalingChannelRef.current.send({
+              type: 'broadcast',
+              event: 'participant-speaking',
+              payload: {
+                userId,
+                isSpeaking,
+                timestamp: Date.now()
+              }
+            });
+          }
+
+          // Update local participants state
+          if (userId === currentUserIdRef.current) {
+            setParticipants(prev => {
+              const newMap = new Map(prev);
+              const participant = newMap.get(userId);
+              if (participant) {
+                newMap.set(userId, {
+                  ...participant,
+                  isSpeaking
+                });
+              }
+              return newMap;
+            });
+          }
+        }
+
+        // Clear timeout if still speaking
+        if (isSpeaking && speakingTimeout) {
+          clearTimeout(speakingTimeout);
+        }
+
+        // Set timeout to mark as not speaking after silence
+        if (!isSpeaking && !speakingTimeout) {
+          speakingTimeout = setTimeout(() => {
+            if (signalingChannelRef.current) {
+              signalingChannelRef.current.send({
+                type: 'broadcast',
+                event: 'participant-speaking',
+                payload: {
+                  userId,
+                  isSpeaking: false,
+                  timestamp: Date.now()
+                }
+              });
+            }
+          }, 1000);
+        }
+
+        requestAnimationFrame(checkAudioLevel);
+      };
+
+      checkAudioLevel();
+    } catch (err) {
+      log('Error setting up audio analysis:', err);
     }
   };
 
@@ -188,10 +401,11 @@ export const useWebRTC = ({
         }
       };
 
-      mediaRecorder.start(1000); // Collect data every second
+      mediaRecorder.start(1000);
       mediaRecorderRef.current = mediaRecorder;
+      log('Started recording');
     } catch (err) {
-      //console.error('Error starting recording:', err);
+      log('Error starting recording:', err);
     }
   };
 
@@ -209,19 +423,21 @@ export const useWebRTC = ({
       };
 
       mediaRecorderRef.current.stop();
+      log('Stopped recording');
     });
   };
 
-  const createPeerConnection = (userId: string): RTCPeerConnection => {
+  const createPeerConnection = (userId: string, isInitiator: boolean = false): RTCPeerConnection => {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+    log('Creating peer connection for:', userId, 'isInitiator:', isInitiator);
 
     // Monitor connection state
     pc.onconnectionstatechange = () => {
+      log('Connection state for', userId, ':', pc.connectionState);
       onConnectionStateChange?.(pc.connectionState);
 
-      // Only update global isConnected state for listeners
-      // For hosts, isConnected means "broadcasting" and is managed by start/stopBroadcasting
-      if (!isHost) {
+      if (!isHost && !isCohostMode) {
         switch (pc.connectionState) {
           case 'connected':
             setIsConnected(true);
@@ -245,6 +461,7 @@ export const useWebRTC = ({
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
+        log('Sending ICE candidate to:', userId);
         signalingChannelRef.current.send({
           type: 'broadcast',
           event: 'ice-candidate',
@@ -257,22 +474,48 @@ export const useWebRTC = ({
       }
     };
 
-    // Handle remote stream (for listeners)
+    // Handle remote stream
     pc.ontrack = (event) => {
-      // Ensure the track is enabled
+      log('Received track from:', userId, 'track:', event.track.kind);
       event.track.enabled = true;
 
       if (event.streams && event.streams[0]) {
-        onRemoteStream?.(event.streams[0]);
-      } else {
-        const newStream = new MediaStream([event.track]);
-        onRemoteStream?.(newStream);
+        const remoteStream = event.streams[0];
+        
+        // Setup audio analysis for this participant
+        if (userId !== currentUserIdRef.current) {
+          setupAudioAnalysis(remoteStream, userId);
+        }
+
+        // For hosts/cohosts: track participants
+        if (isHost || isCohostMode) {
+          setParticipants(prev => {
+            const newMap = new Map(prev);
+            newMap.set(userId, {
+              stream: remoteStream,
+              isSpeaking: false,
+              isMuted: false
+            });
+            return newMap;
+          });
+          
+          onParticipantJoined?.(userId, remoteStream);
+        }
+        
+        // For listeners: forward the stream to audio player
+        if (!isHost && !isCohostMode) {
+          onRemoteStream?.(remoteStream);
+        }
       }
     };
 
     // Monitor ICE connection state
+    // Monitor ICE connection state and handle peer leaving
     pc.oniceconnectionstatechange = () => {
-      if (!isHost) {
+      log('ICE connection state for', userId, ':', pc.iceConnectionState);
+
+      // Connection quality handling for listeners
+      if (!isHost && !isCohostMode) {
         switch (pc.iceConnectionState) {
           case 'checking':
             setConnectionQuality('poor');
@@ -288,10 +531,20 @@ export const useWebRTC = ({
           case 'failed':
             setConnectionQuality('disconnected');
             setIsConnected(false);
-            // Attempt to reconnect
-            pc.restartIce();
+            try { pc.restartIce(); } catch (e) { log('restartIce failed', e); }
             break;
         }
+      }
+
+      // Treat disconnected/failed as peer leaving for hosts/cohosts
+      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+        log('Participant left:', userId);
+        setParticipants(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(userId);
+          return newMap;
+        });
+        onParticipantLeft?.(userId);
       }
     };
 
@@ -302,40 +555,49 @@ export const useWebRTC = ({
     try {
       const stream = localStreamRef.current;
       if (!stream) {
+        log('No local stream available for listener:', listenerId);
         return;
       }
 
-      // Close existing connection if any to avoid leaks and conflicts
+      log('Creating offer for listener:', listenerId);
+
+      // Close existing connection if any
       const existingPeer = peerConnectionsRef.current.get(listenerId);
       if (existingPeer) {
         const state = existingPeer.connection.connectionState;
         if (state === 'connected' || state === 'connecting') {
+          log('Already connected to listener:', listenerId);
           return;
         }
         existingPeer.connection.close();
       }
 
-      const pc = createPeerConnection(listenerId);
+      const pc = createPeerConnection(listenerId, true);
 
       // Add local tracks to peer connection
       stream.getTracks().forEach(track => {
-        track.enabled = true; // Ensure track is enabled before adding
+        log('Adding track to peer connection:', track.kind);
+        track.enabled = true;
         pc.addTrack(track, stream);
       });
 
       peerConnectionsRef.current.set(listenerId, {
         userId: listenerId,
-        connection: pc
+        connection: pc,
+        stream
       });
 
-      // Create and send offer
+      // Create and send offer - listener should receive audio
       const offer = await pc.createOffer({
-        offerToReceiveAudio: false,
+        offerToReceiveAudio: true,
         offerToReceiveVideo: false
       });
+      
+      log('Created offer, setting local description');
       await pc.setLocalDescription(offer);
 
       if (signalingChannelRef.current) {
+        log('Sending offer to listener:', listenerId);
         signalingChannelRef.current.send({
           type: 'broadcast',
           event: 'offer',
@@ -347,17 +609,20 @@ export const useWebRTC = ({
         });
       }
     } catch (err) {
-      //console.error('Error creating offer:', err);
+      log('Error creating offer:', err);
     }
   };
 
   const handleOffer = async (payload: any) => {
     try {
+      log('Handling offer from:', payload.from);
+
       // Close existing connection if any
       const existingPeer = peerConnectionsRef.current.get(payload.from);
       if (existingPeer) {
         const state = existingPeer.connection.connectionState;
         if (state === 'connected' || state === 'connecting') {
+          log('Already connected to:', payload.from);
           return;
         }
         existingPeer.connection.close();
@@ -369,13 +634,23 @@ export const useWebRTC = ({
         connection: pc
       });
 
+      log('Setting remote description');
       await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+      
+      log('Applying pending ICE candidates');
       await applyPendingIceCandidates(payload.from, pc);
 
-      const answer = await pc.createAnswer();
+      // Create answer - listeners don't send audio back unless they're hosts/cohosts
+      const answer = await pc.createAnswer({
+        offerToReceiveAudio: !isHost && !isCohostMode, // Listeners receive audio
+        offerToReceiveVideo: false
+      });
+      
+      log('Created answer, setting local description');
       await pc.setLocalDescription(answer);
 
       if (signalingChannelRef.current) {
+        log('Sending answer to:', payload.from);
         signalingChannelRef.current.send({
           type: 'broadcast',
           event: 'answer',
@@ -387,19 +662,21 @@ export const useWebRTC = ({
         });
       }
     } catch (err) {
-      //console.error('Error handling offer:', err);
+      log('Error handling offer:', err);
     }
   };
 
   const handleAnswer = async (payload: any) => {
     try {
+      log('Handling answer from:', payload.from);
       const peer = peerConnectionsRef.current.get(payload.from);
       if (peer) {
         await peer.connection.setRemoteDescription(new RTCSessionDescription(payload.answer));
         await applyPendingIceCandidates(payload.from, peer.connection);
+        log('Answer processed successfully');
       }
     } catch (err) {
-      //console.error('Error handling answer:', err);
+      log('Error handling answer:', err);
     }
   };
 
@@ -407,26 +684,29 @@ export const useWebRTC = ({
     try {
       const peer = peerConnectionsRef.current.get(payload.from);
       if (peer && peer.connection.remoteDescription) {
+        log('Adding ICE candidate from:', payload.from);
         await peer.connection.addIceCandidate(new RTCIceCandidate(payload.candidate));
       } else {
-        // Buffer candidate if peer connection not ready or remote description not set
+        // Buffer candidate if peer connection not ready
+        log('Buffering ICE candidate from:', payload.from);
         const candidates = pendingIceCandidatesRef.current.get(payload.from) || [];
         candidates.push(new RTCIceCandidate(payload.candidate));
         pendingIceCandidatesRef.current.set(payload.from, candidates);
       }
     } catch (err) {
-      //console.error('Error handling ICE candidate:', err);
+      log('Error handling ICE candidate:', err);
     }
   };
 
   const applyPendingIceCandidates = async (userId: string, pc: RTCPeerConnection) => {
     const candidates = pendingIceCandidatesRef.current.get(userId);
     if (candidates && pc.remoteDescription) {
+      log('Applying', candidates.length, 'buffered ICE candidates for:', userId);
       for (const candidate of candidates) {
         try {
           await pc.addIceCandidate(candidate);
         } catch (e) {
-          //console.error('Error adding buffered ICE candidate:', e);
+          log('Error adding buffered ICE candidate:', e);
         }
       }
       pendingIceCandidatesRef.current.delete(userId);
@@ -439,16 +719,42 @@ export const useWebRTC = ({
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setIsMuted(!audioTrack.enabled);
+        log('Microphone', audioTrack.enabled ? 'unmuted' : 'muted');
+        
+        // Broadcast mute state
+        if (signalingChannelRef.current && currentUserIdRef.current) {
+          signalingChannelRef.current.send({
+            type: 'broadcast',
+            event: 'participant-muted',
+            payload: { 
+              userId: currentUserIdRef.current, 
+              muted: !audioTrack.enabled,
+              timestamp: Date.now()
+            }
+          });
+        }
       }
     }
   }, [localStream]);
 
   const stopBroadcasting = useCallback(async () => {
+    log('Stopping broadcasting...');
     let audioBlob: Blob | null = null;
 
     // Stop recording and get the recorded audio
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       audioBlob = await stopRecording();
+    }
+
+    // Stop and remove all audio analysis
+    analysersRef.current.forEach((analyser, userId) => {
+      analyser.disconnect();
+    });
+    analysersRef.current.clear();
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
     }
 
     if (localStream) {
@@ -458,32 +764,229 @@ export const useWebRTC = ({
     }
     setIsConnected(false);
 
+    log('Broadcasting stopped');
     return audioBlob;
   }, [localStream]);
 
+  const requestPermission = useCallback((requestType: 'speak' | 'cohost') => {
+    if (!signalingChannelRef.current || !currentUserIdRef.current) return;
+
+    log('Requesting permission:', requestType);
+    signalingChannelRef.current.send({
+      type: 'broadcast',
+      event: 'permission-request',
+      payload: {
+        userId: currentUserIdRef.current,
+        requestType,
+        timestamp: Date.now()
+      }
+    });
+
+    // Also save to database for persistence
+    savePermissionRequest(requestType);
+  }, []);
+
+  const savePermissionRequest = async (requestType: 'speak' | 'cohost') => {
+    try {
+      await supabase.from('podcast_participation_requests').insert({
+        podcast_id: podcastId,
+        user_id: currentUserIdRef.current!,
+        request_type: requestType,
+        status: 'pending'
+      });
+    } catch (err) {
+      log('Error saving permission request:', err);
+    }
+  };
+
+  const grantPermission = useCallback(async (userId: string, requestType: 'speak' | 'cohost') => {
+    if (!signalingChannelRef.current) return;
+
+    log('Granting permission to:', userId, 'type:', requestType);
+    
+    // Update database
+    try {
+      const { error } = await supabase
+        .from('podcast_participation_requests')
+        .update({
+          status: 'approved',
+          responded_at: new Date().toISOString(),
+          responder_id: currentUserIdRef.current
+        })
+        .eq('podcast_id', podcastId)
+        .eq('user_id', userId)
+        .eq('status', 'pending');
+
+      if (error) throw error;
+
+      // If cohost request, add to cohosts table
+      if (requestType === 'cohost') {
+        await supabase
+          .from('podcast_cohosts')
+          .upsert({
+            podcast_id: podcastId,
+            user_id: userId,
+            permissions: ['speak', 'moderate'],
+            is_active: true
+          });
+      }
+    } catch (err) {
+      log('Error updating permission in database:', err);
+    }
+
+    // Broadcast permission granted
+    try {
+      signalingChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'permission-granted',
+        payload: {
+          userId,
+          requestType,
+          grantedBy: currentUserIdRef.current,
+          timestamp: Date.now()
+        }
+      });
+    } catch (e) {
+      log('Error broadcasting permission-granted, will rely on DB subscription:', e);
+    }
+
+    // Remove from local requests
+    setPermissionRequests(prev => prev.filter(req => req.userId !== userId));
+  }, [podcastId]);
+
+  const revokePermission = useCallback(async (userId: string) => {
+    if (!signalingChannelRef.current) return;
+
+    log('Revoking permission from:', userId);
+    
+    // Update database
+    try {
+      await supabase
+        .from('podcast_participation_requests')
+        .update({
+          status: 'revoked',
+          responded_at: new Date().toISOString(),
+          responder_id: currentUserIdRef.current
+        })
+        .eq('podcast_id', podcastId)
+        .eq('user_id', userId)
+        .eq('status', 'approved');
+
+      // Remove from cohosts if exists
+      await supabase
+        .from('podcast_cohosts')
+        .update({ is_active: false })
+        .eq('podcast_id', podcastId)
+        .eq('user_id', userId);
+    } catch (err) {
+      log('Error revoking permission in database:', err);
+    }
+
+    try {
+      signalingChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'permission-revoked',
+        payload: {
+          userId,
+          revokedBy: currentUserIdRef.current,
+          timestamp: Date.now()
+        }
+      });
+    } catch (e) {
+      log('Error broadcasting permission-revoked, will rely on DB subscription:', e);
+    }
+  }, [podcastId]);
+
+  const setParticipantsMuted = useCallback((userId: string, muted: boolean) => {
+    const participant = participants.get(userId);
+    if (participant) {
+      participant.stream.getAudioTracks().forEach(track => {
+        track.enabled = !muted;
+      });
+
+      // Update local state
+      setParticipants(prev => {
+        const newMap = new Map(prev);
+        const p = newMap.get(userId);
+        if (p) {
+          newMap.set(userId, { ...p, isMuted: muted });
+        }
+        return newMap;
+      });
+
+      // Broadcast mute state
+      if (signalingChannelRef.current) {
+        signalingChannelRef.current.send({
+          type: 'broadcast',
+          event: 'participant-muted',
+          payload: { userId, muted, timestamp: Date.now() }
+        });
+      }
+    }
+  }, [participants]);
+
   const cleanup = () => {
+    log('Cleaning up WebRTC...');
+    
     // Close all peer connections
     peerConnectionsRef.current.forEach(({ connection }) => {
-      connection.close();
+      try { connection.close(); } catch (e) { log('Error closing connection', e); }
     });
     peerConnectionsRef.current.clear();
 
+    // Stop and remove all audio analysis
+    analysersRef.current.forEach(analyser => {
+      try { analyser.disconnect(); } catch (e) { }
+    });
+    analysersRef.current.clear();
+
+    if (audioContextRef.current) {
+      try { audioContextRef.current.close(); } catch (e) { }
+      audioContextRef.current = null;
+    }
+
     // Stop local stream
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
+      try { localStreamRef.current.getTracks().forEach(track => track.stop()); } catch (e) { }
       localStreamRef.current = null;
     }
 
-    // Unsubscribe from signaling channel
+    // Only unsubscribe signaling channel for non-hosts/non-cohosts.
+    // Hosts/cohosts may close the UI but should keep the channel open while broadcasting.
     if (signalingChannelRef.current) {
-      signalingChannelRef.current.unsubscribe();
+      if (!isHost && !isCohostMode) {
+        try {
+          signalingChannelRef.current.unsubscribe();
+        } catch (e) { log('Error unsubscribing channel', e); }
+        signalingChannelRef.current = null;
+      } else {
+        log('Keeping signaling channel open for host/cohost');
+      }
     }
 
     pendingIceCandidatesRef.current.clear();
     pendingListenersRef.current.clear();
-
+    setParticipants(new Map());
     setIsConnected(false);
+    log('WebRTC cleanup complete');
   };
+
+  // Connection monitor: periodically ensure signaling channel remains subscribed
+  useEffect(() => {
+    const id = setInterval(() => {
+      try {
+        const ch = signalingChannelRef.current as any;
+        if (!ch || ch.state !== 'SUBSCRIBED') {
+          log('Signaling channel not subscribed, attempting to re-setup');
+          setupSignalingChannel();
+        }
+      } catch (e) {
+        log('Connection monitor error', e);
+      }
+    }, 5000);
+
+    return () => clearInterval(id);
+  }, [podcastId, isHost, isCohostMode]);
 
   return {
     localStream,
@@ -492,8 +995,18 @@ export const useWebRTC = ({
     connectionQuality,
     error,
     recordedChunks,
+    participants: Array.from(participants.entries()).map(([userId, data]) => ({
+      userId,
+      ...data
+    })),
+    permissionRequests,
+    isCohostMode,
     toggleMute,
     stopBroadcasting,
-    startBroadcasting
+    startBroadcasting,
+    requestPermission,
+    grantPermission,
+    revokePermission,
+    setParticipantsMuted
   };
 };

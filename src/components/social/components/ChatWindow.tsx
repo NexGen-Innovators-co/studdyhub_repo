@@ -785,7 +785,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         setDocumentsOffset(prev => prev + ITEMS_PER_PAGE);
       }
     } catch (error) {
-      console.error('Error loading more documents:', error);
+      //console.error('Error loading more documents:', error);
     } finally {
       setIsLoadingMore(false);
     }
