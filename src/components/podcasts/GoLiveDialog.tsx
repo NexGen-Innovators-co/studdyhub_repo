@@ -19,13 +19,17 @@ import {
   Users,
   Globe,
   Lock,
+  Image as ImageIcon,
   Loader2,
   AlertCircle,
   Award,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Sparkles,
+  X
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '../ui/alert';
 import { checkPodcastCreationEligibility } from '@/services/podcastModerationService';
@@ -42,10 +46,14 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
   onClose,
   onLiveStart
 }) => {
+  const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [tags, setTags] = useState('');
+  const [coverImage, setCoverImage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isGeneratingAiCover, setIsGeneratingAiCover] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [eligibility, setEligibility] = useState<any>(null);
   const [checkingEligibility, setCheckingEligibility] = useState(true);
@@ -96,6 +104,7 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
           user_id: user.id,
           title: title.trim(),
           description: description.trim() || null,
+          cover_image_url: coverImage || null,
           is_public: isPublic,
           is_live: true,
           live_started_at: new Date().toISOString(),
@@ -121,15 +130,21 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
           role: 'owner'
         });
 
-      // Create social post about going live
+      // Create social post about going live and attach podcast_id so the post links to the podcast
+      let createdPostId: string | null = null;
       if (isPublic) {
-        await supabase
+        const { data: post, error: postError } = await supabase
           .from('social_posts')
           .insert({
             author_id: user.id,
             content: `🔴 LIVE NOW: ${title}${description ? '\n\n' + description : ''}\n\nJoin the live podcast now!`,
-            privacy: 'public'
-          });
+            privacy: 'public',
+          })
+          .select()
+          .single();
+
+        if (postError) throw postError;
+        createdPostId = post?.id || null;
       }
 
       // Send notification to all podcast members (including owner)
@@ -155,9 +170,13 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
       onLiveStart?.(podcast.id);
       onClose();
 
+      // Navigate to the podcast page so the host sees the live stream immediately
+      navigate(`/podcasts/${podcast.id}`);
+
       // Reset form
       setTitle('');
       setDescription('');
+      setCoverImage(null);
       setTags('');
       setIsPublic(true);
     } catch (error: any) {
@@ -168,9 +187,81 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const filePath = `covers/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('podcasts')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('podcasts')
+        .getPublicUrl(filePath);
+
+      setCoverImage(publicUrl);
+      toast.success('Cover image uploaded successfully');
+    } catch (error: any) {
+      //console.error('Error uploading image:', error);
+      toast.error('Failed to upload cover image');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleGenerateAiCover = async () => {
+    setIsGeneratingAiCover(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const prompt = title.trim()
+        ? `A professional podcast cover for a live stream titled: ${title.trim()}. Modern, clean, vibrant, bold typography.`
+        : "A professional live podcast cover, modern design, vibrant colors, clean typography.";
+
+      const { data, error } = await supabase.functions.invoke('generate-image-from-text', {
+        body: { description: prompt, userId: user.id }
+      });
+
+      if (error) throw error;
+      if (data?.imageUrl) {
+        setCoverImage(data.imageUrl);
+        toast.success('AI cover generated successfully');
+      } else {
+        throw new Error('No image URL returned');
+      }
+    } catch (error: any) {
+      //console.error('Error generating AI cover:', error);
+      toast.error('Failed to generate AI cover');
+    } finally {
+      setIsGeneratingAiCover(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-scroll bg-white dark:bg-gray-900">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Radio className="h-5 w-5 text-red-500 animate-pulse" />
@@ -300,6 +391,71 @@ export const GoLiveDialog: React.FC<GoLiveDialogProps> = ({
               )}
             </div>
             <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+          </div>
+
+          {/* Cover Image Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-sm font-medium text-gray-900 dark:text-white">
+                Cover Image (Optional)
+              </Label>
+              {!coverImage && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                  onClick={handleGenerateAiCover}
+                  disabled={isGeneratingAiCover || isUploadingImage}
+                >
+                  {isGeneratingAiCover ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  Generate with AI
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-col gap-4">
+              {coverImage ? (
+                <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 group">
+                  <img
+                    src={coverImage}
+                    alt="Podcast cover"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    onClick={() => setCoverImage(null)}
+                    className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      {isUploadingImage ? (
+                        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+                      ) : (
+                        <>
+                          <ImageIcon className="h-8 w-8 text-gray-400 mb-2" />
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Click to upload cover image</p>
+                          <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
+                        </>
+                      )}
+                    </div>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={isUploadingImage || isGeneratingAiCover}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Info Alert */}

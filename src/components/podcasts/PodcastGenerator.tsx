@@ -1,7 +1,6 @@
-// src/components/aiChat/PodcastGenerator.tsx
+// src/components/aiChat/PodcastGenerator.tsx - Complete with fixed types
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
@@ -11,12 +10,7 @@ import { Checkbox } from '../ui/checkbox';
 import {
   Podcast,
   Loader2,
-  Play,
-  Pause,
-  Download,
   X,
-  Volume2,
-  Clock,
   Sparkles,
   CheckCircle2,
   XCircle,
@@ -33,36 +27,59 @@ import { toast } from 'sonner';
 import { checkPodcastCreationEligibility } from '@/services/podcastModerationService';
 import { Link } from 'react-router-dom';
 
-interface PodcastGeneratorProps {
-  selectedNoteIds?: string[];
-  selectedDocumentIds?: string[];
-  onClose?: () => void;
-  onPodcastGenerated?: (podcast: PodcastData) => void;
-}
-
+// Unified types matching database schema
 export interface AudioSegment {
   speaker: string;
-  audioContent: string;
+  audioContent?: string;
   text: string;
   index: number;
-  audio_url?: string; // For live podcasts stored in storage
+  audio_url?: string;
+  start_time?: number;
+  end_time?: number;
+}
+
+export interface VisualAsset {
+  type: 'image' | 'video';
+  concept: string;
+  description: string;
+  url: string;
+  timestamp: number | null;
+  segmentIndex?: number;
 }
 
 export interface PodcastData {
   id: string;
   title: string;
-  script: string;
-  audioSegments: AudioSegment[];
-  duration: number;
-  sources: string[];
-  style: string;
-  created_at: string;
-  cover_image_url?: string; // Optional cover image
-  is_live?: boolean; // Whether podcast is live
-  description?: string; // Optional description
-  tags?: string[]; // Optional tags
-  listen_count?: number; // Optional listen count
-  is_public: boolean | null
+  description?: string | null;
+  script?: string;
+  audioSegments?: AudioSegment[];
+  duration?: number;
+  sources?: string[];
+  style?: string;
+  created_at?: string;
+  podcast_type?: 'audio' | 'image-audio' | 'video' | 'live-stream' | null;
+  visual_assets?: VisualAsset[] | null;
+  cover_image_url?: string | null;
+  is_live?: boolean | null;
+  tags?: string[] | null;
+  listen_count?: number | null;
+  share_count?: number | null;
+  user_id?: string;
+  user?: {
+    id: string;
+    full_name?: string | null;
+    avatar_url?: string | null;
+    username?: string | null;
+  };
+  is_public?: boolean | null;
+  audio_url?: string | null;
+}
+
+interface PodcastGeneratorProps {
+  selectedNoteIds?: string[];
+  selectedDocumentIds?: string[];
+  onClose?: () => void;
+  onPodcastGenerated?: (podcast: PodcastData) => void;
 }
 
 export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
@@ -108,7 +125,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           return;
         }
 
-        // Check if user is admin first - admins have full access
+        // Check if user is admin first
         const { data: adminUser } = await supabase
           .from('admin_users')
           .select('role')
@@ -116,7 +133,6 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           .maybeSingle();
 
         if (adminUser) {
-          // Admins bypass all checks
           setEligibility({
             canCreate: true,
             hasSubscription: true,
@@ -138,8 +154,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           requirementsNeeded: []
         });
       } catch (error) {
-
-        // Allow creation on error to not block users
+        //console.error('Error checking eligibility:', error);
         setEligibility({
           canCreate: true,
           hasSubscription: false,
@@ -163,7 +178,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Fetch paginated notes
+        // Fetch notes
         const { data: notes } = await supabase
           .from('notes')
           .select('id, title, updated_at')
@@ -176,7 +191,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           setNotesHasMore(notes.length === 20);
         }
 
-        // Fetch paginated documents
+        // Fetch documents
         const { data: documents } = await supabase
           .from('documents')
           .select('id, title, updated_at')
@@ -189,17 +204,16 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           setDocumentsHasMore(documents.length === 20);
         }
       } catch (error) {
-
+        //console.error('Error fetching content:', error);
       } finally {
         setLoadingContent(false);
       }
     };
 
     fetchContent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notesPage, documentsPage]);
 
-  // Infinite scroll for notes/documents
+  // Infinite scroll refs
   const notesScrollRef = React.useRef<HTMLDivElement>(null);
   const documentsScrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -211,8 +225,10 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
         loadMore();
       }
     };
+
     const notesDiv = notesScrollRef.current;
     const docsDiv = documentsScrollRef.current;
+
     if (notesDiv) {
       const onScroll = () => handleScroll(notesScrollRef, notesHasMore, () => setNotesPage(p => p + 1));
       notesDiv.addEventListener('scroll', onScroll);
@@ -227,17 +243,13 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
 
   const toggleNoteSelection = (noteId: string) => {
     setLocalSelectedNoteIds(prev =>
-      prev.includes(noteId)
-        ? prev.filter(id => id !== noteId)
-        : [...prev, noteId]
+      prev.includes(noteId) ? prev.filter(id => id !== noteId) : [...prev, noteId]
     );
   };
 
   const toggleDocumentSelection = (docId: string) => {
     setLocalSelectedDocumentIds(prev =>
-      prev.includes(docId)
-        ? prev.filter(id => id !== docId)
-        : [...prev, docId]
+      prev.includes(docId) ? prev.filter(id => id !== docId) : [...prev, docId]
     );
   };
 
@@ -245,13 +257,11 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('Please upload an image file');
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('Image size must be less than 5MB');
       return;
@@ -279,7 +289,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
       setCoverImage(publicUrl);
       toast.success('Cover image uploaded successfully');
     } catch (error: any) {
-      console.error('Error uploading image:', error);
+      //console.error('Error uploading image:', error);
       toast.error('Failed to upload cover image');
     } finally {
       setIsUploadingImage(false);
@@ -292,7 +302,6 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Get titles of selected notes/docs for the prompt
       const selectedTitles = [
         ...availableNotes.filter(n => localSelectedNoteIds.includes(n.id)).map(n => n.title),
         ...availableDocuments.filter(d => localSelectedDocumentIds.includes(d.id)).map(d => d.title)
@@ -314,7 +323,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
         throw new Error('No image URL returned');
       }
     } catch (error: any) {
-      console.error('Error generating AI cover:', error);
+      //console.error('Error generating AI cover:', error);
       toast.error('Failed to generate AI cover');
     } finally {
       setIsGeneratingAiCover(false);
@@ -322,13 +331,6 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
   };
 
   const generatePodcast = async () => {
-    // Allow generation without pre-selected content for podcast page
-    // if (selectedNoteIds.length === 0 && selectedDocumentIds.length === 0) {
-    //   toast.error('Please select at least one note or document');
-    //   return;
-    // }
-
-    // Check eligibility before generating
     if (!eligibility?.canCreate) {
       toast.error('You do not meet the requirements to generate podcasts');
       return;
@@ -350,7 +352,6 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
         }
       });
 
-      // Check for errors in the response
       if (response.error) {
         throw new Error(response.error.message || 'Failed to generate podcast');
       }
@@ -362,12 +363,58 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
       }
 
       if (result.success) {
-        // Map snake_case fields from backend to camelCase for frontend compatibility
-        const podcast = {
-          ...result.podcast,
-          audioSegments: result.podcast.audio_segments,
-          visualAssets: result.podcast.visual_assets,
+        // Map backend response to frontend types
+        const backendPodcast = result.podcast;
+        
+        // Parse audio_segments if it's a string
+        let audioSegments: AudioSegment[] = [];
+        if (backendPodcast.audio_segments) {
+          if (typeof backendPodcast.audio_segments === 'string') {
+            try {
+              audioSegments = JSON.parse(backendPodcast.audio_segments);
+            } catch (e) {
+              audioSegments = backendPodcast.audio_segments;
+            }
+          } else {
+            audioSegments = backendPodcast.audio_segments;
+          }
+        }
+
+        // Parse visual_assets if it's a string
+        let visualAssets: VisualAsset[] | null = null;
+        if (backendPodcast.visual_assets) {
+          if (typeof backendPodcast.visual_assets === 'string') {
+            try {
+              visualAssets = JSON.parse(backendPodcast.visual_assets);
+            } catch (e) {
+              visualAssets = backendPodcast.visual_assets;
+            }
+          } else {
+            visualAssets = backendPodcast.visual_assets;
+          }
+        }
+
+        const podcast: PodcastData = {
+          id: backendPodcast.id,
+          title: backendPodcast.title,
+          description: backendPodcast.description,
+          script: backendPodcast.script,
+          audioSegments: audioSegments,
+          duration: backendPodcast.duration_minutes || backendPodcast.duration || 0,
+          sources: backendPodcast.sources || [],
+          style: backendPodcast.style,
+          created_at: backendPodcast.created_at,
+          podcast_type: backendPodcast.podcast_type as 'audio' | 'image-audio' | 'video' | 'live-stream' | null,
+          visual_assets: visualAssets,
+          cover_image_url: backendPodcast.cover_image_url,
+          is_live: backendPodcast.is_live || false,
+          tags: backendPodcast.tags || [],
+          listen_count: backendPodcast.listen_count || 0,
+          share_count: backendPodcast.share_count || 0,
+          user_id: backendPodcast.user_id || user.id,
+          is_public: backendPodcast.is_public || false,
         };
+
         toast.success('Podcast generated successfully!', { icon: '🎙️' });
         onPodcastGenerated?.(podcast);
         onClose?.();
@@ -375,7 +422,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
         throw new Error(result.error || 'Failed to generate podcast');
       }
     } catch (error: any) {
-
+      //console.error('Error generating podcast:', error);
       toast.error(error.message || 'Failed to generate podcast');
     } finally {
       setIsGenerating(false);
@@ -384,13 +431,13 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden bg-white dark:bg-gray-900">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
             <Sparkles className="h-5 w-5 text-purple-600" />
             Generate AI Podcast
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-gray-600 dark:text-gray-400">
             Create a conversational podcast from your selected content
           </DialogDescription>
         </DialogHeader>
@@ -399,7 +446,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
           {checkingEligibility ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-              <span className="ml-2 text-sm text-muted-foreground">Checking eligibility...</span>
+              <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Checking eligibility...</span>
             </div>
           ) : !eligibility?.canCreate ? (
             <div className="space-y-4">
@@ -441,39 +488,39 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
               </div>
               <div className="flex gap-2">
                 <Button asChild className="flex-1">
-                  <Link to="/subscription">
-                    View Subscription Plans
-                  </Link>
+                  <Link to="/subscription">View Subscription Plans</Link>
                 </Button>
-                <Button variant="outline" onClick={onClose}>
-                  Close
-                </Button>
+                <Button variant="outline" onClick={onClose}>Close</Button>
               </div>
             </div>
           ) : (
             <div className="space-y-6">
               {/* Content Selection */}
               <div>
-                <Label className="text-sm font-medium mb-3 block">Select Content for Podcast</Label>
+                <Label className="text-sm font-medium mb-3 block text-gray-900 dark:text-white">
+                  Select Content for Podcast
+                </Label>
 
                 {loadingContent ? (
                   <div className="flex items-center justify-center py-4">
                     <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
-                    <span className="ml-2 text-sm text-muted-foreground">Loading your content...</span>
+                    <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Loading your content...</span>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {/* Notes Selection */}
                     {availableNotes.length > 0 && (
-                      <div className="border rounded-lg p-4">
+                      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                         <div className="flex items-center gap-2 mb-3">
                           <FileText className="h-4 w-4 text-purple-600" />
-                          <Label className="text-sm font-medium">Notes ({availableNotes.length})</Label>
+                          <Label className="text-sm font-medium text-gray-900 dark:text-white">
+                            Notes ({availableNotes.length})
+                          </Label>
                         </div>
                         <ScrollArea className="h-[150px]" ref={notesScrollRef}>
                           <div className="space-y-2">
                             {availableNotes.map(note => (
-                              <div key={note.id} className="flex items-start space-x-2 p-2 rounded hover:bg-accent">
+                              <div key={note.id} className="flex items-start space-x-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                                 <Checkbox
                                   id={`note-${note.id}`}
                                   checked={localSelectedNoteIds.includes(note.id)}
@@ -481,10 +528,10 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                                 />
                                 <label
                                   htmlFor={`note-${note.id}`}
-                                  className="flex-1 text-sm cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                  className="flex-1 text-sm cursor-pointer leading-none text-gray-900 dark:text-gray-100"
                                 >
                                   <div className="font-medium">{note.title}</div>
-                                  <div className="text-xs text-muted-foreground">
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
                                     {new Date(note.updated_at).toLocaleDateString()}
                                   </div>
                                 </label>
@@ -504,15 +551,17 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
 
                     {/* Documents Selection */}
                     {availableDocuments.length > 0 && (
-                      <div className="border rounded-lg p-4">
+                      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                         <div className="flex items-center gap-2 mb-3">
                           <File className="h-4 w-4 text-blue-600" />
-                          <Label className="text-sm font-medium">Documents ({availableDocuments.length})</Label>
+                          <Label className="text-sm font-medium text-gray-900 dark:text-white">
+                            Documents ({availableDocuments.length})
+                          </Label>
                         </div>
                         <ScrollArea className="h-[150px]" ref={documentsScrollRef}>
                           <div className="space-y-2">
                             {availableDocuments.map(doc => (
-                              <div key={doc.id} className="flex items-start space-x-2 p-2 rounded hover:bg-accent">
+                              <div key={doc.id} className="flex items-start space-x-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                                 <Checkbox
                                   id={`doc-${doc.id}`}
                                   checked={localSelectedDocumentIds.includes(doc.id)}
@@ -520,10 +569,10 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                                 />
                                 <label
                                   htmlFor={`doc-${doc.id}`}
-                                  className="flex-1 text-sm cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                  className="flex-1 text-sm cursor-pointer leading-none text-gray-900 dark:text-gray-100"
                                 >
                                   <div className="font-medium">{doc.title}</div>
-                                  <div className="text-xs text-muted-foreground">
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
                                     {new Date(doc.updated_at).toLocaleDateString()}
                                   </div>
                                 </label>
@@ -542,7 +591,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                     )}
 
                     {availableNotes.length === 0 && availableDocuments.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
+                      <div className="text-center py-8 text-gray-600 dark:text-gray-400">
                         <p className="mb-2">No content available yet.</p>
                         <Button
                           variant="outline"
@@ -570,9 +619,8 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                       </div>
                     )}
 
-                    {/* Info message if nothing selected */}
                     {localSelectedNoteIds.length === 0 && localSelectedDocumentIds.length === 0 && (availableNotes.length > 0 || availableDocuments.length > 0) && (
-                      <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                         <Sparkles className="h-4 w-4 inline mr-2 text-blue-600" />
                         No content selected. We'll use your 5 most recent notes to generate the podcast.
                       </div>
@@ -581,32 +629,17 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                 )}
               </div>
 
-              {/* Selected Sources - Hidden now, replaced by selection above */}
-              {/* 
-          <div>
-            <Label className="text-sm font-medium mb-2 block">Selected Sources</Label>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              {selectedNoteIds.length} note{selectedNoteIds.length !== 1 ? 's' : ''}
-              {selectedDocumentIds.length > 0 && (
-                <>
-                  <span>•</span>
-                  {selectedDocumentIds.length} document{selectedDocumentIds.length !== 1 ? 's' : ''}
-                </>
-              )}
-            </div>
-          </div>
-          */}
-
               {/* Cover Image Selection */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Label className="text-sm font-medium block">Cover Image (Optional)</Label>
+                  <Label className="text-sm font-medium text-gray-900 dark:text-white">
+                    Cover Image (Optional)
+                  </Label>
                   {!coverImage && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 text-xs gap-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                      className="h-8 text-xs gap-1.5 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
                       onClick={handleGenerateAiCover}
                       disabled={isGeneratingAiCover || isUploadingImage}
                     >
@@ -621,7 +654,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                 </div>
                 <div className="flex flex-col gap-4">
                   {coverImage ? (
-                    <div className="relative w-full aspect-video rounded-lg overflow-hidden border group">
+                    <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 group">
                       <img
                         src={coverImage}
                         alt="Podcast cover"
@@ -636,15 +669,15 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
                     </div>
                   ) : (
                     <div className="flex items-center justify-center w-full">
-                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-accent/50 transition-colors">
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                         <div className="flex flex-col items-center justify-center pt-5 pb-6">
                           {isUploadingImage ? (
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
                           ) : (
                             <>
-                              <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
-                              <p className="text-sm text-muted-foreground">Click to upload cover image</p>
-                              <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                              <ImageIcon className="h-8 w-8 text-gray-400 mb-2" />
+                              <p className="text-sm text-gray-600 dark:text-gray-400">Click to upload cover image</p>
+                              <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
                             </>
                           )}
                         </div>
@@ -663,56 +696,56 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
 
               {/* Podcast Type Selection */}
               <div>
-                <Label className="text-sm font-medium mb-3 block">Podcast Type</Label>
+                <Label className="text-sm font-medium mb-3 block text-gray-900 dark:text-white">Podcast Type</Label>
                 <RadioGroup value={podcastType} onValueChange={(v) => setPodcastType(v as any)}>
                   <div className="space-y-3">
-                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="audio" id="audio" />
                       <div className="flex-1">
-                        <Label htmlFor="audio" className="cursor-pointer font-medium flex items-center gap-2">
+                        <Label htmlFor="audio" className="cursor-pointer font-medium flex items-center gap-2 text-gray-900 dark:text-white">
                           <Headphones className="h-4 w-4" />
                           Audio Only
                         </Label>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Traditional audio podcast - perfect for listening on the go
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="image-audio" id="image-audio" />
                       <div className="flex-1">
-                        <Label htmlFor="image-audio" className="cursor-pointer font-medium flex items-center gap-2">
+                        <Label htmlFor="image-audio" className="cursor-pointer font-medium flex items-center gap-2 text-gray-900 dark:text-white">
                           <ImageIcon className="h-4 w-4" />
                           Image + Audio
                           <Badge variant="secondary" className="text-xs">AI Generated</Badge>
                         </Label>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Audio with AI-generated visual illustrations for key concepts
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="video" id="video" />
                       <div className="flex-1">
-                        <Label htmlFor="video" className="cursor-pointer font-medium flex items-center gap-2">
+                        <Label htmlFor="video" className="cursor-pointer font-medium flex items-center gap-2 text-gray-900 dark:text-white">
                           <Video className="h-4 w-4" />
                           Video Podcast
                           <Badge variant="secondary" className="text-xs">AI Generated</Badge>
                         </Label>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Full video with animated visuals, slides, and dynamic content
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="live-stream" id="live-stream" />
                       <div className="flex-1">
-                        <Label htmlFor="live-stream" className="cursor-pointer font-medium flex items-center gap-2">
+                        <Label htmlFor="live-stream" className="cursor-pointer font-medium flex items-center gap-2 text-gray-900 dark:text-white">
                           <Radio className="h-4 w-4 text-red-500" />
                           Live AI Stream
                           <Badge variant="destructive" className="text-xs">Premium</Badge>
                         </Label>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Real-time AI-powered video stream with interactive visuals
                         </p>
                       </div>
@@ -723,38 +756,38 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
 
               {/* Style Selection */}
               <div>
-                <Label className="text-sm font-medium mb-3 block">Podcast Style</Label>
+                <Label className="text-sm font-medium mb-3 block text-gray-900 dark:text-white">Podcast Style</Label>
                 <RadioGroup value={style} onValueChange={(v) => setStyle(v as any)}>
                   <div className="space-y-3">
-                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="casual" id="casual" />
                       <div className="flex-1">
-                        <Label htmlFor="casual" className="cursor-pointer font-medium">
+                        <Label htmlFor="casual" className="cursor-pointer font-medium text-gray-900 dark:text-white">
                           Casual Chat
                         </Label>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Friendly conversation between two hosts, like chatting over coffee
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="educational" id="educational" />
                       <div className="flex-1">
-                        <Label htmlFor="educational" className="cursor-pointer font-medium">
+                        <Label htmlFor="educational" className="cursor-pointer font-medium text-gray-900 dark:text-white">
                           Educational
                         </Label>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Informative discussion breaking down complex concepts clearly
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-start space-x-3 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-start space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="deep-dive" id="deep-dive" />
                       <div className="flex-1">
-                        <Label htmlFor="deep-dive" className="cursor-pointer font-medium">
+                        <Label htmlFor="deep-dive" className="cursor-pointer font-medium text-gray-900 dark:text-white">
                           Deep Dive
                         </Label>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Analytical exploration of nuances and connections
                         </p>
                       </div>
@@ -765,24 +798,24 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
 
               {/* Duration Selection */}
               <div>
-                <Label className="text-sm font-medium mb-3 block">Duration</Label>
+                <Label className="text-sm font-medium mb-3 block text-gray-900 dark:text-white">Duration</Label>
                 <RadioGroup value={duration} onValueChange={(v) => setDuration(v as any)}>
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="flex items-center space-x-2 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-center space-x-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="short" id="short" />
-                      <Label htmlFor="short" className="cursor-pointer">
+                      <Label htmlFor="short" className="cursor-pointer text-gray-900 dark:text-white">
                         5-7 min
                       </Label>
                     </div>
-                    <div className="flex items-center space-x-2 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-center space-x-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="medium" id="medium" />
-                      <Label htmlFor="medium" className="cursor-pointer">
+                      <Label htmlFor="medium" className="cursor-pointer text-gray-900 dark:text-white">
                         12-15 min
                       </Label>
                     </div>
-                    <div className="flex items-center space-x-2 p-3 rounded-lg border cursor-pointer hover:bg-accent">
+                    <div className="flex items-center space-x-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                       <RadioGroupItem value="long" id="long" />
-                      <Label htmlFor="long" className="cursor-pointer">
+                      <Label htmlFor="long" className="cursor-pointer text-gray-900 dark:text-white">
                         25-30 min
                       </Label>
                     </div>
@@ -794,7 +827,7 @@ export const PodcastGenerator: React.FC<PodcastGeneratorProps> = ({
               <Button
                 onClick={generatePodcast}
                 disabled={isGenerating || !eligibility?.canCreate}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
                 size="lg"
               >
                 {isGenerating ? (

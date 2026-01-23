@@ -103,7 +103,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
       onContentChange(response);
       toast.success('Post rewritten!');
     } catch (error: any) {
-      console.error('Rewrite error:', error);
+      //console.error('Rewrite error:', error);
       toast.error(error.message || 'Failed to rewrite post');
     } finally {
       setIsRewriting(false);

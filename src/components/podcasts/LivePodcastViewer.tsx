@@ -1,37 +1,39 @@
-// LivePodcastViewer.tsx - View and interact with live podcast streams
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+// LivePodcastViewer.tsx - Updated with enhanced participation features
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { ScrollArea } from '../ui/scroll-area';
-import { Input } from '../ui/input';
-import { Slider } from '../ui/slider';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import {
-  Radio,
-  Users,
-  MessageCircle,
-  Send,
-  UserPlus,
-  Share2,
-  Clock,
-  Mic,
-  MicOff,
   X,
-  AlertCircle,
+  Play,
+  Pause,
   Volume2,
   VolumeX,
+  Users,
+  Clock,
+  Radio,
+  Loader2,
+  Share2,
   Wifi,
   WifiOff,
   Activity,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Menu,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Crown,
+  Mic,
+  MicOff
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { useWebRTC } from '@/hooks/useWebRTC';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
 
 interface LivePodcastViewerProps {
   podcastId: string;
@@ -48,74 +50,124 @@ interface Listener {
   joined_at: string;
 }
 
-interface ChatMessage {
+interface PodcastData {
   id: string;
+  title: string;
+  description?: string;
+  cover_image_url?: string;
   user_id: string;
-  message: string;
-  created_at: string;
   user?: {
     full_name: string;
     avatar_url?: string;
+    username?: string;
   };
+  live_started_at?: string;
+  listen_count?: number;
 }
 
 export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
   podcastId,
   onClose
 }) => {
-  const [podcast, setPodcast] = useState<any>(null);
+  const [podcast, setPodcast] = useState<PodcastData | null>(null);
   const [listeners, setListeners] = useState<Listener[]>([]);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [isListening, setIsListening] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [volume, setVolume] = useState(100);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const [showListeners, setShowListeners] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [showControls, setShowControls] = useState(true);
+  const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [recentJoiner, setRecentJoiner] = useState<string | null>(null);
-  const isMobile = useIsMobile();
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [hasRequestedPermission, setHasRequestedPermission] = useState(false);
+  const [isParticipant, setIsParticipant] = useState(false);
+  const [isMicMuted, setIsMicMuted] = useState(true);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
   const audioRef = useRef<HTMLAudioElement>(null);
+  const videoAreaRef = useRef<HTMLDivElement>(null);
+  const mainContainerRef = useRef<HTMLDivElement>(null);
 
   const {
     isConnected,
     connectionQuality,
     error,
-    startBroadcasting // This will trigger a re-announcement if we add it to the hook
+    participants,
+    permissionRequests,
+    requestPermission,
+    isCohostMode,
+    toggleMute,
+    isMuted,
+    startBroadcasting,
+    stopBroadcasting
   } = useWebRTC({
     podcastId,
     isHost: false,
+    isCohost: false,
     onRemoteStream: (stream) => {
-      setRemoteStream(stream);
+      if (audioRef.current) {
+        audioRef.current.srcObject = stream;
+      }
     },
     onConnectionStateChange: (state) => {
       if (state === 'connected') {
         toast.success('Connected to live stream');
+        setIsPlaying(true);
       } else if (state === 'disconnected' || state === 'failed') {
         toast.error('Connection lost. Attempting to reconnect...');
+        setIsPlaying(false);
+      }
+    },
+    onParticipantJoined: (userId, stream) => {
+      // Handle other participants joining
+    },
+    onPermissionRequest: () => {
+      // Handle permission request notifications if viewer becomes co-host
+    },
+    onPermissionGranted: (userId, requestType) => {
+      if (userId === currentUser?.id) {
+        setIsParticipant(true);
+        setHasRequestedPermission(false);
+        
+        if (requestType === 'cohost') {
+          toast.success('🎉 You are now a co-host! You can speak and moderate.');
+        } else {
+          toast.success('🎤 You can now speak! Your microphone is active.');
+        }
+        
+        // Start broadcasting if not already
+        if (!localStream) {
+          startBroadcasting();
+        }
+      }
+    },
+    onPermissionRevoked: (userId) => {
+      if (userId === currentUser?.id) {
+        setIsParticipant(false);
+        setIsMicMuted(true);
+        toast.warning('Your speaking permission has been revoked.');
+        
+        // Stop broadcasting
+        stopBroadcasting();
       }
     }
   });
 
+  // Handle audio setup
   useEffect(() => {
-    if (remoteStream && audioRef.current) {
-      
-      // Only attach if not already attached to avoid interruptions
-      if (audioRef.current.srcObject !== remoteStream) {
-        audioRef.current.srcObject = remoteStream;
-      }
-      
-      // Ensure volume and mute states are synced
-      audioRef.current.volume = volume / 100;
-      audioRef.current.muted = isAudioMuted;
-      
-      // Try to play
+    if (!audioRef.current) return;
+
+    // Ensure volume and mute states are synced
+    audioRef.current.volume = volume / 100;
+    audioRef.current.muted = isAudioMuted;
+
+    // Try to play if a stream is attached and playback is desired
+    if (isPlaying) {
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
         playPromise.catch(err => {
-          //console.error('Audio play error:', err);
-          // If auto-play fails, we might need user interaction
           if (err.name === 'NotAllowedError') {
             toast.info('Click anywhere to enable audio', {
               id: 'audio-permission-needed',
@@ -131,12 +183,14 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
         });
       }
     }
-  }, [remoteStream, isAudioMuted, volume]); // Removed podcast from dependencies to avoid interruptions
+  }, [isAudioMuted, volume, isPlaying]);
 
+  // Load initial data
   useEffect(() => {
     loadPodcast();
     loadCurrentUser();
     joinAsListener();
+    checkExistingPermissionRequests();
 
     // Set up real-time subscriptions
     const listenersChannel = supabase
@@ -144,31 +198,7 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'podcast_listeners',
-          filter: `podcast_id=eq.${podcastId}`
-        },
-        async (payload) => {
-          loadListeners();
-          // Show join notification
-          const { data: userData } = await supabase
-            .from('social_users')
-            .select('display_name, username')
-            .eq('id', payload.new.user_id)
-            .single();
-          
-          if (userData) {
-            const name = userData.display_name || userData.username || 'Someone';
-            setRecentJoiner(`${name} joined`);
-            setTimeout(() => setRecentJoiner(null), 3000);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'podcast_listeners',
           filter: `podcast_id=eq.${podcastId}`
@@ -179,105 +209,247 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
       )
       .subscribe();
 
-    // Cleanup on unmount
+    // Podcast updates
+    const podcastChannel = supabase
+      .channel(`podcast-updates-${podcastId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'ai_podcasts',
+          filter: `id=eq.${podcastId}`
+        },
+        (payload) => {
+          if (payload.new.is_live === false) {
+            toast.info('Live stream has ended');
+            onClose();
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       leaveAsListener();
       listenersChannel.unsubscribe();
+      podcastChannel.unsubscribe();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     };
   }, [podcastId]);
 
+  // Subscribe to DB changes for this user's participation request to catch approvals/revokes
   useEffect(() => {
-    if (podcast) {
-      loadListeners();
-    }
-  }, [podcast]);
+    if (!currentUser?.id) return;
 
-  const loadCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      setCurrentUser({ ...user, ...profile });
-    }
-  };
+    const chanName = `participation-requests-${podcastId}-${currentUser.id}`;
+    const participationChannel = supabase
+      .channel(chanName)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'podcast_participation_requests',
+          filter: `podcast_id=eq.${podcastId},user_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          try {
+            const newStatus = payload.eventType === 'DELETE' ? 'revoked' : payload.new?.status;
+            if (newStatus === 'approved') {
+              setIsParticipant(true);
+              setHasRequestedPermission(false);
+              toast.success('Your speaking request was approved');
+            } else if (newStatus === 'revoked' || newStatus === 'rejected') {
+              setIsParticipant(false);
+              setHasRequestedPermission(false);
+              toast.warning('Your speaking permission was revoked');
+            } else if (newStatus === 'pending') {
+              setHasRequestedPermission(true);
+            }
+          } catch (err) {
+            ////console.error('Error handling participation request payload:', err);
+          }
+        }
+      )
+      .subscribe();
 
-  const loadPodcast = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('ai_podcasts')
-        .select('*')
-        .eq('id', podcastId)
-        .single();
+    return () => {
+      try { participationChannel.unsubscribe(); } catch (e) {}
+    };
+  }, [currentUser?.id, podcastId]);
 
-      if (error) throw error;
-
-      // Fetch user details from social_users
-      if (data?.user_id) {
-        const { data: userData } = await supabase
-          .from('social_users')
-          .select('display_name, username, avatar_url')
-          .eq('id', data.user_id)
-          .single();
-
-        setPodcast({
-          ...data,
-          user: userData ? {
-            full_name: userData.display_name || userData.username || 'Anonymous',
-            avatar_url: userData.avatar_url
-          } : undefined
-        });
-      } else {
-        setPodcast(data);
+  // Show controls on mouse move
+  const handleVideoAreaMouseMove = () => {
+    setShowControls(true);
+    if (controlsTimeout) clearTimeout(controlsTimeout);
+    
+    const timeout = setTimeout(() => {
+      if (isPlaying) {
+        setShowControls(false);
       }
-    } catch (error) {
-      //console.error('Error loading podcast:', error);
-      toast.error('Failed to load podcast');
-    }
+    }, 3000);
+    
+    setControlsTimeout(timeout);
   };
 
-  const loadListeners = async () => {
+  // Touch events for mobile
+  const handleTouchStart = () => {
+    setShowControls(true);
+    if (controlsTimeout) clearTimeout(controlsTimeout);
+    
+    const timeout = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+    
+    setControlsTimeout(timeout);
+  };
+
+  // Handle close with cleanup
+  const handleClose = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    onClose();
+  }, [onClose]);
+
+const loadPodcast = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('ai_podcasts')
+      .select('*')
+      .eq('id', podcastId)
+      .single();
+
+    if (error) throw error;
+
+    // Fetch user details from social_users table
+    if (data?.user_id) {
+      const { data: userData } = await supabase
+        .from('social_users')
+        .select('id, display_name, avatar_url, username')
+        .eq('id', data.user_id)
+        .single();
+
+      setPodcast({
+        ...data,
+        user: userData ? {
+          full_name: userData.display_name || 'Anonymous Host',
+          avatar_url: userData.avatar_url,
+          username: userData.username || ''
+        } : {
+          full_name: 'Host',
+          avatar_url: undefined,
+          username: ''
+        }
+      });
+    } else {
+      setPodcast(data);
+    }
+  } catch (error) {
+    ////console.error('Error loading podcast:', error);
+    toast.error('Failed to load podcast');
+  }
+};
+
+// Update the loadListeners function:
+const loadListeners = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('podcast_listeners')
+      .select('*')
+      .eq('podcast_id', podcastId)
+      .eq('is_active', true)
+      .order('joined_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      const userIds = data.map(l => l.user_id);
+      const { data: usersData } = await supabase
+        .from('social_users') // Change from profiles to social_users
+        .select('id, display_name, avatar_url')
+        .in('id', userIds);
+
+      const usersMap = new Map(
+        (usersData || []).map(u => [
+          u.id,
+          {
+            full_name: u.display_name || 'Anonymous',
+            avatar_url: u.avatar_url
+          }
+        ])
+      );
+
+      const listenersWithUsers = data.map(listener => ({
+        ...listener,
+        user: usersMap.get(listener.user_id)
+      }));
+
+      setListeners(listenersWithUsers);
+    } else {
+      setListeners([]);
+    }
+  } catch (error) {
+    ////console.error('Error loading listeners:', error);
+  }
+};
+
+// Update the loadCurrentUser function if needed:
+const loadCurrentUser = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    // Try to get from social_users first
+    const { data: socialUser } = await supabase
+      .from('social_users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    
+    if (socialUser) {
+      setCurrentUser({ ...user, ...socialUser });
+    } else {
+      // If social_users not present, set a minimal current user
+      setCurrentUser({ id: user.id, full_name: user.user_metadata?.full_name || 'Anonymous User' } as any);
+    }
+  }
+};
+
+  const checkExistingPermissionRequests = async () => {
+    if (!currentUser?.id) return;
+
     try {
       const { data, error } = await supabase
-        .from('podcast_listeners')
+        .from('podcast_participation_requests')
         .select('*')
         .eq('podcast_id', podcastId)
-        .eq('is_active', true)
-        .order('joined_at', { ascending: false });
+        .eq('user_id', currentUser.id)
+        .in('status', ['pending','approved'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        // No request found or other error
+        return;
+      }
 
-      // Fetch user details for all listeners
-      if (data && data.length > 0) {
-        const userIds = data.map(l => l.user_id);
-        const { data: usersData } = await supabase
-          .from('social_users')
-          .select('id, display_name, username, avatar_url')
-          .in('id', userIds);
-
-        const usersMap = new Map(
-          (usersData || []).map(u => [
-            u.id,
-            {
-              full_name: u.display_name || u.username || 'Anonymous',
-              avatar_url: u.avatar_url
-            }
-          ])
-        );
-
-        const listenersWithUsers = data.map(listener => ({
-          ...listener,
-          user: usersMap.get(listener.user_id)
-        }));
-
-        setListeners(listenersWithUsers);
-      } else {
-        setListeners([]);
+      if (data) {
+        if (data.status === 'approved') {
+          // User already granted permission in DB
+          setIsParticipant(true);
+          setHasRequestedPermission(false);
+          // If needed, trigger broadcasting start
+          // startBroadcasting is handled by useWebRTC onPermissionGranted as well
+        } else if (data.status === 'pending') {
+          setHasRequestedPermission(true);
+        }
       }
     } catch (error) {
-      //console.error('Error loading listeners:', error);
+      ////console.error('Error checking permission requests:', error);
     }
   };
 
@@ -286,15 +458,51 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      await supabase.from('podcast_listeners').insert({
-        podcast_id: podcastId,
-        user_id: user.id,
-        is_active: true
-      });
+      // Check for existing listener row for this user + podcast
+      const { data: existing, error: existingErr } = await supabase
+        .from('podcast_listeners')
+        .select('id, is_active')
+        .eq('podcast_id', podcastId)
+        .eq('user_id', user.id)
+        .limit(1)
+        .single();
 
-      setIsListening(true);
+      if (existingErr && existingErr.code !== 'PGRST116') {
+        // If an unexpected error, log and return
+        ////console.error('Error checking existing listener:', existingErr);
+        return;
+      }
+
+      if (existing) {
+        // If already active, don't increment again
+        if (existing.is_active) {
+          // Update joined_at to now for freshness but do not increment
+          await supabase
+            .from('podcast_listeners')
+            .update({ joined_at: new Date().toISOString(), is_active: true, left_at: null })
+            .eq('id', existing.id);
+        } else {
+          // Reactivate listener and increment count
+          await supabase
+            .from('podcast_listeners')
+            .update({ is_active: true, joined_at: new Date().toISOString(), left_at: null })
+            .eq('id', existing.id);
+
+          await supabase.rpc('increment_podcast_listen_count', { podcast_id: podcastId });
+        }
+      } else {
+        // No existing row: create and increment
+        await supabase.from('podcast_listeners').insert({
+          podcast_id: podcastId,
+          user_id: user.id,
+          is_active: true,
+          joined_at: new Date().toISOString()
+        });
+
+        await supabase.rpc('increment_podcast_listen_count', { podcast_id: podcastId });
+      }
     } catch (error) {
-      //console.error('Error joining as listener:', error);
+      ////console.error('Error joining as listener:', error);
     }
   };
 
@@ -311,11 +519,119 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
         })
         .eq('podcast_id', podcastId)
         .eq('user_id', user.id);
-
-      setIsListening(false);
     } catch (error) {
-      //console.error('Error leaving:', error);
+      ////console.error('Error leaving:', error);
     }
+  };
+
+  const handlePlayPause = () => {
+    if (!audioRef.current) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const handleToggleMute = () => {
+    if (audioRef.current) {
+      audioRef.current.muted = !isAudioMuted;
+      setIsAudioMuted(!isAudioMuted);
+    }
+  };
+
+  const handleRequestToSpeak = () => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast.error('You must be signed in to request permission');
+          return;
+        }
+
+        // Check for existing pending or approved request
+        const { data: existing, error } = await supabase
+          .from('podcast_participation_requests')
+          .select('status')
+          .eq('podcast_id', podcastId)
+          .eq('user_id', user.id)
+          .in('status', ['pending','approved'])
+          .limit(1)
+          .single();
+
+        if (!error && existing) {
+          if (existing.status === 'approved') {
+            setIsParticipant(true);
+            setHasRequestedPermission(false);
+            toast.success('You already have speaking permission');
+            return;
+          }
+          if (existing.status === 'pending') {
+            setHasRequestedPermission(true);
+            toast.info('Your request is already pending approval');
+            return;
+          }
+        }
+
+        requestPermission('speak');
+        setHasRequestedPermission(true);
+        toast.info('🎤 Request to speak sent to host');
+      } catch (err) {
+        ////console.error('Error requesting speak permission:', err);
+        toast.error('Failed to send request');
+      }
+    })();
+  };
+
+  const handleRequestCohost = () => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast.error('You must be signed in to request co-host');
+          return;
+        }
+
+        const { data: existing, error } = await supabase
+          .from('podcast_participation_requests')
+          .select('status')
+          .eq('podcast_id', podcastId)
+          .eq('user_id', user.id)
+          .in('status', ['pending','approved'])
+          .limit(1)
+          .single();
+
+        if (!error && existing) {
+          if (existing.status === 'approved') {
+            setIsParticipant(true);
+            setHasRequestedPermission(false);
+            toast.success('You already have co-host permission');
+            return;
+          }
+          if (existing.status === 'pending') {
+            setHasRequestedPermission(true);
+            toast.info('Your co-host request is already pending');
+            return;
+          }
+        }
+
+        requestPermission('cohost');
+        setHasRequestedPermission(true);
+        toast.info('👑 Co-host request sent to host');
+      } catch (err) {
+        ////console.error('Error requesting cohost permission:', err);
+        toast.error('Failed to send co-host request');
+      }
+    })();
+  };
+
+  const handleToggleMic = () => {
+    toggleMute();
+    setIsMicMuted(!isMicMuted);
+    toast.info(isMicMuted ? '🎤 Microphone unmuted' : '🔇 Microphone muted');
   };
 
   const handleShare = async () => {
@@ -340,13 +656,18 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
     }
   };
 
+  const handleVolumeChange = (value: number) => {
+    setVolume(value);
+    if (audioRef.current) {
+      audioRef.current.volume = value / 100;
+    }
+  };
+
   if (!podcast) {
     return (
-      <Card className="w-full max-w-4xl mx-auto">
-        <CardContent className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-        </CardContent>
-      </Card>
+      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+      </div>
     );
   }
 
@@ -354,273 +675,475 @@ export const LivePodcastViewer: React.FC<LivePodcastViewerProps> = ({
     ? formatDistanceToNow(new Date(podcast.live_started_at), { addSuffix: false })
     : '0m';
 
-  return (
-    <div className="bg-white dark:bg-slate-900 h-full flex flex-col">
-      <div className="p-4 bg-gradient-to-r from-blue-500 to-blue-700 dark:from-blue-800 dark:to-blue-900 text-white">
-        <h2 className="text-lg font-bold">Live Podcast</h2>
-      </div>
-      <div className="flex-1 overflow-y-auto p-4">
-        <Card className="w-full max-w-5xl h-full md:h-[90vh] flex flex-col bg-slate-950 border-slate-800 rounded-none md:rounded-2xl overflow-hidden shadow-2xl shadow-blue-500/10">
-          {/* Header */}
-          <CardHeader className="border-b border-slate-800/50 flex-shrink-0 p-4 md:p-6 bg-slate-900/30">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2">
-                  <Badge className="bg-blue-600 hover:bg-blue-700 text-white animate-pulse text-[10px] md:text-xs border-none px-2 py-0.5">
-                    <Radio className="h-3 w-3 mr-1" />
-                    LIVE
-                  </Badge>
-                  <div className="flex items-center gap-1 md:gap-2 text-blue-400/80 text-xs md:text-sm font-medium">
-                    <Clock className="h-3 w-3 md:h-4 md:w-4" />
-                    {liveDuration}
-                  </div>
-                  <div className="flex items-center gap-1 md:gap-2 text-slate-400 text-xs md:text-sm">
-                    <Users className="h-3 w-3 md:h-4 md:w-4" />
-                    {listeners.length}
-                  </div>
-                </div>
-                <CardTitle className="text-lg md:text-2xl text-white font-bold tracking-tight truncate">{podcast.title}</CardTitle>
-                <div className="flex items-center gap-2 md:gap-3 mt-2 md:mt-3">
-                  <div className="relative">
-                    <Avatar className="h-6 w-6 md:h-10 md:w-10 border-2 border-blue-500/30">
-                      <AvatarImage src={podcast.user?.avatar_url} />
-                      <AvatarFallback className="bg-blue-600 text-white text-[10px] md:text-xs">
-                        {podcast.user?.full_name?.charAt(0) || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-slate-950 rounded-full"></div>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs md:text-sm font-semibold text-slate-200 truncate">{podcast.user?.full_name || 'Unknown Host'}</span>
-                    <span className="text-[10px] md:text-xs text-blue-400/70">Host</span>
-                  </div>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={onClose} className="text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-full transition-colors">
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-          </CardHeader>
+  const getConnectionIcon = () => {
+    switch (connectionQuality) {
+      case 'excellent':
+      case 'good':
+        return <Wifi className="h-4 w-4 text-blue-500" />;
+      case 'poor':
+        return <Activity className="h-4 w-4 text-yellow-500" />;
+      default:
+        return <WifiOff className="h-4 w-4 text-red-500" />;
+    }
+  };
+return (
+  <div className="fixed inset-0 z-50 bg-white dark:bg-black overflow-hidden">
+    {/* Hidden audio element */}
+    <audio ref={audioRef} autoPlay playsInline />
 
-          <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-            {/* Join Notification Overlay */}
-            {recentJoiner && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 animate-in fade-in slide-in-from-top-4 duration-300">
-                <div className="bg-blue-600/90 backdrop-blur-md text-white px-4 py-1.5 rounded-full text-xs font-medium shadow-lg shadow-blue-500/20 flex items-center gap-2">
-                  <UserPlus className="h-3 w-3" />
-                  {recentJoiner}
-                </div>
-              </div>
-            )}
-
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-b from-slate-950 via-blue-950/10 to-slate-950 p-4 md:p-8 overflow-y-auto relative">
-              {/* Background Decorative Elements */}
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-600/5 rounded-full blur-[100px]"></div>
-                <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-blue-400/5 rounded-full blur-[100px]"></div>
-              </div>
-
-              {/* Hidden audio element for playback */}
-              <audio 
-                ref={audioRef} 
-                muted={isAudioMuted} 
-                autoPlay 
-                playsInline 
-              />
-
-              <div className="text-center space-y-6 md:space-y-8 w-full max-w-md z-10">
-                <div className="relative mx-auto w-28 h-28 md:w-40 md:h-40">
-                  <div className={`w-full h-full rounded-full p-1 ${
-                    isConnected
-                      ? 'bg-gradient-to-tr from-blue-600 via-blue-400 to-blue-600 animate-spin-slow'
-                      : 'bg-slate-800'
-                  }`}>
-                    <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center overflow-hidden">
-                      {podcast.user?.avatar_url ? (
-                        <img src={podcast.user.avatar_url} alt="Host" className="w-full h-full object-cover opacity-80" />
-                      ) : (
-                        <Radio className="h-12 w-12 md:h-20 md:w-20 text-blue-500" />
-                      )}
-                    </div>
-                  </div>
-                  {isConnected && (
-                    <>
-                      <div className="absolute inset-0 rounded-full border-2 border-blue-500/50 animate-ping"></div>
-                      <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg">
-                        ON AIR
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Connection Status */}
-                <div className="space-y-2">
-                  <h2 className="text-white text-xl md:text-2xl font-bold tracking-tight">
-                    {isConnected ? 'Listening Live' : 'Connecting...'}
-                  </h2>
-                  <div className="flex items-center justify-center gap-3">
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/50 border border-slate-800">
-                      {connectionQuality === 'excellent' || connectionQuality === 'good' ? (
-                        <Wifi className="h-3.5 w-3.5 text-green-500" />
-                      ) : connectionQuality === 'poor' ? (
-                        <Activity className="h-3.5 w-3.5 text-yellow-500" />
-                      ) : (
-                        <WifiOff className="h-3.5 w-3.5 text-red-500" />
-                      )}
-                      <span className={`text-xs font-medium uppercase tracking-wider ${
-                        connectionQuality === 'excellent' || connectionQuality === 'good'
-                          ? 'text-green-500'
-                          : connectionQuality === 'poor'
-                            ? 'text-yellow-500'
-                            : 'text-red-500'
-                      }`}>
-                        {connectionQuality}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Error Message */}
-                {error && (
-                  <div className="bg-red-950/30 border border-red-500/50 rounded-xl p-4 max-w-md mx-auto backdrop-blur-md">
-                    <div className="flex items-center gap-3 text-red-200">
-                      <AlertCircle className="h-5 w-5 flex-shrink-0" />
-                      <p className="text-xs md:text-sm text-left">{error}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Audio Controls */}
-                <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-4 md:p-6 space-y-4 w-full shadow-xl">
-                  <div className="flex items-center gap-4">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setIsAudioMuted(!isAudioMuted);
-                        if (audioRef.current) {
-                          audioRef.current.muted = !isAudioMuted;
-                        }
-                      }}
-                      className="text-white h-10 w-10 hover:bg-slate-800 rounded-full"
-                    >
-                      {isAudioMuted ? <VolumeX className="h-5 w-5 text-slate-400" /> : <Volume2 className="h-5 w-5 text-blue-400" />}
-                    </Button>
-                    <div className="flex-1 space-y-1">
-                      <Slider
-                        value={[volume]}
-                        onValueChange={(value) => {
-                          setVolume(value[0]);
-                          if (audioRef.current) {
-                            audioRef.current.volume = value[0] / 100;
-                          }
-                        }}
-                        max={100}
-                        step={1}
-                        className="cursor-pointer"
-                        disabled={isAudioMuted}
-                      />
-                    </div>
-                    <span className="text-xs font-mono text-slate-400 w-10 text-right">
-                      {isAudioMuted ? '0%' : `${volume}%`}
-                    </span>
-                  </div>
-                  
-                  {!isAudioMuted && isConnected && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-[10px] text-slate-500 hover:text-blue-400 w-full h-auto py-1 transition-colors"
-                      onClick={() => {
-                        if (audioRef.current && remoteStream) {
-                          audioRef.current.srcObject = null;
-                          audioRef.current.srcObject = remoteStream;
-                          audioRef.current.play().catch(console.error);
-                          toast.success('Audio synced');
-                        }
-                      }}
-                    >
-                      Not hearing anything? Tap to sync audio
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 mt-8 md:mt-10 z-10">
-                <Button 
-                  variant="outline" 
-                  onClick={handleShare} 
-                  className="bg-slate-900/50 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 rounded-full px-6"
-                >
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share Stream
-                </Button>
-              </div>
-            </div>
-
-            {/* Sidebar - Listeners */}
-            <div className={`
-              ${isMobile ? (showListeners ? 'h-80' : 'h-14') : 'w-80'} 
-              border-t md:border-t-0 md:border-l border-slate-800 flex flex-col bg-slate-950/50 backdrop-blur-xl transition-all duration-500 ease-in-out z-30
-            `}>
-              <div 
-                className="p-4 border-b border-slate-800/50 flex items-center justify-between cursor-pointer md:cursor-default bg-slate-900/20"
-                onClick={() => isMobile && setShowListeners(!showListeners)}
-              >
-                <h3 className="font-bold text-white flex items-center gap-2 text-sm md:text-base">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  Listeners
-                  <Badge variant="secondary" className="ml-1 bg-slate-800 text-slate-300 border-none h-5 px-1.5">
-                    {listeners.length}
-                  </Badge>
-                </h3>
-                {isMobile && (
-                  <div className="bg-slate-800/50 p-1 rounded-full">
-                    {showListeners ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronUp className="h-4 w-4 text-slate-400" />}
-                  </div>
-                )}
-              </div>
-              <ScrollArea className={`flex-1 ${isMobile && !showListeners ? 'hidden' : 'block'}`}>
-                <div className="p-4 space-y-4">
-                  {listeners.map((listener) => (
-                    <div key={listener.id} className="flex items-center gap-3 group">
-                      <div className="relative">
-                        <Avatar className="h-8 w-8 md:h-9 md:w-9 border border-slate-800 group-hover:border-blue-500/50 transition-colors">
-                          <AvatarImage src={listener.user?.avatar_url} />
-                          <AvatarFallback className="bg-slate-800 text-slate-400 text-[10px] md:text-xs">
-                            {listener.user?.full_name?.charAt(0) || 'U'}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-blue-500 border-2 border-slate-950 rounded-full"></div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs md:text-sm font-medium text-slate-200 truncate group-hover:text-blue-400 transition-colors">
-                          {listener.user?.full_name || 'Anonymous'}
-                        </p>
-                        <p className="text-[10px] md:text-xs text-slate-500">
-                          {formatDistanceToNow(new Date(listener.joined_at), { addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  {listeners.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-                      <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center">
-                        <Users className="h-6 w-6 text-slate-700" />
-                      </div>
-                      <p className="text-slate-500 text-xs md:text-sm">
-                        Waiting for listeners to join...
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
+    {/* Top Navigation */}
+    <div className={`absolute top-0 left-0 right-0 z-40 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+      <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent dark:from-black/80 dark:to-transparent">
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleClose}
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/20"
+          >
+            <X className="h-5 w-5 md:h-6 md:w-6" />
+          </Button>
+          <div className="text-white max-w-[60vw] md:max-w-lg">
+            <h1 className="text-xs md:text-sm font-medium truncate">{podcast.title}</h1>
+            <div className="flex items-center gap-2 text-xs text-gray-300">
+              <Badge className="bg-blue-600 text-white animate-pulse text-[10px] border-0">
+                <Radio className="h-2.5 w-2.5 mr-1" />
+                LIVE
+              </Badge>
+              <span>{liveDuration}</span>
             </div>
           </div>
-        </Card>
+        </div>
+        
+        <div className="flex items-center gap-1 md:gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleShare}
+            className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10"
+          >
+            <Share2 className="h-4 w-4 md:h-5 md:w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsFullScreen(!isFullScreen)}
+            className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10 hidden sm:flex"
+          >
+            {isFullScreen ? <Minimize2 className="h-4 w-4 md:h-5 md:w-5" /> : <Maximize2 className="h-4 w-4 md:h-5 md:w-5" />}
+          </Button>
+          
+          {/* Mobile menu */}
+          <div className="md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+              className="text-white hover:bg-white/20 h-8 w-8"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
-  );
+
+    {/* Participation Status Bar */}
+    <div className={`absolute top-16 left-1/2 transform -translate-x-1/2 z-30 transition-all duration-300 ${
+      isParticipant || hasRequestedPermission ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
+    }`}>
+      <div className="flex items-center gap-2 bg-black/80 backdrop-blur-md rounded-full px-4 py-2 shadow-lg">
+        {isParticipant ? (
+          <>
+            <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></div>
+            <span className="text-white text-sm font-medium">You are speaking</span>
+            <Button
+              onClick={handleToggleMic}
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-white hover:bg-white/20"
+            >
+              {isMicMuted ? (
+                <MicOff className="h-4 w-4" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
+          </>
+        ) : hasRequestedPermission && (
+          <>
+            <div className="h-2 w-2 bg-yellow-500 rounded-full animate-pulse"></div>
+            <span className="text-white text-sm">Waiting for host approval...</span>
+          </>
+        )}
+      </div>
+    </div>
+
+    {/* Main Content */}
+    <div 
+      ref={mainContainerRef}
+      className="h-full flex flex-col lg:flex-row"
+    >
+      {/* Video/Image Area */}
+      <div 
+        ref={videoAreaRef}
+        className="flex-1 relative bg-white dark:bg-black overflow-hidden lg:w-[70%]"
+        onMouseMove={handleVideoAreaMouseMove}
+        onTouchStart={handleTouchStart}
+        onClick={() => setShowControls(true)}
+      >
+        {/* Background Image/Content */}
+        <div className="w-full h-full flex items-center justify-center">
+          {podcast.cover_image_url ? (
+            <img
+              src={podcast.cover_image_url}
+              alt={podcast.title}
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-300 dark:from-gray-900 dark:to-black">
+              <Radio className="h-24 w-24 md:h-32 md:w-32 text-gray-400 dark:text-gray-700" />
+            </div>
+          )}
+
+          {/* Connection Status Overlay */}
+          <div className="absolute top-3 left-3 bg-black/80 text-white px-3 py-1.5 rounded-full text-xs md:text-sm backdrop-blur-sm flex items-center gap-2">
+            {getConnectionIcon()}
+            <span className="uppercase">{connectionQuality}</span>
+          </div>
+
+          {/* Live Badge */}
+          <div className="absolute top-3 right-3">
+            <Badge className="bg-blue-600 text-white animate-pulse text-xs border-0 px-3 py-1">
+              <Radio className="h-3 w-3 mr-1.5" />
+              LIVE
+            </Badge>
+          </div>
+
+          {/* Add participation buttons to the main content area */}
+          <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-20">
+            {!isParticipant && !hasRequestedPermission && (
+              <div className="flex gap-2 bg-slate-600 backdrop-blur-md rounded-full p-2 shadow-lg">
+                <Button
+                  onClick={handleRequestToSpeak}
+                  variant="outline"
+                  size="sm"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                >
+                  <Mic className="h-4 w-4 mr-2" />
+                  Request to Speak
+                </Button>
+                <Button
+                  onClick={handleRequestCohost}
+                  variant="outline"
+                  size="sm"
+                  className="bg-yellow-500/10 border-yellow-500/20 text-yellow-300 hover:bg-yellow-500/20"
+                >
+                  <Crown className="h-4 w-4 mr-2" />
+                  Request Co-host
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Center Play Button */}
+          {(!isPlaying || showControls) && (
+            <button
+              onClick={handlePlayPause}
+              className="absolute inset-0 hidden md:flex items-center justify-center group"
+            >
+              <div className="bg-slate-600 group-hover:bg-slate-700 rounded-full p-6 md:p-8 transition-all transform group-hover:scale-110">
+                {isPlaying ? (
+                  <Pause className="h-12 w-12 md:h-20 md:w-20 text-white" />
+                ) : (
+                  <Play className="h-12 w-12 md:h-20 md:w-20 text-white ml-2 md:ml-3" />
+                )}
+              </div>
+            </button>
+          )}
+
+          {/* Desktop Bottom Controls */}
+          <div 
+            className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 md:p-4 transition-all duration-300 hidden md:block ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 md:gap-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handlePlayPause}
+                  className="text-white hover:bg-white/20 h-8 w-8 md:h-10 md:w-10"
+                >
+                  {isPlaying ? (
+                    <Pause className="h-4 w-4 md:h-5 md:w-5" />
+                  ) : (
+                    <Play className="h-4 w-4 md:h-5 md:w-5 ml-0.5" />
+                  )}
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleToggleMute}
+                  className="text-white hover:bg-white/20 h-7 w-7 md:h-8 md:w-8"
+                >
+                  {isAudioMuted ? <VolumeX className="h-3 w-3 md:h-4 md:w-4" /> : <Volume2 className="h-3 w-3 md:h-4 md:w-4" />}
+                </Button>
+
+                <div className="w-24">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={volume}
+                    onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                    className="w-full h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                  />
+                </div>
+
+                <div className="text-white text-xs md:text-sm ml-1 md:ml-2">
+                  {listeners.length} listening
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Controls Bar */}
+      <div className="md:hidden bg-slate-400">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handlePlayPause}
+              size="icon"
+              className="h-10 w-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full"
+            >
+              {isPlaying ? (
+                <Pause className="h-5 w-5" />
+              ) : (
+                <Play className="h-5 w-5 ml-0.5" />
+              )}
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleMute}
+              className="h-8 w-8 text-white"
+            >
+              {isAudioMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </Button>
+          </div>
+          
+          <div className="text-white text-sm">
+            {listeners.length} listeners
+          </div>
+        </div>
+      </div>
+
+      {/* Right Sidebar - Desktop */}
+      <div className="hidden lg:block w-[30%] bg-white dark:bg-black border-l border-gray-300 dark:border-gray-800 overflow-y-auto">
+        <div className="p-4">
+          {/* Podcast Info */}
+          <div className="mb-6">
+            <h1 className="text-black dark:text-white font-bold text-lg mb-2">{podcast.title}</h1>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-gray-600 dark:text-gray-400 text-sm">{listeners.length} listening</span>
+              <span className="text-gray-600 dark:text-gray-400">•</span>
+              <span className="text-gray-600 dark:text-gray-400 text-sm">{liveDuration}</span>
+            </div>
+            
+            {/* Creator Info */}
+            <div className="flex items-center gap-3 mb-4">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={podcast.user?.avatar_url} />
+                <AvatarFallback className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                  {podcast.user?.full_name?.charAt(0) || 'H'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <h3 className="font-semibold text-black dark:text-white">
+                  {podcast.user?.full_name || 'Host'}
+                </h3>
+                <span className="text-gray-600 dark:text-gray-400 text-sm">Live Host</span>
+              </div>
+            </div>
+
+            {/* Description */}
+            {podcast.description && (
+              <div className="bg-gray-100 dark:bg-gray-900 rounded-lg p-3 mb-4">
+                <h3 className="font-semibold text-black dark:text-white mb-2">About This Stream</h3>
+                <p className="text-gray-700 dark:text-gray-300 text-sm">{podcast.description}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Listeners Section */}
+          <h3 className="text-black dark:text-white font-semibold mb-4 text-lg">Live Listeners</h3>
+          <ScrollArea className="h-64">
+            <div className="space-y-3">
+              {listeners.map((listener) => (
+                <div key={listener.id} className="flex gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={listener.user?.avatar_url} />
+                    <AvatarFallback className="bg-blue-500 dark:bg-blue-600 text-white text-xs">
+                      {listener.user?.full_name?.charAt(0) || 'L'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-black dark:text-white text-sm font-medium truncate">
+                      {listener.user?.full_name || 'Anonymous'}
+                    </h4>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      Joined {formatDistanceToNow(new Date(listener.joined_at), { addSuffix: true })}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {listeners.length === 0 && (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-500">
+                  <Users className="h-8 w-8 mx-auto mb-2" />
+                  <p className="text-sm">No listeners yet</p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      </div>
+
+      {/* Mobile Info Area */}
+      <div className="md:hidden bg-white dark:bg-black border-t border-gray-300 dark:border-gray-800 overflow-y-auto">
+        <div className="p-4">
+          {/* Podcast Title and Stats */}
+          <div className="mb-4">
+            <h1 className="text-black dark:text-white font-bold text-lg mb-2">{podcast.title}</h1>
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm mb-3">
+              <span>{listeners.length} listening</span>
+              <span>•</span>
+              <span>{liveDuration}</span>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={podcast.user?.avatar_url} />
+                  <AvatarFallback className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    {podcast.user?.full_name?.charAt(0) || 'H'}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="font-semibold text-black dark:text-white text-sm">
+                    {podcast.user?.full_name || 'Host'}
+                  </h3>
+                  <span className="text-gray-600 dark:text-gray-400 text-xs">Live Host</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Description Toggle */}
+          {podcast.description && (
+            <div className="mb-4">
+              <Button
+                variant="ghost"
+                className="w-full justify-between text-black dark:text-white px-0"
+                onClick={() => setShowMoreInfo(!showMoreInfo)}
+              >
+                <span className="text-sm">Description</span>
+                {showMoreInfo ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+              {showMoreInfo && (
+                <div className="mt-2 bg-gray-100 dark:bg-gray-900 rounded-lg p-3">
+                  <p className="text-gray-700 dark:text-gray-300 text-sm">{podcast.description}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Listeners Section */}
+          <div className="mb-4">
+            <h3 className="text-black dark:text-white font-semibold mb-3">Live Listeners</h3>
+            <ScrollArea className="h-48">
+              <div className="space-y-3">
+                {listeners.map((listener) => (
+                  <div key={listener.id} className="flex gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={listener.user?.avatar_url} />
+                      <AvatarFallback className="bg-blue-500 dark:bg-blue-600 text-white text-xs">
+                        {listener.user?.full_name?.charAt(0) || 'L'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-black dark:text-white text-sm font-medium truncate">
+                        {listener.user?.full_name || 'Anonymous'}
+                      </h4>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        Joined {formatDistanceToNow(new Date(listener.joined_at), { addSuffix: true })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {listeners.length === 0 && (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-500">
+                    <Users className="h-8 w-8 mx-auto mb-2" />
+                    <p className="text-sm">No listeners yet</p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Mobile Sidebar Sheet for Listeners */}
+    <Sheet open={showMobileSidebar} onOpenChange={setShowMobileSidebar}>
+      <SheetContent side="right" className="w-full sm:w-96 bg-white dark:bg-black border-l border-gray-300 dark:border-gray-800 p-0">
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-black dark:text-white font-semibold text-lg">Listeners</h3>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowMobileSidebar(false)}
+              className="text-black dark:text-white"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          
+          <div className="space-y-3">
+            {listeners.map((listener) => (
+              <div key={listener.id} className="flex gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={listener.user?.avatar_url} />
+                  <AvatarFallback className="bg-blue-500 dark:bg-blue-600 text-white">
+                    {listener.user?.full_name?.charAt(0) || 'L'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-black dark:text-white text-sm font-medium truncate">
+                    {listener.user?.full_name || 'Anonymous'}
+                  </h4>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                    Joined {formatDistanceToNow(new Date(listener.joined_at), { addSuffix: true })}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {listeners.length === 0 && (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-500">
+                <Users className="h-12 w-12 mx-auto mb-3" />
+                <p className="text-sm">No listeners yet</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  </div>
+);
 };

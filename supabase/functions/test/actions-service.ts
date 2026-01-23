@@ -586,6 +586,16 @@ export class StuddyHubActionsService {
             const validTypes = ['class', 'study', 'assignment', 'exam', 'other'];
             const type = validTypes.includes(scheduleData.type) ? scheduleData.type : 'study';
 
+            // Validate start_time
+            if (!scheduleData.start_time || isNaN(Date.parse(scheduleData.start_time))) {
+                throw new Error('Invalid start_time: Must be a valid timestamp');
+            }
+
+            // Validate end_time
+            if (scheduleData.end_time && isNaN(Date.parse(scheduleData.end_time))) {
+                throw new Error('Invalid end_time: Must be a valid timestamp');
+            }
+
             const { data, error } = await this.supabase
                 .from('schedule_items')
                 .insert({
