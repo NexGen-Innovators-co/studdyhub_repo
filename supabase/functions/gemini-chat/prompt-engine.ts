@@ -1,162 +1,120 @@
+import { DB_SCHEMA_DEFINITION } from './db_schema.ts';
+
 export class EnhancedPromptEngine {
     createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, currentTheme = 'light') {
         const userProfile = userContext.profile;
         const userContextSection = this.buildUserContextSection(userContext);
 
-const CRITICAL_ACTION_RULES = `
-🚨🚨🚨 **CRITICAL - READ THIS FIRST** 🚨🚨🚨
+const DB_ACTION_GUIDELINES = `
+**🗄️ DATABASE ACTION GUIDELINES:**
+To perform database operations, analyze the provided DATABASE SCHEMA and construct a single JSON action of type ` + "DB_ACTION" + ` with this exact shape:
+{ "type": "DB_ACTION", "params": { "table": "<table_name>", "operation": "INSERT|UPDATE|DELETE|SELECT", "data": { ... }, "filters": { ... } } }
 
-**RULE #1: ACTION MARKERS ARE MANDATORY**
+Rules:
+- Use table and column names exactly as shown in the schema.
+- When referring to the current user id, use the literal string 'auth.uid'. The runtime will replace it with the actual user id.
+- Ask for explicit permission before performing destructive changes (UPDATE/DELETE). For simple CREATE/INSERT you may ask for confirmation when ambiguous.
+- Do NOT emit legacy ACTION: markers or free-form commands — emit DB_ACTION JSON only when you intend the system to act.
 
-When a user confirms an action (says "yes", "ok", "sure", "do it"), you MUST include the ACTION: marker or THE ACTION WILL NOT EXECUTE.
-
-**WRONG (Nothing happens):**
-User: "yes"
-You: "Great! I've posted it!" ❌ 
-Result: NOTHING was posted to database!
-
-**RIGHT (Action executes):**
-User: "yes"
-You: "Posting now!
-
-ACTION: CREATE_RICH_POST|content here|public|null|null" ✅
-Result: Post is created in database!
-
-**MANDATORY PROCESS:**
-1. User requests action → Ask "Would you like me to...?"
-2. User confirms → Include ACTION: marker in your response
-3. System executes action automatically
-
-**CONFIRMATIONS THAT REQUIRE ACTION: MARKER:**
-"yes", "ok", "sure", "do it", "go ahead", "please", "sounds good"
-
-**IF NO ACTION: MARKER = ACTION NOT EXECUTED**
-
-This is the #1 bug. Always include ACTION: markers after confirmation!
+Example (create note):
+{ "type": "DB_ACTION", "params": { "table": "notes", "operation": "INSERT", "data": { "title": "React", "content": "Brief content...", "category": "general", "tags": ["react"], "user_id": "auth.uid" }, "filters": {} } }
 `;
+// Scheduling guidance appended to DB_ACTION_GUIDELINES to teach the model how to emit schedule_items actions
+const SCHEDULING_GUIDANCE = `
+---
+**📅 SCHEDULING GUIDANCE (for schedule_items):**
+- Use the \`schedule_items\` table for calendar events. Key fields: \`title\`, \`subject\`, \`type\` (class|study|assignment|exam|other), \`start_time\`, \`end_time\`, \`description\`, \`location\`, \`color\`, \`is_recurring\` (boolean), \`recurrence_pattern\` (text, e.g. 'weekly'), \`recurrence_interval\` (integer), \`recurrence_days\` (prefer integers 0=Sunday..6=Saturday), \`recurrence_end_date\` (ISO timestamp).
+- Prefer emitting \`recurrence_days\` as an integer array like \`[2,4]\` for Tuesday/Thursday. If you produce weekday names ("Tuesday", "Tue") or numeric strings ("2"), the runtime will normalize them, but integers avoid errors.
+- For non-recurring events set \`is_recurring: false\` and recurrence fields to \`null\`.
+- Use ISO 8601 UTC timestamps for \`start_time\`/\`end_time\` when possible (e.g. \`2026-02-03T09:00:00Z\`).
 
-        const actionExecutionFramework = `
-**COMPLETE ACTION EXECUTION FRAMEWORK:**
+Example - single event:
+{
+  "type": "DB_ACTION",
+  "params": {
+    "table": "schedule_items",
+    "operation": "INSERT",
+    "data": {
+      "user_id": "auth.uid",
+      "title": "Calculus Lecture",
+      "subject": "Math",
+      "type": "class",
+      "start_time": "2026-02-03T09:00:00Z",
+      "end_time": "2026-02-03T10:00:00Z",
+      "description": "One-off lecture",
+      "is_recurring": false,
+      "recurrence_pattern": null,
+      "recurrence_days": null,
+      "recurrence_interval": 1,
+      "recurrence_end_date": null
+    },
+    "filters": {}
+  }
+}
 
-**🎯 TWO-STEP PROCESS (ALWAYS FOLLOW THIS):**
-
-**STEP 1 - Ask Permission:**
-User: "Create a note about React"
-You: "I can create a comprehensive note about React covering components, hooks, and state management. Would you like me to create this note?"
-[WAIT for user response - DO NOT include ACTION: marker yet]
-
-**STEP 2 - Execute After Confirmation:**
-User: "yes" or "ok" or "sure"
-You: "Creating your React note now!
-
-ACTION: CREATE_NOTE|React Fundamentals|React is a JavaScript library for building user interfaces...|general|react,javascript,frontend"
-
-**⚠️ COMMON MISTAKES TO AVOID:**
-
-❌ MISTAKE: Confirming without ACTION marker
-User: "yes"
-You: "Done! Created your note."
-Problem: Note was NOT created!
-
-✅ CORRECT:
-User: "yes"
-You: "Creating note!
-
-ACTION: CREATE_NOTE|...|...|...|..."
-
-❌ MISTAKE: Including ACTION marker without permission
-User: "Tell me about React"
-You: "ACTION: CREATE_NOTE|..." 
-Problem: User didn't ask for a note!
-
-✅ CORRECT:
-User: "Tell me about React"
-You: "React is a JavaScript library... Would you like me to create a note about this?"
-
-**📝 ALL AVAILABLE ACTIONS:**
-
-**NOTES:**
-ACTION: CREATE_NOTE|Title|Content|Category|Tags
-ACTION: UPDATE_NOTE|NoteTitle|NewTitle|NewContent|NewCategory|NewTags
-ACTION: DELETE_NOTE|NoteTitle
-ACTION: LINK_DOCUMENT_TO_NOTE|NoteTitle|DocumentTitle
-
-**FOLDERS:**
-ACTION: CREATE_FOLDER|Name|Description|Color|ParentFolderName
-ACTION: ADD_DOCUMENT_TO_FOLDER|DocumentTitle|FolderName
-
-**SCHEDULE:**
-ACTION: CREATE_SCHEDULE|Title|Subject|Type|StartTime|EndTime|Description|Location|Color|IsRecurring|Pattern|Days|Interval|EndDate
-ACTION: UPDATE_SCHEDULE|ItemTitle|UpdatesJSON
-ACTION: DELETE_SCHEDULE|ItemTitle
-
-**FLASHCARDS:**
-ACTION: CREATE_FLASHCARD|Front|Back|Category|Difficulty|Hint
-ACTION: CREATE_FLASHCARDS_FROM_NOTE|NoteTitle|Count
-
-**LEARNING GOALS:**
-ACTION: CREATE_LEARNING_GOAL|GoalText|TargetDate|Category|Progress
-ACTION: UPDATE_LEARNING_GOAL|GoalText|NewProgress
-
-**QUIZZES:**
-ACTION: CREATE_QUIZ|Title|QuestionCount|SourceType|ClassID
-ACTION: RECORD_QUIZ_ATTEMPT|QuizTitle|Score|TotalQuestions|TimeSeconds|XPEarned
-
-**SOCIAL MEDIA (MOST COMMON BUG - PAY ATTENTION):**
-ACTION: CREATE_RICH_POST|Content|Privacy|GroupID|MediaJSON
-ACTION: ENGAGE_SOCIAL|Action|TargetID|Content
-
-**IMAGES:**
-ACTION: GENERATE_IMAGE|Prompt
-
-**PODCASTS:**
-ACTION: GENERATE_PODCAST|Title|SourceIDs|Style
-
-**GROUPS:**
-ACTION: CREATE_GROUP|Name|Description|Category
-ACTION: SCHEDULE_GROUP_EVENT|GroupID|Title|StartTime|EndTime
-
-**OTHER:**
-ACTION: CREATE_RECORDING|Title|Subject|Duration|Transcript|Summary|DocumentTitle
-ACTION: UPDATE_PROFILE|UpdatesJSON
-ACTION: UPDATE_STATS|UpdatesJSON
-ACTION: AWARD_ACHIEVEMENT|BadgeName
-ACTION: UPDATE_USER_MEMORY|FactType|FactKey|FactValue|Confidence
-ACTION: GET_REFERRAL_CODE
-
-**🎯 EXAMPLES OF CORRECT FLOW:**
-
-Example 1 - Note Creation:
-User: "Make a note about photosynthesis"
-You: "I can create a detailed note about photosynthesis covering the process, chloroplasts, and energy conversion. Should I create it?"
-User: "yes please"
-You: "Creating your photosynthesis note!
-
-ACTION: CREATE_NOTE|Photosynthesis|Photosynthesis is the process by which plants convert light energy into chemical energy...|science|biology,plants,energy"
-
-Example 2 - Social Post:
-User: "Post this to my feed: Just finished my React project!"
-You: "Would you like me to post this to your social feed?"
-User: "yes"
-You: "Posting to your feed now!
-
-ACTION: CREATE_RICH_POST|Just finished my React project!|public|null|null"
-
-Example 3 - Schedule:
-User: "Schedule math study tomorrow 2-4pm"
-You: "I can schedule a math study session tomorrow from 2-4 PM. Should I add it?"
-User: "yes"
-You: "Adding to your calendar!
-
-ACTION: CREATE_SCHEDULE|Math Study|Mathematics|study|2024-01-20T14:00:00Z|2024-01-20T16:00:00Z|Study session|Library|#3B82F6|false|null|null|null|null"
-
-**REMEMBER:**
-- Ask permission FIRST
-- Include ACTION: marker AFTER user confirms
-- Keep confirmation message brief (1-2 sentences)
-- Don't repeat the full content in your confirmation
+Example - recurring weekly event (Tue & Thu):
+{
+  "type": "DB_ACTION",
+  "params": {
+    "table": "schedule_items",
+    "operation": "INSERT",
+    "data": {
+      "user_id": "auth.uid",
+      "title": "Study Group",
+      "subject": "Physics",
+      "type": "study",
+      "start_time": "2026-02-03T18:00:00Z",
+      "end_time": "2026-02-03T19:00:00Z",
+      "description": "Weekly study group",
+      "is_recurring": true,
+      "recurrence_pattern": "weekly",
+      "recurrence_days": [2,4],
+      "recurrence_interval": 1,
+      "recurrence_end_date": "2026-06-01T00:00:00Z"
+    },
+    "filters": {}
+  }
+}
 `;
+const SOCIAL_POST_GUIDANCE = `
+---
+**📣 SOCIAL POSTS CREATION:**
+- To create a social post, emit a ` + "DB_ACTION" + ` with operation ` + "INSERT" + ` on the ` + "social_posts" + ` table.
+- Include in ` + "data" + `: ` + "{ author_id: 'auth.uid', content: string, privacy?: 'public'|'private'|'group', media?: [], group_id?: string|null, metadata?: any }" + `.
+- Do NOT set bookkeeping fields like ` + "created_at" + ` or counts — the edge function ` + "create-social-post" + ` handles those and runs moderation/subscription checks.
+Example (preferred) — include attachments inline:
+{
+  "type": "DB_ACTION",
+  "params": {
+    "table": "social_posts",
+    "operation": "INSERT",
+    "data": {
+      "author_id": "auth.uid",
+      "content": "Happy Sabbath everyone! Here's a quick study tip...",
+      "privacy": "public",
+      "media": [
+        { "type": "image", "url": "https://...", "filename": "photo.jpg", "mime_type": "image/jpeg" }
+      ],
+      "group_id": null,
+      "metadata": { "topic": "study-tips" }
+    },
+    "filters": {}
+  }
+}
 
+If you must create separate media rows in the \`social_media\` table, do NOT include \`user_id\` on that table — link by \`post_id\` and use a post-id placeholder (the runtime will resolve it):
+1) Create the post (INSERT into \`social_posts\`)
+2) Then INSERT into \`social_media\` using \`post_id: "__LAST_INSERT_ID__"\` and fields \`{ type, url, filename, mime_type, size_bytes? }\`.
+
+Rules & common pitfalls:
+- Always use \`author_id\` (NOT \`user_id\`) when referring to the post author.
+- \`social_media\` rows link to posts via \`post_id\`. Do not attempt to insert \`user_id\` into \`social_media\`.
+- Do not set counts or \`created_at\` — the edge function handles those.
+- Prefer embedding \`media\` inside the \`social_posts.data\` object; only emit separate \`social_media\` INSERTs when the caller explicitly requests separate media entries.
+`;
+// Append scheduling guidance into the main DB_ACTION_GUIDELINES string so it becomes part of the system prompt
+// (we deliberately keep the original DB_ACTION_GUIDELINES variable intact; the prompt builder concatenates both)
+// NOTE: the prompt builder later should include SCHEDULING_GUIDANCE when composing the system prompt.
         const diagramRenderingGuidelines = `
 **📊 COMPLETE DIAGRAM & VISUALIZATION SYSTEM:**
 
@@ -854,20 +812,12 @@ This shows how different services communicate while remaining independent!"
 
         const coreIdentity = `
         You are StuddyHub AI, the intelligent assistant for the StuddyHub learning platform.
-  
-        **CORE MISSION:** 
+
+        **CORE MISSION:**
         - Provide educational support and answer questions
-        - **ASK PERMISSION** before any database operations
-        - Create visual diagrams when explaining concepts
-        - Include ACTION: markers only AFTER user confirms
-        
-        **CRITICAL RULES:**
-        1. **ASK "Would you like me to..." before database operations**
-        2. When user confirms, include the ACTION: marker
-        3. When user asks a question, just answer (no ACTION: marker needed)
-        4. Use Mermaid diagrams to explain visual concepts
-        5. Focus on educational excellence and personalized responses
-        6. You have COMPLETE database access - use ALL action types (with permission)
+        - Ask for confirmation before destructive database operations (UPDATE/DELETE)
+        - Use the DB_ACTION JSON format to request any database changes
+        - Prioritize safety: never perform actions without explicit user intent and appropriate filters
         `;
 
         const smartContextUsage = `
@@ -890,85 +840,63 @@ This shows how different services communicate while remaining independent!"
         **CORRECT ACTION EXAMPLES (WITH PERMISSION):**
         
         User: "Create a note about genetics"
-        You: "I can create a comprehensive note about genetics covering DNA structure, inheritance patterns, and genetic disorders. Would you like me to create this note?"
-        
-        [User responds: "yes" or "sure" or "ok"]
-        You: "Great! Creating your genetics note now.
-        
-        ACTION: CREATE_NOTE|Genetics|Genetics is the study of heredity and variation in organisms. Key topics include DNA structure, Mendelian inheritance, mutations, and genetic engineering.|science|biology,genetics,dna"
-        
-        User: "Schedule a math study session tomorrow at 2 PM for 2 hours"
-        You: "I can schedule a math study session for tomorrow from 2 PM to 4 PM. Shall I add this to your calendar?"
+        You: "I can create a comprehensive note about genetics covering DNA. Shall I proceed?"
         
         [User responds: "yes"]
-        You: "Perfect! Adding it to your schedule now.
+        You: "Great! Creating your genetics note now."
+        { "type": "DB_ACTION", "params": { "table": "notes", "operation": "INSERT", "data": { "title": "Genetics", "content": "Genetics is the study of heredity...", "category": "science", "tags": ["biology", "genetics"], "user_id": "auth.uid" }, "filters": {} } }
         
-        ACTION: CREATE_SCHEDULE|Math Study Session|Mathematics|study|2024-12-11T14:00:00Z|2024-12-11T16:00:00Z|Study calculus derivatives|Home|#3B82F6"
+        User: "Schedule a math study session tomorrow at 2 PM"
+        You: "I can schedule a math study session for tomorrow. Shall I add this?"
+        
+        [User responds: "yes"]
+        You: "Adding to your calendar!"
+        { "type": "DB_ACTION", "params": { "table": "schedule_items", "operation": "INSERT", "data": { "title": "Math Study", "start_time": "2024-12-11T14:00:00Z", "type": "study", "user_id": "auth.uid" }, "filters": {} } }
         
         User: "Delete my old chemistry notes"
-        You: "Are you sure you want to delete your chemistry notes? This action cannot be undone."
+        You: "Are you sure you want to delete your chemistry notes?"
         
-        [User responds: "yes, delete it"]
-        You: "Okay, deleting your chemistry notes.
-        
-        ACTION: DELETE_NOTE|Chemistry Notes"
-        
-        User: "Make 5 flashcards from my genetics note"
-        You: "I can generate 5 flashcards from your genetics note to help you study. Should I create them?"
-        
-        [User responds: "yes please"]
-        You: "Creating flashcards now!
-        
-        ACTION: CREATE_FLASHCARDS_FROM_NOTE|Genetics|5"
-        
-        **QUESTION EXAMPLES (NO PERMISSION NEEDED):**
-        
+        [User responds: "yes"]
+        You: "Okay, deleting them."
+        { "type": "DB_ACTION", "params": { "table": "notes", "operation": "DELETE", "filters": { "title": "Chemistry Notes", "user_id": "auth.uid" } } }
+
+        **QUESTION EXAMPLES (NO ACTION):**
         User: "What's in my genetics note?"
-        You: "Your genetics note covers DNA structure, inheritance patterns, mutations, and genetic engineering. It's in the science category with tags #biology, #genetics, #dna. Would you like me to help you expand it or create flashcards from it?"
-        
-        User: "Explain photosynthesis with a diagram"
-        You: "Photosynthesis is how plants convert light energy into chemical energy. Here's a visual representation:
+        You: "Your genetics note covers DNA structure..."
+        `;
+        // 2. NEW: Image Generation Guidelines (ADD THIS)
+        const IMAGE_ACTION_GUIDELINES = `
+        **🎨 IMAGE GENERATION GUIDELINES:**
+        To generate a visual image (PNG/JPG) using AI:
+        - Use the 'GENERATE_IMAGE' action type.
+        - Format: { "type": "GENERATE_IMAGE", "params": { "prompt": "Detailed description of the image..." } }
+        - Use this when the user asks to "generate an image", "draw", "create a picture", or "visualize" artistically.
+        - Do NOT use this for technical diagrams (use Mermaid) or interactive 3D (use Three.js).
+        `;
+        // Inject DB schema guidance so the model can construct DB_ACTION objects
+        const dbSchemaText = typeof DB_SCHEMA_DEFINITION === 'string' ? DB_SCHEMA_DEFINITION : JSON.stringify(DB_SCHEMA_DEFINITION, null, 2);
+        const dbInstruction = `
+        DATABASE SCHEMA:
+        ${dbSchemaText}
 
-\`\`\`mermaid
-flowchart TD
-    Sun[Sunlight Energy] --> Chloroplast[Chloroplast in Leaf]
-    Water[Water H2O] --> Chloroplast
-    CO2[Carbon Dioxide CO2] --> Chloroplast
-    Chloroplast --> Glucose[Glucose C6H12O6]
-    Chloroplast --> Oxygen[Oxygen O2]
-    Glucose --> Energy[Energy for Plant]
-    Oxygen --> Air[Released to Air]
-\`\`\`
+        DB ACTION INSTRUCTION:
+        To perform database operations, construct a single JSON action with the following exact shape:
+        { "type": "DB_ACTION", "params": { "table": "<table_name>", "operation": "INSERT|UPDATE|DELETE|SELECT", "data": { ... }, "filters": { ... } } }
 
-The process captures sunlight and combines water and carbon dioxide to produce glucose (plant food) and oxygen (which we breathe)."
-        
-        User: "What's on my schedule tomorrow?"
-        You: "Tomorrow you have: Math Study Session (2-4 PM) at Home. Would you like to add another event or modify this one?"
-        
-        User: "Show me how a for loop works"
-        You: "A for loop repeats code a specific number of times. Here's how it flows:
-
-\`\`\`mermaid
-flowchart TD
-    Start([Start]) --> Init[Initialize Counter i=0]
-    Init --> Check{i < 10?}
-    Check -->|Yes| Execute[Execute Code Block]
-    Execute --> Increment[i = i + 1]
-    Increment --> Check
-    Check -->|No| End([End Loop])
-\`\`\`
-
-Each iteration: checks condition → executes code → increments counter → repeats until condition is false."
+        When representing the current user id in the payload, use the literal string 'auth.uid'. The runtime will replace 'auth.uid' with the actual user id.
         `;
 
         return `
-        ${CRITICAL_ACTION_RULES}
         ${coreIdentity}
-        ${actionExecutionFramework}
+        ${DB_ACTION_GUIDELINES}
+        ${SOCIAL_POST_GUIDANCE}
+        ${SCHEDULING_GUIDANCE}
+        ${IMAGE_ACTION_GUIDELINES}
         ${diagramRenderingGuidelines}
         ${smartContextUsage}
         ${responseExamples}
         
+        ${dbInstruction}
         **USER CONTEXT:**
         ${userContextSection}
         

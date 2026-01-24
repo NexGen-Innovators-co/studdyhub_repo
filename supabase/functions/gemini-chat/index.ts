@@ -92,31 +92,6 @@ async function executeAIActions(userId: string, sessionId: string, aiResponse: s
   // Ensure array
   const actionList = Array.isArray(actionsRaw) ? actionsRaw : (actionsRaw ? [actionsRaw] : []);
 
-  // Detect if user confirmed but no ACTION marker is present (for debugging)
-  if (aiResponse.match(/(yes|ok|sure|do it|please proceed|go ahead)/i) && actionList.length === 0) {
-    console.warn('[ActionExecution][WARNING] User confirmed an action but no ACTION: marker was found in the AI response.');
-
-    // Backend fallback: re-prompt the AI for the ACTION: marker and retry ONCE
-    if (!aiResponse.includes('[RETRY_ACTION_MARKER]')) {
-      const fallbackPrompt = `You must output the correct ACTION: marker for the confirmed operation. The user just confirmed an action, but your last reply did NOT include the required ACTION: marker. Please reply with ONLY the correct ACTION: marker for the confirmed action, nothing else.\n\n[RETRY_ACTION_MARKER]`;
-      try {
-        const retryContents = [{ role: 'model', parts: [{ text: aiResponse }] }, { role: 'user', parts: [{ text: fallbackPrompt }] }];
-        const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
-        const retryApiResult = await callEnhancedGeminiAPI(retryContents, geminiApiKey);
-        const retryResponse = retryApiResult.content || '';
-        // Try to execute actions from the retry response
-        const retryResult = await executeAIActions(userId, sessionId, retryResponse);
-        // Merge executed actions and return
-        return {
-          executedActions: retryResult.executedActions,
-          modifiedResponse: retryResult.modifiedResponse
-        };
-      } catch (err) {
-        console.error('[ActionExecution][Fallback] Failed to re-prompt for ACTION marker:', err);
-      }
-    }
-  }
-
   // 2. Execute parsed action if found
   if (actionList.length > 0) {
     console.log(`[ActionExecution] Found ${actionList.length} actions.`);
@@ -188,11 +163,28 @@ async function updateSessionTokenCount(sessionId: string, userId: string, messag
       }
 
       if (!sessionData) {
-        console.log(`[updateSessionTokenCount] Session not found yet, will be created with initial tokens: ${messageTokens}`);
-        return {
-          success: true,
-          tokenCount: messageTokens
-        };
+        console.log(`[updateSessionTokenCount] Session not found yet, creating session token_count: ${messageTokens}`);
+        try {
+          const { error: insertError } = await supabase
+            .from('chat_sessions')
+            .upsert({
+              id: sessionId,
+              user_id: userId,
+              token_count: messageTokens,
+              last_message_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+
+          if (insertError) {
+            console.error('[updateSessionTokenCount] Error inserting initial token count:', insertError);
+            return { success: false, tokenCount: messageTokens };
+          }
+
+          return { success: true, tokenCount: messageTokens };
+        } catch (err) {
+          console.error('[updateSessionTokenCount] Exception inserting session token_count:', err);
+          return { success: false, tokenCount: messageTokens };
+        }
       }
 
       const currentTokenCount = sessionData?.token_count || 0;
@@ -365,10 +357,7 @@ async function buildIntelligentContext(
   } catch (error) {
     console.error(`${logPrefix} Error fetching summary:`, error);
   }
-
-  // Dynamic Context Window Strategy - Maximize history usage within token limits
-  // Gemini 1.5 Pro has a 2M token window, so we can be generous with history
-  const MAX_HISTORY_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS - 100000; // Leave 100k buffer for system prompt/files
+  const MAX_HISTORY_TOKENS = ENHANCED_PROCESSING_CONFIG.MAX_INPUT_TOKENS - 8192; // Leave 8192 buffer for system prompt/files
   let currentTokens = 0;
 
   // Always include the summary if available
@@ -1118,17 +1107,25 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
   error?: string;
   userMessage?: string;
 }> {
-  const apiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent'); // Updated model version for better JSON adherence
-  apiUrl.searchParams.append('key', geminiApiKey);
+  // 1. Define the Fallback Chain (Priority Order)
+  const MODEL_CHAIN = [
+    'gemini-2.5-flash',
+    'gemini-3-pro-preview',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-2.5-pro',
+    'gemini-2.0-pro',
+    'gemini-1.5-pro',
+  ];
 
-  // Extract systemInstruction from configOverrides if present
+  // Extract systemInstruction from configOverrides
   const { systemInstruction, ...generationConfig } = configOverrides;
 
   const requestBody: any = {
     contents,
     generationConfig: {
-      temperature: 0.8,
-      maxOutputTokens: 4096,
+      temperature: 0.7,
+      maxOutputTokens: 8192,
       topK: 40,
       topP: 0.95,
       ...generationConfig
@@ -1139,13 +1136,17 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
     requestBody.systemInstruction = systemInstruction;
   }
 
+  // 2. Retry Loop with Model Switching
   for (let attempt = 0; attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS; attempt++) {
+    const currentModel = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+    console.log(`[GeminiAPI] Attempt ${attempt + 1}/${ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS} using model: ${currentModel}`);
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`;
+
     try {
-      const response = await fetch(apiUrl.toString(), {
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       });
 
@@ -1154,76 +1155,39 @@ async function callEnhancedGeminiAPI(contents: any[], geminiApiKey: string, conf
         const extractedContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (extractedContent) {
-          return {
-            success: true,
-            content: extractedContent
-          };
+          return { success: true, content: extractedContent };
         } else {
-          return {
-            success: false,
-            error: 'No content returned from Gemini'
-          };
+          console.warn(`[GeminiAPI] Model ${currentModel} returned no content.`);
         }
       } else {
         const errorText = await response.text();
-        console.error(`Gemini API error (attempt ${attempt + 1}): ${response.status} - ${errorText}`);
+        const status = response.status;
+        console.error(`[GeminiAPI] Error ${status} with ${currentModel}: ${errorText.substring(0, 200)}...`);
 
-        if (response.status === 429) {
+        if (status === 429 || status === 503) {
+          console.warn(`[GeminiAPI] Quota/Load limit hit for ${currentModel}. Switching to next model...`);
           if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-            const baseDelay = ENHANCED_PROCESSING_CONFIG.INITIAL_RETRY_DELAY *
-              Math.pow(ENHANCED_PROCESSING_CONFIG.EXPONENTIAL_BACKOFF_MULTIPLIER, attempt);
-            const delay = Math.min(baseDelay, ENHANCED_PROCESSING_CONFIG.MAX_RETRY_DELAY);
+            await sleep(1000);
+            continue;
+          }
+        }
 
-            console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS})...`);
-            await sleep(delay);
-            continue;
-          } else {
-            return {
-              success: false,
-              error: 'RATE_LIMIT',
-              userMessage: 'The AI service is currently experiencing high traffic. Please try again in a moment.'
-            };
-          }
-        } else if (response.status === 503) {
-          if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-            const delay = ENHANCED_PROCESSING_CONFIG.INITIAL_RETRY_DELAY * (attempt + 1);
-            console.log(`Service unavailable, retrying in ${delay}ms...`);
-            await sleep(delay);
-            continue;
-          } else {
-            return {
-              success: false,
-              error: 'SERVICE_UNAVAILABLE',
-              userMessage: 'The AI service is temporarily unavailable. Please try again shortly.'
-            };
-          }
-        } else {
-          return {
-            success: false,
-            error: `API_ERROR_${response.status}`,
-            userMessage: `I encountered an issue processing your request. Please try again. (Error: ${response.status})`
-          };
+        if (status === 400) {
+          return { success: false, error: `BAD_REQUEST: ${errorText}`, userMessage: "I couldn't process that request format." };
         }
       }
     } catch (error) {
-      console.error(`Network error (attempt ${attempt + 1}):`, error);
-
-      if (attempt === ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-        return {
-          success: false,
-          error: 'NETWORK_ERROR',
-          userMessage: 'Unable to connect to the AI service. Please check your internet connection and try again.'
-        };
+      console.error(`[GeminiAPI] Network error with ${currentModel}:`, error);
+      if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
+        await sleep(1000);
       }
-
-      await sleep(ENHANCED_PROCESSING_CONFIG.INITIAL_RETRY_DELAY * (attempt + 1));
     }
   }
 
   return {
     success: false,
-    error: 'MAX_RETRIES',
-    userMessage: 'The request took too long to process. Please try again.'
+    error: 'ALL_MODELS_FAILED',
+    userMessage: 'I am currently experiencing heavy load across all AI services. Please try again in a minute.'
   };
 }
 
@@ -1556,20 +1520,21 @@ async function handleStreamingResponse(
         'in-progress'
       );
 
-      const actionSystemPrompt = `You are an AI assistant that manages database operations, image generation, and social tasks.
-      Analyze the user's request and the conversation context.
-      
-      Here is the Database Schema you must use for database operations:
-      ${DB_SCHEMA_DEFINITION}
-      
-      Determine which actions (database, image generation, social engagement, etc.) are needed.
-      Return a JSON object following this schema:
-      ${JSON.stringify(AI_ACTION_SCHEMA)}
-      
-      If no actions are needed, return an empty actions array.
-      Do NOT include any markdown formatting. Return raw JSON only.
-      Strictly follow the table names and structures provided in the schema for DB_ACTION.`;
+      const actionSystemPrompt = `${systemPrompt}
 
+You are an AI assistant that manages database operations and creative tools.
+Analyze the user's request and the conversation context.
+
+YOUR GOAL: Return a JSON object with the necessary actions.
+
+CRITICAL RULES:
+- Return JSON ONLY. No markdown, no extraneous text.
+- The output must be a valid JSON object with a "thought_process" string and an "actions" array.
+- When referring to the current user id, use the literal string "auth.uid" in the JSON; the runtime will replace it.
+- For destructive operations (UPDATE/DELETE) ask for a short confirmation if the intent is ambiguous.
+- For ambiguous scheduling details (time zone, start/end, recurrence), ask a clarifying question instead of guessing.
+
+Note: The full DB action guidelines, scheduling guidance, and social-post guidance are included above in the system prompt; follow them precisely (use \`author_id\`, link media by \`post_id\`, prefer inline \`media\` in \`social_posts\`, etc.).`;
       // Copy contents for action planning
       const actionContents = [...conversationData.contents];
       actionContents.push({
@@ -1581,62 +1546,83 @@ async function handleStreamingResponse(
       const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
       if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
 
-      const actionResponse = await callEnhancedGeminiAPI(actionContents, geminiApiKey, {
-        responseMimeType: "application/json",
-        systemInstruction: { parts: [{ text: actionSystemPrompt }] }
-      });
-
       let executedActions: any[] = [];
       let finalResponseContext = attachedContext;
 
-      if (actionResponse.success && actionResponse.content) {
-        try {
-          console.log('📥 Parsing Action Plan JSON:', actionResponse.content);
-          const actionPlan = JSON.parse(actionResponse.content);
+      try {
+        const actionResponse = await callEnhancedGeminiAPI(actionContents, geminiApiKey, {
+          responseMimeType: "application/json",
+          systemInstruction: { parts: [{ text: actionSystemPrompt }] }
+        });
 
-          if (actionPlan.actions && actionPlan.actions.length > 0) {
-            executedActions = await executeParsedActions(
-              actionsService,
-              userId,
-              sessionId,
-              actionPlan.actions,
-              (action, index, total) => {
-                const actionLabel = getFriendlyActionLabel(action.type, action.params);
-                handler.sendThinkingStep(
-                  'action',
-                  `Action ${index + 1}/${total}`,
-                  `${actionLabel}...`,
-                  'in-progress',
-                  { action, index, total }
-                );
-              }
-            );
+        if (actionResponse.success && actionResponse.content) {
+          try {
+            console.log('📥 Parsing Action Plan JSON:', actionResponse.content);
+            const parsed = JSON.parse(actionResponse.content);
 
-            finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS ===\n';
-            finalResponseContext += JSON.stringify(executedActions, null, 2);
+            // Accept multiple plan shapes:
+            // 1) Full plan: { thought_process: '', actions: [...] }
+            // 2) Single action object: { type: 'DB_ACTION', params: {...} }
+            // 3) Array of actions: [ {..}, {..} ]
+            let actionsToExecute: any[] = [];
+            if (Array.isArray(parsed)) {
+              actionsToExecute = parsed;
+            } else if (parsed && Array.isArray(parsed.actions)) {
+              actionsToExecute = parsed.actions;
+            } else if (parsed && parsed.type) {
+              actionsToExecute = [parsed];
+            }
 
-            handler.sendThinkingStep(
-              'action',
-              'Actions executed',
-              `Successfully executed ${executedActions.filter(a => a.success).length} out of ${executedActions.length} actions.`,
-              'completed'
-            );
-          } else {
-            console.log('No actions planned.');
-            handler.sendThinkingStep(
-              'action',
-              'No actions needed',
-              'Proceeding to response...',
-              'completed',
-              { actionCount: 0 }
-            );
+            if (actionsToExecute.length > 0) {
+              executedActions = await executeParsedActions(
+                actionsService,
+                userId,
+                sessionId,
+                actionsToExecute,
+                (action, index, total) => {
+                  const actionLabel = getFriendlyActionLabel(action.type, action.params);
+                  handler.sendThinkingStep(
+                    'action',
+                    `Action ${index + 1}/${total}`,
+                    `${actionLabel}...`,
+                    'in-progress',
+                    { action, index, total }
+                  );
+                }
+              );
+
+              finalResponseContext += '\n\n=== EXECUTED ACTIONS RESULTS ===\n';
+              finalResponseContext += JSON.stringify(executedActions, null, 2);
+
+              handler.sendThinkingStep(
+                'action',
+                'Actions executed',
+                `Successfully executed ${executedActions.filter(a => a.success).length} out of ${executedActions.length} actions.`,
+                'completed'
+              );
+            } else {
+              console.log('No actions planned.');
+              handler.sendThinkingStep(
+                'action',
+                'No actions needed',
+                'Proceeding to response...',
+                'completed',
+                { actionCount: 0 }
+              );
+            }
+          } catch (parseError: any) {
+            console.error('Failed to parse action plan:', parseError);
+            handler.sendThinkingStep('action', 'Action Planning Warning', 'Could not parse action plan, continuing...', 'completed');
+            // Continue to response generation even if action parsing fails
           }
-        } catch (e) {
-          console.error('Failed to parse action plan:', e);
-          handler.sendThinkingStep('action', 'Action Planning Failed', 'Could not parse action plan', 'failed');
+        } else {
+          console.warn('Action planning API call failed or returned empty, continuing to response...');
+          handler.sendThinkingStep('action', 'Action Planning Skipped', 'Proceeding to response generation...', 'completed');
         }
-      } else {
-        console.warn('Action planning API call failed or returned empty');
+      } catch (actionError: any) {
+        console.error('Error during action planning:', actionError);
+        // Don't fail the entire request - continue to response generation
+        handler.sendThinkingStep('action', 'Action Planning Error', 'Continuing to response generation...', 'completed');
       }
 
       // =========================================================================
@@ -1648,7 +1634,15 @@ async function handleStreamingResponse(
       if (executedActions.length > 0) {
         finalContents.push({
           role: 'user',
-          parts: [{ text: `System Update: The following actions were executed successfully. Use these results to formulate your response to the user.\n\nResults: ${JSON.stringify(executedActions)}` }]
+          // 👇 UPDATED TEXT INSTRUCTION 👇
+          parts: [{ text: `System Update: The following actions were executed successfully.
+          
+          Results: ${JSON.stringify(executedActions)}
+          
+          CRITICAL INSTRUCTION FOR FINAL RESPONSE:
+          1. The actions are DONE. Do NOT output any JSON, "DB_ACTION", or code blocks.
+          2. Just confirm to the user naturally (e.g., "I've added the image to your note.").
+          3. Keep the response concise.` }]
         });
       }
 
@@ -1696,35 +1690,6 @@ async function handleStreamingResponse(
       );
       console.log('✅ Action phase complete');
 
-      // Verification phase
-      handler.sendThinkingStep(
-        'verification',
-        'Verifying response quality',
-        'Checking for accuracy and completeness...',
-        'in-progress'
-      );
-
-      let verification;
-      try {
-        verification = await agenticCore.verifyResponse(generatedText, userIntent, relevantContext);
-      } catch (error: any) {
-        console.error('Error in verifyResponse:', error);
-        // Default verification result
-        verification = {
-          isValid: true,
-          confidence: 0.8,
-          issues: []
-        };
-      }
-
-      handler.sendThinkingStep(
-        'verification',
-        'Verification complete',
-        `Quality score: ${(verification.confidence * 100).toFixed(0)}%${verification.issues.length > 0 ? `, ${verification.issues.length} issues detected` : ', looks good!'}`,
-        verification.isValid ? 'completed' : 'failed',
-        { confidence: verification.confidence, issues: verification.issues }
-      );
-
       console.log('✅ Actions executed (summary):', executedActions.length, 'actions');
 
       // Save AI message
@@ -1741,6 +1706,14 @@ async function handleStreamingResponse(
 
       const savedAiMessage = await saveChatMessage(aiMessageData);
       console.log('✅ AI message saved:', savedAiMessage?.id);
+
+      try {
+        if (generatedText) {
+          await updateSessionTokenCount(sessionId, userId, generatedText, 'add');
+        }
+      } catch (err) {
+        console.error('[Streaming] Failed to update token count after saving AI message:', err);
+      }
 
       // Send final response
       console.log('🏁 Sending final response...');
@@ -2084,6 +2057,13 @@ serve(async (req) => {
         userMessageId = savedUserMessage.id;
         userMessageTimestamp = savedUserMessage.timestamp;
         console.log('✅ User message saved for streaming:', userMessageId);
+        try {
+          if (message) {
+            await updateSessionTokenCount(sessionId, userId, message, 'add');
+          }
+        } catch (err) {
+          console.error('[Main] Failed to update token count after saving user message:', err);
+        }
       }
     }
 
@@ -2267,84 +2247,27 @@ serve(async (req) => {
         .eq('user_id', userId);
     }
 
-    const geminiApiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent');
-    geminiApiUrl.searchParams.append('key', geminiApiKey);
+    console.log('🤖 Calling Gemini API for Final Response...');
 
-    const requestBody = {
-      contents: conversationData.contents,
+    const finalResponse = await callEnhancedGeminiAPI(conversationData.contents, geminiApiKey, {
+      systemInstruction: conversationData.systemInstruction,
       generationConfig: {
         temperature: 0.7,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 8192  // Reduced from 65530 for faster generation
-      },
-      systemInstruction: conversationData.systemInstruction || undefined
-    };
+        maxOutputTokens: 8192
+      }
+    });
 
     let generatedText = '';
     let apiCallSuccess = false;
 
-    for (let attempt = 0; attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS; attempt++) {
-      try {
-        const response = await fetch(geminiApiUrl.toString(), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestBody)
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (generatedText) {
-            apiCallSuccess = true;
-            break;
-          }
-        } else {
-          const errorBody = await response.text();
-          console.error(`Gemini API error (attempt ${attempt + 1}): ${response.status} - ${errorBody}`);
-
-          if (response.status === 429) {
-            if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-              const baseDelay = ENHANCED_PROCESSING_CONFIG.INITIAL_RETRY_DELAY *
-                Math.pow(ENHANCED_PROCESSING_CONFIG.EXPONENTIAL_BACKOFF_MULTIPLIER, attempt);
-              const delay = Math.min(baseDelay, ENHANCED_PROCESSING_CONFIG.MAX_RETRY_DELAY);
-
-              console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt + 1})...`);
-              await sleep(delay);
-              continue;
-            } else {
-              generatedText = `I apologize, but I'm currently experiencing high demand. Please wait a moment and try sending your message again. Your previous messages have been saved.`;
-              break;
-            }
-          } else if (response.status === 503) {
-            if (attempt < ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-              const delay = ENHANCED_PROCESSING_CONFIG.INITIAL_RETRY_DELAY * (attempt + 1);
-              console.log(`Service unavailable, retrying in ${delay}ms...`);
-              await sleep(delay);
-              continue;
-            } else {
-              generatedText = `I'm temporarily unable to process your request due to service maintenance. Please try again in a few moments.`;
-              break;
-            }
-          } else {
-            generatedText = `I encountered an unexpected issue while processing your request. Please try again. If the problem persists, contact support.`;
-            break;
-          }
-        }
-      } catch (error) {
-        console.error(`Network error during API call (attempt ${attempt + 1}):`, error);
-        if (attempt === ENHANCED_PROCESSING_CONFIG.RETRY_ATTEMPTS - 1) {
-          generatedText = `I'm having trouble connecting to process your request. Please check your connection and try again.`;
-          break;
-        }
-        await sleep(ENHANCED_PROCESSING_CONFIG.INITIAL_RETRY_DELAY * (attempt + 1));
-      }
-    }
-
-    if (!generatedText) {
-      generatedText = `I apologize, but I wasn't able to generate a response at this time. Your message has been saved, and you can try asking again.`;
+    if (!finalResponse.success || !finalResponse.content) {
+      generatedText = finalResponse.userMessage || finalResponse.error || `I apologize, but I wasn't able to generate a response at this time. Your message has been saved, and you can try asking again.`;
+      apiCallSuccess = false;
+    } else {
+      generatedText = finalResponse.content;
+      apiCallSuccess = true;
     }
 
     // ========== AGENTIC VERIFICATION PHASE ==========

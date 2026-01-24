@@ -24,13 +24,23 @@ serve(async (req) => {
   try {
     console.log('Starting post creation process...');
     
-    // Extract user ID from auth header
+    // Extract config and parse body early so we can accept author_id fallback
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-    const userId = await extractUserIdFromAuth(req, supabaseUrl, supabaseServiceKey);
-    console.log('User ID extracted:', userId);
-    
+    // Parse request body early so an explicit author_id can be used as a fallback
+    const body = await req.json();
+    console.log('Request body parsed (early):', { contentLength: body.content?.length, privacy: body.privacy, author_id_present: !!body.author_id });
+
+    let userId = await extractUserIdFromAuth(req, supabaseUrl, supabaseServiceKey);
+    console.log('User ID extracted from auth:', userId);
+
+    // If no authenticated user but the client provided an explicit author_id, accept it as a fallback
+    if (!userId && body && body.author_id) {
+      userId = String(body.author_id);
+      console.warn('No auth header present — using provided body.author_id as fallback for author identification. Ensure this is intended.');
+    }
+
     if (!userId) {
       return createErrorResponse('Unauthorized: Invalid or missing authentication', 401);
     }
@@ -46,10 +56,7 @@ serve(async (req) => {
       return createErrorResponse(canPost.message || 'Not allowed to post', 403);
     }
 
-    // Parse request body
-    const body = await req.json();
-    console.log('Request body parsed:', { contentLength: body.content?.length, privacy: body.privacy });
-    
+    // Body was parsed earlier; reuse it here
     const { content, privacy = 'public', media = [], group_id = null, metadata = null } = body;
 
     // Validate content
@@ -138,7 +145,7 @@ serve(async (req) => {
         
         // AI-powered educational analysis using direct API
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
-        const apiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent');
+        const apiUrl = new URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent');
         apiUrl.searchParams.set('key', geminiApiKey);
         
         console.log('Gemini API URL:', apiUrl.toString().replace(geminiApiKey, 'KEY_HIDDEN'));
