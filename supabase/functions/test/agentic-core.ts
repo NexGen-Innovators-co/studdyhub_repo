@@ -1,6 +1,7 @@
 // agentic-core.ts - Advanced Agentic Mechanisms for Accurate Understanding & Response
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { DB_SCHEMA_DEFINITION } from './db_schema.ts';
 
 // Provide a default config if ENHANCED_PROCESSING_CONFIG is not defined elsewhere
 declare const ENHANCED_PROCESSING_CONFIG: any;
@@ -288,21 +289,39 @@ export class AgenticCore {
   async selectTools(intent: UserIntent, context: RetrievalResult[]): Promise<string[]> {
     const tools: string[] = [];
 
-    // Determine which tools are needed
-    if (intent.requiresAction) {
-      if (intent.primary.includes('create')) tools.push('create_tool');
-      if (intent.primary.includes('update')) tools.push('update_tool');
-      if (intent.primary.includes('delete')) tools.push('delete_tool');
-      if (intent.primary.includes('search')) tools.push('search_tool');
+    const text = (intent.primary || '').toLowerCase();
+
+    // Prioritize DB_ACTION for create/update/delete intents
+    const creates = ['create', 'add', 'insert', 'make', 'post'];
+    const updates = ['update', 'edit', 'change', 'modify'];
+    const deletes = ['delete', 'remove', 'destroy'];
+
+    if (intent.requiresAction || creates.some(k => text.includes(k)) || updates.some(k => text.includes(k)) || deletes.some(k => text.includes(k))) {
+      tools.push('db_action');
     }
 
-    // Check if calculation is needed
+    // Fallback tools
     if (this.needsCalculation(intent)) tools.push('calculator');
-
-    // Check if external knowledge is needed
     if (this.needsExternalKnowledge(intent, context)) tools.push('knowledge_retrieval');
 
+    // Always include an LLM interface and semantic search as helpful tools
+    tools.push('llm');
+    tools.push('semantic_search');
+
     return tools;
+  }
+
+  // Compose prompts for LLM calls while injecting DB schema when relevant
+  async processRequest(promptParts: any[]): Promise<any[]> {
+    const dbInfo = typeof DB_SCHEMA_DEFINITION === 'string' ? DB_SCHEMA_DEFINITION : JSON.stringify(DB_SCHEMA_DEFINITION, null, 2);
+    const dbNote = `DATABASE SCHEMA:\n${dbInfo}\n\nWhen constructing DB operations, prefer the DB_ACTION JSON shape with 'auth.uid' for user id.`;
+
+    const enriched = [
+      { role: 'system', parts: [{ text: dbNote }] },
+      ...promptParts
+    ];
+
+    return enriched;
   }
 
   /**

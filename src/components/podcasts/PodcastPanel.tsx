@@ -41,6 +41,8 @@ interface PodcastPanelProps {
   onClose: () => void;
   isOpen: boolean;
   onPodcastSelect?: (podcastId: string) => void;
+  panelWidth?: number;
+  setPanelWidth?: React.Dispatch<React.SetStateAction<number>>;
 }
 
 export interface PodcastPanelRef {

@@ -1,5 +1,6 @@
 // actions-service.ts
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { DB_SCHEMA_DEFINITION } from './db_schema.ts';
 
 export class StuddyHubActionsService {
     supabase: any;
@@ -21,23 +22,40 @@ export class StuddyHubActionsService {
         limit: number | null = null
     ): Promise<{ success: boolean; data?: any; error?: string }> {
         console.log(`[ActionsService] Executing ${operation} on ${table}`);
-        const allowedTables = [
-            'achievements', 'admin_activity_logs', 'admin_system_settings', 'admin_users', 'ai_podcasts',
-            'ai_user_memory', 'app_stats', 'audio_processing_results', 'badges', 'calendar_integrations',
-            'chat_messages', 'chat_sessions', 'class_recordings', 'content_moderation_log',
-            'content_moderation_queue', 'course_materials', 'courses', 'document_folder_items',
-            'document_folders', 'documents', 'error_logs', 'failed_chunks', 'flashcards',
-            'learning_topic_connections', 'notes', 'notification_preferences', 'notification_subscriptions',
-            'notifications', 'podcast_invites', 'podcast_listeners', 'podcast_members', 'podcast_shares',
-            'profiles', 'quiz_attempts', 'quizzes', 'referrals', 'schedule_items', 'schedule_reminders',
-            'schema_agent_audit', 'social_bookmarks', 'social_chat_message_media', 'social_chat_message_reads',
-            'social_chat_message_resources', 'social_chat_messages', 'social_chat_sessions',
-            'social_comment_media', 'social_comments', 'social_event_attendees', 'social_events',
-            'social_follows', 'social_group_members', 'social_groups', 'social_hashtags', 'social_likes',
-            'social_media', 'social_notifications', 'social_post_hashtags', 'social_post_tags',
-            'social_post_views', 'social_posts', 'social_reports', 'social_shares', 'social_tags',
-            'social_users', 'subscriptions', 'system_settings', 'user_learning_goals', 'user_stats'
-        ];
+        // Derive allowed tables from DB_SCHEMA_DEFINITION if possible, fallback to hardcoded list
+        let allowedTables: string[] = [];
+        try {
+            const schemaText = typeof DB_SCHEMA_DEFINITION === 'string' ? DB_SCHEMA_DEFINITION : JSON.stringify(DB_SCHEMA_DEFINITION);
+            const regex = /^\s*\d+\.\s*([a-z0-9_]+)/gim;
+            const tables = new Set<string>();
+            let m: RegExpExecArray | null;
+            while ((m = regex.exec(schemaText)) !== null) {
+                if (m[1]) tables.add(m[1].trim());
+            }
+            if (tables.size > 0) allowedTables = Array.from(tables);
+        } catch (e) {
+            // ignore and fallback
+        }
+
+        if (allowedTables.length === 0) {
+            allowedTables = [
+                'achievements','admin_activity_logs','admin_system_settings','admin_users','ai_podcasts',
+                'ai_user_memory','app_stats','audio_processing_results','badges','calendar_integrations',
+                'chat_messages','chat_sessions','class_recordings','content_moderation_log',
+                'content_moderation_queue','course_materials','courses','document_folder_items',
+                'document_folders','documents','error_logs','failed_chunks','flashcards',
+                'learning_topic_connections','notes','notification_preferences','notification_subscriptions',
+                'notifications','podcast_invites','podcast_listeners','podcast_members','podcast_shares',
+                'profiles','quiz_attempts','quizzes','referrals','schedule_items','schedule_reminders',
+                'schema_agent_audit','social_bookmarks','social_chat_message_media','social_chat_message_reads',
+                'social_chat_message_resources','social_chat_messages','social_chat_sessions',
+                'social_comment_media','social_comments','social_event_attendees','social_events',
+                'social_follows','social_group_members','social_groups','social_hashtags','social_likes',
+                'social_media','social_notifications','social_post_hashtags','social_post_tags',
+                'social_post_views','social_posts','social_reports','social_shares','social_tags',
+                'social_users','subscriptions','system_settings','user_learning_goals','user_stats'
+            ];
+        }
 
         if (!allowedTables.includes(table)) {
             return { success: false, error: `Table '${table}' is not whitelisted for AI actions.` };
@@ -46,7 +64,12 @@ export class StuddyHubActionsService {
         // Helper to recursively replace "auth.uid" with actual userId
         const replaceAuthUid = (obj: any): any => {
             if (typeof obj === 'string') {
-                return obj === 'auth.uid' ? userId : obj;
+                // Handle 'auth.uid', 'auth.uid()', and potentially 'current_user'
+                const lower = obj.toLowerCase();
+                if (lower === 'auth.uid' || lower === 'auth.uid()' || lower === 'user_id') {
+                    return userId;
+                }
+                return obj;
             }
             if (Array.isArray(obj)) {
                 return obj.map(replaceAuthUid);
@@ -60,9 +83,70 @@ export class StuddyHubActionsService {
             }
             return obj;
         };
+        // Normalize recurrence days arrays and other scheduling-specific fields
+        const normalizeRecurrenceDays = (days: any): number[] | null => {
+            if (!days) return null;
+            if (!Array.isArray(days)) return null;
 
-        const cleanData = replaceAuthUid(data);
-        const cleanFilters = replaceAuthUid(filters);
+            const map: Record<string, number> = {
+                sunday: 0,
+                monday: 1,
+                tuesday: 2,
+                wednesday: 3,
+                thursday: 4,
+                friday: 5,
+                saturday: 6
+            };
+
+            const normalized: number[] = [];
+            for (const d of days) {
+                if (d == null) continue;
+                if (typeof d === 'number' && Number.isInteger(d)) {
+                    normalized.push(d);
+                    continue;
+                }
+                const s = String(d).trim().toLowerCase();
+                if (map.hasOwnProperty(s)) {
+                    normalized.push(map[s]);
+                    continue;
+                }
+                const short = s.slice(0, 3);
+                for (const [k, v] of Object.entries(map)) {
+                    if (k.slice(0, 3) === short) {
+                        normalized.push(v);
+                        break;
+                    }
+                }
+                const n = parseInt(s, 10);
+                if (!Number.isNaN(n)) normalized.push(n);
+            }
+            return normalized.length ? normalized : null;
+        };
+
+        const sanitizeForTable = (tbl: string, obj: any): any => {
+            if (obj == null) return obj;
+            if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') return obj;
+            if (Array.isArray(obj)) return obj.map((v) => sanitizeForTable(tbl, v));
+            if (typeof obj === 'object') {
+                const out: any = {};
+                for (const key of Object.keys(obj)) {
+                    const val = obj[key];
+                    if (key === 'recurrence_days') {
+                        out[key] = normalizeRecurrenceDays(val);
+                        continue;
+                    }
+                    out[key] = sanitizeForTable(tbl, val);
+                }
+                return out;
+            }
+            return obj;
+        };
+
+        const replacedData = replaceAuthUid(data);
+        const replacedFilters = replaceAuthUid(filters);
+
+        const cleanData = sanitizeForTable(table, replacedData);
+        let cleanFilters = sanitizeForTable(table, replacedFilters);
 
         try {
             let query = this.supabase.from(table);
@@ -72,6 +156,29 @@ export class StuddyHubActionsService {
                     cleanData.user_id = userId;
                 }
 
+                // Special-case: social_posts should be created via the edge function 'create-social-post'
+                if (table === 'social_posts') {
+                    try {
+                        console.log('[ActionsService] Routing social_posts creation to create-social-post function');
+                        const invokeRes = await this.supabase.functions.invoke('create-social-post', {
+                            body: cleanData
+                        });
+
+                        if (invokeRes && invokeRes.data) {
+                            return { success: true, data: invokeRes.data };
+                        }
+
+                        if (invokeRes && invokeRes.error) {
+                            throw invokeRes.error;
+                        }
+
+                        return { success: false, error: 'create-social-post returned no data' };
+                    } catch (err: any) {
+                        console.error('[ActionsService] Error invoking create-social-post function:', err);
+                        return { success: false, error: err?.message || String(err) };
+                    }
+                }
+
                 const { data: result, error } = await query.insert(cleanData).select();
                 if (error) throw error;
                 return { success: true, data: result };
@@ -79,6 +186,80 @@ export class StuddyHubActionsService {
             } else if (operation === 'UPDATE') {
                 if (Object.keys(cleanFilters).length === 0) {
                     return { success: false, error: 'UPDATE operation requires filters (e.g. { id: ... })' };
+                }
+
+                // If updating schedule_items by title, try to resolve a matching id first
+                if (table === 'schedule_items' && cleanFilters.title && !cleanFilters.id) {
+                    try {
+                        const origTitle = String(cleanFilters.title || '');
+                        const titleVal = origTitle.trim();
+                        console.log('[ActionsService] Resolving schedule_items title to id for update:', titleVal);
+
+                        // 1) Try exact match
+                        let findRes = await this.supabase
+                            .from('schedule_items')
+                            .select('id')
+                            .eq('user_id', userId)
+                            .eq('title', titleVal)
+                            .limit(1)
+                            .single();
+
+                        // 2) Try case-insensitive exact via ilike
+                        if (findRes.error || !findRes.data) {
+                            findRes = await this.supabase
+                                .from('schedule_items')
+                                .select('id')
+                                .eq('user_id', userId)
+                                .ilike('title', titleVal)
+                                .limit(1)
+                                .single();
+                        }
+
+                        // 3) Try partial match
+                        if (findRes.error || !findRes.data) {
+                            findRes = await this.supabase
+                                .from('schedule_items')
+                                .select('id')
+                                .eq('user_id', userId)
+                                .ilike('title', `%${titleVal}%`)
+                                .limit(1)
+                                .single();
+                        }
+
+                        // 4) As a last resort, try a normalized-match (strip punctuation/extra spaces)
+                        if (findRes.error || !findRes.data) {
+                            const normalized = titleVal.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+                            if (normalized && normalized !== titleVal) {
+                                findRes = await this.supabase
+                                    .from('schedule_items')
+                                    .select('id, title')
+                                    .eq('user_id', userId)
+                                    .ilike('title', `%${normalized}%`)
+                                    .limit(1)
+                                    .single();
+                            }
+                        }
+
+                        if (!findRes.error && findRes.data && (findRes.data as any).id) {
+                            cleanFilters = { id: (findRes.data as any).id };
+                            console.log('[ActionsService] Resolved schedule_items title to id for update');
+                        } else {
+                            // Try to fetch some candidate rows for debugging and log them
+                            try {
+                                const { data: candidates } = await this.supabase
+                                    .from('schedule_items')
+                                    .select('id,title')
+                                    .eq('user_id', userId)
+                                    .ilike('title', `%${titleVal}%`)
+                                    .limit(5);
+                                console.log('[ActionsService] Could not resolve title to schedule_items id; candidates:', candidates || []);
+                            } catch (e) {
+                                console.log('[ActionsService] Could not resolve title and candidate lookup failed');
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('[ActionsService] Error resolving schedule_items title to id:', err);
+                    }
                 }
 
                 const { data: result, error } = await query.update(cleanData).match(cleanFilters).select();
@@ -582,20 +763,55 @@ export class StuddyHubActionsService {
         recurrence_interval?: number;
     }) {
         try {
+            // Normalize recurrence_days to a consistent format (integers for weekdays)
+            const normalizeRecurrenceDays = (days: any): number[] | null => {
+                if (!days) return null;
+                if (!Array.isArray(days)) return null;
+
+                const map: Record<string, number> = {
+                    sunday: 0,
+                    monday: 1,
+                    tuesday: 2,
+                    wednesday: 3,
+                    thursday: 4,
+                    friday: 5,
+                    saturday: 6
+                };
+
+                const normalized: number[] = [];
+                for (const d of days) {
+                    if (d == null) continue;
+                    if (typeof d === 'number' && Number.isInteger(d)) {
+                        normalized.push(d);
+                        continue;
+                    }
+                    const s = String(d).trim().toLowerCase();
+                    // try full name
+                    if (map.hasOwnProperty(s)) {
+                        normalized.push(map[s]);
+                        continue;
+                    }
+                    // try short names like 'mon', 'tue'
+                    const short = s.slice(0, 3);
+                    for (const [k, v] of Object.entries(map)) {
+                        if (k.slice(0, 3) === short) {
+                            normalized.push(v);
+                            break;
+                        }
+                    }
+                    // try numeric string
+                    const n = parseInt(s, 10);
+                    if (!Number.isNaN(n)) normalized.push(n);
+                }
+
+                return normalized.length ? normalized : null;
+            };
+
             // Validate type
             const validTypes = ['class', 'study', 'assignment', 'exam', 'other'];
             const type = validTypes.includes(scheduleData.type) ? scheduleData.type : 'study';
-
-            // Validate start_time
-            if (!scheduleData.start_time || isNaN(Date.parse(scheduleData.start_time))) {
-                throw new Error('Invalid start_time: Must be a valid timestamp');
-            }
-
-            // Validate end_time
-            if (scheduleData.end_time && isNaN(Date.parse(scheduleData.end_time))) {
-                throw new Error('Invalid end_time: Must be a valid timestamp');
-            }
-
+            // Normalize recurrence days coming from model/actions
+            const recurrenceDays = normalizeRecurrenceDays((scheduleData as any).recurrence_days);
             const { data, error } = await this.supabase
                 .from('schedule_items')
                 .insert({
@@ -612,7 +828,7 @@ export class StuddyHubActionsService {
                     calendar_event_id: null, // Explicitly set to null as per schema
                     is_recurring: scheduleData.is_recurring || false,
                     recurrence_pattern: scheduleData.recurrence_pattern || null,
-                    recurrence_days: scheduleData.recurrence_days || null,
+                    recurrence_days: recurrenceDays,
                     recurrence_end_date: scheduleData.recurrence_end_date || null,
                     recurrence_interval: scheduleData.recurrence_interval || 1
                 })
