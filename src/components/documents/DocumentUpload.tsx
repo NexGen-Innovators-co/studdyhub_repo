@@ -19,6 +19,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAppContext } from '../../hooks/useAppContext';
 import { DocumentFolder, CreateFolderInput, UpdateFolderInput } from '../../types/Folder';
 import { Skeleton } from '../ui/skeleton';
+import DocumentMarkdownRenderer from '../aiChat/Components/DocumentMarkdownRenderer';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { PodcastButton } from '../dashboard/PodcastButton';
@@ -2120,9 +2121,17 @@ const lastDocumentElementRef = useCallback(
                       )}
                     </div>
                     <div className="bg-white dark:bg-slate-700 rounded-lg p-4 min-h-[120px] max-h-60 overflow-y-auto">
-                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                        {selectedDocument.content_extracted || 'No content has been extracted from this file yet.'}
-                      </p>
+                      {selectedDocument.content_extracted ? (
+                        (/^(#{1,6}\s)|(^```)|(^-\s)|(^\*\s)|(^>\s)/m.test(selectedDocument.content_extracted)) ? (
+                          <DocumentMarkdownRenderer content={selectedDocument.content_extracted} />
+                        ) : (
+                          <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                            {selectedDocument.content_extracted}
+                          </p>
+                        )
+                      ) : (
+                        <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">No content has been extracted from this file yet.</p>
+                      )}
                     </div>
                   </div>
 

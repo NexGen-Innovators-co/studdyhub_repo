@@ -65,7 +65,7 @@ export const CourseDetail: React.FC<CourseDetailProps> = ({ course, onBack }) =>
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {items.map((material) => (
-                    <ResourceCard key={material.id} material={material} />
+                    <ResourceCard key={material.id} material={material} course={course} />
                   ))}
                 </div>
               </div>

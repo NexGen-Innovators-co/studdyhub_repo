@@ -23,6 +23,7 @@ export const useMessageHandlers = () => {
     createNewChatSession,
     dispatch,
     selectedDocumentIds,
+    currentCourse,
   } = useAppContext();
 
   const {
@@ -333,6 +334,7 @@ export const useMessageHandlers = () => {
           files: processedFiles,
           attachedDocumentIds: finalAttachedDocumentIds,
           attachedNoteIds: finalAttachedNoteIds,
+          courseContext: currentCourse || null,
           imageUrl: imageUrl,
           imageMimeType: imageMimeType,
           aiMessageIdToUpdate: aiMessageIdToUpdate,
@@ -483,6 +485,7 @@ export const useMessageHandlers = () => {
             files: processedFiles,
             attachedDocumentIds: finalAttachedDocumentIds,
             attachedNoteIds: finalAttachedNoteIds,
+            courseContext: currentCourse || null,
             imageUrl: imageUrl,
             imageMimeType: imageMimeType,
             aiMessageIdToUpdate: aiMessageIdToUpdate,
@@ -658,6 +661,7 @@ export const useMessageHandlers = () => {
     userProfile,
     dispatch,
     selectedDocumentIds,
+    currentCourse,
     setChatMessages,
     startStreaming,
     accumulatedDataRef,

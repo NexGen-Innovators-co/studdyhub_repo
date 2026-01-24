@@ -7,7 +7,8 @@ const corsHeaders = {
 
 interface TtsRequest {
   text: string;
-  voice?: 'male' | 'female';
+  // voice can be 'male'|'female' for legacy usage or a specific TTS voice name like 'en-US-Neural2-D'
+  voice?: 'male' | 'female' | string;
   rate?: number;
   pitch?: number;
 }
@@ -28,7 +29,7 @@ serve(async (req) => {
       throw new Error("Invalid request body - expected JSON");
     }
 
-    const { text, voice = 'female', rate = 1.0, pitch = 0 } = body;
+    const { text, voice = 'female', rate = 1.0, pitch = 0 } = body as TtsRequest;
 
     if (!text || text.trim().length === 0) {
       throw new Error("Text is required");
@@ -36,8 +37,13 @@ serve(async (req) => {
 
     console.log(`[CloudTTS] Generating audio for ${text.length} characters, voice: ${voice}`);
 
-    // Map voice to Google TTS voice name
-    const voiceName = voice === 'male' ? 'en-US-Neural2-D' : 'en-US-Neural2-C';
+    // Map voice to Google TTS voice name. Accept explicit voice names (e.g. en-US-Neural2-D)
+    let voiceName: string;
+    if (typeof voice === 'string' && /^en-[a-zA-Z-0-9]+/.test(voice)) {
+      voiceName = voice;
+    } else {
+      voiceName = (voice === 'male') ? 'en-US-Neural2-D' : 'en-US-Neural2-C';
+    }
 
     const ttsResponse = await fetch(
       `https://texttospeech.googleapis.com/v1/text:synthesize?key=${geminiApiKey}`,

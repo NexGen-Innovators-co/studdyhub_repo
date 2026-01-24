@@ -1015,7 +1015,7 @@ const AIChat: React.FC<AIChatProps> = ({
                 <span>Loading older messages...</span>
               </div>
             </div>
-          ) : activeChatSessionId && messages.length === 0 ? (
+          ) : activeChatSessionId && messages.length === 0 && !isCurrentlySending && !isSubmittingUserMessage && !isLoadingSessionMessages && !streamingState?.isStreaming && !isCurrentlySendingRef.current && !messages.some(m => m.id?.startsWith?.('optimistic-')) ? (
             <div className="text-center text-gray-500 dark:text-gray-400 mt-20 font-claude">
               <BookPagesAnimation className="mx-auto mb-4 h-16 w-16 text-pink-500" showText={false} />
               <p className="text-lg md:text-xl">Start the conversation by sending a message!</p>

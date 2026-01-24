@@ -32,6 +32,7 @@ export type AppAction =
   | { type: 'SET_MESSAGE_ERROR'; payload: { messageId: string; isError: boolean } }
   | { type: 'SET_SELECTED_CATEGORY'; payload: string }
   | { type: 'CLEAR_SELECTED_CATEGORY' }
+  | { type: 'SET_CURRENT_COURSE'; payload: { id: string; code?: string; title?: string } | null }
   | { type: 'SET_CURRENT_TAB'; payload: string }
   | { type: 'RESET_CHAT_STATE' }
   | { type: 'RESET_ALL_STATE' };
@@ -49,6 +50,7 @@ export interface AppState {
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
   selectedDocumentIds: string[];
+  currentCourse: { id: string; code?: string; title?: string } | null;
   isNotesHistoryOpen: boolean;
   isSubmittingUserMessage: boolean;
   isLoadingSessionMessages: boolean;
@@ -69,6 +71,7 @@ export const initialAppState: AppState = {
   chatSessions: [],
   activeChatSessionId: null,
   selectedDocumentIds: [],
+  currentCourse: null,
   isNotesHistoryOpen: false,
   isSubmittingUserMessage: false,
   isLoadingSessionMessages: false,
@@ -211,6 +214,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, selectedCategory: action.payload };
     case 'CLEAR_SELECTED_CATEGORY':
       return { ...state, selectedCategory: '' };
+    case 'SET_CURRENT_COURSE':
+      return { ...state, currentCourse: action.payload };
     case 'SET_CURRENT_TAB':
       return { ...state, currentTab: action.payload };
     case 'RESET_CHAT_STATE':

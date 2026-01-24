@@ -55,6 +55,7 @@ interface AppContextType extends AppState {
   currentActiveTab: string;
   filteredChatMessages: Message[];
   sessionIdFromUrl: string | null;
+  currentCourse: { id: string; code?: string; title?: string } | null;
 
   // Actions
   dispatch: React.Dispatch<AppAction>;
