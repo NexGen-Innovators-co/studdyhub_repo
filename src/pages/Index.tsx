@@ -180,6 +180,17 @@ const Index = () => {
 
     // Always attempt to select the document if it's in the URL
     // We do this independently of fetching to ensure the UI state reflects the URL intent immediately
+    const courseId = searchParams.get('courseId');
+    const courseTitle = searchParams.get('courseTitle');
+    const courseCode = searchParams.get('courseCode');
+
+    if (courseId) {
+      dispatch({ type: 'SET_CURRENT_COURSE', payload: { id: courseId, title: courseTitle || undefined, code: courseCode || undefined } });
+    } else {
+      // Clear if not provided
+      dispatch({ type: 'SET_CURRENT_COURSE', payload: null });
+    }
+
     if (documentId) {
       // Force new chat mode if we are in a session
       if (activeChatSessionId) {

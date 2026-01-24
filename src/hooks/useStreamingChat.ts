@@ -39,12 +39,13 @@ interface StreamingParams {
   attachedDocumentIds?: string[];
   attachedNoteIds?: string[];
   imageUrl?: string;
-  imageMimeType?: string;
+  courseContext?: { id: string; code?: string; title?: string } | null;
   aiMessageIdToUpdate?: string | null;
   onThinkingStep: (step: ThinkingStep) => void;
   onContentChunk: (chunk: string) => void;
   onComplete: (finalMessage: any) => void; // Changed to any to match backend response
   onError: (error: string) => void;
+  imageMimeType?: string;
 }
 
 /**

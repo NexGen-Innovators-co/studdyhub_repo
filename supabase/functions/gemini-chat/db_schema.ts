@@ -252,6 +252,7 @@ You may perform INSERT, UPDATE, DELETE, and SELECT operations on the following t
     - processing_error: text
     - processing_status: text
     - folder_ids: uuid[]
+    - is_public: boolean
 
 21. error_logs
     - id: integer (pk)

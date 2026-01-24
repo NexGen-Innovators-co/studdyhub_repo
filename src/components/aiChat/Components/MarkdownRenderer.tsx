@@ -31,7 +31,7 @@ interface MemoizedMarkdownRendererProps {
   onDiagramCodeUpdate: (messageId: string, newCode: string) => Promise<void>;
 }
 
-const MemoizedReactMarkdown = memo(
+export const MemoizedReactMarkdown = memo(
   ({ content, components }: { content: string; components: any }) => {
     return (
       <ReactMarkdown

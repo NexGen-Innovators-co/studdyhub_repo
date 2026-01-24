@@ -1325,7 +1325,9 @@ async function handleStreamingResponse(
   filesMetadata: any[],
   userMessageId: string | null,
   userMessageTimestamp: string | null,
-  aiMessageIdToUpdate: string | null
+  aiMessageIdToUpdate: string | null,
+  courseMaterialsContext?: string,
+  courseContext?: { id: string; code?: string; title?: string } | null
 ): Promise<Response> {
   const { stream, handler } = createStreamResponse();
 
@@ -1478,6 +1480,11 @@ async function handleStreamingResponse(
         console.log('✅ Attached context built:', attachedContext.length, 'characters');
       }
 
+      // Merge any course materials context we fetched earlier
+      if (courseMaterialsContext && courseMaterialsContext.length > 0) {
+        attachedContext = `${courseMaterialsContext}\n\n${attachedContext}`;
+      }
+
       // Add semantically retrieved context
       if (relevantContext && relevantContext.length > 0) {
         console.log('🔗 Adding semantic context...');
@@ -1505,7 +1512,14 @@ async function handleStreamingResponse(
 
       console.log('🎯 Building enhanced prompt...');
       const userContext = await contextService.getUserContext(userId);
-      const systemPrompt = promptEngine.createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, 'light');
+      let systemPrompt = promptEngine.createEnhancedSystemPrompt(learningStyle, learningPreferences, userContext, 'light');
+
+      // If streaming path provided a courseContext, instruct the model to adopt a learning-first tone
+      if (typeof courseContext !== 'undefined' && courseContext && (courseContext.title || courseContext.id)) {
+        const courseLabel = courseContext.title ? `${courseContext.title}${courseContext.code ? ` (${courseContext.code})` : ''}` : courseContext.id;
+        const courseInstr = `COURSE CONTEXT: The user is studying ${courseLabel}. Assume their intent is to learn and master this course. Prioritize educational explanations, step-by-step walkthroughs, examples, practice problems, and short quizzes. When appropriate, suggest next study actions and summarize key takeaways.`;
+        systemPrompt = `${systemPrompt}\n\n${courseInstr}`;
+      }
       const conversationData = await buildEnhancedGeminiConversation(userId, sessionId, message, [], attachedContext, systemPrompt);
       console.log('✅ Prompt built with', conversationData.contents.length, 'conversation parts');
 
@@ -1530,7 +1544,7 @@ YOUR GOAL: Return a JSON object with the necessary actions.
 CRITICAL RULES:
 - Return JSON ONLY. No markdown, no extraneous text.
 - The output must be a valid JSON object with a "thought_process" string and an "actions" array.
-- When referring to the current user id, use the literal string "auth.uid" in the JSON; the runtime will replace it.
+- When referring to the current user id, use the literal string "auth.uid()" in the JSON; the runtime will replace it.
 - For destructive operations (UPDATE/DELETE) ask for a short confirmation if the intent is ambiguous.
 - For ambiguous scheduling details (time zone, start/end, recurrence), ask a clarifying question instead of guessing.
 
@@ -1831,6 +1845,7 @@ serve(async (req) => {
       message = '',
       attachedDocumentIds = [],
       attachedNoteIds = [],
+      courseContext = null,
       imageUrl = null,
       imageMimeType = null,
       aiMessageIdToUpdate = null,
@@ -1897,7 +1912,46 @@ serve(async (req) => {
     if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
 
     let filesMetadata: any[] = [];
-    let attachedContext = '';
+    let courseMaterialsContext = '';
+    let attachedContext: string = '';
+
+    // If a course context is provided, fetch course materials and include their document ids
+    if (courseContext && courseContext.id) {
+      try {
+        const { data: cmData, error: cmError } = await supabase
+          .from('course_materials')
+          .select('document_id')
+          .eq('course_id', courseContext.id);
+
+        if (!cmError && Array.isArray(cmData) && cmData.length > 0) {
+          const courseDocIds = cmData.map((r: any) => r.document_id).filter(Boolean);
+          // Merge unique ids into attachedDocumentIds
+          for (const id of courseDocIds) {
+            if (!attachedDocumentIds.includes(id)) attachedDocumentIds.push(id);
+          }
+
+          // Fetch document extracts for context
+          const { data: docs, error: docsError } = await supabase
+            .from('documents')
+            .select('id,title,file_name,content_extracted,processing_status')
+            .in('id', courseDocIds);
+
+          if (!docsError && Array.isArray(docs)) {
+            courseMaterialsContext += `COURSE MATERIALS FOR ${courseContext.title || courseContext.id}:\n`;
+            for (const d of docs) {
+              courseMaterialsContext += `Title: ${d.title || d.file_name}\n`;
+              if (d.content_extracted) {
+                courseMaterialsContext += `Content: ${d.content_extracted}\n\n`;
+              } else {
+                courseMaterialsContext += `Processing status: ${d.processing_status || 'pending'}\n\n`;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[gemini-chat] Error fetching course materials:', err);
+      }
+    }
     const hasFiles = rawFiles.length > 0 || jsonFiles.length > 0;
 
     let userMessageId: string | null = null;
@@ -2083,7 +2137,9 @@ serve(async (req) => {
         filesMetadata,
         userMessageId,
         userMessageTimestamp,
-        aiMessageIdToUpdate
+        aiMessageIdToUpdate,
+        courseMaterialsContext,
+        courseContext
       );
     }
 
@@ -2124,6 +2180,11 @@ serve(async (req) => {
     attachedContext = '';
     if (allDocumentIds.length > 0 || attachedNoteIds.length > 0) {
       attachedContext = await buildAttachedContext(allDocumentIds, attachedNoteIds, userId);
+    }
+
+    // Merge any course materials context we fetched earlier (non-streaming path)
+    if (courseMaterialsContext && courseMaterialsContext.length > 0) {
+      attachedContext = `${courseMaterialsContext}\n\n${attachedContext}`;
     }
 
     // Add semantically retrieved context

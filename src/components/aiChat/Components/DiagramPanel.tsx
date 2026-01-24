@@ -32,6 +32,8 @@ import { ChartJsRenderer } from './ChartJsRenderer';
 import { CodeRenderer } from './CodeRenderer';
 import { ImageRenderer } from './ImageRenderer';
 import { PlainTextRenderer } from './PlainTexRenderer';
+import {MemoizedMarkdownRenderer } from './MarkdownRenderer';
+import DocumentMarkdownRenderer from './DocumentMarkdownRenderer';
 
 Chart.register(...registerables);
 
@@ -870,7 +872,12 @@ ${isInteractiveContent ? 'cursor-grab' : ''}
               <ImageRenderer imageUrl={imageUrl} />
             )}
             {(effectiveDiagramType === 'document-text' || effectiveDiagramType === 'unknown') && (
-              <PlainTextRenderer textContent={renderContent} />
+              // If content appears to be Markdown, render as Markdown, otherwise fallback to plain text
+              (renderContent && /(^#{1,6}\s)|(^```)|(^-\s)|(^\*\s)|(^>\s)/m.test(renderContent)) ? (
+                <DocumentMarkdownRenderer content={renderContent} />
+              ) : (
+                <PlainTextRenderer textContent={renderContent} />
+              )
             )}
           </ErrorBoundary>
         </div>

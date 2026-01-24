@@ -13,6 +13,9 @@ interface PodcastRequest {
   duration?: 'short' | 'medium' | 'long'; // 5min, 15min, 30min
   podcastType?: 'audio' | 'image-audio' | 'video' | 'live-stream';
   cover_image_url?: string;
+  // Optional customization of hosts and voices
+  hosts?: Array<{ name: string; voice?: string }>;
+  numberOfHosts?: number;
 }
 
 serve(async (req) => {
@@ -137,8 +140,20 @@ serve(async (req) => {
       style = 'educational',
       duration = 'medium',
       podcastType = 'audio',
-      cover_image_url: providedCoverImageUrl
-    } = body;
+      cover_image_url: providedCoverImageUrl,
+      hosts: requestedHosts,
+      numberOfHosts = 2
+    } = body as PodcastRequest;
+
+    // Normalize hosts: default to Thomas & Isabel when not provided
+    const defaultHosts = [
+      { name: 'Thomas', voice: 'en-US-Neural2-D' },
+      { name: 'Isabel', voice: 'en-US-Neural2-C' }
+    ];
+
+    const hosts = (Array.isArray(requestedHosts) && requestedHosts.length > 0)
+      ? requestedHosts.slice(0, Math.max(1, numberOfHosts))
+      : defaultHosts.slice(0, Math.max(1, numberOfHosts));
 
     // 1. Fetch content from notes and documents
     let content = "";
@@ -195,7 +210,7 @@ serve(async (req) => {
 
     // 2. Generate podcast script using Gemini
 
-    const scriptPrompt = generateScriptPrompt(content, sources, style, duration);
+    const scriptPrompt = generateScriptPrompt(content, sources, style, duration, hosts.map(h => h.name));
 
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiApiKey}`,
@@ -274,12 +289,37 @@ Title:`;
     }
 
     // 3. Parse script into segments (Host A and Host B)
-    const segments = parseScript(script);
+    const segments = parseScript(script, hosts.map(h => h.name));
 
     // 4. Generate audio for each segment using Google TTS
     const audioSegments = await Promise.all(
       segments.map(async (segment, index) => {
-        const voice = segment.speaker === 'Thomas' ? 'en-US-Neural2-D' : 'en-US-Neural2-C';
+        // Pick voice based on provided hosts mapping (case-insensitive), fallback to defaults
+        const hostIndex = hosts.findIndex(h => h.name && h.name.toLowerCase() === segment.speaker.toLowerCase());
+        const hostDef = hostIndex >= 0 ? hosts[hostIndex] : undefined;
+        let voice = hostDef?.voice?.trim();
+
+        // Normalize short prefix like 'en-US-Neural2' and validate selected voices
+        const allowedVariants = ['A','C','D','E','F','G','H','I','J'];
+        const allowedVoices = new Set(allowedVariants.map(s => `en-US-Neural2-${s}`));
+
+        if (voice && /^en-US-Neural2$/i.test(voice)) {
+          const suffix = allowedVariants[hostIndex >= 0 ? (hostIndex % allowedVariants.length) : 0];
+          voice = `en-US-Neural2-${suffix}`;
+          console.log(`[Podcast] Normalized host voice for ${hostDef?.name}: ${voice}`);
+        }
+
+        // If provided voice is a Neural2 variant but not allowed (e.g. 'en-US-Neural2-B'), map to nearest allowed and warn
+        if (voice && /^en-US-Neural2-[A-Z]$/i.test(voice) && !allowedVoices.has(voice)) {
+          const fallbackSuffix = allowedVariants[hostIndex >= 0 ? (hostIndex % allowedVariants.length) : 0];
+          console.warn(`[Podcast] Requested voice '${voice}' not recognized/available. Falling back to en-US-Neural2-${fallbackSuffix}`);
+          voice = `en-US-Neural2-${fallbackSuffix}`;
+        }
+
+        // Final fallback when no voice provided
+        if (!voice) {
+          voice = (segment.speaker.toLowerCase() === 'thomas') ? 'en-US-Neural2-D' : 'en-US-Neural2-C';
+        }
 
         // Clean the text: remove stage directions and action indicators
         let cleanedText = segment.text
@@ -287,6 +327,7 @@ Title:`;
           .replace(/\[pause\]/gi, '') // Remove [pause]
           .replace(/\[.*?\]/g, '') // Remove any other [actions]
           .replace(/\*.*?\*/g, '') // Remove *emphasis* markers
+          .replace(/`+/g, '') // Remove backticks so code blocks read naturally
           .replace(/\s+/g, ' ') // Normalize whitespace
           .trim();
 
@@ -371,13 +412,20 @@ Title:`;
       }
 
       try {
-        // Extract key concepts for image generation (3-5 images per podcast)
-        const conceptPrompt = `Based on this podcast content, extract 3-5 key visual concepts that would make compelling images. Return ONLY a JSON array of objects with "concept" and "description" fields.
+        // Dynamically determine how many visual concepts are appropriate based on segments and detected insights
+        const approxInsights = segments.filter(s => /insight|interesting|key point|takeaway|interesting thing|insights?/i.test(s.text)).length;
+        const estimatedMinutes = estimateDuration(segments);
+        // Determine desired number of visual concepts based on insights, segment count, and duration.
+        // Allow more than 5 when the podcast is longer or has many segments; cap at 12 for practical reasons.
+        let computed = Math.max(1, Math.round(Math.max(approxInsights, segments.length / 6, estimatedMinutes / 3)));
+        let desiredConceptCount = Math.min(12, computed);
 
-Content summary:
-${script.substring(0, 2000)}
+        const conceptPrompt = `Based on this podcast script, extract ${desiredConceptCount} key visual concepts that would make compelling images. Prioritize concepts that align with the most insightful segments; for each concept include the segment index (0-based) where it appears if possible. Return ONLY a JSON array of objects with "concept", "description" and optional "segmentIndex" fields.
 
-Format: [{"concept": "brief title", "description": "detailed visual description for image generation"}]`;
+      Script excerpt:
+      ${script.substring(0, 2000)}
+
+      Format: [{"concept": "brief title", "description": "detailed visual description for image generation", "segmentIndex": 3}]`;
 
         const conceptResponse = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiApiKey}`,
@@ -412,7 +460,7 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
         }
 
         const conceptText = conceptData.candidates[0].content.parts[0].text;
-        let concepts: Array<{ concept: string, description: string }> = [];
+        let concepts: Array<{ concept: string, description: string, segmentIndex?: number }> = [];
         try {
           const jsonMatch = conceptText.match(/\[[\s\S]*\]/);
           if (jsonMatch) {
@@ -477,8 +525,9 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
             console.error(`[Podcast] Image upload exception:`, error);
           }
 
-          // Find the most relevant segment for this concept
-          const segmentIndex = findRelevantSegmentIndex(concept.concept, segments);
+          // Prefer provided segmentIndex if present, otherwise find the most relevant segment
+          const providedIndex = (typeof (concept as any).segmentIndex === 'number') ? (concept as any).segmentIndex : undefined;
+          const segmentIndex = typeof providedIndex === 'number' ? providedIndex : findRelevantSegmentIndex(concept.concept, segments);
 
           visualAssets.push({
             type: 'image',
@@ -629,7 +678,7 @@ Format: [{"concept": "brief title", "description": "detailed visual description 
   }
 });
 
-function generateScriptPrompt(content: string, sources: string[], style: string, duration: string): string {
+function generateScriptPrompt(content: string, sources: string[], style: string, duration: string, hostNames: string[] = ['Thomas', 'Isabel']): string {
   const durationMap = {
     'short': '5-7 minutes',
     'medium': '12-15 minutes',
@@ -642,7 +691,10 @@ function generateScriptPrompt(content: string, sources: string[], style: string,
     'deep-dive': 'analytical and thorough, exploring nuances and connections between ideas'
   };
 
-  return `You are creating a podcast script for an AI-generated audio show. Create a natural, engaging conversation between two hosts (Thomas and Isabel) discussing the following content.
+  const hostsList = hostNames.join(' and ');
+  const exampleFormat = hostNames.map(n => `${n.toUpperCase()}: [their dialogue]`).join('\n   ');
+
+  return `You are creating a podcast script for an AI-generated audio show. Create a natural, engaging conversation between hosts (${hostsList}) discussing the following content.
 
 **Sources:** ${sources.join(", ")}
 
@@ -655,8 +707,7 @@ ${content.substring(0, 10000)} ${content.length > 10000 ? '...(truncated)' : ''}
 **CRITICAL INSTRUCTIONS:**
 
 1. **Format:** Use this EXACT format for each line:
-   THOMAS: [his dialogue]
-   ISABEL: [her dialogue]
+  ${exampleFormat}
 
 2. **Natural Conversation:**
    - Use casual language, interjections (like "Oh!", "Wow", "Right!")
@@ -683,26 +734,26 @@ ${content.substring(0, 10000)} ${content.length > 10000 ? '...(truncated)' : ''}
    - Build momentum towards key points
 
 Example:
-THOMAS: Hey everyone, welcome back! Today we're diving into something really fascinating.
-ISABEL: Oh yeah, I'm excited about this one. We're talking about [topic], right?
-THOMAS: Exactly! And you know what's interesting? [insight]
-ISABEL: [laughs] That's such a great way to put it!
+${hostNames[0].toUpperCase()}: Hey everyone, welcome back! Today we're diving into something really fascinating.
+${hostNames[1] ? hostNames[1].toUpperCase() : hostNames[0].toUpperCase()}: Oh yeah, I'm excited about this one. We're talking about [topic], right?
+${hostNames[0].toUpperCase()}: Exactly! And you know what's interesting? [insight]
+${hostNames[1] ? hostNames[1].toUpperCase() : hostNames[0].toUpperCase()}: [laughs] That's such a great way to put it!
 
 Create the COMPLETE script now:`;
 }
 
-function parseScript(script: string): Array<{ speaker: string; text: string }> {
+function parseScript(script: string, hostNames: string[] = ['Thomas', 'Isabel']): Array<{ speaker: string; text: string }> {
   const segments: Array<{ speaker: string; text: string }> = [];
   const lines = script.split('\n').filter(line => line.trim());
 
-  for (const line of lines) {
-    const thomasMatch = line.match(/^\*{0,2}THOMAS:\*{0,2}\s*(.+)/i);
-    const isabelMatch = line.match(/^\*{0,2}ISABEL:\*{0,2}\s*(.+)/i);
+  const names = (hostNames && hostNames.length > 0) ? hostNames : ['Thomas', 'Isabel'];
+  const escaped = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`^\\*{0,2}(${escaped.join('|')}):\\*{0,2}\\s*(.+)`, 'i');
 
-    if (thomasMatch) {
-      segments.push({ speaker: 'Thomas', text: thomasMatch[1].trim() });
-    } else if (isabelMatch) {
-      segments.push({ speaker: 'Isabel', text: isabelMatch[1].trim() });
+  for (const line of lines) {
+    const m = line.match(pattern);
+    if (m) {
+      segments.push({ speaker: m[1].trim(), text: m[2].trim() });
     }
   }
 

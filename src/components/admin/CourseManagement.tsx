@@ -10,12 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Loader2, Plus, Trash2, BookOpen, FileText, UploadCloud } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppContext } from '@/hooks/useAppContext';
 import { GenerateCourseDialog } from './GenerateCourseDialog';
-import { AIGeneratedCourse } from '@/services/aiServices';
+import { AIGeneratedCourse, generateInlineContent } from '@/services/aiServices';
 
 const CourseManagement = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { userProfile } = useAppContext();
   const [isAddCourseOpen, setIsAddCourseOpen] = useState(false);
   const [isAddMaterialOpen, setIsAddMaterialOpen] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
@@ -146,21 +148,107 @@ const CourseManagement = () => {
       if (courseError) throw courseError;
       if (!newCourse) throw new Error("Failed to create course");
 
-      // 2. Create Modules
+      // 2. Create Modules + AI-generated documents/notes
       if (courseData.modules && courseData.modules.length > 0) {
-        const materialsToInsert = courseData.modules.map(mod => ({
-          course_id: newCourse.id,
-          title: mod.title,
-          description: mod.description,
-          category: mod.category || 'Lecture',
-          document_id: null
-        }));
+        
 
-        const { error: materialError } = await supabase
-          .from('course_materials')
-          .insert(materialsToInsert);
+        const normalizeCategory = (raw?: string | null) => {
+          if (!raw) return 'lecture_notes';
+          const s = raw.toString().trim().toLowerCase();
+          if (s.includes('lecture') || s.includes('notes')) return 'lecture_notes';
+          if (s.includes('past') && s.includes('question')) return 'past_questions';
+          if (s.includes('past_questions') || s === 'past_questions') return 'past_questions';
+          if (s.includes('slide') || s === 'slides') return 'slides';
+          if (s.includes('textbook') || s.includes('book')) return 'textbook';
+          return 'other';
+        };
 
-        if (materialError) throw materialError;
+        for (const mod of courseData.modules) {
+          // Generate expanded notes/content for each module using the AI service when available
+          let generatedContent = mod.description || '';
+          try {
+            if (userProfile) {
+              const expanded = await generateInlineContent(
+                mod.title,
+                mod.description || '',
+                userProfile,
+                'generate_module_notes',
+                `Create detailed lecture notes for the module titled "${mod.title}". Include explanations, key points, examples, and a short summary at the end.`
+              );
+              if (expanded && expanded.trim()) generatedContent = expanded.trim();
+            }
+          } catch (err) {
+            console.warn('AI notes generation failed for module', mod.title, err);
+          }
+
+          // Insert a document record for the module
+          const sanitizeFilename = (name: string) => {
+            return name
+              .replace(/[^a-z0-9\-_. ]+/gi, '')
+              .replace(/\s+/g, '_')
+              .slice(0, 200);
+          };
+
+          const generatedFilename = sanitizeFilename(`${newCourse.title}-${mod.title}.md`);
+
+          const userIdForDocument = user?.id || userProfile?.id || null;
+
+          let doc: any = null;
+          if (userIdForDocument) {
+            const { data: createdDoc, error: docError } = await supabase
+              .from('documents')
+              .insert({
+                user_id: userIdForDocument,
+                title: `${newCourse.title} - ${mod.title}`,
+                file_name: generatedFilename,
+                // leave file_url empty for generated content (DB requires non-null string)
+                file_url: '',
+                file_type: 'text/markdown',
+                    // make course-generated documents public so course viewers can access them
+                    is_public: true,
+                file_size: generatedContent.length,
+                content_extracted: generatedContent,
+                type: 'ai_generated'
+              })
+              .select()
+              .single();
+
+            if (docError) {
+              console.error('Failed to create document for module', mod.title, docError);
+            } else {
+              doc = createdDoc;
+            }
+          } else {
+            console.warn('No user available; skipping document creation for module', mod.title);
+          }
+
+          // Insert a note linked to the document (document_id may be null)
+          const { error: noteError } = await supabase
+            .from('notes')
+            .insert({
+              user_id: user?.id || userProfile?.id || null,
+              title: mod.title,
+              content: generatedContent,
+              category: 'course',
+              ai_summary: null,
+              document_id: doc?.id || null
+            });
+
+          if (noteError) console.error('Failed to create note for module', mod.title, noteError);
+
+          // Create the course material linking to the generated document (document_id may be null)
+          const { error: materialError } = await supabase
+            .from('course_materials')
+            .insert({
+              course_id: newCourse.id,
+              title: mod.title,
+              description: mod.description,
+              category: normalizeCategory((mod as any).category),
+              document_id: doc?.id || null
+            });
+
+          if (materialError) console.error('Failed to create course material for module', mod.title, materialError);
+        }
       }
 
       // Success
@@ -260,6 +348,12 @@ const CourseManagement = () => {
 
         if (result.documents && result.documents.length > 0) {
           documentId = result.documents[0].id;
+          // ensure the processed/uploaded document is marked public so course viewers can access it
+          try {
+            await supabase.from('documents').update({ is_public: true }).eq('id', documentId);
+          } catch (err) {
+            console.warn('Failed to mark uploaded document public', err);
+          }
           toast.success(`Document "${selectedFile.name}" uploaded and processed.`);
         } else {
           throw new Error('File processed but no document ID returned.');
@@ -289,6 +383,14 @@ const CourseManagement = () => {
     }
 
     createMaterialMutation.mutate(materialData);
+    // If linking an existing document by ID, ensure it's public for course viewers
+    if (documentId) {
+      try {
+        await supabase.from('documents').update({ is_public: true }).eq('id', documentId);
+      } catch (err) {
+        console.warn('Failed to mark linked document public', err);
+      }
+    }
   };
 
   return (

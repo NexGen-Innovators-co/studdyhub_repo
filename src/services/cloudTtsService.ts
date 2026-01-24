@@ -2,7 +2,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface CloudTtsOptions {
   text: string;
-  voice?: 'male' | 'female';
+  // voice can be 'male'|'female' or a specific voice name like 'en-US-Neural2-D'
+  voice?: 'male' | 'female' | string;
   rate?: number;
   pitch?: number;
 }

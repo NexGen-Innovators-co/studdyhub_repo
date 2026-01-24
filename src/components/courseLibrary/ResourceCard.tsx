@@ -3,20 +3,26 @@ import { FileText, MessageSquare, Download, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CourseMaterial } from '@/hooks/useCourseLibrary';
+import { CourseMaterial, Course } from '@/hooks/useCourseLibrary';
 import { useNavigate } from 'react-router-dom';
 
 interface ResourceCardProps {
   material: CourseMaterial;
+  course?: Course;
 }
 
-export const ResourceCard: React.FC<ResourceCardProps> = ({ material }) => {
+export const ResourceCard: React.FC<ResourceCardProps> = ({ material, course }) => {
   const navigate = useNavigate();
 
   const handleAskAI = () => {
     if (material.document_id) {
-      // Navigate to chat tab with document ID
-      navigate(`/chat?documentId=${material.document_id}`);
+      // Navigate to chat tab with document ID and optional course context
+      const params = new URLSearchParams();
+      params.set('documentId', material.document_id);
+      if (course?.id) params.set('courseId', course.id);
+      if (course?.title) params.set('courseTitle', course.title);
+      if (course?.code) params.set('courseCode', course.code);
+      navigate(`/chat?${params.toString()}`);
     }
   };
 
