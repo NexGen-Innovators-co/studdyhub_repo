@@ -117,32 +117,40 @@ const extractContentWithGemini = async (
         safetySettings: LLM_CONFIG.safetySettings
     };
 
-    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
- JSON.stringify({
-        contents: payload.contents.map(c => ({
-            ...c,
-            parts: c.parts.map(p => p.inline_data ? { ...p, inline_data: { mime_type: p.inline_data.mime_type, data: `[${p.inline_data.data.length} bytes]` } } : p)
-        })),
-        generationConfig: payload.generationConfig,
-        safetySettings: payload.safetySettings
-    }, null, 2);
+    const MODEL_CHAIN = [
+        'gemini-2.5-flash',
+        'gemini-3-pro-preview',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-2.5-pro',
+        'gemini-2.0-pro',
+        'gemini-1.5-pro'
+    ];
 
-    const response = await fetch(geminiApiUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-    });
-
-    (`LLM API response status: ${response.status} ${response.statusText}`);
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Gemini API error (${response.status}): ${errorData.error?.message || response.statusText}`);
+    async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
+        for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
+            const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            try {
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                if (resp.ok) return await resp.json();
+                const txt = await resp.text();
+                console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+                if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+            } catch (err) {
+                console.error(`Error calling Gemini ${model}:`, err);
+                if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+            }
+        }
+        throw new Error('All Gemini models failed');
     }
 
-    const result = await response.json();
+    const result = await callGeminiWithModelChain(payload, geminiApiKey);
+    
     const extractedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
     const finishReason = result.candidates?.[0]?.finishReason;
 

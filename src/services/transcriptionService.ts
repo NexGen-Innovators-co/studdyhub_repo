@@ -134,39 +134,123 @@ export const transcribeLivePodcast = async (
   summary: string;
 }> => {
   try {
-    // Call dedicated podcast transcription function
-    const { data, error } = await supabase.functions.invoke('podcast-transcribe', {
-      body: {
-        file_url: audioUrl,
-        title: title,
-        duration: duration
+    // Ensure we have a public file URL – upload the blob if needed
+    let fileUrl = audioUrl;
+    if (!fileUrl && audioBlob) {
+      try {
+        const filename = `live-podcasts/${Date.now()}_${Math.random().toString(36).slice(2,8)}.webm`;
+        const contentType = (audioBlob && (audioBlob as any).type) ? (audioBlob as any).type : 'audio/webm';
+        const { error: uploadErr } = await supabase.storage.from('podcasts').upload(filename, audioBlob as any, { contentType, upsert: true });
+        if (!uploadErr) {
+          const res = supabase.storage.from('podcasts').getPublicUrl(filename) as any;
+          fileUrl = res?.data?.publicUrl || res?.publicUrl || fileUrl;
+        } else {
+          console.warn('transcribeLivePodcast: upload error', uploadErr);
+        }
+      } catch (e) {
+        console.warn('transcribeLivePodcast: failed to upload blob for transcription', e);
       }
-    });
-
-    if (error) {
-      //console.error('Transcription error:', error);
-      throw error;
     }
 
-    if (!data) {
-      throw new Error('No data received from transcription service');
+    // Helper to convert blob to base64 - ENSURES CLEAN BASE64 OUTPUT
+    const blobToBase64 = async (blob: Blob): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          // CRITICAL: Extract ONLY the base64 part, removing ALL prefixes
+          // Handle formats like: "data:video/webm;codecs=vp9,opus;base64,ACTUALDATA"
+          
+          // First, find the last comma (after all mime type and codec info)
+          const lastCommaIndex = dataUrl.lastIndexOf(',');
+          let base64 = lastCommaIndex !== -1 ? dataUrl.substring(lastCommaIndex + 1) : dataUrl;
+          
+          // Double-check: remove any remaining mime type prefix patterns
+          // (in case the data URL format is unusual)
+          const patterns = [
+            /^data:[^,]*,/,           // data:type,
+            /^[^;]+;base64,/,         // type;base64,
+            /^[^,]*;codecs=[^,]*,/   // type;codecs=list,
+          ];
+          
+          for (const pattern of patterns) {
+            base64 = base64.replace(pattern, '');
+          }
+          
+          // Ensure we have actual base64 data (should only contain A-Z, a-z, 0-9, +, /, =)
+          base64 = base64.trim();
+          
+          resolve(base64);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    };
+
+    // Normalize mime type - strip codec parameters
+    const normalizeMimeType = (mimeType: string): string => {
+      return mimeType.split(';')[0].trim();
+    };
+
+    // Call dedicated podcast transcription function
+    let attemptBody: any = { file_url: fileUrl, title: title, duration: duration };
+    let resp: any;
+    
+    try {
+      // First attempt: try with file URL if available
+      if (fileUrl) {
+        const { data, error } = await supabase.functions.invoke('podcast-transcribe', { 
+          body: { 
+            file_url: fileUrl, 
+            title, 
+            duration 
+          } 
+        } as any);
+        if (error) throw error;
+        resp = data;
+      } else {
+        throw new Error('No file URL, using inline base64');
+      }
+    } catch (primaryErr: any) {
+      console.warn('transcribeLivePodcast: primary invocation failed, trying inline base64', primaryErr);
+
+      // Fallback to inline base64 of the blob
+      const base64 = await blobToBase64(audioBlob);
+      
+      // CRITICAL: Ensure clean mime type (no codecs)
+      const rawMimeType = (audioBlob as any).type || 'audio/webm';
+      const normalizedMime = rawMimeType.split(';')[0].trim();
+      
+      console.log('Sending inline base64:', {
+        base64Length: base64.length,
+        base64Preview: base64.substring(0, 50),
+        mime: normalizedMime
+      });
+
+      const { data: data2, error: err2 } = await supabase.functions.invoke('podcast-transcribe', {
+        body: { 
+          inline_base64: base64, 
+          mime_type: normalizedMime, 
+          title, 
+          duration 
+        }
+      } as any);
+      
+      if (err2) throw err2;
+      resp = data2;
     }
 
-    if (!data.success) {
-      throw new Error(data.error || 'Transcription failed');
-    }
+    if (!resp) throw new Error('No data received from transcription service');
+    if (!resp.success) throw new Error(resp.error || 'Transcription failed');
+    if (!resp.transcript) throw new Error('No transcript in response');
 
-    if (!data.transcript) {
-      throw new Error('No transcript in response');
-    }
-
-    return {
-      transcript: data.transcript,
-      script: data.transcript, // Use transcript as script
-      summary: data.summary || 'Live podcast recording'
+    return { 
+      transcript: resp.transcript, 
+      script: resp.transcript, 
+      summary: resp.summary || 'Live podcast recording' 
     };
   } catch (error: any) {
-    //console.error('Error in live podcast transcription:', error);
+    console.error('Error in live podcast transcription:', error);
     throw new Error(`Transcription failed: ${error.message || 'Unknown error'}`);
   }
 };

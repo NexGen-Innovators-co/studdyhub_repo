@@ -22,7 +22,51 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
 
 // Gemini API configuration
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+// Model chain retry helper for reliability across models
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-3-pro-preview',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.0-pro',
+  'gemini-1.5-pro'
+];
+
+async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
+  for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
+    const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        return data;
+      }
+
+      const text = await resp.text();
+      console.warn(`Gemini ${model} returned ${resp.status}: ${text.substring(0, 200)}`);
+      // retry on transient errors
+      if (resp.status === 429 || resp.status === 503) {
+        await sleep(1000 * (attempt + 1));
+        continue;
+      } else {
+        // For other statuses, try next model once
+        continue;
+      }
+    } catch (err) {
+      console.error(`Network/model error with ${model}:`, err);
+      if (attempt < maxAttempts - 1) await sleep(1000 * (attempt + 1));
+    }
+  }
+  throw new Error('All Gemini model attempts failed');
+}
 
 // CORS headers
 const corsHeaders = {
@@ -94,18 +138,7 @@ async function processAudioInBackground(file_url: string, target_language: strin
       ],
     };
 
-    const transcriptionResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(transcriptionPayload),
-    });
-
-    if (!transcriptionResponse.ok) {
-      const errorText = await transcriptionResponse.text();
-      throw new Error(`Gemini transcription failed: ${transcriptionResponse.status} - ${errorText}`);
-    }
-
-    const transcriptionResult = await transcriptionResponse.json();
+    const transcriptionResult = await callGeminiWithModelChain(transcriptionPayload, GEMINI_API_KEY);
     let transcript = extractTextFromGeminiResponse(transcriptionResult, 'No transcription available.');
 
     // 5. Generate Summary from Transcript (in parallel with translation if needed)
@@ -183,19 +216,13 @@ async function generateSummary(transcript: string) {
       ],
     };
 
-    const summaryResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(summaryPayload),
-    });
-
-    if (!summaryResponse.ok) {
-      const errorText = await summaryResponse.text();
-      throw new Error(`Summary generation failed: ${summaryResponse.status} - ${errorText}`);
+    try {
+      const summaryResult = await callGeminiWithModelChain(summaryPayload, GEMINI_API_KEY);
+      return extractTextFromGeminiResponse(summaryResult, 'No summary available.');
+    } catch (err) {
+      console.error('Summary generation error:', err);
+      return 'Failed to generate summary due to an error.';
     }
-
-    const summaryResult = await summaryResponse.json();
-    return extractTextFromGeminiResponse(summaryResult, 'No summary available.');
   } catch (error: any) {
     console.error('Summary generation error:', error);
     return 'Failed to generate summary due to an error.';
@@ -216,19 +243,13 @@ async function translateContent(transcript: string, targetLanguage: string) {
       ],
     };
 
-    const translationResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(translationPayload),
-    });
-
-    if (!translationResponse.ok) {
-      const errorText = await translationResponse.text();
-      throw new Error(`Translation failed: ${translationResponse.status} - ${errorText}`);
+    try {
+      const translationResult = await callGeminiWithModelChain(translationPayload, GEMINI_API_KEY);
+      return extractTextFromGeminiResponse(translationResult, 'No translation available.');
+    } catch (err) {
+      console.error('Translation error:', err);
+      return 'Failed to translate due to an error.';
     }
-
-    const translationResult = await translationResponse.json();
-    return extractTextFromGeminiResponse(translationResult, 'No translation available.');
   } catch (error: any) {
     console.error('Translation error:', error);
     return 'Failed to translate due to an error.';

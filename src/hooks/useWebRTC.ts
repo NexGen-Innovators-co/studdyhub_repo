@@ -7,6 +7,7 @@ interface WebRTCConfig {
   podcastId: string;
   isHost: boolean;
   isCohost?: boolean;
+  enableVideo?: boolean;
   onConnectionStateChange?: (state: RTCPeerConnectionState) => void;
   onRemoteStream?: (stream: MediaStream) => void;
   onParticipantJoined?: (userId: string, stream: MediaStream) => void;
@@ -39,6 +40,7 @@ export const useWebRTC = ({
   podcastId,
   isHost,
   isCohost = false,
+  enableVideo = false,
   onConnectionStateChange,
   onRemoteStream,
   onParticipantJoined,
@@ -62,6 +64,7 @@ export const useWebRTC = ({
   const currentUserIdRef = useRef<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const recordingMimeRef = useRef<string | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const pendingIceCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const pendingListenersRef = useRef<Set<string>>(new Set());
@@ -116,9 +119,23 @@ export const useWebRTC = ({
       // Set up signaling channel
       setupSignalingChannel();
 
-      // If host or cohost, start capturing audio
+      // Wait briefly for the signaling channel to become subscribed to avoid
+      // starting broadcasting before the channel is ready (prevents race with captions/start)
+      const waitForSubscribed = async (timeout = 3000) => {
+        const start = Date.now();
+        while (Date.now() - start < timeout) {
+          const ch: any = signalingChannelRef.current;
+          if (ch && ch.state === 'SUBSCRIBED') return true;
+          await new Promise(r => setTimeout(r, 100));
+        }
+        return false;
+      };
+      try { await waitForSubscribed(3000); } catch (e) { /* best-effort */ }
+
+      // If host or cohost, start capturing audio. StartBroadcasting is best-effort —
+      // prefer the signaling channel to be subscribed first to avoid races.
       if (isHost || isCohostMode) {
-        await startBroadcasting();
+        try { await startBroadcasting(); } catch (e) { log('startBroadcasting failed in init', e); }
       }
     } catch (err: any) {
       log('Error initializing WebRTC:', err);
@@ -270,13 +287,18 @@ export const useWebRTC = ({
   const startBroadcasting = async (): Promise<MediaStream> => {
     try {
       log('Starting broadcasting...');
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const constraints: any = {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
         }
-      });
+      };
+      if (enableVideo) {
+        constraints.video = { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } };
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       log('Got media stream, track count:', stream.getTracks().length);
       setLocalStream(stream);
@@ -392,7 +414,8 @@ export const useWebRTC = ({
 
   const startRecording = (stream: MediaStream) => {
     try {
-      const options = { mimeType: 'audio/webm;codecs=opus' };
+      const hasVideo = stream.getVideoTracks && stream.getVideoTracks().length > 0;
+      const options = hasVideo ? { mimeType: 'video/webm;codecs=vp9,opus' } : { mimeType: 'audio/webm;codecs=opus' };
       const mediaRecorder = new MediaRecorder(stream, options);
 
       mediaRecorder.ondataavailable = (event) => {
@@ -403,11 +426,50 @@ export const useWebRTC = ({
 
       mediaRecorder.start(1000);
       mediaRecorderRef.current = mediaRecorder;
+      recordingMimeRef.current = (options as any).mimeType || null;
       log('Started recording');
     } catch (err) {
       log('Error starting recording:', err);
     }
   };
+
+  const addLocalVideo = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia not supported');
+      }
+
+      const videoConstraints: any = { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } };
+      const vs = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+      const vtrack = vs.getVideoTracks()[0];
+      if (!vtrack) throw new Error('No video track obtained');
+
+      // If there is no existing local stream, create one containing the video track
+      if (!localStreamRef.current) {
+        const newStream = new MediaStream([vtrack]);
+        localStreamRef.current = newStream;
+        try { setLocalStream(newStream); } catch (e) {}
+      } else {
+        try { localStreamRef.current.addTrack(vtrack); } catch (e) {}
+        try { setLocalStream(localStreamRef.current); } catch (e) {}
+      }
+
+      // Add the video track to all existing peer connections
+      peerConnectionsRef.current.forEach(({ connection }) => {
+        try {
+          connection.addTrack(vtrack, localStreamRef.current as MediaStream);
+        } catch (e) {
+          // best-effort
+        }
+      });
+
+      return true;
+    } catch (err) {
+      log('addLocalVideo failed', err);
+      setError((err as any)?.message || 'Failed to enable video');
+      return false;
+    }
+  }, []);
 
   const stopRecording = async (): Promise<Blob | null> => {
     return new Promise((resolve) => {
@@ -417,9 +479,13 @@ export const useWebRTC = ({
       }
 
       mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const mime = recordingMimeRef.current || (mediaRecorderRef.current && (mediaRecorderRef.current as any).mimeType) || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: mime });
         setRecordedChunks(audioChunksRef.current);
-        resolve(audioBlob);
+        // clear recorded chunks and mime
+        audioChunksRef.current = [];
+        recordingMimeRef.current = null;
+        resolve(blob);
       };
 
       mediaRecorderRef.current.stop();
@@ -590,7 +656,7 @@ export const useWebRTC = ({
       // Create and send offer - listener should receive audio
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: false
+        offerToReceiveVideo: !!enableVideo
       });
       
       log('Created offer, setting local description');
@@ -643,7 +709,7 @@ export const useWebRTC = ({
       // Create answer - listeners don't send audio back unless they're hosts/cohosts
       const answer = await pc.createAnswer({
         offerToReceiveAudio: !isHost && !isCohostMode, // Listeners receive audio
-        offerToReceiveVideo: false
+        offerToReceiveVideo: !!enableVideo
       });
       
       log('Created answer, setting local description');
@@ -742,31 +808,66 @@ export const useWebRTC = ({
     let audioBlob: Blob | null = null;
 
     // Stop recording and get the recorded audio
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      audioBlob = await stopRecording();
+    try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        audioBlob = await stopRecording();
+      }
+    } catch (e) {
+      log('Error stopping media recorder:', e);
     }
 
     // Stop and remove all audio analysis
-    analysersRef.current.forEach((analyser, userId) => {
-      analyser.disconnect();
-    });
-    analysersRef.current.clear();
+    try {
+      analysersRef.current.forEach((analyser) => {
+        try { analyser.disconnect(); } catch (e) { }
+      });
+      analysersRef.current.clear();
+    } catch (e) { log('Error clearing analysers', e); }
 
     if (audioContextRef.current) {
-      audioContextRef.current.close();
+      try { await audioContextRef.current.close(); } catch (e) { log('Error closing audioContext', e); }
       audioContextRef.current = null;
     }
 
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
-      setLocalStream(null);
+    // Prefer the ref-stored stream (more reliable across closures)
+    const streamToStop = localStreamRef.current;
+    if (streamToStop) {
+      try {
+        streamToStop.getTracks().forEach(track => {
+          try { track.stop(); } catch (e) { }
+        });
+      } catch (e) { log('Error stopping tracks', e); }
+      // clear refs and state
       localStreamRef.current = null;
+      try { setLocalStream(null); } catch (e) { }
     }
-    setIsConnected(false);
 
+    // Close all peer connections (ensure no active P2P links keeping devices open)
+    try {
+      peerConnectionsRef.current.forEach(({ connection }) => {
+        try { connection.close(); } catch (e) { log('Error closing peer connection', e); }
+      });
+      peerConnectionsRef.current.clear();
+    } catch (e) { log('Error closing peer connections', e); }
+
+    // Clear media recorder refs and collected chunks
+    try {
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
+      setRecordedChunks([]);
+    } catch (e) { }
+
+    setIsConnected(false);
+    // Ensure signaling channel is unsubscribed when broadcasting fully stops
+    try {
+      if (signalingChannelRef.current) {
+        try { signalingChannelRef.current.unsubscribe(); } catch (e) { log('Error unsubscribing channel in stopBroadcasting', e); }
+        signalingChannelRef.current = null;
+      }
+    } catch (e) { }
     log('Broadcasting stopped');
     return audioBlob;
-  }, [localStream]);
+  }, []);
 
   const requestPermission = useCallback((requestType: 'speak' | 'cohost') => {
     if (!signalingChannelRef.current || !currentUserIdRef.current) return;
@@ -1008,5 +1109,7 @@ export const useWebRTC = ({
     grantPermission,
     revokePermission,
     setParticipantsMuted
+    ,
+    addLocalVideo
   };
 };

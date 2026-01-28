@@ -114,19 +114,39 @@ Respond with a JSON object in this exact format. Ensure the JSON is valid.`;
       // Using gemini-2.0-flash as requested
       model: "gemini-2.0-flash"
     };
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Gemini API error:', errorText);
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    const MODEL_CHAIN = [
+      'gemini-2.5-flash',
+      'gemini-3-pro-preview',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-2.5-pro',
+      'gemini-2.0-pro',
+      'gemini-1.5-pro'
+    ];
+
+    async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
+      for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
+        const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        try {
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+          });
+          if (resp.ok) return await resp.json();
+          const txt = await resp.text();
+          console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+          if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+        } catch (err) {
+          console.error(`Error calling Gemini ${model}:`, err);
+          if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+        }
+      }
+      throw new Error('All Gemini models failed');
     }
-    const result = await response.json();
+
+    const result = await callGeminiWithModelChain(payload, geminiApiKey);
     if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts || result.candidates[0].content.parts.length === 0) {
       throw new Error('Invalid response structure from Gemini API');
     }

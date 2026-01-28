@@ -2,7 +2,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mermaid from 'mermaid';
 import { Chart, ChartConfiguration } from 'chart.js';
-import { Edit2, X, AlertCircle, RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, RefreshCcw, GripVertical, ChevronDown, Download } from 'lucide-react';
+import { Edit2, X, AlertCircle, RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, RefreshCcw, GripVertical, ChevronDown, Download, Sparkles } from 'lucide-react';
+import { InlineAIEditor } from './InlineAIEditor';
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
 import { motion, useAnimation } from 'framer-motion';
 
@@ -25,6 +26,8 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<Chart | null>(null);
   const [editing, setEditing] = useState(false);
+  const [aiFixing, setAiFixing] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
@@ -99,7 +102,7 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
                         link.href = canvas.toDataURL('image/png');
                         link.click();
                     } catch (e) {
-                        console.error('Export failed', e);
+                        //console.error('Export failed', e);
                         alert('Could not export to PNG due to security restrictions. Try SVG or PDF.');
                     }
                 }
@@ -195,12 +198,18 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
     };
   }, []);
 
-  // Render diagram
+  // Render diagram and auto-fit container height to diagram
   useEffect(() => {
     const render = async () => {
       setError(null);
       chartInstanceRef.current?.destroy();
       if (containerRef.current) containerRef.current.innerHTML = '';
+
+      // Suppress Mermaid logs during render
+      const originalInfo = console.info;
+      const originalWarn = console.warn;
+      console.info = () => {};
+      console.warn = () => {};
 
       try {
         if (type === 'chartjs') {
@@ -220,13 +229,21 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
           if (!ctx) throw new Error('Canvas context failed');
           chartInstanceRef.current = new Chart(ctx, config);
 
+          // Auto-fit height to canvas
+          setTimeout(() => {
+            if (canvas && wrapperRef.current) {
+              const rect = canvas.getBoundingClientRect();
+              if (rect.height > 0) setHeight(`${rect.height + 48}px`); // 48px for padding/buttons
+            }
+          }, 100);
+
         } else if (type === 'mermaid') {
           // ✅ Safe, isolated Mermaid rendering
           mermaid.initialize({
             startOnLoad: false,
             theme: 'default',
             securityLevel: 'loose',
-            logLevel: 1,
+            logLevel: 5, // 'fatal' level
             fontFamily: 'system-ui, -apple-system, sans-serif',
             flowchart: { curve: 'basis' },
           });
@@ -253,12 +270,17 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
               svgEl.style.maxWidth = '100%';
               svgEl.style.height = 'auto';
               svgEl.style.display = 'block';
+              // Auto-fit height to SVG
+              setTimeout(() => {
+                if (svgEl && wrapperRef.current) {
+                  const bbox = svgEl.getBBox();
+                  if (bbox.height > 0) setHeight(`${bbox.height + 48}px`); // 48px for padding/buttons
+                }
+              }, 100);
             }
 
             setError(null);
           } catch (mermaidErr: any) {
-            ////console.warn('⚠️ Mermaid isolated render error:', mermaidErr);
-
             // Cleanup any leftover global SVG nodes (Mermaid sometimes leaks)
             Array.from(document.querySelectorAll('.mermaid, [id^="mermaid-"]')).forEach((el) => {
               if (el.textContent?.includes('Syntax error')) el.remove();
@@ -311,6 +333,13 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
           containerRef.current!.appendChild(svg);
           svg.style.maxWidth = '100%';
           svg.style.height = 'auto';
+          // Auto-fit height to SVG
+          setTimeout(() => {
+            if (svg && wrapperRef.current) {
+              const bbox = svg.getBBox();
+              if (bbox.height > 0) setHeight(`${bbox.height + 48}px`); // 48px for padding/buttons
+            }
+          }, 100);
         }
       } catch (err: any) {
         setError(err.message || 'Render failed');
@@ -327,6 +356,10 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
             </div>
           `;
         }
+      } finally {
+        // Restore //console methods
+        //console.info = originalInfo;
+        //console.warn = originalWarn;
       }
     };
 
@@ -385,7 +418,13 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
         ref={wrapperRef}
         className={`border rounded-lg overflow-hidden bg-white dark:bg-gray-900 shadow-sm transition-all duration-300 ${selected ? 'ring-2 ring-blue-500' : 'border-gray-200 dark:border-gray-700'
           } ${isFullscreen ? 'fixed inset-4 z-[10000] flex flex-col' : 'relative'}`}
-        style={!isFullscreen ? { height } : {}}
+        style={
+          !isFullscreen
+            ? isResizing
+              ? { height }
+              : { height: 'auto', minHeight: height }
+            : {}
+        }
       >
         {/* Action buttons */}
         <div className={`absolute top-2 right-2 flex gap-1 z-20 ${isFullscreen ? 'top-4 right-4' : ''}`}>
@@ -484,7 +523,17 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
               <X className="w-4 h-4" />
             </button>
           )}
-          {/* Fix Diagram Button: Only show if error is present */}
+          {/* Fix Diagram Button: Always show for testing */}
+          <button
+            onClick={() => {
+              setAiFixing(true);
+              setAiSuggestion(`The following diagram code caused a rendering error. Please correct the syntax for a ${type} diagram.\n\n${code}\n\nError: ${error || 'Unknown error or no error detected.'}`);
+            }}
+            className="p-1.5 bg-blue-50 dark:bg-blue-900 border border-blue-300 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 shadow-sm text-blue-700 dark:text-blue-300"
+            title="AI Fix Diagram"
+          >
+            <Sparkles className="w-4 h-4" />
+          </button>
           {error && (
             <button
               onClick={() => {
@@ -492,7 +541,7 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
                 setError(null);
               }}
               className="p-1.5 bg-blue-50 dark:bg-blue-900 border border-blue-300 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 shadow-sm text-blue-700 dark:text-blue-300"
-              title="Fix Diagram with AI"
+              title="Manual Edit"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -583,6 +632,39 @@ export const DiagramWrapper: React.FC<DiagramWrapperProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+        )}
+        {/* Inline AI Editor for diagram fix */}
+        {aiFixing && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[10002] p-4">
+            <InlineAIEditor
+              originalText={code}
+              selectedText={code}
+              selectionRange={{ from: 0, to: code.length }}
+              actionType={type === 'mermaid' ? 'fix-mermaid' : type === 'dot' ? 'fix-dot' : 'fix-chartjs'}
+              onAccept={() => {
+                // Only close if there is a suggestion
+                if (aiSuggestion && aiSuggestion !== code) {
+                  setCode(aiSuggestion);
+                  setAiFixing(false);
+                  setError(null);
+                }
+              }}
+              onReject={() => {
+                setAiFixing(false);
+              }}
+              onGenerate={async (selectedText, actionType, customInstruction) => {
+                // Simulate AI fix (replace with actual AI call)
+                // For now, just set the suggestion to the original code
+                setAiSuggestion(selectedText);
+              }}
+              position={{ top: 100, left: 100 }}
+              isVisible={true}
+              isLoading={false}
+              error={null}
+              generatedText={aiSuggestion}
+              isTyping={false}
+            />
           </div>
         )}
       </div>

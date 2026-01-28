@@ -20,7 +20,39 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
 
 // Gemini API configuration
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+const MODEL_CHAIN = [
+  'gemini-2.5-flash',
+  'gemini-3-pro-preview',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.0-pro',
+  'gemini-1.5-pro'
+];
+
+async function callGeminiWithModelChain(requestBody: any, apiKey: string, maxAttempts = 3): Promise<any> {
+  for (let attempt = 0; attempt < Math.min(maxAttempts, MODEL_CHAIN.length); attempt++) {
+    const model = MODEL_CHAIN[attempt % MODEL_CHAIN.length];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (resp.ok) return await resp.json();
+      const txt = await resp.text();
+      console.warn(`Gemini ${model} returned ${resp.status}: ${txt.substring(0,200)}`);
+      if (resp.status === 429 || resp.status === 503) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+    } catch (err) {
+      console.error(`Error calling Gemini ${model}:`, err);
+      if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 1000*(attempt+1)));
+    }
+  }
+  throw new Error('All Gemini models failed');
+}
 
 // Declare EdgeRuntime for background tasks
 declare const EdgeRuntime: { waitUntil: (promise: Promise<any>) => void };
@@ -129,18 +161,7 @@ async function processAudioBackground(recordingId: string, fileUrl: string, targ
       generationConfig: { responseMimeType: "application/json" }
     };
 
-    const transcriptionResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(transcriptionPayload),
-    });
-
-    if (!transcriptionResponse.ok) {
-      const errorText = await transcriptionResponse.text();
-      throw new Error(`Gemini transcription failed: ${transcriptionResponse.status} - ${errorText}`);
-    }
-
-    const result = await transcriptionResponse.json();
+    const result = await callGeminiWithModelChain(transcriptionPayload, GEMINI_API_KEY);
     const jsonContent = JSON.parse(result?.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
 
     // Calculate final duration logic

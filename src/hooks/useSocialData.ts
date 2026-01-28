@@ -1178,14 +1178,12 @@ export const useSocialData = (
             .from('social_likes')
             .select('id')
             .eq('user_id', currentUserIdRef.current)
-            .eq('post_id', postId)
-            .single(),
+            .eq('post_id', postId),
           supabase
             .from('social_bookmarks')
             .select('id')
             .eq('user_id', currentUserIdRef.current)
             .eq('post_id', postId)
-            .single()
         ]);
 
         isLiked = !likesResult.error;

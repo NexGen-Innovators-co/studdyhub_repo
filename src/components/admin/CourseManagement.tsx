@@ -178,7 +178,7 @@ const CourseManagement = () => {
               if (expanded && expanded.trim()) generatedContent = expanded.trim();
             }
           } catch (err) {
-            console.warn('AI notes generation failed for module', mod.title, err);
+            //console.warn('AI notes generation failed for module', mod.title, err);
           }
 
           // Insert a document record for the module
@@ -204,22 +204,23 @@ const CourseManagement = () => {
                 // leave file_url empty for generated content (DB requires non-null string)
                 file_url: '',
                 file_type: 'text/markdown',
-                    // make course-generated documents public so course viewers can access them
-                    is_public: true,
+                // make course-generated documents public so course viewers can access them
+                is_public: true,
                 file_size: generatedContent.length,
                 content_extracted: generatedContent,
-                type: 'ai_generated'
+                type: 'ai_generated',
+                processing_status: 'completed' // <-- PATCHED: mark as completed
               })
               .select()
               .single();
 
             if (docError) {
-              console.error('Failed to create document for module', mod.title, docError);
+              //console.error('Failed to create document for module', mod.title, docError);
             } else {
               doc = createdDoc;
             }
           } else {
-            console.warn('No user available; skipping document creation for module', mod.title);
+            //console.warn('No user available; skipping document creation for module', mod.title);
           }
 
           // Insert a note linked to the document (document_id may be null)
@@ -234,7 +235,7 @@ const CourseManagement = () => {
               document_id: doc?.id || null
             });
 
-          if (noteError) console.error('Failed to create note for module', mod.title, noteError);
+          //if (noteError) console.error('Failed to create note for module', mod.title, noteError);
 
           // Create the course material linking to the generated document (document_id may be null)
           const { error: materialError } = await supabase
@@ -247,7 +248,7 @@ const CourseManagement = () => {
               document_id: doc?.id || null
             });
 
-          if (materialError) console.error('Failed to create course material for module', mod.title, materialError);
+          // if (materialError) //console.error('Failed to create course material for module', mod.title, materialError);
         }
       }
 
@@ -256,7 +257,7 @@ const CourseManagement = () => {
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
 
     } catch (error: any) {
-      console.error(error);
+      //console.error(error);
       toast.error(`Failed to save AI course: ${error.message}`);
     }
   };
@@ -352,7 +353,7 @@ const CourseManagement = () => {
           try {
             await supabase.from('documents').update({ is_public: true }).eq('id', documentId);
           } catch (err) {
-            console.warn('Failed to mark uploaded document public', err);
+            //console.warn('Failed to mark uploaded document public', err);
           }
           toast.success(`Document "${selectedFile.name}" uploaded and processed.`);
         } else {
@@ -388,7 +389,7 @@ const CourseManagement = () => {
       try {
         await supabase.from('documents').update({ is_public: true }).eq('id', documentId);
       } catch (err) {
-        console.warn('Failed to mark linked document public', err);
+        //console.warn('Failed to mark linked document public', err);
       }
     }
   };

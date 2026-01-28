@@ -56,15 +56,36 @@ const Carousel = React.forwardRef<
     },
     ref
   ) => {
-    const [carouselRef, api] = useEmblaCarousel(
-      {
-        ...opts,
-        axis: orientation === "horizontal" ? "x" : "y",
-      },
-      plugins
-    )
+    // sensible defaults: center align, snap one slide per scroll, contain trimmed snaps
+    const defaultOpts: CarouselOptions = React.useMemo(() => {
+      if (orientation === "horizontal") {
+        return {
+          align: "center",
+          containScroll: "trimSnaps",
+          slidesToScroll: 1,
+          loop: true,
+        } as CarouselOptions
+      }
+      return {
+        align: "start",
+        containScroll: "trimSnaps",
+        slidesToScroll: 1,
+        loop: true,
+      } as CarouselOptions
+    }, [orientation])
+
+    const mergedOpts = React.useMemo(() => ({
+      ...defaultOpts,
+      ...(opts || {}),
+      axis: orientation === "horizontal" ? "x" : "y",
+    }), [defaultOpts, opts, orientation])
+
+    const [carouselRef, api] = useEmblaCarousel(mergedOpts as CarouselOptions, plugins)
     const [canScrollPrev, setCanScrollPrev] = React.useState(false)
     const [canScrollNext, setCanScrollNext] = React.useState(false)
+    const [isHovered, setIsHovered] = React.useState(false)
+    const [isInteracting, setIsInteracting] = React.useState(false)
+    const interactionTimeout = React.useRef<number | null>(null)
 
     const onSelect = React.useCallback((api: CarouselApi) => {
       if (!api) {
@@ -104,6 +125,8 @@ const Carousel = React.forwardRef<
       setApi(api)
     }, [api, setApi])
 
+    const lastWheel = React.useRef<number>(0)
+
     React.useEffect(() => {
       if (!api) {
         return
@@ -117,6 +140,76 @@ const Carousel = React.forwardRef<
         api?.off("select", onSelect)
       }
     }, [api, onSelect])
+
+
+    // Autoplay: advance when not hovered or interacting. Default interval 4000ms.
+    React.useEffect(() => {
+      if (!api) return
+
+      const intervalMs = (opts as any)?.autoplayInterval ?? 4000
+
+      let timer: number | null = null
+
+      const start = () => {
+        if (timer != null) return
+        timer = window.setInterval(() => {
+          if (!api) return
+          if (isHovered || isInteracting) return
+          // scrollNext wraps when loop enabled; otherwise will stop at end
+          api.scrollNext()
+        }, intervalMs)
+      }
+
+      const stop = () => {
+        if (timer != null) {
+          window.clearInterval(timer)
+          timer = null
+        }
+      }
+
+      start()
+
+      return () => {
+        stop()
+      }
+    }, [api, isHovered, isInteracting, opts])
+
+    const rootRef = React.useRef<HTMLDivElement | null>(null)
+
+    // Provide a merged ref so the forwarded ref and our local ref both point to the same node
+    const setRootRef = React.useCallback((node: HTMLDivElement | null) => {
+      rootRef.current = node
+      if (!ref) return
+      if (typeof ref === 'function') {
+        try { ref(node) } catch {}
+      } else {
+        (ref as React.MutableRefObject<HTMLDivElement | null>).current = node
+      }
+    }, [ref])
+
+    // Attach a native, non-passive wheel listener so we can call preventDefault safely
+    React.useEffect(() => {
+      const el = rootRef.current
+      if (!el || !api) return
+
+      const handler = (e: WheelEvent) => {
+        const now = Date.now()
+        const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX
+        if (now - lastWheel.current < 600) return
+        if (delta > 0) {
+          api.scrollNext()
+        } else if (delta < 0) {
+          api.scrollPrev()
+        }
+        lastWheel.current = now
+        e.preventDefault()
+      }
+
+      el.addEventListener('wheel', handler as EventListener, { passive: false })
+      return () => {
+        el.removeEventListener('wheel', handler as EventListener)
+      }
+    }, [api])
 
     return (
       <CarouselContext.Provider
@@ -133,8 +226,20 @@ const Carousel = React.forwardRef<
         }}
       >
         <div
-          ref={ref}
+          ref={setRootRef}
           onKeyDownCapture={handleKeyDown}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onPointerDown={() => {
+            setIsInteracting(true)
+            if (interactionTimeout.current) {
+              window.clearTimeout(interactionTimeout.current)
+            }
+            interactionTimeout.current = window.setTimeout(() => {
+              setIsInteracting(false)
+              interactionTimeout.current = null
+            }, 2500)
+          }}
           className={cn("relative", className)}
           role="region"
           aria-roledescription="carousel"

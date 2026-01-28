@@ -117,6 +117,53 @@ class OfflineStorage {
     });
   }
 
+  // Clear all object stores in the DB (useful on user sign-out)
+  async clearAll(): Promise<void> {
+    await this.init();
+    return new Promise((resolve, reject) => {
+      try {
+        console.log('[OfflineStorage] clearAll: starting to clear all stores');
+        const tx = this.db!.transaction(Object.values(STORES), 'readwrite');
+        for (const storeName of Object.values(STORES)) {
+          try {
+            const store = tx.objectStore(storeName);
+            store.clear();
+            console.log('[OfflineStorage] clearAll: cleared store', storeName);
+          } catch (e) {
+            // ignore per-store failures
+            console.warn('[OfflineStorage] clearAll: failed to clear store', storeName, e);
+          }
+        }
+        tx.oncomplete = () => {
+          console.log('[OfflineStorage] clearAll: all stores cleared (transaction complete)');
+          resolve();
+        };
+        tx.onerror = () => {
+          console.warn('[OfflineStorage] clearAll: transaction error while clearing stores');
+          resolve(); // resolve even if some stores error to avoid blocking sign-out
+        };
+      } catch (err) {
+        // If transaction creation failed (e.g., DB closed), try deleting the DB entirely
+        try {
+          console.warn('[OfflineStorage] clearAll: transaction creation failed, attempting to delete database', err);
+          const deleteReq = indexedDB.deleteDatabase(DB_NAME);
+          deleteReq.onsuccess = () => {
+            console.log('[OfflineStorage] clearAll: database deleted successfully');
+            resolve();
+          };
+          deleteReq.onerror = () => {
+            console.warn('[OfflineStorage] clearAll: deleteDatabase failed');
+            resolve();
+          };
+        } catch (e) {
+          // give up but resolve so sign-out can proceed
+          console.warn('[OfflineStorage] clearAll fallback failed', e);
+          resolve();
+        }
+      }
+    });
+  }
+
   // Sync related methods
   async addPendingSync(action: string, storeName: string, data: any): Promise<void> {
     const syncItem = {

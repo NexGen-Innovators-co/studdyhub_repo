@@ -189,7 +189,7 @@ const allDocuments = contextDocuments || documents;
           setPreviewOpen(true);
         }
       } catch (error) {
-        console.error('Error fetching preview document:', error);
+        // console.error('Error fetching preview document:', error);
         toast.error('Failed to load document preview');
       }
     };
@@ -992,6 +992,10 @@ function overrideTsMimeType(file: File): File {
 
   const isDocumentProcessing = (docId: string) => {
     const doc = documents.find(d => d.id === docId);
+    // If document has extracted content, treat as completed
+    if (doc && doc.content_extracted && doc.content_extracted.trim().length > 0) {
+      return false;
+    }
     return processingDocuments.has(docId) || (doc?.processing_status as string) === 'pending';
   };
 
@@ -2022,151 +2026,38 @@ const lastDocumentElementRef = useCallback(
         {/* Enhanced Preview Dialog */}
         {previewOpen && selectedDocument && (
           <Suspense fallback={null}>
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[95vh] flex flex-col overflow-hidden">
-                <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-0">
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">
-                      {selectedDocument.title}
-                    </h2>
-                    <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
-                      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(getFileCategory(selectedDocument.file_type))}`}>
-                        {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
-                          className: "h-3 w-3"
-                        })}
-                        {getFileCategory(selectedDocument.file_type).toUpperCase()}
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-0">
+              <div className="bg-white dark:bg-slate-900 w-screen h-screen flex flex-col overflow-hidden">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between px-8 py-6 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80">
+                  <div className="flex items-center gap-5">
+                    {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
+                      <img src={selectedDocument.file_url} alt={selectedDocument.title} className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700" />
+                    ) : (
+                      React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
+                        className: "h-14 w-14 text-blue-600 dark:text-blue-300"
+                      })
+                    )}
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 line-clamp-2">{selectedDocument.title}</h2>
+                      <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-slate-500 dark:text-slate-400">
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-medium border ${getCategoryColor(getFileCategory(selectedDocument.file_type))}`}>
+                          {getFileCategory(selectedDocument.file_type).toUpperCase()}
+                        </span>
+                        <span className="flex items-center gap-1"><HardDrive className="h-4 w-4" />{formatFileSize(selectedDocument.file_size)}</span>
+                        <span className="flex items-center gap-1"><Calendar className="h-4 w-4" />{formatDate(new Date(selectedDocument.created_at).toISOString() || 'Unknown Date')}</span>
+                        <span className={`px-3 py-1 rounded-full flex items-center gap-1 font-medium ${getStatusColor(selectedDocument.processing_status as string)}`}>
+                          {getStatusIcon(selectedDocument.processing_status as string)}
+                          <span className="capitalize">{(selectedDocument.processing_status as string)}</span>
+                        </span>
                       </div>
-                      <span className="flex items-center gap-1">
-                        <HardDrive className="h-4 w-4" />
-                        {formatFileSize(selectedDocument.file_size)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        {formatDate(new Date(selectedDocument.created_at).toISOString() || 'Unknown Date')}
-                      </span>
-                      <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(selectedDocument.processing_status as string)}`}>
-                        {getStatusIcon(selectedDocument.processing_status as string)}
-                        <span className="capitalize">{(selectedDocument.processing_status as string)}</span>
-                      </div>
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleClosePreview}
-                    className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(95vh-160px)] space-y-6">
-                  {/* File Preview */}
-                  <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6">
-                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
-                      <Eye className="h-5 w-5" />
-                      File Preview
-                    </h3>
-                    <div className="aspect-video bg-white dark:bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden">
-                      {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
-                        <img
-                          src={selectedDocument.file_url}
-                          alt={selectedDocument.title}
-                          className="max-w-full max-h-full object-contain rounded-lg"
-                        />
-                      ) : (
-                        <div className="text-center space-y-3">
-                          {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
-                            className: "h-20 w-20 mx-auto text-slate-400 dark:text-slate-500"
-                          })}
-                          <div>
-                            <p className="text-lg font-medium text-slate-600 dark:text-slate-400">
-                              {selectedDocument.title}
-                            </p>
-                            <p className="text-sm text-slate-500 dark:text-slate-500">
-                              Preview not available for this file type
-                            </p>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(selectedDocument.file_url, '_blank')}
-                            className="mt-3"
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Open File
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Extracted Content */}
-                  <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                        <Zap className="h-5 w-5" />
-                        AI-Extracted Content
-                      </h3>
-                      {selectedDocument.content_extracted && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(selectedDocument.content_extracted!)}
-                          className="text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                        >
-                          <Copy className="h-4 w-4 mr-1" />
-                          Copy
-                        </Button>
-                      )}
-                    </div>
-                    <div className="bg-white dark:bg-slate-700 rounded-lg p-4 min-h-[120px] max-h-60 overflow-y-auto">
-                      {selectedDocument.content_extracted ? (
-                        (/^(#{1,6}\s)|(^```)|(^-\s)|(^\*\s)|(^>\s)/m.test(selectedDocument.content_extracted)) ? (
-                          <DocumentMarkdownRenderer content={selectedDocument.content_extracted} />
-                        ) : (
-                          <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                            {selectedDocument.content_extracted}
-                          </p>
-                        )
-                      ) : (
-                        <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">No content has been extracted from this file yet.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Error Information */}
-                  {selectedDocument.processing_status === 'failed' && selectedDocument.processing_error && (
-                    <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl p-6">
-                      <h3 className="font-semibold text-red-800 dark:text-red-200 mb-3 flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5" />
-                        Processing Error
-                      </h3>
-                      <p className="text-sm text-red-700 dark:text-red-300 mb-4">
-                        {selectedDocument.processing_error as string}
-                      </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          handleClosePreview();
-                          triggerAnalysis(selectedDocument);
-                        }}
-                        disabled={isDocumentProcessing(selectedDocument.id)}
-                        className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-300"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Retry Analysis
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="flex flex-col xs:flex-row flex-wrap gap-2 xs:gap-3 pt-4 border-t border-slate-200 dark:border-slate-700 w-full">
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       onClick={() => window.open(selectedDocument.file_url, '_blank')}
-                      className="flex-1 sm:flex-none"
+                      className="min-w-[100px]"
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Download
@@ -2183,7 +2074,7 @@ const lastDocumentElementRef = useCallback(
                           copyToClipboard(selectedDocument.file_url);
                         }
                       }}
-                      className="flex-1 sm:flex-none"
+                      className="min-w-[100px]"
                     >
                       <Share className="h-4 w-4 mr-2" />
                       Share
@@ -2192,7 +2083,7 @@ const lastDocumentElementRef = useCallback(
                       <Button
                         variant="outline"
                         onClick={() => copyToClipboard(selectedDocument.content_extracted!)}
-                        className="flex-1 sm:flex-none"
+                        className="min-w-[100px]"
                       >
                         <Copy className="h-4 w-4 mr-2" />
                         Copy Content
@@ -2205,11 +2096,116 @@ const lastDocumentElementRef = useCallback(
                         handleDeleteDocument(selectedDocument.id, selectedDocument.file_url);
                       }}
                       disabled={isUploading || isDocumentProcessing(selectedDocument.id)}
-                      className="flex-1 sm:flex-none text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
+                      className="min-w-[100px] text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-200 dark:border-red-500/20"
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleClosePreview}
+                      className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-full border-2 border-slate-200 dark:border-slate-700 ml-2"
+                    >
+                      <X className="h-6 w-6" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Main Content: Two-column layout on desktop */}
+                <div className="flex-1 flex flex-col md:flex-row gap-0 overflow-hidden">
+                  {/* Left: File Preview */}
+                  <div className="md:w-1/2 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 p-8 overflow-auto border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700">
+                    <div className="max-w-full w-full">
+                      <div className="flex items-center gap-3 mb-4">
+                        <Eye className="h-5 w-5 text-blue-500" />
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 text-lg">File Preview</span>
+                      </div>
+                      <div className="aspect-video bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-700 shadow-md">
+                        {getFileCategory(selectedDocument.file_type) === 'image' && selectedDocument.file_url ? (
+                          <img
+                            src={selectedDocument.file_url}
+                            alt={selectedDocument.title}
+                            className="max-w-full max-h-full object-contain rounded-xl"
+                          />
+                        ) : (
+                          <div className="text-center space-y-2">
+                            {React.createElement(getCategoryIcon(getFileCategory(selectedDocument.file_type)), {
+                              className: "h-20 w-20 mx-auto text-slate-400 dark:text-slate-500"
+                            })}
+                            <div>
+                              <p className="text-lg font-medium text-slate-600 dark:text-slate-400">
+                                {selectedDocument.title}
+                              </p>
+                              <p className="text-sm text-slate-500 dark:text-slate-500">
+                                Preview not available for this file type
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(selectedDocument.file_url, '_blank')}
+                              className="mt-2"
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Open File
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: AI Content, Error, Actions */}
+                  <div className="md:w-1/2 flex flex-col justify-between bg-white dark:bg-slate-900 p-0 overflow-auto">
+                    <div className="flex-1 flex flex-col gap-6">
+                      {/* AI-Extracted Content Section */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Zap className="h-5 w-5 text-yellow-500" />
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 text-lg">AI-Extracted Content</span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-800 rounded-none p-6 min-h-[120px] max-h-[70vh] overflow-y-auto border-0">
+                          {selectedDocument.content_extracted ? (
+                            (/^(#{1,6}\s)|(^```)|(^-\s)|(^\*\s)|(^>\s)/m.test(selectedDocument.content_extracted)) ? (
+                              <DocumentMarkdownRenderer content={selectedDocument.content_extracted} />
+                            ) : (
+                              <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                {selectedDocument.content_extracted}
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">No content has been extracted from this file yet.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Error Information Section */}
+                      {selectedDocument.processing_status === 'failed' && selectedDocument.processing_error && (
+                        <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg p-5 flex flex-col gap-3 mt-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <AlertTriangle className="h-5 w-5 text-red-500" />
+                            <span className="font-semibold text-red-800 dark:text-red-200">Processing Error</span>
+                          </div>
+                          <p className="text-sm text-red-700 dark:text-red-300 mb-2">
+                            {selectedDocument.processing_error as string}
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              handleClosePreview();
+                              triggerAnalysis(selectedDocument);
+                            }}
+                            disabled={isDocumentProcessing(selectedDocument.id)}
+                            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 border-red-300"
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Retry Analysis
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

@@ -80,16 +80,7 @@ const AppWithSEO = () => {
     <>
       <DynamicHead pathname={location.pathname} />
       <Suspense fallback={<Fallback />}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={getPageKey(location.pathname)}
-            initial={{ opacity: 0, filter: 'blur(5px)' }}
-            animate={{ opacity: 1, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, filter: 'blur(5px)' }}
-            transition={{ duration: 0.3 }}
-            className="w-full"
-          >
-            <Routes location={location}>
+        <Routes location={location}>
           {/* ==== PUBLIC ROUTES ==== */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -128,6 +119,9 @@ const AppWithSEO = () => {
           {/* ==== PODCAST ROUTES - Protected ==== */}
           <Route path="/podcasts" element={<Index />} />
           <Route path="/podcasts/:podcastId" element={<Index />} />
+          <Route path="/podcast/:id" element={<Index />} />
+          {/* Dedicated live podcast route (renders inside app shell) */}
+          <Route path="/podcast/live/:id" element={<Index />} />
           
           {/* ==== SOCIAL ROUTES - Protected ==== */}
           <Route path="/social" element={<Index />} />
@@ -151,8 +145,8 @@ const AppWithSEO = () => {
 
           {/* ==== 404 NOT FOUND ==== */}
           <Route path="*" element={<NotFound />} />
-        </Routes>        </motion.div>
-        </AnimatePresence>      </Suspense>
+        </Routes> 
+      </Suspense>
     </>
   );
 };
@@ -160,7 +154,7 @@ const AppWithSEO = () => {
 const App = () => (
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
-      <Analytics />
+      {/* <Analytics /> */}
       <TooltipProvider>
         <Toaster />
         <Sonner />

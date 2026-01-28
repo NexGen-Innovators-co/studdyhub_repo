@@ -154,7 +154,11 @@ export const useMessageHandlers = () => {
         }
       }
 
-      let finalAttachedDocumentIds = attachedDocumentIds || [];
+      // Use selectedDocumentIds from app context as the source-of-truth
+      // for attached documents when the caller doesn't provide explicit ids.
+      let finalAttachedDocumentIds = (attachedDocumentIds && attachedDocumentIds.length > 0)
+        ? attachedDocumentIds
+        : (selectedDocumentIds || []);
       const finalAttachedNoteIds = attachedNoteIds || [];
 
       // Build the parts for the current user message
