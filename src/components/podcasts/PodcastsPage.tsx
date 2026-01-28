@@ -161,6 +161,32 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
   fileInputRef
 }) => {
   const [showActions, setShowActions] = useState(false);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Hide overlay with delay on mouse leave
+  const handleMouseLeave = () => {
+    hideTimeoutRef.current = setTimeout(() => {
+      setShowActions(false);
+    }, 600); // 600ms delay
+  };
+
+  // Clear timeout if mouse re-enters before timeout
+  const handleMouseEnter = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    setShowActions(true);
+  };
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Improved: Show correct type for live podcasts
   const renderTypeBadge = () => {
@@ -197,8 +223,8 @@ const PodcastCardComponent: React.FC<PodcastCardProps> = ({
       exit={{ opacity: 0, scale: 0.95 }}
       layout
       className="group"
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onClick={() => setShowActions(!showActions)}
     >
       <Card className="overflow-hidden hover:shadow-2xl transition-all duration-300 border-b border-slate-200 dark:border-slate-700 sm:border-b-0 sm:border sm:border-blue-200/50 sm:dark:border-blue-900/50 h-full flex flex-col relative rounded-lg sm:rounded-2xl cursor-pointer">

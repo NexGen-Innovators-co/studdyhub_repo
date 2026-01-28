@@ -73,11 +73,13 @@ const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFu
     isPlaying: boolean;
     isMuted: boolean;
     progress: number;
+    showOverlay?: boolean;
   }>>({});
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const overlayTimeouts = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
   useEffect(() => {
     // Setup intersection observer for auto-play
@@ -221,7 +223,28 @@ const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFu
             }}
           >
             {isVideo ? (
-              <div className="relative w-full h-full">
+              <div
+                className="relative w-full h-full"
+                onMouseEnter={() => {
+                  // Clear any hide timeout and show overlay
+                  const t = overlayTimeouts.current.get(index);
+                  if (t) clearTimeout(t);
+                  setVideoStates(prev => ({
+                    ...prev,
+                    [index]: { ...prev[index], showOverlay: true }
+                  }));
+                }}
+                onMouseLeave={() => {
+                  // Hide overlay after delay
+                  const timeout = setTimeout(() => {
+                    setVideoStates(prev => ({
+                      ...prev,
+                      [index]: { ...prev[index], showOverlay: false }
+                    }));
+                  }, 600);
+                  overlayTimeouts.current.set(index, timeout);
+                }}
+              >
                 <video
                   ref={(el) => {
                     if (el) videoRefs.current.set(index, el);
@@ -248,7 +271,7 @@ const MediaDisplay = memo(({ media, onOpenFullscreen }: { media: any[]; onOpenFu
                 {/* Video Controls Overlay */}
                 <div className="absolute inset-0 pointer-events-none">
                   {/* Play/Pause Overlay (always clickable) */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <div className={`absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity duration-300 ${state.showOverlay !== false ? 'opacity-100' : 'opacity-0'}`}>
                     <button
                       className="pointer-events-auto cursor-pointer bg-white/90 rounded-full p-4 hover:bg-white transition-colors flex items-center justify-center"
                       onClick={e => {
